@@ -2,7 +2,7 @@
 
 A macOS desktop app to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
 
-ClaudeLens reads `~/.claude/` and gives you a unified interface for chat sessions, memory topics, cost tracking, CLAUDE.md hierarchies, skills, agents, and MCP servers — all updated in real time as you work.
+ClaudeLens reads `~/.claude/` and gives you a unified interface for chat sessions, memory topics, CLAUDE.md hierarchies, skills, agents, and MCP servers — all updated in real time as you work.
 
 ---
 
@@ -15,7 +15,7 @@ ClaudeLens reads `~/.claude/` and gives you a unified interface for chat session
 
 ## Installation
 
-Download the `.dmg` from the [Releases](https://github.com/giuliodigiamberardino/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
+Download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
 
 > **First launch — Gatekeeper warning**
 >
@@ -35,8 +35,8 @@ Download the `.dmg` from the [Releases](https://github.com/giuliodigiamberardino
 
 The sidebar lists all projects detected in `~/.claude/projects/`. Selecting a project opens a unified view with:
 
-- **Aggregate stats** — total sessions, tokens, and estimated cost
-- **Recent sessions** — last 4 sessions with date, cost, and token count
+- **Aggregate stats** — total sessions and token usage
+- **Recent sessions** — last 4 sessions with date and token count
 - **Memory** — all saved topics with type and description
 - **CLAUDE.md** — the full instruction hierarchy active for the project
 - **Conditional rules** — `.claude/rules/` files with path applicability
@@ -45,7 +45,7 @@ The sidebar lists all projects detected in `~/.claude/projects/`. Selecting a pr
 
 ### Chat sessions
 
-Browse all conversations of a project, sorted chronologically. Each card shows date, estimated cost, token breakdown, and the dominant model used.
+Browse all conversations of a project, sorted chronologically. Each card shows date, token breakdown, and the dominant model used.
 
 Opening a session reconstructs the conversation from its JSONL file:
 
@@ -72,20 +72,6 @@ For each tool call, open a dedicated panel showing input and output with type-sp
 | **Glob** | Pattern + numbered filepath list |
 | **Agent** | Agent type + description + markdown response |
 | **WebFetch / WebSearch** | URL or query + raw text |
-
----
-
-### Cost tracking
-
-ClaudeLens parses `.jsonl` session files and calculates costs using Anthropic's pricing, including **Prompt Caching** (cache write and cache read).
-
-**Supported models (price per 1M tokens):**
-
-| Model | Input | Output | Cache Write | Cache Read |
-|-------|-------|--------|-------------|------------|
-| Haiku 4.5 | $0.80 | $4.00 | $1.00 | $0.08 |
-| Sonnet 4.x | $3.00 | $15.00 | $3.75 | $0.30 |
-| Opus 4.x | $15.00 | $75.00 | $18.75 | $1.50 |
 
 ---
 
@@ -145,7 +131,6 @@ Requires `claude` CLI in `PATH`.
 ## Build from source
 
 ```bash
-cd claudelens-app
 npm install
 npm run dev              # Vite dev server + Electron
 npm run electron:build   # Generate distributable DMG
@@ -157,7 +142,6 @@ npm run electron:build   # Generate distributable DMG
 
 - AI Assistant requires `claude` CLI installed and in `PATH`
 - Session list is not paginated — may be slow with very large histories (500+ sessions)
-- Pricing table is hardcoded to Anthropic rates as of March 2026
 - No automatic updates
 - App is not code-signed (see installation note above)
 
