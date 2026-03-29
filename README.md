@@ -2,30 +2,55 @@
 
 A macOS desktop app to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
 
-ClaudeLens reads `~/.claude/` and gives you a unified interface for chat sessions, memory topics, CLAUDE.md hierarchies, skills, agents, and MCP servers — all updated in real time as you work.
+If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLens makes it navigable. Browse chat sessions, manage memory topics, inspect tool calls, view your full CLAUDE.md hierarchy, and monitor active Claude processes, all in one place and updated in real time.
 
 ---
 
-## Requirements
+## Screenshots
 
-- macOS 12 Monterey or later
-- [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
+![ClaudeLens — Global Home](docs/screenshots/home.png)
 
----
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/project.png"/>
+      <br/><sub><b>Project overview</b></sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/sessions.png"/>
+      <br/><sub><b>Chat sessions</b></sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/memory.png"/>
+      <br/><sub><b>Memory management</b></sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/claudemd-details.png"/>
+      <br/><sub><b>CLAUDE.md — inline file viewer</b></sub>
+    </td>
+  </tr>
+</table>
 
-## Installation
+**Skills and CLAUDE.md include an inline file viewer — click any item to read its full content without leaving the app.**
 
-Download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/screenshots/skills.png"/>
+      <br/><sub><b>Skills — list</b></sub>
+    </td>
+    <td width="50%">
+      <img src="docs/screenshots/skills-detail.png"/>
+      <br/><sub><b>Skills — file content</b></sub>
+    </td>
+  </tr>
+</table>
 
-> **First launch — Gatekeeper warning**
->
-> The app is not code-signed. macOS will block it on first open.
-> Right-click the app in Finder and choose **Open**, then confirm in the dialog.
->
-> Alternatively, run this command once in Terminal:
-> ```bash
-> xattr -d com.apple.quarantine /Applications/ClaudeLens.app
-> ```
+**Live Monitor** _(experimental)_ — real-time view of active Claude processes with status badge, 90-second activity chart, and tool frequency breakdown.
+
+![Live Monitor](docs/screenshots/live-monitor.png)
 
 ---
 
@@ -40,6 +65,8 @@ The sidebar lists all projects detected in `~/.claude/projects/`. Selecting a pr
 - **Memory** — all saved topics with type and description
 - **CLAUDE.md** — the full instruction hierarchy active for the project
 - **Conditional rules** — `.claude/rules/` files with path applicability
+
+Real-time file watcher (chokidar) keeps every view in sync — any change to `~/.claude/` while you work with Claude Code is reflected immediately.
 
 ---
 
@@ -59,7 +86,7 @@ Two modes: **Minimal** (messages only) and **Full** (includes thinking and tool 
 
 ---
 
-### Tool detail panel
+### Tool call inspector
 
 For each tool call, open a dedicated panel showing input and output with type-specific rendering:
 
@@ -108,15 +135,9 @@ View MCP server configuration (cloud and local) with enabled/disabled state per 
 
 ---
 
-### Live Monitor
+### Live Monitor _(experimental)_
 
 Real-time view of active Claude processes: status badge (IDLE / THINKING / BUSY), activity chart with a 90-second sliding window, tool frequency breakdown, and elapsed timer.
-
----
-
-### Real-time updates
-
-ClaudeLens watches `~/.claude/projects/` with a file watcher. Any addition, modification, or deletion — while you work with Claude Code — refreshes the UI automatically.
 
 ---
 
@@ -125,6 +146,29 @@ ClaudeLens watches `~/.claude/projects/` with a file watcher. Any addition, modi
 Runs `claude -p` in the project context with streaming output. Includes preset actions for memory analysis and CLAUDE.md suggestions.
 
 Requires `claude` CLI in `PATH`.
+
+---
+
+## Requirements
+
+- macOS 12 Monterey or later
+- [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
+
+---
+
+## Installation
+
+Download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
+
+> **First launch — Gatekeeper warning**
+>
+> The app is not code-signed. macOS will block it on first open.
+> Right-click the app in Finder and choose **Open**, then confirm in the dialog.
+>
+> Alternatively, run this command once in Terminal:
+> ```bash
+> xattr -d com.apple.quarantine /Applications/ClaudeLens.app
+> ```
 
 ---
 
