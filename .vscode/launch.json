@@ -1,0 +1,55 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Debug Electron Main",
+            "type": "node",
+            "request": "launch",
+            "cwd": "${workspaceFolder}",
+            "runtimeExecutable": "${workspaceFolder}/node_modules/.bin/electron",
+            "runtimeArgs": [
+                "--inspect=5858",
+                "--remote-debugging-port=9222"
+            ],
+            "args": [
+                "dist-electron/main.js"
+            ],
+            "outFiles": [
+                "${workspaceFolder}/dist-electron/**/*.js"
+            ],
+            "sourceMaps": true,
+            "resolveSourceMapLocations": [
+                "${workspaceFolder}/dist-electron/**",
+                "!**/node_modules/**"
+            ],
+            "skipFiles": [
+                "<node_internals>/**",
+                "**/node_modules/**"
+            ],
+            "preLaunchTask": "Build and Start Dev"
+        },
+        {
+            "name": "Debug Electron Renderer",
+            "type": "chrome",
+            "request": "attach",
+            "port": 9222,
+            "webRoot": "${workspaceFolder}",
+            "sourceMapPathOverrides": {
+                "/@fs/*": "/*"
+            },
+            "skipFiles": [
+                "**/node_modules/**",
+                "**/@react-refresh/**",
+                "**/chunk-*.js"
+            ],
+            "timeout": 10000
+        }
+    ],
+    "compounds": [
+        {
+            "name": "Electron: Full Debug",
+            "configurations": ["Debug Electron Main", "Debug Electron Renderer"],
+            "stopAll": true
+        }
+    ]
+}

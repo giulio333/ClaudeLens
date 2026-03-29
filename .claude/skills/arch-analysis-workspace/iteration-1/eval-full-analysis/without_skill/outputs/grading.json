@@ -1,0 +1,27 @@
+{
+  "eval_id": 0,
+  "eval_name": "full-analysis",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React",
+      "passed": true,
+      "evidence": "Sezioni presenti: Main Process (con IPC), Backend Modules (tabella), Renderer (struttura componenti)"
+    },
+    {
+      "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)",
+      "passed": true,
+      "evidence": "Elenca i namespace: memory:*, cost:*, claudeMd:*, sessions:*, rules:*, skills:*, agents:*, mcp:*, ai:*, live:*, projects:*"
+    },
+    {
+      "text": "Viene segnalato almeno un problema con severità esplicita (warning o error)",
+      "passed": true,
+      "evidence": "Sezioni 'Critici', 'Moderati', 'Minori' con problemi e impatto. Trovati più problemi rispetto alla versione con skill (shell injection, hash collision)"
+    },
+    {
+      "text": "Il report usa almeno una tabella markdown",
+      "passed": true,
+      "evidence": "Tabella moduli backend, tabella dipendenze chiave"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "eval_id": 1,
+  "eval_name": "ipc-alignment",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Il report confronta esplicitamente main.ts con useIPC.ts",
+      "passed": true,
+      "evidence": "Sezione §5 'Allineamento IPC' con tabella a 3 colonne: Handler in main.ts | Hook in useIPC.ts | Stato"
+    },
+    {
+      "text": "Vengono citati handler specifici con il loro namespace (memory:*, cost:*, sessions:*, ecc.)",
+      "passed": true,
+      "evidence": "Tutti i 28 handler elencati con namespace esatto (memory:listProjects, cost:getSummary, ecc.)"
+    },
+    {
+      "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)",
+      "passed": true,
+      "evidence": "Sezione §6 'Preload Bridge' con tabella namespace/metodi e verifica coerenza tipi"
+    },
+    {
+      "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente",
+      "passed": true,
+      "evidence": "claudeMd:getProject segnalato come dead code (warning), sessions:newInTerminal segnalato come non usato nella UI"
+    }
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "eval_id": 1,
+  "eval_name": "ipc-alignment",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "Il report confronta esplicitamente main.ts con useIPC.ts",
+      "passed": true,
+      "evidence": "Tabella completa con colonne Handler | Namespace | Presenza in preload.ts | Presenza in useIPC.ts (hook)"
+    },
+    {
+      "text": "Vengono citati handler specifici con il loro namespace (memory:*, cost:*, sessions:*, ecc.)",
+      "passed": true,
+      "evidence": "Tutti i 27 handler elencati con namespace esatto nella tabella principale"
+    },
+    {
+      "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)",
+      "passed": true,
+      "evidence": "Sezione §5 'Problemi di tipo nel preload' e §3 'Allineamento Preload Bridge' con analisi dei tipi object generico"
+    },
+    {
+      "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente",
+      "passed": true,
+      "evidence": "Trovati due problemi: claudeMd:getProject mai usato (WARNING medio) E useCostSummary hook definito ma mai consumato da componenti (WARNING basso) — più completo rispetto alla versione con skill"
+    }
+  ]
+}

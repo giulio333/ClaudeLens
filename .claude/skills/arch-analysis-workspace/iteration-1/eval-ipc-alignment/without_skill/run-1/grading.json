@@ -1,0 +1,13 @@
+{
+  "eval_id": 1,
+  "eval_name": "ipc-alignment",
+  "configuration": "without_skill",
+  "summary": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4},
+  "timing": {"total_duration_seconds": 87.9, "total_tokens": 32275},
+  "expectations": [
+    {"text": "Il report confronta esplicitamente main.ts con useIPC.ts", "passed": true, "evidence": "Tabella con Handler | Namespace | Presenza preload.ts | Presenza useIPC.ts"},
+    {"text": "Vengono citati handler specifici con il loro namespace", "passed": true, "evidence": "Tutti i 27 handler elencati con namespace esatto"},
+    {"text": "Viene analizzato il preload bridge (contextBridge o preload.ts)", "passed": true, "evidence": "Sezione §5 sui tipi object nel preload e §3 allineamento preload bridge"},
+    {"text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente", "passed": true, "evidence": "claudeMd:getProject E useCostSummary hook mai consumato — più completo della versione con skill"}
+  ]
+}

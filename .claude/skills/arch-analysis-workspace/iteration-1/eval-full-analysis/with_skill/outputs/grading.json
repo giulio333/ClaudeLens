@@ -1,0 +1,27 @@
+{
+  "eval_id": 0,
+  "eval_name": "full-analysis",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React",
+      "passed": true,
+      "evidence": "Sezioni §1 (IPC Handlers), §2 (Backend Modules), §3 (Renderer Components) presenti e ben distinte con titoli e tabelle"
+    },
+    {
+      "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)",
+      "passed": true,
+      "evidence": "10 namespace identificati: memory:*, cost:*, claudeMd:*, sessions:*, rules:*, skills:*, agents:*, projects:*, ai:*, live:*"
+    },
+    {
+      "text": "Viene segnalato almeno un problema con severità esplicita (warning o error)",
+      "passed": true,
+      "evidence": "Sezione §7 elenca 2 errori (error) e 9 warning con severità esplicita e impatto descritto"
+    },
+    {
+      "text": "Il report usa almeno una tabella markdown",
+      "passed": true,
+      "evidence": "Numerose tabelle: handler IPC, moduli backend, componenti, mutation, allineamento IPC, valutazione finale"
+    }
+  ]
+}
