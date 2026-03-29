@@ -1,0 +1,39 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "Build Electron",
+            "type": "shell",
+            "command": "npx tsc -p tsconfig.electron.json",
+            "options": {
+                "cwd": "${workspaceFolder}"
+            },
+            "problemMatcher": "$tsc"
+        },
+        {
+            "label": "Start Vite Dev Server",
+            "type": "shell",
+            "command": "npx vite",
+            "isBackground": true,
+            "problemMatcher": {
+                "owner": "vite",
+                "pattern": {
+                    "regexp": "."
+                },
+                "background": {
+                    "activeOnStart": true,
+                    "beginsPattern": "VITE",
+                    "endsPattern": "Local:.*localhost"
+                }
+            },
+            "options": {
+                "cwd": "${workspaceFolder}"
+            }
+        },
+        {
+            "label": "Build and Start Dev",
+            "dependsOn": ["Build Electron", "Start Vite Dev Server"],
+            "dependsOrder": "sequence"
+        }
+    ]
+}

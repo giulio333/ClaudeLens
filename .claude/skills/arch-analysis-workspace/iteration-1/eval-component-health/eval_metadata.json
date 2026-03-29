@@ -1,0 +1,11 @@
+{
+  "eval_id": 2,
+  "eval_name": "component-health",
+  "prompt": "Dopo il refactor di ProjectOverview, i componenti React sono rimasti entro dimensioni ragionevoli? Ci sono candidati a ulteriori refactor?",
+  "assertions": [
+    {"id": "comp-line-counts", "text": "Il report include il conteggio righe per i componenti principali"},
+    {"id": "comp-checks-project-overview", "text": "ProjectOverview.tsx viene verificato esplicitamente con il numero di righe"},
+    {"id": "comp-identifies-candidates", "text": "Vengono identificati candidati a refactor con una motivazione"},
+    {"id": "comp-maps-structure", "text": "La struttura delle cartelle src/components/ è mappata o elencata"}
+  ]
+}

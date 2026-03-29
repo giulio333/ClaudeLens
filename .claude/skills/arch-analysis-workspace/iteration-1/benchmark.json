@@ -1,0 +1,293 @@
+{
+  "metadata": {
+    "skill_name": "arch-analysis",
+    "skill_path": "<path/to/skill>",
+    "executor_model": "<model-name>",
+    "analyzer_model": "<model-name>",
+    "timestamp": "2026-03-28T21:36:48Z",
+    "evals_run": [
+      0,
+      1,
+      2
+    ],
+    "runs_per_configuration": 3
+  },
+  "runs": [
+    {
+      "eval_id": 2,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 114.8,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report include il conteggio righe per i componenti principali",
+          "passed": true,
+          "evidence": "Tabella con LiveMonitor (624), AnalyticsView (277), MemorySection (250) ecc."
+        },
+        {
+          "text": "ProjectOverview.tsx viene verificato esplicitamente con il numero di righe",
+          "passed": true,
+          "evidence": "Sezione \u00a73: '300 righe \u2014 ampiamente sotto il limite di 400'"
+        },
+        {
+          "text": "Vengono identificati candidati a refactor con una motivazione",
+          "passed": true,
+          "evidence": "LiveMonitor (componenti inline), ToolDetailPanel (catena if), MemorySection con motivazioni"
+        },
+        {
+          "text": "La struttura delle cartelle src/components/ \u00e8 mappata o elencata",
+          "passed": true,
+          "evidence": "Albero completo src/ con tutti i file e righe stimate"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 216.9,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React",
+          "passed": true,
+          "evidence": "Sezioni \u00a71 IPC Handlers, \u00a72 Backend Modules, \u00a73 Renderer Components ben distinte"
+        },
+        {
+          "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)",
+          "passed": true,
+          "evidence": "10 namespace identificati: memory:*, cost:*, claudeMd:*, sessions:*, rules:*, skills:*, agents:*, projects:*, ai:*, live:*"
+        },
+        {
+          "text": "Viene segnalato almeno un problema con severit\u00e0 esplicita (warning o error)",
+          "passed": true,
+          "evidence": "Sezione \u00a77: 2 error e 9 warning con severit\u00e0 esplicita"
+        },
+        {
+          "text": "Il report usa almeno una tabella markdown",
+          "passed": true,
+          "evidence": "Numerose tabelle: handler IPC, moduli, componenti, mutation, allineamento"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 84.9,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report confronta esplicitamente main.ts con useIPC.ts",
+          "passed": true,
+          "evidence": "Sezione \u00a75 con tabella a 3 colonne: Handler | Hook in useIPC.ts | Stato"
+        },
+        {
+          "text": "Vengono citati handler specifici con il loro namespace",
+          "passed": true,
+          "evidence": "Tutti i 28 handler elencati con namespace esatto"
+        },
+        {
+          "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)",
+          "passed": true,
+          "evidence": "Sezione \u00a76 con tabella namespace/metodi e verifica coerenza tipi"
+        },
+        {
+          "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente",
+          "passed": true,
+          "evidence": "claudeMd:getProject dead code, sessions:newInTerminal non usato nella UI"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 2,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 147.9,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report include il conteggio righe per i componenti principali",
+          "passed": true,
+          "evidence": "Tabelle per ogni cartella con righe per file"
+        },
+        {
+          "text": "ProjectOverview.tsx viene verificato esplicitamente con il numero di righe",
+          "passed": true,
+          "evidence": "Sezione \u00a71: PASS, 300 righe, soglia target 400"
+        },
+        {
+          "text": "Vengono identificati candidati a refactor con una motivazione",
+          "passed": true,
+          "evidence": "Sezione \u00a74 con LiveMonitor, ToolDetailPanel, MemorySection, AnalyticsView con suggerimenti specifici"
+        },
+        {
+          "text": "La struttura delle cartelle src/components/ \u00e8 mappata o elencata",
+          "passed": true,
+          "evidence": "Tabelle organizzate per cartella: tabs/, overview/, chat/, sessions/, memory/, ecc."
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 0,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 180.7,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React",
+          "passed": true,
+          "evidence": "Sezioni Main Process, Backend Modules, Renderer presenti"
+        },
+        {
+          "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)",
+          "passed": true,
+          "evidence": "Elenca namespace: memory:*, cost:*, claudeMd:*, sessions:*, rules:*, skills:*, agents:*, mcp:*, ai:*, live:*, projects:*"
+        },
+        {
+          "text": "Viene segnalato almeno un problema con severit\u00e0 esplicita (warning o error)",
+          "passed": true,
+          "evidence": "Sezioni Critici, Moderati, Minori con problemi e impatto"
+        },
+        {
+          "text": "Il report usa almeno una tabella markdown",
+          "passed": true,
+          "evidence": "Tabella moduli backend, tabella dipendenze chiave"
+        }
+      ],
+      "notes": []
+    },
+    {
+      "eval_id": 1,
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 4,
+        "failed": 0,
+        "total": 4,
+        "time_seconds": 87.9,
+        "tokens": 0,
+        "tool_calls": 0,
+        "errors": 0
+      },
+      "expectations": [
+        {
+          "text": "Il report confronta esplicitamente main.ts con useIPC.ts",
+          "passed": true,
+          "evidence": "Tabella con Handler | Namespace | Presenza preload.ts | Presenza useIPC.ts"
+        },
+        {
+          "text": "Vengono citati handler specifici con il loro namespace",
+          "passed": true,
+          "evidence": "Tutti i 27 handler elencati con namespace esatto"
+        },
+        {
+          "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)",
+          "passed": true,
+          "evidence": "Sezione \u00a75 sui tipi object nel preload e \u00a73 allineamento preload bridge"
+        },
+        {
+          "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente",
+          "passed": true,
+          "evidence": "claudeMd:getProject E useCostSummary hook mai consumato \u2014 pi\u00f9 completo della versione con skill"
+        }
+      ],
+      "notes": []
+    }
+  ],
+  "run_summary": {
+    "with_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 138.8667,
+        "stddev": 69.2127,
+        "min": 84.9,
+        "max": 216.9
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "without_skill": {
+      "pass_rate": {
+        "mean": 1.0,
+        "stddev": 0.0,
+        "min": 1.0,
+        "max": 1.0
+      },
+      "time_seconds": {
+        "mean": 138.8333,
+        "stddev": 47.0597,
+        "min": 87.9,
+        "max": 180.7
+      },
+      "tokens": {
+        "mean": 0.0,
+        "stddev": 0.0,
+        "min": 0,
+        "max": 0
+      }
+    },
+    "delta": {
+      "pass_rate": "+0.00",
+      "time_seconds": "+0.0",
+      "tokens": "+0"
+    }
+  },
+  "notes": []
+}

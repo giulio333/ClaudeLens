@@ -1,0 +1,33 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+dist-electron/
+
+# Electron builder output
+release/
+out/
+
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Logs
+*.log
+npm-debug.log*
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Claude Code — dati personali locali
+.claude/agent-memory/
+.claude/settings.local.json
+.claude/worktrees/
+
+# Editor
+.idea/
+*.swp
+*.swo

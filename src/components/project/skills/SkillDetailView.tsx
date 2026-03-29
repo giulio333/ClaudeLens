@@ -1,0 +1,79 @@
+import { useState } from 'react'
+import Markdown from '../../Markdown'
+import { Skill } from '../../../hooks/useIPC'
+import { SkillPropertiesPanel } from './SkillPropertiesPanel'
+
+export function SkillDetailView({ skill, onBack }: { skill: Skill; onBack: () => void }) {
+  const [showRaw, setShowRaw] = useState(false)
+
+  return (
+    <div className="h-full flex flex-col bg-[#161a26]">
+      <div className="shrink-0 border-b border-[#252836] px-6 py-3 flex items-center gap-3">
+        <button
+          onClick={onBack}
+          className="flex items-center gap-1.5 text-[12px] text-zinc-400 hover:text-[#9096b0] transition-colors"
+        >
+          <span className="text-[10px]">←</span>
+          Skills
+        </button>
+        <span className="text-zinc-200 text-[11px]">/</span>
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="text-[11px] shrink-0">⚡</span>
+          <span className="text-[13px] font-semibold text-[#e0e2f0] truncate">{skill.name}</span>
+          <span className={`shrink-0 text-[9px] font-bold uppercase tracking-[0.1em] px-1.5 py-0.5 rounded ${
+            skill.scope === 'global'
+              ? 'bg-blue-950/20 text-blue-400 ring-1 ring-blue-700/30'
+              : 'bg-emerald-950/20 text-emerald-400 ring-1 ring-emerald-700/30'
+          }`}>
+            {skill.scope}
+          </span>
+        </div>
+        {skill.argumentHint && (
+          <code className="ml-auto shrink-0 text-[10px] font-mono text-zinc-400 bg-[#1c2133] px-2 py-0.5 rounded">
+            {skill.argumentHint}
+          </code>
+        )}
+      </div>
+
+      {skill.description && (
+        <div className="shrink-0 px-6 py-2 bg-[#161a26] border-b border-[#1c2030]">
+          <p className="text-[11px] text-zinc-500 leading-relaxed">{skill.description}</p>
+        </div>
+      )}
+
+      <div className="flex-1 flex overflow-hidden">
+        <div className="flex-1 flex flex-col overflow-hidden">
+          <div className="shrink-0 border-b border-[#1c2030] px-6 flex items-center gap-0.5 h-8">
+            {(['View', 'Raw'] as const).map(tab => (
+              <button
+                key={tab}
+                onClick={() => setShowRaw(tab === 'Raw')}
+                className={`px-3 h-full text-[11px] font-medium transition-colors border-b-2 -mb-px ${
+                  (tab === 'Raw') === showRaw
+                    ? 'text-[#e0e2f0] border-zinc-800'
+                    : 'text-zinc-400 border-transparent hover:text-[#787e98]'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          <div className="flex-1 overflow-auto">
+            <div className="px-8 py-6 max-w-3xl">
+              {!showRaw ? (
+                <Markdown>{skill.content}</Markdown>
+              ) : (
+                <pre className="bg-zinc-950 text-zinc-200 p-5 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto">
+                  <code>{skill.rawContent}</code>
+                </pre>
+              )}
+            </div>
+          </div>
+        </div>
+
+        <SkillPropertiesPanel skill={skill} />
+      </div>
+    </div>
+  )
+}

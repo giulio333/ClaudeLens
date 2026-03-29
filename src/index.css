@@ -1,0 +1,144 @@
+@import 'highlight.js/styles/github-dark-dimmed.css';
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* ── Design tokens ────────────────────────────────────────────────────────── */
+:root {
+  --font-sans: 'DM Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'DM Mono', 'SF Mono', monospace;
+
+  /* Obsidian blue-tinted dark palette */
+  --bg-deep:    #0d0f14;
+  --bg-surface: #111318;
+  --bg-card:    #161a26;
+  --bg-hover:   #1c2133;
+  --border:     #252836;
+  --border-sub: #1c2030;
+
+  --text-primary:   #e0e2f0;
+  --text-secondary: #9096b0;
+  --text-muted:     #555c75;
+
+  --accent:     #6366f1;
+  --accent-dim: rgba(99, 102, 241, 0.15);
+}
+
+* {
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-deep);
+  color: var(--text-primary);
+}
+
+/* ── Scrollbar ────────────────────────────────────────────────────────────── */
+::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #252836;
+  border-radius: 999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #2e3450;
+}
+
+/* ── prose-lens: dark markdown ────────────────────────────────────────────── */
+.prose-lens {
+  --tw-prose-body:         #9096b0;
+  --tw-prose-headings:     #e0e2f0;
+  --tw-prose-lead:         #787e98;
+  --tw-prose-links:        #818cf8;
+  --tw-prose-bold:         #e0e2f0;
+  --tw-prose-counters:     #555c75;
+  --tw-prose-bullets:      #555c75;
+  --tw-prose-hr:           #252836;
+  --tw-prose-quotes:       #9096b0;
+  --tw-prose-quote-borders:#4338ca;
+  --tw-prose-captions:     #555c75;
+  --tw-prose-code:         #a5b4fc;
+  --tw-prose-pre-code:     #c4c8e0;
+  --tw-prose-pre-bg:       #0d0f14;
+  --tw-prose-th-borders:   #252836;
+  --tw-prose-td-borders:   #1c2030;
+}
+
+.prose-lens :where(code):not(pre code)::before,
+.prose-lens :where(code):not(pre code)::after {
+  content: '';
+}
+
+.prose-lens :where(code):not(pre code) {
+  font-family: var(--font-mono);
+  background: rgba(99, 102, 241, 0.12);
+  color: #a5b4fc;
+  padding: 0.1em 0.4em;
+  border-radius: 4px;
+  font-size: 0.82em;
+  font-weight: 500;
+}
+
+.prose-lens pre {
+  background: #0d0f14 !important;
+  border: 1px solid #252836;
+  border-radius: 8px;
+  padding: 0 !important;
+  overflow: hidden;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+}
+
+.prose-lens pre code.hljs {
+  font-family: var(--font-mono);
+  background: transparent !important;
+  padding: 1rem;
+  font-size: 0.8rem;
+  line-height: 1.6;
+}
+
+.prose-lens table {
+  width: 100%;
+  font-size: 0.875rem;
+}
+
+.prose-lens thead {
+  background: #1c2133;
+}
+
+.prose-lens th {
+  color: #787e98;
+  font-weight: 600;
+}
+
+.prose-lens td, .prose-lens th {
+  padding: 0.5rem 0.75rem;
+}
+
+.prose-lens tr:nth-child(even) {
+  background: rgba(28, 33, 51, 0.4);
+}
+
+.prose-lens input[type='checkbox'] {
+  margin-right: 0.5rem;
+  accent-color: #6366f1;
+}
+
+.prose-lens blockquote {
+  border-left: 2px solid #4338ca;
+  background: rgba(67, 56, 202, 0.08);
+  border-radius: 0 4px 4px 0;
+  font-style: normal;
+}
+
+.prose-lens blockquote p {
+  color: #9096b0;
+}
