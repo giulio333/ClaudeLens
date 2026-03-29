@@ -2,6 +2,7 @@
   "name": "claudelens-app",
   "version": "1.0.0",
   "description": "ClaudeLens — GUI for Claude Code data",
+  "author": "Giulio Di Giamberardino",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\"",
