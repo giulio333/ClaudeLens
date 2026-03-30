@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import Markdown from '../../Markdown'
 import { MemoryTopic, TopicInput } from '../../../hooks/useIPC'
-import { useUpdateTopic } from '../../../hooks/useIPC'
+import { useUpdateTopic, useDeleteTopic } from '../../../hooks/useIPC'
 import { BackButton } from '../shared/BackButton'
 import { parseMemoryContent, readingTime, formatDate, Heading } from './utils'
 
@@ -58,6 +58,12 @@ export function MemoryTopicView({
   })
 
   const updateMut = useUpdateTopic(hash)
+  const deleteMut = useDeleteTopic(hash)
+  const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const handleDelete = () => {
+    deleteMut.mutate(topic.filename, { onSuccess: onBack })
+  }
 
   const handleCopy = () => {
     navigator.clipboard.writeText(content)
@@ -226,6 +232,38 @@ export function MemoryTopicView({
               >
                 {showOutline ? 'Close' : 'Outline'}
               </button>
+            )}
+          </div>
+
+          <div className="border-t border-[#252836]" />
+
+          <div>
+            {!confirmDelete ? (
+              <button
+                onClick={() => setConfirmDelete(true)}
+                className="w-full text-[12px] font-medium px-3 py-2 rounded-md text-red-500/70 hover:text-red-400 hover:bg-red-950/20 transition-colors"
+              >
+                Delete topic
+              </button>
+            ) : (
+              <div className="space-y-2">
+                <p className="text-[11px] text-red-400 text-center">Delete this topic?</p>
+                <div className="flex gap-1.5">
+                  <button
+                    onClick={() => setConfirmDelete(false)}
+                    className="flex-1 text-[12px] font-medium px-2 py-1.5 rounded-md bg-[#1c2133] text-[#9096b0] hover:text-[#c4c8e0] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleDelete}
+                    disabled={deleteMut.isLoading}
+                    className="flex-1 text-[12px] font-semibold px-2 py-1.5 rounded-md bg-red-950/40 text-red-400 hover:bg-red-950/60 transition-colors disabled:opacity-40"
+                  >
+                    {deleteMut.isLoading ? '...' : 'Delete'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
 
