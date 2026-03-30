@@ -1,7 +1,7 @@
 #!/bin/bash
 set -e
 
-PROJECT_DIR="$(cd "$(dirname "$0")/../../../claudelens-app" && pwd)"
+PROJECT_DIR="$(cd "$(dirname "$0")/../../.." && pwd)"
 
 if [ ! -d "$PROJECT_DIR" ]; then
     echo "Errore: cartella $PROJECT_DIR non trovata"
