@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Markdown from '../../Markdown'
-import { MemoryTopic } from '../../../hooks/useIPC'
+import { MemoryTopic, TopicInput } from '../../../hooks/useIPC'
+import { useUpdateTopic } from '../../../hooks/useIPC'
 import { BackButton } from '../shared/BackButton'
 import { parseMemoryContent, readingTime, formatDate, Heading } from './utils'
 
@@ -24,16 +25,20 @@ function SidebarRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+type TabMode = 'view' | 'raw' | 'edit'
+
 export function MemoryTopicView({
   topic,
   content,
+  hash,
   onBack,
 }: {
   topic: MemoryTopic
   content: string
+  hash: string
   onBack: () => void
 }) {
-  const [showRaw, setShowRaw] = useState(false)
+  const [tab, setTab] = useState<TabMode>('view')
   const [showOutline, setShowOutline] = useState(false)
   const [copied, setCopied] = useState(false)
   const { body, wordCount, charCount, linkCount, headings } = parseMemoryContent(content)
@@ -44,11 +49,36 @@ export function MemoryTopicView({
     ? createdAt.slice(0, 10) === updatedAt.slice(0, 10)
     : true
 
+  const frontmatterBody = content.replace(/^---[\s\S]*?---\n\n?/, '')
+  const [editForm, setEditForm] = useState<TopicInput>({
+    name: topic.name,
+    description: topic.description,
+    type: topic.type,
+    content: frontmatterBody,
+  })
+
+  const updateMut = useUpdateTopic(hash)
+
   const handleCopy = () => {
     navigator.clipboard.writeText(content)
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  const handleSave = () => {
+    const valid = editForm.name.trim() && editForm.description.trim() && editForm.content.trim()
+    if (!valid) return
+    updateMut.mutate(
+      { filename: topic.filename, input: editForm },
+      { onSuccess: () => { setTab('view'); onBack() } }
+    )
+  }
+
+  const tabs: { id: TabMode; label: string }[] = [
+    { id: 'view', label: 'View' },
+    { id: 'raw', label: 'Raw' },
+    { id: 'edit', label: 'Edit' },
+  ]
 
   return (
     <div className="h-full overflow-hidden" style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}>
@@ -71,37 +101,90 @@ export function MemoryTopicView({
       <div className="overflow-hidden flex">
         <div className="flex-1 overflow-hidden flex flex-col">
           <div className="flex items-center gap-0.5 border-b border-[#252836] bg-[#161a26] px-8 h-10 shrink-0">
-            <button
-              onClick={() => setShowRaw(false)}
-              className={`px-3 py-2 text-[13px] font-medium transition-colors border-b-2 ${
-                !showRaw
-                  ? 'text-[#e0e2f0] border-zinc-900'
-                  : 'text-zinc-400 border-transparent hover:text-[#787e98]'
-              }`}
-            >
-              View
-            </button>
-            <button
-              onClick={() => setShowRaw(true)}
-              className={`px-3 py-2 text-[13px] font-medium transition-colors border-b-2 ${
-                showRaw
-                  ? 'text-[#e0e2f0] border-zinc-900'
-                  : 'text-zinc-400 border-transparent hover:text-[#787e98]'
-              }`}
-            >
-              Raw
-            </button>
+            {tabs.map(t => (
+              <button
+                key={t.id}
+                onClick={() => setTab(t.id)}
+                className={`px-3 py-2 text-[13px] font-medium transition-colors border-b-2 ${
+                  tab === t.id
+                    ? 'text-[#e0e2f0] border-zinc-900'
+                    : 'text-zinc-400 border-transparent hover:text-[#787e98]'
+                }`}
+              >
+                {t.label}
+              </button>
+            ))}
           </div>
 
           <div className="flex-1 overflow-y-auto px-8 py-7">
-            {!showRaw ? (
+            {tab === 'view' && (
               <div className="prose prose-zinc prose-sm max-w-none prose-lens">
                 <Markdown>{body}</Markdown>
               </div>
-            ) : (
+            )}
+            {tab === 'raw' && (
               <pre className="bg-zinc-900 text-zinc-100 p-4 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto">
                 <code>{content}</code>
               </pre>
+            )}
+            {tab === 'edit' && (
+              <div className="space-y-4 max-w-2xl">
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Name</label>
+                    <input
+                      value={editForm.name}
+                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
+                      className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Type</label>
+                    <select
+                      value={editForm.type}
+                      onChange={e => setEditForm(f => ({ ...f, type: e.target.value as TopicInput['type'] }))}
+                      className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                    >
+                      <option value="user">user</option>
+                      <option value="feedback">feedback</option>
+                      <option value="project">project</option>
+                      <option value="reference">reference</option>
+                    </select>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Short description</label>
+                  <input
+                    value={editForm.description}
+                    onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
+                    className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                  />
+                </div>
+                <div>
+                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Content</label>
+                  <textarea
+                    value={editForm.content}
+                    onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
+                    rows={16}
+                    className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-2 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-y font-mono leading-relaxed"
+                  />
+                </div>
+                <div className="flex items-center justify-end gap-2">
+                  <button
+                    onClick={() => setTab('view')}
+                    className="text-[13px] text-zinc-500 hover:text-[#c4c8e0] px-3 py-1.5 rounded-md hover:bg-[#1c2133] transition-colors"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={handleSave}
+                    disabled={updateMut.isLoading || !editForm.name.trim() || !editForm.description.trim() || !editForm.content.trim()}
+                    className="text-[13px] font-medium bg-indigo-600 text-white px-4 py-1.5 rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    {updateMut.isLoading ? 'Saving...' : 'Save'}
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>
