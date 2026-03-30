@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMemoryProject, useCreateTopic, useUpdateTopic, useDeleteTopic, MemoryTopic, TopicInput } from '../../../hooks/useIPC'
+import { useMemoryProject, useCreateTopic, useDeleteTopic, MemoryTopic, TopicInput } from '../../../hooks/useIPC'
 import { MemoryIndexFile } from './MemoryIndexFile'
 import { TopicForm, EMPTY_FORM } from './TopicForm'
 
@@ -63,11 +63,9 @@ export function MemorySection({ hash, onOpenTopic }: {
 }) {
   const { data, isLoading } = useMemoryProject(hash)
   const createMut = useCreateTopic(hash)
-  const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
 
   const [creating, setCreating] = useState(false)
-  const [editingFilename, setEditingFilename] = useState<string | null>(null)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
   if (isLoading) return <p className="text-sm text-zinc-400">Loading...</p>
@@ -77,31 +75,13 @@ export function MemorySection({ hash, onOpenTopic }: {
     createMut.mutate(input, { onSuccess: () => setCreating(false) })
   }
 
-  const handleUpdate = (filename: string, input: TopicInput) => {
-    updateMut.mutate({ filename, input }, { onSuccess: () => setEditingFilename(null) })
-  }
-
   const handleDelete = (filename: string) => {
     deleteMut.mutate(filename, { onSuccess: () => setConfirmDelete(null) })
   }
 
   const renderTopicRow = (t: MemoryTopic, topicContent: string | null, readOnly: boolean) => {
     const cfg = MEMORY_TYPE_CONFIG[t.type] ?? MEMORY_TYPE_CONFIG.user
-    const isEditing = !readOnly && editingFilename === t.filename
     const isConfirming = !readOnly && confirmDelete === t.filename
-
-    if (isEditing && topicContent !== null) {
-      const frontmatterContent = topicContent.replace(/^---[\s\S]*?---\n\n?/, '')
-      return (
-        <TopicForm
-          key={t.filename}
-          initial={{ name: t.name, description: t.description, type: t.type, content: frontmatterContent }}
-          onSave={input => handleUpdate(t.filename, input)}
-          onCancel={() => setEditingFilename(null)}
-          saving={updateMut.isLoading}
-        />
-      )
-    }
 
     return (
       <div
@@ -122,26 +102,15 @@ export function MemorySection({ hash, onOpenTopic }: {
         {!isConfirming && (
           <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
             {!readOnly && (
-              <>
-                <button
-                  onClick={e => { e.stopPropagation(); setEditingFilename(t.filename) }}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[#3d4460] hover:text-indigo-400 hover:bg-indigo-950/25 transition-all"
-                  title="Edit"
-                >
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M8.5 1.5L10.5 3.5L4 10H2V8L8.5 1.5Z"/>
-                  </svg>
-                </button>
-                <button
-                  onClick={e => { e.stopPropagation(); setConfirmDelete(t.filename) }}
-                  className="w-6 h-6 flex items-center justify-center rounded text-[#3d4460] hover:text-red-400 hover:bg-red-950/25 transition-all"
-                  title="Delete"
-                >
-                  <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M2 3H10M4 3V2H8V3M3 3l.5 7h5L9 3"/>
-                  </svg>
-                </button>
-              </>
+              <button
+                onClick={e => { e.stopPropagation(); setConfirmDelete(t.filename) }}
+                className="w-6 h-6 flex items-center justify-center rounded text-[#3d4460] hover:text-red-400 hover:bg-red-950/25 transition-all"
+                title="Delete"
+              >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 3H10M4 3V2H8V3M3 3l.5 7h5L9 3"/>
+                </svg>
+              </button>
             )}
             {topicContent && (
               <svg className="w-3 h-3 text-[#3d4460] group-hover:text-[#555c75] transition-colors ml-0.5"

@@ -119,7 +119,7 @@ export default function ProjectOverview() {
           <MemoryFullView
             project={view.project}
             onBack={() => setView({ type: 'overview' })}
-            onOpenTopic={(topic, content) => setView({ type: 'memory-topic', topic, content })}
+            onOpenTopic={(topic, content) => setView({ type: 'memory-topic', topic, content, hash: view.project.hash })}
           />
         )
       case 'project-claudemd':
@@ -160,6 +160,7 @@ export default function ProjectOverview() {
             <MemoryTopicView
               topic={view.topic}
               content={view.content}
+              hash={view.hash}
               onBack={() => setView({ type: 'overview' })}
             />
           </ErrorBoundary>
