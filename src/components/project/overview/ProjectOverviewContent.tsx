@@ -100,16 +100,27 @@ export function ProjectOverviewContent({
                 <p className="text-[11px] text-[#3d4460] font-mono mt-0.5 truncate">{project.realPath}</p>
               </div>
             </div>
-            <button
-              onClick={() => onNavigate({ type: 'ai-assistant', project })}
-              className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/12 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors text-[11.5px] font-medium text-indigo-400 hover:text-indigo-300 shrink-0"
-            >
-              <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="6" cy="6" r="4.5"/>
-                <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none"/>
-              </svg>
-              AI Assistant
-            </button>
+            <div className="flex items-center gap-2 shrink-0">
+              <button
+                onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-emerald-500/12 hover:bg-emerald-500/20 border border-emerald-500/20 transition-colors text-[11.5px] font-medium text-emerald-400 hover:text-emerald-300"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M2 3l3 3-3 3M6.5 9h3.5"/>
+                </svg>
+                Open in Claude Code
+              </button>
+              <button
+                onClick={() => onNavigate({ type: 'ai-assistant', project })}
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-indigo-500/12 hover:bg-indigo-500/20 border border-indigo-500/20 transition-colors text-[11.5px] font-medium text-indigo-400 hover:text-indigo-300"
+              >
+                <svg width="12" height="12" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+                  <circle cx="6" cy="6" r="4.5"/>
+                  <circle cx="6" cy="6" r="1.5" fill="currentColor" stroke="none"/>
+                </svg>
+                AI Assistant
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-4">
