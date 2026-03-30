@@ -60,20 +60,27 @@ export function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; 
         <div className="px-6 py-4 border-b border-[#1c2030] flex items-center gap-2">
           <span className="text-base">🤖</span>
           <h2 className="text-[14px] font-semibold text-[#e0e2f0]">New Global Agent</h2>
-          <button onClick={onClose} className="ml-auto text-zinc-400 hover:text-[#9096b0] text-lg leading-none">×</button>
+          <a
+            href="#"
+            onClick={e => { e.preventDefault(); window.open('https://code.claude.com/docs/en/sub-agents#supported-frontmatter-fields', '_blank', 'noopener') }}
+            className="ml-auto text-[11px] text-violet-400 hover:text-violet-300 transition-colors"
+          >
+            View docs ↗
+          </a>
+          <button onClick={onClose} className="text-zinc-400 hover:text-[#9096b0] text-lg leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
           <div>
             <label className={labelCls}>
               Name <span className="text-red-400 ml-0.5">*</span>
-              <FieldHint text="File name in ~/.claude/agents/. E.g.: 'code-reviewer' → ~/.claude/agents/code-reviewer.md" />
+              <FieldHint text="Unique identifier using lowercase letters and hyphens. E.g.: code-reviewer" />
             </label>
             <input className={inputCls} placeholder="es. code-reviewer" value={form.name} onChange={e => set('name', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Description
-              <FieldHint text="Agent description. Claude uses it to decide when to use this agent autonomously." />
+              <FieldHint text="When Claude should delegate to this subagent. Be specific about the use case." />
             </label>
             <input className={inputCls} placeholder="e.g. Reviews code for quality and security" value={form.description ?? ''} onChange={e => set('description', e.target.value)} />
           </div>
@@ -87,21 +94,21 @@ export function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; 
           <div>
             <label className={labelCls}>
               Model
-              <FieldHint text="Model to use for this agent. If empty, uses the project default." />
+              <FieldHint text="Model to use: sonnet, opus, haiku, a full model ID (e.g. claude-opus-4-6), or inherit. Defaults to inherit." />
             </label>
             <input className={inputCls} placeholder="es. claude-haiku-4-5-20251001" value={form.model ?? ''} onChange={e => set('model', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Allowed Tools
-              <FieldHint text="Tools the agent can use, comma-separated. If empty, can use all tools." />
+              <FieldHint text="Tools the subagent can use, comma-separated. Inherits all tools if omitted." />
             </label>
             <input className={inputCls} placeholder="es. Read, Grep, Bash" value={form.allowedToolsRaw} onChange={e => set('allowedToolsRaw', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Disallowed Tools
-              <FieldHint text="Tools the agent CANNOT use, comma-separated." />
+              <FieldHint text="Tools to deny, comma-separated. Removed from the inherited or specified tools list." />
             </label>
             <input className={inputCls} placeholder="es. Write, Edit" value={form.disallowedToolsRaw} onChange={e => set('disallowedToolsRaw', e.target.value)} />
           </div>
@@ -109,14 +116,14 @@ export function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; 
             <div>
               <label className={labelCls}>
                 Permission Mode
-                <FieldHint text="Permission mode: 'default', 'acceptEdits', 'bypassPermissions'." />
+                <FieldHint text="Permission mode: default, acceptEdits, dontAsk, bypassPermissions, or plan." />
               </label>
               <input className={inputCls} placeholder="default" value={form.permissionMode ?? ''} onChange={e => set('permissionMode', e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>
                 Max Turns
-                <FieldHint text="Maximum number of conversation turns for the agent." />
+                <FieldHint text="Maximum number of agentic turns before the subagent stops." />
               </label>
               <input className={inputCls} type="number" placeholder="es. 10" value={form.maxTurns ?? ''} onChange={e => set('maxTurns', e.target.value ? Number(e.target.value) : undefined)} />
             </div>
@@ -124,28 +131,28 @@ export function CreateAgentModal({ onClose, onCreated }: { onClose: () => void; 
           <div>
             <label className={labelCls}>
               Isolation
-              <FieldHint text="Isolation mode: 'worktree' runs the agent in a temporary git worktree." />
+              <FieldHint text="Set to worktree to run in a temporary git worktree. Automatically cleaned up if no changes are made." />
             </label>
             <input className={inputCls} placeholder="es. worktree" value={form.isolation ?? ''} onChange={e => set('isolation', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Memory
-              <FieldHint text="Path or ID of the memory file to inject into the agent's context." />
+              <FieldHint text="Persistent memory scope: user, project, or local. Enables cross-session learning." />
             </label>
             <input className={inputCls} placeholder="es. ~/.claude/memory.md" value={form.memory ?? ''} onChange={e => set('memory', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Skills
-              <FieldHint text="Names of skills available for the agent, comma-separated." />
+              <FieldHint text="Skills to load into the subagent's context at startup. Full skill content is injected. Subagents don't inherit skills from the parent conversation." />
             </label>
             <input className={inputCls} placeholder="es. commit-helper, test-runner" value={form.skillsRaw} onChange={e => set('skillsRaw', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               MCP Servers
-              <FieldHint text="IDs of MCP servers available for the agent, comma-separated." />
+              <FieldHint text="MCP servers available to this subagent, comma-separated. Each entry is a server name referencing an already-configured server (e.g. slack)." />
             </label>
             <input className={inputCls} placeholder="es. filesystem, github" value={form.mcpServersRaw} onChange={e => set('mcpServersRaw', e.target.value)} />
           </div>

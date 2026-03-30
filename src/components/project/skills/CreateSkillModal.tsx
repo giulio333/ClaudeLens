@@ -55,20 +55,27 @@ export function CreateSkillModal({ onClose, onCreated }: { onClose: () => void; 
         <div className="px-6 py-4 border-b border-[#1c2030] flex items-center gap-2">
           <span className="text-base">⚡</span>
           <h2 className="text-[14px] font-semibold text-[#e0e2f0]">New Global Skill</h2>
-          <button onClick={onClose} className="ml-auto text-zinc-400 hover:text-[#9096b0] text-lg leading-none">×</button>
+          <a
+            href="#"
+            onClick={e => { e.preventDefault(); window.open('https://code.claude.com/docs/en/skills#frontmatter-reference', '_blank', 'noopener') }}
+            className="ml-auto text-[11px] text-indigo-400 hover:text-indigo-300 transition-colors"
+          >
+            View docs ↗
+          </a>
+          <button onClick={onClose} className="text-zinc-400 hover:text-[#9096b0] text-lg leading-none">×</button>
         </div>
         <form onSubmit={handleSubmit} className="overflow-y-auto flex-1 px-6 py-5 space-y-4">
           <div>
             <label className={labelCls}>
               Name <span className="text-red-400 ml-0.5">*</span>
-              <FieldHint text="Skill directory name in ~/.claude/skills/. Letters, numbers and hyphens only. Will be the /name command." />
+              <FieldHint text="Display name for the skill. If omitted, uses the directory name. Lowercase letters, numbers, and hyphens only (max 64 characters)." />
             </label>
             <input className={inputCls} placeholder="es. commit-helper" value={form.name} onChange={e => set('name', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Description
-              <FieldHint text="Short description visible in the skill list. Used by Claude to understand when to invoke the skill." />
+              <FieldHint text="What the skill does and when to use it. Claude uses this to decide when to apply the skill. Front-load the key use case — descriptions over 250 characters are truncated in the listing." />
             </label>
             <input className={inputCls} placeholder="e.g. Generates structured commit messages" value={form.description ?? ''} onChange={e => set('description', e.target.value)} />
           </div>
@@ -82,35 +89,35 @@ export function CreateSkillModal({ onClose, onCreated }: { onClose: () => void; 
           <div>
             <label className={labelCls}>
               Argument Hint
-              <FieldHint text="Hint for the expected argument. E.g.: '<branch-name>' appears in autocomplete." />
+              <FieldHint text="Hint shown during autocomplete to indicate expected arguments. E.g.: [issue-number] or [filename] [format]." />
             </label>
             <input className={inputCls} placeholder="es. <message>" value={form.argumentHint ?? ''} onChange={e => set('argumentHint', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Allowed Tools
-              <FieldHint text="List of allowed tools, comma-separated. Limits which tools Claude can use in the skill." />
+              <FieldHint text="Tools Claude can use without asking permission when this skill is active. Comma-separated." />
             </label>
             <input className={inputCls} placeholder="es. Bash, Read, Write" value={form.allowedToolsRaw} onChange={e => set('allowedToolsRaw', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Model
-              <FieldHint text="Claude model to use for this skill. If empty, uses the default. E.g.: claude-sonnet-4-6" />
+              <FieldHint text="Model to use when this skill is active. If empty, inherits from the session." />
             </label>
             <input className={inputCls} placeholder="es. claude-sonnet-4-6" value={form.model ?? ''} onChange={e => set('model', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Agent
-              <FieldHint text="Name of an agent to delegate for executing this skill." />
+              <FieldHint text="Which subagent type to use when context: fork is set." />
             </label>
             <input className={inputCls} placeholder="es. my-agent" value={form.agent ?? ''} onChange={e => set('agent', e.target.value)} />
           </div>
           <div>
             <label className={labelCls}>
               Context
-              <FieldHint text="Additional context to inject into the prompt when the skill is active." />
+              <FieldHint text="Set to fork to run in a forked subagent context." />
             </label>
             <input className={inputCls} placeholder="es. project-files" value={form.context ?? ''} onChange={e => set('context', e.target.value)} />
           </div>
