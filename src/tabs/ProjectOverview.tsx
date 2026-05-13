@@ -55,7 +55,7 @@ export default function ProjectOverview() {
   function renderMainView() {
     switch (view.type) {
       case 'global-home':
-        return <GlobalHomeView onNavigate={setView} />
+        return <GlobalHomeView onNavigate={setView} onSelectProject={handleSelectProject} />
       case 'global-claudemd':
         return <GlobalClaudeMdView onBack={() => setView({ type: 'global-home' })} />
       case 'global-skills':
@@ -186,7 +186,7 @@ export default function ProjectOverview() {
 
   return (
     <div className="flex h-full">
-      {/* Sidebar */}
+      {false && (
       <aside className="w-[200px] shrink-0 bg-[#0f1117] border-r border-[#1e2130] overflow-hidden flex flex-col">
 
         {/* Drag region (titlebar area, no visible content) */}
@@ -279,6 +279,7 @@ export default function ProjectOverview() {
           </ul>
         </div>
       </aside>
+      )/* sidebar disabled */}
 
       {/* Delete confirmation dialog */}
       {projectToDelete && (
