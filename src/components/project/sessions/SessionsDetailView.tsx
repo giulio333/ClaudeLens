@@ -140,7 +140,7 @@ export function SessionsDetailView({
           ].map(({ label, value }, i) => (
             <div key={label} style={{
               padding: '14px 0',
-              borderLeft: i > 0 ? '1px solid oklch(0.32 0.012 60)' : 'none',
+              borderLeft: i > 0 ? '1px solid oklch(0.28 0.010 60)' : 'none',
               paddingLeft: i > 0 ? '24px' : '28px',
             }}>
               <div style={{
@@ -148,7 +148,7 @@ export function SessionsDetailView({
                 fontSize: '9.5px',
                 letterSpacing: '0.22em',
                 textTransform: 'uppercase',
-                color: 'oklch(0.62 0.005 80)',
+                color: 'oklch(0.65 0.005 80)',
               }}>
                 {label}
               </div>
