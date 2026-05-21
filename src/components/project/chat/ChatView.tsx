@@ -60,7 +60,7 @@ export function ChatView({
         <button
           onClick={onBack}
           style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '10.5px',
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
@@ -76,14 +76,14 @@ export function ChatView({
           {projectName} · Sessions
         </button>
         <span style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '10.5px',
           color: 'var(--cl-ink-4)',
           opacity: 0.4,
           marginRight: '14px',
         }}>/</span>
         <span style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '10.5px',
           letterSpacing: '0.16em',
           textTransform: 'uppercase',
@@ -113,7 +113,7 @@ export function ChatView({
                   color: detailsFilter === v ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
                   border: 'none',
                   padding: '4px 10px',
-                  fontFamily: 'var(--cl-mono)',
+                  fontFamily: 'var(--font-mono)',
                   fontSize: '10px',
                   letterSpacing: '0.12em',
                   textTransform: 'uppercase',
@@ -137,7 +137,7 @@ export function ChatView({
               color: 'var(--cl-paper)',
               border: 'none',
               borderRadius: '2px',
-              fontFamily: 'var(--cl-sans)',
+              fontFamily: 'var(--font-sans)',
               fontSize: '11px',
               fontWeight: 500,
               letterSpacing: '0.01em',
@@ -169,7 +169,7 @@ export function ChatView({
       }}>
         <div>
           <div style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '10px',
             letterSpacing: '0.20em',
             textTransform: 'uppercase',
@@ -199,7 +199,7 @@ export function ChatView({
             {sessionTitle}
           </h1>
           <div style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '11px',
             color: 'var(--cl-ink-3)',
           }}>
@@ -233,7 +233,7 @@ export function ChatView({
               paddingLeft: i > 0 ? '14px' : '0',
             }}>
               <div style={{
-                fontFamily: 'var(--cl-mono)',
+                fontFamily: 'var(--font-mono)',
                 fontSize: '9.5px',
                 letterSpacing: '0.18em',
                 textTransform: 'uppercase',
@@ -270,7 +270,7 @@ export function ChatView({
           flexShrink: 0,
         }}>
           <span style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '9.5px',
             letterSpacing: '0.24em',
             textTransform: 'uppercase',
@@ -282,7 +282,7 @@ export function ChatView({
           <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'nowrap' }}>
             {toolSummary.map(([name, count], i) => (
               <span key={name} style={{
-                fontFamily: 'var(--cl-mono)',
+                fontFamily: 'var(--font-mono)',
                 fontSize: '11px',
                 color: 'var(--cl-ink-2)',
                 display: 'inline-flex',
@@ -321,7 +321,7 @@ export function ChatView({
         }}>
           {isLoading && (
             <p style={{
-              fontFamily: 'var(--cl-mono)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '11px',
               color: 'var(--cl-ink-3)',
               padding: '32px 28px',
@@ -331,7 +331,7 @@ export function ChatView({
           )}
           {messages?.length === 0 && !isLoading && (
             <p style={{
-              fontFamily: 'var(--cl-mono)',
+              fontFamily: 'var(--font-mono)',
               fontSize: '11px',
               color: 'var(--cl-ink-3)',
               fontStyle: 'italic',
