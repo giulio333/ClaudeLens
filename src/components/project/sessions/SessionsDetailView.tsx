@@ -1,5 +1,31 @@
-import { useSessionList, useProjectCost, SessionSummary } from '../../../hooks/useIPC'
+import { useSessionList, useProjectCost, useLiveSessions, SessionSummary, BgSession } from '../../../hooks/useIPC'
 import { fmt, fmtDate, fmtModel, modelColor } from '../utils'
+
+function bgDotColor(b: BgSession): string {
+  if (b.state === 'done') return '#22c55e'
+  if (b.state === 'failed') return '#ef4444'
+  if (b.alive && (b.tempo === 'thinking' || b.tempo === 'busy' || b.inFlightTasks > 0)) return '#6366f1'
+  if (b.alive) return '#0ea5e9'
+  return '#94a3b8'
+}
+
+function BgBadge({ b }: { b: BgSession }) {
+  return (
+    <span
+      title={`Background session · ${b.state}${b.alive ? ' · live' : ''}`}
+      style={{
+        display: 'inline-flex', alignItems: 'center', gap: '5px',
+        padding: '2px 7px', borderRadius: '3px',
+        border: '1px solid var(--cl-line)',
+        fontFamily: 'var(--cl-mono)', fontSize: '9.5px', fontWeight: 600,
+        letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cl-ink-3)',
+      }}
+    >
+      <span style={{ width: '6px', height: '6px', borderRadius: '50%', background: bgDotColor(b) }} />
+      agent
+    </span>
+  )
+}
 
 export function SessionsDetailView({
   project,
@@ -12,6 +38,8 @@ export function SessionsDetailView({
 }) {
   const { data: sessions, isLoading } = useSessionList(project.hash)
   const { data: cost } = useProjectCost(project.hash)
+  const { data: bgSessions = [] } = useLiveSessions()
+  const bgMap = new Map(bgSessions.map(b => [`${b.sessionId}.jsonl`, b]))
   const projectName = project.realPath.split('/').pop() ?? project.realPath
 
   const maxTokens = sessions ? Math.max(...sessions.map(s => s.totalTokens), 1) : 1
@@ -155,6 +183,7 @@ export function SessionsDetailView({
         {sessions && sessions.length > 0 && sessions.map((s: SessionSummary, idx) => {
           const tokenPct = (s.totalTokens / maxTokens) * 100
           const title = s.customTitle || fmtDate(s.date)
+          const bg = bgMap.get(s.filename)
           return (
             <div
               key={s.filename}
@@ -197,13 +226,15 @@ export function SessionsDetailView({
                 <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', gap: '16px', marginBottom: '10px' }}>
                   <div>
                     <div style={{
+                      display: 'flex', alignItems: 'center', gap: '10px',
                       fontSize: '15px',
                       fontWeight: 600,
                       letterSpacing: '-0.015em',
                       color: 'var(--cl-ink)',
                       lineHeight: 1.2,
                     }}>
-                      {title}
+                      <span>{title}</span>
+                      {bg && <BgBadge b={bg} />}
                     </div>
                     <div style={{
                       display: 'flex',
