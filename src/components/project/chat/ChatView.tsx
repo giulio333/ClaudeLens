@@ -1,11 +1,8 @@
 import { useState } from 'react'
 import { useChatSession } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
-import { fmt, fmtDate } from '../utils'
-import { ModelUsageBadge } from '../shared/ModelChip'
-import { StatChip } from '../shared/StatChip'
-import { BackButton } from '../shared/BackButton'
-import { buildProcessedMessages, isMemoryFile, TOOL_ICON, ChatDetailsFilter, ToolGroup } from './utils'
+import { fmt, fmtDate, fmtModel, modelColor } from '../utils'
+import { buildProcessedMessages, isMemoryFile, ChatDetailsFilter, ToolGroup } from './utils'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
 
@@ -27,6 +24,7 @@ export function ChatView({
 
   const realUserCount = processed.filter(p => p.msg.role === 'user').length
   const realAssistantCount = processed.filter(p => p.msg.role === 'assistant').length
+  const totalMessages = realUserCount + realAssistantCount
 
   const toolCounts = processed.reduce((acc, p) => {
     for (const g of p.toolGroups) {
@@ -37,109 +35,321 @@ export function ChatView({
     }
     return acc
   }, {} as Record<string, number>)
-  const toolSummary = Object.entries(toolCounts).sort((a, b) => b[1] - a[1])
+  const toolSummary = Object.entries(toolCounts)
+    .filter(([k]) => k !== '_memory')
+    .sort((a, b) => b[1] - a[1])
+  const totalToolCalls = toolSummary.reduce((s, [, c]) => s + c, 0)
 
-  const filterOptions: Array<{ value: ChatDetailsFilter; label: string; description: string }> = [
-    { value: 'minimal', label: 'Minimal', description: 'Main messages only' },
-    { value: 'all', label: 'Full', description: 'Everything: tools, thinking and detail panels' },
-  ]
+  const sessionTitle = session.customTitle || fmtDate(session.date)
+  const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] ?? null : null
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="shrink-0 bg-[var(--cl-paper-3)]/95 backdrop-blur-sm border-b border-[var(--cl-line)] px-8 pt-4 pb-0">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-3">
-            <BackButton label="Sessions" onClick={onBack} />
-            <span className="text-[var(--cl-ink-2)]">·</span>
-            <span className="text-[13px] font-medium text-[var(--cl-ink-3)]">{projectName}</span>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[var(--cl-accent)] hover:bg-[var(--cl-accent)] text-white text-[12px] font-medium transition-colors"
-              title="Resume this session in Claude"
-            >
-              <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-              </svg>
-              Resume in Claude
-            </button>
-            <div className="flex items-center gap-1 bg-[var(--cl-paper-2)] rounded-lg border border-[var(--cl-line)] p-0.5">
-            {filterOptions.map(option => (
+    <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+
+      {/* ── BREADCRUMB BAR ── */}
+      <nav style={{
+        display: 'flex',
+        alignItems: 'center',
+        height: '38px',
+        padding: '0 28px',
+        background: 'var(--cl-paper-2)',
+        borderBottom: '1px solid var(--cl-line)',
+        gap: 0,
+        flexShrink: 0,
+      }}>
+        <button
+          onClick={onBack}
+          style={{
+            fontFamily: 'var(--cl-mono)',
+            fontSize: '10.5px',
+            letterSpacing: '0.16em',
+            textTransform: 'uppercase',
+            color: 'var(--cl-ink-4)',
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: '0 14px 0 0',
+            display: 'inline-flex',
+            alignItems: 'center',
+          }}
+        >
+          {projectName} · Sessions
+        </button>
+        <span style={{
+          fontFamily: 'var(--cl-mono)',
+          fontSize: '10.5px',
+          color: 'var(--cl-ink-4)',
+          opacity: 0.4,
+          marginRight: '14px',
+        }}>/</span>
+        <span style={{
+          fontFamily: 'var(--cl-mono)',
+          fontSize: '10.5px',
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          color: 'var(--cl-ink)',
+          flex: 1,
+          overflow: 'hidden',
+          textOverflow: 'ellipsis',
+          whiteSpace: 'nowrap',
+        }}>
+          {sessionTitle}
+        </span>
+
+        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
+          {/* Toggle Minimal / Full */}
+          <div style={{
+            display: 'inline-flex',
+            border: '1px solid var(--cl-line)',
+            borderRadius: '2px',
+            overflow: 'hidden',
+          }}>
+            {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
               <button
-                key={option.value}
-                onClick={() => setDetailsFilter(option.value)}
-                className={`px-3 py-1 rounded text-[11px] font-medium transition-colors ${
-                  detailsFilter === option.value
-                    ? 'bg-[var(--cl-accent-soft)] text-[var(--cl-accent-ink)]'
-                    : 'text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-3)] hover:bg-[var(--cl-paper-3)]'
-                }`}
-                title={option.description}
+                key={v}
+                onClick={() => setDetailsFilter(v)}
+                style={{
+                  background: detailsFilter === v ? 'var(--cl-ink)' : 'transparent',
+                  color: detailsFilter === v ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
+                  border: 'none',
+                  padding: '4px 10px',
+                  fontFamily: 'var(--cl-mono)',
+                  fontSize: '10px',
+                  letterSpacing: '0.12em',
+                  textTransform: 'uppercase',
+                  cursor: 'pointer',
+                }}
               >
-                {option.label}
+                {v === 'minimal' ? 'Minimal' : 'Full'}
               </button>
             ))}
+          </div>
+
+          {/* Resume button */}
+          <button
+            onClick={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: '8px',
+              padding: '6px 12px',
+              background: 'var(--cl-ink)',
+              color: 'var(--cl-paper)',
+              border: 'none',
+              borderRadius: '2px',
+              fontFamily: 'var(--cl-sans)',
+              fontSize: '11px',
+              fontWeight: 500,
+              letterSpacing: '0.01em',
+              cursor: 'pointer',
+            }}
+          >
+            <span style={{
+              width: '8px',
+              height: '8px',
+              background: 'var(--cl-accent)',
+              clipPath: 'polygon(0 0, 100% 50%, 0 100%)',
+              display: 'inline-block',
+              flexShrink: 0,
+            }} />
+            Resume in Claude
+          </button>
+        </div>
+      </nav>
+
+      {/* ── HERO SECTION ── */}
+      <header style={{
+        padding: '24px 28px 20px',
+        borderBottom: '1.5px solid var(--cl-ink)',
+        flexShrink: 0,
+        display: 'grid',
+        gridTemplateColumns: '1fr auto',
+        gap: '32px',
+        alignItems: 'end',
+      }}>
+        <div>
+          <div style={{
+            fontFamily: 'var(--cl-mono)',
+            fontSize: '10px',
+            letterSpacing: '0.20em',
+            textTransform: 'uppercase',
+            color: 'var(--cl-ink-3)',
+            marginBottom: '10px',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: '8px',
+          }}>
+            <span style={{
+              width: '6px',
+              height: '6px',
+              borderRadius: '50%',
+              background: 'var(--cl-accent)',
+              display: 'inline-block',
+            }} />
+            Session · {fmtDate(session.date)}
+          </div>
+          <h1 style={{
+            fontSize: '28px',
+            fontWeight: 600,
+            letterSpacing: '-0.025em',
+            lineHeight: 1.1,
+            color: 'var(--cl-ink)',
+            marginBottom: '10px',
+          }}>
+            {sessionTitle}
+          </h1>
+          <div style={{
+            fontFamily: 'var(--cl-mono)',
+            fontSize: '11px',
+            color: 'var(--cl-ink-3)',
+          }}>
+            {session.filename}
+            {primaryModel && (
+              <span style={{ color: modelColor(primaryModel), marginLeft: '12px' }}>
+                {fmtModel(primaryModel)}
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Stat grid */}
+        <div style={{
+          display: 'grid',
+          gridTemplateColumns: 'repeat(3, 1fr)',
+          gap: '0',
+          borderTop: '1.5px solid var(--cl-ink)',
+          borderBottom: '1px solid var(--cl-line)',
+          alignSelf: 'end',
+          minWidth: '260px',
+        }}>
+          {[
+            { label: 'Messages', value: String(totalMessages) },
+            { label: 'Tokens', value: fmt(session.totalTokens) },
+            { label: 'Tools', value: String(totalToolCalls) },
+          ].map(({ label, value }, i) => (
+            <div key={label} style={{
+              padding: '12px 0',
+              borderLeft: i > 0 ? '1px solid var(--cl-line)' : 'none',
+              paddingLeft: i > 0 ? '14px' : '0',
+            }}>
+              <div style={{
+                fontFamily: 'var(--cl-mono)',
+                fontSize: '9.5px',
+                letterSpacing: '0.18em',
+                textTransform: 'uppercase',
+                color: 'var(--cl-ink-3)',
+              }}>
+                {label}
+              </div>
+              <div style={{
+                fontSize: '22px',
+                fontWeight: 600,
+                letterSpacing: '-0.03em',
+                lineHeight: 1,
+                marginTop: '6px',
+                fontVariantNumeric: 'tabular-nums',
+                color: 'var(--cl-ink)',
+              }}>
+                {value}
+              </div>
             </div>
+          ))}
+        </div>
+      </header>
+
+      {/* ── TOOL ORBIT STRIP ── */}
+      {toolSummary.length > 0 && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          padding: '10px 28px',
+          background: 'var(--cl-paper-2)',
+          borderBottom: '1px solid var(--cl-line)',
+          gap: '24px',
+          overflowX: 'auto',
+          flexShrink: 0,
+        }}>
+          <span style={{
+            fontFamily: 'var(--cl-mono)',
+            fontSize: '9.5px',
+            letterSpacing: '0.24em',
+            textTransform: 'uppercase',
+            color: 'var(--cl-ink-3)',
+            whiteSpace: 'nowrap',
+          }}>
+            /// Tools
+          </span>
+          <div style={{ display: 'flex', gap: '20px', alignItems: 'center', flexWrap: 'nowrap' }}>
+            {toolSummary.map(([name, count], i) => (
+              <span key={name} style={{
+                fontFamily: 'var(--cl-mono)',
+                fontSize: '11px',
+                color: 'var(--cl-ink-2)',
+                display: 'inline-flex',
+                alignItems: 'baseline',
+                gap: '6px',
+                whiteSpace: 'nowrap',
+                position: 'relative',
+              }}>
+                {i > 0 && (
+                  <span style={{
+                    position: 'absolute',
+                    left: '-12px',
+                    top: '6px',
+                    width: '3px',
+                    height: '3px',
+                    background: 'var(--cl-accent)',
+                    borderRadius: '50%',
+                  }} />
+                )}
+                <b style={{ fontWeight: 600, fontSize: '13px', color: 'var(--cl-ink)' }}>×{count}</b>
+                {name}
+              </span>
+            ))}
           </div>
         </div>
+      )}
 
-        <div className="flex items-start justify-between mb-3">
-          <div>
-            <h1 className="text-[16px] font-semibold text-[var(--cl-ink)] leading-tight">{session.customTitle || fmtDate(session.date)}</h1>
-            <span className="text-[11px] text-[var(--cl-ink-3)] font-mono mt-0.5 block">{session.filename}</span>
-          </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <StatChip label="Messages" value={String(realUserCount + realAssistantCount)} />
-            <StatChip label="Tokens" value={fmt(session.totalTokens)} />
-          </div>
-        </div>
-
-        <div className="flex items-center justify-between border-t border-[var(--cl-line)] py-2.5 gap-4">
-          <ModelUsageBadge models={session.models} />
-
-          {toolSummary.length > 0 && (
-            <div className="flex items-center gap-1.5 overflow-x-auto shrink-0">
-              {toolSummary.map(([name, count]) => {
-                if (name === '_memory') return (
-                  <div key={name} className="flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--cl-paper-3)] border border-[var(--cl-violet)] text-[11px] whitespace-nowrap">
-                    <span className="text-[11px]">🧠</span>
-                    <span className="font-medium text-[var(--cl-violet)]">Memory</span>
-                    <span className="text-[var(--cl-violet)] font-mono text-[10px]">×{count}</span>
-                  </div>
-                )
-                return (
-                  <div
-                    key={name}
-                    className="flex items-center gap-1 px-2 py-1 rounded-md bg-[var(--cl-paper-2)] border border-[var(--cl-line)] text-[11px] whitespace-nowrap hover:border-[var(--cl-line)] transition-colors"
-                  >
-                    <span className="text-[11px]">{TOOL_ICON[name] ?? '🔧'}</span>
-                    <span className="font-medium text-[var(--cl-ink-3)]">{name}</span>
-                    <span className="text-[var(--cl-ink-3)] font-mono text-[10px]">×{count}</span>
-                  </div>
-                )
-              })}
-            </div>
-          )}
-        </div>
-      </div>
-
+      {/* ── TRANSCRIPT ── */}
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
       ) : (
-        <div className="flex-1 overflow-y-auto px-8 py-6">
-          {isLoading && <p className="text-sm text-[var(--cl-ink-3)]">Loading chat...</p>}
-          {messages?.length === 0 && !isLoading && (
-            <p className="text-sm text-[var(--cl-ink-3)] italic">No messages found in this session.</p>
+        <div style={{
+          flex: 1,
+          overflowY: 'auto',
+          background: 'var(--cl-paper)',
+        }}>
+          {isLoading && (
+            <p style={{
+              fontFamily: 'var(--cl-mono)',
+              fontSize: '11px',
+              color: 'var(--cl-ink-3)',
+              padding: '32px 28px',
+            }}>
+              Loading transcript…
+            </p>
           )}
+          {messages?.length === 0 && !isLoading && (
+            <p style={{
+              fontFamily: 'var(--cl-mono)',
+              fontSize: '11px',
+              color: 'var(--cl-ink-3)',
+              fontStyle: 'italic',
+              padding: '32px 28px',
+            }}>
+              No messages found in this session.
+            </p>
+          )}
+
           {processed.length > 0 && (
-            <div className="max-w-4xl mx-auto space-y-5">
-              {processed.map(p => (
+            <div style={{ maxWidth: '900px', margin: '0 auto' }}>
+              {processed.map((p, idx) => (
                 <MessageBubble
                   key={p.msg.uuid}
                   processed={p}
                   detailsFilter={detailsFilter}
                   onOpenToolDetail={setSelectedTool}
+                  turnIndex={idx + 1}
                 />
               ))}
             </div>
