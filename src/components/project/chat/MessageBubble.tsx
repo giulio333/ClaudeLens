@@ -8,27 +8,64 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   const [open, setOpen] = useState(false)
   if (!thinking) return null
   return (
-    <div className="my-1 rounded-lg border border-[var(--cl-violet)] bg-[var(--cl-paper-3)]/50 text-[12px] overflow-hidden">
+    <div style={{
+      margin: '4px 0',
+      border: '1px solid var(--cl-violet)',
+      borderRadius: '2px',
+      fontSize: '11px',
+      overflow: 'hidden',
+    }}>
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--cl-paper-3)] transition-colors text-left"
+        style={{
+          width: '100%',
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
+          padding: '6px 10px',
+          background: 'transparent',
+          border: 'none',
+          cursor: 'pointer',
+          textAlign: 'left',
+        }}
       >
-        <span className="text-[var(--cl-violet)] font-medium">thinking</span>
-        <span className="ml-auto text-[var(--cl-violet)] text-[10px]">{open ? '▲' : '▼'}</span>
+        <span style={{
+          fontFamily: 'var(--cl-mono)',
+          fontSize: '9.5px',
+          letterSpacing: '0.16em',
+          textTransform: 'uppercase',
+          color: 'var(--cl-violet)',
+          fontWeight: 500,
+        }}>thinking</span>
+        <span style={{ marginLeft: 'auto', color: 'var(--cl-violet)', fontSize: '9px' }}>
+          {open ? '▲' : '▼'}
+        </span>
       </button>
       {open && (
-        <div className="px-3 pb-3 border-t border-[var(--cl-violet)]">
-          <p className="text-[11px] text-[var(--cl-violet)] mt-2 leading-relaxed whitespace-pre-wrap">{thinking}</p>
+        <div style={{
+          padding: '8px 10px 10px',
+          borderTop: '1px solid var(--cl-violet)',
+        }}>
+          <p style={{
+            fontSize: '11px',
+            color: 'var(--cl-violet)',
+            lineHeight: 1.5,
+            whiteSpace: 'pre-wrap',
+            fontFamily: 'var(--cl-mono)',
+          }}>
+            {thinking}
+          </p>
         </div>
       )}
     </div>
   )
 }
 
-export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
+export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turnIndex }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
   onOpenToolDetail: (group: ToolGroup) => void
+  turnIndex?: number
 }) {
   const { msg, toolGroups } = processed
   const isUser = msg.role === 'user'
@@ -46,32 +83,103 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
     (showTools && toolGroups.length > 0)
   if (!hasVisibleContent) return null
 
+  const timestamp = new Date(msg.timestamp).toLocaleTimeString('en-US', {
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  })
+
   return (
-    <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
-      <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold mt-0.5 ${
-        isUser ? 'bg-[var(--cl-accent-soft)] text-[var(--cl-accent-ink)]' : 'bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]'
-      }`}>
-        {isUser ? 'U' : 'C'}
+    <div style={{
+      display: 'grid',
+      gridTemplateColumns: '64px 1fr',
+      gap: '0',
+      borderBottom: '1px solid var(--cl-line)',
+      alignItems: 'start',
+    }}>
+      {/* ── Role column ── */}
+      <div style={{
+        background: isUser ? 'var(--cl-accent)' : 'var(--cl-ink)',
+        color: isUser ? 'white' : 'var(--cl-paper)',
+        padding: '16px 10px',
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        gap: '8px',
+        alignSelf: 'stretch',
+        borderRight: '1px solid var(--cl-line)',
+      }}>
+        <div style={{
+          fontFamily: 'var(--cl-sans)',
+          fontSize: '22px',
+          fontWeight: 700,
+          letterSpacing: '-0.025em',
+          fontVariantNumeric: 'tabular-nums',
+          lineHeight: 1,
+          opacity: isUser ? 1 : 0.9,
+        }}>
+          {turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : (isUser ? 'U' : 'C')}
+        </div>
+        <div style={{
+          width: '10px',
+          height: '10px',
+          border: isUser ? '2px solid rgba(255,255,255,0.5)' : '2px solid rgba(255,255,255,0.25)',
+          borderRadius: '2px',
+          opacity: 0.45,
+        }} />
+        <div style={{
+          fontFamily: 'var(--cl-mono)',
+          fontSize: '9px',
+          letterSpacing: '0.20em',
+          fontWeight: 600,
+          opacity: 0.85,
+          textTransform: 'uppercase',
+        }}>
+          {isUser ? 'User' : 'Claude'}
+        </div>
+        <div style={{
+          fontFamily: 'var(--cl-mono)',
+          fontSize: '9.5px',
+          opacity: 0.65,
+          letterSpacing: '0.02em',
+          marginTop: '2px',
+        }}>
+          {timestamp}
+        </div>
       </div>
 
-      <div className={`flex-1 min-w-0 max-w-[85%] ${isUser ? 'items-end' : 'items-start'} flex flex-col gap-1.5`}>
+      {/* ── Content column ── */}
+      <div style={{ padding: '20px 28px' }}>
         {showThinking && thinkingBlocks.map((b, i) => (
-          <div key={i} className="w-full"><ThinkingBlock thinking={b.thinking} /></div>
+          <ThinkingBlock key={i} thinking={b.thinking} />
         ))}
 
         {textBlocks.map((b, i) => (
-          <div
-            key={i}
-            className={`w-full rounded-xl px-4 py-3 text-[13px] leading-relaxed ${
-              isUser
-                ? 'bg-[var(--cl-accent)] text-white'
-                : 'bg-[var(--cl-paper-2)] border border-[var(--cl-line)] text-[var(--cl-ink-2)]'
-            }`}
-          >
+          <div key={i}>
             {isUser ? (
-              <p className="whitespace-pre-wrap">{b.text}</p>
+              <p style={{
+                fontSize: '15px',
+                lineHeight: 1.6,
+                color: 'var(--cl-ink)',
+                fontWeight: 500,
+                whiteSpace: 'pre-wrap',
+                paddingLeft: '12px',
+                borderLeft: '2px solid var(--cl-accent)',
+              }}>
+                {b.text}
+              </p>
             ) : (
-              <div className="prose prose-sm prose-zinc prose-lens max-w-none">
+              <div
+                className="prose prose-sm prose-zinc prose-lens max-w-none"
+                style={{
+                  fontSize: '15px',
+                  lineHeight: 1.65,
+                  color: 'var(--cl-ink-2)',
+                  paddingLeft: '12px',
+                  borderLeft: '1px solid var(--cl-line)',
+                }}
+              >
                 <Markdown>{b.text}</Markdown>
               </div>
             )}
@@ -79,16 +187,17 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
         ))}
 
         {showTools && toolGroups.length > 0 && (
-          <div className="w-full space-y-1.5 pl-1">
+          <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>
             {toolGroups.map((group, i) => (
-              <ToolGroupCard key={i} group={group} showDetails={showToolDetails} onOpenDetail={() => onOpenToolDetail(group)} />
+              <ToolGroupCard
+                key={i}
+                group={group}
+                showDetails={showToolDetails}
+                onOpenDetail={() => onOpenToolDetail(group)}
+              />
             ))}
           </div>
         )}
-
-        <span className="text-[10px] text-[var(--cl-ink-3)] px-1">
-          {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
-        </span>
       </div>
     </div>
   )
