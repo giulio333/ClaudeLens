@@ -22,7 +22,7 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   const hasExpandable = showDetails || (result && result.content.length > 80)
 
   return (
-    <div className={`rounded-lg border overflow-hidden text-[12px] ${isMemory ? 'border-[var(--cl-violet)] bg-[var(--cl-paper-3)]/30' : 'border-[var(--cl-line)] bg-[var(--cl-paper-3)]'}`}>
+    <div className={`border overflow-hidden text-[12px] ${isMemory ? 'border-[var(--cl-violet)] bg-[var(--cl-paper-3)]/30' : 'border-[var(--cl-line)] bg-[var(--cl-paper-3)]'}`} style={{ borderRadius: '2px' }}>
       <div className="flex items-center">
         <button
           onClick={() => hasExpandable && setOpen(o => !o)}
@@ -34,7 +34,7 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
             <span className="text-[var(--cl-ink-3)] text-[11px] truncate">{String(inputPreview).slice(0, 55)}</span>
           )}
           {isMemory && (
-            <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--cl-violet)] text-[var(--cl-violet)] border border-[var(--cl-violet)] uppercase tracking-wide">Memory</span>
+            <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 bg-[var(--cl-violet)] text-[var(--cl-paper)] border border-[var(--cl-violet)] uppercase tracking-wide" style={{ borderRadius: '2px' }}>Memory</span>
           )}
           {hasExpandable && (
             <span className="ml-auto text-[var(--cl-ink-3)] text-[10px] shrink-0 pr-1">{open ? '▲' : '▼'}</span>
