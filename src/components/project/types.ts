@@ -22,6 +22,7 @@ export type View =
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
+  | { type: 'agents-live'; project?: { hash: string; realPath: string } }
 
 export const TYPE_STYLES: Record<string, string> = {
   user:      'bg-blue-950/20 text-blue-400 ring-1 ring-blue-700/30',

@@ -20,6 +20,7 @@ import type {
   McpData,
   LiveEvent,
   ClaudeProcess,
+  BgSession,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -42,6 +43,7 @@ export type {
   McpData,
   LiveEvent,
   ClaudeProcess,
+  BgSession,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -104,6 +106,7 @@ declare global {
       onDataChanged: (callback: () => void) => void
       live: {
         getProcesses: () => Promise<IpcResult<ClaudeProcess[]>>
+        getSessions: () => Promise<IpcResult<BgSession[]>>
         startWatch: (hash: string) => Promise<IpcResult<{ started: boolean }>>
         stopWatch: () => Promise<IpcResult<null>>
         onEvent: (cb: (event: unknown) => void) => void
@@ -221,6 +224,14 @@ export function useChatSession(hash: string, filename: string | null) {
     ['sessions:chat', hash, filename],
     () => unwrap(window.electronAPI.sessions.getChat(hash, filename!)),
     { enabled: filename !== null }
+  )
+}
+
+export function useLiveSessions() {
+  return useQuery(
+    'live:sessions',
+    () => unwrap(window.electronAPI.live.getSessions()),
+    { refetchInterval: 4000 }
   )
 }
 
