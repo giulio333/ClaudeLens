@@ -373,7 +373,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   const channels = [
     'memory:listProjects', 'memory:getProject', 'memory:createTopic', 'memory:updateTopic', 'memory:deleteTopic',
     'cost:getSummary', 'cost:getByProject',
-    'claudeMd:getGlobal', 'claudeMd:getHierarchy',
+    'claudeMd:getGlobal', 'claudeMd:getHierarchy', 'claudeMd:writeGlobal', 'claudeMd:writeFile',
+    'markdownFile:write',
     'sessions:listByProject', 'sessions:getChat', 'sessions:openInTerminal', 'sessions:newInTerminal',
     'rules:getByProject',
     'skills:getGlobal', 'skills:getAll', 'skills:create',
@@ -400,6 +401,9 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('claudeMd:getGlobal', () => ok(GLOBAL_CLAUDE_MD));
   ipcMain.handle('claudeMd:getHierarchy', () => ok({ layers: HIERARCHY_LAYERS }));
+  ipcMain.handle('claudeMd:writeGlobal', () => ok(null));
+  ipcMain.handle('claudeMd:writeFile', () => ok(null));
+  ipcMain.handle('markdownFile:write', () => ok(null));
 
   ipcMain.handle('sessions:listByProject', (_e: unknown, hash: string) => ok(getSessionList(hash)));
   ipcMain.handle('sessions:getChat', () => ok(MOCK_CHAT));

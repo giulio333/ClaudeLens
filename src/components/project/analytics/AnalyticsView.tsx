@@ -25,10 +25,10 @@ function ChartCard({ title, subtitle, children }: {
   children: React.ReactNode
 }) {
   return (
-    <div className="bg-[#161a26] border border-[#252836] rounded-xl p-5">
+    <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-xl p-5">
       <div className="mb-4">
-        <h3 className="text-[11px] font-semibold text-zinc-400 uppercase tracking-widest">{title}</h3>
-        {subtitle && <p className="text-[11px] text-zinc-400 mt-0.5">{subtitle}</p>}
+        <h3 className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-widest">{title}</h3>
+        {subtitle && <p className="text-[11px] text-[var(--cl-ink-3)] mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
@@ -87,27 +87,27 @@ export function AnalyticsView({
     ? Math.round(sessionsToProcess.reduce((a, s) => a + s.messageCount, 0) / sessionsToProcess.length)
     : 0
 
-  const AXIS = { tick: { fontSize: 10, fill: '#787e98' }, tickLine: false, axisLine: false }
+  const AXIS = { tick: { fontSize: 10, fill: 'var(--cl-ink-3)' }, tickLine: false, axisLine: false }
   const TOOLTIP_STYLE = {
     fontSize: 12,
-    background: '#1c2235',
-    border: '1px solid #252836',
+    background: 'var(--cl-paper-3)',
+    border: '1px solid var(--cl-line)',
     borderRadius: 8,
-    color: '#e0e2f0',
+    color: 'var(--cl-ink)',
   }
-  const TOOLTIP_LABEL_STYLE = { color: '#9096b0' }
-  const GRID_STROKE = '#252836'
+  const TOOLTIP_LABEL_STYLE = { color: 'var(--cl-ink-3)' }
+  const GRID_STROKE = 'var(--cl-line)'
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="sticky top-0 z-10 bg-[#0d0f14]/95 backdrop-blur-sm border-b border-[#252836] px-8 py-4">
+      <div className="sticky top-0 z-10 bg-[var(--cl-paper-3)]/95 backdrop-blur-sm border-b border-[var(--cl-line)] px-8 py-4">
         <div className="flex items-center gap-4 mb-3">
           <BackButton label="Overview" onClick={onBack} />
-          <span className="text-zinc-300">·</span>
-          <span className="text-[13px] font-medium text-[#9096b0]">{projectName}</span>
+          <span className="text-[var(--cl-ink-2)]">·</span>
+          <span className="text-[13px] font-medium text-[var(--cl-ink-3)]">{projectName}</span>
         </div>
         <div className="flex items-end justify-between">
-          <h1 className="text-[17px] font-semibold text-[#e0e2f0]">Analytics</h1>
+          <h1 className="text-[17px] font-semibold text-[var(--cl-ink)]">Analytics</h1>
           <div className="flex gap-2">
             <StatChip label="Sessions" value={String(sessionsToProcess.length)} />
             <StatChip label="Total tokens" value={fmt(totalTokens)} />
@@ -117,9 +117,9 @@ export function AnalyticsView({
       </div>
 
       <div className="px-8 py-5 space-y-4">
-        {isLoading && <p className="text-sm text-zinc-400">Loading data...</p>}
+        {isLoading && <p className="text-sm text-[var(--cl-ink-3)]">Loading data...</p>}
         {!isLoading && sessionsToProcess.length === 0 && (
-          <p className="text-sm text-zinc-400 italic">No sessions found.</p>
+          <p className="text-sm text-[var(--cl-ink-3)] italic">No sessions found.</p>
         )}
 
         {sessionsToProcess.length > 0 && (
@@ -140,9 +140,9 @@ export function AnalyticsView({
                       labelStyle={TOOLTIP_LABEL_STYLE}
                       cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                     />
-                    <Legend wrapperStyle={{ fontSize: 11, color: '#9096b0' }} />
-                    <Bar dataKey="Input" stackId="t" fill="#4f46e5" activeBar={{ fill: '#6366f1' }} />
-                    <Bar dataKey="Output" stackId="t" fill="#7c3aed" radius={[3, 3, 0, 0]} activeBar={{ fill: '#9333ea' }} />
+                    <Legend wrapperStyle={{ fontSize: 11, color: 'var(--cl-ink-3)' }} />
+                    <Bar dataKey="Input" stackId="t" fill="var(--cl-accent)" activeBar={{ fill: 'var(--cl-accent)' }} />
+                    <Bar dataKey="Output" stackId="t" fill="var(--cl-violet)" radius={[3, 3, 0, 0]} activeBar={{ fill: 'var(--cl-violet)' }} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -185,9 +185,9 @@ export function AnalyticsView({
                           {pieData.map(d => (
                             <div key={d.name} className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                              <span className="text-[11px] text-[#787e98] flex-1">{d.name}</span>
-                              <span className="text-[11px] font-mono text-[#555c75]">{fmt(d.value)}</span>
-                              <span className="text-[11px] font-mono text-zinc-400 w-8 text-right">
+                              <span className="text-[11px] text-[var(--cl-ink-3)] flex-1">{d.name}</span>
+                              <span className="text-[11px] font-mono text-[var(--cl-ink-4)]">{fmt(d.value)}</span>
+                              <span className="text-[11px] font-mono text-[var(--cl-ink-3)] w-8 text-right">
                                 {Math.round((d.value / total) * 100)}%
                               </span>
                             </div>
@@ -197,7 +197,7 @@ export function AnalyticsView({
                     })()}
                   </div>
                 ) : (
-                  <p className="text-[12px] text-zinc-400 italic">No model data.</p>
+                  <p className="text-[12px] text-[var(--cl-ink-3)] italic">No model data.</p>
                 )}
               </ChartCard>
             </div>
@@ -208,8 +208,8 @@ export function AnalyticsView({
                   <AreaChart data={messagesData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                     <defs>
                       <linearGradient id="msgGrad" x1="0" y1="0" x2="0" y2="1">
-                        <stop offset="5%" stopColor="#4f46e5" stopOpacity={0.15} />
-                        <stop offset="95%" stopColor="#4f46e5" stopOpacity={0} />
+                        <stop offset="5%" stopColor="var(--cl-accent)" stopOpacity={0.15} />
+                        <stop offset="95%" stopColor="var(--cl-accent)" stopOpacity={0} />
                       </linearGradient>
                     </defs>
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
@@ -219,16 +219,16 @@ export function AnalyticsView({
                       formatter={(v) => [String(v), 'Messages']}
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={TOOLTIP_LABEL_STYLE}
-                      cursor={{ stroke: '#252836', strokeWidth: 1 }}
+                      cursor={{ stroke: 'var(--cl-line)', strokeWidth: 1 }}
                     />
                     <Area
                       type="monotone"
                       dataKey="Messages"
-                      stroke="#4f46e5"
+                      stroke="var(--cl-accent)"
                       strokeWidth={2}
                       fill="url(#msgGrad)"
-                      dot={sessionsToProcess.length <= 15 ? { r: 3, fill: '#4f46e5', stroke: '#4f46e5' } : false}
-                      activeDot={{ r: 4, fill: '#6366f1', stroke: '#1c2235', strokeWidth: 2 }}
+                      dot={sessionsToProcess.length <= 15 ? { r: 3, fill: 'var(--cl-accent)', stroke: 'var(--cl-accent)' } : false}
+                      activeDot={{ r: 4, fill: 'var(--cl-accent)', stroke: 'var(--cl-paper-3)', strokeWidth: 2 }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
@@ -246,7 +246,7 @@ export function AnalyticsView({
                       labelStyle={TOOLTIP_LABEL_STYLE}
                       cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                     />
-                    <Bar dataKey="Sessions" fill="#0d9488" radius={[3, 3, 0, 0]} activeBar={{ fill: '#14b8a6' }} />
+                    <Bar dataKey="Sessions" fill="var(--cl-haiku)" radius={[3, 3, 0, 0]} activeBar={{ fill: 'var(--cl-haiku)' }} />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>

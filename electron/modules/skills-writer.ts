@@ -34,8 +34,9 @@ function buildSkillMarkdown(input: SkillInput): string {
   return lines.join('\n');
 }
 
-export function createGlobalSkill(input: SkillInput): string {
-  const skillDir = join(os.homedir(), '.claude', 'skills', input.name);
+export function createSkill(input: SkillInput, projectPath?: string): string {
+  const baseDir = projectPath ? join(projectPath, '.claude') : join(os.homedir(), '.claude');
+  const skillDir = join(baseDir, 'skills', input.name);
   if (!existsSync(skillDir)) {
     mkdirSync(skillDir, { recursive: true });
   }

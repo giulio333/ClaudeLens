@@ -17,7 +17,7 @@ const components: Components = {
       <a
         href={href}
         onClick={handleClick}
-        className="text-indigo-400 hover:text-indigo-300 underline underline-offset-2 cursor-pointer"
+        className="text-[var(--cl-accent-ink)] hover:text-[var(--cl-accent-ink)] underline underline-offset-2 cursor-pointer"
       >
         {children}
       </a>
@@ -26,13 +26,13 @@ const components: Components = {
 
   // Heading con ancore visive
   h1({ children }) {
-    return <h1 className="text-xl font-bold text-[#e0e2f0] mt-5 mb-3 pb-1 border-b border-[#252836]">{children}</h1>
+    return <h1 className="text-xl font-bold text-[var(--cl-ink)] mt-5 mb-3 pb-1 border-b border-[var(--cl-line)]">{children}</h1>
   },
   h2({ children }) {
-    return <h2 className="text-lg font-semibold text-[#e0e2f0] mt-4 mb-2 pb-1 border-b border-[#1c2030]">{children}</h2>
+    return <h2 className="text-lg font-semibold text-[var(--cl-ink)] mt-4 mb-2 pb-1 border-b border-[var(--cl-line-soft)]">{children}</h2>
   },
   h3({ children }) {
-    return <h3 className="text-base font-semibold text-[#c4c8e0] mt-3 mb-2">{children}</h3>
+    return <h3 className="text-base font-semibold text-[var(--cl-ink-2)] mt-3 mb-2">{children}</h3>
   },
 
   // Blocco codice con label linguaggio
@@ -48,7 +48,7 @@ const components: Components = {
       return (
         <div className="relative group">
           {lang && (
-            <span className="absolute top-2 right-3 text-xs text-zinc-400 font-mono select-none z-10">
+            <span className="absolute top-2 right-3 text-xs text-[var(--cl-ink-3)] font-mono select-none z-10">
               {lang}
             </span>
           )}

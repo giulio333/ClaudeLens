@@ -42,8 +42,9 @@ function buildAgentMarkdown(input: AgentInput): string {
   return lines.join('\n');
 }
 
-export function createGlobalAgent(input: AgentInput): string {
-  const agentsDir = join(os.homedir(), '.claude', 'agents');
+export function createAgent(input: AgentInput, projectPath?: string): string {
+  const baseDir = projectPath ? join(projectPath, '.claude') : join(os.homedir(), '.claude');
+  const agentsDir = join(baseDir, 'agents');
   if (!existsSync(agentsDir)) {
     mkdirSync(agentsDir, { recursive: true });
   }

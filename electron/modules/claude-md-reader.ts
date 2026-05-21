@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
+import { dirname, join } from 'path';
 import os from 'os';
 
 export interface ClaudeMdLayer {
@@ -84,6 +84,17 @@ function findAllClaudeMd(dir: string, maxDepth: number = 5, currentDepth: number
   }
 
   return claudeMdFiles;
+}
+
+export function writeClaudeMdFile(filePath: string, content: string): void {
+  const allowedBasenames = new Set(['CLAUDE.md', 'CLAUDE.local.md']);
+  const base = filePath.split('/').pop() ?? '';
+  if (!allowedBasenames.has(base)) {
+    throw new Error(`Refusing to write non-CLAUDE.md file: ${filePath}`);
+  }
+  const dir = dirname(filePath);
+  if (!existsSync(dir)) mkdirSync(dir, { recursive: true });
+  writeFileSync(filePath, content, 'utf-8');
 }
 
 export function getClaudeMdHierarchy(realPath: string): ClaudeMdHierarchy {

@@ -1,40 +1,38 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   useProjectCost,
   useMemoryProject,
   useSessionList,
   useClaudeMdHierarchy,
+  useProjectRules,
   useGlobalMcp,
   useAllSkills,
   useGlobalAgents,
   useProjectAgents,
-  useProjectRules,
+  useMemoryProjects,
+  useCostSummary,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
-import type { SessionSummary } from '../../../types'
+import { fmt, fmtModel } from '../utils'
+import type { SessionSummary, ProjectCost } from '../../../types'
+import { Lens } from './Lens'
 
-type Category = 'skill' | 'agent' | 'memory' | 'mcp' | 'claude'
+export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp'
 
-const CAT_TOKENS: Record<Category, { fg: string; tint: string; border: string }> = {
-  skill:  { fg: 'oklch(0.78 0.13 210)', tint: 'oklch(0.78 0.13 210 / 0.15)', border: 'oklch(0.78 0.13 210 / 0.30)' },
-  agent:  { fg: 'oklch(0.78 0.13 155)', tint: 'oklch(0.78 0.13 155 / 0.15)', border: 'oklch(0.78 0.13 155 / 0.30)' },
-  memory: { fg: 'oklch(0.80 0.13 85)',  tint: 'oklch(0.80 0.13 85 / 0.15)',  border: 'oklch(0.80 0.13 85 / 0.30)'  },
-  mcp:    { fg: 'oklch(0.72 0.15 295)', tint: 'oklch(0.72 0.15 295 / 0.18)', border: 'oklch(0.72 0.15 295 / 0.30)' },
-  claude: { fg: 'oklch(0.74 0.13 25)',  tint: 'oklch(0.74 0.13 25 / 0.15)',  border: 'oklch(0.74 0.13 25 / 0.30)'  },
-}
+type Project = { hash: string; realPath: string }
 
 function formatTokens(n: number): { value: string; unit: string } {
-  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'B' }
-  if (n >= 1_000_000)     return { value: (n / 1_000_000).toFixed(1), unit: 'M' }
-  if (n >= 1_000)         return { value: (n / 1_000).toFixed(1), unit: 'K' }
+  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'b' }
+  if (n >= 1_000_000)     return { value: (n / 1_000_000).toFixed(1), unit: 'm' }
+  if (n >= 1_000)         return { value: Math.round(n / 1_000).toString(), unit: 'k' }
   return { value: String(n), unit: '' }
 }
 
-function relativeFromIso(iso: string): string {
-  const d = new Date(iso).getTime()
-  if (isNaN(d)) return ''
-  const diff = Math.floor((Date.now() - d) / 1000)
+function relIso(iso: string): string {
+  const t = new Date(iso).getTime()
+  if (isNaN(t)) return ''
+  const diff = Math.floor((Date.now() - t) / 1000)
   if (diff < 60) return `${diff}s`
   if (diff < 3600) return `${Math.floor(diff / 60)}m`
   if (diff < 86400) return `${Math.floor(diff / 3600)}h`
@@ -42,41 +40,81 @@ function relativeFromIso(iso: string): string {
   return `${Math.floor(diff / (86400 * 7))}w`
 }
 
-function ActivityTimeline({ sessions, days }: { sessions: SessionSummary[]; days: number }) {
-  const buckets = useMemo(() => {
-    const now = new Date()
-    now.setHours(0, 0, 0, 0)
-    const arr = new Array(days).fill(0)
-    for (const s of sessions) {
-      const t = new Date(s.date).getTime()
-      if (isNaN(t)) continue
-      const diffDays = Math.floor((now.getTime() - t) / 86400000)
-      const idx = days - 1 - diffDays
-      if (idx >= 0 && idx < days) arr[idx] += s.totalTokens
-    }
-    return arr
-  }, [sessions, days])
-  const max = Math.max(...buckets, 1)
+function shortWhen(iso: string): string {
+  const d = new Date(iso)
+  if (isNaN(d.getTime())) return ''
+  return d.toLocaleString('it-IT', { day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' })
+}
+
+function modelFamily(m?: string): '' | 'opus' | 'haiku' {
+  if (!m) return ''
+  if (m.includes('opus')) return 'opus'
+  if (m.includes('haiku')) return 'haiku'
+  return ''
+}
+
+// 12 weekly buckets, newest last
+function weeklyBuckets(sessions: SessionSummary[], value: 'count' | 'tokens'): number[] {
+  const n = 12
+  const wk = 7 * 86400000
+  const now = Date.now()
+  const arr = new Array(n).fill(0)
+  for (const s of sessions) {
+    const t = new Date(s.date).getTime()
+    if (isNaN(t)) continue
+    const idx = n - 1 - Math.floor((now - t) / wk)
+    if (idx >= 0 && idx < n) arr[idx] += value === 'tokens' ? s.totalTokens : 1
+  }
+  return arr
+}
+
+function Bars({ values }: { values: number[] }) {
+  const max = Math.max(...values, 1)
+  const peakIdx = values.indexOf(Math.max(...values))
   return (
-    <div className="po-tl-grid">
-      {buckets.map((v, i) => {
-        const isToday = i === buckets.length - 1
-        return (
-          <div key={i} className={`po-tl-col ${v > 0 ? 'has' : ''} ${isToday ? 'today' : ''}`}>
-            <div className="po-tl-bar" style={{ height: `${Math.max((v / max) * 100, v > 0 ? 6 : 0)}%` }} />
-          </div>
-        )
-      })}
+    <div className="cl-bars">
+      {values.map((v, i) => (
+        <i
+          key={i}
+          className={v > 0 && i === peakIdx ? 'peak' : ''}
+          style={{ height: `${v > 0 ? Math.max((v / max) * 100, 6) : 0}%` }}
+        />
+      ))}
     </div>
   )
 }
 
-export function ProjectOverviewContent({
+const MEM_PREVIEW_MAX = 70
+
+// Ripulisce la sintassi markdown e tronca per un'anteprima pulita su una riga.
+function memPreview(raw: string): string {
+  const clean = raw
+    .replace(/```[\s\S]*?```/g, ' ')        // blocchi di codice
+    .replace(/`([^`]+)`/g, '$1')             // codice inline
+    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ')   // immagini
+    .replace(/\[\[([^\]]+)\]\]/g, '$1')      // wikilink
+    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // link markdown
+    .replace(/^#{1,6}\s+/gm, '')             // heading
+    .replace(/[*_~>#]/g, '')                 // enfasi e marcatori
+    .replace(/\s+/g, ' ')                    // collassa whitespace
+    .trim()
+  return clean.length > MEM_PREVIEW_MAX
+    ? clean.slice(0, MEM_PREVIEW_MAX).trimEnd() + '…'
+    : clean
+}
+
+export function ProjectView({
   project,
+  section,
   onNavigate,
+  onSelectProject,
+  onDeleteProject,
 }: {
-  project: { hash: string; realPath: string }
+  project: Project
+  section: ProjectSection
   onNavigate: (v: View) => void
+  onSelectProject: (p: Project) => void
+  onDeleteProject: (p: Project) => void
 }) {
   const { data: cost } = useProjectCost(project.hash)
   const { data: memory } = useMemoryProject(project.hash)
@@ -87,653 +125,475 @@ export function ProjectOverviewContent({
   const { data: allSkills = [] } = useAllSkills(project.realPath)
   const { data: globalAgents = [] } = useGlobalAgents()
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
+  const { data: allProjects = [] } = useMemoryProjects()
+  const { data: costSummary } = useCostSummary()
 
-  const [activeProcesses, setActiveProcesses] = useState<ClaudeProcess[]>([])
+  // ── Live process ──
+  const [procs, setProcs] = useState<ClaudeProcess[]>([])
   useEffect(() => {
+    let alive = true
     async function load() {
       try {
         const r = await window.electronAPI.live.getProcesses()
-        if (r.data) setActiveProcesses(r.data)
+        if (alive && r.data) setProcs(r.data)
       } catch { /* ignore */ }
     }
     load()
     const t = setInterval(load, 5000)
-    return () => clearInterval(t)
+    return () => { alive = false; clearInterval(t) }
   }, [])
-  const liveProc = activeProcesses.find(p => p.cwd === project.realPath)
-  const liveStartRef = useMemo(() => Date.now(), [liveProc?.pid])
-  const [, force] = useState(0)
+  const liveProc = procs.find(p => p.cwd === project.realPath)
+  const liveStart = useMemo(() => Date.now(), [liveProc?.pid])
+  const [, tick] = useState(0)
   useEffect(() => {
     if (!liveProc) return
-    const t = setInterval(() => force(x => x + 1), 1000)
+    const t = setInterval(() => tick(x => x + 1), 1000)
     return () => clearInterval(t)
   }, [liveProc])
-  const liveSec = liveProc ? Math.floor((Date.now() - liveStartRef) / 1000) : 0
-  const liveTime = liveProc ? `${Math.floor(liveSec / 60)}m ${liveSec % 60}s` : ''
+  const liveSec = liveProc ? Math.floor((Date.now() - liveStart) / 1000) : 0
+  const liveUptime = `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`
 
+  // ── Derived ──
   const projectName = project.realPath.split('/').pop() ?? project.realPath
   const sessionCount = cost?.sessionsCount ?? sessions.length
-  const tokens = formatTokens(cost?.totalTokens ?? 0)
-  const lastSession = sessions[0]
-
-  // Model mix from sessions
-  const modelMix = useMemo(() => {
-    const m = new Map<string, number>()
-    for (const s of sessions) {
-      for (const [model, count] of Object.entries(s.models ?? {})) {
-        m.set(model, (m.get(model) ?? 0) + count)
-      }
-    }
-    const total = [...m.values()].reduce((a, b) => a + b, 0)
-    if (!total) return [] as { model: string; pct: number; cat: Category }[]
-    const palette: Category[] = ['claude', 'skill', 'mcp', 'agent', 'memory']
-    return [...m.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 3)
-      .map(([model, count], i) => ({
-        model: model.replace(/^claude-/, '').replace(/-\d+-?\d*$/, ''),
-        pct: Math.round((count / total) * 100),
-        cat: palette[i % palette.length],
-      }))
-  }, [sessions])
-
-  const enabledMcp = [
-    ...(mcpData?.cloudServers ?? []),
-    ...(mcpData?.localServers ?? []),
-  ].filter(s => !s.disabledProjectPaths.includes(project.realPath))
-
-  const projectClaudeMd = claudeMd?.layers.find(l => l.scope === 'project')
-  const claudeMdLines = projectClaudeMd ? projectClaudeMd.content.split('\n').length : 0
-  const skillCount = allSkills.length
-  const agentNames = new Set([...projectAgents.map(a => a.name), ...globalAgents.map(a => a.name)])
-  const agentCount = agentNames.size
-  const topicCount = (memory?.index.length ?? 0) + (memory?.projectLevelIndex.length ?? 0)
-  const memoryCap = 200
-
-  // Sparkline for tokens stat from session history
-  const tokenSpark = useMemo(() => {
-    const last = sessions.slice(0, 14).reverse().map(s => s.totalTokens)
-    return last.length ? last : [0, 1, 0]
-  }, [sessions])
-
-  const tokensIncreaseLast7 = useMemo(() => {
+  const totalTokens = cost?.totalTokens ?? sessions.reduce((s, x) => s + x.totalTokens, 0)
+  const tokensFmt = formatTokens(totalTokens)
+  const avgTokens = sessionCount > 0 ? formatTokens(Math.round(totalTokens / sessionCount)) : { value: '0', unit: '' }
+  const lastActive = sessions[0]?.date
+  const last7 = useMemo(() => {
     const cutoff = Date.now() - 7 * 86400000
     return sessions.filter(s => new Date(s.date).getTime() >= cutoff).length
   }, [sessions])
 
-  const [tlRange, setTlRange] = useState<14 | 30 | 90>(14)
+  const sessBars = useMemo(() => weeklyBuckets(sessions, 'count'), [sessions])
+  const tokBars = useMemo(() => weeklyBuckets(sessions, 'tokens'), [sessions])
+  const avgBars = useMemo(() => {
+    const c = weeklyBuckets(sessions, 'count')
+    const t = weeklyBuckets(sessions, 'tokens')
+    return t.map((v, i) => (c[i] > 0 ? v / c[i] : 0))
+  }, [sessions])
+
+  const memTopics = useMemo(
+    () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
+    [memory],
+  )
+  const topicContent = (name: string) =>
+    memory?.topics[name] ?? memory?.projectLevelTopics[name] ?? ''
+
+  const enabledMcp = useMemo(() => {
+    const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])]
+    return all.filter(s => !s.disabledProjectPaths.includes(project.realPath))
+  }, [mcpData, project.realPath])
+
+  const projectClaudeMd = claudeMd?.layers.find(l => l.scope === 'project')
+  const claudeMdLayers = claudeMd?.layers.length ?? 0
+  const skillCount = allSkills.length
+  const agents = useMemo(() => {
+    const seen = new Map<string, typeof globalAgents[number]>()
+    for (const a of [...projectAgents, ...globalAgents]) if (!seen.has(a.name)) seen.set(a.name, a)
+    return [...seen.values()]
+  }, [projectAgents, globalAgents])
+  const agentCount = agents.length
+  const memoryCount = memTopics.length
+
+  // ── Project picker ──
+  const costByHash = useMemo(() => {
+    const m = new Map<string, ProjectCost>()
+    for (const c of (costSummary as ProjectCost[] | undefined) ?? []) m.set(c.project, c)
+    return m
+  }, [costSummary])
+  const triggerRef = useRef<HTMLButtonElement>(null)
+  const popRef = useRef<HTMLDivElement>(null)
+  const inputRef = useRef<HTMLInputElement>(null)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const [pickerPos, setPickerPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
+  const [query, setQuery] = useState('')
+  const [hl, setHl] = useState(0)
+
+  const filtered = useMemo(() => {
+    const q = query.trim().toLowerCase()
+    const list = q
+      ? allProjects.filter(p => p.realPath.toLowerCase().includes(q))
+      : allProjects
+    return [...list].sort((a, b) => (costByHash.get(b.hash)?.totalTokens ?? 0) - (costByHash.get(a.hash)?.totalTokens ?? 0))
+  }, [allProjects, costByHash, query])
+
+  function openPicker() {
+    const r = triggerRef.current?.getBoundingClientRect()
+    if (r) setPickerPos({ top: r.bottom + 8, left: r.left })
+    setQuery('')
+    setHl(0)
+    setPickerOpen(true)
+    setTimeout(() => inputRef.current?.focus(), 10)
+  }
+  function closePicker() { setPickerOpen(false) }
+
+  useEffect(() => {
+    if (!pickerOpen) return
+    function onDown(e: MouseEvent) {
+      const t = e.target as Node
+      if (popRef.current?.contains(t) || triggerRef.current?.contains(t)) return
+      closePicker()
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [pickerOpen])
+
+  function choose(p: Project) { onSelectProject(p); closePicker() }
+
+  function onKey(e: React.KeyboardEvent) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); setHl(h => Math.min(filtered.length - 1, h + 1)) }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setHl(h => Math.max(0, h - 1)) }
+    else if (e.key === 'Enter') { e.preventDefault(); if (filtered[hl]) choose(filtered[hl]) }
+    else if (e.key === 'Escape') { closePicker() }
+  }
 
   return (
-    <div
-      className="h-full overflow-y-auto"
-      style={{
-        background: '#0a0c11',
-        fontFamily: "'Geist','Inter',-apple-system,BlinkMacSystemFont,sans-serif",
-        color: '#e8ecf3',
-      }}
-    >
-      <style>{`
-        @import url('https://fonts.googleapis.com/css2?family=Geist:wght@300;400;500;600;700&family=Geist+Mono:wght@400;500;600&display=swap');
-        .po-root {
-          --bg: #0a0c11;
-          --bg-elev: #0f1218;
-          --bg-elev-2: #141822;
-          --bg-hover: #1a1f2b;
-          --border: rgba(255,255,255,0.06);
-          --border-strong: rgba(255,255,255,0.12);
-          --fg: #e8ecf3;
-          --fg-muted: #8a93a6;
-          --fg-dim: #5a6273;
-          --fg-faint: #3d4454;
-          --accent: oklch(0.78 0.13 210);
-          --success: oklch(0.75 0.17 150);
-          --warn: oklch(0.80 0.15 75);
-          --cat-skill:  oklch(0.78 0.13 210);
-          --cat-agent:  oklch(0.78 0.13 155);
-          --cat-memory: oklch(0.80 0.13 85);
-          --cat-mcp:    oklch(0.72 0.15 295);
-          --cat-claude: oklch(0.74 0.13 25);
-        }
-        .po-mono { font-family: 'Geist Mono','JetBrains Mono','SF Mono',monospace; }
-        .po-band {
-          background: var(--bg-elev);
-          border: 1px solid var(--border);
-          border-radius: 16px;
-          padding: 24px 28px;
-        }
-        .po-band--stats { padding: 20px 28px; }
-        .po-band--hero {
-          background:
-            radial-gradient(circle at 0% 0%, oklch(0.75 0.17 150 / 0.12), transparent 50%),
-            var(--bg-elev);
-        }
-        .po-band--hero[data-live="true"] { border-color: oklch(0.75 0.17 150 / 0.25); }
-        .po-back {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 6px 10px;
-          border-radius: 6px;
-          background: var(--bg-elev-2);
-          border: 1px solid var(--border);
-          font-family: 'Geist Mono',monospace;
-          font-size: 11px;
-          color: var(--fg-muted);
-          cursor: pointer;
-          transition: background 120ms ease, color 120ms ease;
-        }
-        .po-back:hover { background: var(--bg-hover); color: var(--fg); }
-        .po-kicker {
-          font-family: 'Geist Mono',monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.16em;
-          text-transform: uppercase;
-          color: var(--fg-dim);
-        }
-        .po-hero-title {
-          font-size: 44px;
-          font-weight: 500;
-          letter-spacing: -0.03em;
-          line-height: 1;
-          margin: 8px 0 14px;
-          color: var(--fg);
-          word-break: break-word;
-        }
-        .po-hero-title .dim { color: var(--fg-dim); }
-        .po-hero-sub {
-          display: flex; flex-wrap: wrap; gap: 14px; align-items: center;
-          font-family: 'Geist Mono',monospace;
-          font-size: 12px;
-          color: var(--fg-muted);
-        }
-        .po-live-pill {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 4px 10px;
-          border-radius: 99px;
-          background: oklch(0.75 0.17 150 / 0.14);
-          color: var(--success);
-          font-size: 11px;
-          text-transform: uppercase;
-          letter-spacing: 0.08em;
-          font-weight: 500;
-        }
-        .po-live-pill::before {
-          content: '';
-          width: 6px; height: 6px;
-          border-radius: 50%;
-          background: currentColor;
-          box-shadow: 0 0 8px currentColor;
-          animation: poPulse 2s infinite;
-        }
-        @keyframes poPulse {
-          0%,100% { opacity: 1; transform: scale(1); }
-          50% { opacity: 0.4; transform: scale(1.3); }
-        }
-        .po-btn {
-          display: inline-flex; align-items: center; gap: 6px;
-          padding: 7px 14px;
-          border-radius: 6px;
-          background: var(--bg-elev-2);
-          border: 1px solid var(--border-strong);
-          color: var(--fg);
-          font-size: 12px;
-          font-family: inherit;
-          cursor: pointer;
-          transition: background 120ms ease, border-color 120ms ease;
-        }
-        .po-btn:hover { background: var(--bg-hover); }
-        .po-btn--primary {
-          background: var(--accent);
-          color: #0a0c11;
-          border-color: transparent;
-          font-weight: 500;
-        }
-        .po-btn--primary:hover { background: oklch(0.82 0.13 210); }
-        .po-stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 32px; }
-        .po-stat { border-right: 1px dashed var(--border); padding-right: 20px; }
-        .po-stat:last-child { border-right: none; }
-        .po-stat-l {
-          font-family: 'Geist Mono',monospace;
-          font-size: 10.5px;
-          letter-spacing: 0.14em;
-          text-transform: uppercase;
-          color: var(--fg-dim);
-          margin-bottom: 10px;
-        }
-        .po-stat-n {
-          font-size: 32px; font-weight: 500;
-          letter-spacing: -0.02em;
-          font-variant-numeric: tabular-nums;
-          line-height: 1;
-        }
-        .po-stat-n .u { font-size: 14px; color: var(--fg-dim); margin-left: 3px; }
-        .po-stat-d {
-          font-family: 'Geist Mono',monospace;
-          font-size: 10.5px;
-          color: var(--fg-dim);
-          margin-top: 8px;
-        }
-        .po-bar { display: flex; height: 6px; border-radius: 3px; overflow: hidden; margin: 12px 0 10px; background: var(--bg-elev-2); }
-        .po-bar-seg { height: 100%; }
-        .po-legend { display: flex; flex-wrap: wrap; gap: 8px 12px; font-family: 'Geist Mono',monospace; font-size: 10.5px; color: var(--fg-muted); }
-        .po-legend i { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 5px; vertical-align: middle; }
-        .po-band-head {
-          display: flex; justify-content: space-between; align-items: baseline;
-          margin-bottom: 14px;
-        }
-        .po-band-head h2 {
-          font-size: 15px; font-weight: 600; letter-spacing: -0.005em;
-          color: var(--fg); margin: 0;
-        }
-        .po-band-head .meta { font-family: 'Geist Mono',monospace; font-size: 11px; color: var(--fg-dim); }
-        .po-chip-group { display: inline-flex; gap: 4px; }
-        .po-chip {
-          font-family: 'Geist Mono',monospace;
-          font-size: 10.5px;
-          padding: 3px 8px;
-          border-radius: 4px;
-          background: var(--bg-elev-2);
-          border: 1px solid var(--border);
-          color: var(--fg-dim);
-          cursor: pointer;
-          transition: all 120ms ease;
-        }
-        .po-chip:hover { color: var(--fg-muted); }
-        .po-chip.active { background: var(--accent); color: #0a0c11; border-color: transparent; }
-        .po-tl-grid {
-          display: grid;
-          grid-template-columns: repeat(var(--cols, 14), 1fr);
-          gap: 3px;
-          height: 100px;
-          align-items: end;
-        }
-        .po-tl-col { height: 100%; display: flex; align-items: flex-end; }
-        .po-tl-bar {
-          width: 100%;
-          background: var(--bg-elev-2);
-          border-radius: 2px;
-          min-height: 2px;
-          transition: background 120ms ease;
-        }
-        .po-tl-col.has .po-tl-bar { background: oklch(0.78 0.13 210 / 0.6); }
-        .po-tl-col.today .po-tl-bar { background: var(--accent); }
-        .po-tl-axis {
-          display: flex; justify-content: space-between;
-          font-family: 'Geist Mono',monospace;
-          font-size: 10px; color: var(--fg-dim);
-          margin-top: 8px;
-        }
-        .po-config-rail {
-          display: grid;
-          grid-template-columns: repeat(5, 1fr);
-          gap: 14px;
-        }
-        .po-conf-card {
-          background: var(--bg-elev-2);
-          border: 1px solid var(--border);
-          border-left-width: 3px;
-          border-radius: 10px;
-          padding: 14px 14px 14px 16px;
-          cursor: pointer;
-          transition: background 120ms ease, border-color 120ms ease;
-          text-align: left;
-          font: inherit;
-          color: inherit;
-          display: flex; flex-direction: column; gap: 4px;
-        }
-        .po-conf-card:hover { background: var(--bg-hover); }
-        .po-conf-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; }
-        .po-conf-icon {
-          width: 28px; height: 28px;
-          border-radius: 6px;
-          display: flex; align-items: center; justify-content: center;
-          font-family: 'Geist Mono',monospace;
-          font-size: 11px; font-weight: 700;
-        }
-        .po-conf-n {
-          font-family: 'Geist Mono',monospace;
-          font-size: 10.5px;
-          color: var(--fg-muted);
-          font-variant-numeric: tabular-nums;
-        }
-        .po-conf-name { font-size: 13.5px; font-weight: 500; color: var(--fg); }
-        .po-conf-sub {
-          font-family: 'Geist Mono',monospace;
-          font-size: 11px;
-          color: var(--fg-dim);
-          overflow: hidden;
-          text-overflow: ellipsis;
-          white-space: nowrap;
-        }
-        .po-split { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
-        .po-mem-row, .po-rule-row {
-          display: grid;
-          grid-template-columns: 50px 1fr auto;
-          gap: 12px;
-          align-items: center;
-          padding: 12px 0;
-          border-bottom: 1px dashed var(--border);
-        }
-        .po-mem-row:last-child, .po-rule-row:last-child { border-bottom: none; }
-        .po-mem-tag {
-          font-family: 'Geist Mono',monospace;
-          font-size: 9.5px;
-          font-weight: 700;
-          letter-spacing: 0.1em;
-          padding: 3px 6px;
-          border-radius: 4px;
-          text-align: center;
-        }
-        .po-mem-k { font-size: 13px; font-weight: 500; color: var(--fg); }
-        .po-mem-v {
-          font-family: 'Geist Mono',monospace;
-          font-size: 11px; color: var(--fg-dim);
-          margin-top: 2px;
-          overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-        }
-        .po-mem-t { font-family: 'Geist Mono',monospace; font-size: 11px; color: var(--fg-muted); }
-        .po-rule-glob {
-          font-family: 'Geist Mono',monospace;
-          font-size: 11px;
-          color: var(--warn);
-          background: oklch(0.80 0.15 75 / 0.10);
-          border: 1px solid oklch(0.80 0.15 75 / 0.25);
-          padding: 3px 8px;
-          border-radius: 4px;
-          text-align: center;
-          width: max-content;
-          justify-self: start;
-        }
-      `}</style>
-
-      <div
-        className="po-root"
-        style={{ padding: '24px 36px 50px', display: 'flex', flexDirection: 'column', gap: 18 }}
-      >
-        {/* Back to global */}
-        <div>
-          <button className="po-back" type="button" onClick={() => onNavigate({ type: 'global-home' })}>
-            ← Global
+    <div style={{ position: 'relative' }}>
+      {/* ─── HERO ─────────────────────────────────────── */}
+      <section className="cl-hero">
+        <Lens />
+        <div className="cl-hero-actions">
+          <button className="cl-btn" type="button" onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}>
+            Open in Claude Code
+          </button>
+          <button className="cl-btn cl-btn--primary" type="button" onClick={() => onNavigate({ type: 'sessions', project })}>
+            Sessions →
           </button>
         </div>
 
-        {/* ─── Hero band ─────────────────────────── */}
-        <header className="po-band po-band--hero" data-live={liveProc ? 'true' : 'false'}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 24 }}>
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div className="po-kicker">Project · {projectName}</div>
-              <h1 className="po-hero-title">
-                {projectName} <span className="dim">overview</span>
-              </h1>
-              <div className="po-hero-sub">
-                {liveProc && <span className="po-live-pill">Live · {liveTime}</span>}
-                <span>{sessionCount} sessions</span>
-                <span className="po-mono">{tokens.value}{tokens.unit} tokens</span>
-                {lastSession?.model && <span className="po-mono">{lastSession.model.replace(/^claude-/, '')}</span>}
-                <span className="po-mono" title={project.realPath}>{project.realPath}</span>
-              </div>
-            </div>
-            <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
-              <button
-                className="po-btn"
-                type="button"
-                onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}
-              >
-                Open in Claude Code
-              </button>
-              <button
-                className="po-btn po-btn--primary"
-                type="button"
-                onClick={() => onNavigate({ type: 'sessions', project })}
-              >
-                Open sessions →
-              </button>
-            </div>
-          </div>
-        </header>
+        <div className="cl-eyebrow">
+          <span className="pip" />
+          <span title={project.realPath}>Project · {project.realPath}</span>
+        </div>
 
-        {/* ─── Stats band ────────────────────────── */}
-        <section className="po-band po-band--stats">
-          <div className="po-stats">
-            <div className="po-stat">
-              <div className="po-stat-l">Sessions</div>
-              <div className="po-stat-n">{sessionCount}</div>
-              <div className="po-stat-d">+{tokensIncreaseLast7} last 7d</div>
+        <button ref={triggerRef} className="cl-h-name" type="button" onClick={openPicker} aria-haspopup="listbox">
+          <span className="label-name">{projectName}</span><span className="glyph">.</span>
+          <span className="chev">↓</span>
+        </button>
+
+        <div className="cl-h-meta">
+          <span><b>{fmt(sessionCount)}</b> sessions</span>
+          <span className="sep">·</span>
+          <span><b>{tokensFmt.value}{tokensFmt.unit}</b> tokens</span>
+          {lastActive && <><span className="sep">·</span><span>last active <b>{relIso(lastActive)} ago</b></span></>}
+          {liveProc && <span className="tag"><span className="led" /> 1 session running</span>}
+        </div>
+      </section>
+
+      {/* ─── SECTION CONTENT ──────────────────────────── */}
+      {section === 'overview' && (
+        <>
+          <section className="cl-stats">
+            <div className="cl-stat">
+              <span className="lbl">Sessions</span>
+              <div className="num">{fmt(sessionCount)}</div>
+              <Bars values={sessBars} />
+              <div className="delta">↑ {last7} · last 7d</div>
             </div>
-            <div className="po-stat">
-              <div className="po-stat-l">Tokens</div>
-              <div className="po-stat-n">{tokens.value}<span className="u">{tokens.unit}</span></div>
-              <svg viewBox="0 0 100 24" preserveAspectRatio="none" style={{ display: 'block', marginTop: 8, color: 'var(--accent)', width: '100%', height: 24 }}>
-                {(() => {
-                  const min = Math.min(...tokenSpark)
-                  const max = Math.max(...tokenSpark)
-                  const r = max - min || 1
-                  const step = 100 / Math.max(tokenSpark.length - 1, 1)
-                  const pts = tokenSpark.map((v, i) => `${i * step},${24 - ((v - min) / r) * 24}`).join(' ')
-                  return (
-                    <>
-                      <polygon points={`0,24 ${pts} 100,24`} fill="currentColor" opacity="0.15" />
-                      <polyline points={pts} fill="none" stroke="currentColor" strokeWidth="1.2" />
-                    </>
-                  )
-                })()}
-              </svg>
+            <div className="cl-stat">
+              <span className="lbl">Tokens</span>
+              <div className="num">{tokensFmt.value}<small>{tokensFmt.unit}</small></div>
+              <Bars values={tokBars} />
+              <div className="delta">est. ${(cost?.cost ?? 0).toFixed(2)}</div>
             </div>
-            <div className="po-stat">
-              <div className="po-stat-l">Est. cost</div>
-              <div className="po-stat-n">${(cost?.cost ?? 0).toFixed(2)}</div>
-              <div className="po-stat-d">lifetime</div>
+            <div className="cl-stat">
+              <span className="lbl">Avg / session</span>
+              <div className="num">{avgTokens.value}<small>{avgTokens.unit || 'tok'}</small></div>
+              <Bars values={avgBars} />
+              <div className="delta">across {sessionCount} sessions</div>
             </div>
-            <div className="po-stat">
-              <div className="po-stat-l">Model mix</div>
-              {modelMix.length > 0 ? (
+            <div className="cl-stat live">
+              <span className="lbl"><span className="pulse" /> Live</span>
+              {liveProc ? (
                 <>
-                  <div className="po-bar">
-                    {modelMix.map(m => (
-                      <div key={m.model} className="po-bar-seg" style={{ flex: m.pct, background: `var(--cat-${m.cat})` }} />
-                    ))}
-                  </div>
-                  <div className="po-legend">
-                    {modelMix.map(m => (
-                      <span key={m.model}><i style={{ background: `var(--cat-${m.cat})` }} />{m.model} {m.pct}%</span>
-                    ))}
-                  </div>
+                  <div className="pid">PID {liveProc.pid}</div>
+                  <div className="cmd">{liveProc.cmdline || 'claude'}</div>
+                  <div className="uptime">↑ {liveUptime} · attached</div>
                 </>
               ) : (
-                <div className="po-stat-d" style={{ marginTop: 4 }}>no data</div>
+                <div className="idle">No live session</div>
               )}
             </div>
-          </div>
-        </section>
+          </section>
 
-        {/* ─── Activity timeline ─────────────────── */}
-        <section className="po-band">
-          <div className="po-band-head">
-            <h2>Activity</h2>
-            <div className="po-chip-group">
-              {([14, 30, 90] as const).map(d => (
-                <button
-                  key={d}
-                  type="button"
-                  className={`po-chip ${tlRange === d ? 'active' : ''}`}
-                  onClick={() => setTlRange(d)}
-                >
-                  {d}d
+          <section className="cl-section">
+            <div className="cl-sec-head">
+              <h2>Sessions</h2>
+              <span className="ct">{Math.min(5, sessions.length)} of {sessions.length}</span>
+              <button className="all" type="button" onClick={() => onNavigate({ type: 'sessions', project })}>View all</button>
+            </div>
+            <SessionRows sessions={sessions.slice(0, 5)} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+          </section>
+
+          <section className="cl-section">
+            <div className="cl-sec-head">
+              <h2>Memory</h2>
+              <span className="ct">{memoryCount} topics</span>
+              <button className="all" type="button" onClick={() => onNavigate({ type: 'project-memory', project })}>Edit</button>
+            </div>
+            <MemoryRows
+              topics={memTopics.slice(0, 4)}
+              onOpen={t => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.name), hash: project.hash })}
+            />
+          </section>
+
+          <section className="cl-config-strip">
+            <button className={`item ${claudeMdLayers ? 'on' : ''}`} type="button"
+              onClick={() => projectClaudeMd ? onNavigate({ type: 'project-claudemd', project, layer: projectClaudeMd }) : onNavigate({ type: 'global-claudemd' })}>
+              <span className="pip" /><span>CLAUDE.md</span><span className="num">{claudeMdLayers} layer{claudeMdLayers === 1 ? '' : 's'}</span>
+            </button>
+            <button className={`item ${skillCount ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-skills', project })}>
+              <span className="pip" /><span>Skills</span><span className="num">{skillCount}</span>
+            </button>
+            <button className={`item ${agentCount ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-agents', project })}>
+              <span className="pip" /><span>Agents</span><span className="num">{agentCount}</span>
+            </button>
+            <button className={`item ${enabledMcp.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-mcp', project })}>
+              <span className="pip" /><span>MCP</span><span className="num">{enabledMcp.length}</span>
+            </button>
+            <button className={`item ${rules.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-mcp', project })}>
+              <span className="pip" /><span>Rules</span><span className="num">{rules.length} active</span>
+            </button>
+          </section>
+        </>
+      )}
+
+      {section === 'sessions' && (
+        <section className="cl-section" style={{ paddingTop: 38 }}>
+          <div className="cl-sec-head">
+            <h2>Sessions</h2>
+            <span className="ct">{sessions.length} total · sorted by last activity</span>
+          </div>
+          <SessionRows sessions={sessions} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+        </section>
+      )}
+
+      {section === 'memory' && (
+        <section className="cl-section" style={{ paddingTop: 38 }}>
+          <div className="cl-sec-head">
+            <h2>Project memory</h2>
+            <span className="ct">MEMORY.md · {memoryCount} topics</span>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'project-memory', project })}>Manage</button>
+          </div>
+          <MemoryRows
+            topics={memTopics}
+            onOpen={t => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.name), hash: project.hash })}
+          />
+        </section>
+      )}
+
+      {section === 'skills' && (
+        <section className="cl-section" style={{ paddingTop: 38 }}>
+          <div className="cl-sec-head">
+            <h2>Skills</h2>
+            <span className="ct">{skillCount} available</span>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'skill-create', project })}>+ New</button>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-skills' })}>Manage</button>
+          </div>
+          {skillCount === 0 ? (
+            <div className="cl-empty">No skills available for this project.</div>
+          ) : (
+            <div className="cl-tile-grid">
+              {allSkills.map((s, i) => (
+                <button key={s.path} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
+                  onClick={() => onNavigate({ type: 'skill-detail', skill: s })}>
+                  <span className="glyph">{(s.name[0] ?? '?').toUpperCase()}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="t-name">/{s.name}</div>
+                    <div className="t-desc">{s.description || '—'}</div>
+                  </div>
+                  <span className="t-meta"><b>{s.scope}</b></span>
                 </button>
               ))}
             </div>
-          </div>
-          <div style={{ ['--cols' as string]: tlRange } as React.CSSProperties}>
-            <ActivityTimeline sessions={sessions} days={tlRange} />
-          </div>
-          <div className="po-tl-axis">
-            <span>-{tlRange}d</span>
-            <span>-{Math.floor(tlRange * 0.66)}d</span>
-            <span>-{Math.floor(tlRange * 0.33)}d</span>
-            <span>today</span>
-          </div>
+          )}
         </section>
+      )}
 
-        {/* ─── Configuration rail ────────────────── */}
-        <section className="po-band">
-          <div className="po-band-head">
-            <h2>Configuration</h2>
-            <span className="meta">{(claudeMd?.layers.length ?? 0)} layers · merged at runtime</span>
+      {section === 'agents' && (
+        <section className="cl-section" style={{ paddingTop: 38 }}>
+          <div className="cl-sec-head">
+            <h2>Agents</h2>
+            <span className="ct">{agentCount} available · delegate-and-summarize</span>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'agent-create', project })}>+ New</button>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-agents' })}>Manage</button>
           </div>
-          <div className="po-config-rail">
-            <button
-              className="po-conf-card"
-              type="button"
-              style={{ borderLeftColor: CAT_TOKENS.claude.fg }}
-              onClick={() => projectClaudeMd && onNavigate({ type: 'project-claudemd', project, layer: projectClaudeMd })}
-            >
-              <div className="po-conf-top">
-                <div className="po-conf-icon" style={{ background: CAT_TOKENS.claude.tint, color: CAT_TOKENS.claude.fg, border: `1px solid ${CAT_TOKENS.claude.border}` }}>MD</div>
-                <span className="po-conf-n">{claudeMdLines || '—'} lines</span>
-              </div>
-              <div className="po-conf-name">CLAUDE.md</div>
-              <div className="po-conf-sub">{projectClaudeMd ? 'Project instructions' : 'No project file'}</div>
-            </button>
-
-            <button
-              className="po-conf-card"
-              type="button"
-              style={{ borderLeftColor: CAT_TOKENS.skill.fg }}
-              onClick={() => onNavigate({ type: 'project-skills', project })}
-            >
-              <div className="po-conf-top">
-                <div className="po-conf-icon" style={{ background: CAT_TOKENS.skill.tint, color: CAT_TOKENS.skill.fg, border: `1px solid ${CAT_TOKENS.skill.border}` }}>★</div>
-                <span className="po-conf-n">{skillCount}</span>
-              </div>
-              <div className="po-conf-name">Skills</div>
-              <div className="po-conf-sub">
-                {allSkills.slice(0, 3).map(s => s.name).join(' · ') || '—'}
-              </div>
-            </button>
-
-            <button
-              className="po-conf-card"
-              type="button"
-              style={{ borderLeftColor: CAT_TOKENS.agent.fg }}
-              onClick={() => onNavigate({ type: 'project-agents', project })}
-            >
-              <div className="po-conf-top">
-                <div className="po-conf-icon" style={{ background: CAT_TOKENS.agent.tint, color: CAT_TOKENS.agent.fg, border: `1px solid ${CAT_TOKENS.agent.border}` }}>◎</div>
-                <span className="po-conf-n">{agentCount}</span>
-              </div>
-              <div className="po-conf-name">Agents</div>
-              <div className="po-conf-sub">
-                {[...projectAgents, ...globalAgents].slice(0, 3).map(a => a.name).join(' · ') || '—'}
-              </div>
-            </button>
-
-            <button
-              className="po-conf-card"
-              type="button"
-              style={{ borderLeftColor: CAT_TOKENS.mcp.fg }}
-              onClick={() => onNavigate({ type: 'global-mcp' })}
-            >
-              <div className="po-conf-top">
-                <div className="po-conf-icon" style={{ background: CAT_TOKENS.mcp.tint, color: CAT_TOKENS.mcp.fg, border: `1px solid ${CAT_TOKENS.mcp.border}` }}>M</div>
-                <span className="po-conf-n">{enabledMcp.length} servers</span>
-              </div>
-              <div className="po-conf-name">MCP</div>
-              <div className="po-conf-sub">
-                {enabledMcp.slice(0, 3).map(s => s.name.replace(/^claude\.ai\s*/i, '')).join(' · ') || '—'}
-              </div>
-            </button>
-
-            <button
-              className="po-conf-card"
-              type="button"
-              style={{ borderLeftColor: CAT_TOKENS.memory.fg }}
-              onClick={() => onNavigate({ type: 'project-memory', project })}
-            >
-              <div className="po-conf-top">
-                <div className="po-conf-icon" style={{ background: CAT_TOKENS.memory.tint, color: CAT_TOKENS.memory.fg, border: `1px solid ${CAT_TOKENS.memory.border}` }}>≡</div>
-                <span className="po-conf-n">{topicCount} / {memoryCap}</span>
-              </div>
-              <div className="po-conf-name">Memory</div>
-              <div className="po-conf-sub">
-                {(memory?.index ?? []).slice(0, 3).map(t => t.name).join(' · ') || '—'}
-              </div>
-            </button>
-          </div>
-        </section>
-
-        {/* ─── Split: Memory + Rules ─────────────── */}
-        <section className="po-band">
-          <div className="po-split">
-            {/* Memory */}
-            <div>
-              <div className="po-band-head">
-                <h2>Memory</h2>
-                <span className="meta">MEMORY.md · {topicCount} / {memoryCap}</span>
-              </div>
-              <div>
-                {(memory?.index ?? []).slice(0, 6).map(t => {
-                  const tag = t.type === 'feedback' ? 'FB' : t.type === 'project' ? 'REPO' : t.type === 'reference' ? 'REF' : 'USER'
-                  const tagColor =
-                    t.type === 'feedback' ? CAT_TOKENS.skill :
-                    t.type === 'project'  ? CAT_TOKENS.memory :
-                    t.type === 'reference'? CAT_TOKENS.mcp :
-                                            CAT_TOKENS.agent
-                  return (
-                    <div key={t.filename} className="po-mem-row">
-                      <span
-                        className="po-mem-tag"
-                        style={{ background: tagColor.tint, color: tagColor.fg, border: `1px solid ${tagColor.border}` }}
-                      >{tag}</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="po-mem-k">{t.name}</div>
-                        <div className="po-mem-v">{t.description || '—'}</div>
-                      </div>
-                      <span className="po-mem-t">{relativeFromIso(t.updatedAt)}</span>
+          {agentCount === 0 ? (
+            <div className="cl-empty">No agents available for this project.</div>
+          ) : (
+            <div className="cl-tile-grid">
+              {agents.map((a, i) => {
+                const glyphs = ['◐', '◑', '◒', '◓']
+                const mode = a.disableModelInvocation ? 'manual' : 'auto'
+                return (
+                  <button key={a.path} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
+                    onClick={() => onNavigate({ type: 'agent-detail', agent: a })}>
+                    <span className="glyph">{glyphs[i % glyphs.length]}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="t-name">{a.name}</div>
+                      <div className="t-desc">{a.description || '—'}</div>
                     </div>
-                  )
-                })}
-                {(memory?.index?.length ?? 0) === 0 && (
-                  <div style={{ padding: '14px 0', color: 'var(--fg-dim)', fontSize: 13 }}>
-                    No memory topics yet.
-                  </div>
-                )}
-              </div>
+                    <span className="t-meta">{a.model ? `${fmtModel(a.model)} · ` : ''}<b>{mode}</b></span>
+                  </button>
+                )
+              })}
             </div>
-
-            {/* Rules */}
-            <div>
-              <div className="po-band-head">
-                <h2>Rules</h2>
-                <span className="meta">{rules.length} conditional</span>
-              </div>
-              <div>
-                {rules.length === 0 && (
-                  <div style={{ padding: '14px 0', color: 'var(--fg-dim)', fontSize: 13 }}>
-                    No conditional rules.
-                  </div>
-                )}
-                {rules.map(r => (
-                  <div key={r.filename} className="po-rule-row" style={{ gridTemplateColumns: 'auto 1fr' }}>
-                    <div>
-                      {r.paths && r.paths.length > 0 ? (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4 }}>
-                          {r.paths.map(p => (
-                            <span key={p} className="po-rule-glob">{p}</span>
-                          ))}
-                        </div>
-                      ) : (
-                        <span className="po-rule-glob">always</span>
-                      )}
-                    </div>
-                    <div>
-                      <div className="po-mem-k">{r.filename}</div>
-                      <div className="po-mem-v">{r.content.split('\n').find(l => l.trim() && !l.startsWith('---') && !l.startsWith('#'))?.trim() ?? '—'}</div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
+          )}
         </section>
-      </div>
+      )}
+
+      {section === 'mcp' && (
+        <section className="cl-section" style={{ paddingTop: 38 }}>
+          <div className="cl-sec-head">
+            <h2>MCP servers</h2>
+            <span className="ct">{enabledMcp.length} active · project-scoped</span>
+            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
+          </div>
+          {enabledMcp.length === 0 ? (
+            <div className="cl-empty">No MCP servers active for this project.</div>
+          ) : (
+            <div className="cl-mcp-row" style={{ gridTemplateColumns: `repeat(${Math.min(3, enabledMcp.length)}, 1fr)` }}>
+              {enabledMcp.slice(0, 3).map((s, i) => {
+                const tone = ['', 'violet', 'cyan'][i % 3]
+                const total = s.enabledInProjects + s.disabledInProjects
+                return (
+                  <button key={s.name} type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onNavigate({ type: 'global-mcp' })}>
+                    <div className="led-row"><span className="led" /> {s.source}</div>
+                    <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
+                    <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
+                    <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
+                  </button>
+                )
+              })}
+            </div>
+          )}
+
+          <div className="cl-sec-head" style={{ marginTop: 42 }}>
+            <h2>Conditional rules</h2>
+            <span className="ct">{rules.length} {rules.length === 1 ? 'rule' : 'rules'} · path-scoped</span>
+          </div>
+          {rules.length === 0 ? (
+            <div className="cl-empty">No conditional rules.</div>
+          ) : (
+            <div className="cl-rules">
+              {rules.map(r => (
+                <div key={r.filename} className="cl-rule">
+                  <span className="rname">{r.filename}</span>
+                  <span className="rwhen">{r.paths && r.paths.length > 0 ? `path: ${r.paths.join(', ')}` : 'always'}</span>
+                  <span className="ron"><span className="led" /> on</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </section>
+      )}
+
+      {/* ─── PROJECT PICKER ───────────────────────────── */}
+      {pickerOpen && (
+        <div
+          ref={popRef}
+          className="cl-picker-pop"
+          style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left }}
+        >
+          <div className="cl-picker-search-row">
+            <span style={{ color: 'var(--cl-ink-4)' }}>⌕</span>
+            <input
+              ref={inputRef}
+              placeholder="Search projects…"
+              autoComplete="off"
+              value={query}
+              onChange={e => { setQuery(e.target.value); setHl(0) }}
+              onKeyDown={onKey}
+            />
+            <span className="esc" onClick={closePicker}>esc</span>
+          </div>
+          <div className="cl-picker-list">
+            {filtered.length === 0 ? (
+              <div style={{ padding: 20, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cl-ink-4)' }}>
+                No projects match “{query}”
+              </div>
+            ) : (
+              filtered.map((p, i) => {
+                const name = p.realPath.split('/').pop() ?? p.realPath
+                const c = costByHash.get(p.hash)
+                const isActive = p.hash === project.hash
+                return (
+                  <div
+                    key={p.hash}
+                    className={`cl-picker-item ${isActive ? 'active' : ''} ${i === hl ? 'hl' : ''}`}
+                    onMouseEnter={() => setHl(i)}
+                    onClick={() => choose(p)}
+                    style={{ display: 'grid' }}
+                  >
+                    <span className="pglyph">{(name[0] ?? '?').toUpperCase()}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="pname">{name}</div>
+                      <div className="ppath">{p.realPath}</div>
+                    </div>
+                    <span className="pcount">{c?.sessionsCount ?? 0}</span>
+                  </div>
+                )
+              })
+            )}
+          </div>
+          <div className="cl-picker-foot">
+            <span><b>↑↓</b> navigate</span>
+            <span><b>↵</b> open</span>
+            <button
+              type="button"
+              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--cl-ink-4)', cursor: 'pointer', font: 'inherit' }}
+              onClick={() => { closePicker(); onDeleteProject(project) }}
+            >
+              Remove current
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+function SessionRows({ sessions, onOpen }: { sessions: SessionSummary[]; onOpen: (s: SessionSummary) => void }) {
+  if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>
+  return (
+    <div>
+      {sessions.map((s, i) => {
+        const fam = modelFamily(s.model)
+        return (
+          <button key={s.filename} type="button" className="cl-row" onClick={() => onOpen(s)}>
+            <span className="idx">{String(i + 1).padStart(2, '0')}</span>
+            <div style={{ minWidth: 0 }}>
+              <div className="title">{s.customTitle || `Session ${shortWhen(s.date)}`}</div>
+              <div className="file">{s.filename}</div>
+            </div>
+            <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
+            <span className="toks">{fmt(s.totalTokens)}<small>tok</small></span>
+            <span className="when">{shortWhen(s.date)}</span>
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
+function MemoryRows({
+  topics,
+  onOpen,
+}: {
+  topics: { name: string; description: string; type: string; filename: string; updatedAt: string }[]
+  onOpen: (t: any) => void
+}) {
+  if (topics.length === 0) return <div className="cl-empty">No memory topics yet.</div>
+  return (
+    <div className="cl-mem">
+      {topics.map(t => (
+        <div key={t.filename} className="cl-mem-row" onClick={() => onOpen(t)}>
+          <div className="key">{t.name}</div>
+          <div className="val">{t.description ? memPreview(t.description) : '—'}</div>
+          <div className="when">{relIso(t.updatedAt)}</div>
+        </div>
+      ))}
     </div>
   )
 }

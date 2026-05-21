@@ -31,8 +31,8 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/sessions/` — `SessionsDetailView`
 - `project/memory/` — `MemorySection`, `MemoryTopicView`, `MemoryIndexFile`, `TopicForm`, `MemoryFullView`, utils
 - `project/claudemd/` — `GlobalClaudeMdView`
-- `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `SkillPropertiesPanel`, `CreateSkillModal`
-- `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `AgentPropertiesPanel`, `CreateAgentModal`
+- `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `SkillPropertiesPanel`, `CreateSkillPage`
+- `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `AgentPropertiesPanel`, `CreateAgentPage`
 - `project/mcp/` — `GlobalMcpView`, `McpServerCard`
 - `project/analytics/` — `AnalyticsView`
 - `project/ai-assistant/` — `AiAssistantView`

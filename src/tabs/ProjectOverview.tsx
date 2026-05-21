@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
 import LiveMonitor from './LiveMonitor'
 import { useMemoryProjects, useDeleteProject } from '../hooks/useIPC'
 import { View } from '../components/project/types'
@@ -10,140 +10,166 @@ import { GlobalClaudeMdView, ProjectClaudeMdView } from '../components/project/c
 // ─── Skills
 import { GlobalSkillsView } from '../components/project/skills/GlobalSkillsView'
 import { SkillDetailView } from '../components/project/skills/SkillDetailView'
+import { CreateSkillPage } from '../components/project/skills/CreateSkillPage'
 // ─── Agents
 import { GlobalAgentsView } from '../components/project/agents/GlobalAgentsView'
 import { AgentDetailView } from '../components/project/agents/AgentDetailView'
+import { CreateAgentPage } from '../components/project/agents/CreateAgentPage'
 // ─── MCP
 import { GlobalMcpView } from '../components/project/mcp/GlobalMcpView'
-// ─── Sessions / Chat
-import { SessionsDetailView } from '../components/project/sessions/SessionsDetailView'
+// ─── Chat
 import { ChatView } from '../components/project/chat/ChatView'
 // ─── Memory
-import { MemoryFullView } from '../components/project/memory/MemoryFullView'
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
 // ─── Analytics / AI
 import { AnalyticsView } from '../components/project/analytics/AnalyticsView'
 import { AiAssistantView } from '../components/project/ai-assistant/AiAssistantView'
-// ─── Overview
-import { ProjectOverviewContent } from '../components/project/overview/ProjectOverviewContent'
+// ─── Editorial core
+import { ProjectView, type ProjectSection } from '../components/project/overview/ProjectOverviewContent'
 import { GlobalHomeView } from '../components/project/overview/GlobalHomeView'
+import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs'
+
+type Project = { hash: string; realPath: string }
+type Theme = 'light' | 'dark'
+
+// View types that render inside the editorial chrome (top bar + subtabs)
+const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp']
+
+function sectionFromView(v: View): ProjectSection {
+  switch (v.type) {
+    case 'sessions':        return 'sessions'
+    case 'project-memory':  return 'memory'
+    case 'project-skills':  return 'skills'
+    case 'project-agents':  return 'agents'
+    case 'project-mcp':     return 'mcp'
+    default:                return 'overview'
+  }
+}
+
+function SunIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="4.2" /><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
+    </svg>
+  )
+}
+function MoonIcon() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
+    </svg>
+  )
+}
 
 export default function ProjectOverview() {
-  const [selected, setSelected] = useState<{ hash: string; realPath: string } | null>(null)
+  const [selected, setSelected] = useState<Project | null>(null)
+  const [scope, setScope] = useState<'global' | 'project'>('global')
   const [view, setView] = useState<View>({ type: 'global-home' })
-  const [projectToDelete, setProjectToDelete] = useState<{ hash: string; realPath: string } | null>(null)
-  const { data: projects, isLoading } = useMemoryProjects()
+  const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+  const [theme, setTheme] = useState<Theme>(() => {
+    const saved = (typeof localStorage !== 'undefined' && localStorage.getItem('cl-theme')) as Theme | null
+    return saved === 'dark' ? 'dark' : 'light'
+  })
+
+  const { data: projects } = useMemoryProjects()
   const deleteProjectMutation = useDeleteProject()
 
-  function handleSelectProject(p: { hash: string; realPath: string }) {
+  useEffect(() => {
+    document.documentElement.setAttribute('data-theme', theme)
+    try { localStorage.setItem('cl-theme', theme) } catch { /* ignore */ }
+  }, [theme])
+
+  function selectProject(p: Project) {
     setSelected(p)
+    setScope('project')
     setView({ type: 'overview' })
   }
 
-  async function handleConfirmDelete(p: { hash: string; realPath: string }) {
+  function goGlobal() {
+    setScope('global')
+    setView({ type: 'global-home' })
+  }
+
+  function goProjectScope() {
+    if (selected) {
+      setScope('project')
+      setView({ type: 'overview' })
+    } else if (projects && projects.length > 0) {
+      selectProject(projects[0])
+    }
+  }
+
+  async function handleConfirmDelete(p: Project) {
     try {
       await deleteProjectMutation.mutateAsync(p.hash)
       if (selected?.hash === p.hash) {
         setSelected(null)
-        setView({ type: 'global-home' })
+        goGlobal()
       }
     } finally {
       setProjectToDelete(null)
     }
   }
 
-  function renderMainView() {
+  const isGlobalHome = view.type === 'global-home'
+  const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type)
+  const isEditorialCore = isGlobalHome || isCoreProject
+
+  // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
+  function renderDeepView() {
     switch (view.type) {
-      case 'global-home':
-        return <GlobalHomeView onNavigate={setView} onSelectProject={handleSelectProject} />
       case 'global-claudemd':
-        return <GlobalClaudeMdView onBack={() => setView({ type: 'global-home' })} />
+        return <GlobalClaudeMdView onBack={goGlobal} />
       case 'global-skills':
         return (
           <GlobalSkillsView
-            onBack={() => setView({ type: 'global-home' })}
+            onBack={goGlobal}
             onSelectSkill={skill => setView({ type: 'skill-detail', skill })}
-          />
-        )
-      case 'project-skills':
-        return (
-          <GlobalSkillsView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-            onSelectSkill={skill => setView({ type: 'skill-detail', skill })}
-            onNavigateGlobalSkills={() => setView({ type: 'global-skills' })}
+            onCreate={() => setView({ type: 'skill-create' })}
           />
         )
       case 'skill-detail':
         return (
           <SkillDetailView
             skill={view.skill}
-            onBack={() => selected
-              ? setView({ type: 'project-skills', project: selected })
-              : setView({ type: 'global-skills' })
-            }
+            onBack={() => selected ? setView({ type: 'project-skills', project: selected }) : setView({ type: 'global-skills' })}
+          />
+        )
+      case 'skill-create':
+        return (
+          <CreateSkillPage
+            project={view.project}
+            onBack={() => view.project ? setView({ type: 'project-skills', project: view.project }) : setView({ type: 'global-skills' })}
+            onSaved={() => view.project ? setView({ type: 'project-skills', project: view.project }) : setView({ type: 'global-skills' })}
           />
         )
       case 'global-agents':
         return (
           <GlobalAgentsView
-            onBack={() => setView({ type: 'global-home' })}
+            onBack={goGlobal}
             onSelectAgent={agent => setView({ type: 'agent-detail', agent })}
-          />
-        )
-      case 'project-agents':
-        return (
-          <GlobalAgentsView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-            onSelectAgent={agent => setView({ type: 'agent-detail', agent })}
+            onCreate={() => setView({ type: 'agent-create' })}
           />
         )
       case 'agent-detail':
         return (
           <AgentDetailView
             agent={view.agent}
-            onBack={() => selected
-              ? setView({ type: 'project-agents', project: selected })
-              : setView({ type: 'global-agents' })
-            }
+            onBack={() => selected ? setView({ type: 'project-agents', project: selected }) : setView({ type: 'global-agents' })}
+          />
+        )
+      case 'agent-create':
+        return (
+          <CreateAgentPage
+            project={view.project}
+            onBack={() => view.project ? setView({ type: 'project-agents', project: view.project }) : setView({ type: 'global-agents' })}
+            onSaved={() => view.project ? setView({ type: 'project-agents', project: view.project }) : setView({ type: 'global-agents' })}
           />
         )
       case 'global-mcp':
-        return <GlobalMcpView onBack={() => setView({ type: 'global-home' })} />
-      case 'overview':
-        if (!selected) return null
-        return <ProjectOverviewContent project={selected} onNavigate={setView} />
-      case 'project-memory':
-        return (
-          <MemoryFullView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-            onOpenTopic={(topic, content) => setView({ type: 'memory-topic', topic, content, hash: view.project.hash })}
-          />
-        )
+        return <GlobalMcpView onBack={goGlobal} />
       case 'project-claudemd':
-        return (
-          <ProjectClaudeMdView
-            layer={view.layer}
-            onBack={() => setView({ type: 'overview' })}
-          />
-        )
-      case 'sessions':
-        return (
-          <SessionsDetailView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-            onOpenChat={session => setView({ type: 'chat', project: view.project, session })}
-          />
-        )
-      case 'analytics':
-        return (
-          <AnalyticsView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-          />
-        )
+        return <ProjectClaudeMdView layer={view.layer} onBack={() => setView({ type: 'overview' })} />
       case 'chat':
         return (
           <ErrorBoundary key={view.session.filename}>
@@ -161,127 +187,97 @@ export default function ProjectOverview() {
               topic={view.topic}
               content={view.content}
               hash={view.hash}
-              onBack={() => setView({ type: 'overview' })}
+              onBack={() => selected ? setView({ type: 'project-memory', project: selected }) : goGlobal()}
             />
           </ErrorBoundary>
         )
+      case 'analytics':
+        return <AnalyticsView project={view.project} onBack={() => setView({ type: 'overview' })} />
       case 'ai-assistant':
-        return (
-          <AiAssistantView
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-          />
-        )
+        return <AiAssistantView project={view.project} onBack={() => setView({ type: 'overview' })} />
       case 'live-monitor':
-        return (
-          <LiveMonitor
-            project={view.project}
-            onBack={() => setView({ type: 'overview' })}
-          />
-        )
+        return <LiveMonitor project={view.project} onBack={() => setView({ type: 'overview' })} />
       default:
         return null
     }
   }
 
+  // Deep views take over the full surface (preserve their existing chrome).
+  if (!isEditorialCore) {
+    return (
+      <div className="cl-app">
+        <div style={{ flex: 1, overflow: 'hidden' }}>{renderDeepView()}</div>
+        {projectToDelete && (
+          <DeleteProjectDialog
+            project={projectToDelete}
+            isLoading={deleteProjectMutation.isLoading}
+            onConfirm={() => handleConfirmDelete(projectToDelete)}
+            onCancel={() => setProjectToDelete(null)}
+          />
+        )}
+      </div>
+    )
+  }
+
   return (
-    <div className="flex h-full">
-      {false && (
-      <aside className="w-[200px] shrink-0 bg-[#0f1117] border-r border-[#1e2130] overflow-hidden flex flex-col">
+    <div className="cl-app">
+      {/* ─── Top bar ─────────────────────────────────────── */}
+      <header className="cl-bar">
+        <button
+          className="cl-brand"
+          type="button"
+          onClick={goGlobal}
+          style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
+        >
+          <span className="cl-brand-mark" />
+          <span>Claude<span style={{ opacity: 0.55 }}>Lens</span></span>
+        </button>
 
-        {/* Drag region (titlebar area, no visible content) */}
-        <div
-          className="h-[22px] shrink-0"
-          style={{ WebkitAppRegion: 'drag' } as React.CSSProperties}
+        <nav className="cl-scope">
+          <button className={scope === 'global' ? 'on' : ''} onClick={goGlobal}>Global</button>
+          <button className={scope === 'project' ? 'on' : ''} onClick={goProjectScope}>Project</button>
+        </nav>
+
+        <div />
+
+        <div className="cl-bar-right">
+          <button
+            className="cl-theme-toggle"
+            type="button"
+            onClick={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
+            title={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
+            aria-label="Toggle theme"
+          >
+            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+          </button>
+        </div>
+      </header>
+
+      {/* ─── Subtabs (project scope only) ────────────────── */}
+      {scope === 'project' && selected && (
+        <ProjectSubtabs
+          project={selected}
+          active={sectionFromView(view)}
+          onNavigate={setView}
         />
+      )}
 
-        {/* Globale button */}
-        <div className="px-2 pb-2 shrink-0">
-          {(() => {
-            const isGlobal = selected === null
-            return (
-              <button
-                onClick={() => { setSelected(null); setView({ type: 'global-home' }) }}
-                className={`w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all ${
-                  isGlobal ? 'bg-[#1c2235]' : 'hover:bg-[#161b26]'
-                }`}
-              >
-                <div className={`w-[26px] h-[26px] rounded-md flex items-center justify-center shrink-0 ${
-                  isGlobal
-                    ? 'bg-indigo-500/20 border border-indigo-500/30'
-                    : 'bg-[#161b26] border border-[#1e2130]'
-                }`}>
-                  <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
-                    <circle cx="6" cy="6" r="5" stroke={isGlobal ? '#818cf8' : '#555c75'} strokeWidth="1.3"/>
-                    <circle cx="6" cy="6" r="2" fill={isGlobal ? '#818cf8' : '#555c75'}/>
-                  </svg>
-                </div>
-                <span className={`text-[12.5px] font-medium tracking-tight ${
-                  isGlobal ? 'text-[#c4c8e0]' : 'text-[#555c75]'
-                }`}>Global</span>
-              </button>
-            )
-          })()}
-        </div>
+      {/* ─── Main ────────────────────────────────────────── */}
+      <div className="cl-main">
+        {isGlobalHome ? (
+          <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
+        ) : selected ? (
+          <ProjectView
+            key={selected.hash}
+            project={selected}
+            section={sectionFromView(view)}
+            onNavigate={setView}
+            onSelectProject={selectProject}
+            onDeleteProject={setProjectToDelete}
+          />
+        ) : null}
+      </div>
 
-        {/* Divider */}
-        <div className="mx-3 h-px bg-[#1e2130] shrink-0" />
-
-        {/* Projects section */}
-        <div className="flex flex-col flex-1 overflow-hidden pt-2">
-          <p className="px-4 pb-1.5 text-[10px] font-bold text-[#3d4460] uppercase tracking-[0.12em] shrink-0">Projects</p>
-          <ul className="overflow-y-auto flex-1 px-2 pb-2 space-y-0.5">
-            {isLoading && (
-              <li className="px-3 py-2 text-[#3d4460] text-[12px]">Loading...</li>
-            )}
-            {projects?.map(p => {
-              const name = p.realPath.split('/').pop() ?? p.realPath
-              const initial = name[0]?.toUpperCase() ?? '?'
-              const isActive = selected?.hash === p.hash
-              const hues = [240, 260, 280, 200, 160, 30, 10]
-              const hue = hues[p.hash.charCodeAt(0) % hues.length]
-              return (
-                <li key={p.hash}>
-                  <div className={`flex items-center gap-2.5 px-2 py-1.5 rounded-lg transition-all group cursor-pointer ${
-                    isActive ? 'bg-[#1c2235]' : 'hover:bg-[#161b26]'
-                  }`}>
-                    <div
-                      className="w-[26px] h-[26px] rounded-md flex items-center justify-center text-[11px] font-bold shrink-0 select-none"
-                      style={{
-                        background: `hsl(${hue}, 60%, 18%)`,
-                        color: `hsl(${hue}, 70%, 65%)`,
-                        border: isActive ? `1px solid hsl(${hue}, 60%, 30%)` : `1px solid hsl(${hue}, 60%, 14%)`,
-                      }}
-                    >
-                      {initial}
-                    </div>
-                    <button
-                      onClick={() => handleSelectProject(p)}
-                      className="flex-1 min-w-0 text-left"
-                    >
-                      <div className={`text-[12.5px] font-medium truncate tracking-tight transition-colors ${
-                        isActive ? 'text-[#c4c8e0]' : 'text-[#555c75] group-hover:text-[#9096b0]'
-                      }`}>{name}</div>
-                    </button>
-                    <button
-                      onClick={() => setProjectToDelete(p)}
-                      className="shrink-0 w-5 h-5 flex items-center justify-center rounded opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-900/25 text-[#3d4460] hover:text-red-400"
-                      title="Delete project"
-                    >
-                      <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M1.5 3h9M4.5 3V2h3v1M3 3l.5 7h5L9 3"/>
-                      </svg>
-                    </button>
-                  </div>
-                </li>
-              )
-            })}
-          </ul>
-        </div>
-      </aside>
-      )/* sidebar disabled */}
-
-      {/* Delete confirmation dialog */}
       {projectToDelete && (
         <DeleteProjectDialog
           project={projectToDelete}
@@ -290,11 +286,6 @@ export default function ProjectOverview() {
           onCancel={() => setProjectToDelete(null)}
         />
       )}
-
-      {/* Main */}
-      <div className="flex-1 overflow-hidden bg-[#0d0f14]">
-        {renderMainView()}
-      </div>
     </div>
   )
 }

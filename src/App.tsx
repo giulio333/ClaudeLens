@@ -6,7 +6,10 @@ export default function App() {
   useDataChangedRefetch()
 
   return (
-    <div className="flex flex-col h-screen bg-[#0d0f14] text-[#e0e2f0]">
+    <div
+      className="flex flex-col h-screen"
+      style={{ background: 'var(--cl-paper)', color: 'var(--cl-ink)' }}
+    >
       <main className="flex-1 overflow-hidden">
         <ErrorBoundary>
           <ProjectOverview />

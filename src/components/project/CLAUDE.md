@@ -88,7 +88,7 @@ Formatter puri (nessuna dipendenza React):
 |---|---|---|
 | `SkillPropertiesPanel.tsx` | `SkillPropertiesPanel` | Pannello proprietà skill in sola lettura |
 | `SkillDetailView.tsx` | `SkillDetailView` | Vista dettaglio singola skill con prompt e metadata |
-| `CreateSkillModal.tsx` | `CreateSkillModal` | Modal per creare una nuova skill globale |
+| `CreateSkillPage.tsx` | `CreateSkillPage` | Pagina dedicata per creare una nuova skill (globale o di progetto); on save torna alla lista |
 | `GlobalSkillsView.tsx` | `GlobalSkillsView` | Lista skill globali con ricerca e navigazione al detail |
 
 ---
@@ -98,7 +98,7 @@ Formatter puri (nessuna dipendenza React):
 |---|---|---|
 | `AgentPropertiesPanel.tsx` | `AgentPropertiesPanel` | Pannello proprietà agent in sola lettura |
 | `AgentDetailView.tsx` | `AgentDetailView` | Vista dettaglio singolo agent |
-| `CreateAgentModal.tsx` | `CreateAgentModal` | Modal per creare un nuovo agent globale |
+| `CreateAgentPage.tsx` | `CreateAgentPage` | Pagina dedicata per creare un nuovo agent (globale o di progetto); on save torna alla lista |
 | `GlobalAgentsView.tsx` | `GlobalAgentsView` | Lista agent globali |
 
 ---

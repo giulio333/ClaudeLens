@@ -5,14 +5,14 @@ export function mcpServiceColor(name: string): string {
   const n = name.toLowerCase()
   if (n.includes('google') || n.includes('calendar') || n.includes('gmail')) return '#4285f4'
   if (n.includes('atlassian') || n.includes('jira') || n.includes('confluence')) return '#0052cc'
-  if (n.includes('notion')) return '#e0e0e0'
-  if (n.includes('figma')) return '#a259ff'
-  if (n.includes('canva')) return '#00c4cc'
-  if (n.includes('mermaid')) return '#ff3670'
+  if (n.includes('notion')) return 'var(--cl-ink)'
+  if (n.includes('figma')) return 'var(--cl-violet)'
+  if (n.includes('canva')) return 'var(--cl-cyan)'
+  if (n.includes('mermaid')) return 'var(--cl-danger)'
   if (n.includes('slack')) return '#4a154b'
-  if (n.includes('github')) return '#e0e0e0'
-  if (n.includes('linear')) return '#5e6ad2'
-  return '#22d3ee'
+  if (n.includes('github')) return 'var(--cl-ink)'
+  if (n.includes('linear')) return 'var(--cl-accent)'
+  return 'var(--cl-cyan)'
 }
 
 export function McpServerCard({
@@ -32,9 +32,9 @@ export function McpServerCard({
   const hasDisabledProjects = server.disabledProjectPaths.length > 0
 
   return (
-    <div className="rounded-xl border border-[#1e2336] bg-[#111420] overflow-hidden">
+    <div className="rounded-xl border border-[var(--cl-paper-3)] bg-[var(--cl-paper)] overflow-hidden">
       <div
-        className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[#131827] transition-colors"
+        className="flex items-center gap-3 px-3 py-3 cursor-pointer hover:bg-[var(--cl-paper)] transition-colors"
         onClick={() => hasDisabledProjects && setExpanded(e => !e)}
       >
         <div
@@ -46,24 +46,24 @@ export function McpServerCard({
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
-            <p className="text-[13px] font-medium text-[#c4c8e0] truncate">{displayName}</p>
+            <p className="text-[13px] font-medium text-[var(--cl-ink-2)] truncate">{displayName}</p>
             <span className={`w-1.5 h-1.5 rounded-full shrink-0 ${
-              fullyEnabled ? 'bg-emerald-500' : fullyDisabled ? 'bg-red-500' : 'bg-amber-500'
+              fullyEnabled ? 'bg-[var(--cl-ok)]' : fullyDisabled ? 'bg-[var(--cl-danger)]' : 'bg-[var(--cl-warn)]'
             }`} />
           </div>
 
           {totalProjects > 0 && (
             <div className="flex items-center gap-2 mt-1">
-              <div className="flex-1 h-1 rounded-full bg-[#1e2336] overflow-hidden max-w-[80px]">
+              <div className="flex-1 h-1 rounded-full bg-[var(--cl-paper-3)] overflow-hidden max-w-[80px]">
                 <div
                   className="h-full rounded-full transition-all"
                   style={{
                     width: `${(server.enabledInProjects / totalProjects) * 100}%`,
-                    background: fullyEnabled ? '#10b981' : partial ? '#f59e0b' : '#ef4444',
+                    background: fullyEnabled ? 'var(--cl-ok)' : partial ? 'var(--cl-warn)' : 'var(--cl-danger)',
                   }}
                 />
               </div>
-              <span className="text-[10px] text-[#555c75] tabular-nums">
+              <span className="text-[10px] text-[var(--cl-ink-4)] tabular-nums">
                 {server.enabledInProjects}/{totalProjects} projects
               </span>
             </div>
@@ -73,8 +73,8 @@ export function McpServerCard({
         <div className="flex items-center gap-1.5 shrink-0">
           <span className={`text-[10px] font-semibold px-2 py-0.5 rounded-full ${
             server.source === 'cloud'
-              ? 'bg-cyan-950/40 text-cyan-400 ring-1 ring-cyan-700/30'
-              : 'bg-amber-950/40 text-amber-400 ring-1 ring-amber-700/30'
+              ? 'bg-[var(--cl-paper-3)] text-[var(--cl-cyan)] ring-1 ring-[var(--cl-cyan)]'
+              : 'bg-[var(--cl-warn-soft)] text-[var(--cl-warn)] ring-1 ring-[var(--cl-warn)]'
           }`}>
             {server.source === 'cloud' ? 'cloud' : 'local'}
           </span>
@@ -83,19 +83,19 @@ export function McpServerCard({
               width="10" height="10" viewBox="0 0 10 10" fill="none"
               className={`transition-transform ${expanded ? 'rotate-180' : ''}`}
             >
-              <path d="M2 3.5l3 3 3-3" stroke="#555c75" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
+              <path d="M2 3.5l3 3 3-3" stroke="var(--cl-ink-4)" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round"/>
             </svg>
           )}
         </div>
       </div>
 
       {expanded && hasDisabledProjects && (
-        <div className="border-t border-[#1e2336] px-3 py-2 space-y-1">
-          <p className="text-[10px] font-semibold text-[#3d4460] uppercase tracking-wider mb-1.5">Disabled in</p>
+        <div className="border-t border-[var(--cl-paper-3)] px-3 py-2 space-y-1">
+          <p className="text-[10px] font-semibold text-[var(--cl-ink-4)] uppercase tracking-wider mb-1.5">Disabled in</p>
           {server.disabledProjectPaths.map(p => (
             <div key={p} className="flex items-center gap-2">
-              <span className="w-1.5 h-1.5 rounded-full bg-red-500/60 shrink-0" />
-              <span className="text-[11px] text-[#555c75] truncate" title={p}>
+              <span className="w-1.5 h-1.5 rounded-full bg-[var(--cl-danger)] shrink-0" />
+              <span className="text-[11px] text-[var(--cl-ink-4)] truncate" title={p}>
                 {p.split('/').pop() ?? p}
               </span>
             </div>
@@ -104,8 +104,8 @@ export function McpServerCard({
       )}
 
       {server.source === 'local' && server.command && (
-        <div className="border-t border-[#1e2336] px-3 py-2">
-          <p className="text-[11px] font-mono text-[#3d4460] truncate">
+        <div className="border-t border-[var(--cl-paper-3)] px-3 py-2">
+          <p className="text-[11px] font-mono text-[var(--cl-ink-4)] truncate">
             {server.command}{server.args?.length ? ' ' + server.args.join(' ') : ''}
           </p>
         </div>
