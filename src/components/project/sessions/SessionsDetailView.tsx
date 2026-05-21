@@ -17,7 +17,7 @@ function BgBadge({ b }: { b: BgSession }) {
         display: 'inline-flex', alignItems: 'center', gap: '5px',
         padding: '2px 7px', borderRadius: '3px',
         border: '1px solid var(--cl-line)',
-        fontFamily: 'var(--cl-mono)', fontSize: '9.5px', fontWeight: 600,
+        fontFamily: 'var(--font-mono)', fontSize: '9.5px', fontWeight: 600,
         letterSpacing: '0.12em', textTransform: 'uppercase', color: 'var(--cl-ink-3)',
       }}
     >
@@ -62,7 +62,7 @@ export function SessionsDetailView({
         <button
           onClick={onBack}
           style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '10.5px',
             letterSpacing: '0.16em',
             textTransform: 'uppercase',
@@ -78,14 +78,14 @@ export function SessionsDetailView({
           {projectName}
         </button>
         <span style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '10.5px',
           color: 'var(--cl-ink-4)',
           opacity: 0.4,
           marginRight: '14px',
         }}>/</span>
         <span style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '10.5px',
           letterSpacing: '0.16em',
           textTransform: 'uppercase',
@@ -107,7 +107,7 @@ export function SessionsDetailView({
             color: 'var(--cl-paper)',
             border: 'none',
             borderRadius: '2px',
-            fontFamily: 'var(--cl-sans)',
+            fontFamily: 'var(--font-sans)',
             fontSize: '11px',
             fontWeight: 500,
             cursor: 'pointer',
@@ -144,7 +144,7 @@ export function SessionsDetailView({
               paddingLeft: i > 0 ? '24px' : '28px',
             }}>
               <div style={{
-                fontFamily: 'var(--cl-mono)',
+                fontFamily: 'var(--font-mono)',
                 fontSize: '9.5px',
                 letterSpacing: '0.22em',
                 textTransform: 'uppercase',
@@ -171,7 +171,7 @@ export function SessionsDetailView({
       <div>
         {isLoading && (
           <p style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '11px',
             color: 'var(--cl-ink-3)',
             padding: '32px 28px',
@@ -209,7 +209,7 @@ export function SessionsDetailView({
                 gap: '6px',
               }}>
                 <span style={{
-                  fontFamily: 'var(--cl-sans)',
+                  fontFamily: 'var(--font-sans)',
                   fontSize: '18px',
                   fontWeight: 700,
                   letterSpacing: '-0.02em',
@@ -244,7 +244,7 @@ export function SessionsDetailView({
                     }}>
                       {s.model && (
                         <span style={{
-                          fontFamily: 'var(--cl-mono)',
+                          fontFamily: 'var(--font-mono)',
                           fontSize: '11px',
                           fontWeight: 600,
                           color: modelColor(s.model),
@@ -254,7 +254,7 @@ export function SessionsDetailView({
                         </span>
                       )}
                       <span style={{
-                        fontFamily: 'var(--cl-mono)',
+                        fontFamily: 'var(--font-mono)',
                         fontSize: '10.5px',
                         color: 'var(--cl-ink-4)',
                       }}>
@@ -278,7 +278,7 @@ export function SessionsDetailView({
                       background: 'transparent',
                       border: '1px solid var(--cl-line)',
                       borderRadius: '2px',
-                      fontFamily: 'var(--cl-mono)',
+                      fontFamily: 'var(--font-mono)',
                       fontSize: '10px',
                       letterSpacing: '0.10em',
                       textTransform: 'uppercase',
@@ -317,7 +317,7 @@ export function SessionsDetailView({
                   ].map(({ label, value }) => (
                     <div key={label}>
                       <div style={{
-                        fontFamily: 'var(--cl-mono)',
+                        fontFamily: 'var(--font-mono)',
                         fontSize: '9.5px',
                         letterSpacing: '0.18em',
                         textTransform: 'uppercase',
@@ -327,7 +327,7 @@ export function SessionsDetailView({
                         {label}
                       </div>
                       <div style={{
-                        fontFamily: 'var(--cl-mono)',
+                        fontFamily: 'var(--font-mono)',
                         fontSize: '12.5px',
                         fontWeight: 500,
                         color: 'var(--cl-ink-2)',
@@ -366,7 +366,7 @@ export function SessionsDetailView({
 
         {sessions?.length === 0 && (
           <p style={{
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
             fontSize: '11px',
             color: 'var(--cl-ink-3)',
             fontStyle: 'italic',

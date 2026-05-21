@@ -30,7 +30,7 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
         }}
       >
         <span style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '9.5px',
           letterSpacing: '0.16em',
           textTransform: 'uppercase',
@@ -51,7 +51,7 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
             color: 'var(--cl-violet)',
             lineHeight: 1.5,
             whiteSpace: 'pre-wrap',
-            fontFamily: 'var(--cl-mono)',
+            fontFamily: 'var(--font-mono)',
           }}>
             {thinking}
           </p>
@@ -83,7 +83,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
     (showTools && toolGroups.length > 0)
   if (!hasVisibleContent) return null
 
-  const timestamp = new Date(msg.timestamp).toLocaleTimeString('en-US', {
+  const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
@@ -111,7 +111,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
         borderRight: '1px solid var(--cl-line)',
       }}>
         <div style={{
-          fontFamily: 'var(--cl-sans)',
+          fontFamily: 'var(--font-sans)',
           fontSize: '22px',
           fontWeight: 700,
           letterSpacing: '-0.025em',
@@ -129,7 +129,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           opacity: 0.45,
         }} />
         <div style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '9px',
           letterSpacing: '0.20em',
           fontWeight: 600,
@@ -139,7 +139,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           {isUser ? 'User' : 'Claude'}
         </div>
         <div style={{
-          fontFamily: 'var(--cl-mono)',
+          fontFamily: 'var(--font-mono)',
           fontSize: '9.5px',
           opacity: 0.65,
           letterSpacing: '0.02em',
