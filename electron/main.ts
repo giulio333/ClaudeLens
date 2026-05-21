@@ -10,17 +10,18 @@ import { calculateCostSummary, getSessionList, getProjectUsage } from './modules
 import {
   readGlobalClaudeMd,
   getClaudeMdHierarchy,
+  writeClaudeMdFile,
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
 import { readChatSession, findSessionFile } from './modules/session-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
-import { createGlobalSkill, SkillInput } from './modules/skills-writer';
-import { createGlobalAgent, AgentInput } from './modules/agents-writer';
+import { createSkill, SkillInput } from './modules/skills-writer';
+import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { findClaudeProcesses } from './modules/process-scanner';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
-import { hashToPath } from './utils';
+import { hashToPath, resolveRealPath } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 
 const CLAUDE_DIR = join(os.homedir(), '.claude');
@@ -59,8 +60,10 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1280,
     height: 800,
-    backgroundColor: '#0f172a',
+    backgroundColor: '#f6f4ef',
     icon: iconPath,
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 18, y: 18 },
     webPreferences: {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -82,7 +85,7 @@ ipcMain.handle('memory:listProjects', async (): Promise<IpcResult<Array<{ hash: 
     const hashes = await listProjectsWithMemory(PROJECTS_DIR);
     const projects = hashes.map(hash => ({
       hash,
-      realPath: hashToPath(hash),
+      realPath: resolveRealPath(PROJECTS_DIR, hash),
     }));
     return ok(projects);
   } catch (e) {
@@ -93,7 +96,7 @@ ipcMain.handle('memory:listProjects', async (): Promise<IpcResult<Array<{ hash: 
 ipcMain.handle('memory:getProject', async (_event, hash: string) => {
   try {
     const projectPath = join(PROJECTS_DIR, hash);
-    const realPath = hashToPath(hash);
+    const realPath = resolveRealPath(PROJECTS_DIR, hash);
     const md = await readMemory(projectPath, realPath);
     return ok(serializeMemoryData(md));
   } catch (e) {
@@ -139,6 +142,42 @@ ipcMain.handle('claudeMd:getGlobal', async () => {
 ipcMain.handle('claudeMd:getHierarchy', async (_event, realPath: string) => {
   try {
     return ok(getClaudeMdHierarchy(realPath));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('claudeMd:writeGlobal', async (_event, content: string) => {
+  try {
+    writeClaudeMdFile(join(CLAUDE_DIR, 'CLAUDE.md'), content);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: string) => {
+  try {
+    writeClaudeMdFile(filePath, content);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: string) => {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
+    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
+    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
+    if (!filePath.toLowerCase().endsWith('.md')) throw new Error('Only .md files are writable');
+    const home = os.homedir();
+    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
+    const dir = require('path').dirname(filePath) as string;
+    if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
+    fs.writeFileSync(filePath, content, 'utf-8');
+    return ok(null);
   } catch (e) {
     return err(e);
   }
@@ -229,18 +268,18 @@ ipcMain.handle('agents:getByProject', async (_event, realPath: string) => {
   }
 });
 
-ipcMain.handle('skills:create', async (_event, input: SkillInput) => {
+ipcMain.handle('skills:create', async (_event, input: SkillInput, projectPath?: string) => {
   try {
-    const filePath = createGlobalSkill(input);
+    const filePath = createSkill(input, projectPath);
     return ok({ filePath });
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('agents:create', async (_event, input: AgentInput) => {
+ipcMain.handle('agents:create', async (_event, input: AgentInput, projectPath?: string) => {
   try {
-    const filePath = createGlobalAgent(input);
+    const filePath = createAgent(input, projectPath);
     return ok({ filePath });
   } catch (e) {
     return err(e);

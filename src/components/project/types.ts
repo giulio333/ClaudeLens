@@ -6,11 +6,14 @@ export type View =
   | { type: 'global-claudemd' }
   | { type: 'global-skills' }
   | { type: 'skill-detail'; skill: Skill }
+  | { type: 'skill-create'; project?: { hash: string; realPath: string } }
   | { type: 'global-agents' }
   | { type: 'agent-detail'; agent: Agent }
+  | { type: 'agent-create'; project?: { hash: string; realPath: string } }
   | { type: 'global-mcp' }
   | { type: 'project-skills'; project: { hash: string; realPath: string } }
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
+  | { type: 'project-mcp'; project: { hash: string; realPath: string } }
   | { type: 'project-claudemd'; project: { hash: string; realPath: string }; layer: ClaudeMdLayer }
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }

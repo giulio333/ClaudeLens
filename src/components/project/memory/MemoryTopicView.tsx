@@ -6,21 +6,21 @@ import { BackButton } from '../shared/BackButton'
 import { parseMemoryContent, readingTime, formatDate, Heading } from './utils'
 
 const TYPE_META: Record<string, { label: string; bg: string; text: string; dot: string; border: string }> = {
-  user:      { label: 'User',      bg: 'bg-blue-950/20',    text: 'text-blue-400',    dot: 'bg-blue-400',    border: 'border-blue-700/40' },
-  feedback:  { label: 'Feedback',  bg: 'bg-amber-950/20',   text: 'text-amber-400',   dot: 'bg-amber-400',   border: 'border-amber-700/40' },
-  project:   { label: 'Project',   bg: 'bg-emerald-950/20', text: 'text-emerald-400', dot: 'bg-emerald-400', border: 'border-emerald-700/40' },
-  reference: { label: 'Reference', bg: 'bg-violet-950/20',  text: 'text-violet-400',  dot: 'bg-violet-400',  border: 'border-violet-700/40' },
+  user:      { label: 'User',      bg: 'bg-[var(--cl-paper-3)]',    text: 'text-[var(--cl-cyan)]',    dot: 'bg-[var(--cl-cyan)]',    border: 'border-[var(--cl-cyan)]' },
+  feedback:  { label: 'Feedback',  bg: 'bg-[var(--cl-warn-soft)]',   text: 'text-[var(--cl-warn)]',   dot: 'bg-[var(--cl-warn)]',   border: 'border-[var(--cl-warn)]' },
+  project:   { label: 'Project',   bg: 'bg-[var(--cl-paper-3)]', text: 'text-[var(--cl-ok)]', dot: 'bg-[var(--cl-ok)]', border: 'border-[var(--cl-ok)]' },
+  reference: { label: 'Reference', bg: 'bg-[var(--cl-paper-3)]',  text: 'text-[var(--cl-violet)]',  dot: 'bg-[var(--cl-violet)]',  border: 'border-[var(--cl-violet)]' },
 }
 
 function SidebarLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-semibold uppercase tracking-widest text-zinc-400 mb-1">{children}</p>
+  return <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--cl-ink-3)] mb-1">{children}</p>
 }
 
 function SidebarRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
       <SidebarLabel>{label}</SidebarLabel>
-      <p className="text-[13px] text-[#9096b0] leading-snug">{value}</p>
+      <p className="text-[13px] text-[var(--cl-ink-3)] leading-snug">{value}</p>
     </div>
   )
 }
@@ -88,7 +88,7 @@ export function MemoryTopicView({
 
   return (
     <div className="h-full overflow-hidden" style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}>
-      <div className="bg-[#0d0f14]/95 backdrop-blur-sm border-b border-[#252836] px-8 py-4">
+      <div className="bg-[var(--cl-paper-3)]/95 backdrop-blur-sm border-b border-[var(--cl-line)] px-8 py-4">
         <div className="flex items-center gap-4 mb-2">
           <BackButton label="Overview" onClick={onBack} />
         </div>
@@ -97,24 +97,24 @@ export function MemoryTopicView({
             <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
             {meta.label}
           </span>
-          <h1 className="text-[17px] font-semibold text-[#e0e2f0]">{topic.name}</h1>
+          <h1 className="text-[17px] font-semibold text-[var(--cl-ink)]">{topic.name}</h1>
         </div>
         {topic.description && (
-          <p className="text-[13px] text-zinc-500 mt-1.5 ml-[1px]">{topic.description}</p>
+          <p className="text-[13px] text-[var(--cl-ink-3)] mt-1.5 ml-[1px]">{topic.description}</p>
         )}
       </div>
 
       <div className="overflow-hidden flex">
         <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex items-center gap-0.5 border-b border-[#252836] bg-[#161a26] px-8 h-10 shrink-0">
+          <div className="flex items-center gap-0.5 border-b border-[var(--cl-line)] bg-[var(--cl-paper-2)] px-8 h-10 shrink-0">
             {tabs.map(t => (
               <button
                 key={t.id}
                 onClick={() => setTab(t.id)}
                 className={`px-3 py-2 text-[13px] font-medium transition-colors border-b-2 ${
                   tab === t.id
-                    ? 'text-[#e0e2f0] border-zinc-900'
-                    : 'text-zinc-400 border-transparent hover:text-[#787e98]'
+                    ? 'text-[var(--cl-ink)] border-[var(--cl-line)]'
+                    : 'text-[var(--cl-ink-3)] border-transparent hover:text-[var(--cl-ink-3)]'
                 }`}
               >
                 {t.label}
@@ -129,7 +129,7 @@ export function MemoryTopicView({
               </div>
             )}
             {tab === 'raw' && (
-              <pre className="bg-zinc-900 text-zinc-100 p-4 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto">
+              <pre className="bg-[var(--cl-paper-2)] text-[var(--cl-ink)] p-4 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto">
                 <code>{content}</code>
               </pre>
             )}
@@ -137,19 +137,19 @@ export function MemoryTopicView({
               <div className="space-y-4 max-w-2xl">
                 <div className="grid grid-cols-2 gap-3">
                   <div>
-                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Name</label>
+                    <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Name</label>
                     <input
                       value={editForm.name}
                       onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                      className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                      className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent"
                     />
                   </div>
                   <div>
-                    <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Type</label>
+                    <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Type</label>
                     <select
                       value={editForm.type}
                       onChange={e => setEditForm(f => ({ ...f, type: e.target.value as TopicInput['type'] }))}
-                      className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400"
+                      className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)]"
                     >
                       <option value="user">user</option>
                       <option value="feedback">feedback</option>
@@ -159,33 +159,33 @@ export function MemoryTopicView({
                   </div>
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Short description</label>
+                  <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Short description</label>
                   <input
                     value={editForm.description}
                     onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                    className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-1.5 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent"
+                    className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent"
                   />
                 </div>
                 <div>
-                  <label className="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider block mb-1">Content</label>
+                  <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Content</label>
                   <textarea
                     value={editForm.content}
                     onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
                     rows={16}
-                    className="w-full text-[13px] bg-[#161a26] border border-[#252836] rounded-md px-3 py-2 text-[#e0e2f0] focus:outline-none focus:ring-2 focus:ring-indigo-400 focus:border-transparent resize-y font-mono leading-relaxed"
+                    className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-2 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent resize-y font-mono leading-relaxed"
                   />
                 </div>
                 <div className="flex items-center justify-end gap-2">
                   <button
                     onClick={() => setTab('view')}
-                    className="text-[13px] text-zinc-500 hover:text-[#c4c8e0] px-3 py-1.5 rounded-md hover:bg-[#1c2133] transition-colors"
+                    className="text-[13px] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] px-3 py-1.5 rounded-md hover:bg-[var(--cl-paper-3)] transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleSave}
                     disabled={updateMut.isLoading || !editForm.name.trim() || !editForm.description.trim() || !editForm.content.trim()}
-                    className="text-[13px] font-medium bg-indigo-600 text-white px-4 py-1.5 rounded-md hover:bg-indigo-700 transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                    className="text-[13px] font-medium bg-[var(--cl-accent)] text-white px-4 py-1.5 rounded-md hover:bg-[var(--cl-accent)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     {updateMut.isLoading ? 'Saving...' : 'Save'}
                   </button>
@@ -195,7 +195,7 @@ export function MemoryTopicView({
           </div>
         </div>
 
-        <aside className="w-[220px] shrink-0 border-l border-[#252836] bg-[#0d0f14] overflow-y-auto px-5 py-6 space-y-5">
+        <aside className="w-[220px] shrink-0 border-l border-[var(--cl-line)] bg-[var(--cl-paper-3)] overflow-y-auto px-5 py-6 space-y-5">
           <div className="space-y-4">
             {createdAt && <SidebarRow label="Created" value={formatDate(createdAt)} />}
             {updatedAt && !sameDate && (
@@ -203,7 +203,7 @@ export function MemoryTopicView({
             )}
           </div>
 
-          <div className="border-t border-[#252836]" />
+          <div className="border-t border-[var(--cl-line)]" />
 
           <div className="space-y-4">
             <SidebarRow label="Reading" value={readingTime(wordCount)} />
@@ -212,53 +212,53 @@ export function MemoryTopicView({
             <SidebarRow label="Links" value={String(linkCount)} />
             <div>
               <SidebarLabel>File</SidebarLabel>
-              <p className="text-[11px] text-zinc-500 font-mono break-all leading-relaxed">{topic.filename}</p>
+              <p className="text-[11px] text-[var(--cl-ink-3)] font-mono break-all leading-relaxed">{topic.filename}</p>
             </div>
           </div>
 
-          <div className="border-t border-[#252836]" />
+          <div className="border-t border-[var(--cl-line)]" />
 
           <div className="space-y-2">
             <button
               onClick={handleCopy}
-              className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[#1c2133] hover:bg-zinc-200 text-[#9096b0] transition-colors"
+              className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[var(--cl-paper-3)] hover:bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] transition-colors"
             >
               {copied ? '✓ Copied' : 'Copy raw'}
             </button>
             {headings.length > 0 && (
               <button
                 onClick={() => setShowOutline(!showOutline)}
-                className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[#1c2133] hover:bg-zinc-200 text-[#9096b0] transition-colors"
+                className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[var(--cl-paper-3)] hover:bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] transition-colors"
               >
                 {showOutline ? 'Close' : 'Outline'}
               </button>
             )}
           </div>
 
-          <div className="border-t border-[#252836]" />
+          <div className="border-t border-[var(--cl-line)]" />
 
           <div>
             {!confirmDelete ? (
               <button
                 onClick={() => setConfirmDelete(true)}
-                className="w-full text-[12px] font-medium px-3 py-2 rounded-md text-red-500/70 hover:text-red-400 hover:bg-red-950/20 transition-colors"
+                className="w-full text-[12px] font-medium px-3 py-2 rounded-md text-[var(--cl-danger)] hover:text-[var(--cl-danger)] hover:bg-[var(--cl-danger-soft)] transition-colors"
               >
                 Delete topic
               </button>
             ) : (
               <div className="space-y-2">
-                <p className="text-[11px] text-red-400 text-center">Delete this topic?</p>
+                <p className="text-[11px] text-[var(--cl-danger)] text-center">Delete this topic?</p>
                 <div className="flex gap-1.5">
                   <button
                     onClick={() => setConfirmDelete(false)}
-                    className="flex-1 text-[12px] font-medium px-2 py-1.5 rounded-md bg-[#1c2133] text-[#9096b0] hover:text-[#c4c8e0] transition-colors"
+                    className="flex-1 text-[12px] font-medium px-2 py-1.5 rounded-md bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] transition-colors"
                   >
                     Cancel
                   </button>
                   <button
                     onClick={handleDelete}
                     disabled={deleteMut.isLoading}
-                    className="flex-1 text-[12px] font-semibold px-2 py-1.5 rounded-md bg-red-950/40 text-red-400 hover:bg-red-950/60 transition-colors disabled:opacity-40"
+                    className="flex-1 text-[12px] font-semibold px-2 py-1.5 rounded-md bg-[var(--cl-danger-soft)] text-[var(--cl-danger)] hover:bg-[var(--cl-danger-soft)] transition-colors disabled:opacity-40"
                   >
                     {deleteMut.isLoading ? '...' : 'Delete'}
                   </button>
@@ -269,17 +269,17 @@ export function MemoryTopicView({
 
           {showOutline && headings.length > 0 && (
             <>
-              <div className="border-t border-[#252836]" />
+              <div className="border-t border-[var(--cl-line)]" />
               <div>
                 <SidebarLabel>Outline</SidebarLabel>
-                <div className="space-y-1 text-[11px] text-[#787e98]">
+                <div className="space-y-1 text-[11px] text-[var(--cl-ink-3)]">
                   {headings.map((h: Heading, idx: number) => (
                     <div
                       key={idx}
                       className="truncate"
                       style={{ paddingLeft: `${(h.level - 1) * 10}px` }}
                     >
-                      <span className="text-zinc-400">{'▸'.repeat(1)}</span> <span className="truncate">{h.text}</span>
+                      <span className="text-[var(--cl-ink-3)]">{'▸'.repeat(1)}</span> <span className="truncate">{h.text}</span>
                     </div>
                   ))}
                 </div>

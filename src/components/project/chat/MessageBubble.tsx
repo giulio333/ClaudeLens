@@ -8,17 +8,17 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   const [open, setOpen] = useState(false)
   if (!thinking) return null
   return (
-    <div className="my-1 rounded-lg border border-violet-700/40 bg-violet-950/20/50 text-[12px] overflow-hidden">
+    <div className="my-1 rounded-lg border border-[var(--cl-violet)] bg-[var(--cl-paper-3)]/50 text-[12px] overflow-hidden">
       <button
         onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-violet-950/20 transition-colors text-left"
+        className="w-full flex items-center gap-2 px-3 py-2 hover:bg-[var(--cl-paper-3)] transition-colors text-left"
       >
-        <span className="text-violet-500 font-medium">thinking</span>
-        <span className="ml-auto text-violet-400 text-[10px]">{open ? '▲' : '▼'}</span>
+        <span className="text-[var(--cl-violet)] font-medium">thinking</span>
+        <span className="ml-auto text-[var(--cl-violet)] text-[10px]">{open ? '▲' : '▼'}</span>
       </button>
       {open && (
-        <div className="px-3 pb-3 border-t border-violet-700/40">
-          <p className="text-[11px] text-violet-400 mt-2 leading-relaxed whitespace-pre-wrap">{thinking}</p>
+        <div className="px-3 pb-3 border-t border-[var(--cl-violet)]">
+          <p className="text-[11px] text-[var(--cl-violet)] mt-2 leading-relaxed whitespace-pre-wrap">{thinking}</p>
         </div>
       )}
     </div>
@@ -49,7 +49,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
   return (
     <div className={`flex gap-3 ${isUser ? 'flex-row-reverse' : 'flex-row'}`}>
       <div className={`w-7 h-7 rounded-full shrink-0 flex items-center justify-center text-[11px] font-bold mt-0.5 ${
-        isUser ? 'bg-indigo-100 text-indigo-400' : 'bg-[#1c2133] text-zinc-500'
+        isUser ? 'bg-[var(--cl-accent-soft)] text-[var(--cl-accent-ink)]' : 'bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]'
       }`}>
         {isUser ? 'U' : 'C'}
       </div>
@@ -64,8 +64,8 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
             key={i}
             className={`w-full rounded-xl px-4 py-3 text-[13px] leading-relaxed ${
               isUser
-                ? 'bg-indigo-600 text-white'
-                : 'bg-[#161a26] border border-[#252836] text-[#c4c8e0]'
+                ? 'bg-[var(--cl-accent)] text-white'
+                : 'bg-[var(--cl-paper-2)] border border-[var(--cl-line)] text-[var(--cl-ink-2)]'
             }`}
           >
             {isUser ? (
@@ -86,7 +86,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail }: {
           </div>
         )}
 
-        <span className="text-[10px] text-zinc-400 px-1">
+        <span className="text-[10px] text-[var(--cl-ink-3)] px-1">
           {new Date(msg.timestamp).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}
         </span>
       </div>

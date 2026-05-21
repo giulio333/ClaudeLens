@@ -12,12 +12,12 @@ export function SidebarNavItem({ label, icon, isActive, activeIconBg, onClick }:
       onClick={onClick}
       className={`w-full flex items-center gap-2.5 px-2.5 py-2 rounded-lg transition-all text-left group ${
         isActive
-          ? 'bg-[#1c2235] text-[#c4c8e0]'
-          : 'text-[#555c75] hover:bg-[#161b26] hover:text-[#9096b0]'
+          ? 'bg-[var(--cl-paper-3)] text-[var(--cl-ink-2)]'
+          : 'text-[var(--cl-ink-4)] hover:bg-[var(--cl-paper-2)] hover:text-[var(--cl-ink-3)]'
       }`}
     >
       <div className={`w-[26px] h-[26px] rounded-md flex items-center justify-center shrink-0 transition-colors ${
-        isActive ? activeIconBg : 'bg-[#1a1f2e] group-hover:bg-[#1e2440]'
+        isActive ? activeIconBg : 'bg-[var(--cl-paper)] group-hover:bg-[var(--cl-paper-3)]'
       }`}>
         {icon}
       </div>

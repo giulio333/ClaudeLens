@@ -15,6 +15,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   claudeMd: {
     getGlobal: () => ipcRenderer.invoke('claudeMd:getGlobal'),
     getHierarchy: (realPath: string) => ipcRenderer.invoke('claudeMd:getHierarchy', realPath),
+    writeGlobal: (content: string) => ipcRenderer.invoke('claudeMd:writeGlobal', content),
+    writeFile: (filePath: string, content: string) => ipcRenderer.invoke('claudeMd:writeFile', filePath, content),
+  },
+  markdownFile: {
+    write: (filePath: string, content: string) => ipcRenderer.invoke('markdownFile:write', filePath, content),
   },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
@@ -28,12 +33,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   skills: {
     getGlobal: () => ipcRenderer.invoke('skills:getGlobal'),
     getAll: (realPath: string) => ipcRenderer.invoke('skills:getAll', realPath),
-    create: (input: object) => ipcRenderer.invoke('skills:create', input),
+    create: (input: object, projectPath?: string) => ipcRenderer.invoke('skills:create', input, projectPath),
   },
   agents: {
     getGlobal: () => ipcRenderer.invoke('agents:getGlobal'),
     getByProject: (realPath: string) => ipcRenderer.invoke('agents:getByProject', realPath),
-    create: (input: object) => ipcRenderer.invoke('agents:create', input),
+    create: (input: object, projectPath?: string) => ipcRenderer.invoke('agents:create', input, projectPath),
   },
   mcp: {
     getGlobal: () => ipcRenderer.invoke('mcp:getGlobal'),

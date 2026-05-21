@@ -1,98 +1,60 @@
-import { useState } from 'react'
 import { useGlobalSkills, useAllSkills, Skill } from '../../../hooks/useIPC'
-import { CreateSkillModal } from './CreateSkillModal'
+import { Lens } from '../overview/Lens'
 
-function SkillRow({ skill, onClick }: { skill: Skill; onClick: () => void }) {
+function SkillTile({ skill, index, onClick }: { skill: Skill; index: number; onClick: () => void }) {
   return (
     <button
+      type="button"
+      className={`cl-tile ${index === 0 ? 'accent' : ''}`}
       onClick={onClick}
-      className="relative w-full text-left group flex items-start gap-6 px-6 py-4 transition-all duration-200 border-b border-white/[0.035] last:border-0"
     >
-      {/* Gradient sweep on hover */}
-      <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity duration-200 bg-gradient-to-r from-indigo-600/[0.07] via-indigo-600/[0.02] to-transparent pointer-events-none" />
-
-      {/* Left accent — sempre visibile, si intensifica al hover */}
-      <div className={`absolute left-0 top-3 bottom-3 w-[2px] rounded-full transition-all duration-200 ${
-        skill.scope === 'project'
-          ? 'bg-indigo-500/30 group-hover:bg-indigo-400/80'
-          : 'bg-blue-500/20 group-hover:bg-blue-400/60'
-      }`} />
-
-      {/* Nome — elemento primario */}
-      <div className="relative w-44 shrink-0">
-        <span className="text-[13px] font-mono font-semibold tracking-tight text-zinc-300 group-hover:text-white transition-colors duration-150">
-          /{skill.name}
-        </span>
+      <span className="glyph">{(skill.name[0] ?? '?').toUpperCase()}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="t-name">/{skill.name}</div>
+        <div className="t-desc">{skill.description || '—'}</div>
       </div>
-
-      {/* Descrizione + argumentHint */}
-      <div className="relative flex-1 min-w-0">
-        {skill.description ? (
-          <p className="text-[12px] leading-snug text-zinc-500 group-hover:text-zinc-300 transition-colors duration-150 line-clamp-2">
-            {skill.description}
-          </p>
-        ) : (
-          <p className="text-[12px] text-zinc-700 italic">—</p>
-        )}
-        {skill.argumentHint && (
-          <code className="mt-1.5 block text-[10px] font-mono text-zinc-600 group-hover:text-zinc-500 transition-colors">
-            {skill.argumentHint}
-          </code>
-        )}
-      </div>
-
-      {/* Tools + chevron */}
-      <div className="relative flex items-start gap-2 shrink-0 pt-0.5">
-        {skill.allowedTools && skill.allowedTools.length > 0 && (
-          <div className="flex flex-wrap justify-end gap-1">
-            {skill.allowedTools.slice(0, 3).map(t => (
-              <span
-                key={t}
-                className="text-[9px] font-mono px-1.5 py-0.5 rounded-md bg-violet-950/30 text-violet-400/60 ring-1 ring-violet-700/15 group-hover:text-violet-400/90 group-hover:ring-violet-700/30 transition-colors"
-              >
-                {t}
-              </span>
-            ))}
-            {skill.allowedTools.length > 3 && (
-              <span className="text-[9px] font-mono px-1.5 py-0.5 rounded-md bg-zinc-900 text-zinc-600">
-                +{skill.allowedTools.length - 3}
-              </span>
-            )}
-          </div>
-        )}
-        <span className="text-zinc-700 group-hover:text-zinc-400 group-hover:translate-x-0.5 transition-all duration-150 text-[14px] leading-none mt-px">›</span>
-      </div>
+      <span className="t-meta"><b>{skill.scope}</b></span>
     </button>
   )
 }
 
-/* Chip compatta per skill globali nella vista progetto */
-function GlobalSkillChip({ skill, onClick }: { skill: Skill; onClick: () => void }) {
+function TopBar({ onBack, crumb }: { onBack: () => void; crumb: string }) {
   return (
-    <button
-      onClick={onClick}
-      className="group flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-[#111318] border border-white/[0.05] hover:border-indigo-500/25 hover:bg-[#14172280] transition-all duration-150"
+    <div
+      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
+      style={{
+        WebkitAppRegion: 'drag',
+        background: 'var(--cl-paper)',
+        height: 52,
+        padding: '0 28px 0 88px',
+      } as React.CSSProperties}
     >
-      <span className="text-[11px] font-mono text-zinc-600 group-hover:text-zinc-300 transition-colors duration-150">
-        /{skill.name}
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
+        style={{
+          WebkitAppRegion: 'no-drag',
+          fontSize: 11,
+          letterSpacing: '0.18em',
+          color: 'var(--cl-ink-3)',
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        <span>←</span>
+        Back
+      </button>
+      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
+      <span
+        className="font-mono uppercase truncate"
+        style={{
+          fontSize: 11,
+          letterSpacing: '0.18em',
+          color: 'var(--cl-ink-3)',
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        {crumb}
       </span>
-      {skill.allowedTools && skill.allowedTools.length > 0 && (
-        <span className="text-[9px] text-zinc-700 group-hover:text-zinc-500 transition-colors">
-          · {skill.allowedTools.length}
-        </span>
-      )}
-    </button>
-  )
-}
-
-function SectionHeader({ label, count }: { label: string; count: number }) {
-  return (
-    <div className="flex items-center gap-3 px-6 pt-5 pb-3">
-      <span className="text-[9px] font-bold tracking-[0.16em] uppercase text-zinc-500">{label}</span>
-      <span className="text-[9px] font-semibold tabular-nums text-zinc-600 bg-zinc-800/60 px-1.5 py-0.5 rounded-full">
-        {count}
-      </span>
-      <div className="flex-1 h-px bg-white/[0.04]" />
     </div>
   )
 }
@@ -101,11 +63,13 @@ export function GlobalSkillsView({
   onBack,
   onSelectSkill,
   onNavigateGlobalSkills,
+  onCreate,
   project,
 }: {
   onBack: () => void
   onSelectSkill: (skill: Skill) => void
   onNavigateGlobalSkills?: () => void
+  onCreate: () => void
   project?: { hash: string; realPath: string }
 }) {
   const projectName = project?.realPath.split('/').pop()
@@ -115,112 +79,96 @@ export function GlobalSkillsView({
   const skills = project ? allSkills : globalSkills
   const isLoading = project ? loadingAll : loadingGlobal
 
-  const [showCreate, setShowCreate] = useState(false)
-
   const projectSkills = (skills ?? []).filter(s => s.scope === 'project')
   const onlyGlobalSkills = (skills ?? []).filter(s => s.scope === 'global')
+  const total = skills?.length ?? 0
 
   return (
-    <div className="h-full bg-[#0d0f14] flex flex-col">
-      {showCreate && (
-        <CreateSkillModal onClose={() => setShowCreate(false)} onCreated={() => setShowCreate(false)} />
-      )}
+    <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+      <TopBar onBack={onBack} crumb={project ? `Project · Skills · ${projectName}` : 'Global · Skills'} />
 
-      {/* Header */}
-      <div className="shrink-0 border-b border-white/[0.04] px-6 py-3.5 flex items-center gap-3">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-[11px] text-zinc-600 hover:text-zinc-300 transition-colors"
-        >
-          <span className="text-[10px]">←</span>
-          Back
-        </button>
-        <span className="text-zinc-800 text-[11px]">/</span>
-        <h1 className="text-[13px] font-semibold text-zinc-200">
-          {project ? `Skills — ${projectName}` : 'Global Skills'}
-        </h1>
-
-        <div className="ml-auto flex items-center gap-3">
-          {skills && skills.length > 0 && (
-            <span className="text-[11px] tabular-nums text-zinc-600">
-              {skills.length} skill{skills.length !== 1 ? 's' : ''}
-            </span>
-          )}
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-[11px] font-medium bg-indigo-600/90 text-white hover:bg-indigo-500 transition-colors"
-          >
-            <svg className="w-3 h-3" viewBox="0 0 12 12" fill="none">
-              <path d="M6 1v10M1 6h10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"/>
-            </svg>
-            New Skill
-          </button>
-        </div>
-      </div>
-
-      {/* Content */}
-      <div className="flex-1 overflow-auto">
-        {isLoading ? (
-          <div className="px-6 py-8 text-[12px] text-zinc-600">Loading...</div>
-        ) : !skills || skills.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-20 gap-2">
-            <p className="text-[13px] text-zinc-500">No skills found</p>
-            <p className="text-[11px] text-zinc-600 mt-1">
-              Add <code className="font-mono text-zinc-500">*.md</code> files in{' '}
-              <code className="font-mono text-zinc-500">~/.claude/skills/</code>
-            </p>
+      <div className="flex-1 overflow-y-auto">
+        <section className="cl-hero">
+          <Lens />
+          <div className="cl-hero-actions">
+            <button type="button" className="cl-btn cl-btn--primary" onClick={onCreate}>
+              + New Skill
+            </button>
           </div>
+          <div className="cl-eyebrow">
+            <span className="pip" />
+            <span>{project ? `Project · ${projectName} · skills` : 'Global · ~/.claude/skills'}</span>
+          </div>
+          <h1 className="cl-h-name static">
+            <span className="label-name">Skills</span>
+            <span className="glyph">.</span>
+          </h1>
+          <div className="cl-h-meta">
+            <span><b>{total}</b> {total === 1 ? 'skill' : 'skills'}</span>
+            <span className="sep">·</span>
+            <span>reusable behaviors</span>
+            {project && onlyGlobalSkills.length > 0 && (
+              <>
+                <span className="sep">·</span>
+                <span><b>{projectSkills.length}</b> project · <b>{onlyGlobalSkills.length}</b> global</span>
+              </>
+            )}
+          </div>
+        </section>
+
+        {isLoading ? (
+          <section className="cl-section">
+            <p style={{ color: 'var(--cl-ink-3)', fontSize: 13 }}>Loading…</p>
+          </section>
+        ) : total === 0 ? (
+          <section className="cl-section">
+            <div className="cl-empty">
+              No skills found. Add <code style={{ fontFamily: 'var(--font-mono)' }}>*.md</code> files in{' '}
+              <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude/skills/</code>.
+            </div>
+          </section>
         ) : project ? (
-          /* ── Vista progetto: righe per skill di progetto, chips per globali ── */
-          <div>
+          <>
             {projectSkills.length > 0 && (
-              <div>
-                <SectionHeader label="This project" count={projectSkills.length} />
-                <div>
-                  {projectSkills.map(skill => (
-                    <SkillRow key={skill.name} skill={skill} onClick={() => onSelectSkill(skill)} />
+              <section className="cl-section">
+                <div className="cl-sec-head">
+                  <h2>This project</h2>
+                  <span className="ct">{projectSkills.length} project-scoped</span>
+                </div>
+                <div className="cl-tile-grid cl-tile-grid--list">
+                  {projectSkills.map((s, i) => (
+                    <SkillTile key={s.path} skill={s} index={i} onClick={() => onSelectSkill(s)} />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
-
             {onlyGlobalSkills.length > 0 && (
-              <div className="mt-4 mb-6">
-                <div className="flex items-center gap-3 px-6 pt-4 pb-3">
-                  <span className="text-[9px] font-bold tracking-[0.16em] uppercase text-zinc-700">Global</span>
-                  <span className="text-[9px] font-semibold tabular-nums text-zinc-700 bg-zinc-900 px-1.5 py-0.5 rounded-full">
-                    {onlyGlobalSkills.length}
-                  </span>
-                  <div className="flex-1 h-px bg-white/[0.03]" />
+              <section className="cl-section">
+                <div className="cl-sec-head">
+                  <h2>Global</h2>
+                  <span className="ct">{onlyGlobalSkills.length} shared across projects</span>
                   {onNavigateGlobalSkills && (
-                    <button
-                      onClick={onNavigateGlobalSkills}
-                      className="text-[10px] text-zinc-700 hover:text-indigo-400 transition-colors flex items-center gap-1"
-                    >
+                    <button className="all" type="button" onClick={onNavigateGlobalSkills}>
                       Open Global Skills
-                      <span className="text-[11px]">→</span>
                     </button>
                   )}
                 </div>
-                <div className="px-6 flex flex-wrap gap-2">
-                  {onlyGlobalSkills.map(skill => (
-                    <GlobalSkillChip
-                      key={skill.name}
-                      skill={skill}
-                      onClick={() => onSelectSkill(skill)}
-                    />
+                <div className="cl-tile-grid cl-tile-grid--list">
+                  {onlyGlobalSkills.map((s, i) => (
+                    <SkillTile key={s.path} skill={s} index={i} onClick={() => onSelectSkill(s)} />
                   ))}
                 </div>
-              </div>
+              </section>
             )}
-          </div>
+          </>
         ) : (
-          /* ── Vista globale: lista righe piena ── */
-          <div className="pt-1">
-            {skills.map(skill => (
-              <SkillRow key={skill.name} skill={skill} onClick={() => onSelectSkill(skill)} />
-            ))}
-          </div>
+          <section className="cl-section">
+            <div className="cl-tile-grid cl-tile-grid--list">
+              {(skills ?? []).map((s, i) => (
+                <SkillTile key={s.path} skill={s} index={i} onClick={() => onSelectSkill(s)} />
+              ))}
+            </div>
+          </section>
         )}
       </div>
     </div>

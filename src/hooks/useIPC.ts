@@ -66,6 +66,11 @@ declare global {
       claudeMd: {
         getGlobal: () => Promise<IpcResult<string | undefined>>
         getHierarchy: (realPath: string) => Promise<IpcResult<ClaudeMdHierarchy>>
+        writeGlobal: (content: string) => Promise<IpcResult<null>>
+        writeFile: (filePath: string, content: string) => Promise<IpcResult<null>>
+      }
+      markdownFile: {
+        write: (filePath: string, content: string) => Promise<IpcResult<null>>
       }
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>
@@ -79,12 +84,12 @@ declare global {
       skills: {
         getGlobal: () => Promise<IpcResult<Skill[]>>
         getAll: (realPath: string) => Promise<IpcResult<Skill[]>>
-        create: (input: SkillInput) => Promise<IpcResult<{ filePath: string }>>
+        create: (input: SkillInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
       }
       agents: {
         getGlobal: () => Promise<IpcResult<Agent[]>>
         getByProject: (realPath: string) => Promise<IpcResult<Agent[]>>
-        create: (input: AgentInput) => Promise<IpcResult<{ filePath: string }>>
+        create: (input: AgentInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
       }
       mcp: {
         getGlobal: () => Promise<IpcResult<McpData>>
@@ -144,6 +149,46 @@ export function useClaudeMdHierarchy(realPath: string | null) {
 export function useGlobalClaudeMd() {
   return useQuery('claudeMd:global', () =>
     unwrap(window.electronAPI.claudeMd.getGlobal())
+  )
+}
+
+export function useWriteGlobalClaudeMd() {
+  const qc = useQueryClient()
+  return useMutation(
+    (content: string) => unwrap(window.electronAPI.claudeMd.writeGlobal(content)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('claudeMd:global')
+        qc.invalidateQueries('claudeMd:hierarchy')
+      },
+    }
+  )
+}
+
+export function useWriteMarkdownFile(invalidateKeys: string[] = []) {
+  const qc = useQueryClient()
+  return useMutation(
+    ({ filePath, content }: { filePath: string; content: string }) =>
+      unwrap(window.electronAPI.markdownFile.write(filePath, content)),
+    {
+      onSuccess: () => {
+        invalidateKeys.forEach(k => qc.invalidateQueries(k))
+      },
+    }
+  )
+}
+
+export function useWriteClaudeMdFile() {
+  const qc = useQueryClient()
+  return useMutation(
+    ({ filePath, content }: { filePath: string; content: string }) =>
+      unwrap(window.electronAPI.claudeMd.writeFile(filePath, content)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('claudeMd:global')
+        qc.invalidateQueries('claudeMd:hierarchy')
+      },
+    }
   )
 }
 
@@ -241,16 +286,28 @@ export function useProjectAgents(realPath: string | null) {
 export function useCreateSkill() {
   const qc = useQueryClient()
   return useMutation(
-    (input: SkillInput) => unwrap(window.electronAPI.skills.create(input)),
-    { onSuccess: () => qc.invalidateQueries('skills:global') }
+    ({ input, projectPath }: { input: SkillInput; projectPath?: string }) =>
+      unwrap(window.electronAPI.skills.create(input, projectPath)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('skills:global')
+        qc.invalidateQueries('skills:all')
+      },
+    }
   )
 }
 
 export function useCreateAgent() {
   const qc = useQueryClient()
   return useMutation(
-    (input: AgentInput) => unwrap(window.electronAPI.agents.create(input)),
-    { onSuccess: () => qc.invalidateQueries('agents:global') }
+    ({ input, projectPath }: { input: AgentInput; projectPath?: string }) =>
+      unwrap(window.electronAPI.agents.create(input, projectPath)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('agents:global')
+        qc.invalidateQueries('agents:project')
+      },
+    }
   )
 }
 

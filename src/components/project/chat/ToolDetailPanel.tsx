@@ -9,7 +9,7 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     return (
       <div className="space-y-3">
         <PathChip path={fp} />
-        {ext && <span className="inline-block text-[10px] font-mono bg-indigo-950/20 text-indigo-400 border border-indigo-700/40 rounded px-2 py-0.5">.{ext}</span>}
+        {ext && <span className="inline-block text-[10px] font-mono bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded px-2 py-0.5">.{ext}</span>}
       </div>
     )
   }
@@ -31,9 +31,9 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
         {oldStr !== undefined && (
           <>
             <SectionLabel label="Replaced text" />
-            <CodeBlock code={oldStr} dark={false} className="border-red-700/40 opacity-75" />
+            <CodeBlock code={oldStr} dark={false} className="border-[var(--cl-danger)] opacity-75" />
             <SectionLabel label="New text" />
-            <CodeBlock code={newStr ?? ''} dark={false} className="border-emerald-700/40" />
+            <CodeBlock code={newStr ?? ''} dark={false} className="border-[var(--cl-ok)]" />
           </>
         )}
       </div>
@@ -45,16 +45,16 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     const desc = input.description as string | undefined
     return (
       <div className="space-y-3">
-        {desc && <p className="text-[12px] text-[#787e98] italic">{desc}</p>}
-        <div className="rounded-lg bg-zinc-900 border border-zinc-700 overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 bg-zinc-800 border-b border-zinc-700">
-            <span className="w-2.5 h-2.5 rounded-full bg-red-950/200/70" />
+        {desc && <p className="text-[12px] text-[var(--cl-ink-3)] italic">{desc}</p>}
+        <div className="rounded-lg bg-[var(--cl-paper-2)] border border-[var(--cl-line)] overflow-hidden">
+          <div className="flex items-center gap-2 px-3 py-2 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)]">
+            <span className="w-2.5 h-2.5 rounded-full bg-[var(--cl-danger-soft)]/70" />
             <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-green-500/70" />
-            <span className="text-[10px] text-zinc-400 ml-1">shell</span>
+            <span className="w-2.5 h-2.5 rounded-full bg-[var(--cl-ok)]" />
+            <span className="text-[10px] text-[var(--cl-ink-3)] ml-1">shell</span>
           </div>
-          <pre className="px-4 py-3 text-[12px] font-mono text-emerald-400 whitespace-pre-wrap break-words">
-            <span className="text-zinc-500 select-none">$ </span>{cmd}
+          <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ok)] whitespace-pre-wrap break-words">
+            <span className="text-[var(--cl-ink-3)] select-none">$ </span>{cmd}
           </pre>
         </div>
       </div>
@@ -68,9 +68,9 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-zinc-500">Pattern:</span>
-          <code className="bg-amber-950/20 border border-amber-700/40 text-amber-800 rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
-          {mode && <span className="text-[10px] bg-[#1c2133] border border-[#252836] text-[#787e98] rounded px-2 py-0.5 font-mono">{mode}</span>}
+          <span className="text-[11px] text-[var(--cl-ink-3)]">Pattern:</span>
+          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
+          {mode && <span className="text-[10px] bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5 font-mono">{mode}</span>}
         </div>
         {path && <PathChip path={path} />}
       </div>
@@ -83,8 +83,8 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
-          <span className="text-[11px] text-zinc-500">Pattern:</span>
-          <code className="bg-amber-950/20 border border-amber-700/40 text-amber-800 rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
+          <span className="text-[11px] text-[var(--cl-ink-3)]">Pattern:</span>
+          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
         </div>
         {path && <PathChip path={path} />}
       </div>
@@ -98,13 +98,13 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     return (
       <div className="space-y-3">
         {subtype && (
-          <span className="inline-block text-[11px] font-semibold bg-indigo-950/20 text-indigo-400 border border-indigo-700/40 rounded-full px-3 py-1">
+          <span className="inline-block text-[11px] font-semibold bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded-full px-3 py-1">
             {subtype}
           </span>
         )}
-        {desc && <p className="text-[13px] font-medium text-[#9096b0]">{desc}</p>}
-        <div className="rounded-lg bg-[#0d0f14] border border-[#252836] px-4 py-3">
-          <p className="text-[12px] text-[#787e98] whitespace-pre-wrap leading-relaxed">{prompt}</p>
+        {desc && <p className="text-[13px] font-medium text-[var(--cl-ink-3)]">{desc}</p>}
+        <div className="rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line)] px-4 py-3">
+          <p className="text-[12px] text-[var(--cl-ink-3)] whitespace-pre-wrap leading-relaxed">{prompt}</p>
         </div>
       </div>
     )
@@ -120,15 +120,15 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
         <div className="flex items-center gap-2 flex-wrap">
           {type && (
             <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
-              type === 'user' ? 'bg-blue-950/20 text-blue-400 border border-blue-700/40' :
-              type === 'feedback' ? 'bg-amber-950/20 text-amber-400 border border-amber-700/40' :
-              type === 'project' ? 'bg-emerald-950/20 text-emerald-400 border border-emerald-700/40' :
-              'bg-violet-950/20 text-violet-400 border border-violet-700/40'
+              type === 'user' ? 'bg-[var(--cl-paper-3)] text-[var(--cl-cyan)] border border-[var(--cl-cyan)]' :
+              type === 'feedback' ? 'bg-[var(--cl-warn-soft)] text-[var(--cl-warn)] border border-[var(--cl-warn)]' :
+              type === 'project' ? 'bg-[var(--cl-paper-3)] text-[var(--cl-ok)] border border-[var(--cl-ok)]' :
+              'bg-[var(--cl-paper-3)] text-[var(--cl-violet)] border border-[var(--cl-violet)]'
             }`}>{type}</span>
           )}
-          {topicName && <span className="text-[12px] font-semibold text-[#c4c8e0] font-mono">{topicName}</span>}
+          {topicName && <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">{topicName}</span>}
         </div>
-        {desc && <p className="text-[12px] text-[#787e98]">{desc}</p>}
+        {desc && <p className="text-[12px] text-[var(--cl-ink-3)]">{desc}</p>}
         {content && (
           <>
             <SectionLabel label="Content" meta={`${content.split('\n').length} lines`} />
@@ -146,7 +146,7 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     return (
       <div className="space-y-3">
         {filename && <PathChip path={filename} />}
-        {topicName && <span className="text-[12px] font-semibold text-[#c4c8e0] font-mono">{topicName}</span>}
+        {topicName && <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">{topicName}</span>}
         {content && (
           <>
             <SectionLabel label="New content" meta={`${content.split('\n').length} lines`} />
@@ -161,7 +161,7 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
     const filename = input.filename as string | undefined
     return (
       <div className="space-y-2">
-        {filename ? <PathChip path={filename} /> : <p className="text-[12px] text-zinc-400">No filename</p>}
+        {filename ? <PathChip path={filename} /> : <p className="text-[12px] text-[var(--cl-ink-3)]">No filename</p>}
       </div>
     )
   }
@@ -174,15 +174,15 @@ function ToolOutput({ name, input, result }: {
   input: Record<string, unknown>
   result: ToolGroup['result']
 }) {
-  if (!result) return <p className="text-[12px] text-zinc-400 italic">No result available</p>
+  if (!result) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">No result available</p>
 
   const raw = result.content
-  if (!raw) return <p className="text-[12px] text-zinc-400 italic">(no output)</p>
+  if (!raw) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">(no output)</p>
 
   if (result.isError) {
     return (
-      <div className="rounded-lg bg-red-950/20 border border-red-700/40 px-4 py-3">
-        <pre className="text-[12px] text-red-800 font-mono whitespace-pre-wrap break-words leading-relaxed">{raw}</pre>
+      <div className="rounded-lg bg-[var(--cl-danger-soft)] border border-[var(--cl-danger)] px-4 py-3">
+        <pre className="text-[12px] text-[var(--cl-danger)] font-mono whitespace-pre-wrap break-words leading-relaxed">{raw}</pre>
       </div>
     )
   }
@@ -194,7 +194,7 @@ function ToolOutput({ name, input, result }: {
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          {ext && <span className="text-[10px] font-mono bg-[#1c2133] border border-[#252836] text-[#787e98] rounded px-2 py-0.5">.{ext}</span>}
+          {ext && <span className="text-[10px] font-mono bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5">.{ext}</span>}
         </div>
         <CodeBlock code={stripped} dark={false} />
       </div>
@@ -203,9 +203,9 @@ function ToolOutput({ name, input, result }: {
 
   if (name === 'Bash') {
     return (
-      <div className="rounded-lg bg-zinc-900 border border-zinc-700 overflow-hidden">
-        <div className="px-3 py-1.5 bg-zinc-800 border-b border-zinc-700 text-[10px] text-zinc-400">output</div>
-        <pre className="px-4 py-3 text-[12px] font-mono text-zinc-200 whitespace-pre-wrap break-words leading-relaxed max-h-[400px] overflow-y-auto">
+      <div className="rounded-lg bg-[var(--cl-paper-2)] border border-[var(--cl-line)] overflow-hidden">
+        <div className="px-3 py-1.5 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)] text-[10px] text-[var(--cl-ink-3)]">output</div>
+        <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ink-2)] whitespace-pre-wrap break-words leading-relaxed max-h-[400px] overflow-y-auto">
           {raw || '(no output)'}
         </pre>
       </div>
@@ -214,7 +214,7 @@ function ToolOutput({ name, input, result }: {
 
   if (name === 'Agent') {
     return (
-      <div className="bg-[#161a26] border border-[#252836] rounded-lg px-5 py-4">
+      <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-lg px-5 py-4">
         <div className="prose prose-sm prose-zinc max-w-none">
           <Markdown>{raw}</Markdown>
         </div>
@@ -227,12 +227,12 @@ function ToolOutput({ name, input, result }: {
     return (
       <div className="space-y-1">
         {paths.map((p, i) => (
-          <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[#0d0f14] border border-[#1c2030] text-[12px] font-mono text-[#9096b0] hover:bg-[#1c2133] transition-colors">
-            <span className="text-zinc-400 shrink-0 text-[10px]">{i + 1}</span>
+          <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line-soft)] text-[12px] font-mono text-[var(--cl-ink-3)] hover:bg-[var(--cl-paper-3)] transition-colors">
+            <span className="text-[var(--cl-ink-3)] shrink-0 text-[10px]">{i + 1}</span>
             <span className="truncate">{p}</span>
           </div>
         ))}
-        {paths.length === 0 && <p className="text-[12px] text-zinc-400 italic">No files found</p>}
+        {paths.length === 0 && <p className="text-[12px] text-[var(--cl-ink-3)] italic">No files found</p>}
       </div>
     )
   }
@@ -240,14 +240,14 @@ function ToolOutput({ name, input, result }: {
   if (name === 'Grep') {
     const lines = raw.split('\n').filter(Boolean)
     return (
-      <div className="rounded-lg bg-[#0d0f14] border border-[#252836] overflow-hidden">
+      <div className="rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line)] overflow-hidden">
         {lines.map((line, i) => (
-          <div key={i} className="flex items-start gap-3 px-3 py-1.5 border-b border-[#1c2030] last:border-0 hover:bg-[#161a26] transition-colors">
-            <span className="text-zinc-300 text-[10px] font-mono shrink-0 pt-0.5">{i + 1}</span>
-            <pre className="text-[11px] font-mono text-[#9096b0] whitespace-pre-wrap break-words flex-1">{line}</pre>
+          <div key={i} className="flex items-start gap-3 px-3 py-1.5 border-b border-[var(--cl-line-soft)] last:border-0 hover:bg-[var(--cl-paper-2)] transition-colors">
+            <span className="text-[var(--cl-ink-2)] text-[10px] font-mono shrink-0 pt-0.5">{i + 1}</span>
+            <pre className="text-[11px] font-mono text-[var(--cl-ink-3)] whitespace-pre-wrap break-words flex-1">{line}</pre>
           </div>
         ))}
-        {lines.length === 0 && <p className="px-3 py-2 text-[12px] text-zinc-400 italic">No results</p>}
+        {lines.length === 0 && <p className="px-3 py-2 text-[12px] text-[var(--cl-ink-3)] italic">No results</p>}
       </div>
     )
   }
@@ -258,19 +258,19 @@ function ToolOutput({ name, input, result }: {
       if (name === 'memory:createTopic' || name === 'memory:updateTopic') {
         const filename = json.data?.filename || json.filename
         return filename ? (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-950/20 border border-emerald-700/40">
-            <span className="text-emerald-400 text-[13px]">✓</span>
-            <span className="text-[12px] text-emerald-800 font-mono">{filename}</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-ok)]">
+            <span className="text-[var(--cl-ok)] text-[13px]">✓</span>
+            <span className="text-[12px] text-[var(--cl-ok)] font-mono">{filename}</span>
           </div>
         ) : (
-          <p className="text-[12px] text-[#787e98]">Operation completed.</p>
+          <p className="text-[12px] text-[var(--cl-ink-3)]">Operation completed.</p>
         )
       }
       if (name === 'memory:deleteTopic') {
         return (
-          <div className="flex items-center gap-2 p-3 rounded-lg bg-emerald-950/20 border border-emerald-700/40">
-            <span className="text-emerald-400 text-[13px]">✓</span>
-            <span className="text-[12px] text-emerald-800">Topic deleted.</span>
+          <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-ok)]">
+            <span className="text-[var(--cl-ok)] text-[13px]">✓</span>
+            <span className="text-[12px] text-[var(--cl-ok)]">Topic deleted.</span>
           </div>
         )
       }
@@ -291,21 +291,21 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
 
   return (
     <div className="h-full flex flex-col">
-      <div className="shrink-0 flex items-center gap-3 px-8 py-3 border-b border-[#252836] bg-[#0d0f14]/80">
+      <div className="shrink-0 flex items-center gap-3 px-8 py-3 border-b border-[var(--cl-line)] bg-[var(--cl-paper-3)]/80">
         <button
           onClick={onBack}
-          className="flex items-center gap-1.5 text-[12px] text-zinc-500 hover:text-[#c4c8e0] transition-colors"
+          className="flex items-center gap-1.5 text-[12px] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] transition-colors"
         >
           <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round"/>
           </svg>
           Back to chat
         </button>
-        <span className="text-zinc-300">·</span>
+        <span className="text-[var(--cl-ink-2)]">·</span>
         <span className="text-base">{icon}</span>
-        <span className="text-[13px] font-mono font-semibold text-[#9096b0]">{name}</span>
+        <span className="text-[13px] font-mono font-semibold text-[var(--cl-ink-3)]">{name}</span>
         {isMemory && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-violet-100 text-violet-400 border border-violet-700/40 uppercase tracking-wide">Memory</span>
+          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--cl-violet)] text-[var(--cl-violet)] border border-[var(--cl-violet)] uppercase tracking-wide">Memory</span>
         )}
       </div>
 
@@ -315,7 +315,7 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
           <ToolInput name={name} input={input} />
         </div>
 
-        <div className="border-t border-[#252836]" />
+        <div className="border-t border-[var(--cl-line)]" />
 
         <div>
           <SectionLabel

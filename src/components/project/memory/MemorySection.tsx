@@ -15,42 +15,42 @@ export const MEMORY_TYPE_CONFIG: Record<string, {
 }> = {
   feedback: {
     label: 'Feedback',
-    iconColor: '#fbbf24',
-    iconBg: 'bg-amber-950/30 border border-amber-800/30',
+    iconColor: 'var(--cl-warn)',
+    iconBg: 'bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)]',
     accentBorder: 'border-t-amber-500/50',
-    accentBg: 'hover:bg-amber-950/5',
-    badgeBg: 'bg-amber-950/20 border border-amber-700/30',
-    badgeText: 'text-amber-400',
+    accentBg: 'hover:bg-[var(--cl-warn-soft)]',
+    badgeBg: 'bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)]',
+    badgeText: 'text-[var(--cl-warn)]',
     iconPath: 'M2 2h8v6H7l-3 2V8H2V2z',
   },
   project: {
     label: 'Project',
-    iconColor: '#34d399',
-    iconBg: 'bg-emerald-950/30 border border-emerald-800/30',
+    iconColor: 'var(--cl-ok)',
+    iconBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-ok)]',
     accentBorder: 'border-t-emerald-500/50',
-    accentBg: 'hover:bg-emerald-950/5',
-    badgeBg: 'bg-emerald-950/20 border border-emerald-700/30',
-    badgeText: 'text-emerald-400',
+    accentBg: 'hover:bg-[var(--cl-paper-3)]',
+    badgeBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-ok)]',
+    badgeText: 'text-[var(--cl-ok)]',
     iconPath: 'M1 3.5h4l1 1.5h5v5H1V3.5z',
   },
   reference: {
     label: 'Reference',
-    iconColor: '#a78bfa',
-    iconBg: 'bg-violet-950/30 border border-violet-800/30',
+    iconColor: 'var(--cl-violet)',
+    iconBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-violet)]',
     accentBorder: 'border-t-violet-500/50',
-    accentBg: 'hover:bg-violet-950/5',
-    badgeBg: 'bg-violet-950/20 border border-violet-700/30',
-    badgeText: 'text-violet-400',
+    accentBg: 'hover:bg-[var(--cl-paper-3)]',
+    badgeBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-violet)]',
+    badgeText: 'text-[var(--cl-violet)]',
     iconPath: 'M4.5 7.5a3 3 0 104.24-4.24l-.7.7M7.5 4.5a3 3 0 10-4.24 4.24l.7-.7M4.5 7.5l3-3',
   },
   user: {
     label: 'User',
     iconColor: '#60a5fa',
-    iconBg: 'bg-blue-950/30 border border-blue-800/30',
+    iconBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-cyan)]',
     accentBorder: 'border-t-blue-500/50',
-    accentBg: 'hover:bg-blue-950/5',
-    badgeBg: 'bg-blue-950/20 border border-blue-700/30',
-    badgeText: 'text-blue-400',
+    accentBg: 'hover:bg-[var(--cl-paper-3)]',
+    badgeBg: 'bg-[var(--cl-paper-3)] border border-[var(--cl-cyan)]',
+    badgeText: 'text-[var(--cl-cyan)]',
     iconPath: 'M6 5.5a2 2 0 100-4 2 2 0 000 4zM2 10.5c0-2.2 1.8-4 4-4s4 1.8 4 4',
   },
 }
@@ -68,7 +68,7 @@ export function MemorySection({ hash, onOpenTopic }: {
   const [creating, setCreating] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState<string | null>(null)
 
-  if (isLoading) return <p className="text-sm text-zinc-400">Loading...</p>
+  if (isLoading) return <p className="text-sm text-[var(--cl-ink-3)]">Loading...</p>
   if (!data) return null
 
   const handleCreate = (input: TopicInput) => {
@@ -86,16 +86,16 @@ export function MemorySection({ hash, onOpenTopic }: {
     return (
       <div
         key={t.filename}
-        className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-all group ${topicContent ? 'cursor-pointer' : ''} ${isConfirming ? 'bg-red-950/10' : 'hover:bg-[#0f1117]'}`}
+        className={`flex items-center gap-3 px-2 py-2 rounded-lg transition-all group ${topicContent ? 'cursor-pointer' : ''} ${isConfirming ? 'bg-[var(--cl-danger-soft)]' : 'hover:bg-[var(--cl-paper)]'}`}
         onClick={() => topicContent && !isConfirming && onOpenTopic(t, topicContent)}
       >
         <div className="w-[3px] h-[26px] rounded-full shrink-0 opacity-35" style={{ background: cfg.iconColor }} />
 
-        <p className="text-[12.5px] font-medium text-[#9096b0] group-hover:text-[#c4c8e0] transition-colors w-[38%] shrink-0 truncate">
+        <p className="text-[12.5px] font-medium text-[var(--cl-ink-3)] group-hover:text-[var(--cl-ink-2)] transition-colors w-[38%] shrink-0 truncate">
           {t.name}
         </p>
 
-        <p className="text-[11.5px] text-[#3d4460] flex-1 min-w-0 truncate">
+        <p className="text-[11.5px] text-[var(--cl-ink-4)] flex-1 min-w-0 truncate">
           {t.description ?? ''}
         </p>
 
@@ -104,7 +104,7 @@ export function MemorySection({ hash, onOpenTopic }: {
             {!readOnly && (
               <button
                 onClick={e => { e.stopPropagation(); setConfirmDelete(t.filename) }}
-                className="w-6 h-6 flex items-center justify-center rounded text-[#3d4460] hover:text-red-400 hover:bg-red-950/25 transition-all"
+                className="w-6 h-6 flex items-center justify-center rounded text-[var(--cl-ink-4)] hover:text-[var(--cl-danger)] hover:bg-[var(--cl-danger-soft)] transition-all"
                 title="Delete"
               >
                 <svg width="11" height="11" viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" strokeLinejoin="round">
@@ -113,7 +113,7 @@ export function MemorySection({ hash, onOpenTopic }: {
               </button>
             )}
             {topicContent && (
-              <svg className="w-3 h-3 text-[#3d4460] group-hover:text-[#555c75] transition-colors ml-0.5"
+              <svg className="w-3 h-3 text-[var(--cl-ink-4)] group-hover:text-[var(--cl-ink-4)] transition-colors ml-0.5"
                 viewBox="0 0 12 12" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round">
                 <path d="M4.5 2.5L9 6l-4.5 3.5"/>
               </svg>
@@ -122,9 +122,9 @@ export function MemorySection({ hash, onOpenTopic }: {
         )}
         {isConfirming && (
           <div className="flex items-center gap-1.5 shrink-0">
-            <span className="text-[10px] text-red-400">Delete?</span>
-            <button onClick={e => { e.stopPropagation(); handleDelete(t.filename) }} className="text-[10px] font-semibold text-red-400 hover:text-red-300 px-1.5 py-0.5 rounded hover:bg-red-950/20 transition-colors">Yes</button>
-            <button onClick={e => { e.stopPropagation(); setConfirmDelete(null) }} className="text-[10px] text-[#555c75] hover:text-[#9096b0] px-1.5 py-0.5 rounded hover:bg-[#161b26] transition-colors">No</button>
+            <span className="text-[10px] text-[var(--cl-danger)]">Delete?</span>
+            <button onClick={e => { e.stopPropagation(); handleDelete(t.filename) }} className="text-[10px] font-semibold text-[var(--cl-danger)] hover:text-[var(--cl-danger)] px-1.5 py-0.5 rounded hover:bg-[var(--cl-danger-soft)] transition-colors">Yes</button>
+            <button onClick={e => { e.stopPropagation(); setConfirmDelete(null) }} className="text-[10px] text-[var(--cl-ink-4)] hover:text-[var(--cl-ink-3)] px-1.5 py-0.5 rounded hover:bg-[var(--cl-paper-2)] transition-colors">No</button>
           </div>
         )}
       </div>
@@ -145,7 +145,7 @@ export function MemorySection({ hash, onOpenTopic }: {
       {data.memoryMd
         ? <MemoryIndexFile memoryMd={data.memoryMd} />
         : (
-          <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-[#2a2f45] rounded-lg text-zinc-400">
+          <div className="flex items-center gap-2 px-3 py-2 border border-dashed border-[var(--cl-line)] rounded-lg text-[var(--cl-ink-3)]">
             <span className="text-[11px] font-mono">MEMORY.md</span>
             <span className="text-[11px]">— file not found</span>
           </div>
@@ -155,15 +155,15 @@ export function MemorySection({ hash, onOpenTopic }: {
       {hasProjectLevelMemories && (
         <div>
           <div className="flex items-center gap-2 mb-3">
-            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-teal-950/20 border border-teal-700/40 rounded-md">
-              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-teal-400 shrink-0">
+            <div className="flex items-center gap-1.5 px-2 py-0.5 bg-[var(--cl-paper-3)] border border-[var(--cl-haiku)] rounded-md">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="none" className="text-[var(--cl-haiku)] shrink-0">
                 <circle cx="6" cy="6" r="2.5" stroke="currentColor" strokeWidth="1.4"/>
                 <line x1="0" y1="6" x2="3.5" y2="6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
                 <line x1="8.5" y1="6" x2="12" y2="6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/>
               </svg>
-              <span className="text-[10px] font-semibold text-teal-400 uppercase tracking-wide">Committed to repo</span>
+              <span className="text-[10px] font-semibold text-[var(--cl-haiku)] uppercase tracking-wide">Committed to repo</span>
             </div>
-            <span className="text-[11px] text-[#3d4460]">shared with team · read-only</span>
+            <span className="text-[11px] text-[var(--cl-ink-4)]">shared with team · read-only</span>
           </div>
           <div className="space-y-0.5">
             {data.projectLevelIndex.map((t: MemoryTopic) => {
@@ -185,7 +185,7 @@ export function MemorySection({ hash, onOpenTopic }: {
                   <path d={cfg.iconPath}/>
                 </svg>
               </div>
-              <span className="text-[10px] font-bold text-[#3d4460] uppercase tracking-[0.12em]">{cfg.label}</span>
+              <span className="text-[10px] font-bold text-[var(--cl-ink-4)] uppercase tracking-[0.12em]">{cfg.label}</span>
               <span className={`text-[10px] font-semibold px-1.5 py-0.5 rounded-md ${cfg.badgeBg} ${cfg.badgeText}`}>{topics.length}</span>
             </div>
             <div className="space-y-0.5">
@@ -208,7 +208,7 @@ export function MemorySection({ hash, onOpenTopic }: {
       ) : (
         <button
           onClick={() => setCreating(true)}
-          className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium text-[#3d4460] hover:text-indigo-400 py-2.5 border border-dashed border-[#1e2130] rounded-xl hover:border-indigo-600/50 hover:bg-indigo-950/10 transition-all"
+          className="w-full flex items-center justify-center gap-1.5 text-[12px] font-medium text-[var(--cl-ink-4)] hover:text-[var(--cl-accent-ink)] py-2.5 border border-dashed border-[var(--cl-line-soft)] rounded-xl hover:border-[var(--cl-accent)]/50 hover:bg-[var(--cl-accent-soft)]/10 transition-all"
         >
           <span className="text-sm leading-none">+</span> New memory
         </button>

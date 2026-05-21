@@ -1,9 +1,18 @@
 <!DOCTYPE html>
-<html lang="en" class="dark">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>ClaudeLens</title>
+    <script>
+      // Apply saved theme before paint to avoid a flash. Default: light.
+      try {
+        var t = localStorage.getItem('cl-theme') || 'light';
+        document.documentElement.setAttribute('data-theme', t);
+      } catch (e) {
+        document.documentElement.setAttribute('data-theme', 'light');
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>
