@@ -6,6 +6,7 @@ import {
   useMemoryProjects,
   useCostSummary,
   useGlobalClaudeMd,
+  useLiveSessions,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
@@ -56,6 +57,9 @@ export function GlobalHomeView({
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
   const { data: globalClaudeMd } = useGlobalClaudeMd()
+  const { data: bgSessions = [] } = useLiveSessions()
+
+  const liveAgents = bgSessions.filter(s => s.alive).length
 
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
   const [projectsPage, setProjectsPage] = useState(0)
@@ -304,6 +308,14 @@ export function GlobalHomeView({
               <div className="t-desc">Model Context Protocol integrations, shared across projects.</div>
             </div>
             <span className="t-meta"><b>{mcpServers.length}</b> servers</span>
+          </button>
+          <button type="button" className="cl-tile" onClick={() => onNavigate({ type: 'agents-live' })}>
+            <span className="glyph" style={liveAgents > 0 ? { color: '#6366f1' } : undefined}>●</span>
+            <div>
+              <div className="t-name">Agents Live</div>
+              <div className="t-desc">Background <code style={{ fontFamily: 'var(--font-mono)' }}>claude agents</code> sessions across all projects.</div>
+            </div>
+            <span className="t-meta"><b>{liveAgents}</b> live · {bgSessions.length} total</span>
           </button>
         </div>
       </section>

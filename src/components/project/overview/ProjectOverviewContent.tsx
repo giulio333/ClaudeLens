@@ -11,6 +11,7 @@ import {
   useProjectAgents,
   useMemoryProjects,
   useCostSummary,
+  useLiveSessions,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
@@ -127,6 +128,12 @@ export function ProjectView({
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
+  const { data: bgSessions = [] } = useLiveSessions()
+
+  const projectBgSessions = bgSessions.filter(
+    s => s.cwd === project.realPath || s.cwd.startsWith(project.realPath + '/')
+  )
+  const liveBgCount = projectBgSessions.filter(s => s.alive).length
 
   // ── Live process ──
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
@@ -354,6 +361,9 @@ export function ProjectView({
             </button>
             <button className={`item ${rules.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-mcp', project })}>
               <span className="pip" /><span>Rules</span><span className="num">{rules.length} active</span>
+            </button>
+            <button className={`item ${projectBgSessions.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'agents-live', project })}>
+              <span className="pip" /><span>Agents Live</span><span className="num">{liveBgCount} live · {projectBgSessions.length}</span>
             </button>
           </section>
         </>

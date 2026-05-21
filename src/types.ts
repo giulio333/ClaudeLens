@@ -164,6 +164,25 @@ export interface ClaudeProcess {
   cmdline: string
 }
 
+export interface BgSession {
+  id: string
+  sessionId: string
+  name: string
+  state: string
+  tempo: string
+  detail: string
+  intent: string
+  result: string | null
+  cwd: string
+  projectName: string
+  template: string
+  inFlightTasks: number
+  alive: boolean
+  pid: number | null
+  createdAt: string
+  updatedAt: string
+}
+
 export interface AgentInput {
   name: string
   content: string

@@ -17,6 +17,8 @@ import { AgentDetailView } from '../components/project/agents/AgentDetailView'
 import { CreateAgentPage } from '../components/project/agents/CreateAgentPage'
 // ─── MCP
 import { GlobalMcpView } from '../components/project/mcp/GlobalMcpView'
+// ─── Agents Live
+import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView'
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView'
 // ─── Memory
@@ -197,6 +199,14 @@ export default function ProjectOverview() {
         return <AiAssistantView project={view.project} onBack={() => setView({ type: 'overview' })} />
       case 'live-monitor':
         return <LiveMonitor project={view.project} onBack={() => setView({ type: 'overview' })} />
+      case 'agents-live':
+        return (
+          <AgentsLiveView
+            project={view.project}
+            onBack={() => view.project ? setView({ type: 'overview' }) : goGlobal()}
+            onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
+          />
+        )
       default:
         return null
     }
