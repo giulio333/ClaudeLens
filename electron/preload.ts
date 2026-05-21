@@ -68,6 +68,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   live: {
     getProcesses: () => ipcRenderer.invoke('live:getProcesses'),
+    getSessions: () => ipcRenderer.invoke('live:getSessions'),
     startWatch: (hash: string) => ipcRenderer.invoke('live:startWatch', hash),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),
     onEvent: (cb: (event: unknown) => void) => {

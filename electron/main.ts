@@ -20,6 +20,7 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { findClaudeProcesses } from './modules/process-scanner';
+import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { hashToPath, resolveRealPath } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
@@ -374,6 +375,14 @@ ipcMain.handle('live:getProcesses', async () => {
   try {
     const processes = await findClaudeProcesses();
     return ok(processes);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('live:getSessions', async () => {
+  try {
+    return ok(getBgSessions());
   } catch (e) {
     return err(e);
   }
