@@ -11,9 +11,10 @@ export interface ClaudeProcess {
 
 export async function findClaudeProcesses(): Promise<ClaudeProcess[]> {
   try {
-    // Cattura anche il bare command "claude" (senza path), esclude Claude.app desktop e ClaudeLens
+    // Cattura anche il bare command "claude" (senza path), esclude Claude.app desktop, ClaudeLens
+    // e il plumbing del daemon background agent (--bg-pty-host / --bg-spare): non sono sessioni utente.
     const { stdout: psOut } = await execAsync(
-      "ps -A -o pid=,args= 2>/dev/null | grep -iE '\\bclaude\\b' | grep -ivE 'Applications/Claude\\.app|claudelens|esbuild' || true"
+      "ps -A -o pid=,args= 2>/dev/null | grep -iE '\\bclaude\\b' | grep -ivE 'Applications/Claude\\.app|claudelens|esbuild|--bg-pty-host|--bg-spare|--bg-pty' || true"
     );
 
     const lines = psOut.trim().split('\n').filter(l => l.trim());
