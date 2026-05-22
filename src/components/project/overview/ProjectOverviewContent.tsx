@@ -336,8 +336,8 @@ export function ProjectView({
           <section className="cl-section">
             <div className="cl-sec-head">
               <h2>Memory</h2>
-              <span className="ct">{memoryCount} topics</span>
-              <button className="all" type="button" onClick={() => onNavigate({ type: 'project-memory', project })}>Edit</button>
+              <span className="ct">{Math.min(4, memTopics.length)} of {memoryCount}</span>
+              <button className="all" type="button" onClick={() => onNavigate({ type: 'project-memory', project })}>View all</button>
             </div>
             <MemoryRows
               topics={memTopics.slice(0, 4)}
