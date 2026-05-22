@@ -1,74 +1,157 @@
 import { useGlobalMcp, McpData } from '../../../hooks/useIPC'
-import { BackButton } from '../shared/BackButton'
-import { SectionTitle } from '../shared/SectionTitle'
+import { Lens } from '../overview/Lens'
 import { McpServerCard } from './McpServerCard'
 
-export function GlobalMcpView({ onBack }: { onBack: () => void }) {
+function TopBar({ onBack }: { onBack: () => void }) {
+  return (
+    <div
+      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
+      style={{
+        WebkitAppRegion: 'drag',
+        background: 'var(--cl-paper)',
+        height: 52,
+        padding: '0 28px 0 88px',
+      } as React.CSSProperties}
+    >
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
+        style={{
+          WebkitAppRegion: 'no-drag',
+          fontSize: 11,
+          letterSpacing: '0.18em',
+          color: 'var(--cl-ink-3)',
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        <span>←</span>
+        Back
+      </button>
+      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
+      <span
+        className="font-mono uppercase truncate"
+        style={{
+          fontSize: 11,
+          letterSpacing: '0.18em',
+          color: 'var(--cl-ink-3)',
+          lineHeight: 1,
+        } as React.CSSProperties}
+      >
+        Global · MCP
+      </span>
+    </div>
+  )
+}
+
+export function GlobalMcpView({
+  onBack,
+  onSelectServer,
+}: {
+  onBack: () => void
+  onSelectServer: (server: McpData['cloudServers'][number]) => void
+}) {
   const { data, isLoading } = useGlobalMcp()
   const mcp = data as McpData | undefined
 
-  const total = (mcp?.cloudServers.length ?? 0) + (mcp?.localServers.length ?? 0)
+  const cloud = mcp?.cloudServers ?? []
+  const local = mcp?.localServers ?? []
+  const total = cloud.length + local.length
   const totalProjects = mcp?.totalProjects ?? 0
 
+  // Adozione media dei server cloud (% progetti in cui sono attivi).
+  const avgAdoption =
+    cloud.length > 0 && totalProjects > 0
+      ? Math.round(
+          (cloud.reduce((acc, s) => acc + s.enabledInProjects / totalProjects, 0) / cloud.length) * 100
+        )
+      : 0
+
   return (
-    <div className="flex flex-col h-full">
-      <div className="flex items-center gap-3 px-5 pt-5 pb-4 border-b border-[var(--cl-line-soft)] shrink-0">
-        <BackButton label="MCP Servers" onClick={onBack} />
-        {!isLoading && total > 0 && (
-          <span className="text-[11px] text-[var(--cl-ink-4)] ml-auto tabular-nums">
-            {total} server · {totalProjects} projects
-          </span>
-        )}
-      </div>
+    <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+      <TopBar onBack={onBack} />
 
-      <div className="flex-1 overflow-y-auto px-5 py-4 space-y-6">
-        {isLoading && (
-          <p className="text-[13px] text-[var(--cl-ink-3)] italic">Loading...</p>
-        )}
-
-        {!isLoading && total === 0 && (
-          <div className="flex flex-col items-center justify-center h-48 text-center">
-            <div className="w-10 h-10 rounded-xl bg-[var(--cl-paper-2)] border border-[var(--cl-line)] flex items-center justify-center mb-3">
-              <svg width="16" height="16" viewBox="0 0 13 13" fill="none">
-                <circle cx="6.5" cy="6.5" r="5" stroke="var(--cl-ink-4)" strokeWidth="1.2"/>
-                <circle cx="6.5" cy="6.5" r="1.5" fill="var(--cl-ink-4)"/>
-                <path d="M6.5 1.5v2M6.5 9v2M1.5 6.5h2M9 6.5h2" stroke="var(--cl-ink-4)" strokeWidth="1.1" strokeLinecap="round"/>
-              </svg>
-            </div>
-            <p className="text-[13px] text-[var(--cl-ink-3)] italic">No MCP servers configured</p>
+      <div className="flex-1 overflow-y-auto">
+        <section className="cl-hero">
+          <Lens />
+          <div className="cl-eyebrow">
+            <span className="pip" />
+            <span>Global · model context protocol</span>
           </div>
-        )}
-
-        {!isLoading && (mcp?.cloudServers.length ?? 0) > 0 && (
-          <div>
-            <SectionTitle>
-              <span className="flex items-center gap-1.5">
-                Cloud
-                <span className="text-[10px] font-mono text-[var(--cl-cyan)] normal-case tracking-normal ml-1">{mcp!.cloudServers.length}</span>
-              </span>
-            </SectionTitle>
-            <div className="space-y-1.5">
-              {mcp!.cloudServers.map(s => (
-                <McpServerCard key={s.name} server={s} totalProjects={totalProjects} />
-              ))}
-            </div>
+          <h1 className="cl-h-name static">
+            <span className="label-name">MCP</span>
+            <span className="glyph">.</span>
+          </h1>
+          <div className="cl-h-meta">
+            <span><b>{total}</b> {total === 1 ? 'server' : 'servers'}</span>
+            <span className="sep">·</span>
+            <span><b>{cloud.length}</b> cloud · <b>{local.length}</b> local</span>
+            <span className="sep">·</span>
+            <span>extend Claude with external tools</span>
           </div>
-        )}
+        </section>
 
-        {!isLoading && (mcp?.localServers.length ?? 0) > 0 && (
-          <div>
-            <SectionTitle>
-              <span className="flex items-center gap-1.5">
-                Local
-                <span className="text-[10px] font-mono text-[var(--cl-warn)] normal-case tracking-normal ml-1">{mcp!.localServers.length}</span>
-              </span>
-            </SectionTitle>
-            <div className="space-y-1.5">
-              {mcp!.localServers.map(s => (
-                <McpServerCard key={s.name} server={s} totalProjects={totalProjects} />
-              ))}
+        {isLoading ? (
+          <section className="cl-section">
+            <p style={{ color: 'var(--cl-ink-3)', fontSize: 13 }}>Loading…</p>
+          </section>
+        ) : total === 0 ? (
+          <section className="cl-section">
+            <div className="cl-empty">
+              No MCP servers configured. Connect cloud servers in Claude, or define local ones in{' '}
+              <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude/settings.json</code>.
             </div>
-          </div>
+          </section>
+        ) : (
+          <>
+            <section className="cl-section">
+              <div className="cl-mcp-metrics">
+                <div className="met">
+                  <div className="lbl">Servers</div>
+                  <div className="num">{total}</div>
+                </div>
+                <div className="met">
+                  <div className="lbl">Cloud</div>
+                  <div className="num">{cloud.length}</div>
+                </div>
+                <div className="met">
+                  <div className="lbl">Local</div>
+                  <div className="num">{local.length}</div>
+                </div>
+                <div className="met">
+                  <div className="lbl">Avg adoption</div>
+                  <div className="num">{avgAdoption}<small>%</small></div>
+                </div>
+              </div>
+            </section>
+
+            {cloud.length > 0 && (
+              <section className="cl-section">
+                <div className="cl-sec-head">
+                  <h2>Cloud</h2>
+                  <span className="ct">connected · across {totalProjects} projects</span>
+                </div>
+                <div className="cl-mcp-list">
+                  {cloud.map(s => (
+                    <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
+                  ))}
+                </div>
+              </section>
+            )}
+
+            {local.length > 0 && (
+              <section className="cl-section">
+                <div className="cl-sec-head">
+                  <h2>Local</h2>
+                  <span className="ct">~/.claude/settings.json</span>
+                </div>
+                <div className="cl-mcp-list">
+                  {local.map(s => (
+                    <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
+                  ))}
+                </div>
+              </section>
+            )}
+          </>
         )}
       </div>
     </div>
