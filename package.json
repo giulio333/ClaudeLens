@@ -38,6 +38,7 @@
     "concurrently": "^8.2.2",
     "electron": "^31.0.2",
     "electron-builder": "^24.13.3",
+    "playwright-core": "^1.60.0",
     "postcss": "^8.4.38",
     "tailwindcss": "^3.4.4",
     "typescript": "^5.4.5",
