@@ -126,9 +126,9 @@ async function readTopicFiles(memoryDir: string): Promise<Map<string, string>> {
       const filePath = join(memoryDir, file);
       try {
         const content = readFileSync(filePath, 'utf-8');
-        const nameMatch = content.match(/^name:\s*(.+)$/m);
-        const name = nameMatch ? nameMatch[1].trim() : file.replace('.md', '');
-        topics.set(name, content);
+        // Chiave = filename: univoco e sempre allineato a MemoryTopic.filename.
+        // Il name della frontmatter può divergere dal link text di MEMORY.md.
+        topics.set(file, content);
       } catch (e) {
         // Ignora file non leggibili
       }

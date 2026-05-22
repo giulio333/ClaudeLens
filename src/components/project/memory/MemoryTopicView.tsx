@@ -1,31 +1,169 @@
 import { useState } from 'react'
-import Markdown from '../../Markdown'
 import { MemoryTopic, TopicInput } from '../../../hooks/useIPC'
 import { useUpdateTopic, useDeleteTopic } from '../../../hooks/useIPC'
-import { BackButton } from '../shared/BackButton'
-import { parseMemoryContent, readingTime, formatDate, Heading } from './utils'
+import { MarkdownDocView } from '../shared/MarkdownDocView'
+import { parseMemoryContent, readingTime, formatDate } from './utils'
 
-const TYPE_META: Record<string, { label: string; bg: string; text: string; dot: string; border: string }> = {
-  user:      { label: 'User',      bg: 'bg-[var(--cl-paper-3)]',    text: 'text-[var(--cl-cyan)]',    dot: 'bg-[var(--cl-cyan)]',    border: 'border-[var(--cl-cyan)]' },
-  feedback:  { label: 'Feedback',  bg: 'bg-[var(--cl-warn-soft)]',   text: 'text-[var(--cl-warn)]',   dot: 'bg-[var(--cl-warn)]',   border: 'border-[var(--cl-warn)]' },
-  project:   { label: 'Project',   bg: 'bg-[var(--cl-paper-3)]', text: 'text-[var(--cl-ok)]', dot: 'bg-[var(--cl-ok)]', border: 'border-[var(--cl-ok)]' },
-  reference: { label: 'Reference', bg: 'bg-[var(--cl-paper-3)]',  text: 'text-[var(--cl-violet)]',  dot: 'bg-[var(--cl-violet)]',  border: 'border-[var(--cl-violet)]' },
+const TYPE_LABEL: Record<string, string> = {
+  user: 'User',
+  feedback: 'Feedback',
+  project: 'Project',
+  reference: 'Reference',
 }
 
-function SidebarLabel({ children }: { children: React.ReactNode }) {
-  return <p className="text-[10px] font-semibold uppercase tracking-widest text-[var(--cl-ink-3)] mb-1">{children}</p>
-}
-
-function SidebarRow({ label, value }: { label: string; value: string }) {
+function TrashIcon() {
   return (
-    <div>
-      <SidebarLabel>{label}</SidebarLabel>
-      <p className="text-[13px] text-[var(--cl-ink-3)] leading-snug">{value}</p>
+    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M2.5 3.5h9M5.5 3.5V2.3h3v1.2M3.4 3.5l.5 8h6.2l.5-8M6 6v3.4M8 6v3.4" />
+    </svg>
+  )
+}
+
+/**
+ * Controllo delete a due fasi: bottone ghost con icona → si espande in-place
+ * in una pill di pericolo con messaggio e azioni Keep / Delete distinte.
+ */
+function DeleteControl({
+  open,
+  busy,
+  onArm,
+  onCancel,
+  onConfirm,
+}: {
+  open: boolean
+  busy: boolean
+  onArm: () => void
+  onCancel: () => void
+  onConfirm: () => void
+}) {
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={onArm}
+        className="cl-del-trigger"
+        style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          gap: 6,
+          height: 32,
+          padding: '0 12px',
+          borderRadius: 4,
+          border: '1px solid transparent',
+          background: 'transparent',
+          color: 'var(--cl-ink-4)',
+          fontSize: 12.5,
+          cursor: 'pointer',
+          transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
+        }}
+        onMouseEnter={e => {
+          e.currentTarget.style.color = 'var(--cl-danger)'
+          e.currentTarget.style.background = 'var(--cl-danger-soft)'
+          e.currentTarget.style.borderColor = 'var(--cl-danger)'
+        }}
+        onMouseLeave={e => {
+          e.currentTarget.style.color = 'var(--cl-ink-4)'
+          e.currentTarget.style.background = 'transparent'
+          e.currentTarget.style.borderColor = 'transparent'
+        }}
+      >
+        <TrashIcon />
+        Delete
+      </button>
+    )
+  }
+
+  return (
+    <span
+      style={{
+        display: 'inline-flex',
+        alignItems: 'center',
+        gap: 12,
+        height: 32,
+        padding: '0 6px 0 12px',
+        borderRadius: 4,
+        border: '1px solid var(--cl-danger)',
+        background: 'var(--cl-danger-soft)',
+      }}
+    >
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--cl-danger)' }}>
+        <TrashIcon />
+        <span style={{ fontSize: 12.5, fontWeight: 500 }}>Delete permanently?</span>
+      </span>
+      <span style={{ display: 'inline-flex', gap: 4 }}>
+        <button
+          type="button"
+          onClick={onCancel}
+          disabled={busy}
+          style={{
+            height: 24,
+            padding: '0 10px',
+            borderRadius: 3,
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--cl-ink-3)',
+            fontSize: 11.5,
+            cursor: busy ? 'default' : 'pointer',
+          }}
+        >
+          Keep
+        </button>
+        <button
+          type="button"
+          onClick={onConfirm}
+          disabled={busy}
+          style={{
+            height: 24,
+            padding: '0 12px',
+            borderRadius: 3,
+            border: 'none',
+            background: 'var(--cl-danger)',
+            color: 'var(--cl-on-accent)',
+            fontSize: 11.5,
+            fontWeight: 600,
+            cursor: busy ? 'default' : 'pointer',
+            opacity: busy ? 0.6 : 1,
+          }}
+        >
+          {busy ? 'Deleting…' : 'Delete'}
+        </button>
+      </span>
+    </span>
+  )
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="py-2.5">
+      <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
+        {label}
+      </div>
+      <div className="mt-1 text-[13px]" style={{ color: 'var(--cl-ink-2)' }}>{value}</div>
     </div>
   )
 }
 
-type TabMode = 'view' | 'raw' | 'edit'
+/** Estrae name/description/type/body dal markdown grezzo con frontmatter YAML. */
+function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
+  const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
+  let name = fallback.name
+  let description = fallback.description
+  let type: TopicInput['type'] = fallback.type
+  let body = raw
+
+  if (m) {
+    const fm = m[1]
+    const get = (k: string) =>
+      fm.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '')
+    name = get('name') ?? name
+    description = get('description') ?? description
+    const t = get('type')
+    if (t === 'user' || t === 'feedback' || t === 'project' || t === 'reference') type = t
+    body = raw.slice(m[0].length)
+  }
+
+  return { name, description, type, content: body }
+}
 
 export function MemoryTopicView({
   topic,
@@ -38,256 +176,78 @@ export function MemoryTopicView({
   hash: string
   onBack: () => void
 }) {
-  const [tab, setTab] = useState<TabMode>('view')
-  const [showOutline, setShowOutline] = useState(false)
-  const [copied, setCopied] = useState(false)
-  const { body, wordCount, charCount, linkCount, headings } = parseMemoryContent(content)
-  const meta = TYPE_META[topic.type] ?? TYPE_META.user
-  const createdAt = topic.createdAt ?? null
-  const updatedAt = topic.updatedAt ?? null
-  const sameDate = createdAt && updatedAt
-    ? createdAt.slice(0, 10) === updatedAt.slice(0, 10)
-    : true
-
-  const frontmatterBody = content.replace(/^---[\s\S]*?---\n\n?/, '')
-  const [editForm, setEditForm] = useState<TopicInput>({
-    name: topic.name,
-    description: topic.description,
-    type: topic.type,
-    content: frontmatterBody,
-  })
-
+  const { wordCount, charCount, linkCount } = parseMemoryContent(content)
   const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  const createdAt = topic.createdAt ?? null
+  const updatedAt = topic.updatedAt ?? null
+  const sameDate = createdAt && updatedAt ? createdAt.slice(0, 10) === updatedAt.slice(0, 10) : true
+
+  const readOnly = topic.isProjectLevel
 
   const handleDelete = () => {
     deleteMut.mutate(topic.filename, { onSuccess: onBack })
   }
 
-  const handleCopy = () => {
-    navigator.clipboard.writeText(content)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 2000)
-  }
+  const sidebar = (
+    <div className="flex flex-col" style={{ minHeight: '100%' }}>
+      <div className="pb-3" style={{ borderBottom: '1px solid var(--cl-line)' }}>
+        <span className="text-[10px] font-mono font-bold tracking-[0.18em] uppercase" style={{ color: 'var(--cl-ink-3)' }}>
+          Topic
+        </span>
+      </div>
 
-  const handleSave = () => {
-    const valid = editForm.name.trim() && editForm.description.trim() && editForm.content.trim()
-    if (!valid) return
-    updateMut.mutate(
-      { filename: topic.filename, input: editForm },
-      { onSuccess: () => { setTab('view'); onBack() } }
-    )
-  }
+      <div className="flex-1">
+        <StatRow label="Type" value={TYPE_LABEL[topic.type] ?? topic.type} />
+        {createdAt && <StatRow label="Created" value={formatDate(createdAt)} />}
+        {updatedAt && !sameDate && <StatRow label="Updated" value={formatDate(updatedAt)} />}
+        <div style={{ borderTop: '1px solid var(--cl-line)' }} />
+        <StatRow label="Reading" value={readingTime(wordCount)} />
+        <StatRow label="Words" value={String(wordCount)} />
+        <StatRow label="Characters" value={String(charCount)} />
+        <StatRow label="Links" value={String(linkCount)} />
+      </div>
 
-  const tabs: { id: TabMode; label: string }[] = [
-    { id: 'view', label: 'View' },
-    { id: 'raw', label: 'Raw' },
-    { id: 'edit', label: 'Edit' },
-  ]
-
-  return (
-    <div className="h-full overflow-hidden" style={{ display: 'grid', gridTemplateRows: 'auto 1fr' }}>
-      <div className="bg-[var(--cl-paper-3)]/95 backdrop-blur-sm border-b border-[var(--cl-line)] px-8 py-4">
-        <div className="flex items-center gap-4 mb-2">
-          <BackButton label="Overview" onClick={onBack} />
-        </div>
-        <div className="flex items-center gap-3">
-          <span className={`inline-flex items-center gap-1.5 text-[11px] font-semibold px-2.5 py-0.5 rounded-full ${meta.bg} ${meta.text} ring-1 ${meta.border}`}>
-            <span className={`w-1.5 h-1.5 rounded-full ${meta.dot}`} />
-            {meta.label}
-          </span>
-          <h1 className="text-[17px] font-semibold text-[var(--cl-ink)]">{topic.name}</h1>
-        </div>
-        {topic.description && (
-          <p className="text-[13px] text-[var(--cl-ink-3)] mt-1.5 ml-[1px]">{topic.description}</p>
+      <div className="pt-3" style={{ borderTop: '1px solid var(--cl-line)' }}>
+        <p className="text-[10px] font-mono leading-snug break-all" style={{ color: 'var(--cl-ink-3)' }}>
+          {topic.filename}
+        </p>
+        {readOnly && (
+          <p className="mt-2 text-[10px] leading-snug" style={{ color: 'var(--cl-ink-3)' }}>
+            Committed to repo · read-only
+          </p>
         )}
       </div>
-
-      <div className="overflow-hidden flex">
-        <div className="flex-1 overflow-hidden flex flex-col">
-          <div className="flex items-center gap-0.5 border-b border-[var(--cl-line)] bg-[var(--cl-paper-2)] px-8 h-10 shrink-0">
-            {tabs.map(t => (
-              <button
-                key={t.id}
-                onClick={() => setTab(t.id)}
-                className={`px-3 py-2 text-[13px] font-medium transition-colors border-b-2 ${
-                  tab === t.id
-                    ? 'text-[var(--cl-ink)] border-[var(--cl-line)]'
-                    : 'text-[var(--cl-ink-3)] border-transparent hover:text-[var(--cl-ink-3)]'
-                }`}
-              >
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          <div className="flex-1 overflow-y-auto px-8 py-7">
-            {tab === 'view' && (
-              <div className="prose prose-zinc prose-sm max-w-none prose-lens">
-                <Markdown>{body}</Markdown>
-              </div>
-            )}
-            {tab === 'raw' && (
-              <pre className="bg-[var(--cl-paper-2)] text-[var(--cl-ink)] p-4 rounded-lg font-mono text-[11px] leading-relaxed overflow-x-auto">
-                <code>{content}</code>
-              </pre>
-            )}
-            {tab === 'edit' && (
-              <div className="space-y-4 max-w-2xl">
-                <div className="grid grid-cols-2 gap-3">
-                  <div>
-                    <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Name</label>
-                    <input
-                      value={editForm.name}
-                      onChange={e => setEditForm(f => ({ ...f, name: e.target.value }))}
-                      className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Type</label>
-                    <select
-                      value={editForm.type}
-                      onChange={e => setEditForm(f => ({ ...f, type: e.target.value as TopicInput['type'] }))}
-                      className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)]"
-                    >
-                      <option value="user">user</option>
-                      <option value="feedback">feedback</option>
-                      <option value="project">project</option>
-                      <option value="reference">reference</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Short description</label>
-                  <input
-                    value={editForm.description}
-                    onChange={e => setEditForm(f => ({ ...f, description: e.target.value }))}
-                    className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-1.5 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent"
-                  />
-                </div>
-                <div>
-                  <label className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider block mb-1">Content</label>
-                  <textarea
-                    value={editForm.content}
-                    onChange={e => setEditForm(f => ({ ...f, content: e.target.value }))}
-                    rows={16}
-                    className="w-full text-[13px] bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-md px-3 py-2 text-[var(--cl-ink)] focus:outline-none focus:ring-2 focus:ring-[var(--cl-accent)] focus:border-transparent resize-y font-mono leading-relaxed"
-                  />
-                </div>
-                <div className="flex items-center justify-end gap-2">
-                  <button
-                    onClick={() => setTab('view')}
-                    className="text-[13px] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] px-3 py-1.5 rounded-md hover:bg-[var(--cl-paper-3)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleSave}
-                    disabled={updateMut.isLoading || !editForm.name.trim() || !editForm.description.trim() || !editForm.content.trim()}
-                    className="text-[13px] font-medium bg-[var(--cl-accent)] text-white px-4 py-1.5 rounded-md hover:bg-[var(--cl-accent)] transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-                  >
-                    {updateMut.isLoading ? 'Saving...' : 'Save'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        <aside className="w-[220px] shrink-0 border-l border-[var(--cl-line)] bg-[var(--cl-paper-3)] overflow-y-auto px-5 py-6 space-y-5">
-          <div className="space-y-4">
-            {createdAt && <SidebarRow label="Created" value={formatDate(createdAt)} />}
-            {updatedAt && !sameDate && (
-              <SidebarRow label="Updated" value={formatDate(updatedAt)} />
-            )}
-          </div>
-
-          <div className="border-t border-[var(--cl-line)]" />
-
-          <div className="space-y-4">
-            <SidebarRow label="Reading" value={readingTime(wordCount)} />
-            <SidebarRow label="Words" value={String(wordCount)} />
-            <SidebarRow label="Characters" value={String(charCount)} />
-            <SidebarRow label="Links" value={String(linkCount)} />
-            <div>
-              <SidebarLabel>File</SidebarLabel>
-              <p className="text-[11px] text-[var(--cl-ink-3)] font-mono break-all leading-relaxed">{topic.filename}</p>
-            </div>
-          </div>
-
-          <div className="border-t border-[var(--cl-line)]" />
-
-          <div className="space-y-2">
-            <button
-              onClick={handleCopy}
-              className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[var(--cl-paper-3)] hover:bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] transition-colors"
-            >
-              {copied ? '✓ Copied' : 'Copy raw'}
-            </button>
-            {headings.length > 0 && (
-              <button
-                onClick={() => setShowOutline(!showOutline)}
-                className="w-full text-[12px] font-medium px-3 py-2 rounded-md bg-[var(--cl-paper-3)] hover:bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] transition-colors"
-              >
-                {showOutline ? 'Close' : 'Outline'}
-              </button>
-            )}
-          </div>
-
-          <div className="border-t border-[var(--cl-line)]" />
-
-          <div>
-            {!confirmDelete ? (
-              <button
-                onClick={() => setConfirmDelete(true)}
-                className="w-full text-[12px] font-medium px-3 py-2 rounded-md text-[var(--cl-danger)] hover:text-[var(--cl-danger)] hover:bg-[var(--cl-danger-soft)] transition-colors"
-              >
-                Delete topic
-              </button>
-            ) : (
-              <div className="space-y-2">
-                <p className="text-[11px] text-[var(--cl-danger)] text-center">Delete this topic?</p>
-                <div className="flex gap-1.5">
-                  <button
-                    onClick={() => setConfirmDelete(false)}
-                    className="flex-1 text-[12px] font-medium px-2 py-1.5 rounded-md bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] transition-colors"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    onClick={handleDelete}
-                    disabled={deleteMut.isLoading}
-                    className="flex-1 text-[12px] font-semibold px-2 py-1.5 rounded-md bg-[var(--cl-danger-soft)] text-[var(--cl-danger)] hover:bg-[var(--cl-danger-soft)] transition-colors disabled:opacity-40"
-                  >
-                    {deleteMut.isLoading ? '...' : 'Delete'}
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
-
-          {showOutline && headings.length > 0 && (
-            <>
-              <div className="border-t border-[var(--cl-line)]" />
-              <div>
-                <SidebarLabel>Outline</SidebarLabel>
-                <div className="space-y-1 text-[11px] text-[var(--cl-ink-3)]">
-                  {headings.map((h: Heading, idx: number) => (
-                    <div
-                      key={idx}
-                      className="truncate"
-                      style={{ paddingLeft: `${(h.level - 1) * 10}px` }}
-                    >
-                      <span className="text-[var(--cl-ink-3)]">{'▸'.repeat(1)}</span> <span className="truncate">{h.text}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </>
-          )}
-        </aside>
-      </div>
     </div>
+  )
+
+  const extraActions = !readOnly && (
+    <DeleteControl
+      open={confirmDelete}
+      busy={deleteMut.isLoading}
+      onArm={() => setConfirmDelete(true)}
+      onCancel={() => setConfirmDelete(false)}
+      onConfirm={handleDelete}
+    />
+  )
+
+  return (
+    <MarkdownDocView
+      onBack={onBack}
+      backLabel="Memory"
+      crumb={`${topic.type} · ${topic.name}`}
+      eyebrow={<>{topic.type} · memory/{topic.filename}</>}
+      titleLabel={topic.name}
+      titleGlyph=".md"
+      lead={topic.description || undefined}
+      content={content}
+      sidebar={sidebar}
+      extraActions={extraActions}
+      onSave={readOnly ? undefined : async next => {
+        await updateMut.mutateAsync({ filename: topic.filename, input: parseTopicInput(next, topic) })
+      }}
+    />
   )
 }
