@@ -30,6 +30,7 @@ import { AiAssistantView } from '../components/project/ai-assistant/AiAssistantV
 // ─── Editorial core
 import { ProjectView, type ProjectSection } from '../components/project/overview/ProjectOverviewContent'
 import { GlobalHomeView } from '../components/project/overview/GlobalHomeView'
+import { DuplicateProjectsView } from '../components/project/overview/DuplicateProjectsNotice'
 import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs'
 
 type Project = { hash: string; realPath: string }
@@ -221,6 +222,8 @@ export default function ProjectOverview() {
             onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
           />
         )
+      case 'duplicates':
+        return <DuplicateProjectsView onBack={goGlobal} />
       default:
         return null
     }
