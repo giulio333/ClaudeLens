@@ -10,6 +10,8 @@ export interface Agent {
   rawContent: string;
   /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
   missingRequired: string[];
+  /** True if the file name contains spaces — Claude Code requires space-free agent file names. */
+  filenameHasSpaces: boolean;
   description?: string;
   model?: string;
   allowedTools?: string[];
@@ -116,6 +118,7 @@ function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
             content: body,
             rawContent,
             missingRequired,
+            filenameHasSpaces: entry.name.includes(' '),
             description: frontmatter.description,
             model: frontmatter.model,
             allowedTools: frontmatter.allowedTools,

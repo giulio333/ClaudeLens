@@ -449,6 +449,14 @@ export function ProjectView({
               {agents.map((a, i) => {
                 const glyphs = ['◐', '◑', '◒', '◓']
                 const mode = a.disableModelInvocation ? 'manual' : 'auto'
+                const issues = [
+                  ...(a.missingRequired.length > 0
+                    ? [{ label: `missing ${a.missingRequired.join(', ')}`, title: `Missing required frontmatter: ${a.missingRequired.join(', ')}` }]
+                    : []),
+                  ...(a.filenameHasSpaces
+                    ? [{ label: 'spaces in filename', title: 'Claude Code requires agent file names without spaces — this agent may not be loaded.' }]
+                    : []),
+                ]
                 return (
                   <button key={a.path} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
                     onClick={() => onNavigate({ type: 'agent-detail', agent: a })}>
@@ -456,14 +464,15 @@ export function ProjectView({
                     <div style={{ minWidth: 0 }}>
                       <div className="t-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {a.name}
-                        {a.missingRequired.length > 0 && (
+                        {issues.map(issue => (
                           <span
-                            title={`Missing required frontmatter: ${a.missingRequired.join(', ')}`}
+                            key={issue.label}
+                            title={issue.title}
                             style={{ fontSize: 10, fontFamily: 'var(--font-mono)', background: 'color-mix(in srgb, #f59e0b 20%, transparent)', color: '#f59e0b', padding: '1px 5px', borderRadius: 4, letterSpacing: '0.05em', lineHeight: 1.4 }}
                           >
-                            missing {a.missingRequired.join(', ')}
+                            {issue.label}
                           </span>
-                        )}
+                        ))}
                       </div>
                       <div className="t-desc">{a.description || '—'}</div>
                     </div>
