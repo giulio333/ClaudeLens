@@ -1,182 +1,12 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState } from 'react'
 import { useCreateAgent, AgentInput } from '../../../hooks/useIPC'
 import Markdown from '../../Markdown'
-
-const MODEL_PRESETS = ['default', 'best', 'sonnet', 'opus', 'haiku', 'sonnet[1m]', 'opus[1m]', 'opusplan'] as const
-
-// Curated list of common Claude Code tools for the allowed/disallowed-tools autocomplete.
-const KNOWN_TOOLS = [
-  'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
-  'Task', 'TodoWrite', 'NotebookEdit',
-] as const
-
-const NAME_MAX = 64
-const DESC_MAX = 250
-const NAME_RE = /^[a-z0-9-]+$/
+import {
+  NAME_MAX, DESC_MAX, openDocs, validateName, useCreateFormKeys,
+  ModelPicker, ToolsInput, FieldHint, CharCounter, TopBar,
+} from '../shared/CreateFormKit'
 
 const DOCS_URL = 'https://code.claude.com/docs/en/sub-agents#supported-frontmatter-fields'
-function openDocs() {
-  window.open(DOCS_URL, '_blank', 'noopener')
-}
-
-function ModelPicker({ value, onChange, accentVar }: { value: string; onChange: (v: string) => void; accentVar: string }) {
-  const isPreset = MODEL_PRESETS.includes(value as typeof MODEL_PRESETS[number])
-  const [customMode, setCustomMode] = useState(!!value && !isPreset)
-  return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap gap-1.5">
-        {MODEL_PRESETS.map(p => {
-          const active = !customMode && value === p
-          return (
-            <button
-              key={p}
-              type="button"
-              onClick={() => { setCustomMode(false); onChange(p) }}
-              className={`px-2.5 py-1 font-mono text-[11px] border transition-colors ${active ? 'bg-[var(--cl-ink)] text-[var(--cl-paper)] border-[var(--cl-ink)]' : 'bg-[var(--cl-paper)] text-[var(--cl-ink-2)] border-[var(--cl-line)] hover:border-[var(--cl-ink-4)]'}`}
-            >
-              {p}
-            </button>
-          )
-        })}
-        <button
-          type="button"
-          onClick={() => { setCustomMode(true); if (isPreset) onChange('') }}
-          className={`px-2.5 py-1 font-mono text-[11px] border transition-colors ${customMode ? '' : 'bg-[var(--cl-paper)] text-[var(--cl-ink-3)] border-dashed border-[var(--cl-line)] hover:border-[var(--cl-ink-4)] hover:text-[var(--cl-ink-2)]'}`}
-          style={customMode ? { borderColor: `var(${accentVar})`, color: `var(${accentVar})` } : undefined}
-        >
-          Custom…
-        </button>
-      </div>
-      {customMode && (
-        <input
-          autoFocus
-          className="w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 text-[13px] font-mono text-[var(--cl-ink)] placeholder:text-[var(--cl-ink-4)] outline-none focus:border-[var(--cl-ink)] transition-colors"
-          placeholder="claude-haiku-4-5-20251001"
-          value={value}
-          onChange={e => onChange(e.target.value)}
-        />
-      )}
-    </div>
-  )
-}
-
-function ToolsInput({ value, onChange, placeholder }: { value: string[]; onChange: (v: string[]) => void; placeholder: string }) {
-  const [draft, setDraft] = useState('')
-  const [open, setOpen] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
-
-  const suggestions = useMemo(() => {
-    const q = draft.trim().toLowerCase()
-    return KNOWN_TOOLS.filter(t => !value.includes(t) && (!q || t.toLowerCase().includes(q)))
-  }, [draft, value])
-
-  function add(tool: string) {
-    const t = tool.trim()
-    if (t && !value.includes(t)) onChange([...value, t])
-    setDraft('')
-    inputRef.current?.focus()
-  }
-  function removeAt(i: number) {
-    onChange(value.filter((_, idx) => idx !== i))
-  }
-
-  return (
-    <div className="relative">
-      <div
-        onClick={() => inputRef.current?.focus()}
-        className="flex flex-wrap items-center gap-1.5 w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-2 py-1.5 min-h-[40px] cursor-text focus-within:border-[var(--cl-ink)] transition-colors"
-      >
-        {value.map((t, i) => (
-          <span key={t} className="inline-flex items-center gap-1 px-2 py-0.5 font-mono text-[11px] bg-[var(--cl-violet-soft)] text-[var(--cl-violet-ink)] border border-transparent">
-            {t}
-            <button type="button" onClick={() => removeAt(i)} className="opacity-60 hover:opacity-100 leading-none">×</button>
-          </span>
-        ))}
-        <input
-          ref={inputRef}
-          className="flex-1 min-w-[80px] bg-transparent px-1 py-0.5 text-[13px] font-mono text-[var(--cl-ink)] placeholder:text-[var(--cl-ink-4)] outline-none"
-          placeholder={value.length ? '' : placeholder}
-          value={draft}
-          onChange={e => { setDraft(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
-          onKeyDown={e => {
-            if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); if (draft.trim()) add(draft) }
-            else if (e.key === 'Backspace' && !draft && value.length) removeAt(value.length - 1)
-          }}
-        />
-      </div>
-      {open && suggestions.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-[var(--cl-paper)] border border-[var(--cl-ink)] shadow-xl max-h-48 overflow-y-auto">
-          {suggestions.map(t => (
-            <button
-              key={t}
-              type="button"
-              onMouseDown={e => { e.preventDefault(); add(t) }}
-              className="block w-full text-left px-3 py-1.5 font-mono text-[12px] text-[var(--cl-ink-2)] hover:bg-[var(--cl-violet-soft)] hover:text-[var(--cl-violet-ink)] transition-colors"
-            >
-              {t}
-            </button>
-          ))}
-        </div>
-      )}
-    </div>
-  )
-}
-
-function FieldHint({ text }: { text: string }) {
-  return (
-    <span className="relative group inline-flex items-center ml-1.5 cursor-default">
-      <span className="text-[9px] font-mono text-[var(--cl-ink-4)] border border-[var(--cl-line)] w-3.5 h-3.5 flex items-center justify-center leading-none select-none">i</span>
-      <span className="pointer-events-none absolute left-5 top-0 z-50 w-56 bg-[var(--cl-paper)] border border-[var(--cl-ink)] px-2.5 py-1.5 font-mono text-[10px] leading-relaxed text-[var(--cl-ink-2)] shadow-xl opacity-0 group-hover:opacity-100 transition-opacity whitespace-normal normal-case tracking-normal">
-        {text}
-      </span>
-    </span>
-  )
-}
-
-function CharCounter({ n, max }: { n: number; max: number }) {
-  const near = n > max * 0.85
-  const over = n > max
-  return (
-    <span
-      className="ml-auto font-mono text-[9px] tabular-nums"
-      style={{ color: over ? 'var(--cl-danger)' : near ? 'var(--cl-violet)' : 'var(--cl-ink-4)' }}
-    >
-      {n}/{max}
-    </span>
-  )
-}
-
-function TopBar({ onBack, crumb }: { onBack: () => void; crumb: string }) {
-  return (
-    <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
-      style={{
-        WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-violet)]"
-        style={{ WebkitAppRegion: 'no-drag', fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1 } as React.CSSProperties}
-      >
-        <span>←</span>
-        Back
-      </button>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span
-        className="font-mono uppercase truncate"
-        style={{ fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1 } as React.CSSProperties}
-      >
-        {crumb}
-      </span>
-    </div>
-  )
-}
 
 export function CreateAgentPage({ project, onBack, onSaved }: {
   project?: { hash: string; realPath: string }
@@ -207,13 +37,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
 
   // --- live validation ---
   const nameTrim = form.name.trim()
-  const nameError = nameTrim.length === 0
-    ? null
-    : !NAME_RE.test(nameTrim)
-      ? 'Lowercase letters, numbers and hyphens only'
-      : nameTrim.length > NAME_MAX
-        ? `Max ${NAME_MAX} characters`
-        : null
+  const nameError = validateName(form.name)
   const canSubmit = nameTrim.length > 0 && !nameError && form.description.trim().length > 0 && form.content.trim().length > 0
 
   async function submit() {
@@ -251,15 +75,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
     await submit()
   }
 
-  // Cmd/Ctrl+Enter to save · Esc to cancel
-  useEffect(() => {
-    function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); if (canSubmit && !createAgent.isLoading) submit() }
-      else if (e.key === 'Escape') { e.preventDefault(); onBack() }
-    }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
-  })
+  useCreateFormKeys({ canSubmit, isLoading: createAgent.isLoading, onSubmit: submit, onCancel: onBack })
 
   const labelCls = "flex items-center font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--cl-ink-3)] mb-1.5"
   const inputCls = "w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 text-[13px] text-[var(--cl-ink)] placeholder:text-[var(--cl-ink-4)] outline-none focus:border-[var(--cl-ink)] transition-colors"
@@ -268,7 +84,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar onBack={onBack} crumb={crumb} />
+      <TopBar onBack={onBack} crumb={crumb} accent="violet" />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">
@@ -288,7 +104,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
             </span>
             <button
               type="button"
-              onClick={openDocs}
+              onClick={() => openDocs(DOCS_URL)}
               className="cl-docs-link ml-auto inline-flex items-center gap-1.5 font-mono uppercase tracking-[0.16em] border px-3 py-1.5 transition-colors"
               style={{ fontSize: 10, '--docs-accent': 'var(--cl-violet)' } as React.CSSProperties}
             >
@@ -304,7 +120,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                 <label className={labelCls}>
                   <span>Name</span> <span className="text-[var(--cl-violet)] ml-1">*</span>
                   <FieldHint text="Unique identifier using lowercase letters and hyphens. Hooks receive this value as agent_type. The filename does not have to match. E.g.: code-reviewer" />
-                  <CharCounter n={form.name.length} max={NAME_MAX} />
+                  <CharCounter n={form.name.length} max={NAME_MAX} accentVar="--cl-violet" />
                 </label>
                 <input
                   className={inputCls + (nameError ? ' !border-[var(--cl-danger)]' : '')}
@@ -318,7 +134,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                 <label className={labelCls}>
                   <span>Description</span> <span className="text-[var(--cl-violet)] ml-1">*</span>
                   <FieldHint text="When Claude should delegate to this subagent. Be specific about the use case." />
-                  <CharCounter n={form.description.length} max={DESC_MAX} />
+                  <CharCounter n={form.description.length} max={DESC_MAX} accentVar="--cl-violet" />
                 </label>
                 <input className={inputCls} placeholder="Reviews code for quality and security" value={form.description} onChange={e => set('description', e.target.value)} />
               </div>
@@ -367,21 +183,21 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                     <span>Model</span>
                     <FieldHint text="Model alias (sonnet, opus, haiku, opusplan…) or a full model ID. Defaults to inherit from the parent session." />
                   </label>
-                  <ModelPicker value={form.model} onChange={v => set('model', v)} accentVar="--cl-violet" />
+                  <ModelPicker value={form.model} onChange={v => set('model', v)} accentVar="--cl-violet" placeholder="claude-haiku-4-5-20251001" />
                 </div>
                 <div>
                   <label className={labelCls}>
                     <span>Allowed Tools</span>
                     <FieldHint text="Tools the subagent can use. Inherits all tools if omitted. To preload Skills, use the Skills field rather than listing Skill here." />
                   </label>
-                  <ToolsInput value={form.allowedTools} onChange={v => set('allowedTools', v)} placeholder="Read, Grep, Bash" />
+                  <ToolsInput value={form.allowedTools} onChange={v => set('allowedTools', v)} placeholder="Read, Grep, Bash" accent="violet" />
                 </div>
                 <div>
                   <label className={labelCls}>
                     <span>Disallowed Tools</span>
                     <FieldHint text="Tools to deny. Removed from the inherited or specified list." />
                   </label>
-                  <ToolsInput value={form.disallowedTools} onChange={v => set('disallowedTools', v)} placeholder="Write, Edit" />
+                  <ToolsInput value={form.disallowedTools} onChange={v => set('disallowedTools', v)} placeholder="Write, Edit" accent="violet" />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
