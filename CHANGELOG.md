@@ -2,6 +2,36 @@
 
 All notable changes to ClaudeLens are documented here.
 
+## [1.2.0] - 2026-05-22
+
+### Added
+
+- Agents Live view — background agent sessions reader with a live agent badge
+- MCP server detail view — brand hero, adoption metrics, local config, and enabled/disabled project lists; reachable by clicking a server in the MCP list
+
+### Changed
+
+- Complete UI redesign with a new editorial design system (broadsheet-style session/chat views, redesigned GlobalHomeView with stats, sparklines, and project cost listing)
+- Aligned border-radius and colors to the editorial design system
+
+### Fixed
+
+- Memory topic content no longer shows "No content yet" — lookup now keys on filename instead of the (divergent) MEMORY.md link text
+- Corrected CSS font tokens and locale in chat/sessions views
+
+## [1.1.0] - 2026-03-30
+
+### Added
+
+- "Open in Claude Code" button on the project overview header (#3)
+- Delete action and inline edit moved into the memory topic detail view (#5)
+- Docs links and field hints in the skill/agent creation modals (#4)
+
+### Fixed
+
+- build-dmg script path resolution
+- README cleanup for release (sections, intro, screenshots, releases URL)
+
 ## [1.0.0] - 2026-03-29
 
 ### Added
