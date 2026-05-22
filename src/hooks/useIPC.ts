@@ -162,6 +162,9 @@ declare global {
         onDone: (cb: () => void) => void
         onError: (cb: (error: string) => void) => void
       }
+      settings: {
+        getCleanupPeriodDays: () => Promise<IpcResult<number>>
+      }
       onDataChanged: (callback: () => void) => void
       live: {
         getProcesses: () => Promise<IpcResult<ClaudeProcess[]>>
@@ -294,6 +297,14 @@ export function useSessionList(hash: string | null) {
     ['sessions:project', hash],
     () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
     { enabled: hash !== null }
+  )
+}
+
+export function useCleanupPeriodDays() {
+  return useQuery(
+    'settings:cleanupPeriodDays',
+    () => unwrap(window.electronAPI.settings.getCleanupPeriodDays()),
+    { staleTime: 60_000 }
   )
 }
 

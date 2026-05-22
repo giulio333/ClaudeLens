@@ -12,6 +12,7 @@ import {
   useMemoryProjects,
   useCostSummary,
   useLiveSessions,
+  useCleanupPeriodDays,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
@@ -129,6 +130,7 @@ export function ProjectView({
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
   const { data: bgSessions = [] } = useLiveSessions()
+  const { data: cleanupDays = 30 } = useCleanupPeriodDays()
 
   const projectBgSessions = bgSessions.filter(
     s => s.cwd === project.realPath || s.cwd.startsWith(project.realPath + '/')
@@ -330,7 +332,7 @@ export function ProjectView({
               <span className="ct">{Math.min(5, sessions.length)} of {sessions.length}</span>
               <button className="all" type="button" onClick={() => onNavigate({ type: 'sessions', project })}>View all</button>
             </div>
-            <SessionRows sessions={sessions.slice(0, 5)} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            <SessionRows sessions={sessions.slice(0, 5)} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
           </section>
 
           <section className="cl-section">
@@ -375,7 +377,7 @@ export function ProjectView({
             <h2>Sessions</h2>
             <span className="ct">{sessions.length} total · sorted by last activity</span>
           </div>
-          <SessionRows sessions={sessions} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+          <SessionRows sessions={sessions} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
         </section>
       )}
 
@@ -576,7 +578,38 @@ export function ProjectView({
   )
 }
 
-function SessionRows({ sessions, onOpen }: { sessions: SessionSummary[]; onOpen: (s: SessionSummary) => void }) {
+function sessionAgeDays(date: string): number {
+  return Math.floor((Date.now() - new Date(date).getTime()) / 86_400_000)
+}
+
+function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number }) {
+  const remaining = cleanupDays - sessionAgeDays(date)
+  let color: string
+  let opacity: number
+  let label: string
+
+  if (remaining <= 0) {
+    color = 'oklch(0.60 0.18 25)'; opacity = 1; label = 'expired'
+  } else if (remaining <= 3) {
+    color = 'oklch(0.60 0.18 25)'; opacity = 1; label = `${remaining}d`
+  } else if (remaining <= 7) {
+    color = 'oklch(0.65 0.15 55)'; opacity = 0.9; label = `${remaining}d`
+  } else {
+    color = 'var(--cl-ink-4)'; opacity = 0.4; label = `${remaining}d`
+  }
+
+  return (
+    <span
+      title={`Auto-deleted after ${cleanupDays} days · cleanupPeriodDays in ~/.claude/settings.json`}
+      style={{ display: 'inline-flex', alignItems: 'center', gap: 3, fontFamily: 'var(--font-mono)', fontSize: 9, letterSpacing: '0.1em', textTransform: 'uppercase', color, opacity, userSelect: 'none', flexShrink: 0 }}
+    >
+      <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
+      {label}
+    </span>
+  )
+}
+
+function SessionRows({ sessions, cleanupDays, onOpen }: { sessions: SessionSummary[]; cleanupDays: number; onOpen: (s: SessionSummary) => void }) {
   if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>
   return (
     <div>
@@ -586,7 +619,10 @@ function SessionRows({ sessions, onOpen }: { sessions: SessionSummary[]; onOpen:
           <button key={s.filename} type="button" className="cl-row" onClick={() => onOpen(s)}>
             <span className="idx">{String(i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
-              <div className="title">{s.customTitle || `Session ${shortWhen(s.date)}`}</div>
+              <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                {s.customTitle || `Session ${shortWhen(s.date)}`}
+                <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
+              </div>
               <div className="file">{s.filename}</div>
             </div>
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
