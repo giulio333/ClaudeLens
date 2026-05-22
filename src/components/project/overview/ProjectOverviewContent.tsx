@@ -413,7 +413,6 @@ export function ProjectView({
             <h2>Skills</h2>
             <span className="ct">{skillCount} available</span>
             <button className="all" type="button" onClick={() => onNavigate({ type: 'skill-create', project })}>+ New</button>
-            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-skills' })}>Manage</button>
           </div>
           {skillCount === 0 ? (
             <div className="cl-empty">No skills available for this project.</div>
@@ -424,10 +423,26 @@ export function ProjectView({
                   onClick={() => onNavigate({ type: 'skill-detail', skill: s })}>
                   <span className="glyph">{(s.name[0] ?? '?').toUpperCase()}</span>
                   <div style={{ minWidth: 0 }}>
-                    <div className="t-name">/{s.name}</div>
+                    <div className="t-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      /{s.name}
+                      <span
+                        title={s.scope === 'project' ? 'Defined in this project (.claude/skills)' : 'Defined globally (~/.claude/skills)'}
+                        style={{
+                          fontSize: 10,
+                          fontFamily: 'var(--font-mono)',
+                          padding: '1px 5px',
+                          borderRadius: 4,
+                          letterSpacing: '0.05em',
+                          lineHeight: 1.4,
+                          background: s.scope === 'project' ? 'var(--cl-accent-soft)' : 'color-mix(in srgb, var(--cl-ink-3) 14%, transparent)',
+                          color: s.scope === 'project' ? 'var(--cl-accent-ink)' : 'var(--cl-ink-3)',
+                        }}
+                      >
+                        {s.scope}
+                      </span>
+                    </div>
                     <div className="t-desc">{s.description || '—'}</div>
                   </div>
-                  <span className="t-meta"><b>{s.scope}</b></span>
                 </button>
               ))}
             </div>
@@ -464,6 +479,21 @@ export function ProjectView({
                     <div style={{ minWidth: 0 }}>
                       <div className="t-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                         {a.name}
+                        <span
+                          title={a.scope === 'project' ? 'Defined in this project (.claude/agents)' : 'Defined globally (~/.claude/agents)'}
+                          style={{
+                            fontSize: 10,
+                            fontFamily: 'var(--font-mono)',
+                            padding: '1px 5px',
+                            borderRadius: 4,
+                            letterSpacing: '0.05em',
+                            lineHeight: 1.4,
+                            background: a.scope === 'project' ? 'var(--cl-accent-soft)' : 'color-mix(in srgb, var(--cl-ink-3) 14%, transparent)',
+                            color: a.scope === 'project' ? 'var(--cl-accent-ink)' : 'var(--cl-ink-3)',
+                          }}
+                        >
+                          {a.scope}
+                        </span>
                         {issues.map(issue => (
                           <span
                             key={issue.label}
