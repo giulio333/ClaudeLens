@@ -24,6 +24,7 @@ export type View =
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
   | { type: 'agents-live'; project?: { hash: string; realPath: string } }
+  | { type: 'duplicates' }
 
 export const TYPE_STYLES: Record<string, string> = {
   user:      'bg-blue-950/20 text-blue-400 ring-1 ring-blue-700/30',

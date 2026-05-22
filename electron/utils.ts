@@ -15,6 +15,12 @@ export function pathToHash(realPath: string): string {
 // Cache per evitare di rileggere lo stesso jsonl più volte nella stessa sessione.
 const cwdCache = new Map<string, string>()
 
+/** Invalida la cache del cwd dopo che il contenuto di una cartella è cambiato (es. merge). */
+export function invalidateCwdCache(hash?: string): void {
+  if (hash) cwdCache.delete(hash)
+  else cwdCache.clear()
+}
+
 export function resolveRealPath(projectsDir: string, hash: string): string {
   const cached = cwdCache.get(hash)
   if (cached) return cached
