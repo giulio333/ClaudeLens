@@ -1,5 +1,6 @@
 import { useLiveSessions, BgSession, SessionSummary } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
+import { TopBar } from '../shared/TopBar'
 
 type Project = { hash: string; realPath: string }
 
@@ -124,41 +125,6 @@ function SessionRow({ s, showProject, onOpen }: { s: BgSession; showProject: boo
   )
 }
 
-// ─── TopBar (editorial chrome) ──────────────────────────────────────────────────
-
-function TopBar({ onBack, crumb }: { onBack: () => void; crumb: string }) {
-  return (
-    <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
-      style={{
-        WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1,
-        } as React.CSSProperties}
-      >
-        <span>←</span>
-        Back
-      </button>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span
-        className="font-mono uppercase truncate"
-        style={{ fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1 } as React.CSSProperties}
-      >
-        {crumb}
-      </span>
-    </div>
-  )
-}
-
 // ─── View ──────────────────────────────────────────────────────────────────────
 
 export function AgentsLiveView({
@@ -186,7 +152,7 @@ export function AgentsLiveView({
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
       <style>{`@keyframes alPulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
-      <TopBar onBack={onBack} crumb={project ? `Project · Agents Live · ${projectName}` : 'Global · Agents Live'} />
+      <TopBar onBack={onBack} crumbs={[{ label: project ? `Project · Agents Live · ${projectName}` : 'Global · Agents Live' }]} />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">
