@@ -86,6 +86,8 @@ export interface Agent {
   scope: 'global' | 'project'
   content: string
   rawContent: string
+  /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
+  missingRequired: string[]
   description?: string
   model?: string
   allowedTools?: string[]
@@ -98,6 +100,8 @@ export interface Agent {
   background?: boolean
   isolation?: string
   memory?: string
+  effort?: string
+  color?: string
 }
 
 export interface Skill {
@@ -199,4 +203,6 @@ export interface AgentInput {
   skills?: string[]
   mcpServers?: string[]
   disableModelInvocation?: boolean
+  effort?: string
+  color?: string
 }

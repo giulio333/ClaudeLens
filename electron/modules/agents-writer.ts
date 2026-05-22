@@ -17,11 +17,14 @@ export interface AgentInput {
   skills?: string[];
   mcpServers?: string[];
   disableModelInvocation?: boolean;
+  effort?: string;
+  color?: string;
 }
 
 function buildAgentMarkdown(input: AgentInput): string {
   const lines: string[] = ['---'];
 
+  lines.push(`name: ${input.name}`);
   if (input.description) lines.push(`description: ${input.description}`);
   if (input.model) lines.push(`model: ${input.model}`);
   if (input.allowedTools && input.allowedTools.length > 0) lines.push(`tools: [${input.allowedTools.join(', ')}]`);
@@ -31,6 +34,8 @@ function buildAgentMarkdown(input: AgentInput): string {
   if (input.background !== undefined) lines.push(`background: ${input.background}`);
   if (input.isolation) lines.push(`isolation: ${input.isolation}`);
   if (input.memory) lines.push(`memory: ${input.memory}`);
+  if (input.effort) lines.push(`effort: ${input.effort}`);
+  if (input.color) lines.push(`color: ${input.color}`);
   if (input.skills && input.skills.length > 0) lines.push(`skills: [${input.skills.join(', ')}]`);
   if (input.mcpServers && input.mcpServers.length > 0) lines.push(`mcpServers: [${input.mcpServers.join(', ')}]`);
   if (input.disableModelInvocation !== undefined) lines.push(`disable_model_invocation: ${input.disableModelInvocation}`);

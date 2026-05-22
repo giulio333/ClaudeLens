@@ -12,7 +12,6 @@ import { GlobalSkillsView } from '../components/project/skills/GlobalSkillsView'
 import { SkillDetailView } from '../components/project/skills/SkillDetailView'
 import { CreateSkillPage } from '../components/project/skills/CreateSkillPage'
 // ─── Agents
-import { GlobalAgentsView } from '../components/project/agents/GlobalAgentsView'
 import { AgentDetailView } from '../components/project/agents/AgentDetailView'
 import { CreateAgentPage } from '../components/project/agents/CreateAgentPage'
 // ─── MCP
@@ -148,26 +147,23 @@ export default function ProjectOverview() {
           />
         )
       case 'global-agents':
-        return (
-          <GlobalAgentsView
-            onBack={goGlobal}
-            onSelectAgent={agent => setView({ type: 'agent-detail', agent })}
-            onCreate={() => setView({ type: 'agent-create' })}
-          />
-        )
+        if (selected) setView({ type: 'project-agents', project: selected })
+        else goGlobal()
+        return null
       case 'agent-detail':
         return (
           <AgentDetailView
             agent={view.agent}
-            onBack={() => selected ? setView({ type: 'project-agents', project: selected }) : setView({ type: 'global-agents' })}
+            project={selected ?? undefined}
+            onBack={() => selected ? setView({ type: 'project-agents', project: selected }) : goGlobal()}
           />
         )
       case 'agent-create':
         return (
           <CreateAgentPage
             project={view.project}
-            onBack={() => view.project ? setView({ type: 'project-agents', project: view.project }) : setView({ type: 'global-agents' })}
-            onSaved={() => view.project ? setView({ type: 'project-agents', project: view.project }) : setView({ type: 'global-agents' })}
+            onBack={() => view.project ? setView({ type: 'project-agents', project: view.project }) : goGlobal()}
+            onSaved={() => view.project ? setView({ type: 'project-agents', project: view.project }) : goGlobal()}
           />
         )
       case 'global-mcp':

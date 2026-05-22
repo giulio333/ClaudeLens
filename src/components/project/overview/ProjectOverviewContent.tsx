@@ -441,9 +441,8 @@ export function ProjectView({
             <h2>Agents</h2>
             <span className="ct">{agentCount} available · delegate-and-summarize</span>
             <button className="all" type="button" onClick={() => onNavigate({ type: 'agent-create', project })}>+ New</button>
-            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-agents' })}>Manage</button>
           </div>
-          {agentCount === 0 ? (
+{agentCount === 0 ? (
             <div className="cl-empty">No agents available for this project.</div>
           ) : (
             <div className="cl-tile-grid">
@@ -455,7 +454,17 @@ export function ProjectView({
                     onClick={() => onNavigate({ type: 'agent-detail', agent: a })}>
                     <span className="glyph">{glyphs[i % glyphs.length]}</span>
                     <div style={{ minWidth: 0 }}>
-                      <div className="t-name">{a.name}</div>
+                      <div className="t-name" style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        {a.name}
+                        {a.missingRequired.length > 0 && (
+                          <span
+                            title={`Missing required frontmatter: ${a.missingRequired.join(', ')}`}
+                            style={{ fontSize: 10, fontFamily: 'var(--font-mono)', background: 'color-mix(in srgb, #f59e0b 20%, transparent)', color: '#f59e0b', padding: '1px 5px', borderRadius: 4, letterSpacing: '0.05em', lineHeight: 1.4 }}
+                          >
+                            missing {a.missingRequired.join(', ')}
+                          </span>
+                        )}
+                      </div>
                       <div className="t-desc">{a.description || '—'}</div>
                     </div>
                     <span className="t-meta">{a.model ? `${fmtModel(a.model)} · ` : ''}<b>{mode}</b></span>
