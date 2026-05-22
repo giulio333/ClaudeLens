@@ -49,6 +49,17 @@ function sectionFromView(v: View): ProjectSection {
   }
 }
 
+function viewForSection(section: ProjectSection, project: Project): View {
+  switch (section) {
+    case 'sessions': return { type: 'sessions', project }
+    case 'memory':   return { type: 'project-memory', project }
+    case 'skills':   return { type: 'project-skills', project }
+    case 'agents':   return { type: 'project-agents', project }
+    case 'mcp':      return { type: 'project-mcp', project }
+    default:         return { type: 'overview' }
+  }
+}
+
 function SunIcon() {
   return (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -85,7 +96,13 @@ export default function ProjectOverview() {
   function selectProject(p: Project) {
     setSelected(p)
     setScope('project')
-    setView({ type: 'overview' })
+    // Preserve the current section when switching project from within a core
+    // project view (e.g. agents → agents of the newly selected project).
+    setView(prev =>
+      CORE_PROJECT_VIEWS.includes(prev.type)
+        ? viewForSection(sectionFromView(prev), p)
+        : { type: 'overview' }
+    )
   }
 
   function goGlobal() {
