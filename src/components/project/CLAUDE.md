@@ -67,12 +67,8 @@ Formatter puri (nessuna dipendenza React):
 |---|---|---|
 | `utils.ts` | `extractHeadings`, `parseMemoryContent`, `readingTime`, `formatDate`, `SidebarLabel`, `SidebarRow` | Parser markdown per TOC + metadata topic; helper UI sidebar |
 | `MemoryTopicView.tsx` | `MemoryTopicView` | Vista singolo topic: tab View/Raw, sidebar metadata, TOC |
-| `MemoryIndexFile.tsx` | `MemoryIndexFile` | Accordion per `MEMORY.md` con progress bar entries |
-| `TopicForm.tsx` | `TopicForm` | Form create/edit topic: nome, tipo, descrizione, contenuto |
-| `MemorySection.tsx` | `MemorySection` | Lista topic + `TopicForm` inline + `MemoryIndexFile` |
-| `MemoryFullView.tsx` | `MemoryFullView` | Wrapper con breadcrumb per la vista memoria di un progetto |
 
-**Mutations:** `useCreateTopic`, `useUpdateTopic`, `useDeleteTopic` sono chiamati dentro `MemorySection` e `TopicForm`, non nel root.
+> La lista dei topic della vista `project-memory` è renderizzata da `ProjectView` (`overview/ProjectOverviewContent.tsx`, `section === 'memory'`) con `cl-tile-grid`/`cl-tile`, allineata a Skills/Agents.
 
 ---
 

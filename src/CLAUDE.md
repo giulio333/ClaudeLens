@@ -29,7 +29,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/shared/` — Atomic UI: `ModelChip`, `SectionTitle`, `BackButton`, `StatChip`, `Accordion`
 - `project/chat/` — Chat rendering: `ChatView`, `MessageBubble`, `ToolDetailPanel`, `ToolGroupCard`, atoms, utils
 - `project/sessions/` — `SessionsDetailView`
-- `project/memory/` — `MemorySection`, `MemoryTopicView`, `MemoryIndexFile`, `TopicForm`, `MemoryFullView`, utils
+- `project/memory/` — `MemoryTopicView`, utils
 - `project/claudemd/` — `GlobalClaudeMdView`
 - `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `SkillPropertiesPanel`, `CreateSkillPage`
 - `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `AgentPropertiesPanel`, `CreateAgentPage`

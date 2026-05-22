@@ -184,8 +184,8 @@ export function ProjectView({
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
     [memory],
   )
-  const topicContent = (name: string) =>
-    memory?.topics[name] ?? memory?.projectLevelTopics[name] ?? ''
+  const topicContent = (filename: string) =>
+    memory?.topics[filename] ?? memory?.projectLevelTopics[filename] ?? ''
 
   const enabledMcp = useMemo(() => {
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])]
@@ -341,7 +341,7 @@ export function ProjectView({
             </div>
             <MemoryRows
               topics={memTopics.slice(0, 4)}
-              onOpen={t => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.name), hash: project.hash })}
+              onOpen={t => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.filename), hash: project.hash })}
             />
           </section>
 
@@ -383,13 +383,25 @@ export function ProjectView({
         <section className="cl-section" style={{ paddingTop: 38 }}>
           <div className="cl-sec-head">
             <h2>Project memory</h2>
-            <span className="ct">MEMORY.md · {memoryCount} topics</span>
-            <button className="all" type="button" onClick={() => onNavigate({ type: 'project-memory', project })}>Manage</button>
+            <span className="ct">MEMORY.md · {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}</span>
           </div>
-          <MemoryRows
-            topics={memTopics}
-            onOpen={t => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.name), hash: project.hash })}
-          />
+          {memTopics.length === 0 ? (
+            <div className="cl-empty">No memory topics yet.</div>
+          ) : (
+            <div className="cl-tile-grid">
+              {memTopics.map((t, i) => (
+                <button key={t.filename} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
+                  onClick={() => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.filename), hash: project.hash })}>
+                  <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="t-name">{t.name}</div>
+                    <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
+                  </div>
+                  <span className="t-meta"><b>{t.type}</b></span>
+                </button>
+              ))}
+            </div>
+          )}
         </section>
       )}
 
