@@ -28,7 +28,6 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/utils.ts` — Pure formatters: `fmt`, `fmtCost`, `fmtDate`, `fmtModel`, `modelColor`
 - `project/shared/` — Atomic UI: `ModelChip`, `SectionTitle`, `BackButton`, `StatChip`, `Accordion`
 - `project/chat/` — Chat rendering: `ChatView`, `MessageBubble`, `ToolDetailPanel`, `ToolGroupCard`, atoms, utils
-- `project/sessions/` — `SessionsDetailView`
 - `project/memory/` — `MemoryTopicView`, utils
 - `project/claudemd/` — `GlobalClaudeMdView`
 - `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `SkillPropertiesPanel`, `CreateSkillPage`

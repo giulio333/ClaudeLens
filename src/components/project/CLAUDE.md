@@ -55,13 +55,6 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
-### `sessions/` — Lista sessioni
-| File | Esporta | Descrizione |
-|---|---|---|
-| `SessionsDetailView.tsx` | `SessionsDetailView` | Lista tutte le sessioni di un progetto con barre visuali token/costo; click → `onOpenChat` |
-
----
-
 ### `memory/` — Gestione memoria Claude
 | File | Esporta | Descrizione |
 |---|---|---|
