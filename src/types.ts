@@ -88,6 +88,8 @@ export interface Agent {
   rawContent: string
   /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
   missingRequired: string[]
+  /** True if the file name contains spaces — Claude Code requires space-free agent file names. */
+  filenameHasSpaces: boolean
   description?: string
   model?: string
   allowedTools?: string[]
