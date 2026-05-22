@@ -1,4 +1,4 @@
-import { ClaudeMdLayer, SessionSummary, MemoryTopic, Skill, Agent } from '../../hooks/useIPC'
+import { ClaudeMdLayer, SessionSummary, MemoryTopic, Skill, Agent, McpServer } from '../../hooks/useIPC'
 
 export type View =
   | { type: 'global-home' }
@@ -11,6 +11,7 @@ export type View =
   | { type: 'agent-detail'; agent: Agent }
   | { type: 'agent-create'; project?: { hash: string; realPath: string } }
   | { type: 'global-mcp' }
+  | { type: 'mcp-detail'; server: McpServer; totalProjects: number }
   | { type: 'project-skills'; project: { hash: string; realPath: string } }
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
   | { type: 'project-mcp'; project: { hash: string; realPath: string } }

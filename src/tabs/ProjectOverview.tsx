@@ -17,6 +17,7 @@ import { AgentDetailView } from '../components/project/agents/AgentDetailView'
 import { CreateAgentPage } from '../components/project/agents/CreateAgentPage'
 // ─── MCP
 import { GlobalMcpView } from '../components/project/mcp/GlobalMcpView'
+import { McpServerDetailView } from '../components/project/mcp/McpServerDetailView'
 // ─── Agents Live
 import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView'
 // ─── Chat
@@ -169,7 +170,20 @@ export default function ProjectOverview() {
           />
         )
       case 'global-mcp':
-        return <GlobalMcpView onBack={goGlobal} />
+        return (
+          <GlobalMcpView
+            onBack={goGlobal}
+            onSelectServer={server => setView({ type: 'mcp-detail', server, totalProjects: server.enabledInProjects + server.disabledInProjects })}
+          />
+        )
+      case 'mcp-detail':
+        return (
+          <McpServerDetailView
+            server={view.server}
+            totalProjects={view.totalProjects}
+            onBack={() => setView({ type: 'global-mcp' })}
+          />
+        )
       case 'project-claudemd':
         return <ProjectClaudeMdView layer={view.layer} onBack={() => setView({ type: 'overview' })} />
       case 'chat':

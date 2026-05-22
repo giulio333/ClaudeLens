@@ -102,8 +102,9 @@ Formatter puri (nessuna dipendenza React):
 ### `mcp/`
 | File | Esporta | Descrizione |
 |---|---|---|
-| `McpServerCard.tsx` | `McpServerCard`, `mcpServiceColor` | Card singolo MCP server con stato enabled/disabled; colori brand per servizi noti |
-| `GlobalMcpView.tsx` | `GlobalMcpView` | Vista lista MCP server (cloud + local) |
+| `McpServerCard.tsx` | `McpServerCard`, `mcpServiceColor`, `mcpServiceMeta` | Card singolo MCP server (click → `mcp-detail`); colori brand + registry curato categoria/descrizione per servizi noti |
+| `GlobalMcpView.tsx` | `GlobalMcpView` | Vista lista MCP server (cloud + local); `onSelectServer` apre il dettaglio |
+| `McpServerDetailView.tsx` | `McpServerDetailView` | Pagina dettaglio singolo server: hero brand, metriche adoption, config locale, liste progetti enabled/disabled |
 
 ---
 

@@ -139,6 +139,7 @@ export interface McpServer {
   enabledInProjects: number
   disabledInProjects: number
   disabledProjectPaths: string[]
+  enabledProjectPaths: string[]
 }
 
 export interface McpData {

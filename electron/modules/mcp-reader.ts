@@ -12,6 +12,7 @@ export interface McpServer {
   enabledInProjects: number;
   disabledInProjects: number;
   disabledProjectPaths: string[];
+  enabledProjectPaths: string[];
 }
 
 export interface McpData {
@@ -51,12 +52,14 @@ export function getGlobalMcp(): McpData {
 
   const cloudServers: McpServer[] = cloudConnected.map(name => {
     const disabledIn = projectStates.filter(p => p.disabled.includes(name));
+    const enabledIn = projectStates.filter(p => !p.disabled.includes(name));
     return {
       name,
       source: 'cloud' as const,
       enabledInProjects: totalProjects - disabledIn.length,
       disabledInProjects: disabledIn.length,
       disabledProjectPaths: disabledIn.map(p => p.path),
+      enabledProjectPaths: enabledIn.map(p => p.path),
     };
   });
 
@@ -76,6 +79,7 @@ export function getGlobalMcp(): McpData {
         enabledInProjects: totalProjects,
         disabledInProjects: 0,
         disabledProjectPaths: [],
+        enabledProjectPaths: projectStates.map(p => p.path),
       }));
     } catch {
       // file malformato, ignora
