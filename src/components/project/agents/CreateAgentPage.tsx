@@ -104,6 +104,8 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault()
     if (!form.name.trim()) { setError('Name is required'); return }
+    if (!/^[a-z0-9-]+$/.test(form.name.trim())) { setError('Name must use only lowercase letters, numbers and hyphens'); return }
+    if (!form.description?.trim()) { setError('Description is required'); return }
     if (!form.content.trim()) { setError('Content is required'); return }
     const splitList = (raw: string) => raw.split(',').map(s => s.trim()).filter(Boolean)
     const input: AgentInput = {
@@ -119,6 +121,8 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
       ...(form.memory ? { memory: form.memory } : {}),
       ...(form.skillsRaw ? { skills: splitList(form.skillsRaw) } : {}),
       ...(form.mcpServersRaw ? { mcpServers: splitList(form.mcpServersRaw) } : {}),
+      ...(form.effort ? { effort: form.effort } : {}),
+      ...(form.color ? { color: form.color } : {}),
     }
     try {
       await createAgent.mutateAsync({ input, projectPath: project?.realPath })
@@ -170,13 +174,13 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
             <div>
               <label className={labelCls}>
                 <span>Name</span> <span className="text-[var(--cl-violet)] ml-1">*</span>
-                <FieldHint text="Unique identifier using lowercase letters and hyphens. E.g.: code-reviewer" />
+                <FieldHint text="Unique identifier using lowercase letters and hyphens. Hooks receive this value as agent_type. The filename does not have to match. E.g.: code-reviewer" />
               </label>
               <input className={inputCls} placeholder="code-reviewer" value={form.name} onChange={e => set('name', e.target.value)} />
             </div>
             <div>
               <label className={labelCls}>
-                <span>Description</span>
+                <span>Description</span> <span className="text-[var(--cl-violet)] ml-1">*</span>
                 <FieldHint text="When Claude should delegate to this subagent. Be specific about the use case." />
               </label>
               <input className={inputCls} placeholder="Reviews code for quality and security" value={form.description ?? ''} onChange={e => set('description', e.target.value)} />
@@ -203,14 +207,14 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                   <div>
                     <label className={labelCls}>
                       <span>Allowed Tools</span>
-                      <FieldHint text="Tools the subagent can use, comma-separated. Inherits all tools if omitted." />
+                      <FieldHint text="Tools the subagent can use, comma-separated. Inherits all tools if omitted. To preload Skills, use the Skills field rather than listing Skill here." />
                     </label>
                     <input className={inputCls} placeholder="Read, Grep, Bash" value={form.allowedToolsRaw} onChange={e => set('allowedToolsRaw', e.target.value)} />
                   </div>
                   <div>
                     <label className={labelCls}>
                       <span>Disallowed Tools</span>
-                      <FieldHint text="Tools to deny, comma-separated. Removed from the inherited or specified tools list." />
+                      <FieldHint text="Tools to deny, comma-separated. Removed from the inherited or specified list." />
                     </label>
                     <input className={inputCls} placeholder="Write, Edit" value={form.disallowedToolsRaw} onChange={e => set('disallowedToolsRaw', e.target.value)} />
                   </div>
@@ -219,7 +223,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                   <div>
                     <label className={labelCls}>
                       <span>Permission Mode</span>
-                      <FieldHint text="Permission mode: default, acceptEdits, dontAsk, bypassPermissions, or plan." />
+                      <FieldHint text="Permission mode: default, acceptEdits, auto, dontAsk, bypassPermissions, or plan. Ignored for plugin subagents." />
                     </label>
                     <input className={inputCls} placeholder="default" value={form.permissionMode ?? ''} onChange={e => set('permissionMode', e.target.value)} />
                   </div>
@@ -235,7 +239,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                   <div>
                     <label className={labelCls}>
                       <span>Isolation</span>
-                      <FieldHint text="Set to worktree to run in a temporary git worktree. Automatically cleaned up if no changes are made." />
+                      <FieldHint text="Set to worktree to run the subagent in a temporary git worktree with an isolated copy of the repository. Auto-cleaned if no changes are made." />
                     </label>
                     <input className={inputCls} placeholder="worktree" value={form.isolation ?? ''} onChange={e => set('isolation', e.target.value)} />
                   </div>
@@ -244,20 +248,36 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
                       <span>Memory</span>
                       <FieldHint text="Persistent memory scope: user, project, or local. Enables cross-session learning." />
                     </label>
-                    <input className={inputCls} placeholder="~/.claude/memory.md" value={form.memory ?? ''} onChange={e => set('memory', e.target.value)} />
+                    <input className={inputCls} placeholder="user | project | local" value={form.memory ?? ''} onChange={e => set('memory', e.target.value)} />
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className={labelCls}>
+                      <span>Effort</span>
+                      <FieldHint text="Effort level when this subagent is active. Overrides the session effort level. Options: low, medium, high, xhigh, max (availability depends on the model). Defaults to inherit." />
+                    </label>
+                    <input className={inputCls} placeholder="high" value={form.effort ?? ''} onChange={e => set('effort', e.target.value)} />
+                  </div>
+                  <div>
+                    <label className={labelCls}>
+                      <span>Color</span>
+                      <FieldHint text="Display color for the subagent in the task list and transcript: red, blue, green, yellow, purple, orange, pink, or cyan." />
+                    </label>
+                    <input className={inputCls} placeholder="purple" value={form.color ?? ''} onChange={e => set('color', e.target.value)} />
                   </div>
                 </div>
                 <div>
                   <label className={labelCls}>
                     <span>Skills</span>
-                    <FieldHint text="Skills to load into the subagent's context at startup. Full skill content is injected. Subagents don't inherit skills from the parent conversation." />
+                    <FieldHint text="Skills to preload into the subagent's context at startup, comma-separated. The full skill content is injected, not just the description. Subagents can still invoke unlisted skills via the Skill tool." />
                   </label>
                   <input className={inputCls} placeholder="commit-helper, test-runner" value={form.skillsRaw} onChange={e => set('skillsRaw', e.target.value)} />
                 </div>
                 <div>
                   <label className={labelCls}>
                     <span>MCP Servers</span>
-                    <FieldHint text="MCP servers available to this subagent, comma-separated. Each entry is a server name referencing an already-configured server (e.g. slack)." />
+                    <FieldHint text="MCP servers available to this subagent, comma-separated. Each entry references an already-configured server (e.g. slack). Ignored for plugin subagents." />
                   </label>
                   <input className={inputCls} placeholder="filesystem, github" value={form.mcpServersRaw} onChange={e => set('mcpServersRaw', e.target.value)} />
                 </div>

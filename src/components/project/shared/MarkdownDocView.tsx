@@ -39,6 +39,9 @@ interface MarkdownDocViewProps {
 
   /** Extra actions rendered next to View/Edit in the hero (e.g. delete button) */
   extraActions?: ReactNode
+
+  /** Optional notice banner rendered between the hero and the content (e.g. validation warnings) */
+  notice?: ReactNode
 }
 
 function TopBar({ onBack, backLabel, crumb }: { onBack: () => void; backLabel: string; crumb: string }) {
@@ -121,6 +124,7 @@ export function MarkdownDocView({
   sidebar,
   sidebarWidth = 260,
   extraActions,
+  notice,
 }: MarkdownDocViewProps) {
   const editable = typeof onSave === 'function'
   const [mode, setMode] = useState<'view' | 'edit'>('view')
@@ -249,6 +253,12 @@ export function MarkdownDocView({
             </div>
           )}
         </section>
+
+        {notice && (
+          <div className="cl-section" style={{ paddingTop: 24, paddingBottom: 0 }}>
+            {notice}
+          </div>
+        )}
 
         <section className="cl-section">
           <div style={{ display: 'flex', gap: 36, alignItems: 'flex-start' }}>

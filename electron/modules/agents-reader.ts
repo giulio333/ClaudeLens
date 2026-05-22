@@ -8,6 +8,8 @@ export interface Agent {
   scope: 'global' | 'project';
   content: string;
   rawContent: string;
+  /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
+  missingRequired: string[];
   description?: string;
   model?: string;
   allowedTools?: string[];
@@ -20,9 +22,15 @@ export interface Agent {
   background?: boolean;
   isolation?: string;
   memory?: string;
+  effort?: string;
+  color?: string;
 }
 
+/** Frontmatter fields the docs mark as required for a subagent definition. */
+export const REQUIRED_AGENT_FIELDS = ['name', 'description'] as const;
+
 interface AgentFrontmatter {
+  name?: string;
   description?: string;
   model?: string;
   allowedTools?: string[];
@@ -35,6 +43,8 @@ interface AgentFrontmatter {
   background?: boolean;
   isolation?: string;
   memory?: string;
+  effort?: string;
+  color?: string;
 }
 
 function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; body: string } {
@@ -67,6 +77,7 @@ function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; b
     return v !== undefined ? parseInt(v, 10) : undefined;
   };
 
+  if (scalar('name'))            fm.name            = scalar('name');
   if (scalar('description'))     fm.description     = scalar('description');
   if (scalar('model'))           fm.model           = scalar('model');
   if (arr('tools'))              fm.allowedTools    = arr('tools');
@@ -74,6 +85,8 @@ function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; b
   if (scalar('permissionMode'))  fm.permissionMode  = scalar('permissionMode');
   if (scalar('isolation'))       fm.isolation       = scalar('isolation');
   if (scalar('memory'))          fm.memory          = scalar('memory');
+  if (scalar('effort'))          fm.effort          = scalar('effort');
+  if (scalar('color'))           fm.color           = scalar('color');
   if (arr('skills'))             fm.skills          = arr('skills');
   if (arr('mcpServers'))         fm.mcpServers      = arr('mcpServers');
   const mt = num('maxTurns');    if (mt !== undefined) fm.maxTurns = mt;
@@ -95,12 +108,14 @@ function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
         try {
           const rawContent = readFileSync(filePath, 'utf-8');
           const { frontmatter, body } = parseAgentMarkdown(rawContent);
+          const missingRequired = REQUIRED_AGENT_FIELDS.filter(f => !frontmatter[f]);
           agents.push({
-            name: entry.name.replace(/\.md$/, ''),
+            name: frontmatter.name ?? entry.name.replace(/\.md$/, ''),
             path: filePath,
             scope,
             content: body,
             rawContent,
+            missingRequired,
             description: frontmatter.description,
             model: frontmatter.model,
             allowedTools: frontmatter.allowedTools,
@@ -113,6 +128,8 @@ function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
             background: frontmatter.background,
             isolation: frontmatter.isolation,
             memory: frontmatter.memory,
+            effort: frontmatter.effort,
+            color: frontmatter.color,
           });
         } catch (e) {
           console.error(`Errore leggendo agent ${entry.name}: ${e}`);
