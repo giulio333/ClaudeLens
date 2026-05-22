@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('ai:error', (_event, error) => cb(error));
     },
   },
+  settings: {
+    getCleanupPeriodDays: () => ipcRenderer.invoke('settings:getCleanupPeriodDays'),
+  },
   onDataChanged: (callback: () => void) => {
     ipcRenderer.on('data:changed', () => callback());
   },

@@ -196,6 +196,19 @@ ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: s
   }
 });
 
+ipcMain.handle('settings:getCleanupPeriodDays', async () => {
+  try {
+    const { readFileSync, existsSync } = require('fs') as typeof import('fs');
+    const settingsPath = join(CLAUDE_DIR, 'settings.json');
+    if (!existsSync(settingsPath)) return ok(30);
+    const settings = JSON.parse(readFileSync(settingsPath, 'utf-8'));
+    const days = typeof settings.cleanupPeriodDays === 'number' ? settings.cleanupPeriodDays : 30;
+    return ok(days);
+  } catch {
+    return ok(30);
+  }
+});
+
 ipcMain.handle('sessions:listByProject', async (_event, hash: string) => {
   try {
     const projectPath = join(PROJECTS_DIR, hash);
