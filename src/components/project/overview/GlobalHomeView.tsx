@@ -12,6 +12,7 @@ import {
 import { View } from '../types'
 import type { ProjectCost } from '../../../types'
 import { Lens } from './Lens'
+import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
 
 type Project = { hash: string; realPath: string }
 
@@ -144,6 +145,9 @@ export function GlobalHomeView({
           <span><b>{mcpServers.length}</b> MCP servers</span>
         </div>
       </section>
+
+      {/* ─── DUPLICATE PROJECTS (segnale compatto) ────── */}
+      <DuplicateProjectsBadge onNavigate={onNavigate} />
 
       {/* ─── LIVE PROCESSES ───────────────────────────── */}
       {procs.length > 0 && (

@@ -48,6 +48,62 @@ export type {
 
 type IpcResult<T> = { data: T | null; error: string | null }
 
+export interface DuplicateFolder {
+  hash: string
+  realPath: string
+  realPathAuthoritative: boolean
+  sessionCount: number
+  lastActivity: string | null
+  memoryTopicCount: number
+  hasMemoryIndex: boolean
+}
+
+export interface DuplicateGroup {
+  key: string
+  name: string
+  folders: DuplicateFolder[]
+}
+
+export interface SessionMove {
+  filename: string
+  collides: boolean
+  targetName: string
+}
+
+export type MemoryActionKind = 'copy' | 'identical' | 'conflict-rename'
+
+export interface MemoryAction {
+  filename: string
+  kind: MemoryActionKind
+  targetName?: string
+}
+
+export interface MergeResult {
+  movedSessions: number
+  renamedSessions: number
+  movedSidecars: number
+  cwdRewrittenFiles: number
+  memoryCopied: number
+  memoryRenamed: number
+  memorySkipped: number
+  sourceDeleted: boolean
+  backupPath: string
+  warnings: string[]
+}
+
+export interface MergePlan {
+  source: { hash: string; realPath: string; authoritative: boolean }
+  dest: { hash: string; realPath: string; authoritative: boolean }
+  cwdRewrite: { from: string; to: string } | null
+  sessions: SessionMove[]
+  sidecars: { name: string; collides: boolean }[]
+  memory: MemoryAction[]
+  regenerateIndex: boolean
+  sourceEmptyAfter: boolean
+  blockers: string[]
+  warnings: string[]
+}
+
 declare global {
   interface Window {
     electronAPI: {
@@ -60,6 +116,9 @@ declare global {
       }
       projects: {
         delete: (hash: string) => Promise<IpcResult<null>>
+        detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>
+        planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>
+        executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>
       }
       cost: {
         getSummary: () => Promise<IpcResult<ProjectCost[]>>
@@ -124,6 +183,33 @@ async function unwrap<T>(promise: Promise<IpcResult<T>>): Promise<T> {
 export function useMemoryProjects() {
   return useQuery('memory:projects', () =>
     unwrap(window.electronAPI.memory.listProjects())
+  )
+}
+
+export function useDuplicateProjects() {
+  return useQuery('projects:duplicates', () =>
+    unwrap(window.electronAPI.projects.detectDuplicates())
+  )
+}
+
+/** Calcola il piano di merge (read-only) per una coppia source → dest. */
+export function planMerge(sourceHash: string, destHash: string): Promise<MergePlan> {
+  return unwrap(window.electronAPI.projects.planMerge(sourceHash, destHash))
+}
+
+/** Mutation: esegue il merge e invalida le query sui duplicati/progetti. */
+export function useExecuteMerge() {
+  const qc = useQueryClient()
+  return useMutation(
+    ({ sourceHash, destHash }: { sourceHash: string; destHash: string }) =>
+      unwrap(window.electronAPI.projects.executeMerge(sourceHash, destHash)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('projects:duplicates')
+        qc.invalidateQueries('memory:projects')
+        qc.invalidateQueries('cost:summary')
+      },
+    },
   )
 }
 

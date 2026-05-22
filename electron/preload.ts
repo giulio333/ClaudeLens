@@ -45,6 +45,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   projects: {
     delete: (hash: string) => ipcRenderer.invoke('projects:delete', hash),
+    detectDuplicates: () => ipcRenderer.invoke('projects:detectDuplicates'),
+    planMerge: (sourceHash: string, destHash: string) =>
+      ipcRenderer.invoke('projects:planMerge', sourceHash, destHash),
+    executeMerge: (sourceHash: string, destHash: string) =>
+      ipcRenderer.invoke('projects:executeMerge', sourceHash, destHash),
   },
   ai: {
     run: (instruction: string, inputContent: string, projectPath: string) =>

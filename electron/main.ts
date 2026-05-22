@@ -22,13 +22,25 @@ import { getGlobalMcp } from './modules/mcp-reader';
 import { findClaudeProcesses } from './modules/process-scanner';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
-import { hashToPath, resolveRealPath } from './utils';
+import { detectDuplicateProjects } from './modules/duplicate-detector';
+import { computeMergePlan } from './modules/duplicate-merger';
+import { executeMerge } from './modules/duplicate-merge-executor';
+import { hashToPath, resolveRealPath, invalidateCwdCache } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 
 const CLAUDE_DIR = join(os.homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 
 type IpcResult<T> = { data: T | null; error: string | null };
+
+// Un hash di progetto è il nome di una cartella figlia diretta di PROJECTS_DIR:
+// rifiuta separatori/traversal per impedire operazioni fuori da PROJECTS_DIR.
+function assertValidHash(hash: string): void {
+  if (typeof hash !== 'string' || hash.length === 0 || hash === '.' || hash === '..'
+    || hash.includes('/') || hash.includes('\\') || hash.includes('\0')) {
+    throw new Error(`Invalid project hash: ${JSON.stringify(hash)}`);
+  }
+}
 
 function ok<T>(data: T): IpcResult<T> {
   return { data, error: null };
@@ -298,6 +310,47 @@ ipcMain.handle('projects:delete', async (_event, hash: string) => {
   }
 });
 
+ipcMain.handle('projects:detectDuplicates', async () => {
+  try {
+    return ok(detectDuplicateProjects(PROJECTS_DIR));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('projects:planMerge', async (_event, sourceHash: string, destHash: string) => {
+  try {
+    assertValidHash(sourceHash);
+    assertValidHash(destHash);
+    return ok(computeMergePlan(PROJECTS_DIR, sourceHash, destHash));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destHash: string) => {
+  try {
+    assertValidHash(sourceHash);
+    assertValidHash(destHash);
+  } catch (e) {
+    return err(e);
+  }
+  pauseWatcher();
+  try {
+    const result = executeMerge(PROJECTS_DIR, sourceHash, destHash);
+    return ok(result);
+  } catch (e) {
+    return err(e);
+  } finally {
+    // Il contenuto delle due cartelle è cambiato (o è stato ripristinato dal rollback):
+    // invalida la cache del cwd e notifica un solo refresh.
+    invalidateCwdCache(sourceHash);
+    invalidateCwdCache(destHash);
+    resumeWatcher();
+    mainWindow?.webContents.send('data:changed');
+  }
+});
+
 ipcMain.handle('mcp:getGlobal', async () => {
   try {
     return ok(getGlobalMcp());
@@ -432,7 +485,11 @@ ipcMain.handle('sessions:newInTerminal', async (_event, realPath: string) => {
   } catch (e) { return err(e); }
 });
 
-// File watcher
+// File watcher — pausa rientrante (gestisce eventuali merge concorrenti).
+let watcherPauseDepth = 0;
+function pauseWatcher() { watcherPauseDepth += 1; }
+function resumeWatcher() { if (watcherPauseDepth > 0) watcherPauseDepth -= 1; }
+
 function startWatcher() {
   const watcher = chokidar.watch(PROJECTS_DIR, {
     ignoreInitial: true,
@@ -440,6 +497,7 @@ function startWatcher() {
   });
 
   const notify = () => {
+    if (watcherPauseDepth > 0) return;
     mainWindow?.webContents.send('data:changed');
   };
 
