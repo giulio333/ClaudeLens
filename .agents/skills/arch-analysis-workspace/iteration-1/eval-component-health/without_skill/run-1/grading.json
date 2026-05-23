@@ -1,0 +1,13 @@
+{
+  "eval_id": 2,
+  "eval_name": "component-health",
+  "configuration": "without_skill",
+  "summary": {"pass_rate": 1.0, "passed": 4, "failed": 0, "total": 4},
+  "timing": {"total_duration_seconds": 147.9, "total_tokens": 92978},
+  "expectations": [
+    {"text": "Il report include il conteggio righe per i componenti principali", "passed": true, "evidence": "Tabelle per ogni cartella con righe per file"},
+    {"text": "ProjectOverview.tsx viene verificato esplicitamente con il numero di righe", "passed": true, "evidence": "Sezione §1: PASS, 300 righe, soglia target 400"},
+    {"text": "Vengono identificati candidati a refactor con una motivazione", "passed": true, "evidence": "Sezione §4 con LiveMonitor, ToolDetailPanel, MemorySection, AnalyticsView con suggerimenti specifici"},
+    {"text": "La struttura delle cartelle src/components/ è mappata o elencata", "passed": true, "evidence": "Tabelle organizzate per cartella: tabs/, overview/, chat/, sessions/, memory/, ecc."}
+  ]
+}

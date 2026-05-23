@@ -1,0 +1,11 @@
+{
+  "eval_id": 1,
+  "eval_name": "ipc-alignment",
+  "prompt": "Ci sono handler IPC nel main process che non vengono usati dal renderer? Controlla anche se mancano tipi nel preload",
+  "assertions": [
+    {"id": "ipc-compares-both-files", "text": "Il report confronta esplicitamente main.ts con useIPC.ts"},
+    {"id": "ipc-names-specific-handlers", "text": "Vengono citati handler specifici con il loro namespace (memory:*, cost:*, sessions:*, ecc.)"},
+    {"id": "ipc-analyzes-preload", "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)"},
+    {"id": "ipc-identifies-gaps", "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente"}
+  ]
+}
