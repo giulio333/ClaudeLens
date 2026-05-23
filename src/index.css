@@ -712,68 +712,143 @@ body {
 }
 .cl-mcp-metrics .met .num small { font-size: 14px; font-weight: 400; color: var(--cl-ink-4); }
 
-.cl-mcp-list { border-top: 1px solid var(--cl-ink); }
-.cl-mcp-item {
+/* MCP — refined catalog grid (GlobalMcpView) */
+.cl-mcp-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-mcp-card {
+  padding: 22px 28px 22px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  cursor: pointer;
+  display: grid;
+  grid-template-columns: 44px 1fr;
+  gap: 18px; align-items: start;
+  transition: background 100ms;
+  background: transparent; border-left: none; border-top: none;
   width: 100%; text-align: left; font: inherit; color: inherit;
-  background: transparent; border: none; cursor: pointer;
-  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 18px;
-  padding: 18px 0; border-top: 1px solid var(--cl-line-soft);
-  transition: background 120ms, padding 120ms;
+  min-width: 0;
 }
-.cl-mcp-item:first-child { border-top: none; }
-.cl-mcp-item.static { cursor: default; }
-.cl-mcp-item:not(.static):hover { background: var(--cl-accent-soft); padding-left: 14px; padding-right: 14px; }
-.cl-mcp-item .badge {
-  width: 42px; height: 42px; border-radius: 11px; flex-shrink: 0;
+.cl-mcp-card:nth-child(odd) { padding-left: 0; padding-right: 36px; border-right: 1px solid var(--cl-line-soft); }
+.cl-mcp-card:nth-child(even) { padding-left: 36px; border-right: none; }
+.cl-mcp-card:hover { background: var(--cl-accent-soft); }
+.cl-mcp-card .badge {
+  width: 44px; height: 44px; border-radius: 12px; flex-shrink: 0;
   display: flex; align-items: center; justify-content: center;
-  font-family: var(--font-mono); font-size: 16px; font-weight: 600;
+  font-family: var(--font-mono); font-size: 18px; font-weight: 600;
 }
-.cl-mcp-item .m-head { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.cl-mcp-item .m-name { font-size: 16px; font-weight: 600; letter-spacing: -0.015em; color: var(--cl-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.cl-mcp-item .m-led { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
-.cl-mcp-item .m-src {
+.cl-mcp-card .body { min-width: 0; }
+.cl-mcp-card .head { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.cl-mcp-card .name {
+  font-size: 17px; font-weight: 600; letter-spacing: -0.015em;
+  color: var(--cl-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-mcp-card .led { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.cl-mcp-card .src {
   font-family: var(--font-mono); font-size: 9.5px; letter-spacing: 0.12em;
   text-transform: uppercase; padding: 2px 7px; border-radius: 999px; flex-shrink: 0;
+  margin-left: auto;
 }
-.cl-mcp-item .m-sub {
-  font-family: var(--font-mono); font-size: 11px; color: var(--cl-ink-3);
-  margin-top: 5px; line-height: 1.5; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+.cl-mcp-card .cat {
+  font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.16em;
+  text-transform: uppercase; color: var(--cl-ink-4); margin-top: 8px;
 }
-.cl-mcp-item .m-right { display: flex; align-items: center; gap: 16px; }
-.cl-mcp-item .m-prog { display: flex; flex-direction: column; align-items: flex-end; gap: 6px; }
-.cl-mcp-item .m-frac { font-family: var(--font-mono); font-size: 20px; font-weight: 600; color: var(--cl-ink); line-height: 1; }
-.cl-mcp-item .m-frac small { color: var(--cl-ink-4); font-size: 11px; font-weight: 400; }
+.cl-mcp-card .desc {
+  font-size: 13px; color: var(--cl-ink-3);
+  margin-top: 10px; line-height: 1.55;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-mcp-card .foot {
+  display: flex; align-items: center; gap: 12px;
+  margin-top: 16px; min-width: 0;
+}
+.cl-mcp-card .foot .frac {
+  font-family: var(--font-mono); font-size: 12.5px;
+  color: var(--cl-ink-2); font-weight: 500; flex-shrink: 0;
+}
+.cl-mcp-card .foot .frac small { color: var(--cl-ink-4); font-weight: 400; }
+.cl-mcp-card .foot .bar {
+  flex: 1; height: 3px; border-radius: 2px; background: var(--cl-line); overflow: hidden; min-width: 40px;
+}
+.cl-mcp-card .foot .bar i { display: block; height: 100%; border-radius: 2px; }
+.cl-mcp-card .foot .pct {
+  font-family: var(--font-mono); font-size: 11px; color: var(--cl-ink-4); flex-shrink: 0;
+}
+.cl-mcp-card .foot .env {
+  font-family: var(--font-mono); font-size: 11px; color: var(--cl-ink-3); flex-shrink: 0;
+}
+.cl-mcp-card .foot .env b { color: var(--cl-ink-2); font-weight: 500; }
+.cl-mcp-card .foot .cmd {
+  font-family: var(--font-mono); font-size: 11px; color: var(--cl-ink-4);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+
+/* Generic horizontal progress bar — used both inside cards and on detail */
 .cl-mcp-bar { width: 96px; height: 3px; border-radius: 2px; background: var(--cl-line); overflow: hidden; }
 .cl-mcp-bar i { display: block; height: 100%; border-radius: 2px; }
-.cl-mcp-item .chev { color: var(--cl-ink-4); transition: transform 150ms; flex-shrink: 0; }
-.cl-mcp-item .chev.open { transform: rotate(180deg); }
-.cl-mcp-item .chev-right { color: var(--cl-ink-4); flex-shrink: 0; transition: transform 150ms; }
-.cl-mcp-item:hover .chev-right { transform: translateX(3px); color: var(--cl-accent); }
 
-.cl-mcp-detail {
-  padding: 4px 0 20px 60px;
+/* MCP — local configuration block (detail view) */
+.cl-mcp-config {
   border-top: 1px solid var(--cl-line-soft);
-  margin-top: -1px;
 }
-.cl-mcp-detail .d-label {
+.cl-mcp-config .d-label {
   font-family: var(--font-mono); font-size: 10px; letter-spacing: 0.14em;
   text-transform: uppercase; color: var(--cl-ink-4); padding-top: 16px; margin-bottom: 10px;
 }
-.cl-mcp-detail .d-cmd {
+.cl-mcp-config .d-cmd {
   font-family: var(--font-mono); font-size: 12px; color: var(--cl-ink-2);
   background: var(--cl-paper-2); border: 1px solid var(--cl-line-soft);
   border-radius: 8px; padding: 10px 12px; word-break: break-all; line-height: 1.6;
 }
-.cl-mcp-detail .d-env { display: flex; flex-wrap: wrap; gap: 6px; }
-.cl-mcp-detail .d-env .k {
+.cl-mcp-config .d-env { display: flex; flex-wrap: wrap; gap: 6px; }
+.cl-mcp-config .d-env .k {
   font-family: var(--font-mono); font-size: 11px; color: var(--cl-ink-2);
   background: var(--cl-paper-2); border: 1px solid var(--cl-line-soft);
   border-radius: 999px; padding: 3px 10px;
 }
-.cl-mcp-detail .d-proj { display: flex; align-items: center; gap: 9px; padding: 5px 0; }
-.cl-mcp-detail .d-proj .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--cl-danger); flex-shrink: 0; }
-.cl-mcp-detail .d-proj .name { font-size: 12.5px; color: var(--cl-ink-2); }
-.cl-mcp-detail .d-proj .path { font-family: var(--font-mono); font-size: 10.5px; color: var(--cl-ink-4); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* MCP — refined project grid (detail view) */
+.cl-mcp-projs {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 0;
+  border-top: 1px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-mcp-proj {
+  padding: 18px 28px 18px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  display: grid;
+  grid-template-columns: 30px 1fr;
+  gap: 14px; align-items: center;
+  min-width: 0;
+}
+.cl-mcp-proj:nth-child(odd) { padding-left: 0; padding-right: 36px; border-right: 1px solid var(--cl-line-soft); }
+.cl-mcp-proj:nth-child(even) { padding-left: 36px; }
+.cl-mcp-proj .glyph {
+  width: 28px; height: 28px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
+  border: 1.5px solid currentColor;
+  position: relative;
+}
+.cl-mcp-proj .glyph .led {
+  position: absolute; right: -2px; bottom: -2px;
+  width: 9px; height: 9px; border-radius: 50%;
+  border: 2px solid var(--cl-paper);
+}
+.cl-mcp-proj .name {
+  font-size: 14px; font-weight: 600; letter-spacing: -0.01em;
+  color: var(--cl-ink); overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.cl-mcp-proj .path {
+  font-family: var(--font-mono); font-size: 10.5px; color: var(--cl-ink-4);
+  margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
 
 /* Rules */
 .cl-rules { border-top: 1px solid var(--cl-ink); }
