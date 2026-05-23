@@ -6,13 +6,13 @@ import {
   useMemoryProjects,
   useCostSummary,
   useGlobalClaudeMd,
-  useLiveSessions,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import type { ProjectCost } from '../../../types'
 import { Lens } from './Lens'
 import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
+import { McpServerGrid } from '../mcp/McpServerGrid'
 
 type Project = { hash: string; realPath: string }
 
@@ -58,9 +58,6 @@ export function GlobalHomeView({
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
   const { data: globalClaudeMd } = useGlobalClaudeMd()
-  const { data: bgSessions = [] } = useLiveSessions()
-
-  const liveAgents = bgSessions.filter(s => s.alive).length
 
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
   const [projectsPage, setProjectsPage] = useState(0)
@@ -313,38 +310,16 @@ export function GlobalHomeView({
             </div>
             <span className="t-meta"><b>{mcpServers.length}</b> servers</span>
           </button>
-          <button type="button" className="cl-tile" onClick={() => onNavigate({ type: 'agents-live' })}>
-            <span className="glyph" style={liveAgents > 0 ? { color: '#6366f1' } : undefined}>●</span>
-            <div>
-              <div className="t-name">Agents Live</div>
-              <div className="t-desc">Background <code style={{ fontFamily: 'var(--font-mono)' }}>claude agents</code> sessions across all projects.</div>
-            </div>
-            <span className="t-meta"><b>{liveAgents}</b> live · {bgSessions.length} total</span>
-          </button>
         </div>
       </section>
 
       {/* ─── MCP SERVERS ──────────────────────────────── */}
       {mcpServers.length > 0 && (
         <section className="cl-section">
-          <div className="cl-sec-head">
-            <h2>MCP servers</h2>
-            <span className="ct">connected · with project counts</span>
-          </div>
-          <div className="cl-mcp-row" style={{ gridTemplateColumns: `repeat(${Math.min(3, mcpServers.length)}, 1fr)` }}>
-            {mcpServers.slice(0, 3).map((s, i) => {
-              const tone = ['', 'violet', 'cyan'][i % 3]
-              const total = s.enabledInProjects + s.disabledInProjects
-              return (
-                <button key={s.name} type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onNavigate({ type: 'global-mcp' })}>
-                  <div className="led-row"><span className="led" /> {s.source}</div>
-                  <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
-                  <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
-                  <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
-                </button>
-              )
-            })}
-          </div>
+          <McpServerGrid
+            servers={mcpServers}
+            onSelect={s => onNavigate({ type: 'mcp-detail', server: s, totalProjects: s.enabledInProjects + s.disabledInProjects })}
+          />
         </section>
       )}
     </div>

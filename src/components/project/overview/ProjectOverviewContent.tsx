@@ -16,9 +16,10 @@ import {
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
-import { fmt, fmtModel } from '../utils'
+import { fmt, fmtModel, sessionTitle } from '../utils'
 import type { SessionSummary, ProjectCost } from '../../../types'
 import { Lens } from './Lens'
+import { McpServerGrid } from '../mcp/McpServerGrid'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp'
 
@@ -365,7 +366,7 @@ export function ProjectView({
               <span className="pip" /><span>Rules</span><span className="num">{rules.length} active</span>
             </button>
             <button className={`item ${projectBgSessions.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'agents-live', project })}>
-              <span className="pip" /><span>Agents Live</span><span className="num">{liveBgCount} live · {projectBgSessions.length}</span>
+              <span className="pip" /><span>Live Agents</span><span className="num">{liveBgCount} live · {projectBgSessions.length}</span>
             </button>
           </section>
         </>
@@ -517,28 +518,23 @@ export function ProjectView({
 
       {section === 'mcp' && (
         <section className="cl-section" style={{ paddingTop: 38 }}>
-          <div className="cl-sec-head">
-            <h2>MCP servers</h2>
-            <span className="ct">{enabledMcp.length} active · project-scoped</span>
-            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
-          </div>
           {enabledMcp.length === 0 ? (
-            <div className="cl-empty">No MCP servers active for this project.</div>
+            <>
+              <div className="cl-sec-head">
+                <h2>MCP servers</h2>
+                <span className="ct">0 active · project-scoped</span>
+                <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
+              </div>
+              <div className="cl-empty">No MCP servers active for this project.</div>
+            </>
           ) : (
-            <div className="cl-mcp-row" style={{ gridTemplateColumns: `repeat(${Math.min(3, enabledMcp.length)}, 1fr)` }}>
-              {enabledMcp.slice(0, 3).map((s, i) => {
-                const tone = ['', 'violet', 'cyan'][i % 3]
-                const total = s.enabledInProjects + s.disabledInProjects
-                return (
-                  <button key={s.name} type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onNavigate({ type: 'global-mcp' })}>
-                    <div className="led-row"><span className="led" /> {s.source}</div>
-                    <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
-                    <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
-                    <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
-                  </button>
-                )
-              })}
-            </div>
+            <McpServerGrid
+              servers={enabledMcp}
+              onSelect={s => onNavigate({ type: 'mcp-detail', server: s, totalProjects: s.enabledInProjects + s.disabledInProjects })}
+              headerAction={
+                <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
+              }
+            />
           )}
 
           <div className="cl-sec-head" style={{ marginTop: 42 }}>
@@ -668,10 +664,12 @@ function SessionRows({ sessions, cleanupDays, onOpen }: { sessions: SessionSumma
             <span className="idx">{String(i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
               <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {s.customTitle || `Session ${shortWhen(s.date)}`}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {sessionTitle(s)}
+                </span>
                 <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
               </div>
-              <div className="file">{s.filename}</div>
+              <div className="file">{fmt(s.messageCount)} msg · ${s.estimatedCost.toFixed(2)}</div>
             </div>
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
             <span className="toks">{fmt(s.totalTokens)}<small>tok</small></span>

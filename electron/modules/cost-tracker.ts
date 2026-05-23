@@ -30,6 +30,8 @@ export interface SessionSummary {
   model?: string;          // modello dominante (retrocompatibilità)
   models: Record<string, number>; // conteggio messaggi per modello
   customTitle?: string;
+  aiTitle?: string;
+  firstUserMessage?: string;
 }
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
@@ -105,11 +107,15 @@ interface ParsedSession {
   model: string | undefined;  // modello dominante
   models: Record<string, number>;
   customTitle?: string;
+  aiTitle?: string;
+  firstUserMessage?: string;
 }
 
 interface LineData {
   date: string;
   customTitle: string | undefined;
+  aiTitle: string | undefined;
+  firstUserMessage: string | undefined;
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
@@ -117,18 +123,51 @@ interface LineData {
   model: string | undefined;
 }
 
+function extractFirstUserText(json: Record<string, unknown>): string | undefined {
+  if (json.type !== 'user') return undefined;
+  if (json.isMeta === true || json.isSidechain === true) return undefined;
+  const msg = json.message as Record<string, unknown> | undefined;
+  if (!msg) return undefined;
+  const raw = msg.content;
+
+  let text = '';
+  if (typeof raw === 'string') {
+    text = raw;
+  } else if (Array.isArray(raw)) {
+    for (const block of raw) {
+      if (block && typeof block === 'object') {
+        const b = block as Record<string, unknown>;
+        if (b.type === 'text' && typeof b.text === 'string') {
+          text = b.text;
+          break;
+        }
+      }
+    }
+  }
+
+  // Salta messaggi tecnici (caveat, comandi, tool_result)
+  const stripped = text.replace(/<[^>]+>/g, '').trim();
+  if (!stripped) return undefined;
+  if (stripped.startsWith('Caveat:') || stripped.startsWith('[Request interrupted')) return undefined;
+  return stripped;
+}
+
 function parseJsonlLine(line: string): LineData | null {
   try {
     const json = JSON.parse(line);
     const date = json.timestamp ? new Date(json.timestamp).toISOString() : '';
     const customTitle = json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
+    const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
+    const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
     const usage = json.message?.usage;
-    if (!usage && !date && !customTitle) return null;
+    if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
 
     const model: string | undefined = json.message?.model;
     return {
       date,
       customTitle,
+      aiTitle,
+      firstUserMessage,
       inputTokens:      usage?.input_tokens                  ?? 0,
       outputTokens:     usage?.output_tokens                 ?? 0,
       cacheWriteTokens: usage?.cache_creation_input_tokens   ?? 0,
@@ -144,6 +183,7 @@ function parseJsonlSession(filePath: string): ParsedSession {
   const result: ParsedSession = {
     inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0,
     messageCount: 0, date: '', model: undefined, models: {}, customTitle: undefined,
+    aiTitle: undefined, firstUserMessage: undefined,
   };
 
   if (!existsSync(filePath)) return result;
@@ -157,6 +197,8 @@ function parseJsonlSession(filePath: string): ParsedSession {
       if (!parsed) continue;
 
       if (parsed.customTitle) result.customTitle = parsed.customTitle;
+      if (parsed.aiTitle) result.aiTitle = parsed.aiTitle;
+      if (!result.firstUserMessage && parsed.firstUserMessage) result.firstUserMessage = parsed.firstUserMessage;
       if (!result.date && parsed.date) result.date = parsed.date;
 
       if (parsed.inputTokens || parsed.outputTokens) {
@@ -282,6 +324,8 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
         model: s.model,
         models: s.models,
         customTitle: s.customTitle,
+        aiTitle: s.aiTitle,
+        firstUserMessage: s.firstUserMessage,
       });
     } catch {
       // sessione non leggibile

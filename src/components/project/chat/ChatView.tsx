@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useChatSession } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
-import { fmt, fmtDate, fmtModel, modelColor } from '../utils'
+import { fmt, fmtDate, fmtModel, modelColor, sessionTitle } from '../utils'
 import { buildProcessedMessages, isMemoryFile, ChatDetailsFilter, ToolGroup } from './utils'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
@@ -41,7 +41,7 @@ export function ChatView({
     .sort((a, b) => b[1] - a[1])
   const totalToolCalls = toolSummary.reduce((s, [, c]) => s + c, 0)
 
-  const sessionTitle = session.customTitle || fmtDate(session.date)
+  const title = sessionTitle(session)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] ?? null : null
 
   return (
@@ -51,7 +51,7 @@ export function ChatView({
       <TopBar
         onBack={onBack}
         backLabel={`${projectName} · Sessions`}
-        crumbs={[{ label: sessionTitle, accent: true }]}
+        crumbs={[{ label: title, accent: true }]}
         right={
           <>
             <div className="cl-seg">
@@ -102,7 +102,7 @@ export function ChatView({
             textOverflow: 'ellipsis',
             whiteSpace: 'nowrap',
           }}>
-            {sessionTitle}
+            {title}
           </h1>
           <div className="cl-h-meta" style={{ marginTop: 0 }}>
             <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--cl-ink-3)' }}>{session.filename}</span>

@@ -72,6 +72,8 @@ export interface SessionSummary {
   model?: string
   models: Record<string, number>
   customTitle?: string
+  aiTitle?: string
+  firstUserMessage?: string
 }
 
 export interface RuleFile {
