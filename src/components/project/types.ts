@@ -25,17 +25,3 @@ export type View =
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
   | { type: 'agents-live'; project?: { hash: string; realPath: string } }
   | { type: 'duplicates' }
-
-export const TYPE_STYLES: Record<string, string> = {
-  user:      'bg-blue-950/20 text-blue-400 ring-1 ring-blue-700/30',
-  feedback:  'bg-amber-950/20 text-amber-400 ring-1 ring-amber-700/30',
-  project:   'bg-emerald-950/20 text-emerald-400 ring-1 ring-emerald-700/30',
-  reference: 'bg-violet-950/20 text-violet-400 ring-1 ring-violet-700/30',
-}
-
-export const SCOPE_STYLES: Record<string, string> = {
-  global:  'bg-blue-950/20 text-blue-400 ring-1 ring-blue-700/30',
-  project: 'bg-emerald-950/20 text-emerald-400 ring-1 ring-emerald-700/30',
-  local:   'bg-amber-950/20 text-amber-400 ring-1 ring-amber-700/30',
-  subdir:  'bg-violet-950/20 text-violet-400 ring-1 ring-violet-700/30',
-}
