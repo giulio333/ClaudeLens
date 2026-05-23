@@ -399,6 +399,35 @@ ipcMain.handle('agents:create', async (_event, input: AgentInput, projectPath?: 
   }
 });
 
+ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, name?: string, agent?: string) => {
+  try {
+    const args = ['--bg'];
+    if (name) {
+      args.push('--name', name);
+    }
+    if (agent) {
+      args.push('--agent', agent);
+    }
+    args.push(prompt);
+
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+
+    const localBinPath = join(os.homedir(), '.local', 'bin');
+    const env = { 
+      ...process.env, 
+      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}` 
+    };
+
+    await execFileAsync('claude', args, { cwd, env });
+
+    return ok(null);
+  } catch (e: any) {
+    return err(e.stderr || e.message || String(e));
+  }
+});
+
 ipcMain.handle('projects:delete', async (_event, hash: string) => {
   try {
     const projectPath = join(PROJECTS_DIR, hash);

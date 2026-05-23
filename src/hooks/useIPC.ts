@@ -157,6 +157,7 @@ declare global {
         getGlobal: () => Promise<IpcResult<Agent[]>>
         getByProject: (realPath: string) => Promise<IpcResult<Agent[]>>
         create: (input: AgentInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
+        dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string) => Promise<IpcResult<null>>
       }
       mcp: {
         getGlobal: () => Promise<IpcResult<McpData>>
@@ -428,6 +429,19 @@ export function useCreateAgent() {
       onSuccess: () => {
         qc.invalidateQueries('agents:global')
         qc.invalidateQueries('agents:project')
+      },
+    }
+  )
+}
+
+export function useDispatchBackgroundAgent() {
+  const qc = useQueryClient()
+  return useMutation(
+    ({ cwd, prompt, name, agent }: { cwd: string; prompt: string; name?: string; agent?: string }) =>
+      unwrap(window.electronAPI.agents.dispatchBg(cwd, prompt, name, agent)),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('live:sessions')
       },
     }
   )
