@@ -26,11 +26,10 @@ Formatter puri (nessuna dipendenza React):
 ### `shared/` — Atomi UI riutilizzabili
 | File | Esporta | Descrizione |
 |---|---|---|
-| `ModelChip.tsx` | `ModelChip`, `ModelUsageBadge` | Badge modello singolo con fill proporzionale; badge distribuzione multi-modello |
-| `SectionTitle.tsx` | `SectionTitle` | Titolo sezione con divider orizzontale e slot opzionale per action |
 | `BackButton.tsx` | `BackButton` | Bottone freccia indietro con label |
 | `StatChip.tsx` | `StatChip` | Chip label + valore, variante accent indigo |
-| `Accordion.tsx` | `Accordion` | Accordion espandibile con badge scope opzionale |
+| `TopBar.tsx` | `TopBar`, `Crumb` | Top bar editoriale condivisa (52px, drag region, back + breadcrumbs + right slot) |
+| `CreateFormKit.tsx` | `ModelPicker`, `ToolsInput`, `FieldHint`, `CharCounter`, `openDocs`, `validateName`, `useCreateFormKeys`, `MODEL_PRESETS`, `KNOWN_TOOLS`, `NAME_MAX`, `DESC_MAX`, `NAME_RE` | Building blocks condivisi per le pagine "create" (skill, agent): picker modello accent-aware, autocomplete tools, hint, counter, validazione nome, hook keybinding (⌘↵/Esc) |
 
 ---
 
@@ -118,8 +117,11 @@ Formatter puri (nessuna dipendenza React):
 ### `overview/`
 | File | Esporta | Descrizione |
 |---|---|---|
-| `NavCard.tsx` | `NavCard` | Card navigazione con icona, stat principale e sottotitolo |
-| `ProjectOverviewContent.tsx` | `ProjectOverviewContent` | Vista overview di un progetto: header metriche + 4 NavCard (memoria, sessioni, CLAUDE.md, analytics) |
+| `GlobalHomeView.tsx` | `GlobalHomeView` | Home globale: progetti, panoramica MCP, link a sezioni globali |
+| `Lens.tsx` | `Lens` | Componente "lente" usata per inquadrare le metriche/sezioni della overview |
+| `ProjectOverviewContent.tsx` | `ProjectOverviewContent` | Vista overview di un progetto: header metriche + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp) |
+| `ProjectSubtabs.tsx` | `ProjectSubtabs` | Subtab di navigazione interna a un progetto |
+| `DuplicateProjectsNotice.tsx` | `DuplicateProjectsBadge`, `DuplicateProjectsNotice` | Notice/badge per progetti duplicati (cwd rewrite + merge) |
 
 ---
 
