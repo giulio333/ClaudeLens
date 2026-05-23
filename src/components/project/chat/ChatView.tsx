@@ -222,6 +222,12 @@ function ChatSessionHeader({
           </h1>
           <div className="cl-chat-submeta">
             <span className="cl-chat-file">{session.filename}</span>
+            {session.template && session.template !== 'claude' && (
+              <>
+                <span className="sep">·</span>
+                <span style={{ textTransform: 'uppercase' }}>{session.template}</span>
+              </>
+            )}
             {primaryModel && (
               <>
                 <span className="sep">·</span>

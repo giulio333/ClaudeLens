@@ -1,4 +1,5 @@
-import { useLiveSessions, BgSession, SessionSummary } from '../../../hooks/useIPC'
+import { useState } from 'react'
+import { useLiveSessions, BgSession, SessionSummary, useProjectAgents, useGlobalAgents, useDispatchBackgroundAgent } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
 
@@ -23,6 +24,7 @@ function summaryFor(s: BgSession): SessionSummary {
     messageCount: 0,
     models: {},
     customTitle: s.name,
+    template: s.template,
   }
 }
 
@@ -93,7 +95,7 @@ function SessionRow({ s, showProject, onOpen }: { s: BgSession; showProject: boo
       <div style={{ minWidth: 0, flex: 1 }}>
         <div className="t-name" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span className="truncate">{s.name}</span>
-          {s.template === 'bg' && (
+          {s.template && s.template !== 'claude' && (
             <span
               style={{
                 fontSize: 9, letterSpacing: '0.12em', textTransform: 'uppercase',
@@ -101,7 +103,7 @@ function SessionRow({ s, showProject, onOpen }: { s: BgSession; showProject: boo
                 borderRadius: 4, padding: '1px 5px', fontFamily: 'var(--font-mono)',
               }}
             >
-              bg
+              {s.template}
             </span>
           )}
         </div>
@@ -140,6 +142,15 @@ export function AgentsLiveView({
 }) {
   const projectName = project?.realPath.split('/').pop()
   const { data, isLoading } = useLiveSessions()
+
+  const { data: globalAgents = [] } = useGlobalAgents()
+  const { data: projectAgents = [] } = useProjectAgents(project?.realPath || null)
+  const allAgents = [...projectAgents, ...globalAgents].filter((a, i, arr) => arr.findIndex(x => x.name === a.name) === i)
+
+  const dispatchBg = useDispatchBackgroundAgent()
+  const [prompt, setPrompt] = useState('')
+  const [agentName, setAgentName] = useState('')
+  const [sessionName, setSessionName] = useState('')
 
   const all = data ?? []
   const sessions = project
@@ -214,6 +225,66 @@ export function AgentsLiveView({
           ))
         )}
       </div>
+      
+      {project && (
+        <div style={{ padding: '16px', borderTop: '1px solid var(--cl-line)', background: 'var(--cl-panel)', zIndex: 10 }}>
+          {dispatchBg.isError && (
+            <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px', padding: '8px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #f87171' }}>
+              <b>Error dispatching:</b> {String(dispatchBg.error)}
+            </div>
+          )}
+          <form 
+            style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', maxWidth: '800px', margin: '0 auto' }}
+            onSubmit={(e) => {
+              e.preventDefault()
+              if (!prompt.trim()) return
+              dispatchBg.mutate({ cwd: project.realPath, prompt: prompt.trim(), name: sessionName.trim() || undefined, agent: agentName || undefined }, {
+                onSuccess: () => {
+                  setPrompt('')
+                  setSessionName('')
+                  setAgentName('')
+                }
+              })
+            }}
+          >
+            <input 
+              type="text" 
+              placeholder="Prompt for background task..." 
+              value={prompt} 
+              onChange={e => setPrompt(e.target.value)}
+              style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
+            />
+            <input 
+              type="text" 
+              placeholder="Name (optional)" 
+              value={sessionName} 
+              onChange={e => setSessionName(e.target.value)}
+              style={{ width: '150px', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
+            />
+            <select
+              value={agentName}
+              onChange={e => setAgentName(e.target.value)}
+              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
+            >
+              <option value="">No subagent</option>
+              {allAgents.map(a => (
+                <option key={a.name} value={a.name}>{a.name}</option>
+              ))}
+            </select>
+            <button 
+              type="submit" 
+              disabled={!prompt.trim() || dispatchBg.isLoading}
+              style={{ 
+                padding: '8px 16px', borderRadius: '6px', background: 'var(--cl-ink-1)', color: 'var(--cl-paper)', 
+                fontWeight: 600, cursor: prompt.trim() && !dispatchBg.isLoading ? 'pointer' : 'not-allowed', 
+                opacity: prompt.trim() && !dispatchBg.isLoading ? 1 : 0.5 
+              }}
+            >
+              {dispatchBg.isLoading ? 'Dispatching...' : 'Dispatch'}
+            </button>
+          </form>
+        </div>
+      )}
     </div>
   )
 }

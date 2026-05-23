@@ -74,6 +74,7 @@ export interface SessionSummary {
   customTitle?: string
   aiTitle?: string
   firstUserMessage?: string
+  template?: string
 }
 
 export interface ExportSaveResult {

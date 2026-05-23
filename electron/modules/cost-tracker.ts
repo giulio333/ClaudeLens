@@ -32,6 +32,7 @@ export interface SessionSummary {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  template?: string;
 }
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
@@ -109,6 +110,7 @@ interface ParsedSession {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  template?: string;
 }
 
 interface LineData {
@@ -326,6 +328,7 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
         customTitle: s.customTitle,
         aiTitle: s.aiTitle,
         firstUserMessage: s.firstUserMessage,
+        template: s.template,
       });
     } catch {
       // sessione non leggibile
