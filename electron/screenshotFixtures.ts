@@ -375,6 +375,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'cost:getSummary', 'cost:getByProject',
     'claudeMd:getGlobal', 'claudeMd:getHierarchy', 'claudeMd:writeGlobal', 'claudeMd:writeFile',
     'markdownFile:write',
+    'export:markdown', 'export:pdf',
     'sessions:listByProject', 'sessions:getChat', 'sessions:openInTerminal', 'sessions:newInTerminal',
     'rules:getByProject',
     'skills:getGlobal', 'skills:getAll', 'skills:create',
@@ -404,6 +405,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('claudeMd:writeGlobal', () => ok(null));
   ipcMain.handle('claudeMd:writeFile', () => ok(null));
   ipcMain.handle('markdownFile:write', () => ok(null));
+  ipcMain.handle('export:markdown', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.md' }));
+  ipcMain.handle('export:pdf', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.pdf' }));
 
   ipcMain.handle('sessions:listByProject', (_e: unknown, hash: string) => ok(getSessionList(hash)));
   ipcMain.handle('sessions:getChat', () => ok(MOCK_CHAT));

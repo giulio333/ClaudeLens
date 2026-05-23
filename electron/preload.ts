@@ -21,6 +21,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   markdownFile: {
     write: (filePath: string, content: string) => ipcRenderer.invoke('markdownFile:write', filePath, content),
   },
+  exportFile: {
+    saveMarkdown: (defaultFilename: string, content: string) =>
+      ipcRenderer.invoke('export:markdown', defaultFilename, content),
+    savePdf: (defaultFilename: string, html: string) =>
+      ipcRenderer.invoke('export:pdf', defaultFilename, html),
+  },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
     getChat: (hash: string, filename: string) => ipcRenderer.invoke('sessions:getChat', hash, filename),

@@ -1,6 +1,7 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
-import { join } from 'path';
+import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { basename, join } from 'path';
 import os from 'os';
+import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import chokidar from 'chokidar';
 import { execFile, spawn, ChildProcess } from 'child_process';
 
@@ -32,6 +33,7 @@ const CLAUDE_DIR = join(os.homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 
 type IpcResult<T> = { data: T | null; error: string | null };
+type ExportSaveResult = { canceled: boolean; filePath: string | null };
 
 // Un hash di progetto è il nome di una cartella figlia diretta di PROJECTS_DIR:
 // rifiuta separatori/traversal per impedire operazioni fuori da PROJECTS_DIR.
@@ -48,6 +50,38 @@ function ok<T>(data: T): IpcResult<T> {
 
 function err<T>(e: unknown): IpcResult<T> {
   return { data: null, error: e instanceof Error ? e.message : String(e) };
+}
+
+function cleanDefaultFilename(filename: string, extension: string): string {
+  const fallback = `claudelens-export${extension}`;
+  const base = basename(filename || fallback)
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 180);
+  const normalized = base || fallback;
+  return normalized.toLowerCase().endsWith(extension) ? normalized : `${normalized}${extension}`;
+}
+
+async function chooseExportPath(
+  defaultFilename: string,
+  extension: string,
+  filters: Electron.FileFilter[],
+): Promise<ExportSaveResult> {
+  const options: Electron.SaveDialogOptions = {
+    defaultPath: cleanDefaultFilename(defaultFilename, extension),
+    filters,
+  };
+  const result = mainWindow
+    ? await dialog.showSaveDialog(mainWindow, options)
+    : await dialog.showSaveDialog(options);
+
+  if (result.canceled || !result.filePath) return { canceled: true, filePath: null };
+
+  const filePath = result.filePath.toLowerCase().endsWith(extension)
+    ? result.filePath
+    : `${result.filePath}${extension}`;
+  return { canceled: false, filePath };
 }
 
 // Serializza MemoryData (Map non è trasferibile via IPC)
@@ -193,6 +227,59 @@ ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: s
     return ok(null);
   } catch (e) {
     return err(e);
+  }
+});
+
+ipcMain.handle('export:markdown', async (_event, defaultFilename: string, content: string) => {
+  try {
+    if (typeof content !== 'string') throw new Error('Missing markdown content');
+    const chosen = await chooseExportPath(defaultFilename, '.md', [
+      { name: 'Markdown', extensions: ['md'] },
+    ]);
+    if (chosen.canceled || !chosen.filePath) return ok(chosen);
+    writeFileSync(chosen.filePath, content, 'utf-8');
+    return ok(chosen);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('export:pdf', async (_event, defaultFilename: string, html: string) => {
+  let printWindow: BrowserWindow | null = null;
+  let tempDir: string | null = null;
+
+  try {
+    if (typeof html !== 'string' || !html.trim()) throw new Error('Missing HTML content');
+    const chosen = await chooseExportPath(defaultFilename, '.pdf', [
+      { name: 'PDF', extensions: ['pdf'] },
+    ]);
+    if (chosen.canceled || !chosen.filePath) return ok(chosen);
+
+    tempDir = mkdtempSync(join(os.tmpdir(), 'claudelens-export-'));
+    const htmlPath = join(tempDir, 'export.html');
+    writeFileSync(htmlPath, html, 'utf-8');
+
+    printWindow = new BrowserWindow({
+      show: false,
+      webPreferences: {
+        contextIsolation: true,
+        nodeIntegration: false,
+        sandbox: true,
+      },
+    });
+    await printWindow.loadFile(htmlPath);
+    const pdf = await printWindow.webContents.printToPDF({
+      printBackground: true,
+      pageSize: 'A4',
+    });
+
+    writeFileSync(chosen.filePath, pdf);
+    return ok(chosen);
+  } catch (e) {
+    return err(e);
+  } finally {
+    if (printWindow && !printWindow.isDestroyed()) printWindow.close();
+    if (tempDir) rmSync(tempDir, { recursive: true, force: true });
   }
 });
 

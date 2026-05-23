@@ -84,10 +84,17 @@ export function readChatSession(filePath: string): ChatMessage[] {
         let blocks: ChatContentBlock[] = [];
 
         if (typeof rawContent === 'string') {
-          // Salta messaggi tecnici (caveat, command, ecc.)
-          const stripped = rawContent.replace(/<[^>]+>/g, '').trim();
-          if (!stripped) continue;
-          blocks = [{ type: 'text', text: stripped }];
+          // Preserva i tag noti del flow Claude Code command così il frontend
+          // può parsarli e renderizzarli come card dedicata.
+          const isCommand = /<(command-name|local-command-stdout)\b/.test(rawContent);
+          if (isCommand) {
+            blocks = [{ type: 'text', text: rawContent }];
+          } else {
+            // Salta messaggi tecnici (caveat, ecc.)
+            const stripped = rawContent.replace(/<[^>]+>/g, '').trim();
+            if (!stripped) continue;
+            blocks = [{ type: 'text', text: stripped }];
+          }
         } else if (Array.isArray(rawContent)) {
           blocks = parseContentArray(rawContent);
         }

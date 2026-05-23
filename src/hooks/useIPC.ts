@@ -11,6 +11,7 @@ import type {
   ChatContentBlock,
   ChatMessage,
   SessionSummary,
+  ExportSaveResult,
   RuleFile,
   Agent,
   AgentInput,
@@ -34,6 +35,7 @@ export type {
   ChatContentBlock,
   ChatMessage,
   SessionSummary,
+  ExportSaveResult,
   RuleFile,
   Agent,
   AgentInput,
@@ -132,6 +134,10 @@ declare global {
       }
       markdownFile: {
         write: (filePath: string, content: string) => Promise<IpcResult<null>>
+      }
+      exportFile: {
+        saveMarkdown: (defaultFilename: string, content: string) => Promise<IpcResult<ExportSaveResult>>
+        savePdf: (defaultFilename: string, html: string) => Promise<IpcResult<ExportSaveResult>>
       }
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>
@@ -268,6 +274,14 @@ export function useWriteMarkdownFile(invalidateKeys: string[] = []) {
       },
     }
   )
+}
+
+export function saveMarkdownExport(defaultFilename: string, content: string): Promise<ExportSaveResult> {
+  return unwrap(window.electronAPI.exportFile.saveMarkdown(defaultFilename, content))
+}
+
+export function savePdfExport(defaultFilename: string, html: string): Promise<ExportSaveResult> {
+  return unwrap(window.electronAPI.exportFile.savePdf(defaultFilename, html))
 }
 
 export function useWriteClaudeMdFile() {
