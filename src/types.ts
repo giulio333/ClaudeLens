@@ -76,6 +76,11 @@ export interface SessionSummary {
   firstUserMessage?: string
 }
 
+export interface ExportSaveResult {
+  canceled: boolean
+  filePath: string | null
+}
+
 export interface RuleFile {
   filename: string
   content: string

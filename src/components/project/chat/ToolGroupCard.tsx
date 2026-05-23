@@ -22,28 +22,30 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   const hasExpandable = showDetails || (result && result.content.length > 80)
 
   return (
-    <div className={`border overflow-hidden text-[12px] ${isMemory ? 'border-[var(--cl-violet)] bg-[var(--cl-paper-3)]/30' : 'border-[var(--cl-line)] bg-[var(--cl-paper-3)]'}`} style={{ borderRadius: '2px' }}>
-      <div className="flex items-center">
+    <div className={`cl-tool-card ${isMemory ? 'cl-tool-card--memory' : ''}`}>
+      <div className="cl-tool-card-row">
         <button
+          type="button"
           onClick={() => hasExpandable && setOpen(o => !o)}
-          className={`flex-1 flex items-center gap-2 px-3 py-2 text-left transition-colors ${isMemory ? 'hover:bg-[var(--cl-paper-3)]' : 'hover:bg-[var(--cl-paper-3)]'} ${!hasExpandable ? 'cursor-default' : ''}`}
+          className={`cl-tool-card-main ${!hasExpandable ? 'is-static' : ''}`}
         >
-          <span className="text-[13px] shrink-0">{icon}</span>
-          <span className="font-mono font-semibold text-[var(--cl-ink-3)] shrink-0">{use.name}</span>
+          <span className="cl-tool-card-icon">{icon}</span>
+          <span className="cl-tool-card-name">{use.name}</span>
           {inputPreview && !open && (
-            <span className="text-[var(--cl-ink-3)] text-[11px] truncate">{String(inputPreview).slice(0, 55)}</span>
+            <span className="cl-tool-card-preview">{String(inputPreview).slice(0, 80)}</span>
           )}
           {isMemory && (
-            <span className="shrink-0 text-[9px] font-semibold px-1.5 py-0.5 bg-[var(--cl-violet)] text-[var(--cl-paper)] border border-[var(--cl-violet)] uppercase tracking-wide" style={{ borderRadius: '2px' }}>Memory</span>
+            <span className="cl-tool-card-badge">Memory</span>
           )}
           {hasExpandable && (
-            <span className="ml-auto text-[var(--cl-ink-3)] text-[10px] shrink-0 pr-1">{open ? '▲' : '▼'}</span>
+            <span className="cl-tool-card-toggle">{open ? 'Close' : 'Open'}</span>
           )}
         </button>
         {showDetails && (
           <button
+            type="button"
             onClick={e => { e.stopPropagation(); onOpenDetail() }}
-            className="shrink-0 px-2.5 py-2 border-l border-[var(--cl-line)] text-[var(--cl-ink-3)] hover:text-[var(--cl-accent-ink)] hover:bg-[var(--cl-accent-soft)]/20 transition-colors"
+            className="cl-tool-card-detail"
             title="Open detail"
           >
             <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
@@ -56,32 +58,28 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
       </div>
 
       {result && !open && (
-        <div className={`flex items-center gap-2 px-3 py-1.5 border-t text-[11px] ${
-          result.isError
-            ? 'border-[var(--cl-danger)] bg-[var(--cl-danger-soft)] text-[var(--cl-danger)]'
-            : 'border-[var(--cl-ok)] bg-[var(--cl-paper-3)] text-[var(--cl-ok)]'
-        }`}>
-          <span className="shrink-0">{result.isError ? '⚠️' : '✓'}</span>
-          <span className="truncate font-mono text-[10px] opacity-75">{resultPreview}</span>
+        <div className={`cl-tool-card-result ${result.isError ? 'is-error' : 'is-ok'}`}>
+          <span>{result.isError ? 'Error' : 'Result'}</span>
+          <code>{resultPreview}</code>
         </div>
       )}
 
       {open && (
-        <div className="border-t border-[var(--cl-line)] bg-[var(--cl-paper-2)]/90">
+        <div className="cl-tool-card-expanded">
           {showDetails && (
-            <div className="px-3 py-2 border-b border-[var(--cl-line-soft)]">
-              <div className="text-[10px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-wider mb-1">Input</div>
-              <pre className="text-[11px] text-[var(--cl-ink-3)] whitespace-pre-wrap break-words font-mono leading-relaxed">
+            <div className="cl-tool-card-section">
+              <div className="cl-tool-card-section-title">Input</div>
+              <pre>
                 {JSON.stringify(use.input, null, 2)}
               </pre>
             </div>
           )}
           {result && (
-            <div className={`px-3 py-2 ${result.isError ? 'bg-[var(--cl-danger-soft)]/50' : ''}`}>
-              <div className={`text-[10px] font-semibold uppercase tracking-wider mb-1 ${result.isError ? 'text-[var(--cl-danger)]' : 'text-[var(--cl-ok)]'}`}>
-                {result.isError ? '⚠️ Error' : '✓ Result'}
+            <div className={`cl-tool-card-section ${result.isError ? 'is-error' : ''}`}>
+              <div className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}>
+                {result.isError ? 'Error' : 'Result'}
               </div>
-              <pre className={`text-[11px] whitespace-pre-wrap break-words font-mono leading-relaxed max-h-60 overflow-y-auto ${result.isError ? 'text-[var(--cl-danger)]' : 'text-[var(--cl-ink-3)]'}`}>
+              <pre>
                 {result.content}
               </pre>
             </div>

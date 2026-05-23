@@ -1,6 +1,205 @@
 import Markdown from '../../Markdown'
+import type { ReactNode } from 'react'
 import { ToolGroup, isMemoryFile, resolveToolIcon, stripLineNumbers, fileExt } from './utils'
 import { PathChip, SectionLabel, CodeBlock } from './atoms'
+
+function BackChevron() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10 3 5 8l5 5" />
+    </svg>
+  )
+}
+
+function OpenBoxIcon() {
+  return (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M2.5 5 8 2.4 13.5 5 8 7.6 2.5 5Z" />
+      <path d="M2.5 5v6L8 13.6 13.5 11V5" />
+      <path d="M8 7.6v6" />
+    </svg>
+  )
+}
+
+function ResultIcon({ error }: { error: boolean }) {
+  return (
+    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      {error ? (
+        <>
+          <path d="M8 2.4 14 13H2L8 2.4Z" />
+          <path d="M8 6.2v3.1" />
+          <path d="M8 11.5h.01" />
+        </>
+      ) : (
+        <>
+          <path d="M13.3 4.5 6.8 11 3.4 7.6" />
+          <path d="M2.3 8a5.7 5.7 0 1 0 2-4.3" />
+        </>
+      )}
+    </svg>
+  )
+}
+
+function outputLineCount(result: ToolGroup['result']): number {
+  if (!result?.content) return 0
+  return result.content.split('\n').length
+}
+
+function formatDuration(ms?: number): string | null {
+  if (ms === undefined) return null
+  if (ms < 1000) return `${ms}ms`
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
+}
+
+function parseAgentResult(content: string) {
+  const usageMatch = content.match(/<usage>([\s\S]*?)<\/usage>/)
+  const usage = usageMatch?.[1] ?? ''
+  const readNumber = (key: string) => {
+    const match = usage.match(new RegExp(`${key}:\\s*(\\d+)`))
+    return match ? Number(match[1]) : undefined
+  }
+
+  return {
+    cleanContent: content.replace(/\s*<usage>[\s\S]*?<\/usage>\s*/g, '').trim(),
+    totalTokens: readNumber('total_tokens'),
+    toolUses: readNumber('tool_uses'),
+    durationMs: readNumber('duration_ms'),
+    agentId: content.match(/agentId:\s*([A-Za-z0-9_-]+)/)?.[1],
+  }
+}
+
+function ToolDetailShell({
+  icon,
+  name,
+  title,
+  subtitle,
+  result,
+  isMemory,
+  onBack,
+  children,
+}: {
+  icon: string
+  name: string
+  title: string
+  subtitle?: string
+  result: ToolGroup['result']
+  isMemory: boolean
+  onBack: () => void
+  children: ReactNode
+}) {
+  const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending'
+  const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending'
+
+  return (
+    <div className="cl-tool-detail">
+      <div className="cl-tool-detail-bar">
+        <button type="button" onClick={onBack} className="cl-tool-detail-back">
+          <BackChevron />
+          <span>Back to chat</span>
+        </button>
+        <span className="cl-tool-detail-sep">/</span>
+        <span className="cl-tool-detail-mini-icon">{icon}</span>
+        <span className="cl-tool-detail-mini-title">{name}</span>
+      </div>
+
+      <div className="cl-tool-detail-scroll">
+        <header className="cl-tool-detail-hero">
+          <div className="cl-tool-detail-title">
+            <span className="cl-tool-detail-kicker">Tool detail</span>
+            <h2>{title}</h2>
+            {subtitle && <p>{subtitle}</p>}
+          </div>
+          <div className="cl-tool-detail-badges">
+            <span className={`cl-tool-status ${statusClass}`}>{status}</span>
+            {isMemory && <span className="cl-tool-status is-memory">Memory</span>}
+          </div>
+        </header>
+        {children}
+      </div>
+    </div>
+  )
+}
+
+function AgentDetailBody({
+  name,
+  input,
+  result,
+}: {
+  name: string
+  input: Record<string, unknown>
+  result: ToolGroup['result']
+}) {
+  const subtype = (input.subagent_type as string | undefined) || (name === 'Task' ? 'task' : 'general-purpose')
+  const description = (input.description as string | undefined) || 'Agent dispatch'
+  const prompt = (input.prompt as string | undefined) || ''
+  const parsed = parseAgentResult(result?.content ?? '')
+  const cleanOutput = parsed.cleanContent || result?.content || ''
+  const duration = formatDuration(parsed.durationMs)
+  const facts = [
+    { label: 'Status', value: result?.isError ? 'Error' : result ? 'Complete' : 'Pending', tone: result?.isError ? 'is-error' : 'is-ok' },
+    { label: 'Output', value: result ? `${outputLineCount(result)} lines` : '-' },
+    ...(parsed.toolUses !== undefined ? [{ label: 'Tool uses', value: String(parsed.toolUses) }] : []),
+    ...(parsed.totalTokens !== undefined ? [{ label: 'Tokens', value: String(parsed.totalTokens) }] : []),
+    ...(duration ? [{ label: 'Duration', value: duration }] : []),
+    ...(parsed.agentId ? [{ label: 'Agent ID', value: `${parsed.agentId.slice(0, 10)}...`, title: parsed.agentId }] : []),
+  ]
+
+  return (
+    <div className="cl-agent-run-sheet">
+      <div className="cl-agent-run-strip">
+        <div className="cl-agent-run-id">
+          <span>Agent</span>
+          <strong>{subtype}</strong>
+        </div>
+        <div className="cl-agent-run-facts">
+          {facts.map(fact => (
+            <div key={fact.label}>
+              <span>{fact.label}</span>
+              <strong className={fact.tone} title={fact.title}>{fact.value}</strong>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      <div className="cl-agent-sheet-grid">
+        <section className="cl-agent-sheet cl-agent-sheet--prompt">
+          <div className="cl-agent-sheet-head">
+            <OpenBoxIcon />
+            <div>
+              <span>Input brief</span>
+              <strong>{description}</strong>
+            </div>
+          </div>
+          {prompt && (
+            <div className="cl-agent-prompt">
+              <div className="cl-agent-prompt-label">Prompt</div>
+              <pre>{prompt}</pre>
+            </div>
+          )}
+        </section>
+
+        <section className={`cl-agent-sheet cl-agent-sheet--output ${result?.isError ? 'is-error' : ''}`}>
+          <div className="cl-agent-sheet-head">
+            <ResultIcon error={Boolean(result?.isError)} />
+            <div>
+              <span>{result?.isError ? 'Error' : 'Output'}</span>
+              <strong>{result ? `${outputLineCount(result)} lines` : 'No result'}</strong>
+            </div>
+          </div>
+          {!result ? (
+            <p className="cl-agent-empty">No result available.</p>
+          ) : result.isError ? (
+            <pre className="cl-agent-error">{cleanOutput || '(no output)'}</pre>
+          ) : (
+            <div className="cl-agent-markdown">
+              <Markdown>{cleanOutput || '(no output)'}</Markdown>
+            </div>
+          )}
+        </section>
+      </div>
+    </div>
+  )
+}
 
 function ToolInput({ name, input }: { name: string; input: Record<string, unknown> }) {
   if (name === 'Read') {
@@ -288,43 +487,44 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
   const isMemory = isMemoryFile(use.input as Record<string, unknown>)
   const name = use.name
   const input = use.input as Record<string, unknown>
+  const isAgent = name === 'Agent' || name === 'Task'
+  const detailTitle = isAgent
+    ? ((input.description as string | undefined) || 'Agent dispatch')
+    : name
+  const detailSubtitle = isAgent
+    ? ((input.subagent_type as string | undefined) || 'general-purpose')
+    : isMemory
+      ? 'Memory operation'
+      : 'Tool execution'
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="shrink-0 flex items-center gap-3 px-8 py-3 border-b border-[var(--cl-line)] bg-[var(--cl-paper-3)]/80">
-        <button
-          onClick={onBack}
-          className="flex items-center gap-1.5 text-[12px] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink-2)] transition-colors"
-        >
-          <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M10 3L5 8l5 5" strokeLinecap="round" strokeLinejoin="round"/>
-          </svg>
-          Back to chat
-        </button>
-        <span className="text-[var(--cl-ink-2)]">·</span>
-        <span className="text-base">{icon}</span>
-        <span className="text-[13px] font-mono font-semibold text-[var(--cl-ink-3)]">{name}</span>
-        {isMemory && (
-          <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded-full bg-[var(--cl-violet)] text-[var(--cl-violet)] border border-[var(--cl-violet)] uppercase tracking-wide">Memory</span>
-        )}
-      </div>
+    <ToolDetailShell
+      icon={icon}
+      name={name}
+      title={detailTitle}
+      subtitle={detailSubtitle}
+      result={result}
+      isMemory={isMemory}
+      onBack={onBack}
+    >
+      {isAgent ? (
+        <AgentDetailBody name={name} input={input} result={result} />
+      ) : (
+        <div className="cl-tool-detail-grid">
+          <section className="cl-tool-detail-panel">
+            <SectionLabel label="Input" />
+            <ToolInput name={name} input={input} />
+          </section>
 
-      <div className="flex-1 overflow-y-auto px-8 py-6 space-y-6 max-w-4xl mx-auto w-full">
-        <div>
-          <SectionLabel label="Input" />
-          <ToolInput name={name} input={input} />
+          <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+            <SectionLabel
+              label={result?.isError ? 'Error' : 'Output'}
+              meta={result ? `${result.content.split('\n').length} lines` : undefined}
+            />
+            <ToolOutput name={name} input={input} result={result} />
+          </section>
         </div>
-
-        <div className="border-t border-[var(--cl-line)]" />
-
-        <div>
-          <SectionLabel
-            label={result?.isError ? '⚠️ Error' : 'Output'}
-            meta={result ? `${result.content.split('\n').length} lines` : undefined}
-          />
-          <ToolOutput name={name} input={input} result={result} />
-        </div>
-      </div>
-    </div>
+      )}
+    </ToolDetailShell>
   )
 }
