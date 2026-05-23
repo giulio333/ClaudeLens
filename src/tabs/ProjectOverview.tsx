@@ -1,10 +1,25 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
 import LiveMonitor from './LiveMonitor'
-import { useMemoryProjects, useDeleteProject, useCostSummary } from '../hooks/useIPC'
+import {
+  useAllSkills,
+  useCostSummary,
+  useDeleteProject,
+  useGlobalAgents,
+  useGlobalMcp,
+  useGlobalSkills,
+  useMemoryProjects,
+  useProjectAgents,
+} from '../hooks/useIPC'
 import { usePinnedProjects } from '../hooks/usePinnedProjects'
 import { View } from '../components/project/types'
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog'
-import { SearchPopover, LensTriggerIcon } from '../components/project/shared/SearchPopover'
+import {
+  SearchPopover,
+  LensTriggerIcon,
+  type SearchAnchorAlign,
+  type SearchMode,
+  type SearchSession,
+} from '../components/project/shared/SearchPopover'
 import type { ProjectCost } from '../types'
 
 // ─── Shared
@@ -90,16 +105,33 @@ export default function ProjectOverview() {
 
   const { data: projects } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
+  const { data: globalSkills = [] } = useGlobalSkills()
+  const { data: scopedSkills = [] } = useAllSkills(selected?.realPath ?? null)
+  const { data: globalAgents = [] } = useGlobalAgents()
+  const { data: projectAgents = [] } = useProjectAgents(selected?.realPath ?? null)
+  const { data: mcpData } = useGlobalMcp()
   const deleteProjectMutation = useDeleteProject()
   const { pinned, togglePin } = usePinnedProjects()
 
-  // ─── Search popover (lens, top-right) ───
+  // ─── Unified search popover ───
   const lensBtnRef = useRef<HTMLButtonElement>(null)
   const [searchOpen, setSearchOpen] = useState(false)
+  const [searchMode, setSearchMode] = useState<SearchMode>('global')
+  const [searchAnchorAlign, setSearchAnchorAlign] = useState<SearchAnchorAlign>('right')
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
-  function openSearch() {
-    setAnchorRect(lensBtnRef.current?.getBoundingClientRect() ?? null)
+  const [searchSessions, setSearchSessions] = useState<SearchSession[]>([])
+  const [searchSessionsLoading, setSearchSessionsLoading] = useState(false)
+  function openSearch(mode: SearchMode, rect: DOMRect | null, align: SearchAnchorAlign) {
+    setSearchMode(mode)
+    setSearchAnchorAlign(align)
+    setAnchorRect(rect)
     setSearchOpen(true)
+  }
+  function openGlobalSearch() {
+    openSearch('global', lensBtnRef.current?.getBoundingClientRect() ?? null, 'right')
+  }
+  function openProjectSearch(rect: DOMRect) {
+    openSearch('projects', rect, 'left')
   }
   function closeSearch() { setSearchOpen(false) }
 
@@ -109,13 +141,61 @@ export default function ProjectOverview() {
     return m
   }, [costSummary])
 
+  const searchSkills = selected ? scopedSkills : globalSkills
+  const searchAgents = useMemo(() => {
+    if (!selected) return globalAgents
+    const seen = new Map<string, typeof globalAgents[number]>()
+    for (const agent of [...projectAgents, ...globalAgents]) {
+      if (!seen.has(agent.name)) seen.set(agent.name, agent)
+    }
+    return [...seen.values()]
+  }, [globalAgents, projectAgents, selected])
+  const searchMcpServers = useMemo(
+    () => [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])],
+    [mcpData],
+  )
+
+  useEffect(() => {
+    const projectsForSearch = projects ?? []
+    if (!searchOpen || searchMode !== 'global' || projectsForSearch.length === 0) {
+      if (!searchOpen) setSearchSessionsLoading(false)
+      return
+    }
+
+    let cancelled = false
+    async function loadSessions() {
+      setSearchSessionsLoading(true)
+      try {
+        const rows = await Promise.all(projectsForSearch.map(async project => {
+          try {
+            const result = await window.electronAPI.sessions.listByProject(project.hash)
+            if (result.error || !result.data) return [] as SearchSession[]
+            return result.data.map(session => ({ project, session }))
+          } catch {
+            return [] as SearchSession[]
+          }
+        }))
+        if (!cancelled) {
+          setSearchSessions(
+            rows.flat().sort((a, b) => new Date(b.session.date).getTime() - new Date(a.session.date).getTime()),
+          )
+        }
+      } finally {
+        if (!cancelled) setSearchSessionsLoading(false)
+      }
+    }
+
+    loadSessions()
+    return () => { cancelled = true }
+  }, [projects, searchMode, searchOpen])
+
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const meta = e.metaKey || e.ctrlKey
       if (meta && e.key.toLowerCase() === 'k') {
         e.preventDefault()
-        setAnchorRect(lensBtnRef.current?.getBoundingClientRect() ?? null)
-        setSearchOpen(o => !o)
+        if (searchOpen && searchMode === 'global') closeSearch()
+        else openGlobalSearch()
       } else if (meta && e.key.toLowerCase() === 'p' && selected) {
         e.preventDefault()
         togglePin(selected.hash)
@@ -123,7 +203,7 @@ export default function ProjectOverview() {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [selected, togglePin])
+  }, [searchMode, searchOpen, selected, togglePin])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -330,10 +410,10 @@ export default function ProjectOverview() {
           <button
             ref={lensBtnRef}
             type="button"
-            className={`cl-lens-btn${searchOpen ? ' on' : ''}`}
-            onClick={() => searchOpen ? closeSearch() : openSearch()}
-            aria-label="Search projects"
-            title="Search projects"
+            className={`cl-lens-btn${searchOpen && searchMode === 'global' ? ' on' : ''}`}
+            onClick={() => searchOpen && searchMode === 'global' ? closeSearch() : openGlobalSearch()}
+            aria-label="Search"
+            title="Search"
           >
             <LensTriggerIcon />
           </button>
@@ -374,8 +454,7 @@ export default function ProjectOverview() {
             project={selected}
             section={sectionFromView(view)}
             onNavigate={setView}
-            onSelectProject={selectProject}
-            onDeleteProject={setProjectToDelete}
+            onOpenProjectSearch={openProjectSearch}
           />
         ) : null}
       </div>
@@ -391,13 +470,30 @@ export default function ProjectOverview() {
 
       <SearchPopover
         open={searchOpen}
+        mode={searchMode}
         anchorRect={anchorRect}
+        anchorAlign={searchAnchorAlign}
         projects={projects ?? []}
         costByHash={costByHash}
         currentHash={selected?.hash ?? null}
         pinned={pinned}
+        skills={searchSkills}
+        agents={searchAgents}
+        mcpServers={searchMcpServers}
+        mcpTotalProjects={mcpData?.totalProjects ?? projects?.length ?? 0}
+        sessions={searchSessions}
+        sessionsLoading={searchSessionsLoading}
         onTogglePin={togglePin}
-        onSelect={selectProject}
+        onSelectProject={selectProject}
+        onSelectSkill={skill => setView({ type: 'skill-detail', skill })}
+        onSelectAgent={agent => setView({ type: 'agent-detail', agent })}
+        onSelectMcp={server => setView({ type: 'mcp-detail', server, totalProjects: server.enabledInProjects + server.disabledInProjects })}
+        onSelectSession={(project, session) => {
+          setSelected(project)
+          setScope('project')
+          setView({ type: 'chat', project, session })
+        }}
+        onDeleteCurrent={setProjectToDelete}
         onClose={closeSearch}
       />
     </div>
