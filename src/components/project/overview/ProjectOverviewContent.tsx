@@ -261,7 +261,8 @@ export function ProjectView({
   return (
     <div style={{ position: 'relative' }}>
       {/* ─── HERO ─────────────────────────────────────── */}
-      <section className="cl-hero">
+      <section className={`cl-hero${liveProc ? ' is-live' : ''}`}>
+        {liveProc && <span className="cl-live-bar" aria-hidden="true" />}
         <Lens />
         <div className="cl-hero-actions">
           <button className="cl-btn" type="button" onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}>
@@ -275,6 +276,18 @@ export function ProjectView({
         <div className="cl-eyebrow">
           <span className="pip" />
           <span title={project.realPath}>Project · {project.realPath}</span>
+          {liveProc && (
+            <button
+              type="button"
+              className="cl-live-chip"
+              onClick={() => onNavigate({ type: 'live-monitor', project })}
+              title={`PID ${liveProc.pid} · ↑ ${liveUptime}`}
+            >
+              <span className="dot"><span className="ring" /></span>
+              <span className="label">LIVE</span>
+              <span className="meta">{liveUptime}</span>
+            </button>
+          )}
         </div>
 
         <button ref={triggerRef} className="cl-h-name" type="button" onClick={openPicker} aria-haspopup="listbox">
