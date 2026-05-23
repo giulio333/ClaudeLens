@@ -13,6 +13,8 @@ import type { ProjectCost } from '../../../types'
 import { Lens } from './Lens'
 import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
 import { McpServerGrid } from '../mcp/McpServerGrid'
+import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
+import { PinIcon } from '../shared/SearchPopover'
 
 type Project = { hash: string; realPath: string }
 
@@ -62,6 +64,9 @@ export function GlobalHomeView({
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
   const [projectsPage, setProjectsPage] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('tokens')
+  const { pinned, isPinned, togglePin } = usePinnedProjects()
+  // 'pinned' default when any pin exists; user can switch to 'all'
+  const [projectsFilter, setProjectsFilter] = useState<'pinned' | 'all'>('pinned')
   useEffect(() => {
     let alive = true
     async function load() {
@@ -81,8 +86,14 @@ export function GlobalHomeView({
     return m
   }, [costSummary])
 
+  const hasPinned = useMemo(() => allProjects.some(p => pinned.has(p.hash)), [allProjects, pinned])
+  const effectiveFilter: 'pinned' | 'all' = hasPinned ? projectsFilter : 'all'
+
   const sortedProjects = useMemo(() => {
-    const arr = [...allProjects]
+    const base = effectiveFilter === 'pinned'
+      ? allProjects.filter(p => pinned.has(p.hash))
+      : allProjects
+    const arr = [...base]
     const nameOf = (p: Project) => (p.realPath.split('/').pop() ?? p.realPath).toLowerCase()
     switch (sortKey) {
       case 'cost':
@@ -95,7 +106,7 @@ export function GlobalHomeView({
       default:
         return arr.sort((a, b) => (costByHash.get(b.hash)?.totalTokens ?? 0) - (costByHash.get(a.hash)?.totalTokens ?? 0))
     }
-  }, [allProjects, costByHash, sortKey])
+  }, [allProjects, costByHash, sortKey, effectiveFilter, pinned])
 
   const pageCount = Math.max(1, Math.ceil(sortedProjects.length / PROJECTS_PAGE_SIZE))
   const safePage = Math.min(projectsPage, pageCount - 1)
@@ -178,12 +189,27 @@ export function GlobalHomeView({
       {/* ─── PROJECTS ─────────────────────────────────── */}
       <section className="cl-section">
         <div className="cl-sec-head">
-          <h2>Projects</h2>
+          <h2>{effectiveFilter === 'pinned' ? 'Pinned projects' : 'Projects'}</h2>
           <span className="ct">
             {sortedProjects.length === 0
-              ? '0 total · sorted by token usage'
+              ? (effectiveFilter === 'pinned' ? '0 pinned · pin a project to surface it here' : '0 total · sorted by token usage')
               : `${rangeFrom}–${rangeTo} of ${sortedProjects.length} · sorted by ${SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'tokens'}`}
           </span>
+          {hasPinned && (
+            <span className="cl-pinfilter">
+              <button
+                type="button"
+                className={projectsFilter === 'pinned' ? 'on' : ''}
+                onClick={() => { setProjectsFilter('pinned'); setProjectsPage(0) }}
+              >Pinned</button>
+              <span className="sep">·</span>
+              <button
+                type="button"
+                className={projectsFilter === 'all' ? 'on' : ''}
+                onClick={() => { setProjectsFilter('all'); setProjectsPage(0) }}
+              >All</button>
+            </span>
+          )}
           {sortedProjects.length > 0 && (
             <span className="cl-sortbar" style={{ marginLeft: 'auto' }}>
               <span className="label">SORT BY</span>
@@ -203,7 +229,11 @@ export function GlobalHomeView({
           )}
         </div>
         {sortedProjects.length === 0 ? (
-          <div className="cl-empty">No projects yet.</div>
+          <div className="cl-empty">
+            {effectiveFilter === 'pinned'
+              ? 'No pinned projects. Open the lens (top right) or hover a project to pin it.'
+              : 'No projects yet.'}
+          </div>
         ) : (
           <>
             <div>
@@ -212,8 +242,18 @@ export function GlobalHomeView({
                 const c = costByHash.get(p.hash)
                 const tokens = formatTokens(c?.totalTokens ?? 0)
                 const isLive = procs.some(pr => pr.cwd === p.realPath)
+                const pinnedNow = isPinned(p.hash)
                 return (
-                  <button key={p.hash} type="button" className="cl-row" onClick={() => onSelectProject(p)}>
+                  <button key={p.hash} type="button" className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`} onClick={() => onSelectProject(p)}>
+                    <button
+                      type="button"
+                      className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
+                      title={pinnedNow ? 'Unpin project' : 'Pin project'}
+                      aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
+                      onClick={e => { e.stopPropagation(); togglePin(p.hash) }}
+                    >
+                      <PinIcon filled={pinnedNow} />
+                    </button>
                     <span className="idx">{(name[0] ?? '?').toUpperCase()}</span>
                     <div style={{ minWidth: 0 }}>
                       <div className="title">{name}{isLive && <span style={{ color: 'var(--cl-ok)', fontSize: 11, marginLeft: 10, fontFamily: 'var(--font-mono)' }}>● live</span>}</div>

@@ -20,6 +20,8 @@ import { fmt, fmtModel, sessionTitle } from '../utils'
 import type { SessionSummary, ProjectCost } from '../../../types'
 import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
+import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
+import { PinIcon } from '../shared/SearchPopover'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp'
 
@@ -119,6 +121,8 @@ export function ProjectView({
   onSelectProject: (p: Project) => void
   onDeleteProject: (p: Project) => void
 }) {
+  const { isPinned, togglePin } = usePinnedProjects()
+  const pinnedNow = isPinned(project.hash)
   const { data: cost } = useProjectCost(project.hash)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
@@ -264,6 +268,17 @@ export function ProjectView({
       <section className={`cl-hero${liveProc ? ' is-live' : ''}`}>
         <Lens />
         <div className="cl-hero-actions">
+          <button
+            type="button"
+            className={`cl-btn cl-btn--icon${pinnedNow ? ' is-pinned' : ''}`}
+            title={pinnedNow ? 'Unpin project' : 'Pin project'}
+            aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
+            aria-pressed={pinnedNow}
+            onClick={() => togglePin(project.hash)}
+          >
+            <PinIcon filled={pinnedNow} />
+            <span>{pinnedNow ? 'Pinned' : 'Pin'}</span>
+          </button>
           <button className="cl-btn" type="button" onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}>
             Open in Claude Code
           </button>

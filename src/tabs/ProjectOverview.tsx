@@ -1,8 +1,11 @@
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef, useMemo } from 'react'
 import LiveMonitor from './LiveMonitor'
-import { useMemoryProjects, useDeleteProject } from '../hooks/useIPC'
+import { useMemoryProjects, useDeleteProject, useCostSummary } from '../hooks/useIPC'
+import { usePinnedProjects } from '../hooks/usePinnedProjects'
 import { View } from '../components/project/types'
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog'
+import { SearchPopover, LensTriggerIcon } from '../components/project/shared/SearchPopover'
+import type { ProjectCost } from '../types'
 
 // ─── Shared
 import { ErrorBoundary } from '../components/ErrorBoundary'
@@ -86,7 +89,41 @@ export default function ProjectOverview() {
   })
 
   const { data: projects } = useMemoryProjects()
+  const { data: costSummary } = useCostSummary()
   const deleteProjectMutation = useDeleteProject()
+  const { pinned, togglePin } = usePinnedProjects()
+
+  // ─── Search popover (lens, top-right) ───
+  const lensBtnRef = useRef<HTMLButtonElement>(null)
+  const [searchOpen, setSearchOpen] = useState(false)
+  const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null)
+  function openSearch() {
+    setAnchorRect(lensBtnRef.current?.getBoundingClientRect() ?? null)
+    setSearchOpen(true)
+  }
+  function closeSearch() { setSearchOpen(false) }
+
+  const costByHash = useMemo(() => {
+    const m = new Map<string, ProjectCost>()
+    for (const c of (costSummary as ProjectCost[] | undefined) ?? []) m.set(c.project, c)
+    return m
+  }, [costSummary])
+
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      const meta = e.metaKey || e.ctrlKey
+      if (meta && e.key.toLowerCase() === 'k') {
+        e.preventDefault()
+        setAnchorRect(lensBtnRef.current?.getBoundingClientRect() ?? null)
+        setSearchOpen(o => !o)
+      } else if (meta && e.key.toLowerCase() === 'p' && selected) {
+        e.preventDefault()
+        togglePin(selected.hash)
+      }
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selected, togglePin])
 
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', theme)
@@ -291,6 +328,16 @@ export default function ProjectOverview() {
 
         <div className="cl-bar-right">
           <button
+            ref={lensBtnRef}
+            type="button"
+            className={`cl-lens-btn${searchOpen ? ' on' : ''}`}
+            onClick={() => searchOpen ? closeSearch() : openSearch()}
+            aria-label="Search projects"
+            title="Search projects"
+          >
+            <LensTriggerIcon />
+          </button>
+          <button
             className="cl-theme-toggle"
             type="button"
             onClick={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
@@ -341,6 +388,18 @@ export default function ProjectOverview() {
           onCancel={() => setProjectToDelete(null)}
         />
       )}
+
+      <SearchPopover
+        open={searchOpen}
+        anchorRect={anchorRect}
+        projects={projects ?? []}
+        costByHash={costByHash}
+        currentHash={selected?.hash ?? null}
+        pinned={pinned}
+        onTogglePin={togglePin}
+        onSelect={selectProject}
+        onClose={closeSearch}
+      />
     </div>
   )
 }
