@@ -196,6 +196,7 @@ export default function ProjectOverview() {
             server={view.server}
             totalProjects={view.totalProjects}
             onBack={() => setView({ type: 'global-mcp' })}
+            onSelectProject={selectProject}
           />
         )
       case 'project-claudemd':

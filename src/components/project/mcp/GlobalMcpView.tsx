@@ -1,6 +1,96 @@
-import { useGlobalMcp, McpData } from '../../../hooks/useIPC'
+import { useGlobalMcp, McpData, McpServer } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
-import { McpServerCard } from './McpServerCard'
+import { mcpServiceColor } from './McpServerCard'
+
+const TONES = ['', 'violet', 'cyan'] as const
+
+function chunk<T>(arr: T[], size: number): T[][] {
+  const out: T[][] = []
+  for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+  return out
+}
+
+function McpCell({
+  server,
+  tone,
+  totalProjects,
+  onSelect,
+}: {
+  server: McpServer
+  tone: string
+  totalProjects: number
+  onSelect: (s: McpServer) => void
+}) {
+  const displayName = server.name.replace(/^claude\.ai\s*/i, '')
+  const isLocal = server.source === 'local'
+  const fullyEnabled = server.disabledInProjects === 0
+  const fullyDisabled = server.enabledInProjects === 0
+  const ledColor = isLocal
+    ? mcpServiceColor(server.name)
+    : fullyEnabled
+      ? 'var(--cl-ok)'
+      : fullyDisabled
+        ? 'var(--cl-danger)'
+        : 'var(--cl-warn)'
+
+  if (isLocal) {
+    const envKeys = server.env ? Object.keys(server.env) : []
+    return (
+      <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)}>
+        <div className="led-row">
+          <span className="led" style={{ background: ledColor }} />
+          {server.source}
+        </div>
+        <div className="mcp-name">{displayName}</div>
+        <div className="tools">
+          {server.command ? <>command <b>{server.command}</b></> : 'local server'}
+          {envKeys.length > 0 && <> · <b>{envKeys.length}</b> env</>}
+        </div>
+        <div className="frac">local</div>
+      </button>
+    )
+  }
+
+  const total = server.enabledInProjects + server.disabledInProjects
+  const denom = totalProjects > 0 ? totalProjects : total
+  return (
+    <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)}>
+      <div className="led-row">
+        <span className="led" style={{ background: ledColor }} />
+        {server.source}
+      </div>
+      <div className="mcp-name">{displayName}</div>
+      <div className="tools">active in <b>{server.enabledInProjects}</b> of {denom} projects</div>
+      <div className="frac">{server.enabledInProjects}<small>/{denom}</small></div>
+    </button>
+  )
+}
+
+function McpRowGroup({
+  servers,
+  totalProjects,
+  onSelect,
+  baseIndex,
+}: {
+  servers: McpServer[]
+  totalProjects: number
+  onSelect: (s: McpServer) => void
+  baseIndex: number
+}) {
+  return (
+    <div className="cl-mcp-row" style={{ gridTemplateColumns: `repeat(${servers.length}, 1fr)` }}>
+      {servers.map((s, i) => (
+        <McpCell
+          key={s.name}
+          server={s}
+          tone={TONES[(baseIndex + i) % TONES.length]}
+          totalProjects={totalProjects}
+          onSelect={onSelect}
+        />
+      ))}
+    </div>
+  )
+}
 
 function TopBar({ onBack }: { onBack: () => void }) {
   return (
@@ -130,11 +220,15 @@ export function GlobalMcpView({
                   <h2>Cloud</h2>
                   <span className="ct">connected · across {totalProjects} projects</span>
                 </div>
-                <div className="cl-mcp-grid">
-                  {cloud.map(s => (
-                    <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
-                  ))}
-                </div>
+                {chunk(cloud, 3).map((group, gi) => (
+                  <McpRowGroup
+                    key={gi}
+                    servers={group}
+                    totalProjects={totalProjects}
+                    onSelect={onSelectServer}
+                    baseIndex={gi * 3}
+                  />
+                ))}
               </section>
             )}
 
@@ -144,11 +238,15 @@ export function GlobalMcpView({
                   <h2>Local</h2>
                   <span className="ct">~/.claude/settings.json</span>
                 </div>
-                <div className="cl-mcp-grid">
-                  {local.map(s => (
-                    <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
-                  ))}
-                </div>
+                {chunk(local, 3).map((group, gi) => (
+                  <McpRowGroup
+                    key={gi}
+                    servers={group}
+                    totalProjects={totalProjects}
+                    onSelect={onSelectServer}
+                    baseIndex={gi * 3}
+                  />
+                ))}
               </section>
             )}
           </>
