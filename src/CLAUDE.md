@@ -26,7 +26,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - `Markdown.tsx` — Renders markdown with syntax highlighting
 - `project/types.ts` — `View` union type + `TYPE_STYLES` / `SCOPE_STYLES` design tokens
 - `project/utils.ts` — Pure formatters: `fmt`, `fmtCost`, `fmtDate`, `fmtModel`, `modelColor`
-- `project/shared/` — Atomic UI: `ModelChip`, `SectionTitle`, `BackButton`, `StatChip`, `Accordion`
+- `project/shared/` — Atomic UI: `BackButton`, `StatChip`, `TopBar`, `CreateFormKit` (shared building blocks for create pages)
 - `project/chat/` — Chat rendering: `ChatView`, `MessageBubble`, `ToolDetailPanel`, `ToolGroupCard`, atoms, utils
 - `project/memory/` — `MemoryTopicView`, utils
 - `project/claudemd/` — `GlobalClaudeMdView`
@@ -35,7 +35,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/mcp/` — `GlobalMcpView`, `McpServerCard`
 - `project/analytics/` — `AnalyticsView`
 - `project/ai-assistant/` — `AiAssistantView`
-- `project/overview/` — `ProjectOverviewContent`, `NavCard`
+- `project/overview/` — `ProjectOverviewContent`, `GlobalHomeView`, `Lens`
 
 ## When adding a new view
 
