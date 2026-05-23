@@ -40,6 +40,20 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
 - Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`
 
+## Brand palette (Claude Code official)
+
+| Token role     | HEX       | Notes                                   |
+|----------------|-----------|-----------------------------------------|
+| Accent         | `#C15F3C` | Terracotta — primary brand accent       |
+| Paper          | `#FFFFFF` | Base canvas (light theme)               |
+| Paper-2        | `#F4F3EE` | Warm off-white surface / cards          |
+| Warm gray      | `#B1ADA1` | Muted ink / dividers (`--cl-ink-4`)     |
+
+These are the only brand colors. They're encoded in `src/index.css` as
+`--cl-accent`, `--cl-paper`, `--cl-paper-2`, `--cl-ink-4` (light) and
+lifted to higher lightness in `[data-theme='dark']`. Do not introduce new
+hues for accents — extend by varying lightness/chroma on the same hue (40°).
+
 ## Key conventions
 
 **IPC result shape:** every handler returns `{ data: T | null, error: string | null }`. Renderer unwraps with `unwrap()` in `useIPC.ts`.
