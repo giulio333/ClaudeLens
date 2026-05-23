@@ -2752,7 +2752,7 @@ body {
   padding: 4px 12px 4px 5px;
   border-radius: 999px;
   border: 1px solid var(--cl-glass-border);
-  background: var(--cl-glass-bg);
+  background: color-mix(in oklch, oklch(1 0 0) 30%, var(--cl-glass-bg));
   box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
   color: var(--cl-ink-2);
   font-family: var(--font-mono);
@@ -2899,7 +2899,7 @@ body {
   gap: 8px;
   padding: 5px 14px 5px 11px;
   border-radius: 999px;
-  background: color-mix(in oklch, var(--cl-ok) 10%, var(--cl-paper));
+  background: color-mix(in oklch, oklch(1 0 0) 30%, color-mix(in oklch, var(--cl-ok) 10%, var(--cl-paper)));
   border: 1px solid color-mix(in oklch, var(--cl-ok) 30%, var(--cl-line));
   box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
   color: var(--cl-ok);
@@ -2918,13 +2918,18 @@ body {
   background: currentColor;
   box-shadow: 0 0 0 3px color-mix(in oklch, currentColor 22%, transparent);
 }
+.cl-agent-v1-status-pill.is-ok {
+  background: color-mix(in oklch, oklch(1 0 0) 30%, color-mix(in oklch, var(--cl-ok) 10%, var(--cl-paper)));
+  border-color: color-mix(in oklch, var(--cl-ok) 30%, var(--cl-line));
+  color: var(--cl-ok);
+}
 .cl-agent-v1-status-pill.is-error {
-  background: color-mix(in oklch, var(--cl-danger) 10%, var(--cl-paper));
+  background: color-mix(in oklch, oklch(1 0 0) 30%, color-mix(in oklch, var(--cl-danger) 10%, var(--cl-paper)));
   border-color: color-mix(in oklch, var(--cl-danger) 30%, var(--cl-line));
   color: var(--cl-danger);
 }
 .cl-agent-v1-status-pill.is-pending {
-  background: color-mix(in oklch, var(--cl-warn) 10%, var(--cl-paper));
+  background: color-mix(in oklch, oklch(1 0 0) 30%, color-mix(in oklch, var(--cl-warn) 10%, var(--cl-paper)));
   border-color: color-mix(in oklch, var(--cl-warn) 30%, var(--cl-line));
   color: var(--cl-warn);
 }
