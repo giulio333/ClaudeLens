@@ -1,0 +1,77 @@
+{
+  "skill_name": "arch-analysis",
+  "evals": [
+    {
+      "id": 0,
+      "prompt": "Fai un'analisi architetturale di ClaudeLens, voglio capire com'è strutturato il progetto e se ci sono problemi",
+      "expected_output": "Report markdown con: mappa IPC handlers per namespace, lista moduli backend con responsabilità, struttura componenti React, problemi trovati con severità",
+      "files": [],
+      "assertions": [
+        {
+          "id": "full-has-sections",
+          "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React"
+        },
+        {
+          "id": "full-namespace-grouping",
+          "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)"
+        },
+        {
+          "id": "full-problems-severity",
+          "text": "Viene segnalato almeno un problema con severità esplicita (warning o error)"
+        },
+        {
+          "id": "full-uses-tables",
+          "text": "Il report usa almeno una tabella markdown"
+        }
+      ]
+    },
+    {
+      "id": 1,
+      "prompt": "Ci sono handler IPC nel main process che non vengono usati dal renderer? Controlla anche se mancano tipi nel preload",
+      "expected_output": "Tabella di allineamento IPC: handler in main.ts vs hook in useIPC.ts, con segnalazione di handler esposti ma non usati e viceversa; analisi del preload bridge",
+      "files": [],
+      "assertions": [
+        {
+          "id": "ipc-compares-both-files",
+          "text": "Il report confronta esplicitamente main.ts con useIPC.ts"
+        },
+        {
+          "id": "ipc-names-specific-handlers",
+          "text": "Vengono citati handler specifici con il loro namespace (memory:*, cost:*, sessions:*, ecc.)"
+        },
+        {
+          "id": "ipc-analyzes-preload",
+          "text": "Viene analizzato il preload bridge (contextBridge o preload.ts)"
+        },
+        {
+          "id": "ipc-identifies-gaps",
+          "text": "Vengono identificati handler non usati dal renderer o chiamate senza handler corrispondente"
+        }
+      ]
+    },
+    {
+      "id": 2,
+      "prompt": "Dopo il refactor di ProjectOverview, i componenti React sono rimasti entro dimensioni ragionevoli? Ci sono candidati a ulteriori refactor?",
+      "expected_output": "Lista componenti con conteggio righe, verifica che ProjectOverview.tsx sia sotto 400 righe, identificazione candidati a refactor con motivazione",
+      "files": [],
+      "assertions": [
+        {
+          "id": "comp-line-counts",
+          "text": "Il report include il conteggio righe per i componenti principali"
+        },
+        {
+          "id": "comp-checks-project-overview",
+          "text": "ProjectOverview.tsx viene verificato esplicitamente con il numero di righe"
+        },
+        {
+          "id": "comp-identifies-candidates",
+          "text": "Vengono identificati candidati a refactor con una motivazione"
+        },
+        {
+          "id": "comp-maps-structure",
+          "text": "La struttura delle cartelle src/components/ è mappata o elencata"
+        }
+      ]
+    }
+  ]
+}

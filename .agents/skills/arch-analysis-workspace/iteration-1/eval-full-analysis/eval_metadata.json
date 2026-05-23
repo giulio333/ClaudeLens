@@ -1,0 +1,11 @@
+{
+  "eval_id": 0,
+  "eval_name": "full-analysis",
+  "prompt": "Fai un'analisi architetturale di ClaudeLens, voglio capire com'è strutturato il progetto e se ci sono problemi",
+  "assertions": [
+    {"id": "full-has-sections", "text": "Il report contiene sezioni distinte per IPC handlers, moduli backend e componenti React"},
+    {"id": "full-namespace-grouping", "text": "Gli IPC handler sono raggruppati per namespace (almeno 4 namespace identificati)"},
+    {"id": "full-problems-severity", "text": "Viene segnalato almeno un problema con severità esplicita (warning o error)"},
+    {"id": "full-uses-tables", "text": "Il report usa almeno una tabella markdown"}
+  ]
+}
