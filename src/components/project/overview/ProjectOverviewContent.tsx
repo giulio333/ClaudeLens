@@ -19,6 +19,7 @@ import { View } from '../types'
 import { fmt, fmtModel, sessionTitle } from '../utils'
 import type { SessionSummary, ProjectCost } from '../../../types'
 import { Lens } from './Lens'
+import { McpServerGrid } from '../mcp/McpServerGrid'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp'
 
@@ -517,28 +518,23 @@ export function ProjectView({
 
       {section === 'mcp' && (
         <section className="cl-section" style={{ paddingTop: 38 }}>
-          <div className="cl-sec-head">
-            <h2>MCP servers</h2>
-            <span className="ct">{enabledMcp.length} active · project-scoped</span>
-            <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
-          </div>
           {enabledMcp.length === 0 ? (
-            <div className="cl-empty">No MCP servers active for this project.</div>
+            <>
+              <div className="cl-sec-head">
+                <h2>MCP servers</h2>
+                <span className="ct">0 active · project-scoped</span>
+                <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
+              </div>
+              <div className="cl-empty">No MCP servers active for this project.</div>
+            </>
           ) : (
-            <div className="cl-mcp-row" style={{ gridTemplateColumns: `repeat(${Math.min(3, enabledMcp.length)}, 1fr)` }}>
-              {enabledMcp.slice(0, 3).map((s, i) => {
-                const tone = ['', 'violet', 'cyan'][i % 3]
-                const total = s.enabledInProjects + s.disabledInProjects
-                return (
-                  <button key={s.name} type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onNavigate({ type: 'global-mcp' })}>
-                    <div className="led-row"><span className="led" /> {s.source}</div>
-                    <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
-                    <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
-                    <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
-                  </button>
-                )
-              })}
-            </div>
+            <McpServerGrid
+              servers={enabledMcp}
+              onSelect={s => onNavigate({ type: 'mcp-detail', server: s, totalProjects: s.enabledInProjects + s.disabledInProjects })}
+              headerAction={
+                <button className="all" type="button" onClick={() => onNavigate({ type: 'global-mcp' })}>Manage</button>
+              }
+            />
           )}
 
           <div className="cl-sec-head" style={{ marginTop: 42 }}>
