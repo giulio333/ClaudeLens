@@ -51,6 +51,19 @@ function formatDuration(ms?: number): string | null {
   return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
 }
 
+function formatDurationParts(ms?: number): { value: string; unit: string } | null {
+  if (ms === undefined) return null
+  if (ms < 1000) return { value: String(ms), unit: 'ms' }
+  return { value: (ms / 1000).toFixed(ms < 10_000 ? 1 : 0), unit: 's' }
+}
+
+function agentGlyph(name: string): string {
+  const parts = name.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean)
+  if (parts.length === 0) return 'AG'
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
+  return parts[0].slice(0, 2).toUpperCase()
+}
+
 function parseAgentResult(content: string) {
   const usageMatch = content.match(/<usage>([\s\S]*?)<\/usage>/)
   const usage = usageMatch?.[1] ?? ''
@@ -77,6 +90,9 @@ function ToolDetailShell({
   isMemory,
   onBack,
   children,
+  variant,
+  noHero,
+  noBar,
 }: {
   icon: string
   name: string
@@ -86,36 +102,57 @@ function ToolDetailShell({
   isMemory: boolean
   onBack: () => void
   children: ReactNode
+  variant?: 'default' | 'agent'
+  noHero?: boolean
+  noBar?: boolean
 }) {
   const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending'
   const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending'
 
   return (
-    <div className="cl-tool-detail">
-      <div className="cl-tool-detail-bar">
-        <button type="button" onClick={onBack} className="cl-tool-detail-back">
-          <BackChevron />
-          <span>Back to chat</span>
-        </button>
-        <span className="cl-tool-detail-sep">/</span>
-        <span className="cl-tool-detail-mini-icon">{icon}</span>
-        <span className="cl-tool-detail-mini-title">{name}</span>
-      </div>
+    <div className={`cl-tool-detail${variant === 'agent' ? ' cl-tool-detail--agent' : ''}`}>
+      {!noBar && (
+        <div className="cl-tool-detail-bar">
+          <button type="button" onClick={onBack} className="cl-tool-detail-back">
+            <BackChevron />
+            <span>Back to chat</span>
+          </button>
+          <span className="cl-tool-detail-sep">/</span>
+          <span className="cl-tool-detail-mini-icon">{icon}</span>
+          <span className="cl-tool-detail-mini-title">{name}</span>
+        </div>
+      )}
 
       <div className="cl-tool-detail-scroll">
-        <header className="cl-tool-detail-hero">
-          <div className="cl-tool-detail-title">
-            <span className="cl-tool-detail-kicker">Tool detail</span>
-            <h2>{title}</h2>
-            {subtitle && <p>{subtitle}</p>}
-          </div>
-          <div className="cl-tool-detail-badges">
-            <span className={`cl-tool-status ${statusClass}`}>{status}</span>
-            {isMemory && <span className="cl-tool-status is-memory">Memory</span>}
-          </div>
-        </header>
+        {!noHero && (
+          <header className="cl-tool-detail-hero">
+            <div className="cl-tool-detail-title">
+              <span className="cl-tool-detail-kicker">Tool detail</span>
+              <h2>{title}</h2>
+              {subtitle && <p>{subtitle}</p>}
+            </div>
+            <div className="cl-tool-detail-badges">
+              <span className={`cl-tool-status ${statusClass}`}>{status}</span>
+              {isMemory && <span className="cl-tool-status is-memory">Memory</span>}
+            </div>
+          </header>
+        )}
         {children}
       </div>
+    </div>
+  )
+}
+
+function StatChip({ label, value, unit, variant }: {
+  label: string
+  value: string
+  unit?: string
+  variant?: 'id'
+}) {
+  return (
+    <div className={`cl-agent-v1-chip${variant === 'id' ? ' is-id' : ''}`}>
+      <span className="ll">{label}</span>
+      <div className="vv">{value}{unit && <small>{unit}</small>}</div>
     </div>
   )
 }
@@ -124,75 +161,127 @@ function AgentDetailBody({
   name,
   input,
   result,
+  onBack,
 }: {
   name: string
   input: Record<string, unknown>
   result: ToolGroup['result']
+  onBack: () => void
 }) {
   const subtype = (input.subagent_type as string | undefined) || (name === 'Task' ? 'task' : 'general-purpose')
   const description = (input.description as string | undefined) || 'Agent dispatch'
   const prompt = (input.prompt as string | undefined) || ''
   const parsed = parseAgentResult(result?.content ?? '')
   const cleanOutput = parsed.cleanContent || result?.content || ''
-  const duration = formatDuration(parsed.durationMs)
-  const facts = [
-    { label: 'Status', value: result?.isError ? 'Error' : result ? 'Complete' : 'Pending', tone: result?.isError ? 'is-error' : 'is-ok' },
-    { label: 'Output', value: result ? `${outputLineCount(result)} lines` : '-' },
-    ...(parsed.toolUses !== undefined ? [{ label: 'Tool uses', value: String(parsed.toolUses) }] : []),
-    ...(parsed.totalTokens !== undefined ? [{ label: 'Tokens', value: String(parsed.totalTokens) }] : []),
-    ...(duration ? [{ label: 'Duration', value: duration }] : []),
-    ...(parsed.agentId ? [{ label: 'Agent ID', value: `${parsed.agentId.slice(0, 10)}...`, title: parsed.agentId }] : []),
-  ]
+  const isError = Boolean(result?.isError)
+  const isPending = !result
+  const statusLabel = isPending ? 'Pending' : isError ? 'Error' : 'Complete'
+  const statusClass = isPending ? 'is-pending' : isError ? 'is-error' : ''
+  const lineCount = result ? cleanOutput.split('\n').filter(Boolean).length : 0
+  const totalLineCount = result ? outputLineCount(result) : 0
+  const durationParts = formatDurationParts(parsed.durationMs)
+  const durationFull = formatDuration(parsed.durationMs)
+  const glyph = agentGlyph(subtype)
 
   return (
-    <div className="cl-agent-run-sheet">
-      <div className="cl-agent-run-strip">
-        <div className="cl-agent-run-id">
-          <span>Agent</span>
-          <strong>{subtype}</strong>
+    <div className="cl-agent-v1">
+      <nav className="cl-agent-v1-subbread">
+        <button type="button" onClick={onBack} className="cl-agent-v1-back-pill">
+          <span className="ico"><BackChevron /></span>
+          Back to chat
+        </button>
+        <span className="sep">/</span>
+        <span>Agent · Tool detail</span>
+      </nav>
+
+      <section className="cl-agent-v1-hero">
+        <div className={`cl-agent-v1-orb ${statusClass}`}>{glyph}</div>
+        <div className="cl-agent-v1-meta">
+          <div className="cl-agent-v1-eyebrow">
+            <span className="pip" /> Sub-agent · {subtype}
+          </div>
+          <h1>{description}</h1>
+          <div className="cl-agent-v1-sub">
+            <span className="cl-agent-v1-agent-pill">{subtype}</span>
+            {(durationFull || lineCount > 0) && <span className="sep">·</span>}
+            {durationFull && <span>{durationFull}</span>}
+            {durationFull && lineCount > 0 && <span className="sep">·</span>}
+            {lineCount > 0 && <span>{lineCount} {lineCount === 1 ? 'line' : 'lines'}</span>}
+          </div>
         </div>
-        <div className="cl-agent-run-facts">
-          {facts.map(fact => (
-            <div key={fact.label}>
-              <span>{fact.label}</span>
-              <strong className={fact.tone} title={fact.title}>{fact.value}</strong>
-            </div>
-          ))}
+        <div className="cl-agent-v1-status-col">
+          <span className={`cl-agent-v1-status-pill ${statusClass}`}>
+            <span className="led" /> {statusLabel}
+          </span>
+          {parsed.agentId && <span className="cl-agent-v1-id">{parsed.agentId}</span>}
         </div>
+      </section>
+
+      <div className="cl-agent-v1-statline">
+        {totalLineCount > 0 && (
+          <StatChip
+            label="Output"
+            value={String(totalLineCount)}
+            unit={totalLineCount === 1 ? 'line' : 'lines'}
+          />
+        )}
+        {parsed.toolUses !== undefined && (
+          <StatChip label="Tool uses" value={String(parsed.toolUses)} />
+        )}
+        {parsed.totalTokens !== undefined && (
+          <StatChip label="Tokens" value={String(parsed.totalTokens)} />
+        )}
+        {durationParts && (
+          <StatChip label="Duration" value={durationParts.value} unit={durationParts.unit} />
+        )}
+        {parsed.agentId && (
+          <StatChip
+            label="Agent ID"
+            value={`${parsed.agentId.slice(0, 10)}…`}
+            variant="id"
+          />
+        )}
       </div>
 
-      <div className="cl-agent-sheet-grid">
-        <section className="cl-agent-sheet cl-agent-sheet--prompt">
-          <div className="cl-agent-sheet-head">
-            <OpenBoxIcon />
-            <div>
-              <span>Input brief</span>
-              <strong>{description}</strong>
-            </div>
+      <div className="cl-agent-v1-io">
+        <section className="cl-agent-v1-card prompt">
+          <div className="cl-agent-v1-card-head">
+            <span className="ico"><OpenBoxIcon /></span>
+            <span className="lbl">Input · <b>Prompt</b></span>
+            <span className="meta">{prompt.length} chars</span>
           </div>
-          {prompt && (
-            <div className="cl-agent-prompt">
-              <div className="cl-agent-prompt-label">Prompt</div>
-              <pre>{prompt}</pre>
-            </div>
+          {prompt ? (
+            <div className="cl-agent-v1-prompt-body">{prompt}</div>
+          ) : (
+            <p className="cl-agent-v1-empty">No prompt provided.</p>
           )}
         </section>
 
-        <section className={`cl-agent-sheet cl-agent-sheet--output ${result?.isError ? 'is-error' : ''}`}>
-          <div className="cl-agent-sheet-head">
-            <ResultIcon error={Boolean(result?.isError)} />
-            <div>
-              <span>{result?.isError ? 'Error' : 'Output'}</span>
-              <strong>{result ? `${outputLineCount(result)} lines` : 'No result'}</strong>
-            </div>
+        <section className={`cl-agent-v1-card output${isError ? ' is-error' : ''}`}>
+          <div className="cl-agent-v1-card-head">
+            <span className="ico"><ResultIcon error={isError} /></span>
+            <span className="lbl">
+              {isError ? 'Error' : 'Output'}
+              {totalLineCount > 0 && (
+                <>
+                  {' · '}<b>{totalLineCount} {totalLineCount === 1 ? 'line' : 'lines'}</b>
+                </>
+              )}
+            </span>
+            <span className="meta">{isError ? 'stderr' : 'stdout'}</span>
           </div>
-          {!result ? (
-            <p className="cl-agent-empty">No result available.</p>
-          ) : result.isError ? (
-            <pre className="cl-agent-error">{cleanOutput || '(no output)'}</pre>
+          {isPending ? (
+            <p className="cl-agent-v1-empty">No result available.</p>
+          ) : isError ? (
+            <pre className="cl-agent-v1-error">{cleanOutput || '(no output)'}</pre>
           ) : (
-            <div className="cl-agent-markdown">
+            <div className="cl-agent-v1-output-body">
               <Markdown>{cleanOutput || '(no output)'}</Markdown>
+            </div>
+          )}
+          {parsed.agentId && !isError && !isPending && (
+            <div className="cl-agent-v1-notice">
+              <b>Continue this agent:</b> use <code>SendMessage</code> with <code>to: '{parsed.agentId}'</code>
             </div>
           )}
         </section>
@@ -506,9 +595,12 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
       result={result}
       isMemory={isMemory}
       onBack={onBack}
+      variant={isAgent ? 'agent' : 'default'}
+      noHero={isAgent}
+      noBar={isAgent}
     >
       {isAgent ? (
-        <AgentDetailBody name={name} input={input} result={result} />
+        <AgentDetailBody name={name} input={input} result={result} onBack={onBack} />
       ) : (
         <div className="cl-tool-detail-grid">
           <section className="cl-tool-detail-panel">
