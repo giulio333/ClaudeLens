@@ -119,6 +119,11 @@ export default function ProjectOverview() {
     }
   }
 
+  function goLiveAgents() {
+    setScope('global')
+    setView({ type: 'agents-live' })
+  }
+
   async function handleConfirmDelete(p: Project) {
     try {
       await deleteProjectMutation.mutateAsync(p.hash)
@@ -133,7 +138,8 @@ export default function ProjectOverview() {
 
   const isGlobalHome = view.type === 'global-home'
   const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type)
-  const isEditorialCore = isGlobalHome || isCoreProject
+  const isGlobalLiveAgents = view.type === 'agents-live' && !view.project
+  const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents
 
   // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
   function renderDeepView() {
@@ -235,6 +241,7 @@ export default function ProjectOverview() {
             onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
           />
         )
+      // Global `agents-live` is rendered inside the editorial chrome below.
       case 'duplicates':
         return <DuplicateProjectsView onBack={goGlobal} />
       default:
@@ -274,8 +281,9 @@ export default function ProjectOverview() {
         </button>
 
         <nav className="cl-scope">
-          <button className={scope === 'global' ? 'on' : ''} onClick={goGlobal}>Global</button>
-          <button className={scope === 'project' ? 'on' : ''} onClick={goProjectScope}>Project</button>
+          <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
+          <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
+          <button className={isGlobalLiveAgents ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
         </nav>
 
         <div />
@@ -306,6 +314,12 @@ export default function ProjectOverview() {
       <div className="cl-main">
         {isGlobalHome ? (
           <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
+        ) : isGlobalLiveAgents ? (
+          <AgentsLiveView
+            embedded
+            onBack={goGlobal}
+            onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
+          />
         ) : selected ? (
           <ProjectView
             key={selected.hash}

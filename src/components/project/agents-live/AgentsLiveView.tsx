@@ -165,10 +165,12 @@ export function AgentsLiveView({
   onBack,
   project,
   onOpenSession,
+  embedded = false,
 }: {
   onBack: () => void
   project?: Project
   onOpenSession: (project: Project, session: SessionSummary) => void
+  embedded?: boolean
 }) {
   const projectName = project?.realPath.split('/').pop()
   const { data, isLoading } = useLiveSessions()
@@ -184,11 +186,13 @@ export function AgentsLiveView({
     .filter(g => g.items.length > 0)
 
   return (
-    <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+    <div className={embedded ? '' : 'h-full flex flex-col'} style={embedded ? undefined : { background: 'var(--cl-paper)' }}>
       <style>{`@keyframes alPulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
-      <TopBar onBack={onBack} crumb={project ? `Project · Agents Live · ${projectName}` : 'Global · Agents Live'} />
+      {!embedded && (
+        <TopBar onBack={onBack} crumb={project ? `Project · Live Agents · ${projectName}` : 'Global · Live Agents'} />
+      )}
 
-      <div className="flex-1 overflow-y-auto">
+      <div className={embedded ? '' : 'flex-1 overflow-y-auto'}>
         <section className="cl-hero">
           <Lens />
           <div className="cl-eyebrow">
@@ -196,7 +200,7 @@ export function AgentsLiveView({
             <span>{project ? `Project · ${projectName} · background sessions` : 'Global · claude agents'}</span>
           </div>
           <h1 className="cl-h-name static">
-            <span className="label-name">Agents Live</span>
+            <span className="label-name">Live Agents</span>
             <span className="glyph">.</span>
           </h1>
           <div className="cl-h-meta">
