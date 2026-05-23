@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   useProjectCost,
   useMemoryProject,
@@ -9,15 +9,13 @@ import {
   useAllSkills,
   useGlobalAgents,
   useProjectAgents,
-  useMemoryProjects,
-  useCostSummary,
   useLiveSessions,
   useCleanupPeriodDays,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import { fmt, fmtModel, sessionTitle } from '../utils'
-import type { SessionSummary, ProjectCost } from '../../../types'
+import type { SessionSummary } from '../../../types'
 import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
@@ -112,14 +110,12 @@ export function ProjectView({
   project,
   section,
   onNavigate,
-  onSelectProject,
-  onDeleteProject,
+  onOpenProjectSearch,
 }: {
   project: Project
   section: ProjectSection
   onNavigate: (v: View) => void
-  onSelectProject: (p: Project) => void
-  onDeleteProject: (p: Project) => void
+  onOpenProjectSearch: (rect: DOMRect) => void
 }) {
   const { isPinned, togglePin } = usePinnedProjects()
   const pinnedNow = isPinned(project.hash)
@@ -132,8 +128,6 @@ export function ProjectView({
   const { data: allSkills = [] } = useAllSkills(project.realPath)
   const { data: globalAgents = [] } = useGlobalAgents()
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
-  const { data: allProjects = [] } = useMemoryProjects()
-  const { data: costSummary } = useCostSummary()
   const { data: bgSessions = [] } = useLiveSessions()
   const { data: cleanupDays = 30 } = useCleanupPeriodDays()
 
@@ -210,58 +204,6 @@ export function ProjectView({
   const agentCount = agents.length
   const memoryCount = memTopics.length
 
-  // ── Project picker ──
-  const costByHash = useMemo(() => {
-    const m = new Map<string, ProjectCost>()
-    for (const c of (costSummary as ProjectCost[] | undefined) ?? []) m.set(c.project, c)
-    return m
-  }, [costSummary])
-  const triggerRef = useRef<HTMLButtonElement>(null)
-  const popRef = useRef<HTMLDivElement>(null)
-  const inputRef = useRef<HTMLInputElement>(null)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const [pickerPos, setPickerPos] = useState<{ top: number; left: number }>({ top: 0, left: 0 })
-  const [query, setQuery] = useState('')
-  const [hl, setHl] = useState(0)
-
-  const filtered = useMemo(() => {
-    const q = query.trim().toLowerCase()
-    const list = q
-      ? allProjects.filter(p => p.realPath.toLowerCase().includes(q))
-      : allProjects
-    return [...list].sort((a, b) => (costByHash.get(b.hash)?.totalTokens ?? 0) - (costByHash.get(a.hash)?.totalTokens ?? 0))
-  }, [allProjects, costByHash, query])
-
-  function openPicker() {
-    const r = triggerRef.current?.getBoundingClientRect()
-    if (r) setPickerPos({ top: r.bottom + 8, left: r.left })
-    setQuery('')
-    setHl(0)
-    setPickerOpen(true)
-    setTimeout(() => inputRef.current?.focus(), 10)
-  }
-  function closePicker() { setPickerOpen(false) }
-
-  useEffect(() => {
-    if (!pickerOpen) return
-    function onDown(e: MouseEvent) {
-      const t = e.target as Node
-      if (popRef.current?.contains(t) || triggerRef.current?.contains(t)) return
-      closePicker()
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [pickerOpen])
-
-  function choose(p: Project) { onSelectProject(p); closePicker() }
-
-  function onKey(e: React.KeyboardEvent) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); setHl(h => Math.min(filtered.length - 1, h + 1)) }
-    else if (e.key === 'ArrowUp') { e.preventDefault(); setHl(h => Math.max(0, h - 1)) }
-    else if (e.key === 'Enter') { e.preventDefault(); if (filtered[hl]) choose(filtered[hl]) }
-    else if (e.key === 'Escape') { closePicker() }
-  }
-
   return (
     <div style={{ position: 'relative' }}>
       {/* ─── HERO ─────────────────────────────────────── */}
@@ -292,7 +234,12 @@ export function ProjectView({
           <span title={project.realPath}>Project · {project.realPath}</span>
         </div>
 
-        <button ref={triggerRef} className="cl-h-name" type="button" onClick={openPicker} aria-haspopup="listbox">
+        <button
+          className="cl-h-name"
+          type="button"
+          onClick={e => onOpenProjectSearch(e.currentTarget.getBoundingClientRect())}
+          aria-haspopup="dialog"
+        >
           <span className="label-name">{projectName}</span><span className="glyph">.</span>
           <span className="chev">↓</span>
         </button>
@@ -570,68 +517,6 @@ export function ProjectView({
             </div>
           )}
         </section>
-      )}
-
-      {/* ─── PROJECT PICKER ───────────────────────────── */}
-      {pickerOpen && (
-        <div
-          ref={popRef}
-          className="cl-picker-pop"
-          style={{ position: 'fixed', top: pickerPos.top, left: pickerPos.left }}
-        >
-          <div className="cl-picker-search-row">
-            <span style={{ color: 'var(--cl-ink-4)' }}>⌕</span>
-            <input
-              ref={inputRef}
-              placeholder="Search projects…"
-              autoComplete="off"
-              value={query}
-              onChange={e => { setQuery(e.target.value); setHl(0) }}
-              onKeyDown={onKey}
-            />
-            <span className="esc" onClick={closePicker}>esc</span>
-          </div>
-          <div className="cl-picker-list">
-            {filtered.length === 0 ? (
-              <div style={{ padding: 20, textAlign: 'center', fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cl-ink-4)' }}>
-                No projects match “{query}”
-              </div>
-            ) : (
-              filtered.map((p, i) => {
-                const name = p.realPath.split('/').pop() ?? p.realPath
-                const c = costByHash.get(p.hash)
-                const isActive = p.hash === project.hash
-                return (
-                  <div
-                    key={p.hash}
-                    className={`cl-picker-item ${isActive ? 'active' : ''} ${i === hl ? 'hl' : ''}`}
-                    onMouseEnter={() => setHl(i)}
-                    onClick={() => choose(p)}
-                    style={{ display: 'grid' }}
-                  >
-                    <span className="pglyph">{(name[0] ?? '?').toUpperCase()}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="pname">{name}</div>
-                      <div className="ppath">{p.realPath}</div>
-                    </div>
-                    <span className="pcount">{c?.sessionsCount ?? 0}</span>
-                  </div>
-                )
-              })
-            )}
-          </div>
-          <div className="cl-picker-foot">
-            <span><b>↑↓</b> navigate</span>
-            <span><b>↵</b> open</span>
-            <button
-              type="button"
-              style={{ marginLeft: 'auto', background: 'none', border: 'none', color: 'var(--cl-ink-4)', cursor: 'pointer', font: 'inherit' }}
-              onClick={() => { closePicker(); onDeleteProject(project) }}
-            >
-              Remove current
-            </button>
-          </div>
-        </div>
       )}
     </div>
   )
