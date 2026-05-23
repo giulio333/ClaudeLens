@@ -12,11 +12,11 @@ import { View } from '../types'
 import type { ProjectCost } from '../../../types'
 import { Lens } from './Lens'
 import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
+import { McpServerGrid } from '../mcp/McpServerGrid'
 
 type Project = { hash: string; realPath: string }
 
 const PROJECTS_PAGE_SIZE = 5
-const MCP_PAGE_SIZE = 6
 
 type SortKey = 'tokens' | 'cost' | 'sessions' | 'name'
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -24,13 +24,6 @@ const SORT_OPTIONS: { key: SortKey; label: string }[] = [
   { key: 'cost', label: 'cost' },
   { key: 'sessions', label: 'sessions' },
   { key: 'name', label: 'name' },
-]
-
-type McpSortKey = 'projects' | 'name' | 'source'
-const MCP_SORT_OPTIONS: { key: McpSortKey; label: string }[] = [
-  { key: 'projects', label: 'projects' },
-  { key: 'name', label: 'name' },
-  { key: 'source', label: 'source' },
 ]
 
 function pageWindow(current: number, total: number): (number | 'gap')[] {
@@ -69,8 +62,6 @@ export function GlobalHomeView({
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
   const [projectsPage, setProjectsPage] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('tokens')
-  const [mcpPage, setMcpPage] = useState(0)
-  const [mcpSortKey, setMcpSortKey] = useState<McpSortKey>('projects')
   useEffect(() => {
     let alive = true
     async function load() {
@@ -125,34 +116,7 @@ export function GlobalHomeView({
     () => [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])],
     [mcpData],
   )
-  const sortedMcpServers = useMemo(() => {
-    const arr = [...mcpServers]
-    const displayName = (n: string) => n.replace(/^claude\.ai\s*/i, '').toLowerCase()
-    switch (mcpSortKey) {
-      case 'name':
-        return arr.sort((a, b) => displayName(a.name).localeCompare(displayName(b.name)))
-      case 'source':
-        return arr.sort((a, b) => a.source.localeCompare(b.source) || displayName(a.name).localeCompare(displayName(b.name)))
-      case 'projects':
-      default:
-        return arr.sort((a, b) => b.enabledInProjects - a.enabledInProjects)
-    }
-  }, [mcpServers, mcpSortKey])
-  const mcpPageCount = Math.max(1, Math.ceil(sortedMcpServers.length / MCP_PAGE_SIZE))
-  const safeMcpPage = Math.min(mcpPage, mcpPageCount - 1)
-  const pagedMcpServers = sortedMcpServers.slice(
-    safeMcpPage * MCP_PAGE_SIZE,
-    (safeMcpPage + 1) * MCP_PAGE_SIZE,
-  )
-  const mcpRangeFrom = sortedMcpServers.length === 0 ? 0 : safeMcpPage * MCP_PAGE_SIZE + 1
-  const mcpRangeTo = Math.min((safeMcpPage + 1) * MCP_PAGE_SIZE, sortedMcpServers.length)
   const claudeMdLines = (globalClaudeMd ?? '').split('\n').length
-
-  function chunk<T>(arr: T[], size: number): T[][] {
-    const out: T[][] = []
-    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
-    return out
-  }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -352,93 +316,10 @@ export function GlobalHomeView({
       {/* ─── MCP SERVERS ──────────────────────────────── */}
       {mcpServers.length > 0 && (
         <section className="cl-section">
-          <div className="cl-sec-head">
-            <h2>MCP servers</h2>
-            <span className="ct">
-              {`${mcpRangeFrom}–${mcpRangeTo} of ${sortedMcpServers.length} · sorted by ${MCP_SORT_OPTIONS.find(o => o.key === mcpSortKey)?.label ?? 'projects'}`}
-            </span>
-            <span className="cl-sortbar" style={{ marginLeft: 'auto' }}>
-              <span className="label">SORT BY</span>
-              {MCP_SORT_OPTIONS.map((o, i) => (
-                <span key={o.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {i > 0 && <span className="sep">·</span>}
-                  <button
-                    type="button"
-                    className={`opt${mcpSortKey === o.key ? ' on' : ''}`}
-                    onClick={() => { setMcpSortKey(o.key); setMcpPage(0) }}
-                  >
-                    {o.label}
-                  </button>
-                </span>
-              ))}
-            </span>
-          </div>
-          {chunk(pagedMcpServers, 3).map((group, gi) => (
-            <div
-              key={gi}
-              className="cl-mcp-row"
-              style={{ gridTemplateColumns: `repeat(${group.length}, 1fr)` }}
-            >
-              {group.map((s, i) => {
-                const tone = ['', 'violet', 'cyan'][(gi * 3 + i) % 3]
-                const total = s.enabledInProjects + s.disabledInProjects
-                return (
-                  <button
-                    key={s.name}
-                    type="button"
-                    className={`cl-mcp-cell ${tone}`}
-                    onClick={() => onNavigate({ type: 'mcp-detail', server: s, totalProjects: total })}
-                  >
-                    <div className="led-row"><span className="led" /> {s.source}</div>
-                    <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
-                    <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
-                    <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
-                  </button>
-                )
-              })}
-            </div>
-          ))}
-          {mcpPageCount > 1 && (
-            <div className="cl-pag">
-              <span className="cl-pag-meter">
-                PAGE <b>{String(safeMcpPage + 1).padStart(2, '0')}</b> / {String(mcpPageCount).padStart(2, '0')}
-              </span>
-              <div className="cl-pag-side">
-                <button
-                  type="button"
-                  className="cl-pag-btn"
-                  disabled={safeMcpPage === 0}
-                  onClick={() => setMcpPage(safeMcpPage - 1)}
-                >
-                  <span className="arrow">←</span> PREV
-                </button>
-                <div className="cl-pag-nums">
-                  {pageWindow(safeMcpPage, mcpPageCount).map((p, i) =>
-                    p === 'gap' ? (
-                      <span key={`gap-${i}`} className="cl-pag-ellipsis">…</span>
-                    ) : (
-                      <button
-                        key={p}
-                        type="button"
-                        className={`cl-pag-num${p === safeMcpPage ? ' on' : ''}`}
-                        onClick={() => setMcpPage(p)}
-                      >
-                        {String(p + 1).padStart(2, '0')}
-                      </button>
-                    ),
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="cl-pag-btn"
-                  disabled={safeMcpPage >= mcpPageCount - 1}
-                  onClick={() => setMcpPage(safeMcpPage + 1)}
-                >
-                  NEXT <span className="arrow">→</span>
-                </button>
-              </div>
-            </div>
-          )}
+          <McpServerGrid
+            servers={mcpServers}
+            onSelect={s => onNavigate({ type: 'mcp-detail', server: s, totalProjects: s.enabledInProjects + s.disabledInProjects })}
+          />
         </section>
       )}
     </div>
