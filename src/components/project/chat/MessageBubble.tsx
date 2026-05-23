@@ -61,6 +61,28 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   )
 }
 
+/** Compact card that surfaces a Claude Code sub-agent dispatch in minimal mode. */
+function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
+  const input = group.use.input as Record<string, unknown>
+  const subagent = (input.subagent_type as string) || 'general-purpose'
+  const desc = (input.description as string) || (input.prompt as string) || ''
+  return (
+    <button type="button" className="cl-agent-card" onClick={onOpen} title="View agent detail">
+      <span className="ic">🤖</span>
+      <span className="lbl">Claude Code Agent</span>
+      <span className="chip">{subagent}</span>
+      {desc && <span className="desc">{String(desc).slice(0, 90)}</span>}
+      {group.result && (
+        <span className="status" style={{ color: group.result.isError ? 'var(--cl-danger)' : 'var(--cl-ok)' }}>
+          {group.result.isError ? '⚠' : '✓'}
+        </span>
+      )}
+    </button>
+  )
+}
+
+const AGENT_TOOLS = new Set(['Agent', 'Task'])
+
 export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turnIndex }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
@@ -72,16 +94,27 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
 
   const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
+  const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
 
   const showThinking = detailsFilter === 'all'
   const showTools = detailsFilter === 'all'
   const showToolDetails = detailsFilter === 'all'
+  // In minimal mode tools are hidden, but agent dispatches stay visible so the
+  // reader can see when Claude Code delegated work to a sub-agent.
+  const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
 
   const hasVisibleContent =
     textBlocks.length > 0 ||
     (showThinking && thinkingBlocks.some(b => b.thinking)) ||
-    (showTools && toolGroups.length > 0)
+    (showTools && toolGroups.length > 0) ||
+    showAgentStrip
   if (!hasVisibleContent) return null
+
+  // A turn that is *only* a sub-agent dispatch gets its own role identity.
+  const isAgentTurn = showAgentStrip && textBlocks.length === 0
+  const roleBg = isAgentTurn ? 'var(--cl-violet)' : isUser ? 'var(--cl-accent)' : 'var(--cl-ink)'
+  const roleFg = isAgentTurn ? 'var(--cl-on-accent)' : isUser ? 'white' : 'var(--cl-paper)'
+  const roleLabel = isAgentTurn ? 'Agent' : isUser ? 'User' : 'Claude'
 
   const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
     hour: '2-digit',
@@ -100,8 +133,8 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
     }}>
       {/* ── Role column ── */}
       <div style={{
-        background: isUser ? 'var(--cl-accent)' : 'var(--cl-ink)',
-        color: isUser ? 'white' : 'var(--cl-paper)',
+        background: roleBg,
+        color: roleFg,
         padding: '16px 10px',
         display: 'flex',
         flexDirection: 'column',
@@ -119,7 +152,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           lineHeight: 1,
           opacity: isUser ? 1 : 0.9,
         }}>
-          {turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : (isUser ? 'U' : 'C')}
+          {turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : (isAgentTurn ? 'A' : isUser ? 'U' : 'C')}
         </div>
         <div style={{
           width: '10px',
@@ -136,7 +169,7 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           opacity: 0.85,
           textTransform: 'uppercase',
         }}>
-          {isUser ? 'User' : 'Claude'}
+          {roleLabel}
         </div>
         <div style={{
           fontFamily: 'var(--font-mono)',
@@ -185,6 +218,14 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
             )}
           </div>
         ))}
+
+        {showAgentStrip && (
+          <div style={{ marginTop: textBlocks.length > 0 ? '12px' : 0, display: 'flex', flexDirection: 'column', gap: '6px' }}>
+            {agentGroups.map((group, i) => (
+              <AgentDispatchCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
+            ))}
+          </div>
+        )}
 
         {showTools && toolGroups.length > 0 && (
           <div style={{ marginTop: '12px', display: 'flex', flexDirection: 'column', gap: '6px' }}>

@@ -314,6 +314,70 @@ body {
 .cl-btn--primary { background: var(--cl-ink); color: var(--cl-paper); border-color: var(--cl-ink); }
 .cl-btn--primary:hover { background: var(--cl-accent); color: var(--cl-on-accent); border-color: var(--cl-accent); }
 
+/* ─── Chat view controls ─────────────────────────────────────── */
+/* segmented toggle (Minimal / Full) */
+.cl-seg {
+  display: inline-flex; align-items: stretch;
+  border: 1px solid var(--cl-line); border-radius: 4px;
+  overflow: hidden; background: var(--cl-paper);
+}
+.cl-seg button {
+  appearance: none; border: 0; background: transparent; cursor: pointer;
+  font-family: var(--font-mono); font-size: 10px;
+  letter-spacing: 0.12em; text-transform: uppercase;
+  padding: 5px 12px; color: var(--cl-ink-3);
+  transition: background 120ms, color 120ms;
+}
+.cl-seg button + button { border-left: 1px solid var(--cl-line); }
+.cl-seg button:hover { color: var(--cl-ink); }
+.cl-seg button.on { background: var(--cl-accent-soft); color: var(--cl-accent-ink); }
+
+/* resume in claude — primary action */
+.cl-resume {
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 6px 13px; border-radius: 4px;
+  background: var(--cl-ink); color: var(--cl-paper);
+  border: 1px solid var(--cl-ink);
+  font-family: var(--font-sans); font-size: 11px; font-weight: 500; letter-spacing: 0.01em;
+  cursor: pointer; transition: background 120ms, color 120ms, border-color 120ms;
+}
+.cl-resume:hover { background: var(--cl-accent); color: var(--cl-on-accent); border-color: var(--cl-accent); }
+.cl-resume .play {
+  width: 0; height: 0; flex-shrink: 0;
+  border-style: solid; border-width: 4px 0 4px 7px;
+  border-color: transparent transparent transparent var(--cl-accent);
+  transition: border-color 120ms;
+}
+.cl-resume:hover .play { border-left-color: var(--cl-on-accent); }
+
+/* agent dispatch card — surfaces sub-agent runs even in minimal mode */
+.cl-agent-card {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  text-align: left; cursor: pointer;
+  padding: 9px 12px; border-radius: 4px;
+  border: 1px solid var(--cl-violet);
+  background: var(--cl-violet-soft);
+  transition: filter 120ms;
+}
+.cl-agent-card:hover { filter: brightness(0.97); }
+.cl-agent-card .ic { font-size: 14px; flex-shrink: 0; line-height: 1; }
+.cl-agent-card .lbl {
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+  color: var(--cl-violet-ink); flex-shrink: 0;
+}
+.cl-agent-card .chip {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  padding: 2px 8px; border-radius: 3px;
+  background: var(--cl-violet); color: var(--cl-on-accent);
+  flex-shrink: 0;
+}
+.cl-agent-card .desc {
+  font-size: 12px; color: var(--cl-ink-2);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+}
+.cl-agent-card .status { margin-left: auto; flex-shrink: 0; font-size: 11px; }
+
 /* docs outline link in hero meta */
 .cl-docs-link {
   color: var(--cl-ink-2); border-color: var(--cl-line);

@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useMemo } from 'react'
 import { useCreateSkill, SkillInput } from '../../../hooks/useIPC'
 import Markdown from '../../Markdown'
+import { TopBar } from '../shared/TopBar'
 
 const MODEL_PRESETS = ['default', 'best', 'sonnet', 'opus', 'haiku', 'sonnet[1m]', 'opus[1m]', 'opusplan'] as const
 
@@ -148,36 +149,6 @@ function CharCounter({ n, max }: { n: number; max: number }) {
   )
 }
 
-function TopBar({ onBack, crumb }: { onBack: () => void; crumb: string }) {
-  return (
-    <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
-      style={{
-        WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
-        style={{ WebkitAppRegion: 'no-drag', fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1 } as React.CSSProperties}
-      >
-        <span>←</span>
-        Back
-      </button>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span
-        className="font-mono uppercase truncate"
-        style={{ fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-3)', lineHeight: 1 } as React.CSSProperties}
-      >
-        {crumb}
-      </span>
-    </div>
-  )
-}
-
 export function CreateSkillPage({ project, onBack, onSaved }: {
   project?: { hash: string; realPath: string }
   onBack: () => void
@@ -255,7 +226,7 @@ export function CreateSkillPage({ project, onBack, onSaved }: {
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar onBack={onBack} crumb={crumb} />
+      <TopBar onBack={onBack} crumbs={[{ label: crumb }]} />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">

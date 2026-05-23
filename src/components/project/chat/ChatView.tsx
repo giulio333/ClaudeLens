@@ -5,6 +5,7 @@ import { fmt, fmtDate, fmtModel, modelColor, sessionTitle } from '../utils'
 import { buildProcessedMessages, isMemoryFile, ChatDetailsFilter, ToolGroup } from './utils'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
+import { TopBar } from '../shared/TopBar'
 
 export function ChatView({
   project,
@@ -41,126 +42,43 @@ export function ChatView({
   const totalToolCalls = toolSummary.reduce((s, [, c]) => s + c, 0)
 
   const title = sessionTitle(session)
-  const sessionId = session.filename.replace(/\.jsonl$/, '').slice(0, 8)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] ?? null : null
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
 
-      {/* ── BREADCRUMB BAR ── */}
-      <nav style={{
-        display: 'flex',
-        alignItems: 'center',
-        height: '38px',
-        padding: '0 28px',
-        background: 'var(--cl-paper-2)',
-        borderBottom: '1px solid var(--cl-line)',
-        gap: 0,
-        flexShrink: 0,
-      }}>
-        <button
-          onClick={onBack}
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10.5px',
-            letterSpacing: '0.16em',
-            textTransform: 'uppercase',
-            color: 'var(--cl-ink-4)',
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            padding: '0 14px 0 0',
-            display: 'inline-flex',
-            alignItems: 'center',
-          }}
-        >
-          {projectName} · Sessions
-        </button>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10.5px',
-          color: 'var(--cl-ink-4)',
-          opacity: 0.4,
-          marginRight: '14px',
-        }}>/</span>
-        <span style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: '10.5px',
-          letterSpacing: '0.16em',
-          textTransform: 'uppercase',
-          color: 'var(--cl-ink)',
-          flex: 1,
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          whiteSpace: 'nowrap',
-        }}>
-          {title}
-        </span>
-
-        <div style={{ display: 'inline-flex', alignItems: 'center', gap: '10px', marginLeft: 'auto' }}>
-          {/* Toggle Minimal / Full */}
-          <div style={{
-            display: 'inline-flex',
-            border: '1px solid var(--cl-line)',
-            borderRadius: '2px',
-            overflow: 'hidden',
-          }}>
-            {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
-              <button
-                key={v}
-                onClick={() => setDetailsFilter(v)}
-                style={{
-                  background: detailsFilter === v ? 'var(--cl-ink)' : 'transparent',
-                  color: detailsFilter === v ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
-                  border: 'none',
-                  padding: '4px 10px',
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: '10px',
-                  letterSpacing: '0.12em',
-                  textTransform: 'uppercase',
-                  cursor: 'pointer',
-                }}
-              >
-                {v === 'minimal' ? 'Minimal' : 'Full'}
-              </button>
-            ))}
-          </div>
-
-          {/* Resume button */}
-          <button
-            onClick={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: '8px',
-              padding: '6px 12px',
-              background: 'var(--cl-ink)',
-              color: 'var(--cl-paper)',
-              border: 'none',
-              borderRadius: '2px',
-              fontFamily: 'var(--font-sans)',
-              fontSize: '11px',
-              fontWeight: 500,
-              letterSpacing: '0.01em',
-              cursor: 'pointer',
-            }}
-          >
-            <span style={{
-              width: '8px',
-              height: '8px',
-              background: 'var(--cl-accent)',
-              clipPath: 'polygon(0 0, 100% 50%, 0 100%)',
-              display: 'inline-block',
-              flexShrink: 0,
-            }} />
-            Resume in Claude
-          </button>
-        </div>
-      </nav>
+      {/* ── TOP BAR ── */}
+      <TopBar
+        onBack={onBack}
+        backLabel={`${projectName} · Sessions`}
+        crumbs={[{ label: title, accent: true }]}
+        right={
+          <>
+            <div className="cl-seg">
+              {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
+                <button
+                  key={v}
+                  className={detailsFilter === v ? 'on' : ''}
+                  onClick={() => setDetailsFilter(v)}
+                >
+                  {v === 'minimal' ? 'Minimal' : 'Full'}
+                </button>
+              ))}
+            </div>
+            <button
+              className="cl-resume"
+              onClick={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
+            >
+              <span className="play" />
+              Resume in Claude
+            </button>
+          </>
+        }
+      />
 
       {/* ── HERO SECTION ── */}
       <header style={{
-        padding: '24px 28px 20px',
+        padding: '28px 28px 22px',
         borderBottom: '1.5px solid var(--cl-ink)',
         flexShrink: 0,
         display: 'grid',
@@ -168,47 +86,34 @@ export function ChatView({
         gap: '32px',
         alignItems: 'end',
       }}>
-        <div>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '10px',
-            letterSpacing: '0.20em',
-            textTransform: 'uppercase',
-            color: 'var(--cl-ink-3)',
-            marginBottom: '10px',
-            display: 'inline-flex',
-            alignItems: 'center',
-            gap: '8px',
-          }}>
-            <span style={{
-              width: '6px',
-              height: '6px',
-              borderRadius: '50%',
-              background: 'var(--cl-accent)',
-              display: 'inline-block',
-            }} />
-            Session · {fmtDate(session.date)}
+        <div style={{ minWidth: 0 }}>
+          <div className="cl-eyebrow" style={{ marginBottom: '14px' }}>
+            <span className="pip" />
+            <span>Session · {fmtDate(session.date)}</span>
           </div>
           <h1 style={{
-            fontSize: '28px',
+            fontSize: '30px',
             fontWeight: 600,
-            letterSpacing: '-0.025em',
+            letterSpacing: '-0.03em',
             lineHeight: 1.1,
             color: 'var(--cl-ink)',
-            marginBottom: '10px',
+            marginBottom: '12px',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
           }}>
             {title}
           </h1>
-          <div style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: '11px',
-            color: 'var(--cl-ink-3)',
-          }}>
-            <span title={session.filename}>#{sessionId}</span>
+          <div className="cl-h-meta" style={{ marginTop: 0 }}>
+            <span style={{ fontFamily: 'var(--font-mono)', color: 'var(--cl-ink-3)' }}>{session.filename}</span>
             {primaryModel && (
-              <span style={{ color: modelColor(primaryModel), marginLeft: '12px' }}>
-                {fmtModel(primaryModel)}
-              </span>
+              <>
+                <span className="sep">·</span>
+                <span className="tag">
+                  <span className="led" style={{ background: modelColor(primaryModel) }} />
+                  {fmtModel(primaryModel)}
+                </span>
+              </>
             )}
           </div>
         </div>

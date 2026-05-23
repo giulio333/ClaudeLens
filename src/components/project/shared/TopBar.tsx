@@ -1,0 +1,67 @@
+import { Fragment, ReactNode } from 'react'
+
+export type Crumb = { label: ReactNode; accent?: boolean }
+
+/**
+ * Editorial top bar shared by every full-screen "deep" view.
+ *
+ * Fixed 52px height with an 88px left gutter that clears the macOS
+ * traffic-light buttons, and a `-webkit-app-region: drag` surface so the
+ * window can be moved by the bar. Interactive elements opt back out with
+ * `no-drag`. Keeping this in one place guarantees every page lines up.
+ */
+export function TopBar({
+  onBack,
+  backLabel = 'Back',
+  crumbs = [],
+  right,
+}: {
+  onBack: () => void
+  backLabel?: string
+  crumbs?: Crumb[]
+  right?: ReactNode
+}) {
+  const crumbStyle = (accent?: boolean): React.CSSProperties => ({
+    fontSize: 11,
+    letterSpacing: '0.18em',
+    color: accent ? 'var(--cl-ink)' : 'var(--cl-ink-3)',
+    lineHeight: 1,
+  })
+
+  return (
+    <div
+      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
+      style={{
+        WebkitAppRegion: 'drag',
+        background: 'var(--cl-paper)',
+        height: 52,
+        padding: '0 28px 0 88px',
+      } as React.CSSProperties}
+    >
+      <button
+        onClick={onBack}
+        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)] shrink-0"
+        style={{ WebkitAppRegion: 'no-drag', ...crumbStyle() } as React.CSSProperties}
+      >
+        <span>←</span>
+        {backLabel}
+      </button>
+
+      {crumbs.map((c, i) => (
+        <Fragment key={i}>
+          <span className="shrink-0" style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
+          <span className="font-mono uppercase truncate min-w-0" style={crumbStyle(c.accent)}>{c.label}</span>
+        </Fragment>
+      ))}
+
+      {right && (
+        <div
+          className="flex items-center gap-2.5 shrink-0"
+          style={{ marginLeft: 'auto', WebkitAppRegion: 'no-drag' } as React.CSSProperties}
+        >
+          {right}
+        </div>
+      )}
+    </div>
+  )
+}

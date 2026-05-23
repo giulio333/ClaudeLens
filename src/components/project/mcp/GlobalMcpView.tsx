@@ -1,5 +1,6 @@
 import { useGlobalMcp, McpData, McpServer } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
+import { TopBar } from '../shared/TopBar'
 import { mcpServiceColor } from './McpServerCard'
 
 const TONES = ['', 'violet', 'cyan'] as const
@@ -92,47 +93,6 @@ function McpRowGroup({
   )
 }
 
-function TopBar({ onBack }: { onBack: () => void }) {
-  return (
-    <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
-      style={{
-        WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
-        style={{
-          WebkitAppRegion: 'no-drag',
-          fontSize: 11,
-          letterSpacing: '0.18em',
-          color: 'var(--cl-ink-3)',
-          lineHeight: 1,
-        } as React.CSSProperties}
-      >
-        <span>←</span>
-        Back
-      </button>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span
-        className="font-mono uppercase truncate"
-        style={{
-          fontSize: 11,
-          letterSpacing: '0.18em',
-          color: 'var(--cl-ink-3)',
-          lineHeight: 1,
-        } as React.CSSProperties}
-      >
-        Global · MCP
-      </span>
-    </div>
-  )
-}
-
 export function GlobalMcpView({
   onBack,
   onSelectServer,
@@ -158,7 +118,7 @@ export function GlobalMcpView({
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar onBack={onBack} />
+      <TopBar onBack={onBack} crumbs={[{ label: 'Global · MCP' }]} />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">
