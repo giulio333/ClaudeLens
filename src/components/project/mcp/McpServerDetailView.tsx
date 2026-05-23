@@ -1,6 +1,59 @@
-import { McpServer } from '../../../hooks/useIPC'
+import { useMemo } from 'react'
+import { McpServer, useCostSummary, useMemoryProjects } from '../../../hooks/useIPC'
+import type { ProjectCost } from '../../../types'
 import { Lens } from '../overview/Lens'
 import { mcpServiceColor, mcpServiceMeta } from './McpServerCard'
+
+type Project = { hash: string; realPath: string }
+
+function formatTokens(n: number): { value: string; unit: string } {
+  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'b' }
+  if (n >= 1_000_000)     return { value: (n / 1_000_000).toFixed(1), unit: 'm' }
+  if (n >= 1_000)         return { value: Math.round(n / 1_000).toString(), unit: 'k' }
+  return { value: String(n), unit: '' }
+}
+
+function ProjectRow({
+  path,
+  statusColor,
+  project,
+  cost,
+  onSelect,
+}: {
+  path: string
+  statusColor: string
+  project?: Project
+  cost?: ProjectCost
+  onSelect?: (p: Project) => void
+}) {
+  const name = path.split('/').pop() ?? path
+  const initial = (name[0] ?? '?').toUpperCase()
+  const tokens = formatTokens(cost?.totalTokens ?? 0)
+  const clickable = !!(project && onSelect)
+  return (
+    <button
+      type="button"
+      className="cl-row"
+      onClick={() => clickable && onSelect!(project!)}
+      style={{ cursor: clickable ? 'pointer' : 'default' }}
+    >
+      <span className="idx">{initial}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="title">
+          {name}
+          <span style={{
+            display: 'inline-block', width: 7, height: 7, borderRadius: '50%',
+            background: statusColor, marginLeft: 10, verticalAlign: 'middle',
+          }} />
+        </div>
+        <div className="file">{path}</div>
+      </div>
+      <span className="when" style={{ textAlign: 'left' }}>{cost?.sessionsCount ?? 0} sessions</span>
+      <span className="toks">{tokens.value}{tokens.unit}<small>tok</small></span>
+      <span className="when">{cost ? `$${cost.cost.toFixed(2)}` : '—'}</span>
+    </button>
+  )
+}
 
 function TopBar({ onBack, name }: { onBack: () => void; name: string }) {
   const crumb = (accent = false): React.CSSProperties => ({
@@ -35,25 +88,29 @@ function TopBar({ onBack, name }: { onBack: () => void; name: string }) {
   )
 }
 
-function ProjectRow({ path, color }: { path: string; color: string }) {
-  return (
-    <div className="d-proj">
-      <span className="dot" style={{ background: color }} />
-      <span className="name">{path.split('/').pop() ?? path}</span>
-      <span className="path" title={path}>{path}</span>
-    </div>
-  )
-}
-
 export function McpServerDetailView({
   server,
   totalProjects,
   onBack,
+  onSelectProject,
 }: {
   server: McpServer
   totalProjects: number
   onBack: () => void
+  onSelectProject?: (p: Project) => void
 }) {
+  const { data: allProjects = [] } = useMemoryProjects()
+  const { data: costSummary } = useCostSummary()
+  const projectByPath = useMemo(() => {
+    const m = new Map<string, Project>()
+    for (const p of allProjects) m.set(p.realPath, p)
+    return m
+  }, [allProjects])
+  const costByHash = useMemo(() => {
+    const m = new Map<string, ProjectCost>()
+    for (const c of (costSummary as ProjectCost[] | undefined) ?? []) m.set(c.project, c)
+    return m
+  }, [costSummary])
   const displayName = server.name.replace(/^claude\.ai\s*/i, '')
   const color = mcpServiceColor(server.name)
   const initial = displayName.trim()[0]?.toUpperCase() ?? '?'
@@ -149,7 +206,7 @@ export function McpServerDetailView({
               <h2>Configuration</h2>
               <span className="ct">~/.claude/settings.json</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
+            <div className="cl-mcp-config">
               {commandLine && (
                 <>
                   <div className="d-label">Command</div>
@@ -176,10 +233,20 @@ export function McpServerDetailView({
               <h2>Enabled</h2>
               <span className="ct">{server.enabledProjectPaths.length} {server.enabledProjectPaths.length === 1 ? 'project' : 'projects'}</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
-              {server.enabledProjectPaths.map(p => (
-                <ProjectRow key={p} path={p} color="var(--cl-ok)" />
-              ))}
+            <div>
+              {server.enabledProjectPaths.map(p => {
+                const proj = projectByPath.get(p)
+                return (
+                  <ProjectRow
+                    key={p}
+                    path={p}
+                    statusColor="var(--cl-ok)"
+                    project={proj}
+                    cost={proj ? costByHash.get(proj.hash) : undefined}
+                    onSelect={onSelectProject}
+                  />
+                )
+              })}
             </div>
           </section>
         )}
@@ -190,10 +257,20 @@ export function McpServerDetailView({
               <h2>Disabled</h2>
               <span className="ct">{server.disabledProjectPaths.length} {server.disabledProjectPaths.length === 1 ? 'project' : 'projects'}</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
-              {server.disabledProjectPaths.map(p => (
-                <ProjectRow key={p} path={p} color="var(--cl-danger)" />
-              ))}
+            <div>
+              {server.disabledProjectPaths.map(p => {
+                const proj = projectByPath.get(p)
+                return (
+                  <ProjectRow
+                    key={p}
+                    path={p}
+                    statusColor="var(--cl-danger)"
+                    project={proj}
+                    cost={proj ? costByHash.get(proj.hash) : undefined}
+                    onSelect={onSelectProject}
+                  />
+                )
+              })}
             </div>
           </section>
         )}
