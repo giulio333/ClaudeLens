@@ -16,7 +16,7 @@ import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
 type Project = { hash: string; realPath: string }
 
 const PROJECTS_PAGE_SIZE = 5
-const MCP_PAGE_SIZE = 5
+const MCP_PAGE_SIZE = 6
 
 type SortKey = 'tokens' | 'cost' | 'sessions' | 'name'
 const SORT_OPTIONS: { key: SortKey; label: string }[] = [
@@ -147,6 +147,12 @@ export function GlobalHomeView({
   const mcpRangeFrom = sortedMcpServers.length === 0 ? 0 : safeMcpPage * MCP_PAGE_SIZE + 1
   const mcpRangeTo = Math.min((safeMcpPage + 1) * MCP_PAGE_SIZE, sortedMcpServers.length)
   const claudeMdLines = (globalClaudeMd ?? '').split('\n').length
+
+  function chunk<T>(arr: T[], size: number): T[][] {
+    const out: T[][] = []
+    for (let i = 0; i < arr.length; i += size) out.push(arr.slice(i, i + size))
+    return out
+  }
 
   return (
     <div style={{ position: 'relative' }}>
@@ -367,24 +373,31 @@ export function GlobalHomeView({
               ))}
             </span>
           </div>
-          <div>
-            {pagedMcpServers.map(s => {
-              const displayName = s.name.replace(/^claude\.ai\s*/i, '')
-              const total = s.enabledInProjects + s.disabledInProjects
-              return (
-                <button key={s.name} type="button" className="cl-row" onClick={() => onNavigate({ type: 'mcp-detail', server: s, totalProjects: total })}>
-                  <span className="idx">{(displayName[0] ?? '?').toUpperCase()}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="title">{displayName}</div>
-                    <div className="file">{s.source}{s.command ? ` · ${s.command}` : ''}</div>
-                  </div>
-                  <span className="when" style={{ textAlign: 'left' }}>{total} {total === 1 ? 'project' : 'projects'}</span>
-                  <span className="toks">{s.enabledInProjects}<small>/{total}</small></span>
-                  <span className="when">{s.enabledInProjects > 0 ? 'active' : 'inactive'}</span>
-                </button>
-              )
-            })}
-          </div>
+          {chunk(pagedMcpServers, 3).map((group, gi) => (
+            <div
+              key={gi}
+              className="cl-mcp-row"
+              style={{ gridTemplateColumns: `repeat(${group.length}, 1fr)` }}
+            >
+              {group.map((s, i) => {
+                const tone = ['', 'violet', 'cyan'][(gi * 3 + i) % 3]
+                const total = s.enabledInProjects + s.disabledInProjects
+                return (
+                  <button
+                    key={s.name}
+                    type="button"
+                    className={`cl-mcp-cell ${tone}`}
+                    onClick={() => onNavigate({ type: 'mcp-detail', server: s, totalProjects: total })}
+                  >
+                    <div className="led-row"><span className="led" /> {s.source}</div>
+                    <div className="mcp-name">{s.name.replace(/^claude\.ai\s*/i, '')}</div>
+                    <div className="tools">active in <b>{s.enabledInProjects}</b> of {total} projects</div>
+                    <div className="frac">{s.enabledInProjects}<small>/{total}</small></div>
+                  </button>
+                )
+              })}
+            </div>
+          ))}
           {mcpPageCount > 1 && (
             <div className="cl-pag">
               <span className="cl-pag-meter">
