@@ -130,7 +130,7 @@ export function GlobalMcpView({
                   <h2>Cloud</h2>
                   <span className="ct">connected · across {totalProjects} projects</span>
                 </div>
-                <div className="cl-mcp-list">
+                <div className="cl-mcp-grid">
                   {cloud.map(s => (
                     <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
                   ))}
@@ -144,7 +144,7 @@ export function GlobalMcpView({
                   <h2>Local</h2>
                   <span className="ct">~/.claude/settings.json</span>
                 </div>
-                <div className="cl-mcp-list">
+                <div className="cl-mcp-grid">
                   {local.map(s => (
                     <McpServerCard key={s.name} server={s} totalProjects={totalProjects} onSelect={onSelectServer} />
                   ))}

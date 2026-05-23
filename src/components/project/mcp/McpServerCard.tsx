@@ -59,6 +59,7 @@ export function McpServerCard({
   const displayName = server.name.replace(/^claude\.ai\s*/i, '')
   const color = mcpServiceColor(server.name)
   const initial = displayName.trim()[0]?.toUpperCase() ?? '?'
+  const meta = mcpServiceMeta(server.name)
 
   const isLocal = server.source === 'local'
   const fullyEnabled = server.disabledInProjects === 0
@@ -66,26 +67,27 @@ export function McpServerCard({
   const statusColor = fullyEnabled ? 'var(--cl-ok)' : fullyDisabled ? 'var(--cl-danger)' : 'var(--cl-warn)'
 
   const envKeys = server.env ? Object.keys(server.env) : []
-  const commandLine = server.command
-    ? `${server.command}${server.args?.length ? ' ' + server.args.join(' ') : ''}`
-    : null
   const pct = totalProjects > 0 ? Math.round((server.enabledInProjects / totalProjects) * 100) : 0
 
   return (
-    <button type="button" className="cl-mcp-item" onClick={() => onSelect(server)}>
+    <button type="button" className="cl-mcp-card" onClick={() => onSelect(server)}>
       <span
         className="badge"
-        style={{ background: `color-mix(in oklch, ${color} 14%, transparent)`, border: `1px solid color-mix(in oklch, ${color} 28%, transparent)`, color }}
+        style={{
+          background: `color-mix(in oklch, ${color} 14%, transparent)`,
+          border: `1px solid color-mix(in oklch, ${color} 28%, transparent)`,
+          color,
+        }}
       >
         {initial}
       </span>
 
-      <div style={{ minWidth: 0 }}>
-        <div className="m-head">
-          <span className="m-name">{displayName}</span>
-          <span className="m-led" style={{ background: statusColor }} />
+      <div className="body">
+        <div className="head">
+          <span className="name">{displayName}</span>
+          <span className="led" style={{ background: statusColor }} />
           <span
-            className="m-src"
+            className="src"
             style={
               isLocal
                 ? { background: 'var(--cl-warn-soft)', color: 'var(--cl-warn)' }
@@ -95,34 +97,30 @@ export function McpServerCard({
             {server.source}
           </span>
         </div>
-        <div className="m-sub" title={commandLine ?? undefined}>
-          {isLocal
-            ? (commandLine ?? 'local server')
-            : fullyEnabled
-              ? 'enabled everywhere'
-              : fullyDisabled
-                ? 'disabled everywhere'
-                : `disabled in ${server.disabledInProjects} ${server.disabledInProjects === 1 ? 'project' : 'projects'}`}
-        </div>
-      </div>
+        <div className="cat">{meta.category}</div>
+        <div className="desc">{meta.description}</div>
 
-      <div className="m-right">
-        {!isLocal && totalProjects > 0 && (
-          <div className="m-prog">
-            <span className="m-frac">{server.enabledInProjects}<small>/{totalProjects}</small></span>
-            <span className="cl-mcp-bar">
-              <i style={{ width: `${pct}%`, background: statusColor }} />
-            </span>
-          </div>
-        )}
-        {isLocal && envKeys.length > 0 && (
-          <span className="m-frac" style={{ fontSize: 13, color: 'var(--cl-ink-3)' }}>
-            {envKeys.length} env
-          </span>
-        )}
-        <svg className="chev-right" width="13" height="13" viewBox="0 0 10 10" fill="none">
-          <path d="M3.5 2l3 3-3 3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-        </svg>
+        <div className="foot">
+          {!isLocal && totalProjects > 0 && (
+            <>
+              <span className="frac">
+                {server.enabledInProjects}<small>/{totalProjects}</small>
+              </span>
+              <span className="bar"><i style={{ width: `${pct}%`, background: statusColor }} /></span>
+              <span className="pct">{pct}%</span>
+            </>
+          )}
+          {isLocal && (
+            <>
+              {envKeys.length > 0 && (
+                <span className="env"><b>{envKeys.length}</b> env</span>
+              )}
+              {server.command && (
+                <span className="cmd" title={server.command}>{server.command}</span>
+              )}
+            </>
+          )}
+        </div>
       </div>
     </button>
   )

@@ -35,12 +35,19 @@ function TopBar({ onBack, name }: { onBack: () => void; name: string }) {
   )
 }
 
-function ProjectRow({ path, color }: { path: string; color: string }) {
+function ProjectCard({ path, color }: { path: string; color: string }) {
+  const name = path.split('/').pop() ?? path
+  const initial = (name[0] ?? '?').toUpperCase()
   return (
-    <div className="d-proj">
-      <span className="dot" style={{ background: color }} />
-      <span className="name">{path.split('/').pop() ?? path}</span>
-      <span className="path" title={path}>{path}</span>
+    <div className="cl-mcp-proj">
+      <span className="glyph" style={{ color, borderColor: color }}>
+        {initial}
+        <span className="led" style={{ background: color }} />
+      </span>
+      <div style={{ minWidth: 0 }}>
+        <div className="name">{name}</div>
+        <div className="path" title={path}>{path}</div>
+      </div>
     </div>
   )
 }
@@ -149,7 +156,7 @@ export function McpServerDetailView({
               <h2>Configuration</h2>
               <span className="ct">~/.claude/settings.json</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
+            <div className="cl-mcp-config">
               {commandLine && (
                 <>
                   <div className="d-label">Command</div>
@@ -176,9 +183,9 @@ export function McpServerDetailView({
               <h2>Enabled</h2>
               <span className="ct">{server.enabledProjectPaths.length} {server.enabledProjectPaths.length === 1 ? 'project' : 'projects'}</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
+            <div className="cl-mcp-projs">
               {server.enabledProjectPaths.map(p => (
-                <ProjectRow key={p} path={p} color="var(--cl-ok)" />
+                <ProjectCard key={p} path={p} color="var(--cl-ok)" />
               ))}
             </div>
           </section>
@@ -190,9 +197,9 @@ export function McpServerDetailView({
               <h2>Disabled</h2>
               <span className="ct">{server.disabledProjectPaths.length} {server.disabledProjectPaths.length === 1 ? 'project' : 'projects'}</span>
             </div>
-            <div className="cl-mcp-detail" style={{ paddingTop: 0 }}>
+            <div className="cl-mcp-projs">
               {server.disabledProjectPaths.map(p => (
-                <ProjectRow key={p} path={p} color="var(--cl-danger)" />
+                <ProjectCard key={p} path={p} color="var(--cl-danger)" />
               ))}
             </div>
           </section>
