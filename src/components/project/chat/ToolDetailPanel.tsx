@@ -176,7 +176,7 @@ function AgentDetailBody({
   const isError = Boolean(result?.isError)
   const isPending = !result
   const statusLabel = isPending ? 'Pending' : isError ? 'Error' : 'Complete'
-  const statusClass = isPending ? 'is-pending' : isError ? 'is-error' : ''
+  const statusClass = isPending ? 'is-pending' : isError ? 'is-error' : 'is-ok'
   const lineCount = result ? cleanOutput.split('\n').filter(Boolean).length : 0
   const totalLineCount = result ? outputLineCount(result) : 0
   const durationParts = formatDurationParts(parsed.durationMs)
@@ -233,13 +233,6 @@ function AgentDetailBody({
         )}
         {durationParts && (
           <StatChip label="Duration" value={durationParts.value} unit={durationParts.unit} />
-        )}
-        {parsed.agentId && (
-          <StatChip
-            label="Agent ID"
-            value={`${parsed.agentId.slice(0, 10)}…`}
-            variant="id"
-          />
         )}
       </div>
 
