@@ -242,6 +242,211 @@ body {
   border-bottom: 1.5px solid var(--cl-ink);
   overflow: hidden;
 }
+
+/* ── LIVE state ─────────────────────────────────────── */
+.cl-live-bar {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 3px;
+  background: linear-gradient(
+    90deg,
+    transparent 0%,
+    var(--cl-cyan) 12%,
+    var(--cl-ok) 28%,
+    color-mix(in oklch, var(--cl-ok) 60%, var(--cl-accent)) 50%,
+    var(--cl-accent) 72%,
+    var(--cl-violet) 88%,
+    transparent 100%
+  );
+  background-size: 220% 100%;
+  animation: cl-live-sweep 4.5s linear infinite;
+  z-index: 4;
+  pointer-events: none;
+  mix-blend-mode: screen;
+}
+.cl-live-bar::after {
+  content: '';
+  position: absolute;
+  inset: -2px 0 -8px 0;
+  background: inherit;
+  background-size: 220% 100%;
+  filter: blur(10px);
+  opacity: 0.7;
+  animation: cl-live-sweep 4.5s linear infinite;
+}
+@keyframes cl-live-sweep {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* layered gradient aura behind the title when live */
+.cl-hero.is-live::before {
+  content: '';
+  position: absolute;
+  top: -30%;
+  left: -15%;
+  width: 85%;
+  height: 240%;
+  background:
+    radial-gradient(
+      circle at 25% 40%,
+      color-mix(in oklch, var(--cl-ok) 30%, transparent) 0%,
+      transparent 45%
+    ),
+    radial-gradient(
+      circle at 55% 60%,
+      color-mix(in oklch, var(--cl-accent) 22%, transparent) 0%,
+      transparent 50%
+    ),
+    radial-gradient(
+      circle at 15% 70%,
+      color-mix(in oklch, var(--cl-cyan) 20%, transparent) 0%,
+      transparent 55%
+    );
+  pointer-events: none;
+  z-index: 1;
+  filter: blur(8px);
+  animation: cl-live-aura 9s ease-in-out infinite;
+}
+.cl-hero.is-live::after {
+  content: '';
+  position: absolute;
+  top: 30%;
+  left: -5%;
+  width: 60%;
+  height: 60%;
+  background: conic-gradient(
+    from 180deg at 50% 50%,
+    transparent 0deg,
+    color-mix(in oklch, var(--cl-ok) 18%, transparent) 60deg,
+    color-mix(in oklch, var(--cl-violet) 15%, transparent) 180deg,
+    color-mix(in oklch, var(--cl-accent) 16%, transparent) 280deg,
+    transparent 360deg
+  );
+  filter: blur(40px);
+  opacity: 0.55;
+  pointer-events: none;
+  z-index: 1;
+  animation: cl-live-rotate 22s linear infinite;
+}
+@keyframes cl-live-aura {
+  0%   { opacity: 0.55; transform: translate(0, 0) scale(1); }
+  6%   { opacity: 1;    transform: translate(2%, -1%) scale(1.07); }
+  14%  { opacity: 0.65; transform: translate(-1%, 1%) scale(0.99); }
+  22%  { opacity: 0.95; transform: translate(1%, -2%) scale(1.05); }
+  32%  { opacity: 0.6;  transform: translate(0, 0) scale(1); }
+  100% { opacity: 0.55; transform: translate(0, 0) scale(1); }
+}
+@keyframes cl-live-rotate {
+  0%   { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* gradient ink on the project name when live — slow continuous flow */
+.cl-hero.is-live .cl-h-name .label-name {
+  background: linear-gradient(
+    100deg,
+    var(--cl-ink) 0%,
+    var(--cl-ink) 30%,
+    color-mix(in oklch, var(--cl-ok) 75%, var(--cl-ink)) 45%,
+    var(--cl-ok) 52%,
+    var(--cl-accent) 60%,
+    color-mix(in oklch, var(--cl-accent) 65%, var(--cl-ink)) 70%,
+    var(--cl-ink) 85%,
+    var(--cl-ink) 100%
+  );
+  background-size: 280% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: cl-live-ink 22s cubic-bezier(0.45, 0.05, 0.55, 0.95) infinite;
+}
+@keyframes cl-live-ink {
+  0%   { background-position: 100% 0; }
+  18%  { background-position: 74% 0; }
+  31%  { background-position: 68% 0; }
+  47%  { background-position: 32% 0; }
+  55%  { background-position: 28% 0; }
+  72%  { background-position: 12% 0; }
+  85%  { background-position: 4% 0; }
+  100% { background-position: 100% 0; }
+}
+
+/* heartbeat on the trailing glyph */
+.cl-hero.is-live .cl-h-name .glyph {
+  color: var(--cl-ok);
+  display: inline-block;
+  animation: cl-live-heart 1.6s cubic-bezier(0.5, 0, 0.5, 1) infinite;
+  filter: drop-shadow(0 0 6px color-mix(in oklch, var(--cl-ok) 70%, transparent));
+}
+@keyframes cl-live-heart {
+  0%   { transform: scale(1);    filter: drop-shadow(0 0 4px  color-mix(in oklch, var(--cl-ok) 50%, transparent)); }
+  8%   { transform: scale(1.15); filter: drop-shadow(0 0 14px color-mix(in oklch, var(--cl-ok) 90%, transparent)); }
+  16%  { transform: scale(1); }
+  24%  { transform: scale(1.10); filter: drop-shadow(0 0 10px color-mix(in oklch, var(--cl-ok) 75%, transparent)); }
+  32%  { transform: scale(1); }
+  100% { transform: scale(1); }
+}
+
+.cl-hero.is-live .cl-h-name,
+.cl-hero.is-live .cl-h-meta,
+.cl-hero.is-live .cl-eyebrow { position: relative; z-index: 2; }
+
+/* LIVE chip in eyebrow */
+.cl-live-chip {
+  display: inline-flex; align-items: center; gap: 8px;
+  margin-left: 4px;
+  padding: 3px 9px 3px 7px;
+  background: color-mix(in oklch, var(--cl-ok) 14%, transparent);
+  border: 1px solid color-mix(in oklch, var(--cl-ok) 55%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 10.5px; letter-spacing: 0.18em;
+  color: var(--cl-ok);
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms, transform 140ms;
+}
+.cl-live-chip:hover {
+  background: color-mix(in oklch, var(--cl-ok) 22%, transparent);
+  border-color: var(--cl-ok);
+  transform: translateY(-1px);
+}
+.cl-live-chip .dot {
+  position: relative;
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--cl-ok);
+  box-shadow: 0 0 8px var(--cl-ok);
+}
+.cl-live-chip .dot .ring {
+  position: absolute;
+  inset: -3px;
+  border: 1.5px solid var(--cl-ok);
+  border-radius: 50%;
+  animation: cl-live-ring 1.8s ease-out infinite;
+}
+.cl-live-chip .label { font-weight: 600; }
+.cl-live-chip .meta {
+  color: color-mix(in oklch, var(--cl-ok) 70%, var(--cl-ink-3));
+  letter-spacing: 0.08em;
+  padding-left: 6px;
+  border-left: 1px solid color-mix(in oklch, var(--cl-ok) 35%, transparent);
+}
+@keyframes cl-live-ring {
+  0%   { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2.2); opacity: 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-live-bar,
+  .cl-live-bar::after,
+  .cl-hero.is-live::before,
+  .cl-hero.is-live::after,
+  .cl-hero.is-live .cl-h-name .label-name,
+  .cl-hero.is-live .cl-h-name .glyph,
+  .cl-live-chip .dot .ring {
+    animation: none;
+  }
+}
 .cl-eyebrow {
   font-family: var(--font-mono);
   font-size: 11px; letter-spacing: 0.20em; text-transform: uppercase;
