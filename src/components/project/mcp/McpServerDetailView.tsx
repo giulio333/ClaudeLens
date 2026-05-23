@@ -2,6 +2,7 @@ import { useMemo } from 'react'
 import { McpServer, useCostSummary, useMemoryProjects } from '../../../hooks/useIPC'
 import type { ProjectCost } from '../../../types'
 import { Lens } from '../overview/Lens'
+import { TopBar } from '../shared/TopBar'
 import { mcpServiceColor, mcpServiceMeta } from './McpServerCard'
 
 type Project = { hash: string; realPath: string }
@@ -55,39 +56,6 @@ function ProjectRow({
   )
 }
 
-function TopBar({ onBack, name }: { onBack: () => void; name: string }) {
-  const crumb = (accent = false): React.CSSProperties => ({
-    fontSize: 11,
-    letterSpacing: '0.18em',
-    color: accent ? 'var(--cl-ink)' : 'var(--cl-ink-3)',
-    lineHeight: 1,
-  })
-  return (
-    <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
-      style={{
-        WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
-    >
-      <button
-        onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)]"
-        style={{ WebkitAppRegion: 'no-drag', ...crumb() } as React.CSSProperties}
-      >
-        <span>←</span>
-        Back
-      </button>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span className="font-mono uppercase" style={crumb()}>Global · MCP</span>
-      <span style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-      <span className="font-mono uppercase truncate" style={crumb(true)}>{name}</span>
-    </div>
-  )
-}
-
 export function McpServerDetailView({
   server,
   totalProjects,
@@ -130,7 +98,7 @@ export function McpServerDetailView({
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar onBack={onBack} name={displayName} />
+      <TopBar onBack={onBack} crumbs={[{ label: 'Global · MCP' }, { label: displayName, accent: true }]} />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">
