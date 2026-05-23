@@ -16,7 +16,7 @@ import {
   ClaudeProcess,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
-import { fmt, fmtModel } from '../utils'
+import { fmt, fmtModel, sessionTitle } from '../utils'
 import type { SessionSummary, ProjectCost } from '../../../types'
 import { Lens } from './Lens'
 
@@ -668,10 +668,12 @@ function SessionRows({ sessions, cleanupDays, onOpen }: { sessions: SessionSumma
             <span className="idx">{String(i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
               <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                {s.customTitle || `Session ${shortWhen(s.date)}`}
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {sessionTitle(s)}
+                </span>
                 <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
               </div>
-              <div className="file">{s.filename}</div>
+              <div className="file">{fmt(s.messageCount)} msg · ${s.estimatedCost.toFixed(2)}</div>
             </div>
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
             <span className="toks">{fmt(s.totalTokens)}<small>tok</small></span>

@@ -4,6 +4,21 @@ export function fmtDate(d: string) {
   return new Date(d).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// Restituisce un titolo umano per la sessione, in ordine di priorità:
+// 1) customTitle (impostato dall'utente)  2) aiTitle (generato da Claude)
+// 3) primo messaggio utente troncato       4) fallback "Untitled session"
+export function sessionTitle(s: {
+  customTitle?: string
+  aiTitle?: string
+  firstUserMessage?: string
+}, maxLen = 80): string {
+  const raw = s.customTitle?.trim() || s.aiTitle?.trim() || s.firstUserMessage?.trim()
+  if (!raw) return 'Untitled session'
+  const firstLine = raw.split('\n')[0].trim() || raw.trim()
+  if (firstLine.length <= maxLen) return firstLine
+  return firstLine.slice(0, maxLen - 1).trimEnd() + '…'
+}
+
 // Converte l'ID modello in nome leggibile: "claude-sonnet-4-6" → "Sonnet 4.6"
 export function fmtModel(m: string): string {
   const s = m.replace(/^claude-/, '')
