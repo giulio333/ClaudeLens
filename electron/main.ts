@@ -428,6 +428,25 @@ ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, 
   }
 });
 
+ipcMain.handle('agents:deleteBg', async (_event, id: string) => {
+  try {
+    const { execFile } = await import('child_process');
+    const { promisify } = await import('util');
+    const execFileAsync = promisify(execFile);
+
+    const localBinPath = join(os.homedir(), '.local', 'bin');
+    const env = {
+      ...process.env,
+      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`,
+    };
+
+    await execFileAsync('claude', ['rm', id], { env });
+    return ok(null);
+  } catch (e: any) {
+    return err(e.stderr || e.message || String(e));
+  }
+});
+
 ipcMain.handle('projects:delete', async (_event, hash: string) => {
   try {
     const projectPath = join(PROJECTS_DIR, hash);
@@ -600,9 +619,28 @@ function openInTerminal(cwd: string, command: string): void {
   execFile('osascript', ['-e', script]);
 }
 
+/**
+ * Background sessions (managed by `claude agents`) reject plain `--resume`:
+ *  - if the daemon worker is still alive, we open the agents TUI so the user can attach
+ *  - if the session is terminal (done/failed/stopped), we fork it into a fresh copy
+ * Foreground sessions keep the regular `--resume` behavior.
+ */
+function buildResumeCommand(sessionId: string): string {
+  try {
+    const bg = getBgSessions().find(s => s.sessionId === sessionId);
+    if (bg) {
+      if (bg.alive) return 'claude agents';
+      return `claude --resume ${sessionId} --fork-session`;
+    }
+  } catch {
+    // fall through to default
+  }
+  return `claude --resume ${sessionId}`;
+}
+
 ipcMain.handle('sessions:openInTerminal', async (_event, realPath: string, sessionId: string) => {
   try {
-    openInTerminal(realPath, `claude --resume ${sessionId}`);
+    openInTerminal(realPath, buildResumeCommand(sessionId));
     return ok(null);
   } catch (e) { return err(e); }
 });

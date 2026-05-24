@@ -408,9 +408,6 @@ export function ProjectView({
             <button className={`item ${rules.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-mcp', project })}>
               <span className="pip" /><span>Rules</span><span className="num">{rules.length} active</span>
             </button>
-            <button className={`item ${projectBgSessions.length ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'agents-live', project })}>
-              <span className="pip" /><span>Live Agents</span><span className="num">{liveBgCount} live · {projectBgSessions.length}</span>
-            </button>
           </section>
         </>
       )}

@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useLiveSessions, BgSession, SessionSummary, useProjectAgents, useGlobalAgents, useDispatchBackgroundAgent } from '../../../hooks/useIPC'
+import { useState, useRef, useCallback } from 'react'
+import { useLiveSessions, BgSession, SessionSummary, useProjectAgents, useGlobalAgents, useDispatchBackgroundAgent, useDeleteBackgroundAgent } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
 
@@ -30,7 +30,7 @@ function summaryFor(s: BgSession): SessionSummary {
 
 // ─── Status mapping ────────────────────────────────────────────────────────────
 
-type Bucket = 'working' | 'ready' | 'completed' | 'failed' | 'stopped'
+type Bucket = 'needs-input' | 'working' | 'ready' | 'completed' | 'failed' | 'stopped'
 
 interface StatusInfo {
   bucket: Bucket
@@ -39,18 +39,35 @@ interface StatusInfo {
   pulse: boolean
 }
 
+// Mirrors the bucketing used by `claude agents` TUI: needs-input takes priority
+// over working so that rate-limits / pending questions surface immediately.
 function statusOf(s: BgSession): StatusInfo {
+  const needsInput =
+    !!s.hasPendingQuestion ||
+    s.state === 'blocked' ||
+    s.tempo === 'blocked' ||
+    (typeof s.needs === 'string' && s.needs.length > 0)
+  if (needsInput) return { bucket: 'needs-input', label: 'Needs input', color: '#f59e0b', pulse: true }
+
   if (s.state === 'done') return { bucket: 'completed', label: 'Completed', color: '#22c55e', pulse: false }
-  if (s.state === 'failed') return { bucket: 'failed', label: 'Failed', color: '#ef4444', pulse: false }
-  if (s.state === 'stopped' || (!s.alive && s.state !== 'running'))
-    return { bucket: 'stopped', label: 'Stopped', color: '#94a3b8', pulse: false }
-  if (s.alive && (s.tempo === 'thinking' || s.tempo === 'busy' || s.inFlightTasks > 0))
-    return { bucket: 'working', label: s.tempo === 'thinking' ? 'Thinking' : 'Working', color: '#6366f1', pulse: true }
-  if (!s.alive) return { bucket: 'stopped', label: 'Asleep', color: '#94a3b8', pulse: false }
-  return { bucket: 'ready', label: 'Ready', color: '#0ea5e9', pulse: false }
+  if (s.state === 'failed' || s.state === 'errored')
+    return { bucket: 'failed', label: 'Failed', color: '#ef4444', pulse: false }
+  if (s.state === 'stopped') return { bucket: 'stopped', label: 'Stopped', color: '#94a3b8', pulse: false }
+
+  // Alive worker: anything that's not idle-done is treated as Working so the
+  // user sees motion even when `tempo` lags behind the actual state.
+  if (s.alive) {
+    if (s.tempo === 'thinking') return { bucket: 'working', label: 'Thinking', color: '#6366f1', pulse: true }
+    if (s.tempo === 'busy' || s.inFlightTasks > 0 || s.state === 'running' || s.state === 'working')
+      return { bucket: 'working', label: 'Working', color: '#6366f1', pulse: true }
+    return { bucket: 'ready', label: 'Ready', color: '#0ea5e9', pulse: false }
+  }
+
+  return { bucket: 'stopped', label: 'Asleep', color: '#94a3b8', pulse: false }
 }
 
 const BUCKET_ORDER: { key: Bucket; title: string; hint: string }[] = [
+  { key: 'needs-input', title: 'Needs input', hint: 'waiting on you' },
   { key: 'working', title: 'Working', hint: 'actively running' },
   { key: 'ready', title: 'Ready', hint: 'idle, awaiting next prompt' },
   { key: 'completed', title: 'Completed', hint: 'finished successfully' },
@@ -72,9 +89,63 @@ function relTime(iso: string): string {
 
 // ─── Row ─────────────────────────────────────────────────────────────────────
 
-function SessionRow({ s, showProject, onOpen }: { s: BgSession; showProject: boolean; onOpen: () => void }) {
+function StopButton({ onStop, isStopping }: { onStop: () => void; isStopping: boolean }) {
+  const [confirm, setConfirm] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  const handleClick = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (confirm) {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      setConfirm(false)
+      onStop()
+    } else {
+      setConfirm(true)
+      timerRef.current = setTimeout(() => setConfirm(false), 2000)
+    }
+  }, [confirm, onStop])
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={isStopping}
+      title={confirm ? 'Click again to confirm delete' : 'Delete agent (claude rm)'}
+      style={{
+        padding: '2px 8px',
+        borderRadius: 4,
+        fontSize: 11,
+        fontFamily: 'var(--font-mono)',
+        border: `1px solid ${confirm ? '#ef4444' : 'var(--cl-line)'}`,
+        background: confirm ? '#fef2f2' : 'transparent',
+        color: confirm ? '#ef4444' : 'var(--cl-ink-4)',
+        cursor: isStopping ? 'not-allowed' : 'pointer',
+        opacity: isStopping ? 0.5 : 1,
+        transition: 'all 0.15s',
+        flexShrink: 0,
+      }}
+    >
+      {isStopping ? '…' : confirm ? 'confirm?' : 'delete'}
+    </button>
+  )
+}
+
+function SessionRow({
+  s,
+  showProject,
+  onOpen,
+  onStop,
+  isStopping,
+}: {
+  s: BgSession
+  showProject: boolean
+  onOpen: () => void
+  onStop: () => void
+  isStopping: boolean
+}) {
   const st = statusOf(s)
   const subtitle = s.detail || s.result || s.intent || '—'
+  const canStop = true
   return (
     <button
       type="button"
@@ -117,12 +188,15 @@ function SessionRow({ s, showProject, onOpen }: { s: BgSession; showProject: boo
           </div>
         )}
       </div>
-      <span className="t-meta" style={{ textAlign: 'right' }}>
-        <b style={{ color: st.color }}>{st.label}</b>
-        {s.inFlightTasks > 0 && <> · {s.inFlightTasks} task</>}
-        <br />
-        <span style={{ color: 'var(--cl-ink-4)' }}>{relTime(s.updatedAt)}</span>
-      </span>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 6 }}>
+        <span className="t-meta" style={{ textAlign: 'right' }}>
+          <b style={{ color: st.color }}>{st.label}</b>
+          {s.inFlightTasks > 0 && <> · {s.inFlightTasks} task</>}
+          <br />
+          <span style={{ color: 'var(--cl-ink-4)' }}>{relTime(s.updatedAt)}</span>
+        </span>
+        {canStop && <StopButton onStop={onStop} isStopping={isStopping} />}
+      </div>
     </button>
   )
 }
@@ -148,6 +222,8 @@ export function AgentsLiveView({
   const allAgents = [...projectAgents, ...globalAgents].filter((a, i, arr) => arr.findIndex(x => x.name === a.name) === i)
 
   const dispatchBg = useDispatchBackgroundAgent()
+  const deleteBg = useDeleteBackgroundAgent()
+  const [deletingId, setDeletingId] = useState<string | null>(null)
   const [prompt, setPrompt] = useState('')
   const [agentName, setAgentName] = useState('')
   const [sessionName, setSessionName] = useState('')
@@ -184,8 +260,6 @@ export function AgentsLiveView({
             <span><b>{sessions.length}</b> {sessions.length === 1 ? 'session' : 'sessions'}</span>
             <span className="sep">·</span>
             <span><b>{liveCount}</b> live</span>
-            <span className="sep">·</span>
-            <span>auto-refresh 4s</span>
           </div>
         </section>
 
@@ -218,6 +292,11 @@ export function AgentsLiveView({
                       project ?? { hash: hashFromCwd(s.cwd), realPath: s.cwd },
                       summaryFor(s),
                     )}
+                    onStop={() => {
+                      setDeletingId(s.id)
+                      deleteBg.mutate(s.id, { onSettled: () => setDeletingId(null) })
+                    }}
+                    isStopping={deletingId === s.id}
                   />
                 ))}
               </div>

@@ -24,6 +24,8 @@ export interface BgSession {
   pid: number | null;
   createdAt: string;
   updatedAt: string;
+  needs: string | null;  // testo libero quando il worker richiede input umano (rate-limit, blocco, ecc.)
+  hasPendingQuestion: boolean; // true se c'è un AskUserQuestion senza risposta
 }
 
 interface RosterWorker {
@@ -48,6 +50,27 @@ function deriveName(state: Record<string, unknown>, id: string): string {
   const intent = typeof state.intent === 'string' ? state.intent.trim() : '';
   if (intent) return intent.length > 60 ? intent.slice(0, 60) + '…' : intent;
   return id;
+}
+
+function readNeeds(state: Record<string, unknown>): string | null {
+  const candidates = [state.needs, state.needsInput, state.awaiting];
+  for (const c of candidates) {
+    if (typeof c === 'string' && c.trim()) return c.trim();
+  }
+  // pendingQuestion può essere un oggetto strutturato: ne estraiamo il prompt.
+  const pq = state.pendingQuestion;
+  if (pq && typeof pq === 'object') {
+    const q = (pq as Record<string, unknown>).question ?? (pq as Record<string, unknown>).prompt;
+    if (typeof q === 'string' && q.trim()) return q.trim();
+    return 'Waiting for answer';
+  }
+  return null;
+}
+
+function hasPending(state: Record<string, unknown>): boolean {
+  if (state.pendingQuestion && typeof state.pendingQuestion === 'object') return true;
+  if (typeof state.pendingQuestion === 'string' && (state.pendingQuestion as string).trim()) return true;
+  return false;
 }
 
 function readResult(output: unknown): string | null {
@@ -105,6 +128,8 @@ export function getBgSessions(): BgSession[] {
       pid: worker?.pid ?? null,
       createdAt: (state.createdAt as string) ?? '',
       updatedAt: (state.updatedAt as string) ?? '',
+      needs: readNeeds(state),
+      hasPendingQuestion: hasPending(state),
     });
   }
 

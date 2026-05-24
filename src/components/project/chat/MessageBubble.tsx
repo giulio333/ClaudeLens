@@ -2,8 +2,58 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText } from './utils'
 import { ToolGroupCard } from './ToolGroupCard'
+
+const QUESTION_TOOL = 'AskUserQuestion'
+
+/** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
+function AskQuestionCard({ group }: { group: ToolGroup }) {
+  const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>)
+  if (questions.length === 0) return null
+  const answers = group.result ? parseAnswersFromResultText(group.result.content) : {}
+  const pending = !group.result
+
+  return (
+    <div className="cl-ask-card">
+      <div className="cl-ask-card-kicker">
+        <span>Question asked</span>
+        <span className="cl-ask-card-status" data-pending={pending || undefined}>
+          {pending ? 'Waiting for reply' : 'Answered'}
+        </span>
+      </div>
+      {questions.map((q, i) => {
+        const chosen = answers[q.question]
+        return (
+          <div key={i} className="cl-ask-card-q">
+            <div className="cl-ask-card-question">{q.question}</div>
+            <div className="cl-ask-card-options">
+              {q.options.map((opt, j) => {
+                const selected = chosen ? opt.label === chosen : false
+                return (
+                  <div
+                    key={j}
+                    className="cl-ask-card-option"
+                    data-selected={selected || undefined}
+                  >
+                    <div className="cl-ask-card-option-label">
+                      {selected && <span className="cl-ask-card-check">✓</span>}
+                      {opt.label}
+                    </div>
+                    {opt.description && <div className="cl-ask-card-option-desc">{opt.description}</div>}
+                  </div>
+                )
+              })}
+            </div>
+            {chosen && !q.options.some(o => o.label === chosen) && (
+              <div className="cl-ask-card-custom">Reply: <b>{chosen}</b></div>
+            )}
+          </div>
+        )
+      })}
+    </div>
+  )
+}
 
 export function ThinkingBlock({ thinking }: { thinking: string }) {
   const [open, setOpen] = useState(false)
@@ -81,6 +131,11 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
   const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
+  const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
+  // Tools rendered by the generic stack: never include AskUserQuestion (we have
+  // a dedicated card) and, in minimal, never include agent dispatches either
+  // (those use the AgentDispatchCard).
+  const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL)
 
   const showThinking = detailsFilter === 'all'
   const showTools = detailsFilter === 'all'
@@ -88,29 +143,46 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
   // In minimal mode tools are hidden, but agent dispatches stay visible so the
   // reader can see when Claude Code delegated work to a sub-agent.
   const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
+  // Questions are first-class content: always visible regardless of filter.
+  const showQuestions = questionGroups.length > 0
 
   const hasVisibleContent =
     textBlocks.length > 0 ||
     (showThinking && thinkingBlocks.some(b => b.thinking)) ||
-    (showTools && toolGroups.length > 0) ||
-    showAgentStrip
+    (showTools && standardToolGroups.length > 0) ||
+    showAgentStrip ||
+    showQuestions
   if (!hasVisibleContent) return null
 
   // A turn that is *only* a sub-agent dispatch gets its own role identity.
   const isAgentTurn = showAgentStrip && textBlocks.length === 0
+  // A turn whose only payload is a question (no text, no other tools) gets
+  // a dedicated "Question" identity so it stands out in the timeline.
+  const isQuestionTurn =
+    showQuestions &&
+    textBlocks.length === 0 &&
+    !showAgentStrip &&
+    (!showTools || standardToolGroups.length === 0)
   const isCommandTurn = !!command
-  const roleVariant: 'user' | 'claude' | 'agent' | 'command' =
-    isCommandTurn ? 'command' : isAgentTurn ? 'agent' : isUser ? 'user' : 'claude'
+  const roleVariant: 'user' | 'claude' | 'agent' | 'command' | 'question' =
+    isCommandTurn ? 'command'
+    : isQuestionTurn ? 'question'
+    : isAgentTurn ? 'agent'
+    : isUser ? 'user'
+    : 'claude'
   const roleInitial =
     roleVariant === 'command' ? '/' :
+    roleVariant === 'question' ? '?' :
     roleVariant === 'agent' ? 'A' :
     roleVariant === 'user' ? 'U' : 'C'
   const roleLabel =
     roleVariant === 'command' ? 'Command' :
+    roleVariant === 'question' ? 'Question' :
     roleVariant === 'agent' ? 'Agent' :
     roleVariant === 'user' ? 'You' : 'Claude'
   const roleColor =
     roleVariant === 'command' ? 'var(--cl-accent)' :
+    roleVariant === 'question' ? 'var(--cl-warn)' :
     roleVariant === 'agent' ? 'var(--cl-violet)' :
     roleVariant === 'user' ? 'var(--cl-ink)' : 'var(--cl-accent)'
 
@@ -155,8 +227,8 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           <span className="cl-turn-who">{roleLabel}</span>
           <span className="cl-turn-sep">·</span>
           <time>{timestamp}</time>
-          {toolGroups.length > 0 && (
-            <span className="cl-turn-tool-count">{toolGroups.length} tool{toolGroups.length === 1 ? '' : 's'}</span>
+          {standardToolGroups.length > 0 && (
+            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}</span>
           )}
         </header>
 
@@ -179,6 +251,14 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           ))}
         </div>
 
+        {showQuestions && (
+          <div className="cl-ask-stack">
+            {questionGroups.map((group, i) => (
+              <AskQuestionCard key={i} group={group} />
+            ))}
+          </div>
+        )}
+
         {showAgentStrip && (
           <div className="cl-agent-stack">
             {agentGroups.map((group, i) => (
@@ -187,9 +267,9 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
           </div>
         )}
 
-        {showTools && toolGroups.length > 0 && (
+        {showTools && standardToolGroups.length > 0 && (
           <div className="cl-tool-stack">
-            {toolGroups.map((group, i) => (
+            {standardToolGroups.map((group, i) => (
               <ToolGroupCard
                 key={i}
                 group={group}

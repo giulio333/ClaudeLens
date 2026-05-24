@@ -196,6 +196,10 @@ export interface BgSession {
   pid: number | null
   createdAt: string
   updatedAt: string
+  /** Free-text reason the worker needs human input (rate-limited, awaiting, etc.). Null when no input is needed. */
+  needs: string | null
+  /** True when the assistant has emitted an AskUserQuestion that hasn't been answered. */
+  hasPendingQuestion: boolean
 }
 
 export interface AgentInput {
