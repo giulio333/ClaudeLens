@@ -399,7 +399,7 @@ ipcMain.handle('agents:create', async (_event, input: AgentInput, projectPath?: 
   }
 });
 
-ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, name?: string, agent?: string) => {
+ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, name?: string, agent?: string, model?: string) => {
   try {
     const { existsSync, statSync } = await import('fs');
     if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
@@ -412,6 +412,9 @@ ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, 
     }
     if (agent) {
       args.push('--agent', agent);
+    }
+    if (model) {
+      args.push('--model', model);
     }
     args.push(prompt);
 
