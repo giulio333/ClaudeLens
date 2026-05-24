@@ -53,7 +53,7 @@ export function ProjectSubtabs({
     { key: 'skills', label: 'Skills', count: skills.length, view: { type: 'project-skills', project } },
     { key: 'agents', label: 'Agents', count: agentCount, view: { type: 'project-agents', project } },
     { key: 'mcp', label: 'MCP', count: mcpCount, view: { type: 'project-mcp', project } },
-    { key: 'live-agents', label: 'Live Agents', count: liveCount, view: { type: 'agents-live', project } },
+    { key: 'live-agents', label: 'Agent View', count: liveCount, view: { type: 'agents-live', project } },
   ]
 
   return (

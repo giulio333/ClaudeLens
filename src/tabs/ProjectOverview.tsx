@@ -399,7 +399,7 @@ export default function ProjectOverview() {
         <nav className="cl-scope">
           <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
           <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
-          <button className={view.type === 'agents-live' && !view.project ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
+          <button className={view.type === 'agents-live' && !view.project ? 'on' : ''} onClick={goLiveAgents}>Agent View</button>
         </nav>
 
         <div />

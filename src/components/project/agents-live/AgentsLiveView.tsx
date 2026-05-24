@@ -299,6 +299,7 @@ export function AgentsLiveView({
   const [prompt, setPrompt] = useState('')
   const [agentName, setAgentName] = useState('')
   const [sessionName, setSessionName] = useState('')
+  const [model, setModel] = useState('')
 
   const all = data ?? []
   const sessions = project
@@ -314,7 +315,7 @@ export function AgentsLiveView({
     <div className={embedded ? '' : 'h-full flex flex-col'} style={embedded ? undefined : { background: 'var(--cl-paper)' }}>
       <style>{`@keyframes alPulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
       {!embedded && (
-        <TopBar onBack={onBack} crumbs={[{ label: project ? `Project · Live Agents · ${projectName}` : 'Global · Live Agents' }]} />
+        <TopBar onBack={onBack} crumbs={[{ label: project ? `Project · Agent View · ${projectName}` : 'Global · Agent View' }]} />
       )}
 
       <div className={embedded ? '' : 'flex-1 overflow-y-auto'}>
@@ -326,7 +327,7 @@ export function AgentsLiveView({
               <span>{project ? `Project · ${projectName} · background sessions` : 'Global · claude agents'}</span>
             </div>
             <h1 className="cl-h-name static">
-              <span className="label-name">Live Agents</span>
+              <span className="label-name">Agent View</span>
               <span className="glyph">.</span>
             </h1>
             <div className="cl-h-meta">
@@ -412,11 +413,12 @@ export function AgentsLiveView({
             onSubmit={(e) => {
               e.preventDefault()
               if (!prompt.trim()) return
-              dispatchBg.mutate({ cwd: project.realPath, prompt: prompt.trim(), name: sessionName.trim() || undefined, agent: agentName || undefined }, {
+              dispatchBg.mutate({ cwd: project.realPath, prompt: prompt.trim(), name: sessionName.trim() || undefined, agent: agentName || undefined, model: model || undefined }, {
                 onSuccess: () => {
                   setPrompt('')
                   setSessionName('')
                   setAgentName('')
+                  setModel('')
                 }
               })
             }}
@@ -444,6 +446,17 @@ export function AgentsLiveView({
               {allAgents.map(a => (
                 <option key={a.name} value={a.name}>{a.name}</option>
               ))}
+            </select>
+            <select
+              value={model}
+              onChange={e => setModel(e.target.value)}
+              title="Override model for this session (passed as --model)"
+              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
+            >
+              <option value="">Default model</option>
+              <option value="opus">Opus 4.7</option>
+              <option value="sonnet">Sonnet 4.6</option>
+              <option value="haiku">Haiku 4.5</option>
             </select>
             <button 
               type="submit" 
