@@ -17,10 +17,11 @@ import { fmt, fmtModel, sessionTitle } from '../utils'
 import type { SessionSummary } from '../../../types'
 import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
+import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { PinIcon } from '../shared/SearchPopover'
 
-export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp'
+export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents'
 
 type Project = { hash: string; realPath: string }
 
@@ -592,6 +593,16 @@ export function ProjectView({
             </div>
           )}
         </section>
+      )}
+
+      {section === 'live-agents' && (
+        <AgentsLiveView
+          embedded
+          hideHero
+          project={project}
+          onBack={() => onNavigate({ type: 'overview' })}
+          onOpenSession={(p, s) => onNavigate({ type: 'chat', project: p, session: s, from: 'agents-live' })}
+        />
       )}
     </div>
   )

@@ -272,11 +272,13 @@ export function AgentsLiveView({
   project,
   onOpenSession,
   embedded = false,
+  hideHero = false,
 }: {
   onBack: () => void
   project?: Project
   onOpenSession: (project: Project, session: SessionSummary) => void
   embedded?: boolean
+  hideHero?: boolean
 }) {
   const projectName = project?.realPath.split('/').pop()
   const { data, isLoading } = useLiveSessions()
@@ -316,22 +318,24 @@ export function AgentsLiveView({
       )}
 
       <div className={embedded ? '' : 'flex-1 overflow-y-auto'}>
-        <section className="cl-hero">
-          <Lens />
-          <div className="cl-eyebrow">
-            <span className="pip" />
-            <span>{project ? `Project · ${projectName} · background sessions` : 'Global · claude agents'}</span>
-          </div>
-          <h1 className="cl-h-name static">
-            <span className="label-name">Live Agents</span>
-            <span className="glyph">.</span>
-          </h1>
-          <div className="cl-h-meta">
-            <span><b>{sessions.length}</b> {sessions.length === 1 ? 'session' : 'sessions'}</span>
-            <span className="sep">·</span>
-            <span><b>{liveCount}</b> live</span>
-          </div>
-        </section>
+        {!hideHero && (
+          <section className="cl-hero">
+            <Lens />
+            <div className="cl-eyebrow">
+              <span className="pip" />
+              <span>{project ? `Project · ${projectName} · background sessions` : 'Global · claude agents'}</span>
+            </div>
+            <h1 className="cl-h-name static">
+              <span className="label-name">Live Agents</span>
+              <span className="glyph">.</span>
+            </h1>
+            <div className="cl-h-meta">
+              <span><b>{sessions.length}</b> {sessions.length === 1 ? 'session' : 'sessions'}</span>
+              <span className="sep">·</span>
+              <span><b>{liveCount}</b> live</span>
+            </div>
+          </section>
+        )}
 
         {isLoading ? (
           <section className="cl-section">
