@@ -4991,3 +4991,352 @@ body {
     linear-gradient(to right, color-mix(in oklch, var(--cl-accent) 18%, transparent), transparent 70%),
     oklch(1 0 0 / 0.04);
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Session Timeline View — swimlane visualization
+   Rendered inside ChatView when the user toggles "Timeline". Pure SVG, no
+   external graph library. Time on X, one lane per file/tool group on Y,
+   turn-density heartbeat at the top, user prompts as vertical anchors.
+   ════════════════════════════════════════════════════════════════════════ */
+
+/* Modifier on the chat workspace shell: confines the timeline so its inner
+   scrollbars cannot push the wrapper height/width into a ResizeObserver loop. */
+.cl-chat-workspace--tl {
+  position: relative;
+  overflow: hidden;
+}
+.cl-chat-workspace--tl > .cl-tl-wrap {
+  position: absolute;
+  inset: 0;
+}
+
+.cl-tl-wrap {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  height: 100%;
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  font-family: var(--font-sans);
+}
+
+.cl-tl-empty,
+.cl-tl-noresults {
+  display: grid;
+  place-items: center;
+  flex: 1;
+  color: var(--cl-ink-3);
+  font-size: 13px;
+}
+
+/* ── Filters bar ─────────────────────────────────────── */
+.cl-tl-filters {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 12px 20px;
+  border-bottom: 1px solid var(--cl-line);
+  background: var(--cl-paper);
+  flex-shrink: 0;
+}
+.cl-tl-filters-l,
+.cl-tl-filters-r {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.cl-tl-search {
+  width: 240px;
+  padding: 6px 10px;
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  outline: none;
+  transition: border-color 120ms ease;
+}
+.cl-tl-search:focus { border-color: var(--cl-accent); }
+.cl-tl-search::placeholder { color: var(--cl-ink-4); }
+
+.cl-tl-kinds {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cl-tl-kind {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  background: transparent;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  color: var(--cl-ink-3);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+  user-select: none;
+}
+.cl-tl-kind:hover { color: var(--cl-ink); border-color: var(--cl-ink-4); }
+.cl-tl-kind.on {
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+  border-color: var(--cl-ink-4);
+}
+.cl-tl-kind-sw {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+.cl-tl-kind.is-file.on   .cl-tl-kind-sw { background: var(--cl-accent); }
+.cl-tl-kind.is-memory.on .cl-tl-kind-sw { background: var(--cl-violet); }
+.cl-tl-kind.is-bash.on   .cl-tl-kind-sw { background: var(--cl-ink-2); }
+.cl-tl-kind.is-web.on    .cl-tl-kind-sw { background: var(--cl-haiku); }
+.cl-tl-kind.is-agent.on  .cl-tl-kind-sw { background: var(--cl-accent); }
+.cl-tl-kind.is-other.on  .cl-tl-kind-sw { background: var(--cl-ink-3); }
+.cl-tl-kind-n {
+  margin-left: 2px;
+  padding: 0 5px;
+  font-size: 9px;
+  background: var(--cl-paper);
+  border-radius: 6px;
+  color: var(--cl-ink-3);
+}
+.cl-tl-kind.on .cl-tl-kind-n {
+  background: color-mix(in oklch, var(--cl-accent) 12%, var(--cl-paper));
+  color: var(--cl-accent);
+}
+
+.cl-tl-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-3);
+  letter-spacing: 0.02em;
+}
+.cl-tl-meta b { color: var(--cl-ink); font-weight: 600; }
+
+.cl-tl-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  padding: 2px;
+}
+.cl-tl-zoom button {
+  width: 24px;
+  height: 22px;
+  border: none;
+  background: transparent;
+  color: var(--cl-ink-2);
+  font-family: var(--font-mono);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 4px;
+  display: grid;
+  place-items: center;
+  transition: background 120ms ease;
+}
+.cl-tl-zoom button:hover { background: var(--cl-paper); color: var(--cl-ink); }
+.cl-tl-zoom-val {
+  padding: 0 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-3);
+  min-width: 38px;
+  text-align: center;
+}
+.cl-tl-zoom-reset { font-size: 12px !important; }
+
+/* ── Body: labels column + scrollable canvas ──────────── */
+.cl-tl-body {
+  position: relative;
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.cl-tl-labels {
+  position: relative;
+  background: var(--cl-paper);
+  border-right: 1px solid var(--cl-line);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+  z-index: 2;
+}
+.cl-tl-labels::-webkit-scrollbar { display: none; }
+
+.cl-tl-label {
+  position: absolute;
+  left: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  cursor: pointer;
+  color: var(--cl-ink-2);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  text-align: left;
+  transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
+}
+.cl-tl-label:hover {
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+}
+.cl-tl-label.is-selected {
+  background: color-mix(in oklch, var(--cl-accent) 10%, var(--cl-paper));
+  border-color: var(--cl-accent);
+  color: var(--cl-ink);
+}
+.cl-tl-label-kind {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
+  color: var(--cl-accent);
+  flex-shrink: 0;
+  min-width: 36px;
+  text-align: center;
+}
+.cl-tl-label.is-memory .cl-tl-label-kind { background: color-mix(in oklch, var(--cl-violet) 14%, transparent); color: var(--cl-violet); }
+.cl-tl-label.is-bash   .cl-tl-label-kind { background: var(--cl-paper-2); color: var(--cl-ink-2); border: 1px solid var(--cl-line); }
+.cl-tl-label.is-web    .cl-tl-label-kind { background: color-mix(in oklch, var(--cl-haiku) 14%, transparent); color: var(--cl-haiku); }
+.cl-tl-label.is-agent  .cl-tl-label-kind { background: color-mix(in oklch, var(--cl-accent) 14%, transparent); color: var(--cl-accent); }
+.cl-tl-label.is-other  .cl-tl-label-kind { background: var(--cl-paper-2); color: var(--cl-ink-3); }
+.cl-tl-label-text {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-tl-label-count {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-3);
+  background: var(--cl-paper-2);
+  padding: 1px 6px;
+  border-radius: 999px;
+  flex-shrink: 0;
+}
+
+.cl-tl-canvas-scroll {
+  flex: 1;
+  overflow: auto;
+  position: relative;
+  background:
+    repeating-linear-gradient(
+      to right,
+      transparent 0,
+      transparent 80px,
+      color-mix(in oklch, var(--cl-ink-4) 6%, transparent) 80px,
+      color-mix(in oklch, var(--cl-ink-4) 6%, transparent) 81px
+    ),
+    var(--cl-paper);
+}
+.cl-tl-canvas-scroll::-webkit-scrollbar { height: 12px; width: 12px; }
+.cl-tl-canvas-scroll::-webkit-scrollbar-thumb {
+  background: var(--cl-scroll);
+  border-radius: 6px;
+  border: 3px solid var(--cl-paper);
+}
+
+.cl-tl-canvas { display: block; }
+
+.cl-tl-lane:hover .cl-tl-lane-bg { opacity: 0.85; }
+
+/* ── Tooltip ────────────────────────────────────────── */
+.cl-tl-tip {
+  position: fixed;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  box-shadow: 0 8px 28px rgba(0,0,0,0.16);
+  max-width: 320px;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  color: var(--cl-ink);
+  transform: translate(-50%, -100%);
+}
+.cl-tl-tip-h {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 4px;
+}
+.cl-tl-tip-h b { font-weight: 600; color: var(--cl-ink); }
+.cl-tl-tip-t {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-3);
+  letter-spacing: 0.04em;
+}
+.cl-tl-tip-lane {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-2);
+  word-break: break-all;
+}
+.cl-tl-tip-hint {
+  margin-top: 6px;
+  font-size: 10px;
+  color: var(--cl-ink-3);
+  font-style: italic;
+}
+
+/* ── Chat / Timeline toggle in ChatView header ───────── */
+.cl-view-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 0;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  padding: 2px;
+}
+.cl-view-mode button {
+  padding: 4px 12px;
+  border: none;
+  background: transparent;
+  color: var(--cl-ink-3);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 120ms ease, color 120ms ease;
+}
+.cl-view-mode button:hover { color: var(--cl-ink); }
+.cl-view-mode button.on {
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.06);
+}
