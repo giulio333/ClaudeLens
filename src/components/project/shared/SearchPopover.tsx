@@ -297,6 +297,14 @@ export function SearchPopover({
     onClose()
   }
 
+  function moveFilter(delta: -1 | 1) {
+    if (mode !== 'global') return
+    const currentIdx = FILTERS.findIndex(f => f.key === activeFilter)
+    const nextIdx = (currentIdx + delta + FILTERS.length) % FILTERS.length
+    setActiveFilter(FILTERS[nextIdx].key)
+    setHl(0)
+  }
+
   function onKeyDown(e: React.KeyboardEvent) {
     if (e.key === 'ArrowDown') {
       e.preventDefault()
@@ -304,6 +312,12 @@ export function SearchPopover({
     } else if (e.key === 'ArrowUp') {
       e.preventDefault()
       setHl(h => Math.max(0, h - 1))
+    } else if (e.key === 'ArrowRight' && mode === 'global') {
+      e.preventDefault()
+      moveFilter(1)
+    } else if (e.key === 'ArrowLeft' && mode === 'global') {
+      e.preventDefault()
+      moveFilter(-1)
     } else if (e.key === 'Enter') {
       e.preventDefault()
       const row = flat[hl]
@@ -413,6 +427,7 @@ export function SearchPopover({
 
       <div className="cl-search-foot">
         <span><kbd>↑↓</kbd>navigate</span>
+        {mode === 'global' && <span><kbd>←→</kbd>tabs</span>}
         <span><kbd>↵</kbd>open</span>
         <span><kbd>⌘P</kbd>pin</span>
         {sessionsLoading && mode === 'global' && <span>loading chats</span>}
