@@ -303,9 +303,6 @@ export function ProjectView({
           <button className="cl-btn" type="button" onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}>
             Open in Claude Code
           </button>
-          <button className="cl-btn cl-btn--primary" type="button" onClick={() => onNavigate({ type: 'sessions', project })}>
-            Sessions →
-          </button>
         </div>
 
         <div className="cl-eyebrow">
