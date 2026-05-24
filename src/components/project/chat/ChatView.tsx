@@ -8,6 +8,9 @@ import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExp
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
+import { SessionGraphView } from './graph/SessionGraphView'
+
+type ViewMode = 'chat' | 'timeline'
 
 function ExportIcon() {
   return (
@@ -101,6 +104,8 @@ function ChatExportMenu({
 }
 
 function ChatTopActions({
+  viewMode,
+  setViewMode,
   detailsFilter,
   setDetailsFilter,
   canExport,
@@ -116,6 +121,8 @@ function ChatTopActions({
   onExport,
   onResume,
 }: {
+  viewMode: ViewMode
+  setViewMode: (mode: ViewMode) => void
   detailsFilter: ChatDetailsFilter
   setDetailsFilter: (filter: ChatDetailsFilter) => void
   canExport: boolean
@@ -133,18 +140,33 @@ function ChatTopActions({
 }) {
   return (
     <>
-      <div className="cl-seg" aria-label="Transcript detail">
-        {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
+      <div className="cl-view-mode" aria-label="View mode">
+        {(['chat', 'timeline'] as ViewMode[]).map(v => (
           <button
             key={v}
             type="button"
-            className={detailsFilter === v ? 'on' : ''}
-            onClick={() => setDetailsFilter(v)}
+            className={viewMode === v ? 'on' : ''}
+            onClick={() => setViewMode(v)}
+            title={v === 'timeline' ? 'Session timeline (swimlanes by file/tool)' : 'Linear transcript'}
           >
-            {v === 'minimal' ? 'Minimal' : 'Full'}
+            {v === 'chat' ? 'Chat' : 'Timeline'}
           </button>
         ))}
       </div>
+      {viewMode === 'chat' && (
+        <div className="cl-seg" aria-label="Transcript detail">
+          {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
+            <button
+              key={v}
+              type="button"
+              className={detailsFilter === v ? 'on' : ''}
+              onClick={() => setDetailsFilter(v)}
+            >
+              {v === 'minimal' ? 'Minimal' : 'Full'}
+            </button>
+          ))}
+        </div>
+      )}
       <ChatExportMenu
         canExport={canExport}
         exportOpen={exportOpen}
@@ -323,6 +345,7 @@ export function ChatView({
 }) {
   const { data: messages, isLoading } = useChatSession(project.hash, session.filename)
   const projectName = project.realPath.split('/').pop() ?? project.realPath
+  const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
@@ -410,6 +433,8 @@ export function ChatView({
         crumbs={[{ label: title, accent: true }]}
         right={
           <ChatTopActions
+            viewMode={viewMode}
+            setViewMode={setViewMode}
             detailsFilter={detailsFilter}
             setDetailsFilter={setDetailsFilter}
             canExport={canExport}
@@ -434,6 +459,14 @@ export function ChatView({
 
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
+      ) : viewMode === 'timeline' ? (
+        <div className="cl-chat-workspace cl-chat-workspace--tl">
+          {isLoading ? (
+            <p className="cl-transcript-state">Loading transcript…</p>
+          ) : (
+            <SessionGraphView processed={processed} onSelectTool={setSelectedTool} />
+          )}
+        </div>
       ) : (
         <div className="cl-chat-workspace">
           <main
