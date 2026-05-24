@@ -192,7 +192,7 @@ export default function ProjectOverview() {
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
       const meta = e.metaKey || e.ctrlKey
-      if (meta && e.key.toLowerCase() === 'k') {
+      if (meta && e.key.toLowerCase() === 'f') {
         e.preventDefault()
         if (searchOpen && searchMode === 'global') closeSearch()
         else openGlobalSearch()
