@@ -300,6 +300,7 @@ export default function ProjectOverview() {
             agent={view.agent}
             project={selected ?? undefined}
             onBack={() => selected ? setView({ type: 'project-agents', project: selected }) : goGlobal()}
+            onNavigateLive={selected ? () => setView({ type: 'agents-live', project: selected }) : undefined}
           />
         )
       case 'agent-create':
