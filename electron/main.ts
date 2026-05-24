@@ -401,6 +401,11 @@ ipcMain.handle('agents:create', async (_event, input: AgentInput, projectPath?: 
 
 ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, name?: string, agent?: string) => {
   try {
+    const { existsSync, statSync } = await import('fs');
+    if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
+      return err(`Project directory not found on disk: ${cwd}. The project may have been moved or deleted.`);
+    }
+
     const args = ['--bg'];
     if (name) {
       args.push('--name', name);
@@ -415,15 +420,18 @@ ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, 
     const execFileAsync = promisify(execFile);
 
     const localBinPath = join(os.homedir(), '.local', 'bin');
-    const env = { 
-      ...process.env, 
-      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}` 
+    const env = {
+      ...process.env,
+      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`
     };
 
     await execFileAsync('claude', args, { cwd, env });
 
     return ok(null);
   } catch (e: any) {
+    if (e?.code === 'ENOENT') {
+      return err(`'claude' CLI not found in PATH, or working directory missing (${cwd}).`);
+    }
     return err(e.stderr || e.message || String(e));
   }
 });

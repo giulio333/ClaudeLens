@@ -6,6 +6,7 @@ import {
   useProjectAgents,
   useGlobalAgents,
   useGlobalMcp,
+  useLiveSessions,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import type { ProjectSection } from './ProjectOverviewContent'
@@ -27,6 +28,7 @@ export function ProjectSubtabs({
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
   const { data: globalAgents = [] } = useGlobalAgents()
   const { data: mcpData } = useGlobalMcp()
+  const { data: liveSessions = [] } = useLiveSessions()
 
   const memoryCount = (memory?.index.length ?? 0) + (memory?.projectLevelIndex.length ?? 0)
   const agentCount = useMemo(
@@ -37,6 +39,12 @@ export function ProjectSubtabs({
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])]
     return all.filter(s => !s.disabledProjectPaths.includes(project.realPath)).length
   }, [mcpData, project.realPath])
+  const liveCount = useMemo(
+    () => liveSessions.filter(s =>
+      s.cwd === project.realPath || s.cwd.startsWith(project.realPath + '/'),
+    ).length,
+    [liveSessions, project.realPath],
+  )
 
   const tabs: { key: ProjectSection; label: string; count?: number; view: View }[] = [
     { key: 'overview', label: 'Overview', view: { type: 'overview' } },
@@ -45,6 +53,7 @@ export function ProjectSubtabs({
     { key: 'skills', label: 'Skills', count: skills.length, view: { type: 'project-skills', project } },
     { key: 'agents', label: 'Agents', count: agentCount, view: { type: 'project-agents', project } },
     { key: 'mcp', label: 'MCP', count: mcpCount, view: { type: 'project-mcp', project } },
+    { key: 'live-agents', label: 'Live Agents', count: liveCount, view: { type: 'agents-live', project } },
   ]
 
   return (

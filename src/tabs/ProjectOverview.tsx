@@ -54,7 +54,7 @@ type Project = { hash: string; realPath: string }
 type Theme = 'light' | 'dark'
 
 // View types that render inside the editorial chrome (top bar + subtabs)
-const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp']
+const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live']
 
 function sectionFromView(v: View): ProjectSection {
   switch (v.type) {
@@ -63,18 +63,20 @@ function sectionFromView(v: View): ProjectSection {
     case 'project-skills':  return 'skills'
     case 'project-agents':  return 'agents'
     case 'project-mcp':     return 'mcp'
+    case 'agents-live':     return 'live-agents'
     default:                return 'overview'
   }
 }
 
 function viewForSection(section: ProjectSection, project: Project): View {
   switch (section) {
-    case 'sessions': return { type: 'sessions', project }
-    case 'memory':   return { type: 'project-memory', project }
-    case 'skills':   return { type: 'project-skills', project }
-    case 'agents':   return { type: 'project-agents', project }
-    case 'mcp':      return { type: 'project-mcp', project }
-    default:         return { type: 'overview' }
+    case 'sessions':     return { type: 'sessions', project }
+    case 'memory':       return { type: 'project-memory', project }
+    case 'skills':       return { type: 'project-skills', project }
+    case 'agents':       return { type: 'project-agents', project }
+    case 'mcp':          return { type: 'project-mcp', project }
+    case 'live-agents':  return { type: 'agents-live', project }
+    default:             return { type: 'overview' }
   }
 }
 
@@ -237,12 +239,8 @@ export default function ProjectOverview() {
   }
 
   function goLiveAgents() {
-    if (selected) {
-      setView({ type: 'agents-live', project: selected })
-    } else {
-      setScope('global')
-      setView({ type: 'agents-live' })
-    }
+    setScope('global')
+    setView({ type: 'agents-live' })
   }
 
   async function handleConfirmDelete(p: Project) {
@@ -359,15 +357,7 @@ export default function ProjectOverview() {
         return <AiAssistantView project={view.project} onBack={() => setView({ type: 'overview' })} />
       case 'live-monitor':
         return <LiveMonitor project={view.project} onBack={() => setView({ type: 'overview' })} />
-      case 'agents-live':
-        return (
-          <AgentsLiveView
-            project={view.project}
-            onBack={() => view.project ? setView({ type: 'overview' }) : goGlobal()}
-            onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
-          />
-        )
-      // Global `agents-live` is rendered inside the editorial chrome below.
+      // `agents-live` (project & global) is rendered inside the editorial chrome below.
       case 'duplicates':
         return <DuplicateProjectsView onBack={goGlobal} />
       default:
@@ -409,7 +399,7 @@ export default function ProjectOverview() {
         <nav className="cl-scope">
           <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
           <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
-          <button className={view.type === 'agents-live' ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
+          <button className={view.type === 'agents-live' && !view.project ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
         </nav>
 
         <div />
