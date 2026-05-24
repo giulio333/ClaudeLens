@@ -158,7 +158,10 @@ declare global {
         getByProject: (realPath: string) => Promise<IpcResult<Agent[]>>
         create: (input: AgentInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
         dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string) => Promise<IpcResult<null>>
-        deleteBg: (id: string) => Promise<IpcResult<null>>
+        deleteBg: (id: string) => Promise<IpcResult<string>>
+        stopBg: (id: string) => Promise<IpcResult<string>>
+        respawnBg: (id: string) => Promise<IpcResult<string>>
+        attachBg: (cwd: string, id: string) => Promise<IpcResult<null>>
       }
       mcp: {
         getGlobal: () => Promise<IpcResult<McpData>>
@@ -452,11 +455,30 @@ export function useDeleteBackgroundAgent() {
   const qc = useQueryClient()
   return useMutation(
     (id: string) => unwrap(window.electronAPI.agents.deleteBg(id)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('live:sessions')
-      },
-    }
+    { onSuccess: () => qc.invalidateQueries('live:sessions') }
+  )
+}
+
+export function useStopBackgroundAgent() {
+  const qc = useQueryClient()
+  return useMutation(
+    (id: string) => unwrap(window.electronAPI.agents.stopBg(id)),
+    { onSuccess: () => qc.invalidateQueries('live:sessions') }
+  )
+}
+
+export function useRespawnBackgroundAgent() {
+  const qc = useQueryClient()
+  return useMutation(
+    (id: string) => unwrap(window.electronAPI.agents.respawnBg(id)),
+    { onSuccess: () => qc.invalidateQueries('live:sessions') }
+  )
+}
+
+export function useAttachBackgroundAgent() {
+  return useMutation(
+    ({ cwd, id }: { cwd: string; id: string }) =>
+      unwrap(window.electronAPI.agents.attachBg(cwd, id))
   )
 }
 

@@ -429,23 +429,40 @@ ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, 
 });
 
 ipcMain.handle('agents:deleteBg', async (_event, id: string) => {
+  return runClaudeCommand(['rm', id]);
+});
+
+ipcMain.handle('agents:stopBg', async (_event, id: string) => {
+  return runClaudeCommand(['stop', id]);
+});
+
+ipcMain.handle('agents:respawnBg', async (_event, id: string) => {
+  return runClaudeCommand(['respawn', id]);
+});
+
+ipcMain.handle('agents:attachBg', async (_event, cwd: string, id: string) => {
+  try {
+    openInTerminal(cwd || os.homedir(), `claude attach ${id}`);
+    return ok(null);
+  } catch (e) { return err(e); }
+});
+
+async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
   try {
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFile);
-
     const localBinPath = join(os.homedir(), '.local', 'bin');
     const env = {
       ...process.env,
       PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`,
     };
-
-    await execFileAsync('claude', ['rm', id], { env });
-    return ok(null);
+    const { stdout } = await execFileAsync('claude', args, { env, maxBuffer: 4 * 1024 * 1024 });
+    return ok(stdout);
   } catch (e: any) {
     return err(e.stderr || e.message || String(e));
   }
-});
+}
 
 ipcMain.handle('projects:delete', async (_event, hash: string) => {
   try {
@@ -620,18 +637,15 @@ function openInTerminal(cwd: string, command: string): void {
 }
 
 /**
- * Background sessions (managed by `claude agents`) reject plain `--resume`:
- *  - if the daemon worker is still alive, we open the agents TUI so the user can attach
- *  - if the session is terminal (done/failed/stopped), we fork it into a fresh copy
+ * Background sessions (managed by `claude agents`) reject plain `--resume`,
+ * so we always use `claude attach <id>` — works for both alive and terminal
+ * sessions and shows the real conversation rather than forking a copy.
  * Foreground sessions keep the regular `--resume` behavior.
  */
 function buildResumeCommand(sessionId: string): string {
   try {
     const bg = getBgSessions().find(s => s.sessionId === sessionId);
-    if (bg) {
-      if (bg.alive) return 'claude agents';
-      return `claude --resume ${sessionId} --fork-session`;
-    }
+    if (bg) return `claude attach ${bg.id}`;
   } catch {
     // fall through to default
   }

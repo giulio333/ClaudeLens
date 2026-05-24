@@ -1,5 +1,9 @@
-import { useState, useRef, useCallback } from 'react'
-import { useLiveSessions, BgSession, SessionSummary, useProjectAgents, useGlobalAgents, useDispatchBackgroundAgent, useDeleteBackgroundAgent } from '../../../hooks/useIPC'
+import { useState, useRef, useCallback, useEffect } from 'react'
+import {
+  useLiveSessions, BgSession, SessionSummary, useProjectAgents, useGlobalAgents,
+  useDispatchBackgroundAgent, useDeleteBackgroundAgent,
+  useStopBackgroundAgent, useRespawnBackgroundAgent, useAttachBackgroundAgent,
+} from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
 
@@ -89,44 +93,106 @@ function relTime(iso: string): string {
 
 // ─── Row ─────────────────────────────────────────────────────────────────────
 
-function StopButton({ onStop, isStopping }: { onStop: () => void; isStopping: boolean }) {
-  const [confirm, setConfirm] = useState(false)
-  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+type ActionTone = 'neutral' | 'danger'
 
-  const handleClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation()
-    if (confirm) {
-      if (timerRef.current) clearTimeout(timerRef.current)
-      setConfirm(false)
-      onStop()
-    } else {
-      setConfirm(true)
-      timerRef.current = setTimeout(() => setConfirm(false), 2000)
-    }
-  }, [confirm, onStop])
-
+function ActionButton({
+  label, title, onClick, disabled, busy, tone = 'neutral', confirming,
+}: {
+  label: string
+  title: string
+  onClick: (e: React.MouseEvent) => void
+  disabled?: boolean
+  busy?: boolean
+  tone?: ActionTone
+  confirming?: boolean
+}) {
+  const danger = tone === 'danger'
   return (
     <button
       type="button"
-      onClick={handleClick}
-      disabled={isStopping}
-      title={confirm ? 'Click again to confirm delete' : 'Delete agent (claude rm)'}
+      onClick={onClick}
+      disabled={disabled || busy}
+      title={title}
       style={{
         padding: '2px 8px',
         borderRadius: 4,
         fontSize: 11,
         fontFamily: 'var(--font-mono)',
-        border: `1px solid ${confirm ? '#ef4444' : 'var(--cl-line)'}`,
-        background: confirm ? '#fef2f2' : 'transparent',
-        color: confirm ? '#ef4444' : 'var(--cl-ink-4)',
-        cursor: isStopping ? 'not-allowed' : 'pointer',
-        opacity: isStopping ? 0.5 : 1,
+        border: `1px solid ${confirming ? '#ef4444' : 'var(--cl-line)'}`,
+        background: confirming ? '#fef2f2' : 'transparent',
+        color: confirming || danger ? '#ef4444' : 'var(--cl-ink-4)',
+        cursor: disabled || busy ? 'not-allowed' : 'pointer',
+        opacity: disabled || busy ? 0.5 : 1,
         transition: 'all 0.15s',
         flexShrink: 0,
+        whiteSpace: 'nowrap',
       }}
     >
-      {isStopping ? '…' : confirm ? 'confirm?' : 'delete'}
+      {busy ? '…' : confirming ? 'confirm?' : label}
     </button>
+  )
+}
+
+/** Two-click confirm wrapper — first click arms, second click within 2s fires. */
+function useTwoStepConfirm(onConfirm: () => void) {
+  const [confirming, setConfirming] = useState(false)
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => () => { if (timerRef.current) clearTimeout(timerRef.current) }, [])
+  const trigger = useCallback((e: React.MouseEvent) => {
+    e.stopPropagation()
+    if (confirming) {
+      if (timerRef.current) clearTimeout(timerRef.current)
+      setConfirming(false)
+      onConfirm()
+    } else {
+      setConfirming(true)
+      timerRef.current = setTimeout(() => setConfirming(false), 2000)
+    }
+  }, [confirming, onConfirm])
+  return { confirming, trigger }
+}
+
+interface RowActions {
+  onAttach: () => void
+  onStop: () => void
+  onRestart: () => void
+  onRemove: () => void
+  busy: { stop: boolean; restart: boolean; remove: boolean; attach: boolean }
+}
+
+function ActionCluster({ s, actions }: { s: BgSession; actions: RowActions }) {
+  const stopConfirm = useTwoStepConfirm(actions.onStop)
+  const removeConfirm = useTwoStepConfirm(actions.onRemove)
+  const canStop = s.alive
+  const stop = (e: React.MouseEvent) => e.stopPropagation()
+
+  return (
+    <div style={{ display: 'flex', gap: 4 }} onClick={stop}>
+      <ActionButton
+        label="attach" title="Attach in Terminal (claude attach)"
+        onClick={(e) => { e.stopPropagation(); actions.onAttach() }}
+        busy={actions.busy.attach}
+      />
+      <ActionButton
+        label="stop" title={canStop ? 'Stop the running session (claude stop)' : 'Session is not running'}
+        onClick={stopConfirm.trigger}
+        disabled={!canStop}
+        busy={actions.busy.stop}
+        confirming={stopConfirm.confirming}
+      />
+      <ActionButton
+        label="restart" title="Restart session, preserving conversation (claude respawn)"
+        onClick={(e) => { e.stopPropagation(); actions.onRestart() }}
+        busy={actions.busy.restart}
+      />
+      <ActionButton
+        label="remove" tone="danger"
+        title="Remove from the list (claude rm)"
+        onClick={removeConfirm.trigger}
+        busy={actions.busy.remove}
+        confirming={removeConfirm.confirming}
+      />
+    </div>
   )
 }
 
@@ -134,18 +200,15 @@ function SessionRow({
   s,
   showProject,
   onOpen,
-  onStop,
-  isStopping,
+  actions,
 }: {
   s: BgSession
   showProject: boolean
   onOpen: () => void
-  onStop: () => void
-  isStopping: boolean
+  actions: RowActions
 }) {
   const st = statusOf(s)
   const subtitle = s.detail || s.result || s.intent || '—'
-  const canStop = true
   return (
     <button
       type="button"
@@ -195,11 +258,12 @@ function SessionRow({
           <br />
           <span style={{ color: 'var(--cl-ink-4)' }}>{relTime(s.updatedAt)}</span>
         </span>
-        {canStop && <StopButton onStop={onStop} isStopping={isStopping} />}
+        <ActionCluster s={s} actions={actions} />
       </div>
     </button>
   )
 }
+
 
 // ─── View ──────────────────────────────────────────────────────────────────────
 
@@ -223,7 +287,13 @@ export function AgentsLiveView({
 
   const dispatchBg = useDispatchBackgroundAgent()
   const deleteBg = useDeleteBackgroundAgent()
-  const [deletingId, setDeletingId] = useState<string | null>(null)
+  const stopBg = useStopBackgroundAgent()
+  const respawnBg = useRespawnBackgroundAgent()
+  const attachBg = useAttachBackgroundAgent()
+  const [busyIds, setBusyIds] = useState<Record<string, { stop?: boolean; restart?: boolean; remove?: boolean; attach?: boolean }>>({})
+  const [actionError, setActionError] = useState<string | null>(null)
+  const setBusy = (id: string, key: 'stop' | 'restart' | 'remove' | 'attach', v: boolean) =>
+    setBusyIds(prev => ({ ...prev, [id]: { ...prev[id], [key]: v } }))
   const [prompt, setPrompt] = useState('')
   const [agentName, setAgentName] = useState('')
   const [sessionName, setSessionName] = useState('')
@@ -283,28 +353,49 @@ export function AgentsLiveView({
                 <span className="ct">{g.items.length} · {g.hint}</span>
               </div>
               <div className="cl-tile-grid cl-tile-grid--list">
-                {g.items.map(s => (
-                  <SessionRow
-                    key={s.id}
-                    s={s}
-                    showProject={!project}
-                    onOpen={() => onOpenSession(
-                      project ?? { hash: hashFromCwd(s.cwd), realPath: s.cwd },
-                      summaryFor(s),
-                    )}
-                    onStop={() => {
-                      setDeletingId(s.id)
-                      deleteBg.mutate(s.id, { onSettled: () => setDeletingId(null) })
-                    }}
-                    isStopping={deletingId === s.id}
-                  />
-                ))}
+                {g.items.map(s => {
+                  const b = busyIds[s.id] || {}
+                  const handle = (key: 'stop' | 'restart' | 'remove' | 'attach', run: () => Promise<unknown>) => {
+                    setBusy(s.id, key, true)
+                    setActionError(null)
+                    run()
+                      .catch((e: unknown) => setActionError(e instanceof Error ? e.message : String(e)))
+                      .finally(() => setBusy(s.id, key, false))
+                  }
+                  return (
+                    <SessionRow
+                      key={s.id}
+                      s={s}
+                      showProject={!project}
+                      onOpen={() => onOpenSession(
+                        project ?? { hash: hashFromCwd(s.cwd), realPath: s.cwd },
+                        summaryFor(s),
+                      )}
+                      actions={{
+                        onAttach: () => handle('attach', () => attachBg.mutateAsync({ cwd: s.cwd, id: s.id })),
+                        onStop: () => handle('stop', () => stopBg.mutateAsync(s.id)),
+                        onRestart: () => handle('restart', () => respawnBg.mutateAsync(s.id)),
+                        onRemove: () => handle('remove', () => deleteBg.mutateAsync(s.id)),
+                        busy: {
+                          stop: !!b.stop, restart: !!b.restart, remove: !!b.remove, attach: !!b.attach,
+                        },
+                      }}
+                    />
+                  )
+                })}
               </div>
             </section>
           ))
         )}
       </div>
       
+      {actionError && (
+        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--cl-line)', background: '#fef2f2', color: '#ef4444', fontSize: 12, fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
+          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>✕ {actionError}</span>
+          <button type="button" onClick={() => setActionError(null)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}>dismiss</button>
+        </div>
+      )}
+
       {project && (
         <div style={{ padding: '16px', borderTop: '1px solid var(--cl-line)', background: 'var(--cl-panel)', zIndex: 10 }}>
           {dispatchBg.isError && (
