@@ -3262,13 +3262,14 @@ body {
    ════════════════════════════════════════════════════════════════════════ */
 .cl-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   border-bottom: 1.5px solid var(--cl-ink);
 }
 .cl-stat {
   padding: 26px 28px 28px;
   border-left: 1px solid var(--cl-line);
   position: relative;
+  min-width: 0;
 }
 .cl-stat:first-child { border-left: none; padding-left: var(--cl-gutter); }
 /* "Negative" live cell — fixed dark in both themes (the dramatic block) */
@@ -3307,14 +3308,57 @@ body {
 .cl-bars {
   margin-top: 14px;
   display: grid;
-  grid-template-columns: repeat(12, 1fr);
+  grid-template-columns: repeat(12, minmax(0, 1fr));
   align-items: end; gap: 3px;
   height: 28px;
+  min-width: 0;
+  width: 100%;
+  position: relative;
+  overflow: visible;
 }
-.cl-bars i { display: block; background: var(--cl-ink); width: 100%; opacity: 0.85; min-height: 1px; }
-.cl-bars i.peak { background: var(--cl-accent); opacity: 1; }
-.cl-stat:last-child .cl-bars i { background: oklch(0.96 0.004 80); opacity: 0.5; }
-.cl-stat:last-child .cl-bars i.peak { background: var(--cl-accent); opacity: 1; }
+.cl-stat-bar {
+  position: relative;
+  display: flex;
+  align-items: end;
+  height: 28px;
+  min-width: 0;
+  overflow: hidden;
+  justify-self: stretch;
+  outline: none;
+}
+.cl-stat-bar-fill {
+  display: block;
+  background: var(--cl-ink);
+  width: 100%;
+  opacity: 0.85;
+  min-height: 1px;
+  transition: height 160ms ease, opacity 120ms ease, background 120ms ease;
+}
+.cl-stat-bar.peak .cl-stat-bar-fill,
+.cl-stat-bar:hover .cl-stat-bar-fill,
+.cl-stat-bar:focus-visible .cl-stat-bar-fill {
+  background: var(--cl-accent);
+  opacity: 1;
+}
+.cl-bars-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  transform: translateX(-20%);
+  z-index: 6;
+  pointer-events: none;
+  white-space: nowrap;
+  width: 190px;
+  padding: 6px 8px;
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  box-shadow: 0 10px 24px oklch(0 0 0 / 0.12);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.2;
+  letter-spacing: 0;
+}
 
 .cl-stat.live { display: flex; flex-direction: column; gap: 6px; }
 .cl-stat.live .pulse {

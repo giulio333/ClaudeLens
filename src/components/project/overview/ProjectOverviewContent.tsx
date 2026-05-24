@@ -1,6 +1,5 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type CSSProperties } from 'react'
 import {
-  useProjectCost,
   useMemoryProject,
   useSessionList,
   useClaudeMdHierarchy,
@@ -56,33 +55,112 @@ function modelFamily(m?: string): '' | 'opus' | 'haiku' {
   return ''
 }
 
-// 12 weekly buckets, newest last
-function weeklyBuckets(sessions: SessionSummary[], value: 'count' | 'tokens'): number[] {
-  const n = 12
-  const wk = 7 * 86400000
-  const now = Date.now()
-  const arr = new Array(n).fill(0)
-  for (const s of sessions) {
-    const t = new Date(s.date).getTime()
-    if (isNaN(t)) continue
-    const idx = n - 1 - Math.floor((now - t) / wk)
-    if (idx >= 0 && idx < n) arr[idx] += value === 'tokens' ? s.totalTokens : 1
-  }
-  return arr
+const DAY_MS = 86_400_000
+const DEFAULT_RETENTION_DAYS = 30
+const MAX_STAT_BARS = 12
+
+type StatMetric = 'sessions' | 'tokens' | 'avg'
+
+type TimelineBucket = {
+  key: string
+  label: string
+  sessions: number
+  tokens: number
 }
 
-function Bars({ values }: { values: number[] }) {
+function normalizeRetentionDays(days: number): number {
+  return Number.isFinite(days) && days > 0 ? Math.max(1, Math.round(days)) : DEFAULT_RETENTION_DAYS
+}
+
+function fmtBucketDate(ms: number): string {
+  return new Date(ms).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' })
+}
+
+function bucketLabel(startMs: number, endMs: number): string {
+  const start = fmtBucketDate(startMs)
+  const end = fmtBucketDate(Math.max(startMs, endMs - 1))
+  return start === end ? start : `${start} - ${end}`
+}
+
+function buildTimelineBuckets(sessions: SessionSummary[], days: number): TimelineBucket[] {
+  const bucketCount = Math.min(MAX_STAT_BARS, Math.max(1, Math.ceil(days)))
+  const now = Date.now()
+  const windowMs = days * DAY_MS
+  const startMs = now - windowMs
+  const bucketMs = windowMs / bucketCount
+  const buckets = Array.from({ length: bucketCount }, (_, i) => {
+    const from = startMs + i * bucketMs
+    const to = i === bucketCount - 1 ? now : startMs + (i + 1) * bucketMs
+    return {
+      key: `${Math.round(from)}-${Math.round(to)}`,
+      label: bucketLabel(from, to),
+      sessions: 0,
+      tokens: 0,
+    }
+  })
+
+  for (const s of sessions) {
+    const t = new Date(s.date).getTime()
+    if (isNaN(t) || t < startMs || t > now) continue
+    const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((t - startMs) / bucketMs)))
+    buckets[idx].sessions += 1
+    buckets[idx].tokens += s.totalTokens
+  }
+
+  return buckets
+}
+
+function bucketValue(bucket: TimelineBucket, metric: StatMetric): number {
+  if (metric === 'sessions') return bucket.sessions
+  if (metric === 'tokens') return bucket.tokens
+  return bucket.sessions > 0 ? bucket.tokens / bucket.sessions : 0
+}
+
+function bucketTooltip(bucket: TimelineBucket, metric: StatMetric): string {
+  if (metric === 'sessions') return `${bucket.label} · ${fmt(bucket.sessions)} sessions · ${fmt(bucket.tokens)} tok`
+  if (metric === 'tokens') return `${bucket.label} · ${fmt(bucket.tokens)} tok · ${fmt(bucket.sessions)} sessions`
+  const avg = bucket.sessions > 0 ? Math.round(bucket.tokens / bucket.sessions) : 0
+  return `${bucket.label} · ${fmt(avg)} tok/session · ${fmt(bucket.sessions)} sessions`
+}
+
+function Bars({ buckets, metric }: { buckets: TimelineBucket[]; metric: StatMetric }) {
+  const [active, setActive] = useState<{ index: number; text: string } | null>(null)
+  const values = buckets.map(bucket => bucketValue(bucket, metric))
   const max = Math.max(...values, 1)
   const peakIdx = values.indexOf(Math.max(...values))
+  const gridStyle: CSSProperties = { gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))` }
   return (
-    <div className="cl-bars">
-      {values.map((v, i) => (
-        <i
-          key={i}
-          className={v > 0 && i === peakIdx ? 'peak' : ''}
-          style={{ height: `${v > 0 ? Math.max((v / max) * 100, 6) : 0}%` }}
-        />
-      ))}
+    <div className="cl-bars" style={gridStyle}>
+      {buckets.map((bucket, i) => {
+        const value = values[i] ?? 0
+        const tooltip = bucketTooltip(bucket, metric)
+        return (
+          <span
+            key={bucket.key}
+            className={`cl-stat-bar${value > 0 && i === peakIdx ? ' peak' : ''}`}
+            tabIndex={0}
+            title={tooltip}
+            aria-label={tooltip}
+            onMouseEnter={() => setActive({ index: i, text: tooltip })}
+            onMouseLeave={() => setActive(null)}
+            onFocus={() => setActive({ index: i, text: tooltip })}
+            onBlur={() => setActive(null)}
+          >
+            <span
+              className="cl-stat-bar-fill"
+              style={{ height: `${value > 0 ? Math.max((value / max) * 100, 6) : 0}%` }}
+            />
+          </span>
+        )
+      })}
+      {active && (
+        <span
+          className="cl-bars-tip"
+          style={{ left: `${((active.index + 0.5) / Math.max(buckets.length, 1)) * 100}%` }}
+        >
+          {active.text}
+        </span>
+      )}
     </div>
   )
 }
@@ -119,7 +197,6 @@ export function ProjectView({
 }) {
   const { isPinned, togglePin } = usePinnedProjects()
   const pinnedNow = isPinned(project.hash)
-  const { data: cost } = useProjectCost(project.hash)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath)
@@ -163,23 +240,25 @@ export function ProjectView({
 
   // ── Derived ──
   const projectName = project.realPath.split('/').pop() ?? project.realPath
-  const sessionCount = cost?.sessionsCount ?? sessions.length
-  const totalTokens = cost?.totalTokens ?? sessions.reduce((s, x) => s + x.totalTokens, 0)
+  const retentionDays = normalizeRetentionDays(cleanupDays)
+  const statsSessions = useMemo(() => {
+    const now = Date.now()
+    const cutoff = now - retentionDays * DAY_MS
+    return sessions.filter(s => {
+      const t = new Date(s.date).getTime()
+      return !isNaN(t) && t >= cutoff && t <= now
+    })
+  }, [sessions, retentionDays])
+  const sessionCount = statsSessions.length
+  const totalTokens = statsSessions.reduce((s, x) => s + x.totalTokens, 0)
+  const totalCost = statsSessions.reduce((s, x) => s + x.estimatedCost, 0)
   const tokensFmt = formatTokens(totalTokens)
   const avgTokens = sessionCount > 0 ? formatTokens(Math.round(totalTokens / sessionCount)) : { value: '0', unit: '' }
+  const allSessionCount = sessions.length
+  const olderSessionCount = Math.max(0, allSessionCount - sessionCount)
+  const retentionLabel = retentionDays === 1 ? 'last 24h' : `last ${retentionDays}d`
   const lastActive = sessions[0]?.date
-  const last7 = useMemo(() => {
-    const cutoff = Date.now() - 7 * 86400000
-    return sessions.filter(s => new Date(s.date).getTime() >= cutoff).length
-  }, [sessions])
-
-  const sessBars = useMemo(() => weeklyBuckets(sessions, 'count'), [sessions])
-  const tokBars = useMemo(() => weeklyBuckets(sessions, 'tokens'), [sessions])
-  const avgBars = useMemo(() => {
-    const c = weeklyBuckets(sessions, 'count')
-    const t = weeklyBuckets(sessions, 'tokens')
-    return t.map((v, i) => (c[i] > 0 ? v / c[i] : 0))
-  }, [sessions])
+  const statBuckets = useMemo(() => buildTimelineBuckets(statsSessions, retentionDays), [statsSessions, retentionDays])
 
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
@@ -245,7 +324,7 @@ export function ProjectView({
         </button>
 
         <div className="cl-h-meta">
-          <span><b>{fmt(sessionCount)}</b> sessions</span>
+          <span><b>{fmt(sessionCount)}</b> sessions / {retentionDays}d</span>
           <span className="sep">·</span>
           <span><b>{tokensFmt.value}{tokensFmt.unit}</b> tokens</span>
           {lastActive && <><span className="sep">·</span><span>last active <b>{relIso(lastActive)} ago</b></span></>}
@@ -260,20 +339,22 @@ export function ProjectView({
             <div className="cl-stat">
               <span className="lbl">Sessions</span>
               <div className="num">{fmt(sessionCount)}</div>
-              <Bars values={sessBars} />
-              <div className="delta">↑ {last7} · last 7d</div>
+              <Bars buckets={statBuckets} metric="sessions" />
+              <div className="delta">
+                {retentionLabel}{olderSessionCount > 0 ? ` · ${fmt(olderSessionCount)} older` : ' · full retention'}
+              </div>
             </div>
             <div className="cl-stat">
               <span className="lbl">Tokens</span>
               <div className="num">{tokensFmt.value}<small>{tokensFmt.unit}</small></div>
-              <Bars values={tokBars} />
-              <div className="delta">est. ${(cost?.cost ?? 0).toFixed(2)}</div>
+              <Bars buckets={statBuckets} metric="tokens" />
+              <div className="delta">est. ${totalCost.toFixed(2)} · {retentionLabel}</div>
             </div>
             <div className="cl-stat">
               <span className="lbl">Avg / session</span>
               <div className="num">{avgTokens.value}<small>{avgTokens.unit || 'tok'}</small></div>
-              <Bars values={avgBars} />
-              <div className="delta">across {sessionCount} sessions</div>
+              <Bars buckets={statBuckets} metric="avg" />
+              <div className="delta">across {fmt(sessionCount)} sessions</div>
             </div>
             <div className="cl-stat live">
               <span className="lbl"><span className="pulse" /> Live</span>
