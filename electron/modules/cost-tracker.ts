@@ -201,7 +201,7 @@ function parseJsonlSession(filePath: string): ParsedSession {
       if (parsed.customTitle) result.customTitle = parsed.customTitle;
       if (parsed.aiTitle) result.aiTitle = parsed.aiTitle;
       if (!result.firstUserMessage && parsed.firstUserMessage) result.firstUserMessage = parsed.firstUserMessage;
-      if (!result.date && parsed.date) result.date = parsed.date;
+      if (parsed.date) result.date = parsed.date;
 
       if (parsed.inputTokens || parsed.outputTokens) {
         result.messageCount++;
