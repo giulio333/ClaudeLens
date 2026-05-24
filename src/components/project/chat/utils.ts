@@ -161,6 +161,52 @@ export function parseLocalCommandOutput(text: string): string | null {
   return stripAnsi(match[1]).trim()
 }
 
+// AskUserQuestion: i campi sono nel tool_use.input.questions[] e la risposta
+// arriva o nel testo del tool_result ("...="Yes"...") o nel toolUseResult.answers.
+export type AskQuestion = {
+  question: string
+  header?: string
+  multiSelect: boolean
+  options: { label: string; description?: string }[]
+}
+
+export function parseAskUserQuestions(input: Record<string, unknown>): AskQuestion[] {
+  const raw = input.questions
+  if (!Array.isArray(raw)) return []
+  const out: AskQuestion[] = []
+  for (const q of raw) {
+    if (!q || typeof q !== 'object') continue
+    const o = q as Record<string, unknown>
+    const question = typeof o.question === 'string' ? o.question : ''
+    if (!question) continue
+    const opts = Array.isArray(o.options) ? o.options : []
+    out.push({
+      question,
+      header: typeof o.header === 'string' ? o.header : undefined,
+      multiSelect: Boolean(o.multiSelect),
+      options: opts
+        .map(opt => (opt && typeof opt === 'object' ? opt as Record<string, unknown> : null))
+        .filter((x): x is Record<string, unknown> => x !== null)
+        .map(opt => ({
+          label: typeof opt.label === 'string' ? opt.label : '',
+          description: typeof opt.description === 'string' ? opt.description : undefined,
+        })),
+    })
+  }
+  return out
+}
+
+// Estrae la risposta dal testo del tool_result quando non abbiamo strutturato.
+// Formato osservato: 'Your questions have been answered: "Q1"="A1", "Q2"="A2".'
+export function parseAnswersFromResultText(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  if (!text) return out
+  const re = /"([^"]+)"\s*=\s*"([^"]*)"/g
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) out[m[1]] = m[2]
+  return out
+}
+
 export const TOOL_ICON: Record<string, string> = {
   Read: '📖', Write: '✏️', Edit: '✏️', Bash: '⌨️', Glob: '📁',
   Grep: '🔍', Agent: '🤖', WebFetch: '🌐', WebSearch: '🔎', Task: '📋',

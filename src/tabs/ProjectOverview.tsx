@@ -237,8 +237,12 @@ export default function ProjectOverview() {
   }
 
   function goLiveAgents() {
-    setScope('global')
-    setView({ type: 'agents-live' })
+    if (selected) {
+      setView({ type: 'agents-live', project: selected })
+    } else {
+      setScope('global')
+      setView({ type: 'agents-live' })
+    }
   }
 
   async function handleConfirmDelete(p: Project) {
@@ -330,7 +334,10 @@ export default function ProjectOverview() {
             <ChatView
               project={view.project}
               session={view.session}
-              onBack={() => setView({ type: 'sessions', project: view.project })}
+              onBack={() => view.from === 'agents-live'
+                ? setView({ type: 'agents-live', project: view.project })
+                : setView({ type: 'sessions', project: view.project })
+              }
             />
           </ErrorBoundary>
         )
@@ -356,7 +363,7 @@ export default function ProjectOverview() {
           <AgentsLiveView
             project={view.project}
             onBack={() => view.project ? setView({ type: 'overview' }) : goGlobal()}
-            onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
+            onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
           />
         )
       // Global `agents-live` is rendered inside the editorial chrome below.
@@ -401,7 +408,7 @@ export default function ProjectOverview() {
         <nav className="cl-scope">
           <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
           <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
-          <button className={isGlobalLiveAgents ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
+          <button className={view.type === 'agents-live' ? 'on' : ''} onClick={goLiveAgents}>Live Agents</button>
         </nav>
 
         <div />
@@ -446,7 +453,7 @@ export default function ProjectOverview() {
           <AgentsLiveView
             embedded
             onBack={goGlobal}
-            onOpenSession={(project, session) => setView({ type: 'chat', project, session })}
+            onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
           />
         ) : selected ? (
           <ProjectView

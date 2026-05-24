@@ -2305,7 +2305,8 @@ body {
   line-height: 1.55;
 }
 .cl-agent-stack,
-.cl-tool-stack {
+.cl-tool-stack,
+.cl-ask-stack {
   max-width: 780px;
   margin-top: 12px;
   display: grid;
@@ -2655,6 +2656,68 @@ body {
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
 }
 .cl-agent-card .status { margin-left: auto; flex-shrink: 0; font-size: 11px; }
+
+/* AskUserQuestion card — first-class content, always visible */
+.cl-ask-card {
+  width: 100%;
+  padding: 12px 14px 14px;
+  border-radius: 10px;
+  border: 1px solid color-mix(in oklch, var(--cl-warn) 50%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-warn-soft) 55%, var(--cl-paper));
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    0 4px 14px -10px color-mix(in oklch, var(--cl-warn) 50%, transparent);
+  display: flex; flex-direction: column; gap: 10px;
+}
+.cl-ask-card-kicker {
+  display: flex; align-items: center; justify-content: space-between;
+  font-family: var(--font-mono); font-size: 9.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
+  color: var(--cl-warn);
+}
+.cl-ask-card-status {
+  padding: 2px 8px; border-radius: 3px;
+  background: var(--cl-paper); color: var(--cl-ink-3);
+  border: 1px solid var(--cl-line);
+  letter-spacing: 0.12em;
+}
+.cl-ask-card-status[data-pending] {
+  background: var(--cl-warn); color: var(--cl-on-accent);
+  border-color: transparent;
+}
+.cl-ask-card-q { display: flex; flex-direction: column; gap: 8px; }
+.cl-ask-card-q + .cl-ask-card-q {
+  padding-top: 10px;
+  border-top: 1px dashed color-mix(in oklch, var(--cl-warn) 30%, var(--cl-line));
+}
+.cl-ask-card-question {
+  font-size: 14px; font-weight: 600; color: var(--cl-ink); line-height: 1.4;
+}
+.cl-ask-card-options { display: grid; gap: 6px; }
+.cl-ask-card-option {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper);
+  display: flex; flex-direction: column; gap: 2px;
+}
+.cl-ask-card-option[data-selected] {
+  border-color: color-mix(in oklch, var(--cl-warn) 65%, transparent);
+  background: color-mix(in oklch, var(--cl-warn) 14%, var(--cl-paper));
+}
+.cl-ask-card-option-label {
+  font-size: 13px; font-weight: 500; color: var(--cl-ink);
+  display: flex; align-items: center; gap: 6px;
+}
+.cl-ask-card-check { color: var(--cl-warn); font-weight: 700; }
+.cl-ask-card-option-desc {
+  font-size: 12px; color: var(--cl-ink-3); line-height: 1.4;
+}
+.cl-ask-card-custom {
+  font-size: 12px; color: var(--cl-ink-2);
+  padding: 6px 8px; border-radius: 4px;
+  background: var(--cl-paper); border: 1px dashed var(--cl-line);
+}
 
 /* ─── Transcript timeline (v1 Glass Tahoe stream) ──────────────────── */
 .cl-transcript-inner {

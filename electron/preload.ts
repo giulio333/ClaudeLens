@@ -46,6 +46,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getByProject: (realPath: string) => ipcRenderer.invoke('agents:getByProject', realPath),
     create: (input: object, projectPath?: string) => ipcRenderer.invoke('agents:create', input, projectPath),
     dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string) => ipcRenderer.invoke('agents:dispatchBg', cwd, prompt, name, agent),
+    deleteBg: (id: string) => ipcRenderer.invoke('agents:deleteBg', id),
   },
   mcp: {
     getGlobal: () => ipcRenderer.invoke('mcp:getGlobal'),
