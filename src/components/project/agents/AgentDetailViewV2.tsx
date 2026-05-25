@@ -27,21 +27,33 @@ function initialOf(name: string) {
 }
 
 /* ── catalogue of "Available options" shown in the V2 grid ── */
-const OPTION_DEFS: { key: keyof Agent; label: string; blurb: string; isArray?: boolean; isBool?: boolean }[] = [
+type OptionDef = {
+  key: keyof Agent
+  label: string
+  blurb: string
+  isArray?: boolean
+  isBool?: boolean
+  isNumber?: boolean
+  enum?: string[]
+}
+
+const OPTION_DEFS: OptionDef[] = [
+  { key: 'color',                 label: 'color',           blurb: 'Accent color for the agent identity: red · orange · yellow · green · cyan · blue · purple · pink.', enum: ['green', 'red', 'orange', 'yellow', 'cyan', 'blue', 'purple', 'pink'] },
+  { key: 'model',                 label: 'model',           blurb: 'Model alias or full model ID. Omit to inherit from the current session.' },
   { key: 'allowedTools',          label: 'tools',           blurb: 'Tools the subagent can use. Inherits all if omitted.', isArray: true },
   { key: 'disallowedTools',       label: 'disallowedTools', blurb: 'Tools to deny, removed from the inherited list.', isArray: true },
-  { key: 'permissionMode',        label: 'permissionMode',  blurb: 'default · acceptEdits · auto · dontAsk · bypassPermissions · plan' },
-  { key: 'maxTurns',              label: 'maxTurns',        blurb: 'Maximum agentic turns before the subagent stops.' },
-  { key: 'isolation',             label: 'isolation',       blurb: 'Set to worktree to run in an isolated git worktree.' },
-  { key: 'memory',                label: 'memory',          blurb: 'Persistent memory scope: user · project · local.' },
+  { key: 'permissionMode',        label: 'permissionMode',  blurb: 'default · acceptEdits · auto · dontAsk · bypassPermissions · plan', enum: ['default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan'] },
+  { key: 'maxTurns',              label: 'maxTurns',        blurb: 'Maximum agentic turns before the subagent stops.', isNumber: true },
+  { key: 'isolation',             label: 'isolation',       blurb: 'Set to worktree to run in an isolated git worktree.', enum: ['worktree'] },
+  { key: 'memory',                label: 'memory',          blurb: 'Persistent memory scope: user · project · local.', enum: ['user', 'project', 'local'] },
   { key: 'skills',                label: 'skills',          blurb: 'Skills preloaded at startup, full content injected.', isArray: true },
   { key: 'mcpServers',            label: 'mcpServers',      blurb: 'MCP servers available to this subagent.', isArray: true },
-  { key: 'effort',                label: 'effort',          blurb: 'Effort level: low · medium · high · xhigh · max.' },
+  { key: 'effort',                label: 'effort',          blurb: 'Effort level: low · medium · high · xhigh · max.', enum: ['low', 'medium', 'high', 'xhigh', 'max'] },
   { key: 'background',            label: 'background',      blurb: 'Always run this subagent as a background task.', isBool: true },
   { key: 'disableModelInvocation',label: 'disable_model_invocation', blurb: 'Hide this subagent from automatic invocation.', isBool: true },
 ]
 
-function optionValueOf(agent: Agent, def: typeof OPTION_DEFS[number]): string | null {
+function optionValueOf(agent: Agent, def: OptionDef): string | null {
   const v = agent[def.key]
   if (v == null || v === '') return null
   if (def.isBool) return v ? 'enabled' : null
@@ -75,6 +87,30 @@ function serializeAgent(a: Agent, body: string, overrides: Partial<Agent> = {}):
   return lines.join('\n')
 }
 
+/* ── EditState option helpers ── */
+type OptionValue = string | string[] | number | boolean | null
+
+function readOption(agent: Agent, def: OptionDef): OptionValue {
+  const v = agent[def.key]
+  if (v == null) return null
+  if (def.isArray) return Array.isArray(v) ? [...(v as string[])] : null
+  if (def.isBool) return Boolean(v)
+  if (def.isNumber) return typeof v === 'number' ? v : null
+  return typeof v === 'string' ? v : null
+}
+
+function defaultFor(def: OptionDef): OptionValue {
+  if (def.isArray) return []
+  if (def.isBool) return true
+  if (def.isNumber) return 0
+  if (def.enum?.length) return def.enum[0]
+  return ''
+}
+
+function isOptionSet(v: OptionValue): boolean {
+  return v !== null
+}
+
 /* ══════════════════════════ ICONS ══════════════════════════ */
 const ExportIcon = () => (
   <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
@@ -94,7 +130,9 @@ function AgentViewManifesto({ agent }: { agent: Agent }) {
   const body = agent.content || ''
   const charCount = body.length
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
-  const setCount = OPTION_DEFS.reduce((acc, def) => acc + (optionValueOf(agent, def) ? 1 : 0), 0)
+  const propertyRows = OPTION_DEFS.map(def => ({ def, value: optionValueOf(agent, def) }))
+  const setProperties = propertyRows.filter(row => row.value)
+  const unsetProperties = propertyRows.filter(row => !row.value)
 
   return (
     <div className="cl-agent-v2" style={agentStyle(agent.color)}>
@@ -157,18 +195,37 @@ function AgentViewManifesto({ agent }: { agent: Agent }) {
         </div>
 
         <div className="cl-agent-v2-opts">
-          <h3><span>Available options</span><b>{setCount} / {OPTION_DEFS.length} set · using defaults</b></h3>
-          <div className="grid">
-            {OPTION_DEFS.map(def => {
-              const val = optionValueOf(agent, def)
-              return (
-                <div key={def.label} className={'tile' + (val ? ' set' : '')}>
-                  <span className="nm"><span className="dot" />{def.label}</span>
-                  <div className="vl">{val ?? def.blurb}</div>
-                </div>
-              )
-            })}
+          <h3><span>Properties</span><b>{setProperties.length} / {OPTION_DEFS.length} set</b></h3>
+
+          <div className="cl-agent-v2-prop-group is-set">
+            <div className="group-head"><span>Set properties</span><b>{setProperties.length}</b></div>
+            {setProperties.length > 0 ? (
+              <div className="grid">
+                {setProperties.map(({ def, value }) => (
+                  <div key={def.label} className="tile set">
+                    <span className="nm"><span className="dot" />{def.label}<span className="state">set</span></span>
+                    <div className="vl">{value}</div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="empty">No optional properties set.</div>
+            )}
           </div>
+
+          {unsetProperties.length > 0 && (
+            <div className="cl-agent-v2-prop-group is-unset">
+              <div className="group-head"><span>Unset properties</span><b>{unsetProperties.length}</b></div>
+              <div className="grid compact">
+                {unsetProperties.map(({ def }) => (
+                  <div key={def.label} className="tile unset">
+                    <span className="nm"><span className="dot" />{def.label}<span className="state">default</span></span>
+                    <div className="vl">{def.blurb}</div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </section>
     </div>
@@ -178,7 +235,88 @@ function AgentViewManifesto({ agent }: { agent: Agent }) {
 /* ════════════════════════════════════════════════════════════════════
    EDIT V2 — Forms workbench
    ════════════════════════════════════════════════════════════════════ */
-type EditState = { body: string; description: string; model: string; color: string }
+type EditState = {
+  body: string
+  description: string
+  options: Record<string, OptionValue>
+}
+
+function OptionEditor({
+  def,
+  value,
+  onChange,
+}: {
+  def: OptionDef
+  value: OptionValue
+  onChange: (v: OptionValue) => void
+}) {
+  if (def.isBool) {
+    const on = value === true
+    return (
+      <button
+        type="button"
+        className={'cl-opt-toggle' + (on ? ' on' : '')}
+        onClick={() => onChange(!on)}
+      >
+        <span className="cl-opt-toggle-knob" />
+        <span className="cl-opt-toggle-label">{on ? 'enabled' : 'disabled'}</span>
+      </button>
+    )
+  }
+  if (def.isArray) {
+    const arr = Array.isArray(value) ? value : []
+    return (
+      <input
+        type="text"
+        className="cl-opt-input"
+        value={arr.join(', ')}
+        placeholder="comma, separated, values"
+        onChange={e =>
+          onChange(
+            e.target.value
+              .split(',')
+              .map(s => s.trim())
+              .filter(Boolean)
+          )
+        }
+      />
+    )
+  }
+  if (def.enum?.length) {
+    return (
+      <select
+        className="cl-opt-input"
+        value={typeof value === 'string' ? value : ''}
+        onChange={e => onChange(e.target.value)}
+      >
+        {def.enum.map(o => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    )
+  }
+  if (def.isNumber) {
+    return (
+      <input
+        type="number"
+        className="cl-opt-input"
+        value={typeof value === 'number' ? value : ''}
+        onChange={e => {
+          const n = e.target.value === '' ? 0 : Number(e.target.value)
+          onChange(Number.isFinite(n) ? n : 0)
+        }}
+      />
+    )
+  }
+  return (
+    <input
+      type="text"
+      className="cl-opt-input"
+      value={typeof value === 'string' ? value : ''}
+      onChange={e => onChange(e.target.value)}
+    />
+  )
+}
 
 function AgentEditWorkbench({
   agent,
@@ -199,14 +337,20 @@ function AgentEditWorkbench({
     setPos({ line: lines.length, col: lines[lines.length - 1].length + 1 })
   }
 
+  function setOption(def: OptionDef, value: OptionValue) {
+    onChange({ ...state, options: { ...state.options, [def.key]: value } })
+  }
+
   const body = state.body
   const charCount = body.length
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
   const paragraphs = body.split(/\n{2,}/).filter(Boolean).length
-  const setCount = OPTION_DEFS.reduce((acc, d) => acc + (optionValueOf(agent, d) ? 1 : 0), 0)
+  const setDefs = OPTION_DEFS.filter(d => isOptionSet(state.options[d.key]))
+  const unsetDefs = OPTION_DEFS.filter(d => !isOptionSet(state.options[d.key]))
+  const setCount = setDefs.length
 
   return (
-    <div className="cl-agent-edit-v2" style={agentStyle(state.color || agent.color)}>
+    <div className="cl-agent-edit-v2" style={agentStyle(String(state.options.color || agent.color || ''))}>
       <div className="cl-agent-edit-v2-strip">
         <div className="crumbs">
           <span className="pip" />
@@ -247,59 +391,71 @@ function AgentEditWorkbench({
             />
           </div>
 
-          <div className="cl-agent-edit-v2-card">
-            <div className="cl-agent-edit-v2-grid2">
-              <div className="cl-agent-edit-v2-field">
-                <span className="l">Name</span>
-                <span className="c muted">{agent.name} · read-only</span>
-              </div>
-              <div className="cl-agent-edit-v2-field">
-                <span className="l">Color</span>
-                <span className="c">
-                  <span className="led agent" />
-                  <input
-                    value={state.color}
-                    placeholder="green"
-                    onChange={e => onChange({ ...state, color: e.target.value })}
-                  />
-                </span>
-              </div>
-              <div className="cl-agent-edit-v2-field">
-                <span className="l">Model</span>
-                <span className="c">
-                  <span className="led violet" />
-                  <input
-                    value={state.model}
-                    placeholder="inherit"
-                    onChange={e => onChange({ ...state, model: e.target.value })}
-                  />
-                </span>
-              </div>
-              <div className="cl-agent-edit-v2-field">
-                <span className="l">Scope</span>
-                <span className="c muted">{agent.scope} · read-only</span>
-              </div>
-            </div>
-          </div>
-
-          <h2 style={{ marginTop: 22 }}>
-            <span>Available options</span>
-            <b>{setCount} / {OPTION_DEFS.length} set</b>
+          <h2>
+            <span>Properties</span>
+            <b>{setCount} / {OPTION_DEFS.length} optional set</b>
           </h2>
           <div className="cl-agent-edit-v2-card" style={{ padding: '6px 18px 8px' }}>
             <div className="cl-agent-edit-v2-rows">
-              {OPTION_DEFS.map(def => {
-                const val = optionValueOf(agent, def)
-                return (
-                  <div key={def.label} className={'opt' + (val ? ' set' : '')}>
-                    <span className="nm"><span className="dot" />{def.label}</span>
-                    <span className="vl" title={val ?? def.blurb}>{val ?? def.blurb}</span>
-                    <span className="plus" title={val ? 'edit (raw YAML)' : 'add (edit raw YAML)'}>＋</span>
-                  </div>
-                )
-              })}
+              <div className="opt set core">
+                <span className="nm"><span className="dot" />name</span>
+                <span className="vl muted">{agent.name}</span>
+                <span className="cl-opt-ro">read-only</span>
+              </div>
+              <div className="opt set core">
+                <span className="nm"><span className="dot" />scope</span>
+                <span className="vl muted">{agent.scope}</span>
+                <span className="cl-opt-ro">read-only</span>
+              </div>
+              {setDefs.map(def => (
+                <div key={def.label} className="opt set">
+                  <span className="nm"><span className="dot" />{def.label}</span>
+                  <span className="vl as-editor">
+                    <OptionEditor
+                      def={def}
+                      value={state.options[def.key]}
+                      onChange={v => setOption(def, v)}
+                    />
+                  </span>
+                  <button
+                    type="button"
+                    className="plus minus"
+                    title="Remove property"
+                    onClick={() => setOption(def, null)}
+                  >
+                    ✕
+                  </button>
+                </div>
+              ))}
             </div>
           </div>
+
+          {unsetDefs.length > 0 && (
+            <>
+              <h2 style={{ marginTop: 22 }}>
+                <span>Available options</span>
+                <b>{unsetDefs.length} unset</b>
+              </h2>
+              <div className="cl-agent-edit-v2-card" style={{ padding: '6px 18px 8px' }}>
+                <div className="cl-agent-edit-v2-rows">
+                  {unsetDefs.map(def => (
+                    <div key={def.label} className="opt">
+                      <span className="nm"><span className="dot" />{def.label}</span>
+                      <span className="vl" title={def.blurb}>{def.blurb}</span>
+                      <button
+                        type="button"
+                        className="plus"
+                        title="Add property"
+                        onClick={() => setOption(def, defaultFor(def))}
+                      >
+                        ＋
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
         </div>
 
         <div className="cl-agent-edit-v2-col">
@@ -501,22 +657,44 @@ export function AgentDetailViewV2({
   const [error, setError] = useState<string | null>(null)
   const [showRun, setShowRun] = useState(false)
 
-  const initial = useMemo<EditState>(() => ({
-    body: agent.content,
-    description: agent.description ?? '',
-    model: agent.model ?? '',
-    color: agent.color ?? '',
-  }), [agent.content, agent.description, agent.model, agent.color])
+  const initial = useMemo<EditState>(() => {
+    const options: Record<string, OptionValue> = {}
+    for (const def of OPTION_DEFS) options[def.key] = readOption(agent, def)
+    return {
+      body: agent.content,
+      description: agent.description ?? '',
+      options,
+    }
+  }, [agent])
 
   const [editState, setEditState] = useState<EditState>(initial)
   useEffect(() => { setEditState(initial) }, [initial])
   useEffect(() => { setError(null) }, [mode])
 
+  const optionsDirty = OPTION_DEFS.some(def => {
+    const a = editState.options[def.key]
+    const b = initial.options[def.key]
+    if (Array.isArray(a) && Array.isArray(b)) {
+      return a.length !== b.length || a.some((v, i) => v !== b[i])
+    }
+    return a !== b
+  })
+
   const dirty =
     editState.body !== initial.body ||
     editState.description !== initial.description ||
-    editState.model !== initial.model ||
-    editState.color !== initial.color
+    optionsDirty
+
+  function optionsToOverrides(opts: Record<string, OptionValue>): Partial<Agent> {
+    const out: Partial<Agent> = {}
+    for (const def of OPTION_DEFS) {
+      const v = opts[def.key]
+      // Cast through `any` because Agent's optional fields are loosely typed strings;
+      // values come from typed inputs (select/toggle/number) so they're safe.
+      ;(out as Record<string, unknown>)[def.key] = v === null ? undefined : v
+    }
+    return out
+  }
 
   async function handleSave() {
     if (!dirty || saving) return
@@ -525,8 +703,7 @@ export function AgentDetailViewV2({
       setError(null)
       const raw = serializeAgent(agent, editState.body, {
         description: editState.description || undefined,
-        model: editState.model || undefined,
-        color: editState.color || undefined,
+        ...optionsToOverrides(editState.options),
       })
       await onSave(raw)
       setMode('view')
