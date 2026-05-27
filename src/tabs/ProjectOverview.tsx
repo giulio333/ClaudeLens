@@ -11,6 +11,7 @@ import {
   useProjectAgents,
 } from '../hooks/useIPC'
 import { usePinnedProjects } from '../hooks/usePinnedProjects'
+import { usePinnedSessions } from '../hooks/usePinnedSessions'
 import { View } from '../components/project/types'
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog'
 import {
@@ -114,6 +115,7 @@ export default function ProjectOverview() {
   const { data: mcpData } = useGlobalMcp()
   const deleteProjectMutation = useDeleteProject()
   const { pinned, togglePin } = usePinnedProjects()
+  const { isPinned: isSessionPinned, togglePin: toggleSessionPin } = usePinnedSessions()
 
   // ─── Unified search popover ───
   const lensBtnRef = useRef<HTMLButtonElement>(null)
@@ -481,7 +483,9 @@ export default function ProjectOverview() {
         mcpTotalProjects={mcpData?.totalProjects ?? projects?.length ?? 0}
         sessions={searchSessions}
         sessionsLoading={searchSessionsLoading}
+        pinnedSessions={isSessionPinned}
         onTogglePin={togglePin}
+        onToggleSessionPin={toggleSessionPin}
         onSelectProject={selectProject}
         onSelectSkill={skill => setView({ type: 'skill-detail', skill })}
         onSelectAgent={agent => setView({ type: 'agent-detail', agent })}
