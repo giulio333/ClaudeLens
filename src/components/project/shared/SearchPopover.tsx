@@ -7,7 +7,7 @@ export type SearchMode = 'global' | 'projects'
 export type SearchAnchorAlign = 'left' | 'right'
 export type SearchSession = { project: Project; session: SessionSummary }
 
-type SearchFilter = 'all' | 'projects' | 'chats' | 'skills' | 'agents' | 'mcp'
+type SearchFilter = 'all' | 'projects' | 'sessions' | 'skills' | 'agents' | 'mcp'
 
 type ProjectRow = {
   kind: 'project'
@@ -21,7 +21,7 @@ type ProjectRow = {
 }
 
 type EntityRow =
-  | { kind: 'chat'; key: string; project: Project; session: SessionSummary; title: string; detail: string; meta: string; glyph: string }
+  | { kind: 'session'; key: string; project: Project; session: SessionSummary; title: string; detail: string; meta: string; glyph: string; pinned: boolean }
   | { kind: 'skill'; key: string; skill: Skill; title: string; detail: string; meta: string; glyph: string }
   | { kind: 'agent'; key: string; agent: Agent; title: string; detail: string; meta: string; glyph: string }
   | { kind: 'mcp'; key: string; server: McpServer; title: string; detail: string; meta: string; glyph: string }
@@ -32,7 +32,7 @@ type SearchSection = { key: string; title: string; count: number; rows: SearchRo
 const FILTERS: { key: SearchFilter; label: string }[] = [
   { key: 'all', label: 'All' },
   { key: 'projects', label: 'Projects' },
-  { key: 'chats', label: 'Chats' },
+  { key: 'sessions', label: 'Sessions' },
   { key: 'skills', label: 'Skills' },
   { key: 'agents', label: 'Agents' },
   { key: 'mcp', label: 'MCP' },
@@ -103,7 +103,9 @@ export function SearchPopover({
   mcpTotalProjects = 0,
   sessions = [],
   sessionsLoading = false,
+  pinnedSessions,
   onTogglePin,
+  onToggleSessionPin,
   onSelectProject,
   onSelectSkill,
   onSelectAgent,
@@ -126,7 +128,9 @@ export function SearchPopover({
   mcpTotalProjects?: number
   sessions?: SearchSession[]
   sessionsLoading?: boolean
+  pinnedSessions?: (projectHash: string, sessionFilename: string) => boolean
   onTogglePin: (hash: string) => void
+  onToggleSessionPin?: (projectHash: string, sessionFilename: string) => void
   onSelectProject: (p: Project) => void
   onSelectSkill?: (skill: Skill) => void
   onSelectAgent?: (agent: Agent) => void
@@ -231,7 +235,7 @@ export function SearchPopover({
       glyph: 'M',
     }))
 
-    const sessionRows: EntityRow[] = [...sessions]
+    const sessionRowsAll: EntityRow[] = [...sessions]
       .filter(({ project, session }) => includesQuery(q, [
         sessionTitle(session, 160),
         session.firstUserMessage,
@@ -244,19 +248,22 @@ export function SearchPopover({
       ]))
       .sort((a, b) => new Date(b.session.date).getTime() - new Date(a.session.date).getTime())
       .map(({ project, session }) => ({
-        kind: 'chat',
-        key: `chat:${project.hash}:${session.filename}`,
+        kind: 'session' as const,
+        key: `session:${project.hash}:${session.filename}`,
         project,
         session,
         title: sessionTitle(session),
         detail: project.realPath,
         meta: `${session.messageCount} msg · ${shortWhen(session.date)}`,
         glyph: '#',
+        pinned: pinnedSessions ? pinnedSessions(project.hash, session.filename) : false,
       }))
+    const pinnedSessionRows = sessionRowsAll.filter(r => r.kind === 'session' && r.pinned)
+    const otherSessionRows = sessionRowsAll.filter(r => !(r.kind === 'session' && r.pinned))
 
     const counts = {
       projects: projectRows.length,
-      chats: sessionRows.length,
+      sessions: sessionRowsAll.length,
       skills: skillRows.length,
       agents: agentRows.length,
       mcp: mcpRows.length,
@@ -276,13 +283,18 @@ export function SearchPopover({
       if (pinnedVisible.length > 0) out.push({ key: 'pinned', title: 'Pinned projects', count: pinnedProjects.length, rows: pinnedVisible })
       if (otherVisible.length > 0) out.push({ key: 'projects', title: 'Projects', count: otherProjects.length, rows: otherVisible })
     }
-    if (shouldShow('chats') && sessionRows.length > 0) out.push({ key: 'chats', title: 'Chats', count: sessionRows.length, rows: limitRows(sessionRows) })
+    if (shouldShow('sessions')) {
+      const pinnedVisible = limitRows(pinnedSessionRows)
+      const otherVisible = limitRows(otherSessionRows)
+      if (pinnedVisible.length > 0) out.push({ key: 'pinned-sessions', title: 'Pinned sessions', count: pinnedSessionRows.length, rows: pinnedVisible })
+      if (otherVisible.length > 0) out.push({ key: 'sessions', title: 'Sessions', count: otherSessionRows.length, rows: otherVisible })
+    }
     if (shouldShow('skills') && skillRows.length > 0) out.push({ key: 'skills', title: 'Skills', count: skillRows.length, rows: limitRows(skillRows) })
     if (shouldShow('agents') && agentRows.length > 0) out.push({ key: 'agents', title: 'Agents', count: agentRows.length, rows: limitRows(agentRows) })
     if (shouldShow('mcp') && mcpRows.length > 0) out.push({ key: 'mcp', title: 'MCP', count: mcpRows.length, rows: limitRows(mcpRows) })
 
     return { sections: out, flat: out.flatMap(s => s.rows), counts }
-  }, [activeFilter, agents, costByHash, currentHash, mcpServers, mcpTotalProjects, mode, pinned, projects, query, sessions, skills])
+  }, [activeFilter, agents, costByHash, currentHash, mcpServers, mcpTotalProjects, mode, pinned, pinnedSessions, projects, query, sessions, skills])
 
   useEffect(() => {
     if (hl >= flat.length) setHl(Math.max(0, flat.length - 1))
@@ -293,7 +305,7 @@ export function SearchPopover({
     else if (row.kind === 'skill') onSelectSkill?.(row.skill)
     else if (row.kind === 'agent') onSelectAgent?.(row.agent)
     else if (row.kind === 'mcp') onSelectMcp?.(row.server)
-    else if (row.kind === 'chat') onSelectSession?.(row.project, row.session)
+    else if (row.kind === 'session') onSelectSession?.(row.project, row.session)
     onClose()
   }
 
@@ -327,6 +339,9 @@ export function SearchPopover({
       if (row?.kind === 'project') {
         e.preventDefault()
         onTogglePin(row.project.hash)
+      } else if (row?.kind === 'session') {
+        e.preventDefault()
+        onToggleSessionPin?.(row.project.hash, row.session.filename)
       }
     }
   }
@@ -342,11 +357,11 @@ export function SearchPopover({
     left = Math.max(12, Math.min(window.innerWidth - popWidth - 12, desiredLeft))
   }
 
-  const totalCount = counts.projects + counts.chats + counts.skills + counts.agents + counts.mcp
+  const totalCount = counts.projects + counts.sessions + counts.skills + counts.agents + counts.mcp
   const currentProject = currentHash ? projects.find(p => p.hash === currentHash) : undefined
   const placeholder = mode === 'projects'
     ? 'Switch project'
-    : 'Search projects, chats, skills, agents, MCP'
+    : 'Search projects, sessions, skills, agents, MCP'
 
   return (
     <div
@@ -392,8 +407,8 @@ export function SearchPopover({
           <div className="cl-search-empty">
             {mode === 'projects'
               ? <>No projects match &ldquo;{query}&rdquo;</>
-              : sessionsLoading && activeFilter === 'chats'
-                ? 'Loading chats…'
+              : sessionsLoading && activeFilter === 'sessions'
+                ? 'Loading sessions…'
                 : <>No results match &ldquo;{query}&rdquo;</>}
           </div>
         ) : (
@@ -418,6 +433,9 @@ export function SearchPopover({
                   hl={hl}
                   setHl={setHl}
                   onSelect={() => selectRow(row)}
+                  onTogglePin={row.kind === 'session' && onToggleSessionPin
+                    ? () => onToggleSessionPin(row.project.hash, row.session.filename)
+                    : undefined}
                 />
               ))}
             </Fragment>
@@ -430,7 +448,7 @@ export function SearchPopover({
         {mode === 'global' && <span><kbd>←→</kbd>tabs</span>}
         <span><kbd>↵</kbd>open</span>
         <span><kbd>⌘P</kbd>pin</span>
-        {sessionsLoading && mode === 'global' && <span>loading chats</span>}
+        {sessionsLoading && mode === 'global' && <span>loading sessions</span>}
         {mode === 'projects' && currentProject && onDeleteCurrent && (
           <button
             type="button"
@@ -483,19 +501,21 @@ function ProjectSearchItem({
 }
 
 function EntitySearchItem({
-  row, flatIdx, hl, setHl, onSelect,
+  row, flatIdx, hl, setHl, onSelect, onTogglePin,
 }: {
   row: EntityRow
   flatIdx: number
   hl: number
   setHl: (n: number) => void
   onSelect: () => void
+  onTogglePin?: () => void
 }) {
+  const isSessionPinned = row.kind === 'session' && row.pinned
   return (
     <div
       role="option"
       aria-selected={flatIdx === hl}
-      className={`cl-search-item entity ${row.kind}${flatIdx === hl ? ' hl' : ''}`}
+      className={`cl-search-item entity ${row.kind}${flatIdx === hl ? ' hl' : ''}${isSessionPinned ? ' is-pinned' : ''}`}
       onMouseEnter={() => setHl(flatIdx)}
       onClick={onSelect}
     >
@@ -506,6 +526,17 @@ function EntitySearchItem({
       </span>
       <span className="ekind">{row.kind}</span>
       <span className="pmeta">{row.meta}</span>
+      {row.kind === 'session' && onTogglePin && (
+        <button
+          type="button"
+          className={`cl-pin-toggle${isSessionPinned ? ' pinned' : ''}`}
+          title={isSessionPinned ? 'Unpin session' : 'Pin session'}
+          aria-label={isSessionPinned ? 'Unpin session' : 'Pin session'}
+          onClick={e => { e.stopPropagation(); onTogglePin() }}
+        >
+          <PinIcon filled={isSessionPinned} />
+        </button>
+      )}
     </div>
   )
 }
