@@ -20,7 +20,11 @@ import { McpServerGrid } from '../mcp/McpServerGrid'
 import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
+import { useSessionTags } from '../../../hooks/useSessionTags'
 import { PinIcon } from '../shared/SearchPopover'
+import { TagChip } from '../sessions/TagChip'
+import { TagBar } from '../sessions/TagBar'
+import { TagPicker } from '../sessions/TagPicker'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents'
 
@@ -200,7 +204,9 @@ export function ProjectView({
   const { isPinned, togglePin } = usePinnedProjects()
   const pinnedNow = isPinned(project.hash)
   const { isPinned: isSessionPinned } = usePinnedSessions()
+  const { tags: projectTags, tagCounts, tagsForSession } = useSessionTags(project.hash)
   const [sessionsFilter, setSessionsFilter] = useState<'pinned' | 'all'>('all')
+  const [tagFilter, setTagFilter] = useState<string | null>(null)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath)
@@ -270,7 +276,14 @@ export function ProjectView({
   )
   const hasPinnedSession = pinnedSessions.length > 0
   const effectiveSessionsFilter: 'pinned' | 'all' = hasPinnedSession ? sessionsFilter : 'all'
-  const visibleSessions = effectiveSessionsFilter === 'pinned' ? pinnedSessions : sessions
+  const visibleSessions = useMemo(() => {
+    const base = effectiveSessionsFilter === 'pinned' ? pinnedSessions : sessions
+    if (!tagFilter) return base
+    return base.filter(s => tagsForSession(s.filename).includes(tagFilter))
+  }, [effectiveSessionsFilter, pinnedSessions, sessions, tagFilter, tagsForSession])
+  useEffect(() => {
+    if (tagFilter && !projectTags.some(t => t.name === tagFilter)) setTagFilter(null)
+  }, [tagFilter, projectTags])
 
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
@@ -436,9 +449,11 @@ export function ProjectView({
           <div className="cl-sec-head">
             <h2>{effectiveSessionsFilter === 'pinned' ? 'Pinned sessions' : 'Sessions'}</h2>
             <span className="ct">
-              {effectiveSessionsFilter === 'pinned'
-                ? `${visibleSessions.length} pinned`
-                : `${sessions.length} total · sorted by last activity`}
+              {tagFilter
+                ? `${visibleSessions.length} tagged #${tagFilter}`
+                : effectiveSessionsFilter === 'pinned'
+                  ? `${visibleSessions.length} pinned`
+                  : `${sessions.length} total · sorted by last activity`}
             </span>
             {hasPinnedSession && (
               <span className="cl-pinfilter">
@@ -456,8 +471,21 @@ export function ProjectView({
               </span>
             )}
           </div>
-          {visibleSessions.length === 0 && effectiveSessionsFilter === 'pinned' ? (
-            <div className="cl-empty">No pinned sessions. Hover a session row to pin it.</div>
+          <TagBar
+            tags={projectTags}
+            counts={tagCounts}
+            activeTag={tagFilter}
+            totalCount={effectiveSessionsFilter === 'pinned' ? pinnedSessions.length : sessions.length}
+            onSelect={setTagFilter}
+          />
+          {visibleSessions.length === 0 ? (
+            <div className="cl-empty">
+              {tagFilter
+                ? `No sessions tagged #${tagFilter}.`
+                : effectiveSessionsFilter === 'pinned'
+                  ? 'No pinned sessions. Hover a session row to pin it.'
+                  : 'No sessions yet.'}
+            </div>
           ) : (
             <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
           )}
@@ -685,12 +713,17 @@ function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number })
 
 function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions: SessionSummary[]; projectHash: string; cleanupDays: number; onOpen: (s: SessionSummary) => void }) {
   const { isPinned, togglePin } = usePinnedSessions()
+  const { tags: allTags, tagsForSession, toggleTagOnSession, removeTagFromSession } = useSessionTags(projectHash)
+  const [pickerFor, setPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(null)
+
   if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>
   return (
     <div>
       {sessions.map((s, i) => {
         const fam = modelFamily(s.model)
         const pinnedNow = isPinned(projectHash, s.filename)
+        const sessionTags = tagsForSession(s.filename)
+        const isPickerOpen = pickerFor?.filename === s.filename
         return (
           <button key={s.filename} type="button" className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`} onClick={() => onOpen(s)}>
             <button
@@ -704,13 +737,40 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
             </button>
             <span className="idx">{String(i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
-              <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                  {sessionTitle(s)}
-                </span>
+              <div className="title cl-row-title">
+                <span className="cl-row-title-text">{sessionTitle(s)}</span>
                 <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
               </div>
-              <div className="file">{fmt(s.messageCount)} msg · ${s.estimatedCost.toFixed(2)}</div>
+              <div className="cl-row-meta">
+                <span className="cl-row-meta-stats">{fmt(s.messageCount)} msg</span>
+                {sessionTags.length > 0 && <span className="cl-row-meta-sep" aria-hidden>·</span>}
+                <span className="cl-row-tags" onClick={e => e.stopPropagation()}>
+                  {sessionTags.map((t, ti) => (
+                    <span key={t} className="cl-row-tag-item">
+                      {ti > 0 && <span className="cl-row-meta-sep" aria-hidden>·</span>}
+                      <TagChip
+                        name={t}
+                        variant="plain"
+                        tone="soft"
+                        removable
+                        onRemove={() => removeTagFromSession(s.filename, t)}
+                      />
+                    </span>
+                  ))}
+                </span>
+                <button
+                  type="button"
+                  className="cl-row-tag-add"
+                  data-haspicker={isPickerOpen}
+                  aria-label="Add tag"
+                  title="Add tag"
+                  onClick={e => {
+                    e.stopPropagation()
+                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect()
+                    setPickerFor({ filename: s.filename, rect })
+                  }}
+                >+ tag</button>
+              </div>
             </div>
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
             <span className="toks">{fmt(s.totalTokens)}<small>tok</small></span>
@@ -718,6 +778,15 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
           </button>
         )
       })}
+      {pickerFor && (
+        <TagPicker
+          anchorRect={pickerFor.rect}
+          allTags={allTags}
+          selected={tagsForSession(pickerFor.filename)}
+          onToggle={name => toggleTagOnSession(pickerFor.filename, name)}
+          onClose={() => setPickerFor(null)}
+        />
+      )}
     </div>
   )
 }
