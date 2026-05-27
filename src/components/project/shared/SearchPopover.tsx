@@ -511,28 +511,30 @@ function EntitySearchItem({
   onTogglePin?: () => void
 }) {
   const isSessionPinned = row.kind === 'session' && row.pinned
+  const showPin = row.kind === 'session' && !!onTogglePin
   return (
     <div
       role="option"
       aria-selected={flatIdx === hl}
-      className={`cl-search-item entity ${row.kind}${flatIdx === hl ? ' hl' : ''}${isSessionPinned ? ' is-pinned' : ''}`}
+      className={`cl-search-item entity ${row.kind}${flatIdx === hl ? ' hl' : ''}${isSessionPinned ? ' is-pinned' : ''}${showPin ? ' has-pin' : ''}`}
       onMouseEnter={() => setHl(flatIdx)}
       onClick={onSelect}
     >
       <span className="eglyph">{row.glyph}</span>
-      <span className="ecopy">
-        <span className="etitle">{row.title}</span>
-        <span className="edetail">{row.detail}</span>
+      <span className="pname-line">
+        <span className="pname">{row.title}</span>
+        <span className="pdot" />
+        <span className="ppath">{row.detail}</span>
       </span>
       <span className="ekind">{row.kind}</span>
       <span className="pmeta">{row.meta}</span>
-      {row.kind === 'session' && onTogglePin && (
+      {showPin && (
         <button
           type="button"
           className={`cl-pin-toggle${isSessionPinned ? ' pinned' : ''}`}
           title={isSessionPinned ? 'Unpin session' : 'Pin session'}
           aria-label={isSessionPinned ? 'Unpin session' : 'Pin session'}
-          onClick={e => { e.stopPropagation(); onTogglePin() }}
+          onClick={e => { e.stopPropagation(); onTogglePin?.() }}
         >
           <PinIcon filled={isSessionPinned} />
         </button>

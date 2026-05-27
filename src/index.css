@@ -505,6 +505,9 @@ body {
   padding-top: 9px;
   padding-bottom: 9px;
 }
+.cl-search-item.entity.has-pin {
+  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+}
 .cl-search-item.entity .eglyph {
   width: 22px;
   height: 22px;
@@ -529,29 +532,6 @@ body {
 .cl-search-item.entity.skill .eglyph { color: #0d9488; }
 .cl-search-item.entity.agent .eglyph { color: #7c3aed; }
 .cl-search-item.entity.mcp .eglyph { color: var(--cl-accent-ink); }
-.cl-search-item .ecopy {
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cl-search-item .etitle {
-  font-size: 13.5px;
-  font-weight: 500;
-  color: var(--cl-ink);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cl-search-item .edetail {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--cl-ink-4);
-  letter-spacing: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
 .cl-search-item .ekind {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -559,8 +539,8 @@ body {
   text-transform: uppercase;
   color: var(--cl-ink-4);
 }
-.cl-search-item.entity:hover .etitle,
-.cl-search-item.entity.hl .etitle { color: var(--cl-accent-ink); }
+.cl-search-item.entity:hover .pname,
+.cl-search-item.entity.hl .pname { color: var(--cl-accent-ink); }
 
 /* pin toggle inside search row — only visible on hover or when pinned */
 .cl-pin-toggle {
