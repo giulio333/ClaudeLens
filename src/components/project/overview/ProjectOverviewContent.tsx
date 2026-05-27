@@ -19,6 +19,7 @@ import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
+import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
 import { PinIcon } from '../shared/SearchPopover'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents'
@@ -198,6 +199,8 @@ export function ProjectView({
 }) {
   const { isPinned, togglePin } = usePinnedProjects()
   const pinnedNow = isPinned(project.hash)
+  const { isPinned: isSessionPinned } = usePinnedSessions()
+  const [sessionsFilter, setSessionsFilter] = useState<'pinned' | 'all'>('all')
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath)
@@ -260,6 +263,14 @@ export function ProjectView({
   const retentionLabel = retentionDays === 1 ? 'last 24h' : `last ${retentionDays}d`
   const lastActive = sessions[0]?.date
   const statBuckets = useMemo(() => buildTimelineBuckets(statsSessions, retentionDays), [statsSessions, retentionDays])
+
+  const pinnedSessions = useMemo(
+    () => sessions.filter(s => isSessionPinned(project.hash, s.filename)),
+    [sessions, project.hash, isSessionPinned],
+  )
+  const hasPinnedSession = pinnedSessions.length > 0
+  const effectiveSessionsFilter: 'pinned' | 'all' = hasPinnedSession ? sessionsFilter : 'all'
+  const visibleSessions = effectiveSessionsFilter === 'pinned' ? pinnedSessions : sessions
 
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
@@ -368,13 +379,23 @@ export function ProjectView({
             </div>
           </section>
 
+          {hasPinnedSession && (
+            <section className="cl-section">
+              <div className="cl-sec-head">
+                <h2>Pinned sessions</h2>
+                <span className="ct">{pinnedSessions.length} pinned</span>
+              </div>
+              <SessionRows sessions={pinnedSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            </section>
+          )}
+
           <section className="cl-section">
             <div className="cl-sec-head">
               <h2>Sessions</h2>
               <span className="ct">{Math.min(5, sessions.length)} of {sessions.length}</span>
               <button className="all" type="button" onClick={() => onNavigate({ type: 'sessions', project })}>View all</button>
             </div>
-            <SessionRows sessions={sessions.slice(0, 5)} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            <SessionRows sessions={sessions.slice(0, 5)} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
           </section>
 
           <section className="cl-section">
@@ -413,10 +434,33 @@ export function ProjectView({
       {section === 'sessions' && (
         <section className="cl-section" style={{ paddingTop: 38 }}>
           <div className="cl-sec-head">
-            <h2>Sessions</h2>
-            <span className="ct">{sessions.length} total · sorted by last activity</span>
+            <h2>{effectiveSessionsFilter === 'pinned' ? 'Pinned sessions' : 'Sessions'}</h2>
+            <span className="ct">
+              {effectiveSessionsFilter === 'pinned'
+                ? `${visibleSessions.length} pinned`
+                : `${sessions.length} total · sorted by last activity`}
+            </span>
+            {hasPinnedSession && (
+              <span className="cl-pinfilter">
+                <button
+                  type="button"
+                  className={sessionsFilter === 'pinned' ? 'on' : ''}
+                  onClick={() => setSessionsFilter('pinned')}
+                >Pinned</button>
+                <span className="sep">·</span>
+                <button
+                  type="button"
+                  className={sessionsFilter === 'all' ? 'on' : ''}
+                  onClick={() => setSessionsFilter('all')}
+                >All</button>
+              </span>
+            )}
           </div>
-          <SessionRows sessions={sessions} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+          {visibleSessions.length === 0 && effectiveSessionsFilter === 'pinned' ? (
+            <div className="cl-empty">No pinned sessions. Hover a session row to pin it.</div>
+          ) : (
+            <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+          )}
         </section>
       )}
 
@@ -639,14 +683,25 @@ function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number })
   )
 }
 
-function SessionRows({ sessions, cleanupDays, onOpen }: { sessions: SessionSummary[]; cleanupDays: number; onOpen: (s: SessionSummary) => void }) {
+function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions: SessionSummary[]; projectHash: string; cleanupDays: number; onOpen: (s: SessionSummary) => void }) {
+  const { isPinned, togglePin } = usePinnedSessions()
   if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>
   return (
     <div>
       {sessions.map((s, i) => {
         const fam = modelFamily(s.model)
+        const pinnedNow = isPinned(projectHash, s.filename)
         return (
-          <button key={s.filename} type="button" className="cl-row" onClick={() => onOpen(s)}>
+          <button key={s.filename} type="button" className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`} onClick={() => onOpen(s)}>
+            <button
+              type="button"
+              className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
+              title={pinnedNow ? 'Unpin session' : 'Pin session'}
+              aria-label={pinnedNow ? 'Unpin session' : 'Pin session'}
+              onClick={e => { e.stopPropagation(); togglePin(projectHash, s.filename) }}
+            >
+              <PinIcon filled={pinnedNow} />
+            </button>
             <span className="idx">{String(i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
               <div className="title" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
