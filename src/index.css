@@ -1241,6 +1241,19 @@ body {
   transition: color 120ms;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 70vw;
 }
+/* Titolo "fluid": va a capo invece di troncare; il font-size è impostato inline
+   in base alla lunghezza (vedi fluidTitleSize in MarkdownDocView). */
+.cl-h-name.fluid {
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  line-height: 1.04;
+}
+.cl-h-name.fluid .label-name {
+  overflow: visible; text-overflow: clip; white-space: normal;
+  max-width: 100%;
+  overflow-wrap: anywhere; word-break: break-word;
+}
 .cl-h-name:not(.static):hover .label-name { color: var(--cl-accent); }
 .cl-h-name .glyph { color: var(--cl-accent); }
 .cl-h-name .chev {

@@ -16,6 +16,7 @@ import {
 import { readProjectRules } from './modules/rules-reader';
 import { readChatSession, findSessionFile } from './modules/session-reader';
 import { getProjectTasks } from './modules/tasks-reader';
+import { getProjectPlans } from './modules/plans-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { createSkill, SkillInput } from './modules/skills-writer';
@@ -33,6 +34,7 @@ import { registerScreenshotHandlers } from './screenshotFixtures';
 const CLAUDE_DIR = join(os.homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
+const PLANS_DIR = join(CLAUDE_DIR, 'plans');
 
 type IpcResult<T> = { data: T | null; error: string | null };
 type ExportSaveResult = { canceled: boolean; filePath: string | null };
@@ -346,6 +348,16 @@ ipcMain.handle('tasks:getByProject', async (_event, hash: string) => {
   try {
     const projectPath = join(PROJECTS_DIR, hash);
     const groups = await getProjectTasks(projectPath, TASKS_DIR);
+    return ok(groups);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('plans:getByProject', async (_event, hash: string) => {
+  try {
+    const projectPath = join(PROJECTS_DIR, hash);
+    const groups = await getProjectPlans(projectPath);
     return ok(groups);
   } catch (e) {
     return err(e);
@@ -695,9 +707,10 @@ function pauseWatcher() { watcherPauseDepth += 1; }
 function resumeWatcher() { if (watcherPauseDepth > 0) watcherPauseDepth -= 1; }
 
 function startWatcher() {
-  // Osserva sia le sessioni dei progetti sia i task creati durante le sessioni
-  // (~/.claude/tasks/{sessionUUID}/*.json): così il subtab Tasks si aggiorna live.
-  const watcher = chokidar.watch([PROJECTS_DIR, TASKS_DIR], {
+  // Osserva le sessioni dei progetti, i task creati durante le sessioni
+  // (~/.claude/tasks/{sessionUUID}/*.json) e i piani (~/.claude/plans/*.md):
+  // così i subtab Tasks e Plans si aggiornano live.
+  const watcher = chokidar.watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR], {
     ignoreInitial: true,
     depth: 3,
   });

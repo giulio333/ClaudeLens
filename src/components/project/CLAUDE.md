@@ -121,6 +121,14 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
+### `plans/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `PlansSection.tsx` | `PlansSection` | Subtab "Plans": legge i piani referenziati negli attachment `plan_mode`/`plan_mode_exit` delle sessioni e ne legge il markdown dal dir globale `~/.claude/plans/*.md` via `useProjectPlans`, raggruppati per sessione con badge `proposed`/`approved`/`deleted`. Click sul piano → `plan-detail`; click sull'header del gruppo → chat della sessione |
+| `PlanDetailView.tsx` | `PlanDetailView` | Vista dettaglio singolo piano: render markdown read-only via `MarkdownDocView`, sidebar con status/created/branch/filePath. I piani vivono globali su disco ma sono linkati al progetto via `planFilePath` nei `.jsonl` |
+
+---
+
 ### `overview/`
 | File | Esporta | Descrizione |
 |---|---|---|

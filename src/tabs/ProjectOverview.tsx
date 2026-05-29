@@ -42,6 +42,7 @@ import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView
 import { ChatView } from '../components/project/chat/ChatView'
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
+import { PlanDetailView } from '../components/project/plans/PlanDetailView'
 // ─── Analytics / AI
 import { AnalyticsView } from '../components/project/analytics/AnalyticsView'
 import { AiAssistantView } from '../components/project/ai-assistant/AiAssistantView'
@@ -55,7 +56,7 @@ type Project = { hash: string; realPath: string }
 type Theme = 'light' | 'dark'
 
 // View types that render inside the editorial chrome (top bar + subtabs)
-const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks']
+const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks', 'project-plans']
 
 function sectionFromView(v: View): ProjectSection {
   switch (v.type) {
@@ -66,6 +67,7 @@ function sectionFromView(v: View): ProjectSection {
     case 'project-mcp':     return 'mcp'
     case 'agents-live':     return 'live-agents'
     case 'project-tasks':   return 'tasks'
+    case 'project-plans':   return 'plans'
     default:                return 'overview'
   }
 }
@@ -79,6 +81,7 @@ function viewForSection(section: ProjectSection, project: Project): View {
     case 'mcp':          return { type: 'project-mcp', project }
     case 'live-agents':  return { type: 'agents-live', project }
     case 'tasks':        return { type: 'project-tasks', project }
+    case 'plans':        return { type: 'project-plans', project }
     default:             return { type: 'overview' }
   }
 }
@@ -352,6 +355,15 @@ export default function ProjectOverview() {
               content={view.content}
               hash={view.hash}
               onBack={() => selected ? setView({ type: 'project-memory', project: selected }) : goGlobal()}
+            />
+          </ErrorBoundary>
+        )
+      case 'plan-detail':
+        return (
+          <ErrorBoundary key={view.plan.filePath}>
+            <PlanDetailView
+              plan={view.plan}
+              onBack={() => setView({ type: 'project-plans', project: view.project })}
             />
           </ErrorBoundary>
         )

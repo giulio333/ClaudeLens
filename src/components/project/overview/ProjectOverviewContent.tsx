@@ -19,6 +19,7 @@ import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { TasksSection } from '../tasks/TasksSection'
+import { PlansSection } from '../plans/PlansSection'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
 import { useSessionTags } from '../../../hooks/useSessionTags'
@@ -27,7 +28,7 @@ import { TagChip } from '../sessions/TagChip'
 import { TagBar } from '../sessions/TagBar'
 import { TagPicker } from '../sessions/TagPicker'
 
-export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks'
+export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks' | 'plans'
 
 type Project = { hash: string; realPath: string }
 
@@ -672,6 +673,14 @@ export function ProjectView({
         <TasksSection
           project={project}
           onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+        />
+      )}
+
+      {section === 'plans' && (
+        <PlansSection
+          project={project}
+          onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+          onOpenPlan={plan => onNavigate({ type: 'plan-detail', project, plan })}
         />
       )}
 
