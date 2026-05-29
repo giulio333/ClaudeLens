@@ -15,6 +15,7 @@ export type View =
   | { type: 'project-skills'; project: { hash: string; realPath: string } }
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
   | { type: 'project-mcp'; project: { hash: string; realPath: string } }
+  | { type: 'project-tasks'; project: { hash: string; realPath: string } }
   | { type: 'project-claudemd'; project: { hash: string; realPath: string }; layer: ClaudeMdLayer }
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }

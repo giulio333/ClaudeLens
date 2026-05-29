@@ -22,6 +22,9 @@ import type {
   LiveEvent,
   ClaudeProcess,
   BgSession,
+  Task,
+  TaskStatus,
+  TaskGroup,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -46,6 +49,9 @@ export type {
   LiveEvent,
   ClaudeProcess,
   BgSession,
+  Task,
+  TaskStatus,
+  TaskGroup,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -147,6 +153,9 @@ declare global {
       }
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>
+      }
+      tasks: {
+        getByProject: (hash: string) => Promise<IpcResult<TaskGroup[]>>
       }
       skills: {
         getGlobal: () => Promise<IpcResult<Skill[]>>
@@ -315,6 +324,14 @@ export function useSessionList(hash: string | null) {
   return useQuery(
     ['sessions:project', hash],
     () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
+    { enabled: hash !== null }
+  )
+}
+
+export function useProjectTasks(hash: string | null) {
+  return useQuery(
+    ['tasks:project', hash],
+    () => unwrap(window.electronAPI.tasks.getByProject(hash!)),
     { enabled: hash !== null }
   )
 }
@@ -504,6 +521,7 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries('claudeMd:hierarchy')
       qc.invalidateQueries('claudeMd:global')
       qc.invalidateQueries('rules:project')
+      qc.invalidateQueries('tasks:project')
       qc.invalidateQueries('skills:global')
       qc.invalidateQueries('skills:all')
       qc.invalidateQueries('agents:global')
