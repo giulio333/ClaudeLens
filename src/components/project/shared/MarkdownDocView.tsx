@@ -16,6 +16,12 @@ interface MarkdownDocViewProps {
   titleLabel: string
   /** Title trailing glyph (rendered in accent color) — e.g. ".md" */
   titleGlyph?: string
+  /**
+   * When true, the title wraps onto multiple lines instead of truncating with
+   * an ellipsis, and its font-size scales down as the text grows (stays large
+   * for short titles). Use for titles that can be full sentences (e.g. plans).
+   */
+  titleFluid?: boolean
   /** Optional editorial "standfirst" rendered under the title (e.g. skill/agent description). */
   lead?: ReactNode
 
@@ -43,6 +49,17 @@ interface MarkdownDocViewProps {
 
   /** Optional notice banner rendered between the hero and the content (e.g. validation warnings) */
   notice?: ReactNode
+}
+
+// Per i titoli "fluid" (frasi intere): resta grande quando corto, rimpicciolisce
+// in scaglioni man mano che cresce, sempre con clamp sul viewport.
+function fluidTitleSize(label: string): string {
+  const len = label.length
+  if (len <= 16) return 'clamp(54px, 8.5vw, 120px)'
+  if (len <= 28) return 'clamp(46px, 6.5vw, 88px)'
+  if (len <= 44) return 'clamp(38px, 5vw, 64px)'
+  if (len <= 64) return 'clamp(30px, 4vw, 50px)'
+  return 'clamp(26px, 3.2vw, 40px)'
 }
 
 function Editor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -76,6 +93,7 @@ export function MarkdownDocView({
   eyebrow,
   titleLabel,
   titleGlyph,
+  titleFluid,
   lead,
   content,
   isLoading,
@@ -131,7 +149,10 @@ export function MarkdownDocView({
             <span className="pip" />
             <span>{eyebrow}</span>
           </div>
-          <h1 className="cl-h-name static">
+          <h1
+            className={`cl-h-name static${titleFluid ? ' fluid' : ''}`}
+            style={titleFluid ? { fontSize: fluidTitleSize(titleLabel) } : undefined}
+          >
             <span className="label-name">{titleLabel}</span>
             {titleGlyph && <span className="glyph">{titleGlyph}</span>}
           </h1>

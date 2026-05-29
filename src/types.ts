@@ -100,6 +100,25 @@ export interface TaskGroup {
   tasks: Task[]
 }
 
+export type PlanStatus = 'proposed' | 'approved'
+
+export interface Plan {
+  filePath: string
+  slug: string
+  title: string
+  status: PlanStatus
+  exists: boolean
+  content: string | null
+  timestamp: string
+  gitBranch?: string
+}
+
+export interface PlanGroup {
+  sessionId: string
+  filename: string
+  plans: Plan[]
+}
+
 export interface RuleFile {
   filename: string
   content: string

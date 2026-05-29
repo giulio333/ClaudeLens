@@ -25,6 +25,9 @@ import type {
   Task,
   TaskStatus,
   TaskGroup,
+  Plan,
+  PlanStatus,
+  PlanGroup,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -52,6 +55,9 @@ export type {
   Task,
   TaskStatus,
   TaskGroup,
+  Plan,
+  PlanStatus,
+  PlanGroup,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -156,6 +162,9 @@ declare global {
       }
       tasks: {
         getByProject: (hash: string) => Promise<IpcResult<TaskGroup[]>>
+      }
+      plans: {
+        getByProject: (hash: string) => Promise<IpcResult<PlanGroup[]>>
       }
       skills: {
         getGlobal: () => Promise<IpcResult<Skill[]>>
@@ -332,6 +341,14 @@ export function useProjectTasks(hash: string | null) {
   return useQuery(
     ['tasks:project', hash],
     () => unwrap(window.electronAPI.tasks.getByProject(hash!)),
+    { enabled: hash !== null }
+  )
+}
+
+export function useProjectPlans(hash: string | null) {
+  return useQuery(
+    ['plans:project', hash],
+    () => unwrap(window.electronAPI.plans.getByProject(hash!)),
     { enabled: hash !== null }
   )
 }
@@ -522,6 +539,7 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries('claudeMd:global')
       qc.invalidateQueries('rules:project')
       qc.invalidateQueries('tasks:project')
+      qc.invalidateQueries('plans:project')
       qc.invalidateQueries('skills:global')
       qc.invalidateQueries('skills:all')
       qc.invalidateQueries('agents:global')

@@ -39,6 +39,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   tasks: {
     getByProject: (hash: string) => ipcRenderer.invoke('tasks:getByProject', hash),
   },
+  plans: {
+    getByProject: (hash: string) => ipcRenderer.invoke('plans:getByProject', hash),
+  },
   skills: {
     getGlobal: () => ipcRenderer.invoke('skills:getGlobal'),
     getAll: (realPath: string) => ipcRenderer.invoke('skills:getAll', realPath),

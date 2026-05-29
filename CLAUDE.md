@@ -17,8 +17,8 @@ No automated tests — validate against real `~/.claude/` data.
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.
 
 **Main process** (`electron/main.ts`):
-- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*`, `rules:*`, `tasks:*`
-- Watches `~/.claude/projects/` and `~/.claude/tasks/` with chokidar (depth 3); emits `data:changed` to renderer on any change
+- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*`, `rules:*`, `tasks:*`, `plans:*`
+- Watches `~/.claude/projects/`, `~/.claude/tasks/` and `~/.claude/plans/` with chokidar (depth 3); emits `data:changed` to renderer on any change
 - Serializes `Map` → plain object before IPC (Maps are not transferable)
 
 **Preload** (`electron/preload.ts`):
@@ -33,6 +33,7 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `rules-reader.ts` — reads conditional rules from `.claude/rules/**/*.md`; extracts `paths` from YAML frontmatter
 - `session-reader.ts` — parses JSONL chat sessions; skips meta/sidechain lines; normalizes content (string or block array)
 - `tasks-reader.ts` — reads tasks Claude creates during sessions from `~/.claude/tasks/{sessionUUID}/*.json`; maps each session UUID (the project's `.jsonl` filename) back to the project and groups tasks per session
+- `plans-reader.ts` — reads plan-mode plans: scans the project's session `.jsonl` for `plan_mode`/`plan_mode_exit` attachments (carrying `planFilePath`), dedupes per file (approved > proposed), then reads the markdown from the global `~/.claude/plans/*.md`; groups per session, flags missing files as deleted
 
 **Renderer** (`src/`):
 - Single page, no routing — `ProjectOverview.tsx` manages all views with internal navigation state (`overview` | `sessions` | `chat` | `memory-topic`)
