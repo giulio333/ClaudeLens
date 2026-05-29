@@ -55,7 +55,7 @@ type Project = { hash: string; realPath: string }
 type Theme = 'light' | 'dark'
 
 // View types that render inside the editorial chrome (top bar + subtabs)
-const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live']
+const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks']
 
 function sectionFromView(v: View): ProjectSection {
   switch (v.type) {
@@ -65,6 +65,7 @@ function sectionFromView(v: View): ProjectSection {
     case 'project-agents':  return 'agents'
     case 'project-mcp':     return 'mcp'
     case 'agents-live':     return 'live-agents'
+    case 'project-tasks':   return 'tasks'
     default:                return 'overview'
   }
 }
@@ -77,6 +78,7 @@ function viewForSection(section: ProjectSection, project: Project): View {
     case 'agents':       return { type: 'project-agents', project }
     case 'mcp':          return { type: 'project-mcp', project }
     case 'live-agents':  return { type: 'agents-live', project }
+    case 'tasks':        return { type: 'project-tasks', project }
     default:             return { type: 'overview' }
   }
 }

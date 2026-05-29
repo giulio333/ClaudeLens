@@ -15,6 +15,7 @@ import {
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
 import { readChatSession, findSessionFile } from './modules/session-reader';
+import { getProjectTasks } from './modules/tasks-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { createSkill, SkillInput } from './modules/skills-writer';
@@ -31,6 +32,7 @@ import { registerScreenshotHandlers } from './screenshotFixtures';
 
 const CLAUDE_DIR = join(os.homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
+const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 
 type IpcResult<T> = { data: T | null; error: string | null };
 type ExportSaveResult = { canceled: boolean; filePath: string | null };
@@ -338,6 +340,16 @@ ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string
     const messages = readChatSession(filePath);
     return ok(messages);
   } catch (e) { return err(e); }
+});
+
+ipcMain.handle('tasks:getByProject', async (_event, hash: string) => {
+  try {
+    const projectPath = join(PROJECTS_DIR, hash);
+    const groups = await getProjectTasks(projectPath, TASKS_DIR);
+    return ok(groups);
+  } catch (e) {
+    return err(e);
+  }
 });
 
 ipcMain.handle('rules:getByProject', async (_event, realPath: string) => {
@@ -683,7 +695,9 @@ function pauseWatcher() { watcherPauseDepth += 1; }
 function resumeWatcher() { if (watcherPauseDepth > 0) watcherPauseDepth -= 1; }
 
 function startWatcher() {
-  const watcher = chokidar.watch(PROJECTS_DIR, {
+  // Osserva sia le sessioni dei progetti sia i task creati durante le sessioni
+  // (~/.claude/tasks/{sessionUUID}/*.json): così il subtab Tasks si aggiorna live.
+  const watcher = chokidar.watch([PROJECTS_DIR, TASKS_DIR], {
     ignoreInitial: true,
     depth: 3,
   });

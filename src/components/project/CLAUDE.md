@@ -114,6 +114,13 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
+### `tasks/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `TasksSection.tsx` | `TasksSection` | Subtab "Tasks": legge i task creati da Claude (`~/.claude/tasks/{sessionUUID}/*.json`) via `useProjectTasks`, raggruppati per sessione con badge di stato (pending/in_progress/completed). Click sull'header del gruppo → apre la chat della sessione (`onOpenChat`) |
+
+---
+
 ### `overview/`
 | File | Esporta | Descrizione |
 |---|---|---|

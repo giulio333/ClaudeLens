@@ -18,6 +18,7 @@ import type { SessionSummary } from '../../../types'
 import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { AgentsLiveView } from '../agents-live/AgentsLiveView'
+import { TasksSection } from '../tasks/TasksSection'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
 import { useSessionTags } from '../../../hooks/useSessionTags'
@@ -26,7 +27,7 @@ import { TagChip } from '../sessions/TagChip'
 import { TagBar } from '../sessions/TagBar'
 import { TagPicker } from '../sessions/TagPicker'
 
-export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents'
+export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks'
 
 type Project = { hash: string; realPath: string }
 
@@ -665,6 +666,13 @@ export function ProjectView({
             </div>
           )}
         </section>
+      )}
+
+      {section === 'tasks' && (
+        <TasksSection
+          project={project}
+          onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+        />
       )}
 
       {section === 'live-agents' && (

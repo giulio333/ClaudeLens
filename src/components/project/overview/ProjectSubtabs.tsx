@@ -7,6 +7,7 @@ import {
   useGlobalAgents,
   useGlobalMcp,
   useLiveSessions,
+  useProjectTasks,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import type { ProjectSection } from './ProjectOverviewContent'
@@ -29,6 +30,7 @@ export function ProjectSubtabs({
   const { data: globalAgents = [] } = useGlobalAgents()
   const { data: mcpData } = useGlobalMcp()
   const { data: liveSessions = [] } = useLiveSessions()
+  const { data: taskGroups = [] } = useProjectTasks(project.hash)
 
   const memoryCount = (memory?.index.length ?? 0) + (memory?.projectLevelIndex.length ?? 0)
   const agentCount = useMemo(
@@ -45,6 +47,10 @@ export function ProjectSubtabs({
     ).length,
     [liveSessions, project.realPath],
   )
+  const taskCount = useMemo(
+    () => taskGroups.reduce((n, g) => n + g.tasks.length, 0),
+    [taskGroups],
+  )
 
   const tabs: { key: ProjectSection; label: string; count?: number; view: View }[] = [
     { key: 'overview', label: 'Overview', view: { type: 'overview' } },
@@ -54,6 +60,7 @@ export function ProjectSubtabs({
     { key: 'agents', label: 'Agents', count: agentCount, view: { type: 'project-agents', project } },
     { key: 'mcp', label: 'MCP', count: mcpCount, view: { type: 'project-mcp', project } },
     { key: 'live-agents', label: 'Agent View', count: liveCount, view: { type: 'agents-live', project } },
+    { key: 'tasks', label: 'Tasks', count: taskCount, view: { type: 'project-tasks', project } },
   ]
 
   return (

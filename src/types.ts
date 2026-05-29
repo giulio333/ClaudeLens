@@ -82,6 +82,24 @@ export interface ExportSaveResult {
   filePath: string | null
 }
 
+export type TaskStatus = 'pending' | 'in_progress' | 'completed'
+
+export interface Task {
+  id: string
+  subject: string
+  description: string
+  status: TaskStatus
+  blocks: string[]
+  blockedBy: string[]
+  activeForm?: string
+}
+
+export interface TaskGroup {
+  sessionId: string
+  filename: string
+  tasks: Task[]
+}
+
 export interface RuleFile {
   filename: string
   content: string
