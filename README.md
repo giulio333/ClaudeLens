@@ -65,6 +65,8 @@ The sidebar lists all projects detected in `~/.claude/projects/`. Selecting a pr
 - **Memory** — all saved topics with type and description
 - **CLAUDE.md** — the full instruction hierarchy active for the project
 - **Conditional rules** — `.claude/rules/` files with path applicability
+- **Tasks** — tasks Claude creates during sessions, grouped per session
+- **Plans** — plan-mode plans linked to the project, filterable by status (approved / proposed / deleted), searchable, with inline preview and full-plan editing
 
 Real-time file watcher (chokidar) keeps every view in sync — any change to `~/.claude/` while you work with Claude Code is reflected immediately.
 
