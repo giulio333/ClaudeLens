@@ -1,37 +1,86 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { useProjectPlans, useSessionList } from '../../../hooks/useIPC'
 import type { Plan, SessionSummary } from '../../../types'
 import { fmtDate, sessionTitle } from '../utils'
 
 type Project = { hash: string; realPath: string }
+type StatusKey = 'approved' | 'proposed' | 'deleted'
+type FilterKey = 'all' | StatusKey
+type SortKey = 'recent' | 'status'
 
-function StatusPill({ plan }: { plan: Plan }) {
-  if (!plan.exists) {
-    return <span className="t-status pend" title="Plan file no longer on disk"><i />Deleted</span>
-  }
-  const approved = plan.status === 'approved'
+const STATUS_LABEL: Record<StatusKey, string> = {
+  approved: 'APPROVED',
+  proposed: 'PROPOSED',
+  deleted: 'DELETED',
+}
+
+function statusKey(p: Plan): StatusKey {
+  if (!p.exists) return 'deleted'
+  return p.status === 'approved' ? 'approved' : 'proposed'
+}
+
+const PLAN_PREVIEW_MAX = 180
+const PLAN_EXCERPT_MAX = 460
+
+// Ripulisce il markdown del piano in testo piano.
+function planText(raw: string | null): string {
+  if (!raw) return ''
+  return raw
+    .replace(/^---\n[\s\S]*?\n---\n?/, '') // frontmatter
+    .replace(/```[\s\S]*?```/g, ' ') // blocchi codice
+    .replace(/`([^`]+)`/g, '$1') // codice inline
+    .replace(/^#{1,6}\s+/gm, '') // heading
+    .replace(/[*_~>#]/g, '') // marcatori
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
+function clamp(s: string, max: number): string {
+  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s
+}
+
+// Anteprima su due righe per la riga del piano.
+function planPreview(raw: string | null): string {
+  return clamp(planText(raw), PLAN_PREVIEW_MAX)
+}
+
+// Estratto più ampio mostrato nell'espansione inline (non l'intero piano).
+function planExcerpt(raw: string | null): string {
+  return clamp(planText(raw), PLAN_EXCERPT_MAX)
+}
+
+function StatusBadge({ k }: { k: StatusKey }) {
   return (
-    <span className={`t-status ${approved ? 'done' : 'prog'}`}>
+    <span className={`cl-plan-badge cl-mono ${k}`}>
       <i />
-      {approved ? 'Approved' : 'Proposed'}
+      {STATUS_LABEL[k]}
     </span>
   )
 }
 
-const PLAN_PREVIEW_MAX = 140
+function Chevron({ open }: { open: boolean }) {
+  return (
+    <svg
+      className={`cl-plan-chev${open ? ' is-open' : ''}`}
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+    >
+      <path d="m6 9 6 6 6-6" />
+    </svg>
+  )
+}
 
-// Ripulisce il markdown del piano per un'anteprima su due righe.
-function planPreview(raw: string | null): string {
-  if (!raw) return ''
-  const clean = raw
-    .replace(/^---\n[\s\S]*?\n---\n?/, '')   // frontmatter
-    .replace(/```[\s\S]*?```/g, ' ')         // blocchi codice
-    .replace(/`([^`]+)`/g, '$1')             // codice inline
-    .replace(/^#{1,6}\s+/gm, '')             // heading
-    .replace(/[*_~>#]/g, '')                 // marcatori
-    .replace(/\s+/g, ' ')
-    .trim()
-  return clean.length > PLAN_PREVIEW_MAX ? clean.slice(0, PLAN_PREVIEW_MAX).trimEnd() + '…' : clean
+type FlatPlan = {
+  plan: Plan
+  key: string
+  k: StatusKey
+  sessionId: string
+  sessionName: string
+  sessionDate: number
 }
 
 export function PlansSection({
@@ -46,90 +95,250 @@ export function PlansSection({
   const { data: groups = [], isLoading } = useProjectPlans(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
 
+  const [filter, setFilter] = useState<FilterKey>('all')
+  const [query, setQuery] = useState('')
+  const [sort, setSort] = useState<SortKey>('recent')
+  const [openKey, setOpenKey] = useState<string | null>(null)
+
   const sessionByFilename = useMemo(() => {
     const map = new Map<string, SessionSummary>()
     for (const s of sessions) map.set(s.filename, s)
     return map
   }, [sessions])
 
-  const planCount = groups.reduce((n, g) => n + g.plans.length, 0)
+  // Lista piatta arricchita con info di sessione (nome + data) per filtri e ordinamento.
+  const flat = useMemo<FlatPlan[]>(() => {
+    const arr: FlatPlan[] = []
+    for (const g of groups) {
+      const session = sessionByFilename.get(g.filename)
+      const sessionName = session ? sessionTitle(session) : g.sessionId.slice(0, 8)
+      const sessionDate = session ? new Date(session.date).getTime() || 0 : 0
+      g.plans.forEach((plan, i) => {
+        arr.push({
+          plan,
+          key: `${g.sessionId}:${plan.filePath}:${i}`,
+          k: statusKey(plan),
+          sessionId: g.sessionId,
+          sessionName,
+          sessionDate,
+        })
+      })
+    }
+    return arr
+  }, [groups, sessionByFilename])
+
+  const counts = useMemo(() => {
+    const c = { all: flat.length, approved: 0, proposed: 0, deleted: 0 }
+    for (const f of flat) c[f.k] += 1
+    return c
+  }, [flat])
+
+  const q = query.trim().toLowerCase()
+  const match = (f: FlatPlan) =>
+    (filter === 'all' || f.k === filter) &&
+    (q === '' ||
+      `${f.plan.title} ${f.plan.content ?? ''} ${f.sessionName}`.toLowerCase().includes(q))
+
+  const STATUS_ORDER: Record<StatusKey, number> = { proposed: 0, approved: 1, deleted: 2 }
+
+  // Gruppi per sessione, rispettando filtro + ricerca, ordinati.
+  const visibleGroups = useMemo(() => {
+    const bySession = new Map<
+      string,
+      { sessionId: string; name: string; date: number; session?: SessionSummary; items: FlatPlan[] }
+    >()
+    for (const f of flat) {
+      if (!match(f)) continue
+      let g = bySession.get(f.sessionId)
+      if (!g) {
+        const filename = groups.find(gr => gr.sessionId === f.sessionId)?.filename
+        g = {
+          sessionId: f.sessionId,
+          name: f.sessionName,
+          date: f.sessionDate,
+          session: filename ? sessionByFilename.get(filename) : undefined,
+          items: [],
+        }
+        bySession.set(f.sessionId, g)
+      }
+      g.items.push(f)
+    }
+    const arr = [...bySession.values()]
+    arr.sort((a, b) => b.date - a.date)
+    if (sort === 'status') {
+      for (const g of arr) g.items.sort((a, b) => STATUS_ORDER[a.k] - STATUS_ORDER[b.k])
+    }
+    return arr
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [flat, filter, q, sort, groups, sessionByFilename])
+
+  const visibleCount = visibleGroups.reduce((n, g) => n + g.items.length, 0)
+
+  const chips: [FilterKey, string][] = [
+    ['all', 'ALL'],
+    ['approved', 'APPROVED'],
+    ['proposed', 'PROPOSED'],
+    ['deleted', 'DELETED'],
+  ]
 
   return (
-    <section className="cl-section" style={{ paddingTop: 38 }}>
-      <div className="cl-sec-head">
-        <h2>Plans</h2>
-        <span className="ct">
-          {planCount} across {groups.length} {groups.length === 1 ? 'session' : 'sessions'}
-        </span>
+    <section className="cl-section cl-plans" style={{ paddingTop: 38 }}>
+      <div className="cl-plans-head">
+        <div className="cl-plans-title-wrap">
+          <h2>Plans</h2>
+          <span className="cl-plans-sub cl-mono">
+            {visibleCount} {visibleCount === 1 ? 'plan' : 'plans'} · {visibleGroups.length}{' '}
+            {visibleGroups.length === 1 ? 'session' : 'sessions'}
+          </span>
+        </div>
+        <div className="cl-plans-search">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+            <circle cx="11" cy="11" r="7" />
+            <path d="m20 20-3.5-3.5" />
+          </svg>
+          <input
+            className="cl-mono"
+            placeholder="filter plans…"
+            value={query}
+            onChange={e => setQuery(e.target.value)}
+          />
+        </div>
       </div>
 
-      {isLoading ? (
-        <div className="cl-empty">Loading plans…</div>
-      ) : groups.length === 0 ? (
-        <div className="cl-empty">No plans recorded for this project.</div>
-      ) : (
-        <>
-          <div className="cl-task-legend">
-            <span className="done"><i />Approved</span>
-            <span className="prog"><i />Proposed</span>
-            <span className="pend"><i />Deleted</span>
-          </div>
-          <div className="cl-tasks">
-            {groups.map(group => {
-              const session = sessionByFilename.get(group.filename)
-              const title = session ? sessionTitle(session) : group.sessionId.slice(0, 8)
-              const Head = session ? 'button' : 'div'
-              return (
-                <div key={group.sessionId} className="group">
-                  <Head
-                    {...(session
-                      ? { type: 'button' as const, onClick: () => onOpenChat(session), title: 'Open session chat' }
-                      : {})}
-                    className="cl-task-group-head"
-                  >
-                    <span className="gt">
-                      <span className="name">{title}</span>
-                    </span>
-                    {session && <span className="date">{fmtDate(session.date)}</span>}
-                  </Head>
+      <div className="cl-plans-controls">
+        <div className="cl-plans-chips">
+          {chips.map(([id, label]) => (
+            <button
+              key={id}
+              className={`cl-plan-chip cl-mono ${id}${filter === id ? ' is-on' : ''}`}
+              onClick={() => setFilter(id)}
+            >
+              <i />
+              {label}
+              <span className="ct">{counts[id]}</span>
+            </button>
+          ))}
+        </div>
+        <div className="cl-plans-sort cl-mono">
+          <span className="lbl">sort</span>
+          <button className={sort === 'recent' ? 'is-on' : ''} onClick={() => setSort('recent')}>
+            recent
+          </button>
+          <button className={sort === 'status' ? 'is-on' : ''} onClick={() => setSort('status')}>
+            status
+          </button>
+        </div>
+      </div>
 
-                  <div className="cl-tlist">
-                    {group.plans.map((plan, i) => {
-                      const tone = !plan.exists ? 'pend' : plan.status === 'approved' ? 'done' : 'prog'
-                      const clickable = plan.exists
-                      const Card = clickable ? 'button' : 'div'
-                      return (
-                        <Card
-                          key={`${plan.filePath}-${i}`}
-                          {...(clickable
-                            ? { type: 'button' as const, onClick: () => onOpenPlan(plan), title: 'Open plan' }
-                            : {})}
-                          className={`cl-task ${tone}`}
-                          style={clickable ? { cursor: 'pointer', textAlign: 'left', width: '100%' } : undefined}
-                        >
-                          <div className="rail">
-                            <span className="line" />
-                            <span className={`marker ${tone}`} />
+      <div className="cl-plans-body">
+        {isLoading ? (
+          <div className="cl-empty">Loading plans…</div>
+        ) : groups.length === 0 ? (
+          <div className="cl-empty">No plans recorded for this project.</div>
+        ) : visibleCount === 0 ? (
+          <div className="cl-empty">No plans match your filters.</div>
+        ) : (
+          visibleGroups.map(g => (
+            <section key={g.sessionId} className="cl-plan-group">
+              <div className="cl-plan-eyebrow cl-mono">
+                <span className="dot" />
+                <span className="name">{g.name}</span>
+                <span className="meta">
+                  {g.items.length} {g.items.length === 1 ? 'plan' : 'plans'}
+                  {g.date ? ` · ${fmtDate(new Date(g.date).toISOString())}` : ''}
+                  {g.session && (
+                    <button type="button" className="open" onClick={() => onOpenChat(g.session!)}>
+                      open chat ↗
+                    </button>
+                  )}
+                </span>
+              </div>
+
+              <div className="cl-plan-rows">
+                {g.items.map(f => {
+                  const { plan, k, key } = f
+                  const expanded = openKey === key
+                  return (
+                    <div key={key} className={`cl-plan-row ${k}${expanded ? ' is-expanded' : ''}`}>
+                      <div
+                        className="cl-plan-row-head"
+                        role="button"
+                        tabIndex={0}
+                        onClick={() => setOpenKey(cur => (cur === key ? null : key))}
+                        onKeyDown={e => {
+                          if (e.key === 'Enter' || e.key === ' ') {
+                            e.preventDefault()
+                            setOpenKey(cur => (cur === key ? null : key))
+                          }
+                        }}
+                      >
+                        <div className="cl-plan-row-body">
+                          <div className="cl-plan-title-line">
+                            <span className="cl-plan-title">{plan.title || '(untitled plan)'}</span>
+                            <StatusBadge k={k} />
                           </div>
-                          <div className="t-main">
-                            <div className="t-row1">
-                              <span className="t-title">{plan.title || '(untitled plan)'}</span>
-                            </div>
-                            {plan.content
-                              ? <p className="t-desc">{planPreview(plan.content)}</p>
-                              : <p className="t-desc" style={{ fontStyle: 'italic' }}>Plan file no longer on disk.</p>}
+                          {plan.content ? (
+                            <p className="cl-plan-summary">{planPreview(plan.content)}</p>
+                          ) : (
+                            <p className="cl-plan-summary is-muted">Plan file no longer on disk.</p>
+                          )}
+                          <div className="cl-plan-meta cl-mono">
+                            <span className="path">plans/{plan.slug}.md</span>
+                            {plan.gitBranch && (
+                              <>
+                                <span className="sep">·</span>
+                                <span>{plan.gitBranch}</span>
+                              </>
+                            )}
                           </div>
-                          <StatusPill plan={plan} />
-                        </Card>
-                      )
-                    })}
-                  </div>
-                </div>
-              )
-            })}
-          </div>
-        </>
-      )}
+                        </div>
+                        <div className="cl-plan-row-aside">
+                          {plan.exists && (
+                            <button
+                              type="button"
+                              className="cl-plan-action"
+                              title="Open plan"
+                              aria-label="Open plan"
+                              onClick={e => {
+                                e.stopPropagation()
+                                onOpenPlan(plan)
+                              }}
+                            >
+                              ↗
+                            </button>
+                          )}
+                          <Chevron open={expanded} />
+                        </div>
+                      </div>
+                      {expanded && (
+                        <div className="cl-plan-detail">
+                          {plan.content ? (
+                            <>
+                              <p className="cl-plan-excerpt">{planExcerpt(plan.content)}</p>
+                              <button
+                                type="button"
+                                className="cl-plan-full"
+                                onClick={e => {
+                                  e.stopPropagation()
+                                  onOpenPlan(plan)
+                                }}
+                              >
+                                View full plan ↗
+                              </button>
+                            </>
+                          ) : (
+                            <p className="cl-plan-summary is-muted">Plan file no longer on disk.</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            </section>
+          ))
+        )}
+      </div>
     </section>
   )
 }

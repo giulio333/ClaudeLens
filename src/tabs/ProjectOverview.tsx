@@ -363,6 +363,7 @@ export default function ProjectOverview() {
           <ErrorBoundary key={view.plan.filePath}>
             <PlanDetailView
               plan={view.plan}
+              project={view.project}
               onBack={() => setView({ type: 'project-plans', project: view.project })}
             />
           </ErrorBoundary>

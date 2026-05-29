@@ -1,4 +1,5 @@
 import type { Plan } from '../../../types'
+import { useProjectPlans, useWriteMarkdownFile, useDeleteMarkdownFile } from '../../../hooks/useIPC'
 import { EntityDetailView, EntityConfig, TapeCell } from '../shared/EntityDetailView'
 
 function fmtDateTime(iso: string): string {
@@ -7,7 +8,17 @@ function fmtDateTime(iso: string): string {
   return d.toLocaleString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
 }
 
-export function PlanDetailView({ plan, onBack }: { plan: Plan; onBack: () => void }) {
+type Project = { hash: string; realPath: string }
+
+export function PlanDetailView({ plan: initialPlan, project, onBack }: { plan: Plan; project: Project; onBack: () => void }) {
+  const write = useWriteMarkdownFile(['plans:project'])
+  const del = useDeleteMarkdownFile(['plans:project'])
+
+  // Ri-deriva il piano fresco dopo un save (il watcher invalida 'plans:project').
+  const { data: groups } = useProjectPlans(project.hash)
+  const fresh = groups?.flatMap(g => g.plans).find(p => p.filePath === initialPlan.filePath)
+  const plan = fresh ?? initialPlan
+
   const statusLabel = plan.status === 'approved' ? 'Approved' : 'Proposed'
 
   const tape: TapeCell[] = [{ label: 'Status', value: statusLabel }]
@@ -32,13 +43,22 @@ export function PlanDetailView({ plan, onBack }: { plan: Plan; onBack: () => voi
     optionDefs: [],
     initialOptions: {},
     body: plan.content ?? '',
-    editable: false,
-    deletable: false,
+    // Nessun frontmatter modellato: il body è l'intero markdown del piano.
+    serialize: ({ body }) => body,
+    editable: plan.exists,
+    deletable: plan.exists,
     duplicable: false,
     runnable: false,
     emptyMessage: 'Plan file no longer on disk.',
-    footerNote: 'Stored globally in ~/.claude/plans · read-only',
+    footerNote: 'Stored globally in ~/.claude/plans',
   }
 
-  return <EntityDetailView config={config} onBack={onBack} />
+  return (
+    <EntityDetailView
+      config={config}
+      onBack={onBack}
+      onSave={async raw => { await write.mutateAsync({ filePath: plan.filePath, content: raw }) }}
+      onDelete={async () => { await del.mutateAsync({ filePath: plan.filePath }) }}
+    />
+  )
 }
