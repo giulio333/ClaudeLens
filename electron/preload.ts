@@ -17,9 +17,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getHierarchy: (realPath: string) => ipcRenderer.invoke('claudeMd:getHierarchy', realPath),
     writeGlobal: (content: string) => ipcRenderer.invoke('claudeMd:writeGlobal', content),
     writeFile: (filePath: string, content: string) => ipcRenderer.invoke('claudeMd:writeFile', filePath, content),
+    deleteGlobal: () => ipcRenderer.invoke('claudeMd:deleteGlobal'),
+    deleteFile: (filePath: string) => ipcRenderer.invoke('claudeMd:deleteFile', filePath),
   },
   markdownFile: {
     write: (filePath: string, content: string) => ipcRenderer.invoke('markdownFile:write', filePath, content),
+    delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) => ipcRenderer.invoke('markdownFile:delete', filePath, opts),
   },
   exportFile: {
     saveMarkdown: (defaultFilename: string, content: string) =>

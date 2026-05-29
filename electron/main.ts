@@ -234,6 +234,54 @@ ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: s
   }
 });
 
+ipcMain.handle('markdownFile:delete', async (_event, filePath: string, opts?: { pruneEmptyDir?: boolean }) => {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    const path = require('path') as typeof import('path');
+    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
+    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
+    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
+    if (!filePath.toLowerCase().endsWith('.md')) throw new Error('Only .md files are deletable');
+    const home = os.homedir();
+    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
+    if (fs.existsSync(filePath)) fs.rmSync(filePath);
+    // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
+    if (opts?.pruneEmptyDir) {
+      const dir = path.dirname(filePath);
+      if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmSync(dir, { recursive: false });
+    }
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('claudeMd:deleteGlobal', async () => {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    const target = join(CLAUDE_DIR, 'CLAUDE.md');
+    if (fs.existsSync(target)) fs.rmSync(target);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('claudeMd:deleteFile', async (_event, filePath: string) => {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
+    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
+    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
+    const home = os.homedir();
+    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
+    if (fs.existsSync(filePath)) fs.rmSync(filePath);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
 ipcMain.handle('export:markdown', async (_event, defaultFilename: string, content: string) => {
   try {
     if (typeof content !== 'string') throw new Error('Missing markdown content');
