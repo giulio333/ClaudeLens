@@ -30,8 +30,8 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/chat/` — Chat rendering: `ChatView`, `MessageBubble`, `ToolDetailPanel`, `ToolGroupCard`, atoms, utils
 - `project/memory/` — `MemoryTopicView`, utils
 - `project/claudemd/` — `GlobalClaudeMdView`
-- `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `SkillPropertiesPanel`, `CreateSkillPage`
-- `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `AgentPropertiesPanel`, `CreateAgentPage`
+- `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `CreateSkillPage`
+- `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `RunAgentDialog`, `CreateAgentPage`
 - `project/mcp/` — `GlobalMcpView`, `McpServerCard`
 - `project/analytics/` — `AnalyticsView`
 - `project/ai-assistant/` — `AiAssistantView`

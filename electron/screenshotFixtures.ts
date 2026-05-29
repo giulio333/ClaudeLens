@@ -374,7 +374,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'memory:listProjects', 'memory:getProject', 'memory:createTopic', 'memory:updateTopic', 'memory:deleteTopic',
     'cost:getSummary', 'cost:getByProject',
     'claudeMd:getGlobal', 'claudeMd:getHierarchy', 'claudeMd:writeGlobal', 'claudeMd:writeFile',
-    'markdownFile:write',
+    'claudeMd:deleteGlobal', 'claudeMd:deleteFile',
+    'markdownFile:write', 'markdownFile:delete',
     'export:markdown', 'export:pdf',
     'sessions:listByProject', 'sessions:getChat', 'sessions:openInTerminal', 'sessions:newInTerminal',
     'rules:getByProject',
@@ -404,7 +405,10 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('claudeMd:getHierarchy', () => ok({ layers: HIERARCHY_LAYERS }));
   ipcMain.handle('claudeMd:writeGlobal', () => ok(null));
   ipcMain.handle('claudeMd:writeFile', () => ok(null));
+  ipcMain.handle('claudeMd:deleteGlobal', () => ok(null));
+  ipcMain.handle('claudeMd:deleteFile', () => ok(null));
   ipcMain.handle('markdownFile:write', () => ok(null));
+  ipcMain.handle('markdownFile:delete', () => ok(null));
   ipcMain.handle('export:markdown', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.md' }));
   ipcMain.handle('export:pdf', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.pdf' }));
 

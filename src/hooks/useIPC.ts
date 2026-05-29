@@ -143,9 +143,12 @@ declare global {
         getHierarchy: (realPath: string) => Promise<IpcResult<ClaudeMdHierarchy>>
         writeGlobal: (content: string) => Promise<IpcResult<null>>
         writeFile: (filePath: string, content: string) => Promise<IpcResult<null>>
+        deleteGlobal: () => Promise<IpcResult<null>>
+        deleteFile: (filePath: string) => Promise<IpcResult<null>>
       }
       markdownFile: {
         write: (filePath: string, content: string) => Promise<IpcResult<null>>
+        delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) => Promise<IpcResult<null>>
       }
       exportFile: {
         saveMarkdown: (defaultFilename: string, content: string) => Promise<IpcResult<ExportSaveResult>>
@@ -294,6 +297,37 @@ export function useWriteMarkdownFile(invalidateKeys: string[] = []) {
     {
       onSuccess: () => {
         invalidateKeys.forEach(k => qc.invalidateQueries(k))
+      },
+    }
+  )
+}
+
+export function useDeleteMarkdownFile(invalidateKeys: string[] = []) {
+  const qc = useQueryClient()
+  return useMutation(
+    ({ filePath, pruneEmptyDir }: { filePath: string; pruneEmptyDir?: boolean }) =>
+      unwrap(window.electronAPI.markdownFile.delete(filePath, pruneEmptyDir ? { pruneEmptyDir } : undefined)),
+    {
+      onSuccess: () => {
+        invalidateKeys.forEach(k => qc.invalidateQueries(k))
+      },
+    }
+  )
+}
+
+export function useDeleteClaudeMdFile() {
+  const qc = useQueryClient()
+  return useMutation(
+    (filePath: string | null) =>
+      unwrap(
+        filePath
+          ? window.electronAPI.claudeMd.deleteFile(filePath)
+          : window.electronAPI.claudeMd.deleteGlobal()
+      ),
+    {
+      onSuccess: () => {
+        qc.invalidateQueries('claudeMd:global')
+        qc.invalidateQueries('claudeMd:hierarchy')
       },
     }
   )

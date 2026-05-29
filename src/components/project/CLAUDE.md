@@ -29,6 +29,9 @@ Formatter puri (nessuna dipendenza React):
 | `BackButton.tsx` | `BackButton` | Bottone freccia indietro con label |
 | `StatChip.tsx` | `StatChip` | Chip label + valore, variante accent indigo |
 | `TopBar.tsx` | `TopBar`, `Crumb` | Top bar editoriale condivisa (52px, drag region, back + breadcrumbs + right slot) |
+| `EntityDetailView.tsx` | `EntityDetailView`, `EntityConfig`, `TapeCell` | **Vista detail unificata config-driven** (look "manifesto" stile agent): toggle View/Edit + Save/Discard/Delete/Duplicate/Run nella TopBar, tape/properties grid in view, frontmatter+body editabili. Usata da Agent, Skill, CLAUDE.md, Plan. Edit mono-colonna (`is-single-col`) per le entità senza frontmatter (CLAUDE.md); read-only per Plan |
+| `entityOptions.ts` | `OptionDef`, `OptionValue`, `OptionEditor`-data, `AGENT_OPTION_DEFS`, `SKILL_OPTION_DEFS`, `serializeAgent`, `serializeSkill`, `readOptions`, `entityTint`, `initialOf`, `fluidTitleSize`, helper | Logica condivisa per `EntityDetailView`: option defs per agent/skill, serializzazione frontmatter YAML **con preservazione delle chiavi non modellate** (es. `hooks`), tint identità |
+| `MarkdownDocView.tsx` | `MarkdownDocView` | Shell markdown semplice (toggle View/Edit nell'hero). Usata **solo da `memory/MemoryTopicView`** |
 | `CreateFormKit.tsx` | `ModelPicker`, `ToolsInput`, `FieldHint`, `CharCounter`, `openDocs`, `validateName`, `useCreateFormKeys`, `MODEL_PRESETS`, `KNOWN_TOOLS`, `NAME_MAX`, `DESC_MAX`, `NAME_RE` | Building blocks condivisi per le pagine "create" (skill, agent): picker modello accent-aware, autocomplete tools, hint, counter, validazione nome, hook keybinding (⌘↵/Esc) |
 
 ---
@@ -67,15 +70,14 @@ Formatter puri (nessuna dipendenza React):
 ### `claudemd/`
 | File | Esporta | Descrizione |
 |---|---|---|
-| `GlobalClaudeMdView.tsx` | `GlobalClaudeMdView` | Visualizza la gerarchia di file CLAUDE.md (global → project → local → subdir) con accordion per layer |
+| `GlobalClaudeMdView.tsx` | `GlobalClaudeMdView`, `ProjectClaudeMdView` | Wrapper detail per CLAUDE.md (global e per-layer) via `EntityDetailView`: edit mono-colonna (nessun frontmatter) + delete (`claudeMd:deleteGlobal`/`deleteFile`) |
 
 ---
 
 ### `skills/`
 | File | Esporta | Descrizione |
 |---|---|---|
-| `SkillPropertiesPanel.tsx` | `SkillPropertiesPanel` | Pannello proprietà skill in sola lettura |
-| `SkillDetailView.tsx` | `SkillDetailView` | Vista dettaglio singola skill con prompt e metadata |
+| `SkillDetailView.tsx` | `SkillDetailView` | Wrapper che costruisce la `EntityConfig` skill (opzioni frontmatter editabili strutturate, `serializeSkill`) e delega a `EntityDetailView`. Supporta edit + delete (rimuove la cartella `skills/<name>/` se vuota) |
 | `CreateSkillPage.tsx` | `CreateSkillPage` | Pagina dedicata per creare una nuova skill (globale o di progetto); on save torna alla lista |
 | `GlobalSkillsView.tsx` | `GlobalSkillsView` | Lista skill globali con ricerca e navigazione al detail |
 
@@ -84,8 +86,8 @@ Formatter puri (nessuna dipendenza React):
 ### `agents/`
 | File | Esporta | Descrizione |
 |---|---|---|
-| `AgentPropertiesPanel.tsx` | `AgentPropertiesPanel` | Pannello proprietà agent in sola lettura |
-| `AgentDetailView.tsx` | `AgentDetailView` | Vista dettaglio singolo agent |
+| `AgentDetailView.tsx` | `AgentDetailView` | Wrapper che costruisce la `EntityConfig` agent (`AGENT_OPTION_DEFS`, `serializeAgent`, tape Scope/Model/Color/Status, validation) e delega a `EntityDetailView`. Supporta edit + delete + Run agent |
+| `RunAgentDialog.tsx` | `RunAgentDialog` | Dialog di dispatch background agent (overlay passato a `EntityDetailView` via `renderRunOverlay`) |
 | `CreateAgentPage.tsx` | `CreateAgentPage` | Pagina dedicata per creare un nuovo agent (globale o di progetto); on save torna alla lista |
 | `GlobalAgentsView.tsx` | `GlobalAgentsView` | Lista agent globali |
 
@@ -125,7 +127,7 @@ Formatter puri (nessuna dipendenza React):
 | File | Esporta | Descrizione |
 |---|---|---|
 | `PlansSection.tsx` | `PlansSection` | Subtab "Plans": legge i piani referenziati negli attachment `plan_mode`/`plan_mode_exit` delle sessioni e ne legge il markdown dal dir globale `~/.claude/plans/*.md` via `useProjectPlans`, raggruppati per sessione con badge `proposed`/`approved`/`deleted`. Click sul piano → `plan-detail`; click sull'header del gruppo → chat della sessione |
-| `PlanDetailView.tsx` | `PlanDetailView` | Vista dettaglio singolo piano: render markdown read-only via `MarkdownDocView`, sidebar con status/created/branch/filePath. I piani vivono globali su disco ma sono linkati al progetto via `planFilePath` nei `.jsonl` |
+| `PlanDetailView.tsx` | `PlanDetailView` | Vista dettaglio singolo piano: `EntityDetailView` read-only (no edit/delete), tape status/created/branch + footer filePath. I piani vivono globali su disco ma sono linkati al progetto via `planFilePath` nei `.jsonl` |
 
 ---
 

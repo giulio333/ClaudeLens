@@ -4780,6 +4780,15 @@ button.cl-task-group-head:disabled { cursor: default; }
     inset 0 1px 0 oklch(1 0 0 / 0.14),
     inset 0 -1px 0 oklch(0 0 0 / 0.35);
 }
+/* Variante "flat": nessuna cella scura feature (entità senza Status, es. CLAUDE.md/Skill/Plan).
+   Le colonne sono impostate inline in base al numero di celle. */
+.cl-agent-v2-tape--flat .cell:last-child,
+[data-theme='dark'] .cl-agent-v2-tape--flat .cell:last-child {
+  background: none;
+  box-shadow: none;
+}
+.cl-agent-v2-tape--flat .cell:last-child .l { color: var(--cl-ink-3); }
+.cl-agent-v2-tape--flat .cell:last-child .v { color: var(--cl-ink); }
 .cl-agent-v2-tape .cell .l {
   font-family: var(--font-mono); font-size: 10px;
   letter-spacing: 0.20em; text-transform: uppercase;
@@ -5146,6 +5155,9 @@ button.cl-task-group-head:disabled { cursor: default; }
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
   gap: 24px;
 }
+/* Layout mono-colonna (entità senza frontmatter editabile, es. CLAUDE.md) */
+.cl-agent-edit-v2.is-single-col .cl-agent-edit-v2-work { grid-template-columns: 1fr; }
+.cl-agent-edit-v2.is-single-col .cl-agent-edit-v2-body .bb { min-height: 520px; }
 .cl-agent-edit-v2-col { min-width: 0; }
 .cl-agent-edit-v2-col h2 {
   font-family: var(--font-mono); font-size: 10.5px;
