@@ -67,18 +67,55 @@ export async function startLiveMonitor(
       try {
         const st = fstatSync(fd);
         if (st.size <= state.fileOffset) return;
-        const newBytes = st.size - state.fileOffset;
-        const buf = Buffer.alloc(newBytes);
-        readSync(fd, buf, 0, newBytes, state.fileOffset);
-        state.fileOffset = st.size;
 
-        const text = buf.toString('utf-8');
-        const lines = text.split('\n').filter(l => l.trim());
-        for (const line of lines) {
+        // Read the delta in bounded chunks (never allocate the whole append at
+        // once) and assemble complete lines from a byte-level buffer so multi-byte
+        // UTF-8 chars and lines straddling a chunk boundary are handled correctly.
+        let offset = state.fileOffset;
+        let consumed = state.fileOffset; // bytes up to and including the last newline
+        let pending = Buffer.alloc(0);
+        let dropped = 0;
+
+        const emitLine = (lineBuf: Buffer) => {
+          const line = lineBuf.toString('utf-8').trim();
+          if (!line) return;
           try {
             const json = JSON.parse(line) as Record<string, unknown>;
             parseJsonlLine(json).forEach(onEvent);
-          } catch { /* riga non-JSON */ }
+          } catch {
+            dropped++;
+          }
+        };
+
+        while (offset < st.size) {
+          const chunkSize = Math.min(MAX_READ_BYTES, st.size - offset);
+          const buf = Buffer.alloc(chunkSize);
+          const n = readSync(fd, buf, 0, chunkSize, offset);
+          if (n <= 0) break;
+          offset += n;
+          pending = pending.length ? Buffer.concat([pending, buf.subarray(0, n)]) : buf.subarray(0, n);
+
+          let nl: number;
+          while ((nl = pending.indexOf(0x0a)) !== -1) {
+            emitLine(pending.subarray(0, nl));
+            consumed += nl + 1;
+            pending = pending.subarray(nl + 1);
+          }
+
+          // Guard against an unterminated, oversized (likely corrupt) line:
+          // drop it instead of buffering unboundedly.
+          if (pending.length > MAX_LINE_BYTES) {
+            dropped++;
+            consumed += pending.length;
+            pending = Buffer.alloc(0);
+          }
+        }
+
+        // Leave the trailing partial line (no newline yet) unconsumed for next time.
+        state.fileOffset = consumed;
+
+        if (dropped > 0) {
+          console.warn(`[live-monitor] dropped ${dropped} malformed/oversized JSONL line(s) in ${state.filePath}`);
         }
       } finally {
         closeSync(fd);
@@ -88,6 +125,11 @@ export async function startLiveMonitor(
 
   return true;
 }
+
+// Cap per readSync allocation; loop for larger appends.
+const MAX_READ_BYTES = 4 * 1024 * 1024; // 4 MB
+// A single JSONL line above this is treated as corrupt and dropped.
+const MAX_LINE_BYTES = 16 * 1024 * 1024; // 16 MB
 
 function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
   const events: LiveEvent[] = [];
