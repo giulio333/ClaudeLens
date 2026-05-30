@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
 import { basename, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -168,7 +168,27 @@ function createWindow() {
       preload: join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
+      sandbox: true,
     },
+  });
+
+  // Open external links (window.open from Markdown) in the system browser, deny in-app windows
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      shell.openExternal(url);
+    }
+    return { action: 'deny' };
+  });
+
+  // Block navigation away from the app origin
+  const appOrigin = isDev ? 'http://localhost:5173' : 'file://';
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (!url.startsWith(appOrigin)) {
+      event.preventDefault();
+      if (url.startsWith('http://') || url.startsWith('https://')) {
+        shell.openExternal(url);
+      }
+    }
   });
 
   if (isDev) {
