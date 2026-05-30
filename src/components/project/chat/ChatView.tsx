@@ -9,6 +9,7 @@ import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
 import { SessionGraphView } from './graph/SessionGraphView'
+import { QueryError } from '../../QueryError'
 
 type ViewMode = 'chat' | 'timeline'
 
@@ -343,7 +344,7 @@ export function ChatView({
   session: SessionSummary
   onBack: () => void
 }) {
-  const { data: messages, isLoading } = useChatSession(project.hash, session.filename)
+  const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
   const projectName = project.realPath.split('/').pop() ?? project.realPath
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
@@ -459,6 +460,10 @@ export function ChatView({
 
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
+      ) : isError ? (
+        <div className="cl-chat-workspace">
+          <QueryError title="Failed to load transcript" error={error} onRetry={() => refetch()} />
+        </div>
       ) : viewMode === 'timeline' ? (
         <div className="cl-chat-workspace cl-chat-workspace--tl">
           {isLoading ? (

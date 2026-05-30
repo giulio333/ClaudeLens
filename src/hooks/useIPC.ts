@@ -197,7 +197,7 @@ declare global {
       settings: {
         getCleanupPeriodDays: () => Promise<IpcResult<number>>
       }
-      onDataChanged: (callback: () => void) => void
+      onDataChanged: (callback: () => void) => () => void
       live: {
         getProcesses: () => Promise<IpcResult<ClaudeProcess[]>>
         getSessions: () => Promise<IpcResult<BgSession[]>>
@@ -562,7 +562,7 @@ export function useDataChangedRefetch() {
   const qc = useQueryClient()
 
   useEffect(() => {
-    window.electronAPI.onDataChanged(() => {
+    const unsubscribe = window.electronAPI.onDataChanged(() => {
       qc.invalidateQueries('memory:projects')
       qc.invalidateQueries('memory:project')
       qc.invalidateQueries('cost:summary')
@@ -580,5 +580,6 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries('agents:project')
       qc.invalidateQueries('mcp:global')
     })
+    return unsubscribe
   }, [qc])
 }

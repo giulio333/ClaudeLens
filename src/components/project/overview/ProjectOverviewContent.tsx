@@ -175,6 +175,13 @@ function Bars({ buckets, metric }: { buckets: TimelineBucket[]; metric: StatMetr
 
 const MEM_PREVIEW_MAX = 70
 
+const CLAUDE_MD_SCOPE_LABEL: Record<'global' | 'project' | 'local' | 'subdir', string> = {
+  project: 'Project',
+  local: 'Local',
+  subdir: 'Subdir',
+  global: 'Global',
+}
+
 // Ripulisce la sintassi markdown e tronca per un'anteprima pulita su una riga.
 function memPreview(raw: string): string {
   const clean = raw
@@ -299,8 +306,11 @@ export function ProjectView({
     return all.filter(s => !s.disabledProjectPaths.includes(project.realPath))
   }, [mcpData, project.realPath])
 
-  const projectClaudeMd = claudeMd?.layers.find(l => l.scope === 'project')
   const claudeMdLayers = claudeMd?.layers.length ?? 0
+  const claudeMdLayerList = useMemo(() => {
+    const order = { project: 0, local: 1, subdir: 2, global: 3 } as const
+    return [...(claudeMd?.layers ?? [])].sort((a, b) => order[a.scope] - order[b.scope])
+  }, [claudeMd])
   const skillCount = allSkills.length
   const agents = useMemo(() => {
     const seen = new Map<string, typeof globalAgents[number]>()
@@ -425,11 +435,41 @@ export function ProjectView({
             />
           </section>
 
+          <section className="cl-section">
+            <div className="cl-sec-head">
+              <h2>CLAUDE.md</h2>
+              <span className="ct">{claudeMdLayers} {claudeMdLayers === 1 ? 'layer' : 'layers'} · global → project → local → subdir</span>
+            </div>
+            {claudeMdLayers === 0 ? (
+              <div className="cl-empty">No CLAUDE.md instructions for this project.</div>
+            ) : (
+              <div className="cl-tile-grid">
+                {claudeMdLayerList.map((l, i) => {
+                  const lines = l.content.split('\n').length
+                  const path = l.scope === 'global'
+                    ? '~/.claude/CLAUDE.md'
+                    : l.filePath.startsWith(project.realPath + '/')
+                      ? l.filePath.slice(project.realPath.length + 1)
+                      : l.filePath
+                  return (
+                    <button key={l.filePath} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
+                      onClick={() => l.scope === 'global'
+                        ? onNavigate({ type: 'global-claudemd' })
+                        : onNavigate({ type: 'project-claudemd', project, layer: l })}>
+                      <span className="glyph">M</span>
+                      <div style={{ minWidth: 0 }}>
+                        <div className="t-name">{CLAUDE_MD_SCOPE_LABEL[l.scope]}</div>
+                        <div className="t-desc">{path}</div>
+                      </div>
+                      <span className="t-meta"><b>{lines}</b> lines</span>
+                    </button>
+                  )
+                })}
+              </div>
+            )}
+          </section>
+
           <section className="cl-config-strip">
-            <button className={`item ${claudeMdLayers ? 'on' : ''}`} type="button"
-              onClick={() => projectClaudeMd ? onNavigate({ type: 'project-claudemd', project, layer: projectClaudeMd }) : onNavigate({ type: 'global-claudemd' })}>
-              <span className="pip" /><span>CLAUDE.md</span><span className="num">{claudeMdLayers} layer{claudeMdLayers === 1 ? '' : 's'}</span>
-            </button>
             <button className={`item ${skillCount ? 'on' : ''}`} type="button" onClick={() => onNavigate({ type: 'project-skills', project })}>
               <span className="pip" /><span>Skills</span><span className="num">{skillCount}</span>
             </button>
