@@ -226,7 +226,7 @@ export function MemoryTopicView({
   const extraActions = !readOnly && (
     <DeleteControl
       open={confirmDelete}
-      busy={deleteMut.isLoading}
+      busy={deleteMut.isPending}
       onArm={() => setConfirmDelete(true)}
       onCancel={() => setConfirmDelete(false)}
       onConfirm={handleDelete}
