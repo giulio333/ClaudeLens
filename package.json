@@ -84,11 +84,20 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "icon4.icns"
+      "icon4.icns",
+      "icon.png"
     ],
     "mac": {
       "target": "dmg",
       "icon": "./icon4.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage",
+        "deb"
+      ],
+      "icon": "./icon.png",
+      "category": "Development"
     }
   }
 }
