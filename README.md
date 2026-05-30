@@ -1,6 +1,6 @@
 # ClaudeLens
 
-A desktop app (macOS, with experimental Linux support) to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
+A desktop app (macOS, with experimental Linux and Windows support) to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
 
 If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLens makes it navigable. Browse chat sessions, manage memory topics, inspect tool calls, view your full CLAUDE.md hierarchy, and monitor active Claude processes, all in one place and updated in real time.
 
@@ -153,7 +153,7 @@ Requires `claude` CLI in `PATH`.
 
 ## Requirements
 
-- macOS 12 Monterey or later, or Linux (experimental)
+- macOS 12 Monterey or later, or Linux / Windows (experimental)
 - [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
 
 ---
@@ -163,6 +163,8 @@ Requires `claude` CLI in `PATH`.
 **macOS** — download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
 
 **Linux (experimental)** — download the `.AppImage` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page and make it executable with `chmod +x`. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
+
+**Windows (experimental)** — download and run the `.exe` installer from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page. Opening a session launches it in a new `cmd` window.
 
 > **First launch — Gatekeeper warning**
 >
@@ -193,6 +195,7 @@ npm run electron:build   # Generate distributable DMG
 - Session list is not paginated — may be slow with very large histories (500+ sessions)
 - No automatic updates
 - App is not code-signed (see installation note above)
+- On Windows, the Live Monitor and the in-app AI Assistant / background agents are not yet supported (they rely on Unix process tooling and direct CLI spawning); browsing sessions, memory, CLAUDE.md, and opening sessions in a terminal all work
 
 ---
 
