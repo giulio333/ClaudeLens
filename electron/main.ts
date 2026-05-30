@@ -108,6 +108,7 @@ function err<T>(e: unknown): IpcResult<T> {
 function cleanDefaultFilename(filename: string, extension: string): string {
   const fallback = `claudelens-export${extension}`;
   const base = basename(filename || fallback)
+    // eslint-disable-next-line no-control-regex -- intentionally strip control chars from filenames
     .replace(/[<>:"/\\|?*\x00-\x1f]/g, '-')
     .replace(/\s+/g, ' ')
     .trim()

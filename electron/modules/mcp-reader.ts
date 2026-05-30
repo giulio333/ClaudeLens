@@ -27,7 +27,7 @@ export function getGlobalMcp(): McpData {
   const settingsPath = join(homeDir, '.claude', 'settings.json');
 
   let cloudConnected: string[] = [];
-  let projectStates: Array<{ path: string; disabled: string[] }> = [];
+  const projectStates: Array<{ path: string; disabled: string[] }> = [];
 
   if (existsSync(claudeJsonPath)) {
     try {

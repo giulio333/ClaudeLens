@@ -8,9 +8,17 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 npm run dev             # Vite dev server + Electron in parallel
 npm run build           # tsc (electron) + vite build (renderer)
 npm run electron:build  # Package distributable DMG (macOS)
+npm run typecheck       # tsc --noEmit on both configs (renderer + electron)
+npm run lint            # ESLint (flat config); lint:fix to autofix
+npm run format          # Prettier write; format:check to verify
+npm test                # Vitest (unit tests for pure modules)
 ```
 
-No automated tests — validate against real `~/.claude/` data.
+Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
+`cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`, and the chat
+`utils`. UI/IPC behavior still needs manual validation against real `~/.claude/`
+data via `npm run dev`. CI (`.github/workflows/ci.yml`) runs typecheck + lint +
+test + build on every push/PR.
 
 ## Architecture
 
