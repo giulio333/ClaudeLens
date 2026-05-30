@@ -1,6 +1,6 @@
 import { readdirSync, readFileSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
-import { resolveRealPath } from '../utils';
+import { resolveRealPath, isAbsolutePath } from '../utils';
 
 /** Spostamento di un file di sessione dalla source alla dest. */
 export interface SessionMove {
@@ -12,8 +12,8 @@ export interface SessionMove {
 }
 
 export type MemoryActionKind =
-  | 'copy'             // nessun file con lo stesso nome nella dest → copia diretta
-  | 'identical'        // file con lo stesso nome e contenuto identico → skip
+  | 'copy' // nessun file con lo stesso nome nella dest → copia diretta
+  | 'identical' // file con lo stesso nome e contenuto identico → skip
   | 'conflict-rename'; // stesso nome, contenuto diverso → copia rinominata
 
 export interface MemoryAction {
@@ -78,7 +78,7 @@ function readCwdSet(filePath: string): Set<string> {
       if (!line || line.indexOf('"cwd"') === -1) continue;
       try {
         const obj = JSON.parse(line);
-        if (typeof obj.cwd === 'string' && obj.cwd.startsWith('/')) out.add(obj.cwd);
+        if (typeof obj.cwd === 'string' && isAbsolutePath(obj.cwd)) out.add(obj.cwd);
       } catch {
         // riga malformata
       }
@@ -108,7 +108,11 @@ function uniqueRenameTarget(baseName: string, taken: Set<string>): string {
  * dentro `destHash`. Non scrive nulla: produce il piano che alimenta il dialog di
  * conferma e, successivamente, l'esecuzione.
  */
-export function computeMergePlan(projectsDir: string, sourceHash: string, destHash: string): MergePlan {
+export function computeMergePlan(
+  projectsDir: string,
+  sourceHash: string,
+  destHash: string
+): MergePlan {
   const sourceDir = join(projectsDir, sourceHash);
   const destDir = join(projectsDir, destHash);
 
@@ -150,7 +154,7 @@ export function computeMergePlan(projectsDir: string, sourceHash: string, destHa
     if (!destAuthoritative) {
       // Senza sessioni nella dest il cwd nuovo non è ricavabile in modo affidabile.
       blockers.push(
-        'Cannot determine the destination cwd reliably: the destination folder has no sessions to read it from.',
+        'Cannot determine the destination cwd reliably: the destination folder has no sessions to read it from.'
       );
     } else if (sourceReal !== destReal) {
       cwdRewrite = { from: sourceReal, to: destReal };
@@ -159,7 +163,9 @@ export function computeMergePlan(projectsDir: string, sourceHash: string, destHa
         .map(f => readCwdSet(join(sourceDir, f)))
         .find(set => set.size > 0);
       if (sample && !sample.has(sourceReal)) {
-        warnings.push('Source sessions reference a cwd different from the resolved source path; rewrite will target the destination cwd anyway.');
+        warnings.push(
+          'Source sessions reference a cwd different from the resolved source path; rewrite will target the destination cwd anyway.'
+        );
       }
     }
   }
@@ -193,7 +199,9 @@ export function computeMergePlan(projectsDir: string, sourceHash: string, destHa
       const targetName = uniqueRenameTarget(filename, takenTargets);
       takenTargets.add(targetName);
       memory.push({ filename, kind: 'conflict-rename', targetName });
-      warnings.push(`Memory "${filename}" exists in both with different content → kept as "${targetName}". Wikilinks to its slug may become ambiguous.`);
+      warnings.push(
+        `Memory "${filename}" exists in both with different content → kept as "${targetName}". Wikilinks to its slug may become ambiguous.`
+      );
     }
   }
 
@@ -210,7 +218,9 @@ export function computeMergePlan(projectsDir: string, sourceHash: string, destHa
     .map(name => {
       const collides = destSubdirSet.has(name);
       if (collides) {
-        warnings.push(`Session folder "${name}" already exists in the destination → left in place (not overwritten).`);
+        warnings.push(
+          `Session folder "${name}" already exists in the destination → left in place (not overwritten).`
+        );
       }
       return { name, collides };
     });
@@ -226,7 +236,7 @@ export function computeMergePlan(projectsDir: string, sourceHash: string, destHa
     /* ignore */
   }
   const leftovers = sourceEntries.filter(
-    n => n !== 'memory' && n !== '.DS_Store' && !n.endsWith('.jsonl') && !movableSidecars.has(n),
+    n => n !== 'memory' && n !== '.DS_Store' && !n.endsWith('.jsonl') && !movableSidecars.has(n)
   );
   const sourceEmptyAfter = leftovers.length === 0;
 
