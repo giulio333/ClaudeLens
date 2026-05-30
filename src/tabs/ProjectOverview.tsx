@@ -388,7 +388,7 @@ export default function ProjectOverview() {
         {projectToDelete && (
           <DeleteProjectDialog
             project={projectToDelete}
-            isLoading={deleteProjectMutation.isLoading}
+            isLoading={deleteProjectMutation.isPending}
             onConfirm={() => handleConfirmDelete(projectToDelete)}
             onCancel={() => setProjectToDelete(null)}
           />
@@ -477,7 +477,7 @@ export default function ProjectOverview() {
       {projectToDelete && (
         <DeleteProjectDialog
           project={projectToDelete}
-          isLoading={deleteProjectMutation.isLoading}
+          isLoading={deleteProjectMutation.isPending}
           onConfirm={() => handleConfirmDelete(projectToDelete)}
           onCancel={() => setProjectToDelete(null)}
         />

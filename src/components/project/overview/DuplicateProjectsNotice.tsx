@@ -262,7 +262,7 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
           plan={dialog.plan}
           sourceName={dialog.sourceName}
           destName={dialog.destName}
-          isLoading={executeMerge.isLoading}
+          isLoading={executeMerge.isPending}
           canExecute={true}
           onConfirm={confirmMerge}
           onCancel={() => setDialog(null)}
