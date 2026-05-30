@@ -35,6 +35,13 @@ export interface ProjectCost {
   sessionsCount: number
 }
 
+export interface PricingMeta {
+  /** ISO date (YYYY-MM-DD) the pricing table was last verified. */
+  lastUpdated: string
+  /** Model IDs priced exactly; anything else is an estimate (fuzzy/default). */
+  knownModels: string[]
+}
+
 export interface ClaudeMdLayer {
   scope: 'global' | 'project' | 'local' | 'subdir'
   filePath: string

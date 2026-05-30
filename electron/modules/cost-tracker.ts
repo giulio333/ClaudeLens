@@ -36,7 +36,10 @@ export interface SessionSummary {
 }
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
-// Fonte: Anthropic pricing page
+// Fonte: Anthropic pricing page (https://www.anthropic.com/pricing).
+// IMPORTANT: when updating the PRICING table below, bump PRICING_LAST_UPDATED so
+// the cost UI can show users how current these estimates are.
+export const PRICING_LAST_UPDATED = '2026-05-30';
 
 interface ModelPricing {
   input: number;
@@ -78,6 +81,27 @@ function getPricing(model: string | undefined): ModelPricing {
 
   // Default conservativo: Sonnet
   return PRICING['claude-sonnet-4-6'];
+}
+
+export interface PricingMeta {
+  /** ISO date (YYYY-MM-DD) the PRICING table was last verified. */
+  lastUpdated: string;
+  /** Model IDs with an exact entry in the table (everything else is estimated). */
+  knownModels: string[];
+}
+
+/** Metadata for the cost UI: how current the table is and which models it prices exactly. */
+export function getPricingMeta(): PricingMeta {
+  return { lastUpdated: PRICING_LAST_UPDATED, knownModels: Object.keys(PRICING) };
+}
+
+/**
+ * True only when the model has an exact pricing entry. Models priced via the
+ * fuzzy family fallback (or the conservative Sonnet default) return false, so the
+ * UI can flag their cost figures as estimates.
+ */
+export function isModelPriced(model: string | undefined): boolean {
+  return !!model && model in PRICING;
 }
 
 function calculateCost(

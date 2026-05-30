@@ -4,7 +4,7 @@ import {
   CartesianGrid, Legend, AreaChart, Area,
   PieChart, Pie, Cell,
 } from 'recharts'
-import { useSessionList } from '../../../hooks/useIPC'
+import { useSessionList, usePricingMeta } from '../../../hooks/useIPC'
 import { fmt, fmtModel, modelColor } from '../utils'
 import { BackButton } from '../shared/BackButton'
 import { StatChip } from '../shared/StatChip'
@@ -43,7 +43,13 @@ export function AnalyticsView({
   onBack: () => void
 }) {
   const { data: allSessions, isLoading } = useSessionList(project.hash)
+  const { data: pricingMeta } = usePricingMeta()
   const projectName = project.realPath.split('/').pop() ?? project.realPath
+
+  const knownModels = useMemo(() => new Set(pricingMeta?.knownModels ?? []), [pricingMeta])
+  // A model is "estimated" when it's not in the pricing table (priced via the
+  // fuzzy family fallback or the conservative default), so its cost is approximate.
+  const isEstimated = (model: string) => model !== '<synthetic>' && !knownModels.has(model)
 
   const sessionsToProcess = useMemo(() => {
     const sorted = allSessions
@@ -66,7 +72,9 @@ export function AnalyticsView({
     name: fmtModel(m),
     value: count,
     color: modelColor(m),
+    estimated: isEstimated(m),
   }))
+  const estimatedCount = pieData.filter(d => d.estimated).length
 
   const messagesData = sessionsToProcess.map(s => ({
     label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
@@ -185,7 +193,17 @@ export function AnalyticsView({
                           {pieData.map(d => (
                             <div key={d.name} className="flex items-center gap-2">
                               <div className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
-                              <span className="text-[11px] text-[var(--cl-ink-3)] flex-1">{d.name}</span>
+                              <span className="text-[11px] text-[var(--cl-ink-3)] flex-1">
+                                {d.name}
+                                {d.estimated && (
+                                  <span
+                                    className="text-[var(--cl-ink-4)]"
+                                    title="Not in the pricing table — cost estimated from model family"
+                                  >
+                                    {' '}~
+                                  </span>
+                                )}
+                              </span>
                               <span className="text-[11px] font-mono text-[var(--cl-ink-4)]">{fmt(d.value)}</span>
                               <span className="text-[11px] font-mono text-[var(--cl-ink-3)] w-8 text-right">
                                 {Math.round((d.value / total) * 100)}%
@@ -198,6 +216,14 @@ export function AnalyticsView({
                   </div>
                 ) : (
                   <p className="text-[12px] text-[var(--cl-ink-3)] italic">No model data.</p>
+                )}
+                {pricingMeta && (
+                  <p className="text-[10px] text-[var(--cl-ink-4)] mt-3 pt-2 border-t border-[var(--cl-line)]">
+                    Pricing as of {pricingMeta.lastUpdated}
+                    {estimatedCount > 0 && (
+                      <> · {estimatedCount} model{estimatedCount > 1 ? 's' : ''} estimated (~)</>
+                    )}
+                  </p>
                 )}
               </ChartCard>
             </div>
