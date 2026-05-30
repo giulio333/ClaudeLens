@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain } from 'electron';
-import { basename, join } from 'path';
+import { basename, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import chokidar from 'chokidar';
@@ -46,6 +46,55 @@ function assertValidHash(hash: string): void {
     || hash.includes('/') || hash.includes('\\') || hash.includes('\0')) {
     throw new Error(`Invalid project hash: ${JSON.stringify(hash)}`);
   }
+}
+
+// Valida l'hash e costruisce il path della cartella progetto in un colpo solo,
+// così nessun handler può dimenticare la validazione (vedi #13).
+function projectDir(hash: string): string {
+  assertValidHash(hash);
+  return join(PROJECTS_DIR, hash);
+}
+
+const CLAUDE_MD_BASENAMES: ReadonlySet<string> = new Set(['CLAUDE.md', 'CLAUDE.local.md']);
+
+// Un filename fornito dal renderer dev'essere un singolo segmento (no traversal):
+// gli handler memory/sessions lo concatenano a un dir di progetto già validato.
+function assertValidFilename(filename: string): void {
+  if (typeof filename !== 'string' || filename.length === 0
+    || filename === '.' || filename === '..'
+    || filename !== basename(filename)
+    || filename.includes('\\') || filename.includes('\0')) {
+    throw new Error(`Invalid filename: ${JSON.stringify(filename)}`);
+  }
+}
+
+interface SafeWritePathOptions {
+  allowedBasenames?: ReadonlySet<string>;
+  // I CLAUDE.md di progetto possono stare fuori dalla home (realPath = cwd letto dal .jsonl),
+  // quindi il containment nella home si applica solo ai path sotto ~/.claude (markdownFile:*).
+  requireUnderHome?: boolean;
+}
+
+// Valida un path fornito dal renderer prima di scriverci/cancellarlo (vedi #14):
+// dev'essere assoluto, normalizzato (collassa `..`/`.`) e con un basename ammesso
+// (allowlist) oppure `.md`; opzionalmente contenuto nella home. Ritorna il path normalizzato.
+function assertSafeWritePath(filePath: string, opts: SafeWritePathOptions = {}): string {
+  if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
+  if (!isAbsolute(filePath)) throw new Error('Path must be absolute');
+  const resolved = resolve(filePath);
+  if (opts.requireUnderHome) {
+    const home = os.homedir();
+    if (resolved !== home && !resolved.startsWith(home + sep)) {
+      throw new Error('Path must be under home directory');
+    }
+  }
+  const base = basename(resolved);
+  if (opts.allowedBasenames) {
+    if (!opts.allowedBasenames.has(base)) throw new Error(`Refusing to write file: ${base}`);
+  } else if (!base.toLowerCase().endsWith('.md')) {
+    throw new Error('Only .md files are allowed');
+  }
+  return resolved;
 }
 
 function ok<T>(data: T): IpcResult<T> {
@@ -146,7 +195,7 @@ ipcMain.handle('memory:listProjects', async (): Promise<IpcResult<Array<{ hash: 
 
 ipcMain.handle('memory:getProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const realPath = resolveRealPath(PROJECTS_DIR, hash);
     const md = await readMemory(projectPath, realPath);
     return ok(serializeMemoryData(md));
@@ -166,14 +215,14 @@ ipcMain.handle('cost:getSummary', async () => {
 
 ipcMain.handle('cost:getByProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
-    const { usage, sessionCount } = await getProjectUsage(projectPath);
+    const projectPath = projectDir(hash);
+    const { usage, sessionCount, cost } = await getProjectUsage(projectPath);
     const result = {
       project: hash,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
-      cost: (usage.inputTokens / 1_000_000) * 3.0 + (usage.outputTokens / 1_000_000) * 15.0,
+      cost,
       sessionsCount: sessionCount,
     };
     return ok(result);
@@ -209,7 +258,8 @@ ipcMain.handle('claudeMd:writeGlobal', async (_event, content: string) => {
 
 ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: string) => {
   try {
-    writeClaudeMdFile(filePath, content);
+    const safePath = assertSafeWritePath(filePath, { allowedBasenames: CLAUDE_MD_BASENAMES });
+    writeClaudeMdFile(safePath, content);
     return ok(null);
   } catch (e) {
     return err(e);
@@ -219,15 +269,10 @@ ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: s
 ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: string) => {
   try {
     const fs = require('fs') as typeof import('fs');
-    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
-    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
-    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
-    if (!filePath.toLowerCase().endsWith('.md')) throw new Error('Only .md files are writable');
-    const home = os.homedir();
-    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
-    const dir = require('path').dirname(filePath) as string;
+    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
+    const dir = require('path').dirname(safePath) as string;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
-    fs.writeFileSync(filePath, content, 'utf-8');
+    fs.writeFileSync(safePath, content, 'utf-8');
     return ok(null);
   } catch (e) {
     return err(e);
@@ -238,16 +283,11 @@ ipcMain.handle('markdownFile:delete', async (_event, filePath: string, opts?: { 
   try {
     const fs = require('fs') as typeof import('fs');
     const path = require('path') as typeof import('path');
-    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
-    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
-    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
-    if (!filePath.toLowerCase().endsWith('.md')) throw new Error('Only .md files are deletable');
-    const home = os.homedir();
-    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
-    if (fs.existsSync(filePath)) fs.rmSync(filePath);
+    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
+    if (fs.existsSync(safePath)) fs.rmSync(safePath);
     // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
     if (opts?.pruneEmptyDir) {
-      const dir = path.dirname(filePath);
+      const dir = path.dirname(safePath);
       if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmSync(dir, { recursive: false });
     }
     return ok(null);
@@ -270,12 +310,8 @@ ipcMain.handle('claudeMd:deleteGlobal', async () => {
 ipcMain.handle('claudeMd:deleteFile', async (_event, filePath: string) => {
   try {
     const fs = require('fs') as typeof import('fs');
-    if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
-    if (!filePath.startsWith('/')) throw new Error('Path must be absolute');
-    if (filePath.includes('..')) throw new Error('Path traversal not allowed');
-    const home = os.homedir();
-    if (!filePath.startsWith(home + '/')) throw new Error('Path must be under home directory');
-    if (fs.existsSync(filePath)) fs.rmSync(filePath);
+    const safePath = assertSafeWritePath(filePath, { allowedBasenames: CLAUDE_MD_BASENAMES });
+    if (fs.existsSync(safePath)) fs.rmSync(safePath);
     return ok(null);
   } catch (e) {
     return err(e);
@@ -350,7 +386,7 @@ ipcMain.handle('settings:getCleanupPeriodDays', async () => {
 
 ipcMain.handle('sessions:listByProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const sessions = await getSessionList(projectPath);
     return ok(sessions);
   } catch (e) {
@@ -360,7 +396,7 @@ ipcMain.handle('sessions:listByProject', async (_event, hash: string) => {
 
 ipcMain.handle('memory:createTopic', async (_event, hash: string, input: TopicInput) => {
   try {
-    const memoryDir = join(PROJECTS_DIR, hash, 'memory');
+    const memoryDir = join(projectDir(hash), 'memory');
     const filename = createTopic(memoryDir, input);
     return ok({ filename });
   } catch (e) { return err(e); }
@@ -368,7 +404,8 @@ ipcMain.handle('memory:createTopic', async (_event, hash: string, input: TopicIn
 
 ipcMain.handle('memory:updateTopic', async (_event, hash: string, filename: string, input: TopicInput) => {
   try {
-    const memoryDir = join(PROJECTS_DIR, hash, 'memory');
+    assertValidFilename(filename);
+    const memoryDir = join(projectDir(hash), 'memory');
     updateTopic(memoryDir, filename, input);
     return ok(null);
   } catch (e) { return err(e); }
@@ -376,7 +413,8 @@ ipcMain.handle('memory:updateTopic', async (_event, hash: string, filename: stri
 
 ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: string) => {
   try {
-    const memoryDir = join(PROJECTS_DIR, hash, 'memory');
+    assertValidFilename(filename);
+    const memoryDir = join(projectDir(hash), 'memory');
     deleteTopic(memoryDir, filename);
     return ok(null);
   } catch (e) { return err(e); }
@@ -384,7 +422,8 @@ ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: stri
 
 ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    assertValidFilename(filename);
+    const projectPath = projectDir(hash);
     const filePath = await findSessionFile(projectPath, filename);
     if (!filePath) return err(new Error(`File sessione non trovato: ${filename}`));
     const messages = readChatSession(filePath);
@@ -394,7 +433,7 @@ ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string
 
 ipcMain.handle('tasks:getByProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const groups = await getProjectTasks(projectPath, TASKS_DIR);
     return ok(groups);
   } catch (e) {
@@ -404,7 +443,7 @@ ipcMain.handle('tasks:getByProject', async (_event, hash: string) => {
 
 ipcMain.handle('plans:getByProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const groups = await getProjectPlans(projectPath);
     return ok(groups);
   } catch (e) {
@@ -549,7 +588,7 @@ async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
 
 ipcMain.handle('projects:delete', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const { rmSync } = await import('fs');
     rmSync(projectPath, { recursive: true, force: true });
     return ok(null);
@@ -691,7 +730,7 @@ ipcMain.handle('live:getSessions', async () => {
 
 ipcMain.handle('live:startWatch', async (event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
+    const projectPath = projectDir(hash);
     const started = await startLiveMonitor(projectPath, (liveEvent) => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('live:event', liveEvent);

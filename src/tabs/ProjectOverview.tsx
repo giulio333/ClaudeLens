@@ -336,37 +336,31 @@ export default function ProjectOverview() {
         return <ProjectClaudeMdView layer={view.layer} onBack={() => setView({ type: 'overview' })} />
       case 'chat':
         return (
-          <ErrorBoundary key={view.session.filename}>
-            <ChatView
-              project={view.project}
-              session={view.session}
-              onBack={() => view.from === 'agents-live'
-                ? setView({ type: 'agents-live', project: view.project })
-                : setView({ type: 'sessions', project: view.project })
-              }
-            />
-          </ErrorBoundary>
+          <ChatView
+            project={view.project}
+            session={view.session}
+            onBack={() => view.from === 'agents-live'
+              ? setView({ type: 'agents-live', project: view.project })
+              : setView({ type: 'sessions', project: view.project })
+            }
+          />
         )
       case 'memory-topic':
         return (
-          <ErrorBoundary key={view.topic.filename}>
-            <MemoryTopicView
-              topic={view.topic}
-              content={view.content}
-              hash={view.hash}
-              onBack={() => selected ? setView({ type: 'project-memory', project: selected }) : goGlobal()}
-            />
-          </ErrorBoundary>
+          <MemoryTopicView
+            topic={view.topic}
+            content={view.content}
+            hash={view.hash}
+            onBack={() => selected ? setView({ type: 'project-memory', project: selected }) : goGlobal()}
+          />
         )
       case 'plan-detail':
         return (
-          <ErrorBoundary key={view.plan.filePath}>
-            <PlanDetailView
-              plan={view.plan}
-              project={view.project}
-              onBack={() => setView({ type: 'project-plans', project: view.project })}
-            />
-          </ErrorBoundary>
+          <PlanDetailView
+            plan={view.plan}
+            project={view.project}
+            onBack={() => setView({ type: 'project-plans', project: view.project })}
+          />
         )
       case 'analytics':
         return <AnalyticsView project={view.project} onBack={() => setView({ type: 'overview' })} />
@@ -383,10 +377,14 @@ export default function ProjectOverview() {
   }
 
   // Deep views take over the full surface (preserve their existing chrome).
+  // A boundary keyed by the view isolates a sub-view crash and auto-clears it on
+  // navigation, instead of bubbling to the app-level boundary and resetting all state.
   if (!isEditorialCore) {
     return (
       <div className="cl-app">
-        <div style={{ flex: 1, overflow: 'hidden' }}>{renderDeepView()}</div>
+        <div style={{ flex: 1, overflow: 'hidden' }}>
+          <ErrorBoundary key={JSON.stringify(view)}>{renderDeepView()}</ErrorBoundary>
+        </div>
         {projectToDelete && (
           <DeleteProjectDialog
             project={projectToDelete}
@@ -455,23 +453,25 @@ export default function ProjectOverview() {
 
       {/* ─── Main ────────────────────────────────────────── */}
       <div className="cl-main">
-        {isGlobalHome ? (
-          <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
-        ) : isGlobalLiveAgents ? (
-          <AgentsLiveView
-            embedded
-            onBack={goGlobal}
-            onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
-          />
-        ) : selected ? (
-          <ProjectView
-            key={selected.hash}
-            project={selected}
-            section={sectionFromView(view)}
-            onNavigate={setView}
-            onOpenProjectSearch={openProjectSearch}
-          />
-        ) : null}
+        <ErrorBoundary key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}>
+          {isGlobalHome ? (
+            <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
+          ) : isGlobalLiveAgents ? (
+            <AgentsLiveView
+              embedded
+              onBack={goGlobal}
+              onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
+            />
+          ) : selected ? (
+            <ProjectView
+              key={selected.hash}
+              project={selected}
+              section={sectionFromView(view)}
+              onNavigate={setView}
+              onOpenProjectSearch={openProjectSearch}
+            />
+          ) : null}
+        </ErrorBoundary>
       </div>
 
       {projectToDelete && (

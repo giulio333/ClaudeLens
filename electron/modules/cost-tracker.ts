@@ -235,23 +235,49 @@ async function findSessionFiles(projectPath: string): Promise<string[]> {
   return glob('*.jsonl', { cwd: projectPath, absolute: true });
 }
 
-export async function getProjectUsage(
-  projectPath: string
-): Promise<{ usage: UsageData; sessionCount: number }> {
+interface ProjectAggregate {
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  cost: number;
+  sessionCount: number;
+}
+
+// Aggrega token e costo di un progetto usando la pricing table per-modello
+// (modello dominante + cache token), così summary e per-progetto coincidono.
+async function aggregateProject(projectPath: string): Promise<ProjectAggregate> {
   const files = await findSessionFiles(projectPath);
-  let inputTokens = 0, outputTokens = 0, cacheWrite = 0, cacheRead = 0;
+  let inputTokens = 0, outputTokens = 0, cacheWriteTokens = 0, cacheReadTokens = 0;
+  const modelCounts: Record<string, number> = {};
 
   for (const f of files) {
     const s = parseJsonlSession(f);
-    inputTokens  += s.inputTokens;
-    outputTokens += s.outputTokens;
-    cacheWrite   += s.cacheWriteTokens;
-    cacheRead    += s.cacheReadTokens;
+    inputTokens      += s.inputTokens;
+    outputTokens     += s.outputTokens;
+    cacheWriteTokens += s.cacheWriteTokens;
+    cacheReadTokens  += s.cacheReadTokens;
+    if (s.model) modelCounts[s.model] = (modelCounts[s.model] ?? 0) + 1;
   }
 
+  const dominantModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
+  const cost = calculateCost(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, dominantModel);
+
   return {
-    usage: { inputTokens, outputTokens, totalTokens: inputTokens + outputTokens },
-    sessionCount: files.length,
+    inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens,
+    totalTokens: inputTokens + outputTokens, cost, sessionCount: files.length,
+  };
+}
+
+export async function getProjectUsage(
+  projectPath: string
+): Promise<{ usage: UsageData; sessionCount: number; cost: number }> {
+  const a = await aggregateProject(projectPath);
+  return {
+    usage: { inputTokens: a.inputTokens, outputTokens: a.outputTokens, totalTokens: a.totalTokens },
+    sessionCount: a.sessionCount,
+    cost: a.cost,
   };
 }
 
@@ -262,32 +288,16 @@ export async function calculateCostSummary(claudeDir: string): Promise<ProjectCo
 
     for (const projectPath of projectDirs) {
       try {
-        const files = await findSessionFiles(projectPath);
-        let inputTokens = 0, outputTokens = 0, cacheWrite = 0, cacheRead = 0;
-        const modelCounts: Record<string, number> = {};
-
-        for (const f of files) {
-          const s = parseJsonlSession(f);
-          inputTokens  += s.inputTokens;
-          outputTokens += s.outputTokens;
-          cacheWrite   += s.cacheWriteTokens;
-          cacheRead    += s.cacheReadTokens;
-          if (s.model) modelCounts[s.model] = (modelCounts[s.model] ?? 0) + 1;
-        }
-
-        const totalTokens = inputTokens + outputTokens;
-        if (totalTokens === 0) continue;
-
-        const dominantModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-        const cost = calculateCost(inputTokens, outputTokens, cacheWrite, cacheRead, dominantModel);
+        const a = await aggregateProject(projectPath);
+        if (a.totalTokens === 0) continue;
 
         costs.push({
           project: projectPath.split('/').pop() || 'unknown',
-          inputTokens,
-          outputTokens,
-          totalTokens,
-          cost,
-          sessionsCount: files.length,
+          inputTokens: a.inputTokens,
+          outputTokens: a.outputTokens,
+          totalTokens: a.totalTokens,
+          cost: a.cost,
+          sessionsCount: a.sessionCount,
         });
       } catch {
         // progetto non leggibile
