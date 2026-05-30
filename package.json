@@ -96,8 +96,7 @@
     },
     "linux": {
       "target": [
-        "AppImage",
-        "deb"
+        "AppImage"
       ],
       "icon": "./icon.png",
       "category": "Development"

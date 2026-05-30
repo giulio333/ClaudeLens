@@ -162,7 +162,7 @@ Requires `claude` CLI in `PATH`.
 
 **macOS** — download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
 
-**Linux (experimental)** — download the `.AppImage` (make it executable with `chmod +x`) or the `.deb` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
+**Linux (experimental)** — download the `.AppImage` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page and make it executable with `chmod +x`. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
 
 > **First launch — Gatekeeper warning**
 >
