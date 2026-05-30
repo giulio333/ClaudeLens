@@ -13,21 +13,21 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLe
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/project.png"/>
+      <img src="docs/screenshots/project.png" alt="ClaudeLens project overview screen"/>
       <br/><sub><b>Project overview</b></sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/sessions.png"/>
+      <img src="docs/screenshots/sessions.png" alt="ClaudeLens chat sessions view"/>
       <br/><sub><b>Chat sessions</b></sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/memory.png"/>
+      <img src="docs/screenshots/memory.png" alt="ClaudeLens memory management view"/>
       <br/><sub><b>Memory management</b></sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/claudemd-details.png"/>
+      <img src="docs/screenshots/claudemd-details.png" alt="ClaudeLens CLAUDE.md inline file viewer"/>
       <br/><sub><b>CLAUDE.md — inline file viewer</b></sub>
     </td>
   </tr>
@@ -38,11 +38,11 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLe
 <table>
   <tr>
     <td width="50%">
-      <img src="docs/screenshots/skills.png"/>
+      <img src="docs/screenshots/skills.png" alt="ClaudeLens skills list"/>
       <br/><sub><b>Skills — list</b></sub>
     </td>
     <td width="50%">
-      <img src="docs/screenshots/skills-detail.png"/>
+      <img src="docs/screenshots/skills-detail.png" alt="ClaudeLens skill file content view"/>
       <br/><sub><b>Skills — file content</b></sub>
     </td>
   </tr>

@@ -366,6 +366,9 @@ export function SearchPopover({
   return (
     <div
       ref={popRef}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Search"
       className={`cl-search-pop${mode === 'projects' ? ' project-only' : ''}`}
       style={{ top, left, width: popWidth }}
       onClick={e => e.stopPropagation()}

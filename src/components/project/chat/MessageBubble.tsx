@@ -60,7 +60,7 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   if (!thinking) return null
   return (
     <div className="cl-thinking">
-      <button type="button" onClick={() => setOpen(o => !o)} className="cl-thinking-toggle">
+      <button type="button" onClick={() => setOpen(o => !o)} className="cl-thinking-toggle" aria-label={`Thinking — ${open ? 'collapse' : 'expand'} content`} aria-expanded={open}>
         <span>Thinking</span>
         <b>{open ? 'Close' : 'Open'}</b>
       </button>

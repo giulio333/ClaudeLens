@@ -3,6 +3,23 @@
   "version": "1.5.0",
   "description": "ClaudeLens — GUI for Claude Code data",
   "author": "Giulio Di Giamberardino",
+  "license": "MIT",
+  "homepage": "https://github.com/giulio333/ClaudeLens#readme",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/giulio333/ClaudeLens.git"
+  },
+  "bugs": {
+    "url": "https://github.com/giulio333/ClaudeLens/issues"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "electron",
+    "react",
+    "developer-tools",
+    "macos"
+  ],
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on http://localhost:5173 dist-electron/main.js && electron .\"",
