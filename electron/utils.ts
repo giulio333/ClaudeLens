@@ -1,64 +1,73 @@
-import { readdirSync, readFileSync, statSync } from 'fs'
-import { join } from 'path'
+import { readdirSync, readFileSync, statSync } from 'fs';
+import { join } from 'path';
 
 export function hashToPath(hash: string): string {
   // Fallback ingenuo: Claude Code converte sia '/' sia '.' in '-' nel nome cartella,
   // quindi questa inversione è lossy (es. SARA2.0 → SARA2-0 → SARA2/0).
   // Usa resolveRealPath quando possibile per leggere il cwd autoritativo dai .jsonl.
-  return '/' + hash.replace(/^-/, '').replace(/-/g, '/')
+  return '/' + hash.replace(/^-/, '').replace(/-/g, '/');
 }
 
 export function pathToHash(realPath: string): string {
-  return realPath.replace(/\//g, '-')
+  return realPath.replace(/\//g, '-');
+}
+
+/**
+ * True if `p` looks like an absolute path on any platform. Used to validate the
+ * `cwd` read from .jsonl files: POSIX paths start with '/', Windows paths start
+ * with a drive letter ('C:\...' / 'C:/...') or a UNC prefix ('\\server\share').
+ */
+export function isAbsolutePath(p: string): boolean {
+  return p.startsWith('/') || /^[a-zA-Z]:[\\/]/.test(p) || p.startsWith('\\\\');
 }
 
 // Cache per evitare di rileggere lo stesso jsonl più volte nella stessa sessione.
-const cwdCache = new Map<string, string>()
+const cwdCache = new Map<string, string>();
 
 /** Invalida la cache del cwd dopo che il contenuto di una cartella è cambiato (es. merge). */
 export function invalidateCwdCache(hash?: string): void {
-  if (hash) cwdCache.delete(hash)
-  else cwdCache.clear()
+  if (hash) cwdCache.delete(hash);
+  else cwdCache.clear();
 }
 
 export function resolveRealPath(projectsDir: string, hash: string): string {
-  const cached = cwdCache.get(hash)
-  if (cached) return cached
+  const cached = cwdCache.get(hash);
+  if (cached) return cached;
 
-  const projectDir = join(projectsDir, hash)
+  const projectDir = join(projectsDir, hash);
   try {
     const files = readdirSync(projectDir)
       .filter(f => f.endsWith('.jsonl'))
       .map(f => {
-        const full = join(projectDir, f)
-        return { full, mtime: statSync(full).mtimeMs }
+        const full = join(projectDir, f);
+        return { full, mtime: statSync(full).mtimeMs };
       })
-      .sort((a, b) => b.mtime - a.mtime)
+      .sort((a, b) => b.mtime - a.mtime);
 
     for (const { full } of files) {
-      const cwd = readCwdFromJsonl(full)
+      const cwd = readCwdFromJsonl(full);
       if (cwd) {
-        cwdCache.set(hash, cwd)
-        return cwd
+        cwdCache.set(hash, cwd);
+        return cwd;
       }
     }
   } catch {
     // ignore, ricade nel fallback
   }
 
-  return hashToPath(hash)
+  return hashToPath(hash);
 }
 
 function readCwdFromJsonl(filePath: string): string | null {
   try {
-    const content = readFileSync(filePath, 'utf-8')
+    const content = readFileSync(filePath, 'utf-8');
     for (const line of content.split('\n')) {
-      if (!line) continue
-      const idx = line.indexOf('"cwd"')
-      if (idx === -1) continue
+      if (!line) continue;
+      const idx = line.indexOf('"cwd"');
+      if (idx === -1) continue;
       try {
-        const obj = JSON.parse(line)
-        if (typeof obj.cwd === 'string' && obj.cwd.startsWith('/')) return obj.cwd
+        const obj = JSON.parse(line);
+        if (typeof obj.cwd === 'string' && isAbsolutePath(obj.cwd)) return obj.cwd;
       } catch {
         // riga malformata, continua
       }
@@ -66,5 +75,5 @@ function readCwdFromJsonl(filePath: string): string | null {
   } catch {
     // file illeggibile
   }
-  return null
+  return null;
 }

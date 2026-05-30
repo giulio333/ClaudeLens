@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
-import { basename, isAbsolute, join, resolve, sep } from 'path';
+import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import chokidar from 'chokidar';
@@ -120,6 +120,19 @@ function ok<T>(data: T): IpcResult<T> {
 
 function err<T>(e: unknown): IpcResult<T> {
   return { data: null, error: e instanceof Error ? e.message : String(e) };
+}
+
+// Build the env for spawning the `claude` CLI. A GUI-launched app may not inherit
+// the user's interactive-shell PATH, so we prepend common install locations using
+// the platform path delimiter (':' on Unix, ';' on Windows). On Windows the CLI
+// is on the user PATH as claude.cmd, so the Unix-only dirs are skipped.
+function claudeEnv(): NodeJS.ProcessEnv {
+  const extra =
+    process.platform === 'win32'
+      ? []
+      : [join(os.homedir(), '.local', 'bin'), '/usr/local/bin', '/opt/homebrew/bin'];
+  const PATH = [...extra, process.env.PATH || ''].filter(Boolean).join(delimiter);
+  return { ...process.env, PATH };
 }
 
 function cleanDefaultFilename(filename: string, extension: string): string {
@@ -630,13 +643,7 @@ ipcMain.handle(
       const { promisify } = await import('util');
       const execFileAsync = promisify(execFile);
 
-      const localBinPath = join(os.homedir(), '.local', 'bin');
-      const env = {
-        ...process.env,
-        PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`,
-      };
-
-      await execFileAsync('claude', args, { cwd, env });
+      await execFileAsync('claude', args, { cwd, env: claudeEnv() });
 
       return ok(null);
     } catch (e: any) {
@@ -674,12 +681,10 @@ async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
     const { execFile } = await import('child_process');
     const { promisify } = await import('util');
     const execFileAsync = promisify(execFile);
-    const localBinPath = join(os.homedir(), '.local', 'bin');
-    const env = {
-      ...process.env,
-      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`,
-    };
-    const { stdout } = await execFileAsync('claude', args, { env, maxBuffer: 4 * 1024 * 1024 });
+    const { stdout } = await execFileAsync('claude', args, {
+      env: claudeEnv(),
+      maxBuffer: 4 * 1024 * 1024,
+    });
     return ok(stdout);
   } catch (e: any) {
     return err(e.stderr || e.message || String(e));
@@ -775,10 +780,9 @@ ipcMain.handle(
         'Read,Glob,Grep,WebSearch,WebFetch',
         '--no-session-persistence',
       ];
-      const localBinPath = join(os.homedir(), '.local', 'bin');
       const proc = spawn('claude', args, {
         cwd: projectPath,
-        env: { ...process.env, PATH: `${localBinPath}:/usr/local/bin:${process.env.PATH || ''}` },
+        env: claudeEnv(),
       });
       currentAiProcess = proc;
 
@@ -874,6 +878,14 @@ function openInTerminal(cwd: string, command: string): void {
       'end tell',
     ].join('\n');
     execFile('osascript', ['-e', script]);
+    return;
+  }
+
+  if (process.platform === 'win32') {
+    // `start` is a cmd builtin (hence `cmd /c start`); the empty "" is the
+    // window title. `cmd /k` runs the command and keeps the window open.
+    // `cd /d` switches drive and directory in one go.
+    execFile('cmd.exe', ['/c', 'start', '', 'cmd', '/k', `cd /d "${dir}" && ${command}`]);
     return;
   }
 

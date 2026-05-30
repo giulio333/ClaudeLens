@@ -36,6 +36,11 @@ async function getProcessCwd(pid: number): Promise<string | null> {
 }
 
 export async function findClaudeProcesses(): Promise<ClaudeProcess[]> {
+  // Windows has no `ps`/`lsof`/`/proc`, and resolving an arbitrary process'
+  // working directory requires native APIs (NtQueryInformationProcess). The
+  // Live Monitor degrades to empty here; the rest of the app is unaffected.
+  if (process.platform === 'win32') return [];
+
   try {
     // Cattura anche il bare command "claude" (senza path), esclude Claude.app desktop, ClaudeLens
     // e il plumbing del daemon background agent (--bg-pty-host / --bg-spare): non sono sessioni utente.

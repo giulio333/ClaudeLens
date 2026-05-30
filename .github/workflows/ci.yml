@@ -67,3 +67,32 @@ jobs:
           name: claudelens-linux
           path: release/*.AppImage
           if-no-files-found: error
+
+  package-windows:
+    name: Package Windows (nsis)
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + electron
+        run: npm run build
+
+      - name: Package Windows artifacts
+        run: npx electron-builder --win --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: claudelens-windows
+          path: release/*.exe
+          if-no-files-found: error
