@@ -215,14 +215,14 @@ ipcMain.handle('cost:getSummary', async () => {
 
 ipcMain.handle('cost:getByProject', async (_event, hash: string) => {
   try {
-    const projectPath = join(PROJECTS_DIR, hash);
-    const { usage, sessionCount } = await getProjectUsage(projectPath);
+    const projectPath = projectDir(hash);
+    const { usage, sessionCount, cost } = await getProjectUsage(projectPath);
     const result = {
       project: hash,
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       totalTokens: usage.totalTokens,
-      cost: (usage.inputTokens / 1_000_000) * 3.0 + (usage.outputTokens / 1_000_000) * 15.0,
+      cost,
       sessionsCount: sessionCount,
     };
     return ok(result);
