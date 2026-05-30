@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { memo, useState } from 'react'
 import type { CSSProperties } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
@@ -119,7 +119,15 @@ function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand;
   )
 }
 
-export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turnIndex }: {
+// Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
+// `onOpenToolDetail` setter, bubbles don't re-render on header-collapse / export
+// state changes — only when their own props actually change.
+export const MessageBubble = memo(function MessageBubble({
+  processed,
+  detailsFilter,
+  onOpenToolDetail,
+  turnIndex,
+}: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
   onOpenToolDetail: (group: ToolGroup) => void
@@ -282,4 +290,4 @@ export function MessageBubble({ processed, detailsFilter, onOpenToolDetail, turn
       </section>
     </article>
   )
-}
+})

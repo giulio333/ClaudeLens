@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, RefObject } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
@@ -357,27 +357,40 @@ export function ChatView({
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
 
-  const processed = messages ? buildProcessedMessages(messages) : []
+  // Heavy: rebuild the processed transcript only when the raw messages change,
+  // not on every render (e.g. header collapse toggles fired during scroll).
+  const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
   const canExport = processed.length > 0 && !isLoading
 
-  const realUserCount = processed.filter(p => p.msg.role === 'user').length
-  const realAssistantCount = processed.filter(p => p.msg.role === 'assistant').length
-  const totalMessages = realUserCount + realAssistantCount
+  // Derived session stats — also O(n), so memoize on the processed list.
+  const stats = useMemo(() => {
+    const realUserCount = processed.filter(p => p.msg.role === 'user').length
+    const realAssistantCount = processed.filter(p => p.msg.role === 'assistant').length
 
-  const toolCounts = processed.reduce((acc, p) => {
-    for (const g of p.toolGroups) {
-      acc[g.use.name] = (acc[g.use.name] ?? 0) + 1
-      if (isMemoryFile(g.use.input as Record<string, unknown>)) {
-        acc['_memory'] = (acc['_memory'] ?? 0) + 1
-      }
+    const toolCounts = processed.reduce(
+      (acc, p) => {
+        for (const g of p.toolGroups) {
+          acc[g.use.name] = (acc[g.use.name] ?? 0) + 1
+          if (isMemoryFile(g.use.input as Record<string, unknown>)) {
+            acc['_memory'] = (acc['_memory'] ?? 0) + 1
+          }
+        }
+        return acc
+      },
+      {} as Record<string, number>
+    )
+    const toolSummary = Object.entries(toolCounts)
+      .filter(([k]) => k !== '_memory')
+      .sort((a, b) => b[1] - a[1])
+
+    return {
+      totalMessages: realUserCount + realAssistantCount,
+      toolSummary,
+      totalToolCalls: toolSummary.reduce((s, [, c]) => s + c, 0),
+      memoryToolCalls: toolCounts['_memory'] ?? 0,
     }
-    return acc
-  }, {} as Record<string, number>)
-  const toolSummary = Object.entries(toolCounts)
-    .filter(([k]) => k !== '_memory')
-    .sort((a, b) => b[1] - a[1])
-  const totalToolCalls = toolSummary.reduce((s, [, c]) => s + c, 0)
-  const memoryToolCalls = toolCounts['_memory'] ?? 0
+  }, [processed])
+  const { totalMessages, toolSummary, totalToolCalls, memoryToolCalls } = stats
 
   const title = sessionTitle(session)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] ?? null : null
