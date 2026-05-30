@@ -81,14 +81,25 @@
   "build": {
     "appId": "com.claudelens.app",
     "productName": "ClaudeLens",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "icon4.icns"
+      "icon4.icns",
+      "icon.png"
     ],
     "mac": {
       "target": "dmg",
       "icon": "./icon4.icns"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "icon": "./icon.png",
+      "category": "Development"
     }
   }
 }

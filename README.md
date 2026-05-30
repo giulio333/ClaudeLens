@@ -1,6 +1,6 @@
 # ClaudeLens
 
-A macOS desktop app to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
+A desktop app (macOS, with experimental Linux support) to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
 
 If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLens makes it navigable. Browse chat sessions, manage memory topics, inspect tool calls, view your full CLAUDE.md hierarchy, and monitor active Claude processes, all in one place and updated in real time.
 
@@ -92,15 +92,15 @@ Two modes: **Minimal** (messages only) and **Full** (includes thinking and tool 
 
 For each tool call, open a dedicated panel showing input and output with type-specific rendering:
 
-| Tool | Rendering |
-|------|-----------|
-| **Read** | Filepath + syntax-highlighted code block |
-| **Write / Edit** | Filepath + old/new content |
-| **Bash** | Description + command in terminal style + output |
-| **Grep** | Regex pattern + matching lines with line numbers |
-| **Glob** | Pattern + numbered filepath list |
-| **Agent** | Agent type + description + markdown response |
-| **WebFetch / WebSearch** | URL or query + raw text |
+| Tool                     | Rendering                                        |
+| ------------------------ | ------------------------------------------------ |
+| **Read**                 | Filepath + syntax-highlighted code block         |
+| **Write / Edit**         | Filepath + old/new content                       |
+| **Bash**                 | Description + command in terminal style + output |
+| **Grep**                 | Regex pattern + matching lines with line numbers |
+| **Glob**                 | Pattern + numbered filepath list                 |
+| **Agent**                | Agent type + description + markdown response     |
+| **WebFetch / WebSearch** | URL or query + raw text                          |
 
 ---
 
@@ -153,14 +153,16 @@ Requires `claude` CLI in `PATH`.
 
 ## Requirements
 
-- macOS 12 Monterey or later
+- macOS 12 Monterey or later, or Linux (experimental)
 - [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
 
 ---
 
 ## Installation
 
-Download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
+**macOS** — download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
+
+**Linux (experimental)** — download the `.AppImage` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page and make it executable with `chmod +x`. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
 
 > **First launch — Gatekeeper warning**
 >
@@ -168,6 +170,7 @@ Download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/
 > Right-click the app in Finder and choose **Open**, then confirm in the dialog.
 >
 > Alternatively, run this command once in Terminal:
+>
 > ```bash
 > xattr -d com.apple.quarantine /Applications/ClaudeLens.app
 > ```
