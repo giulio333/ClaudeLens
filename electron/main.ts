@@ -654,16 +654,23 @@ ipcMain.handle('ai:run', async (event, instruction: string, inputContent: string
     currentAiProcess = null;
   }
 
+  const { existsSync, statSync } = await import('fs');
+  if (!projectPath || !existsSync(projectPath) || !statSync(projectPath).isDirectory()) {
+    return err(`Project directory not found on disk: ${projectPath}. The project may have been moved or deleted.`);
+  }
+
   return new Promise<IpcResult<null>>((resolve) => {
-    // Con shell:true su Unix, spawn(cmd, args) diventa: /bin/sh -c cmd arg1 arg2
-    // dove arg1/arg2 sono $0/$1 della shell, NON argomenti di cmd.
-    // Soluzione: passare tutto come stringa singola con args=[].
-    const escapedInstruction = instruction.replace(/'/g, "'\\''");
-    const cmd = `claude -p '${escapedInstruction}' --model Haiku --allowedTools 'Read,Glob,Grep,WebSearch,WebFetch' --no-session-persistence`;
+    // execFile-style: nessuna shell, l'istruzione passa come argomento separato
+    // (niente string-building né escaping fragile — cfr. agents:dispatchBg).
+    const args = [
+      '-p', instruction,
+      '--model', 'Haiku',
+      '--allowedTools', 'Read,Glob,Grep,WebSearch,WebFetch',
+      '--no-session-persistence',
+    ];
     const localBinPath = join(os.homedir(), '.local', 'bin');
-    const proc = spawn(cmd, [], {
+    const proc = spawn('claude', args, {
       cwd: projectPath,
-      shell: true,
       env: { ...process.env, PATH: `${localBinPath}:/usr/local/bin:${process.env.PATH || ''}` },
     });
     currentAiProcess = proc;
