@@ -28,6 +28,8 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
           type="button"
           onClick={() => hasExpandable && setOpen(o => !o)}
           className={`cl-tool-card-main ${!hasExpandable ? 'is-static' : ''}`}
+          aria-label={`${use.name} tool — ${open ? 'collapse' : 'expand'} details`}
+          aria-expanded={hasExpandable ? open : undefined}
         >
           <span className="cl-tool-card-icon">{icon}</span>
           <span className="cl-tool-card-name">{use.name}</span>

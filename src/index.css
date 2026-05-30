@@ -26,7 +26,7 @@
   --cl-ink:        oklch(0.18 0.010 60);
   --cl-ink-2:      oklch(0.34 0.010 70);
   --cl-ink-3:      oklch(0.52 0.010 80);
-  --cl-ink-4:      oklch(0.720 0.010 90);       /* #B1ADA1 */
+  --cl-ink-4:      oklch(0.55 0.012 90);        /* ~#7c7669 — darkened for WCAG AA (~4.6:1 on white) */
   --cl-line:       oklch(0.86 0.008 90);
   --cl-line-soft:  oklch(0.91 0.006 90);
   --cl-accent:      oklch(0.575 0.135 40);      /* #C15F3C */

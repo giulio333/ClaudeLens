@@ -57,12 +57,14 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 | Accent         | `#C15F3C` | Terracotta — primary brand accent       |
 | Paper          | `#FFFFFF` | Base canvas (light theme)               |
 | Paper-2        | `#F4F3EE` | Warm off-white surface / cards          |
-| Warm gray      | `#B1ADA1` | Muted ink / dividers (`--cl-ink-4`)     |
+| Warm gray      | `#B1ADA1` | Muted ink / dividers (reference hue)    |
 
 These are the only brand colors. They're encoded in `src/index.css` as
-`--cl-accent`, `--cl-paper`, `--cl-paper-2`, `--cl-ink-4` (light) and
+`--cl-accent`, `--cl-paper`, `--cl-paper-2`, and the warm-gray hue and
 lifted to higher lightness in `[data-theme='dark']`. Do not introduce new
 hues for accents — extend by varying lightness/chroma on the same hue (40°).
+Note: `--cl-ink-4` in the light theme is darkened from the reference `#B1ADA1`
+to ~`#7c7669` so meta text/labels meet WCAG AA contrast (~4.6:1) on white.
 
 ## Key conventions
 
