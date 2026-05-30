@@ -7,7 +7,12 @@ import { execFile, spawn, ChildProcess } from 'child_process';
 
 import { listProjectsWithMemory, readMemory } from './modules/memory-reader';
 import { createTopic, updateTopic, deleteTopic, TopicInput } from './modules/memory-writer';
-import { calculateCostSummary, getSessionList, getProjectUsage, getPricingMeta } from './modules/cost-tracker';
+import {
+  calculateCostSummary,
+  getSessionList,
+  getProjectUsage,
+  getPricingMeta,
+} from './modules/cost-tracker';
 import {
   readGlobalClaudeMd,
   getClaudeMdHierarchy,
@@ -42,8 +47,15 @@ type ExportSaveResult = { canceled: boolean; filePath: string | null };
 // Un hash di progetto è il nome di una cartella figlia diretta di PROJECTS_DIR:
 // rifiuta separatori/traversal per impedire operazioni fuori da PROJECTS_DIR.
 function assertValidHash(hash: string): void {
-  if (typeof hash !== 'string' || hash.length === 0 || hash === '.' || hash === '..'
-    || hash.includes('/') || hash.includes('\\') || hash.includes('\0')) {
+  if (
+    typeof hash !== 'string' ||
+    hash.length === 0 ||
+    hash === '.' ||
+    hash === '..' ||
+    hash.includes('/') ||
+    hash.includes('\\') ||
+    hash.includes('\0')
+  ) {
     throw new Error(`Invalid project hash: ${JSON.stringify(hash)}`);
   }
 }
@@ -60,10 +72,15 @@ const CLAUDE_MD_BASENAMES: ReadonlySet<string> = new Set(['CLAUDE.md', 'CLAUDE.l
 // Un filename fornito dal renderer dev'essere un singolo segmento (no traversal):
 // gli handler memory/sessions lo concatenano a un dir di progetto già validato.
 function assertValidFilename(filename: string): void {
-  if (typeof filename !== 'string' || filename.length === 0
-    || filename === '.' || filename === '..'
-    || filename !== basename(filename)
-    || filename.includes('\\') || filename.includes('\0')) {
+  if (
+    typeof filename !== 'string' ||
+    filename.length === 0 ||
+    filename === '.' ||
+    filename === '..' ||
+    filename !== basename(filename) ||
+    filename.includes('\\') ||
+    filename.includes('\0')
+  ) {
     throw new Error(`Invalid filename: ${JSON.stringify(filename)}`);
   }
 }
@@ -120,7 +137,7 @@ function cleanDefaultFilename(filename: string, extension: string): string {
 async function chooseExportPath(
   defaultFilename: string,
   extension: string,
-  filters: Electron.FileFilter[],
+  filters: Electron.FileFilter[]
 ): Promise<ExportSaveResult> {
   const options: Electron.SaveDialogOptions = {
     defaultPath: cleanDefaultFilename(defaultFilename, extension),
@@ -185,9 +202,7 @@ function setupContentSecurityPolicy() {
 
 function createWindow() {
   const isDev = !app.isPackaged;
-  const iconPath = isDev
-    ? join(__dirname, '../icon4.icns')
-    : join(app.getAppPath(), 'icon4.icns');
+  const iconPath = isDev ? join(__dirname, '../icon4.icns') : join(app.getAppPath(), 'icon4.icns');
 
   mainWindow = new BrowserWindow({
     width: 1280,
@@ -232,18 +247,21 @@ function createWindow() {
 }
 
 // IPC Handlers
-ipcMain.handle('memory:listProjects', async (): Promise<IpcResult<Array<{ hash: string; realPath: string }>>> => {
-  try {
-    const hashes = await listProjectsWithMemory(PROJECTS_DIR);
-    const projects = hashes.map(hash => ({
-      hash,
-      realPath: resolveRealPath(PROJECTS_DIR, hash),
-    }));
-    return ok(projects);
-  } catch (e) {
-    return err(e);
+ipcMain.handle(
+  'memory:listProjects',
+  async (): Promise<IpcResult<Array<{ hash: string; realPath: string }>>> => {
+    try {
+      const hashes = await listProjectsWithMemory(PROJECTS_DIR);
+      const projects = hashes.map(hash => ({
+        hash,
+        realPath: resolveRealPath(PROJECTS_DIR, hash),
+      }));
+      return ok(projects);
+    } catch (e) {
+      return err(e);
+    }
   }
-});
+);
 
 ipcMain.handle('memory:getProject', async (_event, hash: string) => {
   try {
@@ -339,22 +357,26 @@ ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: s
   }
 });
 
-ipcMain.handle('markdownFile:delete', async (_event, filePath: string, opts?: { pruneEmptyDir?: boolean }) => {
-  try {
-    const fs = require('fs') as typeof import('fs');
-    const path = require('path') as typeof import('path');
-    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
-    if (fs.existsSync(safePath)) fs.rmSync(safePath);
-    // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
-    if (opts?.pruneEmptyDir) {
-      const dir = path.dirname(safePath);
-      if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0) fs.rmSync(dir, { recursive: false });
+ipcMain.handle(
+  'markdownFile:delete',
+  async (_event, filePath: string, opts?: { pruneEmptyDir?: boolean }) => {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const path = require('path') as typeof import('path');
+      const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
+      if (fs.existsSync(safePath)) fs.rmSync(safePath);
+      // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
+      if (opts?.pruneEmptyDir) {
+        const dir = path.dirname(safePath);
+        if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0)
+          fs.rmSync(dir, { recursive: false });
+      }
+      return ok(null);
+    } catch (e) {
+      return err(e);
     }
-    return ok(null);
-  } catch (e) {
-    return err(e);
   }
-});
+);
 
 ipcMain.handle('claudeMd:deleteGlobal', async () => {
   try {
@@ -459,17 +481,24 @@ ipcMain.handle('memory:createTopic', async (_event, hash: string, input: TopicIn
     const memoryDir = join(projectDir(hash), 'memory');
     const filename = createTopic(memoryDir, input);
     return ok({ filename });
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
-ipcMain.handle('memory:updateTopic', async (_event, hash: string, filename: string, input: TopicInput) => {
-  try {
-    assertValidFilename(filename);
-    const memoryDir = join(projectDir(hash), 'memory');
-    updateTopic(memoryDir, filename, input);
-    return ok(null);
-  } catch (e) { return err(e); }
-});
+ipcMain.handle(
+  'memory:updateTopic',
+  async (_event, hash: string, filename: string, input: TopicInput) => {
+    try {
+      assertValidFilename(filename);
+      const memoryDir = join(projectDir(hash), 'memory');
+      updateTopic(memoryDir, filename, input);
+      return ok(null);
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
 
 ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: string) => {
   try {
@@ -477,7 +506,9 @@ ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: stri
     const memoryDir = join(projectDir(hash), 'memory');
     deleteTopic(memoryDir, filename);
     return ok(null);
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
 ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string) => {
@@ -488,7 +519,9 @@ ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string
     if (!filePath) return err(new Error(`File sessione non trovato: ${filename}`));
     const messages = readChatSession(filePath);
     return ok(messages);
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
 ipcMain.handle('tasks:getByProject', async (_event, hash: string) => {
@@ -570,45 +603,50 @@ ipcMain.handle('agents:create', async (_event, input: AgentInput, projectPath?: 
   }
 });
 
-ipcMain.handle('agents:dispatchBg', async (_event, cwd: string, prompt: string, name?: string, agent?: string, model?: string) => {
-  try {
-    const { existsSync, statSync } = await import('fs');
-    if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
-      return err(`Project directory not found on disk: ${cwd}. The project may have been moved or deleted.`);
-    }
+ipcMain.handle(
+  'agents:dispatchBg',
+  async (_event, cwd: string, prompt: string, name?: string, agent?: string, model?: string) => {
+    try {
+      const { existsSync, statSync } = await import('fs');
+      if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
+        return err(
+          `Project directory not found on disk: ${cwd}. The project may have been moved or deleted.`
+        );
+      }
 
-    const args = ['--bg'];
-    if (name) {
-      args.push('--name', name);
-    }
-    if (agent) {
-      args.push('--agent', agent);
-    }
-    if (model) {
-      args.push('--model', model);
-    }
-    args.push(prompt);
+      const args = ['--bg'];
+      if (name) {
+        args.push('--name', name);
+      }
+      if (agent) {
+        args.push('--agent', agent);
+      }
+      if (model) {
+        args.push('--model', model);
+      }
+      args.push(prompt);
 
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
-    const execFileAsync = promisify(execFile);
+      const { execFile } = await import('child_process');
+      const { promisify } = await import('util');
+      const execFileAsync = promisify(execFile);
 
-    const localBinPath = join(os.homedir(), '.local', 'bin');
-    const env = {
-      ...process.env,
-      PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`
-    };
+      const localBinPath = join(os.homedir(), '.local', 'bin');
+      const env = {
+        ...process.env,
+        PATH: `${localBinPath}:/usr/local/bin:/opt/homebrew/bin:${process.env.PATH || ''}`,
+      };
 
-    await execFileAsync('claude', args, { cwd, env });
+      await execFileAsync('claude', args, { cwd, env });
 
-    return ok(null);
-  } catch (e: any) {
-    if (e?.code === 'ENOENT') {
-      return err(`'claude' CLI not found in PATH, or working directory missing (${cwd}).`);
+      return ok(null);
+    } catch (e: any) {
+      if (e?.code === 'ENOENT') {
+        return err(`'claude' CLI not found in PATH, or working directory missing (${cwd}).`);
+      }
+      return err(e.stderr || e.message || String(e));
     }
-    return err(e.stderr || e.message || String(e));
   }
-});
+);
 
 ipcMain.handle('agents:deleteBg', async (_event, id: string) => {
   return runClaudeCommand(['rm', id]);
@@ -626,7 +664,9 @@ ipcMain.handle('agents:attachBg', async (_event, cwd: string, id: string) => {
   try {
     openInTerminal(cwd || os.homedir(), `claude attach ${id}`);
     return ok(null);
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
 async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
@@ -708,65 +748,73 @@ ipcMain.handle('mcp:getGlobal', async () => {
 
 let currentAiProcess: ChildProcess | null = null;
 
-ipcMain.handle('ai:run', async (event, instruction: string, inputContent: string, projectPath: string) => {
-  if (currentAiProcess) {
-    currentAiProcess.kill();
-    currentAiProcess = null;
-  }
-
-  const { existsSync, statSync } = await import('fs');
-  if (!projectPath || !existsSync(projectPath) || !statSync(projectPath).isDirectory()) {
-    return err(`Project directory not found on disk: ${projectPath}. The project may have been moved or deleted.`);
-  }
-
-  return new Promise<IpcResult<null>>((resolve) => {
-    // execFile-style: nessuna shell, l'istruzione passa come argomento separato
-    // (niente string-building né escaping fragile — cfr. agents:dispatchBg).
-    const args = [
-      '-p', instruction,
-      '--model', 'Haiku',
-      '--allowedTools', 'Read,Glob,Grep,WebSearch,WebFetch',
-      '--no-session-persistence',
-    ];
-    const localBinPath = join(os.homedir(), '.local', 'bin');
-    const proc = spawn('claude', args, {
-      cwd: projectPath,
-      env: { ...process.env, PATH: `${localBinPath}:/usr/local/bin:${process.env.PATH || ''}` },
-    });
-    currentAiProcess = proc;
-
-    if (inputContent) {
-      proc.stdin?.write(inputContent);
+ipcMain.handle(
+  'ai:run',
+  async (event, instruction: string, inputContent: string, projectPath: string) => {
+    if (currentAiProcess) {
+      currentAiProcess.kill();
+      currentAiProcess = null;
     }
-    proc.stdin?.end();
 
-    proc.stdout?.on('data', (chunk: Buffer) => {
-      event.sender.send('ai:chunk', chunk.toString());
-    });
+    const { existsSync, statSync } = await import('fs');
+    if (!projectPath || !existsSync(projectPath) || !statSync(projectPath).isDirectory()) {
+      return err(
+        `Project directory not found on disk: ${projectPath}. The project may have been moved or deleted.`
+      );
+    }
 
-    proc.stderr?.on('data', (chunk: Buffer) => {
-      event.sender.send('ai:error', chunk.toString());
-    });
+    return new Promise<IpcResult<null>>(resolve => {
+      // execFile-style: nessuna shell, l'istruzione passa come argomento separato
+      // (niente string-building né escaping fragile — cfr. agents:dispatchBg).
+      const args = [
+        '-p',
+        instruction,
+        '--model',
+        'Haiku',
+        '--allowedTools',
+        'Read,Glob,Grep,WebSearch,WebFetch',
+        '--no-session-persistence',
+      ];
+      const localBinPath = join(os.homedir(), '.local', 'bin');
+      const proc = spawn('claude', args, {
+        cwd: projectPath,
+        env: { ...process.env, PATH: `${localBinPath}:/usr/local/bin:${process.env.PATH || ''}` },
+      });
+      currentAiProcess = proc;
 
-    proc.on('close', (code) => {
-      currentAiProcess = null;
-      if (code === 0 || code === null) {
-        event.sender.send('ai:done');
-        resolve(ok(null));
-      } else {
-        event.sender.send('ai:done');
-        resolve(err(new Error(`Processo terminato con codice ${code}`)));
+      if (inputContent) {
+        proc.stdin?.write(inputContent);
       }
-    });
+      proc.stdin?.end();
 
-    proc.on('error', (e) => {
-      currentAiProcess = null;
-      event.sender.send('ai:error', e.message);
-      event.sender.send('ai:done');
-      resolve(err(e));
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        event.sender.send('ai:chunk', chunk.toString());
+      });
+
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        event.sender.send('ai:error', chunk.toString());
+      });
+
+      proc.on('close', code => {
+        currentAiProcess = null;
+        if (code === 0 || code === null) {
+          event.sender.send('ai:done');
+          resolve(ok(null));
+        } else {
+          event.sender.send('ai:done');
+          resolve(err(new Error(`Processo terminato con codice ${code}`)));
+        }
+      });
+
+      proc.on('error', e => {
+        currentAiProcess = null;
+        event.sender.send('ai:error', e.message);
+        event.sender.send('ai:done');
+        resolve(err(e));
+      });
     });
-  });
-});
+  }
+);
 
 ipcMain.handle('ai:stop', async () => {
   if (currentAiProcess) {
@@ -798,7 +846,7 @@ ipcMain.handle('live:getSessions', async () => {
 ipcMain.handle('live:startWatch', async (event, hash: string) => {
   try {
     const projectPath = projectDir(hash);
-    const started = await startLiveMonitor(projectPath, (liveEvent) => {
+    const started = await startLiveMonitor(projectPath, liveEvent => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('live:event', liveEvent);
       }
@@ -815,14 +863,44 @@ ipcMain.handle('live:stopWatch', async () => {
 });
 
 function openInTerminal(cwd: string, command: string): void {
-  const escapedCwd = cwd.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
-  const script = [
-    'tell application "Terminal"',
-    `do script "cd \\"${escapedCwd}\\" && ${command}"`,
-    'activate',
-    'end tell',
-  ].join('\n');
-  execFile('osascript', ['-e', script]);
+  const dir = cwd || os.homedir();
+
+  if (process.platform === 'darwin') {
+    const escapedCwd = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const script = [
+      'tell application "Terminal"',
+      `do script "cd \\"${escapedCwd}\\" && ${command}"`,
+      'activate',
+      'end tell',
+    ].join('\n');
+    execFile('osascript', ['-e', script]);
+    return;
+  }
+
+  // Linux: no single standard terminal, so try common emulators in order and
+  // fall through on ENOENT. We pass the working directory via the spawn `cwd`
+  // option (and `--working-directory` where supported) to avoid quoting it into
+  // the shell command. `exec $SHELL` keeps the window open after the command.
+  const shell = process.env.SHELL || 'bash';
+  const inner = `${command}; exec ${shell}`;
+  const candidates: Array<[string, string[]]> = [
+    ['x-terminal-emulator', ['-e', 'bash', '-lc', inner]],
+    ['gnome-terminal', ['--working-directory', dir, '--', 'bash', '-lc', inner]],
+    ['konsole', ['--workdir', dir, '-e', 'bash', '-lc', inner]],
+    ['xfce4-terminal', [`--working-directory=${dir}`, '-x', 'bash', '-lc', inner]],
+    ['xterm', ['-e', 'bash', '-lc', inner]],
+  ];
+
+  const tryNext = (i: number): void => {
+    if (i >= candidates.length) return;
+    const [bin, args] = candidates[i];
+    const child = execFile(bin, args, { cwd: dir });
+    child.on('error', (e: NodeJS.ErrnoException) => {
+      // Emulator not installed — try the next one.
+      if (e?.code === 'ENOENT') tryNext(i + 1);
+    });
+  };
+  tryNext(0);
 }
 
 /**
@@ -845,20 +923,28 @@ ipcMain.handle('sessions:openInTerminal', async (_event, realPath: string, sessi
   try {
     openInTerminal(realPath, buildResumeCommand(sessionId));
     return ok(null);
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
 ipcMain.handle('sessions:newInTerminal', async (_event, realPath: string) => {
   try {
     openInTerminal(realPath, 'claude');
     return ok(null);
-  } catch (e) { return err(e); }
+  } catch (e) {
+    return err(e);
+  }
 });
 
 // File watcher — pausa rientrante (gestisce eventuali merge concorrenti).
 let watcherPauseDepth = 0;
-function pauseWatcher() { watcherPauseDepth += 1; }
-function resumeWatcher() { if (watcherPauseDepth > 0) watcherPauseDepth -= 1; }
+function pauseWatcher() {
+  watcherPauseDepth += 1;
+}
+function resumeWatcher() {
+  if (watcherPauseDepth > 0) watcherPauseDepth -= 1;
+}
 
 function startWatcher() {
   // Osserva le sessioni dei progetti, i task creati durante le sessioni

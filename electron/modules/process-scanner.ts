@@ -1,5 +1,6 @@
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { readlink } from 'fs/promises';
 
 const execAsync = promisify(exec);
 
@@ -7,6 +8,31 @@ export interface ClaudeProcess {
   pid: number;
   cwd: string;
   cmdline: string;
+}
+
+/**
+ * Resolve a process' working directory. On Linux the kernel exposes it as the
+ * symlink /proc/<pid>/cwd — native, always available, no external binary. On
+ * macOS (no /proc) we fall back to `lsof`.
+ */
+async function getProcessCwd(pid: number): Promise<string | null> {
+  if (process.platform === 'linux') {
+    try {
+      return await readlink(`/proc/${pid}/cwd`);
+    } catch {
+      return null;
+    }
+  }
+  try {
+    // -a = AND semantics: intersezione di -p <pid> e -d cwd
+    // -Fn = output solo il campo nome (path)
+    const { stdout } = await execAsync(
+      `lsof -a -p ${pid} -d cwd -Fn 2>/dev/null | grep '^n' | head -1`
+    );
+    return stdout.trim().replace(/^n/, '').trim();
+  } catch {
+    return null;
+  }
 }
 
 export async function findClaudeProcesses(): Promise<ClaudeProcess[]> {
@@ -17,7 +43,10 @@ export async function findClaudeProcesses(): Promise<ClaudeProcess[]> {
       "ps -A -o pid=,args= 2>/dev/null | grep -iE '\\bclaude\\b' | grep -ivE 'Applications/Claude\\.app|claudelens|esbuild|--bg-pty-host|--bg-spare|--bg-pty' || true"
     );
 
-    const lines = psOut.trim().split('\n').filter(l => l.trim());
+    const lines = psOut
+      .trim()
+      .split('\n')
+      .filter(l => l.trim());
     const results: ClaudeProcess[] = [];
     const ownPid = process.pid;
 
@@ -30,18 +59,9 @@ export async function findClaudeProcesses(): Promise<ClaudeProcess[]> {
 
       const cmdline = match[2].trim();
 
-      try {
-        // -a = AND semantics: intersezione di -p <pid> e -d cwd
-        // -Fn = output solo il campo nome (path)
-        const { stdout: lsofOut } = await execAsync(
-          `lsof -a -p ${pid} -d cwd -Fn 2>/dev/null | grep '^n' | head -1`
-        );
-        const cwd = lsofOut.trim().replace(/^n/, '').trim();
-        if (cwd && cwd.length > 1 && cwd !== '/') {
-          results.push({ pid, cwd, cmdline: cmdline.slice(0, 100) });
-        }
-      } catch {
-        // Processo terminato o permesso negato
+      const cwd = await getProcessCwd(pid);
+      if (cwd && cwd.length > 1 && cwd !== '/') {
+        results.push({ pid, cwd, cmdline: cmdline.slice(0, 100) });
       }
     }
 
