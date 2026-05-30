@@ -154,31 +154,29 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   return stripped;
 }
 
-function parseJsonlLine(line: string): LineData | null {
-  try {
-    const json = JSON.parse(line);
-    const date = json.timestamp ? new Date(json.timestamp).toISOString() : '';
-    const customTitle = json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
-    const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
-    const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
-    const usage = json.message?.usage;
-    if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
+// Extracts the relevant fields from an already-parsed JSONL object. Returns null
+// for well-formed lines that carry nothing we track (kept separate from JSON
+// parse failures, which the caller counts and logs).
+function extractLineData(json: any): LineData | null {
+  const date = json.timestamp ? new Date(json.timestamp).toISOString() : '';
+  const customTitle = json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
+  const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
+  const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
+  const usage = json.message?.usage;
+  if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
 
-    const model: string | undefined = json.message?.model;
-    return {
-      date,
-      customTitle,
-      aiTitle,
-      firstUserMessage,
-      inputTokens:      usage?.input_tokens                  ?? 0,
-      outputTokens:     usage?.output_tokens                 ?? 0,
-      cacheWriteTokens: usage?.cache_creation_input_tokens   ?? 0,
-      cacheReadTokens:  usage?.cache_read_input_tokens       ?? 0,
-      model:            model && model !== '<synthetic>' ? model : undefined,
-    };
-  } catch {
-    return null;
-  }
+  const model: string | undefined = json.message?.model;
+  return {
+    date,
+    customTitle,
+    aiTitle,
+    firstUserMessage,
+    inputTokens:      usage?.input_tokens                  ?? 0,
+    outputTokens:     usage?.output_tokens                 ?? 0,
+    cacheWriteTokens: usage?.cache_creation_input_tokens   ?? 0,
+    cacheReadTokens:  usage?.cache_read_input_tokens       ?? 0,
+    model:            model && model !== '<synthetic>' ? model : undefined,
+  };
 }
 
 function parseJsonlSession(filePath: string): ParsedSession {
@@ -193,9 +191,17 @@ function parseJsonlSession(filePath: string): ParsedSession {
   try {
     const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
     const modelCounts: Record<string, number> = {};
+    let dropped = 0;
 
     for (const line of lines) {
-      const parsed = parseJsonlLine(line);
+      let json: any;
+      try {
+        json = JSON.parse(line);
+      } catch {
+        dropped++;
+        continue;
+      }
+      const parsed = extractLineData(json);
       if (!parsed) continue;
 
       if (parsed.customTitle) result.customTitle = parsed.customTitle;
@@ -217,6 +223,10 @@ function parseJsonlSession(filePath: string): ParsedSession {
     const entries = Object.entries(modelCounts);
     if (entries.length > 0) result.model = entries.sort((a, b) => b[1] - a[1])[0][0];
     if (!result.date) result.date = statSync(filePath).mtime.toISOString();
+
+    if (dropped > 0) {
+      console.warn(`[cost-tracker] skipped ${dropped} malformed JSONL line(s) in ${filePath}`);
+    }
   } catch (error) {
     console.error(`Errore leggendo JSONL da ${filePath}: ${error}`);
   }
