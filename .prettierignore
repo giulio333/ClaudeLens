@@ -1,0 +1,6 @@
+dist
+dist-electron
+release
+node_modules
+*.icns
+package-lock.json

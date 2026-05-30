@@ -8,7 +8,6 @@ import {
   useAllSkills,
   useGlobalAgents,
   useProjectAgents,
-  useLiveSessions,
   useCleanupPeriodDays,
   ClaudeProcess,
 } from '../../../hooks/useIPC'
@@ -224,13 +223,7 @@ export function ProjectView({
   const { data: allSkills = [] } = useAllSkills(project.realPath)
   const { data: globalAgents = [] } = useGlobalAgents()
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
-  const { data: bgSessions = [] } = useLiveSessions()
   const { data: cleanupDays = 30 } = useCleanupPeriodDays()
-
-  const projectBgSessions = bgSessions.filter(
-    s => s.cwd === project.realPath || s.cwd.startsWith(project.realPath + '/')
-  )
-  const liveBgCount = projectBgSessions.filter(s => s.alive).length
 
   // ── Live process ──
   const [procs, setProcs] = useState<ClaudeProcess[]>([])
