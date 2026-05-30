@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   cost: {
     getSummary: () => ipcRenderer.invoke('cost:getSummary'),
     getByProject: (hash: string) => ipcRenderer.invoke('cost:getByProject', hash),
+    getPricingMeta: () => ipcRenderer.invoke('cost:getPricingMeta'),
   },
   claudeMd: {
     getGlobal: () => ipcRenderer.invoke('claudeMd:getGlobal'),

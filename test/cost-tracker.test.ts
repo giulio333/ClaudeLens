@@ -5,6 +5,9 @@ import {
   getProjectUsage,
   calculateCostSummary,
   getSessionList,
+  getPricingMeta,
+  isModelPriced,
+  PRICING_LAST_UPDATED,
 } from '../electron/modules/cost-tracker';
 
 // ─── Pricing constants (mirror of cost-tracker.ts PRICING table) ──────────────
@@ -319,5 +322,27 @@ describe('getSessionList', () => {
 
     const sessions = await getSessionList(tmp);
     expect(sessions.map(s => s.filename)).toEqual(['inner.jsonl']);
+  });
+});
+
+describe('pricing metadata', () => {
+  it('exposes an ISO last-updated date and the list of exactly-priced models', () => {
+    const meta = getPricingMeta();
+    expect(meta.lastUpdated).toBe(PRICING_LAST_UPDATED);
+    expect(meta.lastUpdated).toMatch(/^\d{4}-\d{2}-\d{2}$/);
+    expect(meta.knownModels).toContain('claude-sonnet-4-6');
+    expect(meta.knownModels).toContain('claude-opus-4-6');
+    expect(meta.knownModels.length).toBeGreaterThan(0);
+  });
+
+  it('isModelPriced is true only for exact table entries, not fuzzy/default matches', () => {
+    expect(isModelPriced('claude-sonnet-4-6')).toBe(true);
+    expect(isModelPriced('claude-opus-4-6')).toBe(true);
+    // priced via fuzzy family fallback → not an exact entry
+    expect(isModelPriced('claude-sonnet-9-9-future')).toBe(false);
+    // unknown → conservative default, still not "priced"
+    expect(isModelPriced('gpt-mystery')).toBe(false);
+    expect(isModelPriced(undefined)).toBe(false);
+    expect(isModelPriced('<synthetic>')).toBe(false);
   });
 });

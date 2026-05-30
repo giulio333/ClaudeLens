@@ -7,7 +7,7 @@ import { execFile, spawn, ChildProcess } from 'child_process';
 
 import { listProjectsWithMemory, readMemory } from './modules/memory-reader';
 import { createTopic, updateTopic, deleteTopic, TopicInput } from './modules/memory-writer';
-import { calculateCostSummary, getSessionList, getProjectUsage } from './modules/cost-tracker';
+import { calculateCostSummary, getSessionList, getProjectUsage, getPricingMeta } from './modules/cost-tracker';
 import {
   readGlobalClaudeMd,
   getClaudeMdHierarchy,
@@ -260,6 +260,14 @@ ipcMain.handle('cost:getSummary', async () => {
   try {
     const data = await calculateCostSummary(PROJECTS_DIR);
     return ok(data);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('cost:getPricingMeta', async () => {
+  try {
+    return ok(getPricingMeta());
   } catch (e) {
     return err(e);
   }

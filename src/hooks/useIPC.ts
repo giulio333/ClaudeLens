@@ -6,6 +6,7 @@ import type {
   TopicInput,
   MemoryData,
   ProjectCost,
+  PricingMeta,
   ClaudeMdLayer,
   ClaudeMdHierarchy,
   ChatContentBlock,
@@ -36,6 +37,7 @@ export type {
   TopicInput,
   MemoryData,
   ProjectCost,
+  PricingMeta,
   ClaudeMdLayer,
   ClaudeMdHierarchy,
   ChatContentBlock,
@@ -137,6 +139,7 @@ declare global {
       cost: {
         getSummary: () => Promise<IpcResult<ProjectCost[]>>
         getByProject: (hash: string) => Promise<IpcResult<ProjectCost>>
+        getPricingMeta: () => Promise<IpcResult<PricingMeta>>
       }
       claudeMd: {
         getGlobal: () => Promise<IpcResult<string | undefined>>
@@ -259,6 +262,13 @@ export function useMemoryProject(hash: string | null) {
 export function useCostSummary() {
   return useQuery('cost:summary', () =>
     unwrap(window.electronAPI.cost.getSummary())
+  )
+}
+
+export function usePricingMeta() {
+  return useQuery('cost:pricingMeta', () =>
+    unwrap(window.electronAPI.cost.getPricingMeta()),
+    { staleTime: Infinity }
   )
 }
 
