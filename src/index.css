@@ -2944,6 +2944,13 @@ body {
   padding: 24px 64px 80px 88px;
   position: relative;
 }
+/* Perf: skip layout/paint of off-screen turns on long sessions (Chromium/Electron).
+   `contain-intrinsic-size: auto N` lets the browser remember each turn's real
+   measured height, so the scrollbar stays stable after first paint. */
+.cl-transcript-inner > .cl-turn {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 240px;
+}
 .cl-transcript-inner::before {
   content: "";
   position: absolute;
