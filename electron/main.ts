@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { basename, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -150,6 +150,37 @@ function serializeMemoryData(md: Awaited<ReturnType<typeof readMemory>>) {
 }
 
 let mainWindow: BrowserWindow | null = null;
+
+// Set a Content Security Policy on every response so the renderer (which renders
+// untrusted local Markdown/highlight content) has a second line of defense.
+// Applied via onHeadersReceived so it covers both the file:// build and the dev server.
+// `style-src 'unsafe-inline'` is required by Tailwind; Google Fonts (CSS + woff2) are
+// allowlisted because index.css pulls them via @import. In dev, Vite's HMR needs
+// 'unsafe-inline'/'unsafe-eval' and a websocket connection.
+function setupContentSecurityPolicy() {
+  const isDev = !app.isPackaged;
+  const directives = [
+    "default-src 'self'",
+    isDev ? "script-src 'self' 'unsafe-inline' 'unsafe-eval'" : "script-src 'self'",
+    "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com",
+    "font-src 'self' data: https://fonts.gstatic.com",
+    "img-src 'self' data:",
+    isDev ? "connect-src 'self' ws://localhost:5173 http://localhost:5173" : "connect-src 'self'",
+    "object-src 'none'",
+    "base-uri 'self'",
+    "frame-src 'none'",
+  ];
+  const policy = directives.join('; ');
+
+  session.defaultSession.webRequest.onHeadersReceived((details, callback) => {
+    callback({
+      responseHeaders: {
+        ...details.responseHeaders,
+        'Content-Security-Policy': [policy],
+      },
+    });
+  });
+}
 
 function createWindow() {
   const isDev = !app.isPackaged;
@@ -843,6 +874,7 @@ app.whenReady().then(() => {
   if (process.env.SCREENSHOT_MODE) {
     registerScreenshotHandlers(ipcMain);
   }
+  setupContentSecurityPolicy();
   createWindow();
   if (!process.env.SCREENSHOT_MODE) startWatcher();
 
