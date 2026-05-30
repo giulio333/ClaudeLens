@@ -460,14 +460,14 @@ export function AgentsLiveView({
             </select>
             <button 
               type="submit" 
-              disabled={!prompt.trim() || dispatchBg.isLoading}
+              disabled={!prompt.trim() || dispatchBg.isPending}
               style={{ 
                 padding: '8px 16px', borderRadius: '6px', background: 'var(--cl-ink-1)', color: 'var(--cl-paper)', 
-                fontWeight: 600, cursor: prompt.trim() && !dispatchBg.isLoading ? 'pointer' : 'not-allowed', 
-                opacity: prompt.trim() && !dispatchBg.isLoading ? 1 : 0.5 
+                fontWeight: 600, cursor: prompt.trim() && !dispatchBg.isPending ? 'pointer' : 'not-allowed', 
+                opacity: prompt.trim() && !dispatchBg.isPending ? 1 : 0.5 
               }}
             >
-              {dispatchBg.isLoading ? 'Dispatching...' : 'Dispatch'}
+              {dispatchBg.isPending ? 'Dispatching...' : 'Dispatch'}
             </button>
           </form>
         </div>

@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from 'react-query'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
 import type {
@@ -219,15 +219,17 @@ async function unwrap<T>(promise: Promise<IpcResult<T>>): Promise<T> {
 }
 
 export function useMemoryProjects() {
-  return useQuery('memory:projects', () =>
-    unwrap(window.electronAPI.memory.listProjects())
-  )
+  return useQuery({
+    queryKey: ['memory:projects'],
+    queryFn: () => unwrap(window.electronAPI.memory.listProjects()),
+  })
 }
 
 export function useDuplicateProjects() {
-  return useQuery('projects:duplicates', () =>
-    unwrap(window.electronAPI.projects.detectDuplicates())
-  )
+  return useQuery({
+    queryKey: ['projects:duplicates'],
+    queryFn: () => unwrap(window.electronAPI.projects.detectDuplicates()),
+  })
 }
 
 /** Calcola il piano di merge (read-only) per una coppia source → dest. */
@@ -238,109 +240,102 @@ export function planMerge(sourceHash: string, destHash: string): Promise<MergePl
 /** Mutation: esegue il merge e invalida le query sui duplicati/progetti. */
 export function useExecuteMerge() {
   const qc = useQueryClient()
-  return useMutation(
-    ({ sourceHash, destHash }: { sourceHash: string; destHash: string }) =>
+  return useMutation({
+    mutationFn: ({ sourceHash, destHash }: { sourceHash: string; destHash: string }) =>
       unwrap(window.electronAPI.projects.executeMerge(sourceHash, destHash)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('projects:duplicates')
-        qc.invalidateQueries('memory:projects')
-        qc.invalidateQueries('cost:summary')
-      },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['projects:duplicates'] })
+      qc.invalidateQueries({ queryKey: ['memory:projects'] })
+      qc.invalidateQueries({ queryKey: ['cost:summary'] })
     },
-  )
+  })
 }
 
 export function useMemoryProject(hash: string | null) {
-  return useQuery(
-    ['memory:project', hash],
-    () => unwrap(window.electronAPI.memory.getProject(hash!)),
-    { enabled: hash !== null }
-  )
+  return useQuery({
+    queryKey: ['memory:project', hash],
+    queryFn: () => unwrap(window.electronAPI.memory.getProject(hash!)),
+    enabled: hash !== null,
+  })
 }
 
 export function useCostSummary() {
-  return useQuery('cost:summary', () =>
-    unwrap(window.electronAPI.cost.getSummary())
-  )
+  return useQuery({
+    queryKey: ['cost:summary'],
+    queryFn: () => unwrap(window.electronAPI.cost.getSummary()),
+  })
 }
 
 export function usePricingMeta() {
-  return useQuery('cost:pricingMeta', () =>
-    unwrap(window.electronAPI.cost.getPricingMeta()),
-    { staleTime: Infinity }
-  )
+  return useQuery({
+    queryKey: ['cost:pricingMeta'],
+    queryFn: () => unwrap(window.electronAPI.cost.getPricingMeta()),
+    staleTime: Infinity,
+  })
 }
 
 export function useClaudeMdHierarchy(realPath: string | null) {
-  return useQuery(
-    ['claudeMd:hierarchy', realPath],
-    () => unwrap(window.electronAPI.claudeMd.getHierarchy(realPath!)),
-    { enabled: realPath !== null }
-  )
+  return useQuery({
+    queryKey: ['claudeMd:hierarchy', realPath],
+    queryFn: () => unwrap(window.electronAPI.claudeMd.getHierarchy(realPath!)),
+    enabled: realPath !== null,
+  })
 }
 
 export function useGlobalClaudeMd() {
-  return useQuery('claudeMd:global', () =>
-    unwrap(window.electronAPI.claudeMd.getGlobal())
-  )
+  return useQuery({
+    queryKey: ['claudeMd:global'],
+    queryFn: () => unwrap(window.electronAPI.claudeMd.getGlobal()),
+  })
 }
 
 export function useWriteGlobalClaudeMd() {
   const qc = useQueryClient()
-  return useMutation(
-    (content: string) => unwrap(window.electronAPI.claudeMd.writeGlobal(content)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('claudeMd:global')
-        qc.invalidateQueries('claudeMd:hierarchy')
-      },
-    }
-  )
+  return useMutation({
+    mutationFn: (content: string) => unwrap(window.electronAPI.claudeMd.writeGlobal(content)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+    },
+  })
 }
 
 export function useWriteMarkdownFile(invalidateKeys: string[] = []) {
   const qc = useQueryClient()
-  return useMutation(
-    ({ filePath, content }: { filePath: string; content: string }) =>
+  return useMutation({
+    mutationFn: ({ filePath, content }: { filePath: string; content: string }) =>
       unwrap(window.electronAPI.markdownFile.write(filePath, content)),
-    {
-      onSuccess: () => {
-        invalidateKeys.forEach(k => qc.invalidateQueries(k))
-      },
-    }
-  )
+    onSuccess: () => {
+      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }))
+    },
+  })
 }
 
 export function useDeleteMarkdownFile(invalidateKeys: string[] = []) {
   const qc = useQueryClient()
-  return useMutation(
-    ({ filePath, pruneEmptyDir }: { filePath: string; pruneEmptyDir?: boolean }) =>
+  return useMutation({
+    mutationFn: ({ filePath, pruneEmptyDir }: { filePath: string; pruneEmptyDir?: boolean }) =>
       unwrap(window.electronAPI.markdownFile.delete(filePath, pruneEmptyDir ? { pruneEmptyDir } : undefined)),
-    {
-      onSuccess: () => {
-        invalidateKeys.forEach(k => qc.invalidateQueries(k))
-      },
-    }
-  )
+    onSuccess: () => {
+      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }))
+    },
+  })
 }
 
 export function useDeleteClaudeMdFile() {
   const qc = useQueryClient()
-  return useMutation(
-    (filePath: string | null) =>
+  return useMutation({
+    mutationFn: (filePath: string | null) =>
       unwrap(
         filePath
           ? window.electronAPI.claudeMd.deleteFile(filePath)
           : window.electronAPI.claudeMd.deleteGlobal()
       ),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('claudeMd:global')
-        qc.invalidateQueries('claudeMd:hierarchy')
-      },
-    }
-  )
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+    },
+  })
 }
 
 export function saveMarkdownExport(defaultFilename: string, content: string): Promise<ExportSaveResult> {
@@ -353,219 +348,214 @@ export function savePdfExport(defaultFilename: string, html: string): Promise<Ex
 
 export function useWriteClaudeMdFile() {
   const qc = useQueryClient()
-  return useMutation(
-    ({ filePath, content }: { filePath: string; content: string }) =>
+  return useMutation({
+    mutationFn: ({ filePath, content }: { filePath: string; content: string }) =>
       unwrap(window.electronAPI.claudeMd.writeFile(filePath, content)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('claudeMd:global')
-        qc.invalidateQueries('claudeMd:hierarchy')
-      },
-    }
-  )
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+    },
+  })
 }
 
 export function useProjectRules(realPath: string | null) {
-  return useQuery(
-    ['rules:project', realPath],
-    () => unwrap(window.electronAPI.rules.getByProject(realPath!)),
-    { enabled: realPath !== null }
-  )
+  return useQuery({
+    queryKey: ['rules:project', realPath],
+    queryFn: () => unwrap(window.electronAPI.rules.getByProject(realPath!)),
+    enabled: realPath !== null,
+  })
 }
 
 export function useSessionList(hash: string | null) {
-  return useQuery(
-    ['sessions:project', hash],
-    () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
-    { enabled: hash !== null }
-  )
+  return useQuery({
+    queryKey: ['sessions:project', hash],
+    queryFn: () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
+    enabled: hash !== null,
+  })
 }
 
 export function useProjectTasks(hash: string | null) {
-  return useQuery(
-    ['tasks:project', hash],
-    () => unwrap(window.electronAPI.tasks.getByProject(hash!)),
-    { enabled: hash !== null }
-  )
+  return useQuery({
+    queryKey: ['tasks:project', hash],
+    queryFn: () => unwrap(window.electronAPI.tasks.getByProject(hash!)),
+    enabled: hash !== null,
+  })
 }
 
 export function useProjectPlans(hash: string | null) {
-  return useQuery(
-    ['plans:project', hash],
-    () => unwrap(window.electronAPI.plans.getByProject(hash!)),
-    { enabled: hash !== null }
-  )
+  return useQuery({
+    queryKey: ['plans:project', hash],
+    queryFn: () => unwrap(window.electronAPI.plans.getByProject(hash!)),
+    enabled: hash !== null,
+  })
 }
 
 export function useCleanupPeriodDays() {
-  return useQuery(
-    'settings:cleanupPeriodDays',
-    () => unwrap(window.electronAPI.settings.getCleanupPeriodDays()),
-    { staleTime: 60_000 }
-  )
+  return useQuery({
+    queryKey: ['settings:cleanupPeriodDays'],
+    queryFn: () => unwrap(window.electronAPI.settings.getCleanupPeriodDays()),
+    staleTime: 60_000,
+  })
 }
 
 export function useProjectCost(hash: string | null) {
-  return useQuery(
-    ['cost:project', hash],
-    () => unwrap(window.electronAPI.cost.getByProject(hash!)),
-    { enabled: hash !== null }
-  )
+  return useQuery({
+    queryKey: ['cost:project', hash],
+    queryFn: () => unwrap(window.electronAPI.cost.getByProject(hash!)),
+    enabled: hash !== null,
+  })
 }
 
 export function useChatSession(hash: string, filename: string | null) {
-  return useQuery(
-    ['sessions:chat', hash, filename],
-    () => unwrap(window.electronAPI.sessions.getChat(hash, filename!)),
-    { enabled: filename !== null }
-  )
+  return useQuery({
+    queryKey: ['sessions:chat', hash, filename],
+    queryFn: () => unwrap(window.electronAPI.sessions.getChat(hash, filename!)),
+    enabled: filename !== null,
+  })
 }
 
 export function useLiveSessions() {
-  return useQuery(
-    'live:sessions',
-    () => unwrap(window.electronAPI.live.getSessions()),
-    { refetchInterval: 4000 }
-  )
+  return useQuery({
+    queryKey: ['live:sessions'],
+    queryFn: () => unwrap(window.electronAPI.live.getSessions()),
+    refetchInterval: 4000,
+  })
 }
 
 export function useCreateTopic(hash: string) {
   const qc = useQueryClient()
-  return useMutation(
-    (input: TopicInput) => unwrap(window.electronAPI.memory.createTopic(hash, input)),
-    { onSuccess: () => qc.invalidateQueries(['memory:project', hash]) }
-  )
+  return useMutation({
+    mutationFn: (input: TopicInput) => unwrap(window.electronAPI.memory.createTopic(hash, input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
+  })
 }
 
 export function useUpdateTopic(hash: string) {
   const qc = useQueryClient()
-  return useMutation(
-    ({ filename, input }: { filename: string; input: TopicInput }) =>
+  return useMutation({
+    mutationFn: ({ filename, input }: { filename: string; input: TopicInput }) =>
       unwrap(window.electronAPI.memory.updateTopic(hash, filename, input)),
-    { onSuccess: () => qc.invalidateQueries(['memory:project', hash]) }
-  )
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
+  })
 }
 
 export function useDeleteTopic(hash: string) {
   const qc = useQueryClient()
-  return useMutation(
-    (filename: string) => unwrap(window.electronAPI.memory.deleteTopic(hash, filename)),
-    { onSuccess: () => qc.invalidateQueries(['memory:project', hash]) }
-  )
+  return useMutation({
+    mutationFn: (filename: string) => unwrap(window.electronAPI.memory.deleteTopic(hash, filename)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
+  })
 }
 
 export function useGlobalSkills() {
-  return useQuery('skills:global', () =>
-    unwrap(window.electronAPI.skills.getGlobal())
-  )
+  return useQuery({
+    queryKey: ['skills:global'],
+    queryFn: () => unwrap(window.electronAPI.skills.getGlobal()),
+  })
 }
 
 export function useAllSkills(realPath: string | null) {
-  return useQuery(
-    ['skills:all', realPath],
-    () => unwrap(window.electronAPI.skills.getAll(realPath!)),
-    { enabled: realPath !== null }
-  )
+  return useQuery({
+    queryKey: ['skills:all', realPath],
+    queryFn: () => unwrap(window.electronAPI.skills.getAll(realPath!)),
+    enabled: realPath !== null,
+  })
 }
 
 export function useGlobalAgents() {
-  return useQuery('agents:global', () =>
-    unwrap(window.electronAPI.agents.getGlobal())
-  )
+  return useQuery({
+    queryKey: ['agents:global'],
+    queryFn: () => unwrap(window.electronAPI.agents.getGlobal()),
+  })
 }
 
 export function useGlobalMcp() {
-  return useQuery('mcp:global', () =>
-    unwrap(window.electronAPI.mcp.getGlobal())
-  )
+  return useQuery({
+    queryKey: ['mcp:global'],
+    queryFn: () => unwrap(window.electronAPI.mcp.getGlobal()),
+  })
 }
 
 export function useProjectAgents(realPath: string | null) {
-  return useQuery(
-    ['agents:project', realPath],
-    () => unwrap(window.electronAPI.agents.getByProject(realPath!)),
-    { enabled: realPath !== null }
-  )
+  return useQuery({
+    queryKey: ['agents:project', realPath],
+    queryFn: () => unwrap(window.electronAPI.agents.getByProject(realPath!)),
+    enabled: realPath !== null,
+  })
 }
 
 export function useCreateSkill() {
   const qc = useQueryClient()
-  return useMutation(
-    ({ input, projectPath }: { input: SkillInput; projectPath?: string }) =>
+  return useMutation({
+    mutationFn: ({ input, projectPath }: { input: SkillInput; projectPath?: string }) =>
       unwrap(window.electronAPI.skills.create(input, projectPath)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('skills:global')
-        qc.invalidateQueries('skills:all')
-      },
-    }
-  )
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['skills:global'] })
+      qc.invalidateQueries({ queryKey: ['skills:all'] })
+    },
+  })
 }
 
 export function useCreateAgent() {
   const qc = useQueryClient()
-  return useMutation(
-    ({ input, projectPath }: { input: AgentInput; projectPath?: string }) =>
+  return useMutation({
+    mutationFn: ({ input, projectPath }: { input: AgentInput; projectPath?: string }) =>
       unwrap(window.electronAPI.agents.create(input, projectPath)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('agents:global')
-        qc.invalidateQueries('agents:project')
-      },
-    }
-  )
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['agents:global'] })
+      qc.invalidateQueries({ queryKey: ['agents:project'] })
+    },
+  })
 }
 
 export function useDispatchBackgroundAgent() {
   const qc = useQueryClient()
-  return useMutation(
-    ({ cwd, prompt, name, agent, model }: { cwd: string; prompt: string; name?: string; agent?: string; model?: string }) =>
+  return useMutation({
+    mutationFn: ({ cwd, prompt, name, agent, model }: { cwd: string; prompt: string; name?: string; agent?: string; model?: string }) =>
       unwrap(window.electronAPI.agents.dispatchBg(cwd, prompt, name, agent, model)),
-    {
-      onSuccess: () => {
-        qc.invalidateQueries('live:sessions')
-      },
-    }
-  )
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['live:sessions'] })
+    },
+  })
 }
 
 export function useDeleteBackgroundAgent() {
   const qc = useQueryClient()
-  return useMutation(
-    (id: string) => unwrap(window.electronAPI.agents.deleteBg(id)),
-    { onSuccess: () => qc.invalidateQueries('live:sessions') }
-  )
+  return useMutation({
+    mutationFn: (id: string) => unwrap(window.electronAPI.agents.deleteBg(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
+  })
 }
 
 export function useStopBackgroundAgent() {
   const qc = useQueryClient()
-  return useMutation(
-    (id: string) => unwrap(window.electronAPI.agents.stopBg(id)),
-    { onSuccess: () => qc.invalidateQueries('live:sessions') }
-  )
+  return useMutation({
+    mutationFn: (id: string) => unwrap(window.electronAPI.agents.stopBg(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
+  })
 }
 
 export function useRespawnBackgroundAgent() {
   const qc = useQueryClient()
-  return useMutation(
-    (id: string) => unwrap(window.electronAPI.agents.respawnBg(id)),
-    { onSuccess: () => qc.invalidateQueries('live:sessions') }
-  )
+  return useMutation({
+    mutationFn: (id: string) => unwrap(window.electronAPI.agents.respawnBg(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
+  })
 }
 
 export function useAttachBackgroundAgent() {
-  return useMutation(
-    ({ cwd, id }: { cwd: string; id: string }) =>
-      unwrap(window.electronAPI.agents.attachBg(cwd, id))
-  )
+  return useMutation({
+    mutationFn: ({ cwd, id }: { cwd: string; id: string }) =>
+      unwrap(window.electronAPI.agents.attachBg(cwd, id)),
+  })
 }
 
 export function useDeleteProject() {
   const qc = useQueryClient()
-  return useMutation(
-    (hash: string) => unwrap(window.electronAPI.projects.delete(hash)),
-    { onSuccess: () => qc.invalidateQueries('memory:projects') }
-  )
+  return useMutation({
+    mutationFn: (hash: string) => unwrap(window.electronAPI.projects.delete(hash)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:projects'] }),
+  })
 }
 
 export function useDataChangedRefetch() {
@@ -573,22 +563,22 @@ export function useDataChangedRefetch() {
 
   useEffect(() => {
     const unsubscribe = window.electronAPI.onDataChanged(() => {
-      qc.invalidateQueries('memory:projects')
-      qc.invalidateQueries('memory:project')
-      qc.invalidateQueries('cost:summary')
-      qc.invalidateQueries('cost:project')
-      qc.invalidateQueries('sessions:project')
-      qc.invalidateQueries('sessions:chat')
-      qc.invalidateQueries('claudeMd:hierarchy')
-      qc.invalidateQueries('claudeMd:global')
-      qc.invalidateQueries('rules:project')
-      qc.invalidateQueries('tasks:project')
-      qc.invalidateQueries('plans:project')
-      qc.invalidateQueries('skills:global')
-      qc.invalidateQueries('skills:all')
-      qc.invalidateQueries('agents:global')
-      qc.invalidateQueries('agents:project')
-      qc.invalidateQueries('mcp:global')
+      qc.invalidateQueries({ queryKey: ['memory:projects'] })
+      qc.invalidateQueries({ queryKey: ['memory:project'] })
+      qc.invalidateQueries({ queryKey: ['cost:summary'] })
+      qc.invalidateQueries({ queryKey: ['cost:project'] })
+      qc.invalidateQueries({ queryKey: ['sessions:project'] })
+      qc.invalidateQueries({ queryKey: ['sessions:chat'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
+      qc.invalidateQueries({ queryKey: ['rules:project'] })
+      qc.invalidateQueries({ queryKey: ['tasks:project'] })
+      qc.invalidateQueries({ queryKey: ['plans:project'] })
+      qc.invalidateQueries({ queryKey: ['skills:global'] })
+      qc.invalidateQueries({ queryKey: ['skills:all'] })
+      qc.invalidateQueries({ queryKey: ['agents:global'] })
+      qc.invalidateQueries({ queryKey: ['agents:project'] })
+      qc.invalidateQueries({ queryKey: ['mcp:global'] })
     })
     return unsubscribe
   }, [qc])

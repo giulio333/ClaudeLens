@@ -76,7 +76,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
     await submit()
   }
 
-  useCreateFormKeys({ canSubmit, isLoading: createAgent.isLoading, onSubmit: submit, onCancel: onBack })
+  useCreateFormKeys({ canSubmit, isLoading: createAgent.isPending, onSubmit: submit, onCancel: onBack })
 
   const labelCls = "flex items-center font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--cl-ink-3)] mb-1.5"
   const inputCls = "w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 text-[13px] text-[var(--cl-ink)] placeholder:text-[var(--cl-ink-4)] outline-none focus:border-[var(--cl-ink)] transition-colors"
@@ -273,11 +273,11 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
             <button type="button" onClick={onBack} className="cl-btn">Cancel</button>
             <button
               type="submit"
-              disabled={!canSubmit || createAgent.isLoading}
+              disabled={!canSubmit || createAgent.isPending}
               className="cl-btn cl-btn--primary"
-              style={{ opacity: (!canSubmit || createAgent.isLoading) ? 0.4 : 1, cursor: (!canSubmit || createAgent.isLoading) ? 'not-allowed' : 'pointer' }}
+              style={{ opacity: (!canSubmit || createAgent.isPending) ? 0.4 : 1, cursor: (!canSubmit || createAgent.isPending) ? 'not-allowed' : 'pointer' }}
             >
-              {createAgent.isLoading ? 'Saving…' : 'Create Agent ↗'}
+              {createAgent.isPending ? 'Saving…' : 'Create Agent ↗'}
             </button>
           </div>
         </form>
