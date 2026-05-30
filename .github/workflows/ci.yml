@@ -38,3 +38,34 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  package-linux:
+    name: Package Linux (AppImage · deb)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + electron
+        run: npm run build
+
+      - name: Package Linux artifacts
+        run: npx electron-builder --linux --publish never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: claudelens-linux
+          path: |
+            release/*.AppImage
+            release/*.deb
+          if-no-files-found: error

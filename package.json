@@ -81,6 +81,9 @@
   "build": {
     "appId": "com.claudelens.app",
     "productName": "ClaudeLens",
+    "directories": {
+      "output": "release"
+    },
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
