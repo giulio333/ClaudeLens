@@ -3,6 +3,11 @@ import { IpcMain } from 'electron';
 type IpcResult<T> = { data: T | null; error: string | null };
 const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 
+// Istante di riferimento fissato al caricamento del modulo: tutte le date demo
+// derivano da qui, così i filename di sessione sono deterministici e stabili tra
+// chiamate IPC diverse (necessario per agganciare tasks/plans alle sessioni reali).
+const NOW = new Date();
+
 // ─── Progetti finti ───────────────────────────────────────────────────────────
 
 const MOCK_PROJECTS = [
@@ -13,28 +18,19 @@ const MOCK_PROJECTS = [
   { hash: '-Users-alice-side-blog', realPath: '/Users/alice/side/blog' },
 ];
 
-// ─── Costi per progetto ───────────────────────────────────────────────────────
+// ─── Numero di sessioni per progetto ──────────────────────────────────────────
+// Unica fonte del conteggio: la lista sessioni e il sommario costi derivano
+// entrambi da qui, così Global → Projects e il tab Sessions sono coerenti.
 
-const MOCK_COSTS: Record<string, { inputTokens: number; outputTokens: number; cacheRead: number; sessionsCount: number; cost: number }> = {
-  '-Users-alice-projects-webapp':          { inputTokens: 410_000,  outputTokens: 180_000, cacheRead: 890_000,  sessionsCount: 42, cost: 28.50 },
-  '-Users-alice-projects-api-server':      { inputTokens: 160_000,  outputTokens: 72_000,  cacheRead: 340_000,  sessionsCount: 18, cost: 11.20 },
-  '-Users-alice-work-data-pipeline':       { inputTokens: 78_000,   outputTokens: 33_000,  cacheRead: 120_000,  sessionsCount: 9,  cost: 5.40 },
-  '-Users-alice-experiments-llm-playground': { inputTokens: 290_000, outputTokens: 130_000, cacheRead: 560_000,  sessionsCount: 31, cost: 19.70 },
-  '-Users-alice-side-blog':                { inputTokens: 18_000,   outputTokens: 7_000,   cacheRead: 22_000,   sessionsCount: 3,  cost: 1.20 },
+const SESSION_COUNTS: Record<string, number> = {
+  '-Users-alice-projects-webapp': 42,
+  '-Users-alice-projects-api-server': 18,
+  '-Users-alice-work-data-pipeline': 9,
+  '-Users-alice-experiments-llm-playground': 31,
+  '-Users-alice-side-blog': 3,
 };
 
-function getCost(hash: string) {
-  const c = MOCK_COSTS[hash] ?? MOCK_COSTS['-Users-alice-projects-webapp'];
-  return {
-    project: hash,
-    inputTokens: c.inputTokens,
-    outputTokens: c.outputTokens,
-    cacheReadTokens: c.cacheRead,
-    totalTokens: c.inputTokens + c.outputTokens,
-    cost: c.cost,
-    sessionsCount: c.sessionsCount,
-  };
-}
+const sessionCountFor = (hash: string) => SESSION_COUNTS[hash] ?? SESSION_COUNTS['-Users-alice-projects-webapp'];
 
 // ─── Sessioni per progetto ────────────────────────────────────────────────────
 
@@ -49,11 +45,21 @@ const SESSION_TEMPLATES = [
   { days: 25, input: 61_000,  output: 27_000, cache: 122_000, msgs: 44, model: 'claude-opus-4-6',   title: 'Implement real-time sync' },
 ];
 
-function getSessionList(_hash: string) {
-  const now = new Date('2026-03-29T10:00:00Z');
-  return SESSION_TEMPLATES.map((t, i) => {
-    const d = new Date(now.getTime() - t.days * 86_400_000);
-    const pad = (n: number) => String(n).padStart(2, '0');
+function getSessionList(hash: string) {
+  // Ancorato a NOW (non a una data fissa) così le sessioni restano dentro
+  // la finestra di retention dell'Overview/Analytics e i conteggi non vanno a 0.
+  const now = NOW;
+  // Genera tante sessioni quante ne dichiara SESSION_COUNTS,
+  // così Global → Projects e il tab Sessions mostrano lo stesso numero.
+  // I primi 8 sono i template "belli" con titoli unici (in cima alla lista);
+  // gli eventuali extra ciclano i template, una sessione al giorno andando indietro.
+  const count = sessionCountFor(hash);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return Array.from({ length: count }, (_, i) => {
+    const t = SESSION_TEMPLATES[i % SESSION_TEMPLATES.length];
+    // i < 8 → usa l'offset originale del template; oltre → un giorno in più ciascuno
+    const dayOffset = i < SESSION_TEMPLATES.length ? t.days : i;
+    const d = new Date(now.getTime() - dayOffset * 86_400_000);
     const filename = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(i).padStart(6,'0')}.jsonl`;
     return {
       filename,
@@ -67,9 +73,30 @@ function getSessionList(_hash: string) {
       messageCount: t.msgs,
       model: t.model,
       models: { [t.model]: t.msgs },
-      customTitle: t.title,
+      customTitle: i < SESSION_TEMPLATES.length ? t.title : `${t.title} (${Math.floor(i / SESSION_TEMPLATES.length) + 1})`,
     };
   });
+}
+
+// ─── Sommario costi per progetto ──────────────────────────────────────────────
+// Derivato dalla lista sessioni, così i totali (token/costo) coincidono esattamente
+// con la somma delle sessioni mostrate nel tab Sessions.
+
+function getCost(hash: string) {
+  const sessions = getSessionList(hash);
+  const inputTokens = sessions.reduce((s, x) => s + x.inputTokens, 0);
+  const outputTokens = sessions.reduce((s, x) => s + x.outputTokens, 0);
+  const cacheReadTokens = sessions.reduce((s, x) => s + x.cacheReadTokens, 0);
+  const cost = parseFloat(sessions.reduce((s, x) => s + x.estimatedCost, 0).toFixed(2));
+  return {
+    project: hash,
+    inputTokens,
+    outputTokens,
+    cacheReadTokens,
+    totalTokens: inputTokens + outputTokens,
+    cost,
+    sessionsCount: sessions.length,
+  };
 }
 
 // ─── Chat finta ───────────────────────────────────────────────────────────────
@@ -315,19 +342,28 @@ const MOCK_MCP = {
     {
       name: 'github',
       source: 'cloud' as const,
-      enabledInProjects: 4,
+      enabledInProjects: 3,
       disabledInProjects: 2,
-      disabledProjectPaths: ['/Users/alice/side/blog', '/Users/alice/work/data-pipeline'],
+      enabledProjectPaths: [
+        '/Users/alice/projects/webapp',
+        '/Users/alice/projects/api-server',
+        '/Users/alice/experiments/llm-playground',
+      ],
+      disabledProjectPaths: ['/Users/alice/work/data-pipeline', '/Users/alice/side/blog'],
     },
     {
       name: 'linear',
       source: 'cloud' as const,
       enabledInProjects: 2,
       disabledInProjects: 3,
+      enabledProjectPaths: [
+        '/Users/alice/projects/webapp',
+        '/Users/alice/experiments/llm-playground',
+      ],
       disabledProjectPaths: [
         '/Users/alice/projects/api-server',
-        '/Users/alice/side/blog',
         '/Users/alice/work/data-pipeline',
+        '/Users/alice/side/blog',
       ],
     },
   ],
@@ -337,8 +373,14 @@ const MOCK_MCP = {
       source: 'local' as const,
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/alice'],
-      enabledInProjects: 5,
+      enabledInProjects: 4,
       disabledInProjects: 1,
+      enabledProjectPaths: [
+        '/Users/alice/projects/webapp',
+        '/Users/alice/projects/api-server',
+        '/Users/alice/work/data-pipeline',
+        '/Users/alice/experiments/llm-playground',
+      ],
       disabledProjectPaths: ['/Users/alice/side/blog'],
     },
   ],
@@ -367,6 +409,330 @@ const MOCK_RULES = [
   },
 ];
 
+// ─── Tasks per progetto ───────────────────────────────────────────────────────
+
+const MOCK_TASKS = [
+  {
+    sessionId: '20260329T091500',
+    filename: '20260329T091500_000000.jsonl',
+    tasks: [
+      {
+        id: 'task-1',
+        subject: 'Add jsonwebtoken dependency',
+        description: 'Install jsonwebtoken and @types/jsonwebtoken, then add JWT_SECRET to the env schema.',
+        status: 'completed' as const,
+        blocks: ['task-2'],
+        blockedBy: [],
+      },
+      {
+        id: 'task-2',
+        subject: 'Create JWT helper module',
+        description: 'Implement signToken / verifyToken in src/auth/jwt.ts and cover them with integration tests.',
+        status: 'in_progress' as const,
+        blocks: ['task-3'],
+        blockedBy: ['task-1'],
+        activeForm: 'Creating the JWT helper module',
+      },
+      {
+        id: 'task-3',
+        subject: 'Replace session middleware',
+        description: 'Swap express-session for the JWT verification middleware across all protected routes.',
+        status: 'pending' as const,
+        blocks: [],
+        blockedBy: ['task-2'],
+      },
+      {
+        id: 'task-4',
+        subject: 'Remove express-session',
+        description: 'Drop the express-session dependency and its configuration once routes are migrated.',
+        status: 'pending' as const,
+        blocks: [],
+        blockedBy: ['task-3'],
+      },
+    ],
+  },
+  {
+    sessionId: '20260326T140000',
+    filename: '20260326T140000_000002.jsonl',
+    tasks: [
+      {
+        id: 'task-a',
+        subject: 'Audit slow database queries',
+        description: 'Profile the dashboard endpoints and identify queries missing indexes.',
+        status: 'completed' as const,
+        blocks: [],
+        blockedBy: [],
+      },
+      {
+        id: 'task-b',
+        subject: 'Add composite index on (user_id, created_at)',
+        description: 'Create the migration and verify the query planner picks it up.',
+        status: 'completed' as const,
+        blocks: [],
+        blockedBy: [],
+      },
+    ],
+  },
+];
+
+// ─── Plans per progetto ───────────────────────────────────────────────────────
+
+const PLAN_AUTH = `# Migrate authentication to JWT
+
+## Goal
+Replace server-side sessions with stateless JWT tokens.
+
+## Steps
+1. Install \`jsonwebtoken\` and \`@types/jsonwebtoken\`
+2. Add \`src/auth/jwt.ts\` with \`signToken\` / \`verifyToken\`
+3. Issue a JWT on login and return it in the response body
+4. Replace the \`express-session\` middleware with JWT verification
+5. Remove \`express-session\` and its configuration
+
+## Risks
+- Existing logged-in users will be signed out on deploy
+- Token revocation needs a short expiry + refresh strategy
+`;
+
+const PLAN_DARKMODE = `# Add dark mode support
+
+## Goal
+Ship a system-aware dark theme toggled from the settings menu.
+
+## Steps
+1. Define semantic color tokens in \`theme.css\`
+2. Add a \`data-theme\` attribute driven by \`prefers-color-scheme\`
+3. Persist the user's explicit choice in localStorage
+4. Audit components for hardcoded colors
+
+## Open questions
+- Do we animate the transition or swap instantly?
+`;
+
+const MOCK_PLANS = [
+  {
+    sessionId: '20260329T091500',
+    filename: '20260329T091500_000000.jsonl',
+    plans: [
+      {
+        filePath: '/Users/alice/.claude/plans/migrate-auth-to-jwt.md',
+        slug: 'migrate-auth-to-jwt',
+        title: 'Migrate authentication to JWT',
+        status: 'approved' as const,
+        exists: true,
+        content: PLAN_AUTH,
+        timestamp: '2026-03-29T09:05:18Z',
+        gitBranch: 'feat/jwt-auth',
+      },
+    ],
+  },
+  {
+    sessionId: '20260321T100000',
+    filename: '20260321T100000_000004.jsonl',
+    plans: [
+      {
+        filePath: '/Users/alice/.claude/plans/add-dark-mode-support.md',
+        slug: 'add-dark-mode-support',
+        title: 'Add dark mode support',
+        status: 'proposed' as const,
+        exists: true,
+        content: PLAN_DARKMODE,
+        timestamp: '2026-03-21T10:12:00Z',
+        gitBranch: 'feat/dark-mode',
+      },
+    ],
+  },
+];
+
+// ─── Sessioni agent live / background ──────────────────────────────────────────
+// Timestamp ancorati a NOW (minuti fa) così la Agent View mostra tempi relativi
+// realistici ("just now", "5m ago") invece di date statiche vecchie di mesi.
+const minsAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
+
+const MOCK_BG_SESSIONS = [
+  // ── Progetto webapp: spettro completo di stati per popolare ogni bucket della
+  // Agent View (Needs input · Working · Ready · Completed · Failed · Stopped) ──
+  {
+    id: 'a1b2c3',
+    sessionId: '20260329T101500_000123',
+    name: 'Refactor auth to JWT',
+    state: 'running',
+    tempo: 'busy',
+    detail: 'Editing src/middleware/protect.ts',
+    intent: 'Replace the session middleware with JWT verification across all protected routes.',
+    result: null,
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'bg',
+    inFlightTasks: 2,
+    alive: true,
+    pid: 24817,
+    createdAt: minsAgo(18),
+    updatedAt: minsAgo(0),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+  {
+    id: 'b2c3d4',
+    sessionId: '20260531T094000_000201',
+    name: 'Add Stripe checkout flow',
+    state: 'running',
+    tempo: 'blocked',
+    detail: 'Paused — needs a decision before continuing',
+    intent: 'Wire up Stripe Checkout for the Pro plan and handle the success webhook.',
+    result: null,
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'bg',
+    inFlightTasks: 1,
+    alive: true,
+    pid: 25104,
+    createdAt: minsAgo(32),
+    updatedAt: minsAgo(2),
+    needs: 'Should I store the Stripe customer ID on the users table or in a separate billing table?',
+    hasPendingQuestion: true,
+  },
+  {
+    id: 'c3d4e5',
+    sessionId: '20260531T093000_000202',
+    name: 'Investigate flaky e2e test',
+    state: 'running',
+    tempo: 'thinking',
+    detail: 'Analyzing test/login.e2e.ts retry logs',
+    intent: 'Find why the login e2e test fails ~1 in 5 runs on CI.',
+    result: null,
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'claude',
+    inFlightTasks: 1,
+    alive: true,
+    pid: 25210,
+    createdAt: minsAgo(11),
+    updatedAt: minsAgo(1),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+  {
+    id: 'd4e5f6',
+    sessionId: '20260531T090500_000203',
+    name: 'Bump dependencies',
+    state: 'idle',
+    tempo: 'idle',
+    detail: 'Idle — awaiting your next prompt',
+    intent: 'Upgrade React, Vite and TypeScript to their latest minor versions.',
+    result: null,
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'bg',
+    inFlightTasks: 0,
+    alive: true,
+    pid: 25288,
+    createdAt: minsAgo(46),
+    updatedAt: minsAgo(9),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+  {
+    id: 'e5f6a7',
+    sessionId: '20260531T083000_000204',
+    name: 'Add dark mode toggle',
+    state: 'done',
+    tempo: 'idle',
+    detail: 'Completed — toggle shipped, 6 files changed',
+    intent: 'Add a system-aware dark theme switch to the settings menu.',
+    result: 'Added data-theme switching with localStorage persistence; audited 12 components for hardcoded colors.',
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'bg',
+    inFlightTasks: 0,
+    alive: false,
+    pid: null,
+    createdAt: minsAgo(180),
+    updatedAt: minsAgo(64),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+  {
+    id: 'f6a7b8',
+    sessionId: '20260531T080000_000205',
+    name: 'Migrate to ESM',
+    state: 'failed',
+    tempo: 'idle',
+    detail: 'Failed — build broke on circular import',
+    intent: 'Convert the server bundle from CommonJS to native ESM.',
+    result: 'Stopped after the build failed: circular dependency between src/db.ts and src/models/user.ts.',
+    cwd: '/Users/alice/projects/webapp',
+    projectName: 'webapp',
+    template: 'claude',
+    inFlightTasks: 0,
+    alive: false,
+    pid: null,
+    createdAt: minsAgo(240),
+    updatedAt: minsAgo(120),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+  // ── Altri progetti: variano la Global Agent View ──
+  {
+    id: 'a7b8c9',
+    sessionId: '20260531T095500_000098',
+    name: 'Generate API docs',
+    state: 'running',
+    tempo: 'thinking',
+    detail: 'Summarizing OpenAPI schema',
+    intent: 'Write reference docs for every endpoint in the api-server project.',
+    result: null,
+    cwd: '/Users/alice/projects/api-server',
+    projectName: 'api-server',
+    template: 'claude',
+    inFlightTasks: 1,
+    alive: true,
+    pid: 24990,
+    createdAt: minsAgo(25),
+    updatedAt: minsAgo(3),
+    needs: 'Waiting for confirmation: overwrite existing docs/api.md?',
+    hasPendingQuestion: true,
+  },
+  {
+    id: 'g7h8i9',
+    sessionId: '20260531T084000_000071',
+    name: 'Add unit tests for utils',
+    state: 'done',
+    tempo: 'idle',
+    detail: 'Completed — 14 tests added, all passing',
+    intent: 'Write integration-style tests for the date and currency helpers.',
+    result: 'Added 14 tests in test/utils.test.ts; coverage on src/utils.ts is now 96%.',
+    cwd: '/Users/alice/experiments/llm-playground',
+    projectName: 'llm-playground',
+    template: 'bg',
+    inFlightTasks: 0,
+    alive: false,
+    pid: null,
+    createdAt: minsAgo(140),
+    updatedAt: minsAgo(95),
+    needs: null,
+    hasPendingQuestion: false,
+  },
+];
+
+// ─── Risposta AI Assistant simulata (streaming) ────────────────────────────────
+
+const MOCK_AI_RESPONSE = `Here's a summary of the **webapp** project's authentication setup:
+
+## Current state
+- Sessions are handled by \`express-session\` and stored server-side
+- \`req.session.userId\` gates the protected routes via \`src/middleware/protect.ts\`
+- The secret comes from \`process.env.SESSION_SECRET\`
+
+## Observations
+1. **Stateless tokens** would remove the server-side session store and simplify horizontal scaling.
+2. The login route in \`src/routes/auth.ts\` is the single place that establishes identity — a good seam to issue a JWT.
+3. Three call sites reference \`req.session\`, so the migration surface is small.
+
+## Suggested next step
+Introduce \`src/auth/jwt.ts\` with \`signToken\`/\`verifyToken\`, then swap the middleware. The change is well-contained and low-risk.
+`;
+
 // ─── Registrazione handler mock ───────────────────────────────────────────────
 
 export function registerScreenshotHandlers(ipcMain: IpcMain) {
@@ -384,7 +750,9 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'projects:delete',
     'mcp:getGlobal',
     'ai:run', 'ai:stop',
-    'live:getProcesses', 'live:startWatch', 'live:stopWatch',
+    'live:getProcesses', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
+    'tasks:getByProject', 'plans:getByProject',
+    'settings:getCleanupPeriodDays',
   ];
 
   // Rimuovi handler reali prima di registrare i mock
@@ -431,10 +799,45 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('mcp:getGlobal', () => ok(MOCK_MCP));
 
-  ipcMain.handle('ai:run', () => ok(null));
+  // Streaming AI simulato: invia la risposta a blocchi via `ai:chunk`, poi `ai:done`.
+  ipcMain.handle('ai:run', (event: { sender: { send: (channel: string, ...args: unknown[]) => void } }) => {
+    const words = MOCK_AI_RESPONSE.split(/(\s+)/);
+    let i = 0;
+    const tick = () => {
+      if (i >= words.length) {
+        event.sender.send('ai:done');
+        return;
+      }
+      // Spedisce qualche token alla volta per simulare lo streaming
+      const slice = words.slice(i, i + 4).join('');
+      event.sender.send('ai:chunk', slice);
+      i += 4;
+      setTimeout(tick, 40);
+    };
+    setTimeout(tick, 120);
+    return ok(null);
+  });
   ipcMain.handle('ai:stop', () => ok(null));
 
   ipcMain.handle('live:getProcesses', () => ok(MOCK_PROCESSES));
+  ipcMain.handle('live:getSessions', () => ok(MOCK_BG_SESSIONS));
   ipcMain.handle('live:startWatch', () => ok({ started: true }));
   ipcMain.handle('live:stopWatch', () => ok(null));
+
+  // Aggancia i gruppi task/plan alle sessioni reali del progetto (per filename),
+  // così la UI mostra il titolo e la data della sessione e l'header è cliccabile.
+  const attachToSessions = <T extends { sessionId: string; filename: string }>(hash: string, groups: T[]): T[] => {
+    const sessions = getSessionList(hash);
+    return groups.map((g, i) => {
+      const s = sessions[i];
+      return s ? { ...g, sessionId: s.filename.replace(/\.jsonl$/, ''), filename: s.filename } : g;
+    });
+  };
+
+  ipcMain.handle('tasks:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_TASKS)));
+  ipcMain.handle('plans:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_PLANS)));
+
+  // Finestra di retention fissa così i conteggi demo sono deterministici
+  // a prescindere dalle settings reali della macchina.
+  ipcMain.handle('settings:getCleanupPeriodDays', () => ok(30));
 }
