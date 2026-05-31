@@ -27,6 +27,15 @@ export default function MyDoc() {
 }
 ```
 
+### ErrorBoundary.tsx
+React class error boundary that catches render-time errors in its subtree and
+renders `<QueryError />` instead of crashing the app.
+
+### QueryError.tsx
+Presentational error surface for failed IPC/React Query calls. Accepts an
+`error` (Error, string, or unknown) and an optional `onRetry` handler (renders
+a "Retry" button when provided).
+
 ## CSS Classes
 
 Components use Tailwind CSS + a custom `prose-lens` variant defined in `tailwind.config.ts` for semantic markdown rendering.
