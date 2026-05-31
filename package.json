@@ -35,7 +35,7 @@
     "test:watch": "vitest",
     "electron:build": "electron-builder",
     "memory-stats": "npx ts-node ../scripts/memory-stats.ts",
-    "screenshot": "SCREENSHOT_MODE=true concurrently -k \"vite\" \"wait-on http://localhost:5173 && electron .\""
+    "screenshot": "SCREENSHOT_MODE=true concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on http://localhost:5173 dist-electron/main.js && electron .\""
   },
   "dependencies": {
     "@tailwindcss/typography": "^0.5.19",
