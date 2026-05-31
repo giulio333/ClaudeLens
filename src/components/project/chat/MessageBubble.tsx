@@ -1,11 +1,10 @@
-import { memo, useState } from 'react'
-import type { CSSProperties } from 'react'
+import React, { memo, useState } from 'react'
+import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, AGENT_TOOLS, QUESTION_TOOL } from './utils'
+import { fmtModel, modelColor } from '../utils'
 import { ToolGroupCard } from './ToolGroupCard'
-
-const QUESTION_TOOL = 'AskUserQuestion'
 
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
 function AskQuestionCard({ group }: { group: ToolGroup }) {
@@ -17,7 +16,8 @@ function AskQuestionCard({ group }: { group: ToolGroup }) {
   return (
     <div className="cl-ask-card">
       <div className="cl-ask-card-kicker">
-        <span>Question asked</span>
+        <span className="cl-ask-card-ic">?</span>
+        <span className="lbl">Question asked</span>
         <span className="cl-ask-card-status" data-pending={pending || undefined}>
           {pending ? 'Waiting for reply' : 'Answered'}
         </span>
@@ -36,11 +36,8 @@ function AskQuestionCard({ group }: { group: ToolGroup }) {
                     className="cl-ask-card-option"
                     data-selected={selected || undefined}
                   >
-                    <div className="cl-ask-card-option-label">
-                      {selected && <span className="cl-ask-card-check">✓</span>}
-                      {opt.label}
-                    </div>
-                    {opt.description && <div className="cl-ask-card-option-desc">{opt.description}</div>}
+                    <span className="cl-ask-card-option-label">{opt.label}</span>
+                    {opt.description && <span className="cl-ask-card-option-desc">{opt.description}</span>}
                   </div>
                 )
               })}
@@ -61,8 +58,11 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   return (
     <div className="cl-thinking">
       <button type="button" onClick={() => setOpen(o => !o)} className="cl-thinking-toggle" aria-label={`Thinking — ${open ? 'collapse' : 'expand'} content`} aria-expanded={open}>
-        <span>Thinking</span>
-        <b>{open ? 'Close' : 'Open'}</b>
+        <span className="tw">Thinking</span>
+        <svg className="caret" width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+          <path d="M3 1.5L6 4.5L3 7.5" />
+        </svg>
+        <b>{open ? 'Hide' : 'Show'}</b>
       </button>
       {open && (
         <pre className="cl-thinking-body">{thinking}</pre>
@@ -71,27 +71,35 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   )
 }
 
-/** Compact card that surfaces a Claude Code sub-agent dispatch in minimal mode. */
+/** Sub-agent dispatch rendered as an editorial "delegated task receipt". */
 function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
   const input = group.use.input as Record<string, unknown>
   const subagent = (input.subagent_type as string) || 'general-purpose'
   const desc = (input.description as string) || (input.prompt as string) || ''
+  const result = group.result
+  const resultText = result ? result.content.replace(/\s+/g, ' ').trim().slice(0, 320) : ''
   return (
     <button type="button" className="cl-agent-card" onClick={onOpen} title="View agent detail">
-      <span className="ic">A</span>
-      <span className="lbl">Claude Code Agent</span>
-      <span className="chip">{subagent}</span>
-      {desc && <span className="desc">{String(desc).slice(0, 90)}</span>}
-      {group.result && (
-        <span className="status" style={{ color: group.result.isError ? 'var(--cl-danger)' : 'var(--cl-ok)' }}>
-          {group.result.isError ? '⚠' : '✓'}
+      <span className="top">
+        <span className="ic">A</span>
+        <span className="lbl">Sub-agent</span>
+        <span className="chip">{subagent}</span>
+        {result && (
+          <span className="status" data-error={result.isError || undefined}>
+            {result.isError ? 'failed' : 'done'}
+          </span>
+        )}
+      </span>
+      {desc && <span className="desc">{String(desc)}</span>}
+      {resultText && (
+        <span className="return">
+          <span className="mini">Returned</span>
+          <span className="res">{resultText}</span>
         </span>
       )}
     </button>
   )
 }
-
-const AGENT_TOOLS = new Set(['Agent', 'Task'])
 
 function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand; timestamp?: string }) {
   // Nascondi args se è solo l'echo del command name (es. <command-message>model</command-message> per /model)
@@ -110,10 +118,7 @@ function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand;
         <pre className="cl-command-args">{command.args}</pre>
       )}
       {command.output && (
-        <div className="cl-command-output">
-          <div className="cl-command-output-label">Output</div>
-          <pre>{command.output}</pre>
-        </div>
+        <div className="cl-command-output">{command.output}</div>
       )}
     </div>
   )
@@ -127,11 +132,17 @@ export const MessageBubble = memo(function MessageBubble({
   detailsFilter,
   onOpenToolDetail,
   turnIndex,
+  dimmed,
+  innerRef,
 }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
   onOpenToolDetail: (group: ToolGroup) => void
   turnIndex?: number
+  /** Faded out because it doesn't match the active type filter (kept visible for context). */
+  dimmed?: boolean
+  /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
+  innerRef?: Ref<HTMLElement>
 }) {
   const { msg, toolGroups, command } = processed
   const isUser = msg.role === 'user'
@@ -160,39 +171,19 @@ export const MessageBubble = memo(function MessageBubble({
     (showTools && standardToolGroups.length > 0) ||
     showAgentStrip ||
     showQuestions
-  if (!hasVisibleContent) return null
 
-  // A turn that is *only* a sub-agent dispatch gets its own role identity.
-  const isAgentTurn = showAgentStrip && textBlocks.length === 0
-  // A turn whose only payload is a question (no text, no other tools) gets
-  // a dedicated "Question" identity so it stands out in the timeline.
-  const isQuestionTurn =
-    showQuestions &&
-    textBlocks.length === 0 &&
-    !showAgentStrip &&
-    (!showTools || standardToolGroups.length === 0)
+  // In minimal mode, tool-only turns (no text, no agents, no questions) are
+  // otherwise invisible. Render a compact "X tools hidden" badge so the user
+  // can see that tool activity happened.
+  const isHiddenToolsOnly = !hasVisibleContent && !showTools && standardToolGroups.length > 0
+
+  if (!hasVisibleContent && !isHiddenToolsOnly) return null
+
+  // Role identity is resolved by the shared describeTurn() so the minimap and
+  // the rendered bubble always agree on who's speaking.
   const isCommandTurn = !!command
-  const roleVariant: 'user' | 'claude' | 'agent' | 'command' | 'question' =
-    isCommandTurn ? 'command'
-    : isQuestionTurn ? 'question'
-    : isAgentTurn ? 'agent'
-    : isUser ? 'user'
-    : 'claude'
-  const roleInitial =
-    roleVariant === 'command' ? '/' :
-    roleVariant === 'question' ? '?' :
-    roleVariant === 'agent' ? 'A' :
-    roleVariant === 'user' ? 'U' : 'C'
-  const roleLabel =
-    roleVariant === 'command' ? 'Command' :
-    roleVariant === 'question' ? 'Question' :
-    roleVariant === 'agent' ? 'Agent' :
-    roleVariant === 'user' ? 'You' : 'Claude'
-  const roleColor =
-    roleVariant === 'command' ? 'var(--cl-accent)' :
-    roleVariant === 'question' ? 'var(--cl-warn)' :
-    roleVariant === 'agent' ? 'var(--cl-violet)' :
-    roleVariant === 'user' ? 'var(--cl-ink)' : 'var(--cl-accent)'
+  const { variant: roleVariant, label: roleLabel, initial: roleInitial, color: roleColor } =
+    describeTurn(processed, detailsFilter)
 
   const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
     hour: '2-digit',
@@ -202,16 +193,36 @@ export const MessageBubble = memo(function MessageBubble({
   })
   const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
 
+  // Tool-only turn in minimal mode: render a compact inline badge instead of full article.
+  if (isHiddenToolsOnly) {
+    return (
+      <div
+        className="cl-turn-tools-hidden"
+        ref={innerRef as React.Ref<HTMLDivElement>}
+        data-n={turnIndex}
+        data-dim={dimmed || undefined}
+      >
+        <span className="cl-turn-tools-hidden-badge">
+          {standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'} hidden
+        </span>
+      </div>
+    )
+  }
+
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
   if (isCommandTurn && command) {
     return (
       <article
         className="cl-turn cl-turn--command"
         style={{ '--turn-role-color': roleColor } as CSSProperties}
+        ref={innerRef}
+        data-n={turnIndex}
+        data-dim={dimmed || undefined}
       >
         <aside className="cl-turn-rail">
           <span className="cl-turn-orb" aria-label={roleLabel}>{roleInitial}</span>
           <span className="cl-turn-index">{turnNumber}</span>
+          <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
           <SlashCommandCard command={command} timestamp={timestamp} />
@@ -224,10 +235,14 @@ export const MessageBubble = memo(function MessageBubble({
     <article
       className={`cl-turn cl-turn--${roleVariant}`}
       style={{ '--turn-role-color': roleColor } as CSSProperties}
+      ref={innerRef}
+      data-n={turnIndex}
+      data-dim={dimmed || undefined}
     >
       <aside className="cl-turn-rail">
         <span className="cl-turn-orb">{roleInitial}</span>
         <span className="cl-turn-index">{turnNumber}</span>
+        <span className="cl-turn-spine" aria-hidden />
       </aside>
 
       <section className="cl-turn-body">
@@ -235,8 +250,16 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="cl-turn-who">{roleLabel}</span>
           <span className="cl-turn-sep">·</span>
           <time>{timestamp}</time>
+          {msg.model && msg.role === 'assistant' && (
+            <>
+              <span className="cl-turn-sep">·</span>
+              <span className="cl-turn-model-chip" style={{ '--mt': modelColor(msg.model) } as CSSProperties}>
+                {fmtModel(msg.model)}
+              </span>
+            </>
+          )}
           {standardToolGroups.length > 0 && (
-            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}</span>
+            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}{!showTools ? ' hidden' : ''}</span>
           )}
         </header>
 
