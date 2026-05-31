@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, RefObject } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
-import { fmt, fmtDate, fmtModel, modelColor, sessionTitle } from '../utils'
-import { buildProcessedMessages, isMemoryFile, ChatDetailsFilter, ToolGroup, TOOL_TINT } from './utils'
+import { fmt, fmtModel, modelColor, sessionTitle } from '../utils'
+import { buildProcessedMessages, describeTurn, isMemoryFile, ChatDetailsFilter, ToolGroup, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { MessageBubble } from './MessageBubble'
@@ -190,16 +190,6 @@ function ChatTopActions({
   )
 }
 
-function splitTokens(value: number): { whole: string; decimals: string | null } {
-  if (value >= 1000) {
-    const k = value / 1000
-    const whole = Math.floor(k).toString()
-    const dec = k - Math.floor(k)
-    return { whole, decimals: dec > 0 ? `.${Math.round(dec * 10)}k` : 'k' }
-  }
-  return { whole: fmt(value), decimals: null }
-}
-
 function splitCost(value: number): { whole: string; decimals: string | null } {
   const fixed = value.toFixed(2)
   const [whole, dec] = fixed.split('.')
@@ -209,27 +199,20 @@ function splitCost(value: number): { whole: string; decimals: string | null } {
 function ChatSessionHeader({
   title,
   session,
-  primaryModel,
+  projectName,
   totalMessages,
   totalToolCalls,
-  toolSummary,
-  memoryToolCalls,
-  startedAt,
-  endedAt,
+  duration,
   collapsed,
 }: {
   title: string
   session: SessionSummary
-  primaryModel: string | null
+  projectName: string
   totalMessages: number
   totalToolCalls: number
-  toolSummary: [string, number][]
-  memoryToolCalls: number
-  startedAt: string | null
-  endedAt: string | null
+  duration: string | null
   collapsed: boolean
 }) {
-  const tokens = splitTokens(session.totalTokens)
   const cost = splitCost(session.estimatedCost)
 
   return (
@@ -238,7 +221,7 @@ function ChatSessionHeader({
         <div className="cl-chat-hero-text">
           <div className="cl-eyebrow cl-chat-eyebrow">
             <span className="pip" />
-            <span>Session · {fmtDate(session.date)}</span>
+            <span>Session · {projectName}</span>
           </div>
           <h1>
             {title}
@@ -252,86 +235,133 @@ function ChatSessionHeader({
                 <span style={{ textTransform: 'uppercase' }}>{session.template}</span>
               </>
             )}
-            {primaryModel && (
-              <>
-                <span className="sep">·</span>
-                <span className="cl-chat-model">
-                  <span className="led" style={{ background: modelColor(primaryModel) }} />
-                  <b>{fmtModel(primaryModel)}</b>
-                </span>
-              </>
-            )}
-            {startedAt && (
-              <>
-                <span className="sep">·</span>
-                <span>started <b>{startedAt}</b></span>
-              </>
-            )}
-            {endedAt && endedAt !== startedAt && (
-              <>
-                <span className="sep">·</span>
-                <span>ended <b>{endedAt}</b></span>
-              </>
-            )}
           </div>
-        </div>
-        <div className="cl-lens-cluster" aria-hidden>
-          <span className="orb-big" />
-          <span className="orb-mid" />
-          <span className="orb-sm" />
         </div>
       </section>
 
       <section className="cl-chat-stats">
         <div className="cl-chat-stat">
-          <div className="l">Messages</div>
+          <div className="l">Turns</div>
           <div className="n">{fmt(totalMessages)}</div>
         </div>
         <div className="cl-chat-stat">
-          <div className="l">Tokens</div>
-          <div className="n">{tokens.whole}{tokens.decimals && <small>{tokens.decimals}</small>}</div>
-        </div>
-        <div className="cl-chat-stat">
-          <div className="l">Tools</div>
+          <div className="l">Tool calls</div>
           <div className="n">{fmt(totalToolCalls)}</div>
         </div>
+        {duration && (
+          <div className="cl-chat-stat">
+            <div className="l">Duration</div>
+            <div className="n cl-chat-duration">{duration}</div>
+          </div>
+        )}
         <div className="cl-chat-stat is-dark">
           <div className="l">Cost</div>
           <div className="n">{cost.whole}{cost.decimals && <small>{cost.decimals}</small>}</div>
         </div>
       </section>
+    </div>
+  )
+}
 
-      <div className="cl-chat-toolstrip">
-        <div className="cl-chat-io">
-          <span>Input <b>{fmt(session.inputTokens)}</b></span>
-          <span className="sep">/</span>
-          <span>Output <b>{fmt(session.outputTokens)}</b></span>
-          <span className="sep">/</span>
-          <span>Cache <b>{fmt(session.cacheReadTokens)}</b></span>
-        </div>
-        {toolSummary.length > 0 ? (
-          <div className="cl-chat-tool-chips">
-            {toolSummary.slice(0, 6).map(([name, count]) => (
-              <span
-                key={name}
-                className="cl-tk"
-                style={{ '--tk-tint': TOOL_TINT[name] ?? 'var(--cl-ink-3)' } as CSSProperties}
-              >
-                <span className="d" />
-                <b>{count}</b> {name}
-              </span>
-            ))}
-            {memoryToolCalls > 0 && (
-              <span className="cl-tk" style={{ '--tk-tint': 'var(--cl-violet)' } as CSSProperties}>
-                <span className="d" />
-                <b>{memoryToolCalls}</b> Memory
-              </span>
-            )}
-          </div>
-        ) : (
-          <div className="cl-chat-tool-chips is-empty">No tool calls</div>
-        )}
+type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions'
+
+function fmtK(n: number): string {
+  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm'
+  if (n >= 1e3) return Math.round(n / 1e3) + 'k'
+  return String(n)
+}
+
+/** Per-model token distribution — a single stacked bar + legend (prototype's da-models). */
+function ChatModelBar({ models }: { models: [string, number][] }) {
+  const total = models.reduce((s, [, t]) => s + t, 0)
+  if (total <= 0) return null
+  return (
+    <div className="cl-chat-models">
+      <div className="cl-chat-mbar" role="img" aria-label="Token distribution by model">
+        {models.map(([name, tokens]) => (
+          <span
+            key={name}
+            style={{ width: `${(tokens / total) * 100}%`, background: modelColor(name) }}
+            title={`${fmtModel(name)} · ${fmtK(tokens)} tok`}
+          />
+        ))}
       </div>
+      {models.map(([name, tokens]) => (
+        <span key={name} className="cl-chat-mkey">
+          <i style={{ background: modelColor(name) }} />
+          {fmtModel(name)}
+          <span className="t">{fmtK(tokens)}</span>
+        </span>
+      ))}
+    </div>
+  )
+}
+
+type MinimapItem = TurnDescriptor & { n: number; time: string }
+
+/** Navigable turn-index rail with scroll-spy. Mirrors the prototype's da-rail:
+ *  one colour-coded dot per turn, hover label, click to jump, active dot enlarged. */
+function TurnMinimap({
+  items,
+  active,
+  matches,
+  onJump,
+}: {
+  items: MinimapItem[]
+  active: number | null
+  matches: (d: TurnDescriptor) => boolean
+  onJump: (n: number) => void
+}) {
+  return (
+    <nav className="cl-minimap" aria-label="Turn index">
+      {items.map(it => (
+        <button
+          key={it.n}
+          type="button"
+          className="cl-minimap-item"
+          style={{ '--c': it.color } as CSSProperties}
+          data-active={active === it.n || undefined}
+          data-dim={!matches(it) || undefined}
+          onClick={() => onJump(it.n)}
+          title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
+          aria-label={`Jump to turn ${it.n}, ${it.label}`}
+        >
+          <span className="d" />
+          <span className="n">{String(it.n).padStart(2, '0')} {it.label}</span>
+        </button>
+      ))}
+    </nav>
+  )
+}
+
+function ChatTypeFilters({
+  filter,
+  setFilter,
+  counts,
+  showThinking,
+}: {
+  filter: TurnFilter
+  setFilter: (f: TurnFilter) => void
+  counts: { all: number; tools: number; thinking: number; questions: number }
+  showThinking: boolean
+}) {
+  const Chip = ({ id, label, c }: { id: TurnFilter; label: string; c: number }) => (
+    <button
+      type="button"
+      className="cl-filter"
+      data-on={filter === id || undefined}
+      onClick={() => setFilter(filter === id ? 'all' : id)}
+    >
+      {label}
+      <span className="c">{c}</span>
+    </button>
+  )
+  return (
+    <div className="cl-chat-filters" role="group" aria-label="Filter turns by type">
+      <Chip id="all" label="All" c={counts.all} />
+      <Chip id="tools" label="Tools" c={counts.tools} />
+      {showThinking && <Chip id="thinking" label="Thinking" c={counts.thinking} />}
+      <Chip id="questions" label="Questions" c={counts.questions} />
     </div>
   )
 }
@@ -356,7 +386,11 @@ export function ChatView({
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
+  const [activeTurn, setActiveTurn] = useState<number | null>(null)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
+  const feedRef = useRef<HTMLElement | null>(null)
+  const turnRefs = useRef<Record<number, HTMLElement | null>>({})
 
   // Heavy: rebuild the processed transcript only when the raw messages change,
   // not on every render (e.g. header collapse toggles fired during scroll).
@@ -380,28 +414,110 @@ export function ChatView({
       },
       {} as Record<string, number>
     )
-    const toolSummary = Object.entries(toolCounts)
-      .filter(([k]) => k !== '_memory')
-      .sort((a, b) => b[1] - a[1])
-
+    const toolEntries = Object.entries(toolCounts).filter(([k]) => k !== '_memory')
     return {
       totalMessages: realUserCount + realAssistantCount,
-      toolSummary,
-      totalToolCalls: toolSummary.reduce((s, [, c]) => s + c, 0),
-      memoryToolCalls: toolCounts['_memory'] ?? 0,
+      totalToolCalls: toolEntries.reduce((s, [, c]) => s + c, 0),
     }
   }, [processed])
-  const { totalMessages, toolSummary, totalToolCalls, memoryToolCalls } = stats
+  const { totalMessages, totalToolCalls } = stats
+
+  // The detail filter (Minimal/Full) drives which turns are visible — Minimal
+  // hides thinking/tools — so the navigation descriptors depend on it too.
+  const descriptors = useMemo(
+    () => processed.map(p => describeTurn(p, detailsFilter)),
+    [processed, detailsFilter]
+  )
+  const fmtTurnTime = useCallback(
+    (ts: string | undefined) => (ts
+      ? new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
+      : ''),
+    []
+  )
+  const minimapItems = useMemo<MinimapItem[]>(
+    () => descriptors
+      .map((d, i) => ({ ...d, n: i + 1, time: fmtTurnTime(processed[i]?.msg.timestamp) }))
+      .filter(d => d.visible),
+    [descriptors, processed, fmtTurnTime]
+  )
+  // Per-turn match against the active type filter (non-matching turns are dimmed,
+  // never removed, so the conversation thread stays continuous).
+  const matchesFilter = useCallback(
+    (d: TurnDescriptor) => {
+      switch (turnFilter) {
+        case 'tools': return d.hasTools
+        case 'thinking': return d.hasThinking && detailsFilter === 'all'
+        case 'questions': return d.hasQuestion
+        default: return true
+      }
+    },
+    [turnFilter, detailsFilter]
+  )
+  const filterCounts = useMemo(
+    () => ({
+      all: minimapItems.length,
+      tools: minimapItems.filter(d => d.hasTools).length,
+      thinking: minimapItems.filter(d => d.hasThinking).length,
+      questions: minimapItems.filter(d => d.hasQuestion).length,
+    }),
+    [minimapItems]
+  )
+  // Model token distribution (descending), excluding the synthetic bucket.
+  const modelEntries = useMemo<[string, number][]>(
+    () => Object.entries(session.models ?? {})
+      .filter(([k, v]) => k !== '<synthetic>' && v > 0)
+      .sort((a, b) => b[1] - a[1]),
+    [session.models]
+  )
+
+  // Stable ref setter (keyed by the turn's data-n) so MessageBubble's memo holds.
+  const setTurnRef = useCallback((el: HTMLElement | null) => {
+    const n = el?.dataset.n
+    if (el && n) turnRefs.current[Number(n)] = el
+  }, [])
+
+  // Scroll-spy: highlight the turn nearest the viewport centre.
+  useEffect(() => {
+    const root = feedRef.current
+    if (!root || minimapItems.length === 0) return
+    setActiveTurn(prev => prev ?? minimapItems[0].n)
+    const io = new IntersectionObserver(
+      entries => {
+        entries.forEach(e => {
+          if (e.isIntersecting) setActiveTurn(Number((e.target as HTMLElement).dataset.n))
+        })
+      },
+      { root, rootMargin: '-45% 0px -45% 0px', threshold: 0 }
+    )
+    Object.values(turnRefs.current).forEach(el => el && io.observe(el))
+    return () => io.disconnect()
+  }, [minimapItems, viewMode])
+
+  // Minimal mode hides thinking, so the Thinking filter no longer applies.
+  useEffect(() => {
+    if (detailsFilter === 'minimal' && turnFilter === 'thinking') setTurnFilter('all')
+  }, [detailsFilter, turnFilter])
+
+  const jumpToTurn = useCallback((n: number) => {
+    const el = turnRefs.current[n]
+    if (!el) return
+    el.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    setActiveTurn(n)
+  }, [])
 
   const title = sessionTitle(session)
-  const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] ?? null : null
   const selectedExportPreset = CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
 
-  const fmtTime = (ts: string | undefined) => ts
-    ? new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
-    : null
-  const startedAt = fmtTime(processed[0]?.msg.timestamp)
-  const endedAt = fmtTime(processed[processed.length - 1]?.msg.timestamp)
+  const duration = useMemo(() => {
+    const t0 = processed[0]?.msg.timestamp
+    const t1 = processed[processed.length - 1]?.msg.timestamp
+    if (!t0 || !t1) return null
+    const ms = new Date(t1).getTime() - new Date(t0).getTime()
+    if (ms <= 0) return null
+    const s = Math.round(ms / 1000)
+    const m = Math.floor(s / 60)
+    return m > 0 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`
+  }, [processed])
 
   useEffect(() => {
     if (!exportOpen) return
@@ -490,6 +606,7 @@ export function ChatView({
         <div className="cl-chat-workspace">
           <main
             className="cl-chat-feed"
+            ref={feedRef}
             onScroll={e => {
               const top = (e.target as HTMLElement).scrollTop
               // hysteresis: collapse at 220px, expand back only under 80px — evita flicker
@@ -500,15 +617,27 @@ export function ChatView({
             <ChatSessionHeader
               title={title}
               session={session}
-              primaryModel={primaryModel}
+              projectName={projectName}
               totalMessages={totalMessages}
               totalToolCalls={totalToolCalls}
-              toolSummary={toolSummary}
-              memoryToolCalls={memoryToolCalls}
-              startedAt={startedAt}
-              endedAt={endedAt}
+              duration={duration}
               collapsed={headerCollapsed}
             />
+
+            {modelEntries.length > 0 && (
+              <div className={`cl-chat-collapsible${headerCollapsed ? ' is-collapsed' : ''}`}>
+                <ChatModelBar models={modelEntries} />
+              </div>
+            )}
+
+            {processed.length > 0 && (
+              <ChatTypeFilters
+                filter={turnFilter}
+                setFilter={setTurnFilter}
+                counts={filterCounts}
+                showThinking={detailsFilter === 'all'}
+              />
+            )}
 
             {isLoading && (
               <p className="cl-transcript-state">
@@ -522,16 +651,26 @@ export function ChatView({
             )}
 
             {processed.length > 0 && (
-              <div className="cl-transcript-inner">
-                {processed.map((p, idx) => (
-                  <MessageBubble
-                    key={p.msg.uuid}
-                    processed={p}
-                    detailsFilter={detailsFilter}
-                    onOpenToolDetail={setSelectedTool}
-                    turnIndex={idx + 1}
-                  />
-                ))}
+              <div className="cl-chat-main">
+                <TurnMinimap
+                  items={minimapItems}
+                  active={activeTurn}
+                  matches={matchesFilter}
+                  onJump={jumpToTurn}
+                />
+                <div className="cl-transcript-inner">
+                  {processed.map((p, idx) => (
+                    <MessageBubble
+                      key={p.msg.uuid}
+                      processed={p}
+                      detailsFilter={detailsFilter}
+                      onOpenToolDetail={setSelectedTool}
+                      turnIndex={idx + 1}
+                      dimmed={turnFilter !== 'all' && descriptors[idx]?.visible && !matchesFilter(descriptors[idx])}
+                      innerRef={setTurnRef}
+                    />
+                  ))}
+                </div>
               </div>
             )}
           </main>

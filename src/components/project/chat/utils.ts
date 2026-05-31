@@ -207,6 +207,81 @@ export function parseAnswersFromResultText(text: string): Record<string, string>
   return out
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Turn role resolution — single source of truth shared by MessageBubble
+// (rendering) and ChatView (navigation minimap + type filters). Mirrors the
+// "Direction A — editorial transcript" prototype: one identity per turn.
+// ──────────────────────────────────────────────────────────────────────────
+export const AGENT_TOOLS = new Set(['Agent', 'Task'])
+export const QUESTION_TOOL = 'AskUserQuestion'
+
+export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'question'
+
+export type TurnDescriptor = {
+  variant: TurnVariant
+  label: string
+  initial: string
+  color: string
+  hasText: boolean
+  hasThinking: boolean
+  hasTools: boolean
+  hasQuestion: boolean
+  hasAgent: boolean
+  /** True when MessageBubble would render something for this turn+filter. */
+  visible: boolean
+}
+
+const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: string }> = {
+  user:     { label: 'You',      initial: 'U', color: 'var(--cl-ink)' },
+  claude:   { label: 'Claude',   initial: 'C', color: 'var(--cl-accent)' },
+  agent:    { label: 'Agent',    initial: 'A', color: 'var(--cl-violet)' },
+  command:  { label: 'Command',  initial: '/', color: 'var(--cl-accent)' },
+  question: { label: 'Question', initial: '?', color: 'var(--cl-warn)' },
+}
+
+export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilter): TurnDescriptor {
+  const { msg, toolGroups, command } = p
+  const isUser = msg.role === 'user'
+
+  const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
+  const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
+  const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
+  const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
+  const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL)
+
+  const showThinking = detailsFilter === 'all'
+  const showTools = detailsFilter === 'all'
+  const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
+  const showQuestions = questionGroups.length > 0
+
+  const hasText = textBlocks.length > 0
+  const hasThinking = thinkingBlocks.some(b => b.thinking)
+  const hasTools = standardToolGroups.length > 0
+  const hasQuestion = showQuestions
+  const hasAgent = agentGroups.length > 0
+
+  const visible =
+    hasText ||
+    (showThinking && hasThinking) ||
+    hasTools ||
+    showAgentStrip ||
+    showQuestions
+
+  const isAgentTurn = showAgentStrip && textBlocks.length === 0
+  const isQuestionTurn =
+    showQuestions && textBlocks.length === 0 && !showAgentStrip && (!showTools || standardToolGroups.length === 0)
+  const isCommandTurn = !!command
+
+  const variant: TurnVariant =
+    isCommandTurn ? 'command'
+    : isQuestionTurn ? 'question'
+    : isAgentTurn ? 'agent'
+    : isUser ? 'user'
+    : 'claude'
+
+  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, visible }
+}
+
 export const TOOL_ICON: Record<string, string> = {
   Read: '📖', Write: '✏️', Edit: '✏️', Bash: '⌨️', Glob: '📁',
   Grep: '🔍', Agent: '🤖', WebFetch: '🌐', WebSearch: '🔎', Task: '📋',

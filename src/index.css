@@ -1872,12 +1872,7 @@ body {
   min-height: 0;
   overflow-y: auto;
   position: relative;
-  background:
-    radial-gradient(38% 30% at 6% 14%, color-mix(in oklch, var(--cl-violet) 16%, transparent), transparent 70%),
-    radial-gradient(40% 32% at 100% 6%, color-mix(in oklch, var(--cl-accent) 18%, transparent), transparent 72%),
-    radial-gradient(46% 36% at 100% 100%, color-mix(in oklch, var(--cl-cyan) 14%, transparent), transparent 72%),
-    radial-gradient(36% 28% at 8% 92%, color-mix(in oklch, var(--cl-violet) 12%, transparent), transparent 72%),
-    var(--cl-paper);
+  background: var(--cl-paper);
 }
 .cl-transcript-state {
   padding: 36px 88px;
@@ -2036,7 +2031,7 @@ body {
 /* STATS · 4 col, last is a dark slab */
 .cl-chat-stats {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
   border-bottom: 1.5px solid var(--cl-ink);
 }
 .cl-chat-stat {
@@ -2156,6 +2151,167 @@ body {
   border-radius: 50%;
   background: var(--tk-tint, var(--cl-ink-3));
 }
+
+/* ──────────────────────────────────────────────────────────
+   MODEL DISTRIBUTION BAR — per-model token split (da-models)
+   ────────────────────────────────────────────────────────── */
+.cl-chat-models {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  padding: 13px 64px 13px 88px;
+  border-bottom: 1px solid var(--cl-line);
+  font-family: var(--font-mono);
+}
+.cl-chat-mbar {
+  flex: 1 1 240px;
+  min-width: 200px;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  display: flex;
+  background: var(--cl-paper-2);
+  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.10);
+}
+.cl-chat-mbar > span { height: 100%; }
+.cl-chat-mkey {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-3);
+  white-space: nowrap;
+}
+.cl-chat-mkey i { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
+.cl-chat-mkey .t { color: var(--cl-ink-4); }
+
+/* ──────────────────────────────────────────────────────────
+   TYPE FILTERS — sticky chips (All / Tools / Thinking / Questions)
+   ────────────────────────────────────────────────────────── */
+.cl-chat-filters {
+  position: sticky;
+  top: 0;
+  z-index: 8;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding: 12px 64px 12px 88px;
+  background: color-mix(in oklch, var(--cl-paper) 86%, transparent);
+  backdrop-filter: blur(16px) saturate(1.4);
+  -webkit-backdrop-filter: blur(16px) saturate(1.4);
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-filter {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-3);
+  padding: 7px 13px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper);
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s, border-color 0.15s;
+}
+.cl-filter:hover {
+  color: var(--cl-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 35%, var(--cl-line));
+}
+.cl-filter[data-on] {
+  background: var(--cl-ink);
+  color: var(--cl-paper);
+  border-color: var(--cl-ink);
+}
+.cl-filter .c { opacity: 0.55; margin-left: 5px; }
+
+/* ──────────────────────────────────────────────────────────
+   TRANSCRIPT LAYOUT — navigable minimap rail + turn stream
+   ────────────────────────────────────────────────────────── */
+.cl-chat-main {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr);
+}
+/* the minimap consumes 56px of the 88px editorial gutter, so the stream's
+   orbs stay aligned with the hero's left edge (56 + 32 = 88px). */
+.cl-chat-main .cl-transcript-inner { padding-left: 32px; }
+.cl-chat-main .cl-transcript-inner::before { left: calc(32px + 22px); }
+.cl-chat-main .cl-turn { scroll-margin-top: 64px; transition: opacity 0.2s, filter 0.2s; }
+.cl-chat-main .cl-turn[data-dim] { opacity: 0.28; filter: saturate(0.4); }
+
+.cl-minimap {
+  position: sticky;
+  top: 60px;
+  align-self: start;
+  height: max-content;
+  display: flex;
+  flex-direction: column;
+  padding: 28px 0 28px 16px;
+  z-index: 5;
+}
+.cl-minimap-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 30px;
+  padding: 0;
+  border: none;
+  background: none;
+  cursor: pointer;
+  transition: opacity 0.2s;
+}
+.cl-minimap-item .d {
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  background: var(--c);
+  border: 2px solid var(--cl-paper);
+  box-shadow: 0 0 0 1px color-mix(in oklch, var(--c) 50%, transparent);
+  transition: transform 0.18s, box-shadow 0.18s;
+  flex: 0 0 auto;
+}
+.cl-minimap-item::after {
+  content: '';
+  position: absolute;
+  left: 5px;
+  top: 21px;
+  width: 1px;
+  height: 9px;
+  background: var(--cl-line);
+}
+.cl-minimap-item:last-child::after { display: none; }
+.cl-minimap-item[data-dim] { opacity: 0.32; }
+.cl-minimap-item .n {
+  position: absolute;
+  left: 18px;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--cl-ink);
+  background: var(--cl-paper);
+  padding: 4px 7px;
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  box-shadow: var(--cl-glass-lift);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.15s;
+  z-index: 3;
+}
+.cl-minimap-item:hover .n { opacity: 1; }
+.cl-minimap-item[data-active] .d {
+  transform: scale(1.5);
+  box-shadow:
+    0 0 0 1px color-mix(in oklch, var(--c) 60%, transparent),
+    0 0 0 4px color-mix(in oklch, var(--c) 16%, transparent);
+}
+
 /* ──────────────────────────────────────────────────────────
    MESSAGES (v1 Glass Tahoe) — orb avatar + glass card stream
    ────────────────────────────────────────────────────────── */
@@ -2177,46 +2333,31 @@ body {
   position: relative;
   z-index: 2;
   padding-top: 12px;
+  align-self: stretch;
 }
+/* Editorial role orb — rounded square tile, filled with the role colour
+   (matches the prototype's cx-orb). One identity primitive for every variant. */
 .cl-turn-orb {
-  width: 28px;
-  height: 28px;
+  width: 30px;
+  height: 30px;
   border-radius: 50%;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  color: oklch(1 0 0 / 0.96);
+  color: var(--cl-on-accent);
   font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 12px;
+  font-weight: 600;
   background:
-    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.55), transparent 55%),
-    linear-gradient(180deg, oklch(0.30 0.04 60), oklch(0.13 0.02 60));
+    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.45), transparent 55%),
+    var(--turn-role-color, var(--cl-accent));
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.20),
-    0 2px 6px -2px oklch(0.10 0.02 60 / 0.45);
+    inset 0 1px 0 oklch(1 0 0 / 0.35),
+    0 4px 10px -4px color-mix(in oklch, var(--turn-role-color, var(--cl-accent)) 55%, transparent);
   flex-shrink: 0;
 }
-.cl-turn--claude .cl-turn-orb {
-  background:
-    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.55), transparent 55%),
-    linear-gradient(180deg,
-      color-mix(in oklch, var(--cl-accent) 90%, white),
-      var(--cl-accent));
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.45),
-    0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 50%, transparent);
-}
-.cl-turn--agent .cl-turn-orb {
-  background:
-    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.55), transparent 55%),
-    linear-gradient(180deg,
-      color-mix(in oklch, var(--cl-violet) 90%, white),
-      var(--cl-violet));
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.45),
-    0 4px 10px -3px color-mix(in oklch, var(--cl-violet) 50%, transparent);
-}
+/* User turn: inked tile with paper glyph. */
+.cl-turn--user .cl-turn-orb { color: var(--cl-paper); }
 .cl-turn-index {
   width: auto;
   height: auto;
@@ -2231,34 +2372,25 @@ body {
   margin-top: 2px;
   box-shadow: none;
 }
+.cl-turn-spine {
+  flex: 1;
+  width: 2px;
+  min-height: 14px;
+  margin-top: 4px;
+  border-radius: 2px;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--turn-role-color, var(--cl-line)) 50%, transparent) 0%,
+    var(--cl-line) 70%
+  );
+  opacity: 0.35;
+}
+.cl-turn:last-child .cl-turn-spine { display: none; }
 
+/* Flat editorial body — no card, just the conversation on paper. */
 .cl-turn-body {
   min-width: 0;
-  padding: 14px 18px 16px;
-  border-radius: 14px;
-  background: var(--cl-glass-bg-strong, oklch(1 0 0 / 0.62));
-  border: 1px solid var(--cl-glass-highlight, oklch(1 0 0 / 0.75));
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.7),
-    0 12px 32px -16px oklch(0.20 0.05 268 / 0.15);
-  backdrop-filter: blur(24px) saturate(1.8);
-  -webkit-backdrop-filter: blur(24px) saturate(1.8);
-  transition: background 160ms ease, border-color 160ms ease;
-}
-.cl-turn:hover .cl-turn-body {
-  background: var(--cl-glass-bg-strong, oklch(1 0 0 / 0.74));
-}
-.cl-turn--claude .cl-turn-body {
-  background:
-    radial-gradient(60% 80% at 100% 0%, color-mix(in oklch, var(--cl-accent-soft) 70%, transparent), transparent 65%),
-    var(--cl-glass-bg-strong, oklch(1 0 0 / 0.62));
-  border-color: color-mix(in oklch, var(--cl-accent) 32%, var(--cl-glass-highlight));
-}
-.cl-turn--agent .cl-turn-body {
-  background:
-    radial-gradient(60% 80% at 100% 0%, color-mix(in oklch, var(--cl-violet-soft) 60%, transparent), transparent 65%),
-    var(--cl-glass-bg-strong, oklch(1 0 0 / 0.62));
-  border-color: color-mix(in oklch, var(--cl-violet) 28%, var(--cl-glass-highlight));
+  padding: 2px 0 20px;
 }
 
 .cl-turn-head {
@@ -2272,27 +2404,59 @@ body {
   color: var(--cl-ink-3);
 }
 .cl-turn-who {
-  color: var(--cl-ink);
+  color: var(--turn-role-color, var(--cl-ink));
   font-weight: 600;
-  letter-spacing: 0.14em;
+  font-size: 11px;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
 }
 .cl-turn--claude .cl-turn-who { color: var(--cl-accent-ink); }
 .cl-turn--agent .cl-turn-who { color: var(--cl-violet-ink); }
-.cl-turn-sep { color: var(--cl-ink-4); opacity: 0.5; }
+.cl-turn-sep { color: var(--cl-line); }
 .cl-turn-head time {
   color: var(--cl-ink-4);
   letter-spacing: 0.02em;
 }
+.cl-turn-model-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.1em;
+  color: var(--mt, var(--cl-ink-3));
+}
+.cl-turn-model-chip::before {
+  content: ''; width: 6px; height: 6px; border-radius: 50%;
+  background: var(--mt, var(--cl-ink-3));
+  flex-shrink: 0;
+}
+/* tools-strip badge (prototype's da-tools-strip) */
 .cl-turn-tool-count {
   margin-left: auto;
   color: var(--cl-ink-4);
+  font-family: var(--font-mono);
   font-size: 10px;
-  letter-spacing: 0.04em;
-  padding: 0;
-  border: none;
+  font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 4px 9px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
   background: transparent;
-  text-transform: none;
+}
+/* Compact indicator for tool-only turns in minimal mode. */
+.cl-turn-tools-hidden {
+  padding: 0 0 4px 54px;
+  transition: opacity 0.2s, filter 0.2s;
+}
+.cl-turn-tools-hidden[data-dim] { opacity: 0.28; filter: saturate(0.4); }
+.cl-turn-tools-hidden-badge {
+  display: inline-flex; align-items: center; gap: 6px;
+  font: 500 10px/1 var(--font-mono); text-transform: uppercase; letter-spacing: 0.08em;
+  color: var(--cl-ink-4); padding: 4px 9px;
+  border: 1px solid var(--cl-line); border-radius: 999px;
+}
+.cl-turn-tools-hidden-badge::before {
+  content: ''; width: 5px; height: 5px; border-radius: 50%;
+  background: var(--cl-ink-4); flex-shrink: 0;
 }
 .cl-turn-content {
   display: grid;
@@ -2354,85 +2518,56 @@ body {
     0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 50%, transparent);
 }
 
+/* Command card — editorial (prototype's cx-cmd): paper + accent spine. */
 .cl-command-card {
-  display: grid;
-  gap: 12px;
   width: 100%;
-  padding: 14px 16px 16px;
-  border-radius: 14px;
-  border: 1px solid color-mix(in oklch, var(--cl-accent) 32%, var(--cl-glass-highlight));
-  background:
-    radial-gradient(60% 80% at 100% 0%, color-mix(in oklch, var(--cl-accent-soft) 80%, transparent), transparent 65%),
-    var(--cl-glass-bg-strong, oklch(1 0 0 / 0.62));
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.7),
-    0 12px 28px -16px color-mix(in oklch, var(--cl-accent) 38%, transparent);
-  backdrop-filter: blur(20px) saturate(1.6);
-  -webkit-backdrop-filter: blur(20px) saturate(1.6);
+  border: 1px solid var(--cl-line);
+  border-left: 3px solid var(--cl-accent);
+  border-radius: 10px;
+  padding: 12px 14px;
+  background: var(--cl-paper);
 }
 .cl-command-kicker {
   display: flex;
   align-items: center;
+  justify-content: space-between;
   gap: 8px;
-  color: var(--cl-accent-ink);
+  color: var(--cl-ink-4);
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
+  font-size: 10.5px;
   letter-spacing: 0.18em;
   text-transform: uppercase;
 }
-.cl-command-kicker::before {
-  content: "";
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cl-accent);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-accent) 18%, transparent);
-}
 .cl-command-kicker time {
-  margin-left: auto;
   color: var(--cl-ink-4);
-  font-weight: 500;
   letter-spacing: 0.06em;
   text-transform: none;
 }
 .cl-command-main {
   display: flex;
   align-items: baseline;
-  gap: 12px;
+  gap: 10px;
+  margin-top: 8px;
   min-width: 0;
   flex-wrap: wrap;
 }
 .cl-command-main code {
-  color: var(--cl-on-accent);
-  background:
-    radial-gradient(circle at 30% 0%, oklch(1 0 0 / 0.18), transparent 60%),
-    linear-gradient(180deg,
-      color-mix(in oklch, var(--cl-accent) 90%, white),
-      var(--cl-accent));
-  border: 1px solid color-mix(in oklch, var(--cl-accent) 70%, black);
-  border-radius: 7px;
-  padding: 3px 9px;
   font-family: var(--font-mono);
-  font-size: 13.5px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--cl-accent-ink);
   white-space: nowrap;
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.25),
-    0 2px 6px -2px color-mix(in oklch, var(--cl-accent) 45%, transparent);
 }
 .cl-command-main span {
   color: var(--cl-ink-2);
   font-size: 13px;
-  line-height: 1.45;
+  line-height: 1.6;
 }
 .cl-command-args {
-  margin: 0;
-  padding: 10px 12px;
-  border: 1px solid var(--cl-glass-border, oklch(0.18 0.010 60 / 0.10));
-  border-radius: 8px;
-  background: color-mix(in oklch, var(--cl-paper-2) 64%, transparent);
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--cl-paper-2);
   color: var(--cl-ink-2);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -2441,84 +2576,67 @@ body {
   line-height: 1.55;
 }
 .cl-command-output {
-  display: grid;
-  gap: 6px;
-  border-top: 1px solid color-mix(in oklch, var(--cl-accent) 18%, var(--cl-line-soft));
-  padding-top: 12px;
+  margin-top: 8px;
+  color: var(--cl-ink-3);
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
-.cl-command-output-label {
+/* Thinking — quiet editorial disclosure (prototype's cx-think). */
+.cl-thinking {
+  width: 100%;
+  margin: 2px 0 4px;
+}
+.cl-thinking-toggle {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  color: var(--cl-accent-ink);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-}
-.cl-command-output-label::before {
-  content: "↳";
-  color: color-mix(in oklch, var(--cl-accent) 70%, var(--cl-ink-3));
-  font-size: 12px;
-  font-weight: 500;
-  letter-spacing: 0;
-}
-.cl-command-output pre {
-  margin: 0;
-  padding: 10px 12px;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, oklch(0.18 0.015 60), oklch(0.13 0.012 60));
-  color: oklch(0.92 0.005 90);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
-  line-height: 1.55;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08);
-}
-.cl-thinking {
-  width: 100%;
-  margin: 0 0 4px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklch, var(--cl-violet) 26%, var(--cl-glass-border));
-  background: color-mix(in oklch, var(--cl-violet-soft) 48%, transparent);
-  overflow: hidden;
-}
-.cl-thinking-toggle {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 8px 12px;
+  padding: 5px 0;
   border: 0;
   background: transparent;
-  color: var(--cl-violet-ink);
+  color: var(--cl-ink-3);
   cursor: pointer;
   text-align: left;
-}
-.cl-thinking-toggle span,
-.cl-thinking-toggle b {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+}
+.cl-thinking-toggle .tw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 10px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
+  color: var(--cl-ink-4);
 }
+.cl-thinking-toggle .tw::before {
+  content: '';
+  width: 12px;
+  height: 1px;
+  background: var(--cl-line);
+  display: inline-block;
+}
+.cl-thinking-toggle .caret { transition: transform .2s; opacity: .6; }
+.cl-thinking-toggle[aria-expanded="true"] .caret { transform: rotate(90deg); }
 .cl-thinking-toggle b {
-  margin-left: auto;
-  color: var(--cl-ink-3);
-  font-weight: 500;
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--cl-accent-ink);
+  font-weight: 600;
 }
 .cl-thinking-body {
-  margin: 0;
-  padding: 0 12px 12px;
-  color: var(--cl-violet-ink);
+  margin: 4px 0 6px;
+  padding: 12px 14px;
+  border-left: 2px solid var(--cl-line);
+  background: var(--cl-paper-2);
+  border-radius: 0 8px 8px 0;
+  color: var(--cl-ink-3);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.55;
+  font-size: 12.5px;
+  line-height: 1.65;
 }
 .cl-agent-stack,
 .cl-tool-stack,
@@ -2565,7 +2683,7 @@ body {
   align-items: center;
   justify-content: center;
   border: 1px solid var(--cl-line);
-  border-radius: 50%;
+  border-radius: 6px;
   background: var(--cl-paper-2);
   font-size: 12px;
   flex: 0 0 auto;
@@ -2706,6 +2824,13 @@ body {
   .cl-chat-toolstrip {
     padding: 13px 32px;
   }
+  .cl-chat-models,
+  .cl-chat-filters {
+    padding-left: 32px;
+    padding-right: 32px;
+  }
+  .cl-chat-main { grid-template-columns: 1fr; }
+  .cl-minimap { display: none; }
   .cl-tool-detail-scroll {
     padding: 24px 26px 46px;
   }
@@ -2772,6 +2897,13 @@ body {
   .cl-transcript-inner {
     padding: 18px 18px 40px;
   }
+  .cl-chat-main .cl-transcript-inner { padding-left: 18px; }
+  .cl-chat-main .cl-transcript-inner::before { left: 31px; }
+  .cl-chat-models,
+  .cl-chat-filters {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
   .cl-turn {
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 12px;
@@ -2832,107 +2964,169 @@ body {
 }
 
 /* agent dispatch card — surfaces sub-agent runs even in minimal mode */
+/* Agent dispatch — "delegated task receipt" (prototype's cx-agent). */
 .cl-agent-card {
-  display: flex; align-items: center; gap: 10px; width: 100%;
+  display: block; position: relative; overflow: hidden; width: 100%;
   text-align: left; cursor: pointer;
-  padding: 9px 12px; border-radius: 8px;
-  border: 1px solid color-mix(in oklch, var(--cl-violet) 65%, transparent);
-  background: color-mix(in oklch, var(--cl-violet-soft) 75%, transparent);
-  -webkit-backdrop-filter: blur(10px) saturate(var(--cl-glass-sat));
-  backdrop-filter: blur(10px) saturate(var(--cl-glass-sat));
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    inset 0 -1px 0 oklch(0 0 0 / 0.04),
-    0 4px 14px -8px color-mix(in oklch, var(--cl-violet) 40%, transparent);
-  transition: filter 120ms, transform 120ms, box-shadow 120ms;
+  border: 1px solid var(--cl-line);
+  border-left: 3px solid var(--cl-violet);
+  border-radius: var(--cl-r-card);
+  padding: 13px 15px 14px;
+  background: var(--cl-paper);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-elev-card, 0 1px 2px oklch(0 0 0 / 0.04));
 }
-.cl-agent-card:hover { filter: brightness(0.97); }
+.cl-agent-card::after {
+  content: ''; position: absolute; inset: 0 0 auto auto; width: 55%; height: 75%; pointer-events: none;
+  background: radial-gradient(80% 90% at 100% 0%, color-mix(in oklch, var(--cl-violet-soft) 55%, transparent), transparent 70%);
+}
+.cl-agent-card:hover { border-color: color-mix(in oklch, var(--cl-violet) 32%, var(--cl-line)); }
+.cl-agent-card .top { display: flex; align-items: center; gap: 10px; position: relative; }
 .cl-agent-card .ic {
-  width: 22px; height: 22px;
+  width: 26px; height: 26px; flex: 0 0 auto;
   display: inline-flex; align-items: center; justify-content: center;
-  border: 1px solid color-mix(in oklch, var(--cl-violet) 55%, transparent);
-  border-radius: 50%;
-  color: var(--cl-violet-ink);
-  font-family: var(--font-mono); font-size: 11px; font-weight: 700;
-  flex-shrink: 0; line-height: 1;
+  border-radius: 8px;
+  color: var(--cl-on-accent);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; line-height: 1;
+  background: radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.45), transparent 55%), var(--cl-violet);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.4), 0 3px 8px -3px color-mix(in oklch, var(--cl-violet) 55%, transparent);
 }
 .cl-agent-card .lbl {
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
-  color: var(--cl-violet-ink); flex-shrink: 0;
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 400;
+  color: var(--cl-ink-3); flex-shrink: 0; white-space: nowrap;
 }
 .cl-agent-card .chip {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
-  padding: 2px 8px; border-radius: 3px;
-  background: var(--cl-violet); color: var(--cl-on-accent);
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; white-space: nowrap;
+  padding: 4px 9px; border-radius: 999px;
+  color: var(--cl-violet-ink);
+  border: 1px solid color-mix(in oklch, var(--cl-violet) 38%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-violet-soft) 40%, var(--cl-paper));
   flex-shrink: 0;
 }
-.cl-agent-card .desc {
-  font-size: 12px; color: var(--cl-ink-2);
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0;
+.cl-agent-card .status {
+  margin-left: auto; flex-shrink: 0;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--cl-ink-3);
 }
-.cl-agent-card .status { margin-left: auto; flex-shrink: 0; font-size: 11px; }
+.cl-agent-card .status::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--cl-ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-ok) 18%, transparent);
+}
+.cl-agent-card .status[data-error] { color: var(--cl-danger); }
+.cl-agent-card .status[data-error]::before {
+  background: var(--cl-danger); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-danger) 18%, transparent);
+}
+.cl-agent-card .desc {
+  display: block; position: relative;
+  font: 400 13px/1.55 var(--font-sans); color: var(--cl-ink-2); margin: 10px 0 0;
+}
+.cl-agent-card .return {
+  display: block; position: relative;
+  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--cl-line-soft);
+}
+.cl-agent-card .mini {
+  display: block; font: 400 9px/1 var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.18em; color: var(--cl-ink-4); margin-bottom: 6px;
+}
+.cl-agent-card .res {
+  display: block; position: relative; padding-left: 16px;
+  font: 400 12.5px/1.55 var(--font-sans); color: var(--cl-ink-2);
+}
+.cl-agent-card .res::before {
+  content: '↳'; position: absolute; left: 0; top: -1px;
+  color: var(--cl-violet); font-family: var(--font-mono); font-size: 13px;
+}
 
-/* AskUserQuestion card — first-class content, always visible */
+/* AskUserQuestion card — editorial (prototype's cx-q): paper + warn spine. */
 .cl-ask-card {
-  width: 100%;
-  padding: 12px 14px 14px;
-  border-radius: 10px;
-  border: 1px solid color-mix(in oklch, var(--cl-warn) 50%, var(--cl-line));
-  background: color-mix(in oklch, var(--cl-warn-soft) 55%, var(--cl-paper));
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    0 4px 14px -10px color-mix(in oklch, var(--cl-warn) 50%, transparent);
-  display: flex; flex-direction: column; gap: 10px;
+  position: relative; overflow: hidden; width: 100%;
+  padding: 14px 16px 15px;
+  border-radius: var(--cl-r-card);
+  border: 1px solid var(--cl-line);
+  border-left: 3px solid var(--cl-warn);
+  background: var(--cl-paper);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-elev-card, 0 1px 2px oklch(0 0 0 / 0.04));
+  display: flex; flex-direction: column; gap: 12px;
+}
+.cl-ask-card::after {
+  content: ''; position: absolute; inset: 0 0 auto auto; width: 55%; height: 70%; pointer-events: none;
+  background: radial-gradient(80% 90% at 100% 0%, color-mix(in oklch, var(--cl-warn-soft) 60%, transparent), transparent 70%);
 }
 .cl-ask-card-kicker {
-  display: flex; align-items: center; justify-content: space-between;
-  font-family: var(--font-mono); font-size: 9.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 600;
-  color: var(--cl-warn);
+  display: flex; align-items: center; gap: 9px; position: relative;
+}
+.cl-ask-card-ic {
+  width: 22px; height: 22px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 6px;
+  color: var(--cl-on-accent);
+  font: 700 12px/1 var(--font-mono);
+  background: radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.45), transparent 55%), var(--cl-warn);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.4), 0 3px 7px -3px color-mix(in oklch, var(--cl-warn) 55%, transparent);
+}
+.cl-ask-card-kicker .lbl {
+  font: var(--cl-mono-label); text-transform: uppercase; letter-spacing: 0.18em;
+  color: var(--cl-ink-3); white-space: nowrap;
 }
 .cl-ask-card-status {
-  padding: 2px 8px; border-radius: 3px;
-  background: var(--cl-paper); color: var(--cl-ink-3);
-  border: 1px solid var(--cl-line);
-  letter-spacing: 0.12em;
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.08em; color: var(--cl-ink-3);
 }
-.cl-ask-card-status[data-pending] {
-  background: var(--cl-warn); color: var(--cl-on-accent);
-  border-color: transparent;
+.cl-ask-card-status::before {
+  content: ''; width: 7px; height: 7px; border-radius: 50%;
+  background: var(--cl-ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-ok) 18%, transparent);
 }
-.cl-ask-card-q { display: flex; flex-direction: column; gap: 8px; }
+.cl-ask-card-status[data-pending]::before {
+  background: var(--cl-warn); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-warn) 18%, transparent);
+}
+.cl-ask-card-q { display: flex; flex-direction: column; gap: 12px; position: relative; }
 .cl-ask-card-q + .cl-ask-card-q {
-  padding-top: 10px;
-  border-top: 1px dashed color-mix(in oklch, var(--cl-warn) 30%, var(--cl-line));
+  padding-top: 12px;
+  border-top: 1px solid var(--cl-line-soft);
 }
 .cl-ask-card-question {
-  font-size: 14px; font-weight: 600; color: var(--cl-ink); line-height: 1.4;
+  font: 600 15.5px/1.4 var(--font-sans); letter-spacing: -0.015em; color: var(--cl-ink);
 }
-.cl-ask-card-options { display: grid; gap: 6px; }
+.cl-ask-card-options { display: grid; gap: 7px; }
 .cl-ask-card-option {
-  padding: 8px 10px;
-  border-radius: 6px;
+  display: grid; grid-template-columns: 15px minmax(0, 1fr); column-gap: 11px; row-gap: 4px;
+  align-items: start;
+  padding: 10px 13px;
+  border-radius: 10px;
   border: 1px solid var(--cl-line);
-  background: var(--cl-paper);
-  display: flex; flex-direction: column; gap: 2px;
+  background: var(--cl-paper-2);
+  transition: border-color 0.15s, background 0.15s;
+}
+.cl-ask-card-option::before {
+  content: ''; grid-column: 1; grid-row: 1; align-self: start;
+  width: 15px; height: 15px; margin-top: 1px; border-radius: 50%;
+  border: 1.5px solid var(--cl-line); background: var(--cl-paper); box-sizing: border-box;
 }
 .cl-ask-card-option[data-selected] {
-  border-color: color-mix(in oklch, var(--cl-warn) 65%, transparent);
-  background: color-mix(in oklch, var(--cl-warn) 14%, var(--cl-paper));
+  border-color: color-mix(in oklch, var(--cl-accent) 55%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-accent-soft) 50%, var(--cl-paper));
+}
+.cl-ask-card-option[data-selected]::before {
+  border-color: var(--cl-accent); background: var(--cl-accent);
+  box-shadow: inset 0 0 0 2px var(--cl-paper), 0 0 0 3px color-mix(in oklch, var(--cl-accent) 16%, transparent);
 }
 .cl-ask-card-option-label {
-  font-size: 13px; font-weight: 500; color: var(--cl-ink);
-  display: flex; align-items: center; gap: 6px;
+  grid-column: 2; grid-row: 1;
+  font: 600 13px/1.3 var(--font-sans); color: var(--cl-ink-3);
 }
-.cl-ask-card-check { color: var(--cl-warn); font-weight: 700; }
+.cl-ask-card-option[data-selected] .cl-ask-card-option-label { color: var(--cl-accent-ink); }
 .cl-ask-card-option-desc {
-  font-size: 12px; color: var(--cl-ink-3); line-height: 1.4;
+  grid-column: 2; grid-row: 2;
+  font: 400 12px/1.45 var(--font-sans); color: var(--cl-ink-4);
 }
+.cl-ask-card-option[data-selected] .cl-ask-card-option-desc { color: var(--cl-ink-3); }
 .cl-ask-card-custom {
   font-size: 12px; color: var(--cl-ink-2);
-  padding: 6px 8px; border-radius: 4px;
-  background: var(--cl-paper); border: 1px dashed var(--cl-line);
+  padding: 8px 10px; border-radius: 8px;
+  background: var(--cl-paper-2); border: 1px solid var(--cl-line);
 }
 
 /* ─── Transcript timeline (v1 Glass Tahoe stream) ──────────────────── */
@@ -4461,12 +4655,7 @@ button.cl-task-group-head:disabled { cursor: default; }
    CHAT — dark theme refinements
    ────────────────────────────────────────────────────────── */
 :root[data-theme='dark'] .cl-chat-feed {
-  background:
-    radial-gradient(38% 30% at 6% 14%, color-mix(in oklch, var(--cl-violet) 22%, transparent), transparent 70%),
-    radial-gradient(40% 32% at 100% 6%, color-mix(in oklch, var(--cl-accent) 22%, transparent), transparent 72%),
-    radial-gradient(46% 36% at 100% 100%, color-mix(in oklch, var(--cl-cyan) 18%, transparent), transparent 72%),
-    radial-gradient(36% 28% at 8% 92%, color-mix(in oklch, var(--cl-violet) 18%, transparent), transparent 72%),
-    var(--cl-paper);
+  background: var(--cl-paper);
 }
 :root[data-theme='dark'] .cl-chat-hero,
 :root[data-theme='dark'] .cl-chat-stats {
@@ -4528,40 +4717,12 @@ button.cl-task-group-head:disabled { cursor: default; }
 }
 
 :root[data-theme='dark'] .cl-turn-orb {
-  background:
-    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.35), transparent 55%),
-    linear-gradient(180deg, oklch(0.78 0.008 80), oklch(0.62 0.008 80));
-  color: var(--cl-paper);
   box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.35),
-    0 2px 6px -2px oklch(0 0 0 / 0.55);
-}
-:root[data-theme='dark'] .cl-turn-body {
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.06),
-    0 12px 32px -16px oklch(0 0 0 / 0.45);
-}
-:root[data-theme='dark'] .cl-turn:hover .cl-turn-body {
-  background: oklch(1 0 0 / 0.05);
+    inset 0 1px 0 oklch(1 0 0 / 0.20),
+    0 4px 10px -4px color-mix(in oklch, var(--turn-role-color, var(--cl-accent)) 45%, transparent);
 }
 
-:root[data-theme='dark'] .cl-command-card {
-  background:
-    radial-gradient(60% 80% at 100% 0%, color-mix(in oklch, var(--cl-accent) 26%, transparent), transparent 65%),
-    var(--cl-glass-bg-strong);
-  border-color: color-mix(in oklch, var(--cl-accent) 36%, var(--cl-glass-border));
-}
-:root[data-theme='dark'] .cl-command-args {
-  background: oklch(1 0 0 / 0.05);
-  border-color: oklch(1 0 0 / 0.06);
-}
-:root[data-theme='dark'] .cl-command-output {
-  border-top-color: color-mix(in oklch, var(--cl-accent) 22%, var(--cl-line));
-}
-:root[data-theme='dark'] .cl-command-output pre {
-  background: linear-gradient(180deg, oklch(0.10 0.012 60), oklch(0.07 0.010 60));
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
-}
+:root[data-theme='dark'] .cl-command-args { background: oklch(1 0 0 / 0.05); }
 :root[data-theme='dark'] .cl-transcript-inner::before {
   background: linear-gradient(
     to bottom,
@@ -4571,6 +4732,18 @@ button.cl-task-group-head:disabled { cursor: default; }
     transparent 100%
   );
 }
+:root[data-theme='dark'] .cl-chat-models { border-bottom-color: var(--cl-line); }
+:root[data-theme='dark'] .cl-chat-mbar { background: var(--cl-paper-3); box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.40); }
+:root[data-theme='dark'] .cl-chat-filters {
+  background: color-mix(in oklch, var(--cl-paper) 80%, transparent);
+}
+:root[data-theme='dark'] .cl-filter[data-on] {
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+  border-color: var(--cl-line);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
+}
+:root[data-theme='dark'] .cl-minimap-item .n { box-shadow: 0 8px 20px -8px oklch(0 0 0 / 0.6); }
 
 /* ════════════════════════════════════════════════════════════════════════
    AGENT TOPBAR — shared chrome (View/Edit pill + actions)
