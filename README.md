@@ -8,49 +8,56 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLe
 
 ## Screenshots
 
-![ClaudeLens — Global Home](docs/screenshots/home.png)
-
 <table>
   <tr>
-    <td width="50%">
-      <img src="docs/screenshots/project.png" alt="ClaudeLens project overview screen"/>
-      <br/><sub><b>Project overview</b></sub>
+    <td align="center"><sub><b>Global Home — Light</b></sub></td>
+    <td align="center"><sub><b>Global Home — Dark</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/home_light.png" alt="ClaudeLens — Global Home Light" style="max-width:100%;height:auto;"/>
     </td>
-    <td width="50%">
-      <img src="docs/screenshots/sessions.png" alt="ClaudeLens chat sessions view"/>
-      <br/><sub><b>Chat sessions</b></sub>
+    <td align="center">
+      <img src="docs/screenshots/home_dark.png" alt="ClaudeLens — Global Home Dark" style="max-width:100%;height:auto;"/>
     </td>
   </tr>
   <tr>
-    <td width="50%">
-      <img src="docs/screenshots/memory.png" alt="ClaudeLens memory management view"/>
-      <br/><sub><b>Memory management</b></sub>
+    <td align="center"><sub><b>Project Overview — Light</b></sub></td>
+    <td align="center"><sub><b>Project Overview — Dark</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/project_light.png" alt="ClaudeLens — Project Overview Light" style="max-width:100%;height:auto;"/>
     </td>
-    <td width="50%">
-      <img src="docs/screenshots/claudemd-details.png" alt="ClaudeLens CLAUDE.md inline file viewer"/>
-      <br/><sub><b>CLAUDE.md — inline file viewer</b></sub>
+    <td align="center">
+      <img src="docs/screenshots/project_dark.png" alt="ClaudeLens — Project Overview Dark" style="max-width:100%;height:auto;"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Skill Editor — Light</b></sub></td>
+    <td align="center"><sub><b>Skill Editor — Dark</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/skills_light.png" alt="ClaudeLens — Skill Editor Light" style="max-width:100%;height:auto;"/>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/skills_dark.png" alt="ClaudeLens — Skill Editor Dark" style="max-width:100%;height:auto;"/>
+    </td>
+  </tr>
+  <tr>
+    <td align="center"><sub><b>Agent View — Light</b></sub></td>
+    <td align="center"><sub><b>Agent View — Dark</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/agentview_light.png" alt="ClaudeLens — Agent View Light" style="max-width:100%;height:auto;"/>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/agentview_dark.png" alt="ClaudeLens — Agent View Dark" style="max-width:100%;height:auto;"/>
     </td>
   </tr>
 </table>
-
-**Skills and CLAUDE.md include an inline file viewer — click any item to read its full content without leaving the app.**
-
-<table>
-  <tr>
-    <td width="50%">
-      <img src="docs/screenshots/skills.png" alt="ClaudeLens skills list"/>
-      <br/><sub><b>Skills — list</b></sub>
-    </td>
-    <td width="50%">
-      <img src="docs/screenshots/skills-detail.png" alt="ClaudeLens skill file content view"/>
-      <br/><sub><b>Skills — file content</b></sub>
-    </td>
-  </tr>
-</table>
-
-**Live Monitor** _(experimental)_ — real-time view of active Claude processes with status badge, 90-second activity chart, and tool frequency breakdown.
-
-![Live Monitor](docs/screenshots/live-monitor.png)
 
 ---
 
