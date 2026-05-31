@@ -47,7 +47,7 @@ function ChatExportMenu({
   exportMessage: string | null
   exportError: string | null
   selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  menuRef: RefObject<HTMLDivElement>
+  menuRef: RefObject<HTMLDivElement | null>
   onToggle: () => void
   onPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
@@ -133,7 +133,7 @@ function ChatTopActions({
   exportMessage: string | null
   exportError: string | null
   selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  exportMenuRef: RefObject<HTMLDivElement>
+  exportMenuRef: RefObject<HTMLDivElement | null>
   onToggleExport: () => void
   onExportPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
