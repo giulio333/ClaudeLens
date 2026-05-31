@@ -11,7 +11,7 @@ This directory contains the Electron renderer process: a single-page React app t
 
 **ProjectOverview.tsx** (`tabs/ProjectOverview.tsx`) — Root navigation shell
 - Manages all UI state in a single `View` discriminated union (no router)
-- Views: `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `global-agents` | `agent-detail` | `global-mcp` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor`
+- Views (~27 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `project-skills` | `project-agents` | `project-mcp` | `project-tasks` | `project-plans` | `plan-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates`
 - Thin shell (~340 righe): sidebar + `switch(view.type)` → delegates to feature components
 - All feature components live in `components/project/`
 
@@ -29,13 +29,17 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/shared/` — Atomic UI: `BackButton`, `StatChip`, `TopBar`, `CreateFormKit` (shared building blocks for create pages)
 - `project/chat/` — Chat rendering: `ChatView`, `MessageBubble`, `ToolDetailPanel`, `ToolGroupCard`, atoms, utils
 - `project/memory/` — `MemoryTopicView`, utils
-- `project/claudemd/` — `GlobalClaudeMdView`
+- `project/claudemd/` — `GlobalClaudeMdView`, `ProjectClaudeMdView`
 - `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `CreateSkillPage`
 - `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `RunAgentDialog`, `CreateAgentPage`
-- `project/mcp/` — `GlobalMcpView`, `McpServerCard`
+- `project/agents-live/` — `AgentsLiveView` (background/live agent sessions)
+- `project/mcp/` — `GlobalMcpView`, `McpServerCard`, `McpServerDetailView`
 - `project/analytics/` — `AnalyticsView`
 - `project/ai-assistant/` — `AiAssistantView`
-- `project/overview/` — `ProjectOverviewContent`, `GlobalHomeView`, `Lens`
+- `project/sessions/` — `TagBar`, `TagChip`, `TagPicker` (session tagging)
+- `project/tasks/` — `TasksSection`
+- `project/plans/` — `PlansSection`, `PlanDetailView`
+- `project/overview/` — `ProjectOverviewContent`, `GlobalHomeView`, `Lens`, `ProjectSubtabs`, `DuplicateProjectsNotice`
 
 ## When adding a new view
 
@@ -50,12 +54,14 @@ This directory contains the Electron renderer process: a single-page React app t
 - **Navigation state:** Keep it in one `useState` in `ProjectOverview`; pass callbacks to child components
 - **Data fetching:** Always use hooks from `useIPC.ts`; React Query caches automatically
 - **Error handling:** Use `unwrap()` or check `error` field; show user-friendly messages
-- **Styling:** Tailwind CSS; reuse zinc/indigo palette for consistency
-- **Date/time:** Use `fmtDate()` for localized display (currently `it-IT`)
+- **Styling:** Tailwind CSS + the `--cl-*` brand tokens / `cl-*` classes in `index.css` (terracotta accent `#C15F3C`); do not introduce new accent hues — see root `CLAUDE.md`
+- **Date/time:** Use `fmtDate()` for localized display (currently `it-IT`); `fmt()` uses `en-US` thousands separators
 
 ## Testing
 
-No automated tests — validate against real `~/.claude/` data by running:
+Pure modules are covered by Vitest unit tests under `test/` (run `npm test`).
+UI/IPC behavior has no automated tests — validate against real `~/.claude/`
+data by running:
 ```bash
 npm run dev
 ```

@@ -5,7 +5,7 @@ Tutti i componenti UI del progetto ClaudeLens, organizzati per dominio funzional
 ## Fondamenta
 
 ### `types.ts`
-- `View` — discriminated union con tutti i tipi di vista navigabili (15 casi)
+- `View` — discriminated union con tutti i tipi di vista navigabili (~27 casi)
 - `TYPE_STYLES` — classi Tailwind per i badge dei topic di memoria (`user`, `feedback`, `project`, `reference`)
 - `SCOPE_STYLES` — classi Tailwind per i badge di scope CLAUDE.md (`global`, `project`, `local`, `subdir`)
 
@@ -102,6 +102,22 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
+### `agents-live/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `AgentsLiveView.tsx` | `AgentsLiveView` | Vista dei background/live agent: legge le sessioni agent in corso (`bg-sessions-reader` + `live:*`/`agents:*` IPC), con dispatch/stop/respawn. Click su una sessione → `chat` (con `from: 'agents-live'`) |
+
+---
+
+### `sessions/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `TagBar.tsx` | `TagBar` | Barra dei tag di una sessione (lista + add) |
+| `TagChip.tsx` | `TagChip` | Chip singolo tag (colore + remove) |
+| `TagPicker.tsx` | `TagPicker` | Picker per assegnare/creare tag a una sessione |
+
+---
+
 ### `analytics/`
 | File | Esporta | Descrizione |
 |---|---|---|
@@ -146,5 +162,5 @@ Formatter puri (nessuna dipendenza React):
 
 - **Navigation:** ogni componente riceve `onNavigate(v: View)` e/o `onBack()` come callback — non gestisce stato di navigazione proprio
 - **Data fetching:** tutti gli hook da `../../hooks/useIPC`; React Query gestisce cache e invalidazione
-- **Styling:** Tailwind CSS; palette zinc/indigo/emerald/amber/violet; dark mode fisso (`#0d0f14` background)
+- **Styling:** Tailwind CSS + token `--cl-*` / classi `cl-*` in `index.css` (accent terracotta `#C15F3C`). Tema chiaro di default, dark derivato via `:root[data-theme='dark']`. Non introdurre nuove tinte d'accento — vedi root `CLAUDE.md`
 - **Import paths:** da sottocartelle usare `../types`, `../utils`, `../shared/BackButton`, ecc.
