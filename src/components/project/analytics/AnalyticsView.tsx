@@ -8,6 +8,7 @@ import { useSessionList, usePricingMeta } from '../../../hooks/useIPC'
 import { fmt, fmtModel, modelColor } from '../utils'
 import { BackButton } from '../shared/BackButton'
 import { StatChip } from '../shared/StatChip'
+import { projectDisplayName } from '../shared/projectName'
 
 const SIZE_BUCKETS = [
   { label: '< 10k',   min: 0,       max: 10_000 },
@@ -44,7 +45,7 @@ export function AnalyticsView({
 }) {
   const { data: allSessions, isLoading } = useSessionList(project.hash)
   const { data: pricingMeta } = usePricingMeta()
-  const projectName = project.realPath.split('/').pop() ?? project.realPath
+  const projectName = projectDisplayName(project.realPath)
 
   const knownModels = useMemo(() => new Set(pricingMeta?.knownModels ?? []), [pricingMeta])
   // A model is "estimated" when it's not in the pricing table (priced via the

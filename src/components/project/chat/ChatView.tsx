@@ -10,6 +10,7 @@ import { MessageBubble } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
 import { SessionGraphView } from './graph/SessionGraphView'
 import { QueryError } from '../../QueryError'
+import { projectDisplayName } from '../shared/projectName'
 
 type ViewMode = 'chat' | 'timeline'
 
@@ -345,7 +346,7 @@ export function ChatView({
   onBack: () => void
 }) {
   const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
-  const projectName = project.realPath.split('/').pop() ?? project.realPath
+  const projectName = projectDisplayName(project.realPath)
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)

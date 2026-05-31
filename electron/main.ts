@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -221,6 +221,10 @@ function createWindow() {
     height: 800,
     backgroundColor: '#f6f4ef',
     icon: iconPath,
+    // Su Windows/Linux la menu bar nativa (File/Edit/…) non ha senso: l'app non
+    // la usa e su macOS vive nella system bar. La nascondiamo (Alt non la mostra
+    // perché viene anche rimossa via Menu.setApplicationMenu(null) all'avvio).
+    autoHideMenuBar: true,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 18, y: 18 },
     webPreferences: {
@@ -982,6 +986,9 @@ app.whenReady().then(() => {
   if (process.env.SCREENSHOT_MODE) {
     registerScreenshotHandlers(ipcMain);
   }
+  // Rimuove del tutto la menu bar nativa su Windows/Linux (incl. il toggle con Alt).
+  // Su macOS la lasciamo: ospita l'app menu di sistema (Cmd+Q, copia/incolla, ecc.).
+  if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
   setupContentSecurityPolicy();
   createWindow();
   if (!process.env.SCREENSHOT_MODE) void startWatcher();

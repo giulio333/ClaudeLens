@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from 'react'
 import Markdown from '../../Markdown'
 import { BackButton } from '../shared/BackButton'
+import { projectDisplayName } from '../shared/projectName'
 
 type PresetAction = {
   label: string
@@ -27,7 +28,7 @@ export function AiAssistantView({
   project: { hash: string; realPath: string }
   onBack: () => void
 }) {
-  const projectName = project.realPath.split('/').pop() ?? project.realPath
+  const projectName = projectDisplayName(project.realPath)
   const [prompt, setPrompt] = useState('')
   const [output, setOutput] = useState('')
   const [isRunning, setIsRunning] = useState(false)

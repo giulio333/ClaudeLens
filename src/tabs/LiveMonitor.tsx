@@ -3,6 +3,7 @@ import { LiveEvent, ClaudeProcess } from '../hooks/useIPC'
 import { UsedItem, VISIBLE_TYPES, MAX_EVENTS, CHART_H } from './live/types'
 import { ActivityChart } from './live/ActivityChart'
 import { ProjectContextPanel } from './live/ProjectContextPanel'
+import { projectDisplayName } from '../components/project/shared/projectName'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -36,7 +37,7 @@ export default function LiveMonitor({
   const [elapsed, setElapsed]       = useState(0)
   const lastUsedIdRef = useRef<string | null>(null)
   const toolStartRef = useRef<number>(0)
-  const projectName  = project.realPath.split('/').pop() ?? project.realPath
+  const projectName  = projectDisplayName(project.realPath)
 
   const toolCount  = events.filter(e => e.type === 'tool_use').length
   const thinkCount = events.filter(e => e.type === 'thinking').length

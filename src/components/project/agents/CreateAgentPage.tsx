@@ -6,6 +6,7 @@ import {
   NAME_MAX, DESC_MAX, openDocs, validateName, useCreateFormKeys,
   ModelPicker, ToolsInput, FieldHint, CharCounter,
 } from '../shared/CreateFormKit'
+import { projectDisplayName } from '../shared/projectName'
 
 const DOCS_URL = 'https://code.claude.com/docs/en/sub-agents#supported-frontmatter-fields'
 
@@ -14,7 +15,7 @@ export function CreateAgentPage({ project, onBack, onSaved }: {
   onBack: () => void
   onSaved: () => void
 }) {
-  const projectName = project?.realPath.split('/').pop()
+  const projectName = project ? projectDisplayName(project.realPath) : undefined
   const [form, setForm] = useState<{
     name: string; content: string; description: string
     model: string; permissionMode: string; isolation: string; memory: string

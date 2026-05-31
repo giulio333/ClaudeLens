@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import { Agent } from '../../../hooks/useIPC'
 import { entityTint } from '../shared/entityOptions'
+import { projectDisplayName } from '../shared/projectName'
 
 const PlayIcon = () => (
   <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
@@ -53,7 +54,7 @@ export function RunAgentDialog({
     }
   }
 
-  const projectName = project.realPath.split('/').pop() || project.realPath
+  const projectName = projectDisplayName(project.realPath)
 
   return (
     <div className="cl-run-agent-backdrop" onClick={onClose}>

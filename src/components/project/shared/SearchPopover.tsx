@@ -1,6 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { Agent, McpServer, ProjectCost, SessionSummary, Skill } from '../../../types'
 import { fmtModel, sessionTitle } from '../utils'
+import { projectDisplayName } from './projectName'
 
 type Project = { hash: string; realPath: string }
 export type SearchMode = 'global' | 'projects'
@@ -56,7 +57,7 @@ function PinIcon({ filled }: { filled?: boolean }) {
 }
 
 function projectName(p: Project): string {
-  return p.realPath.split('/').pop() ?? p.realPath
+  return projectDisplayName(p.realPath)
 }
 
 function includesQuery(q: string, values: Array<string | undefined | null>): boolean {

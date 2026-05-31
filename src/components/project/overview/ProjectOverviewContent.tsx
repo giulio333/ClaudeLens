@@ -18,6 +18,7 @@ import { Lens } from './Lens'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { TasksSection } from '../tasks/TasksSection'
+import { projectDisplayName } from '../shared/projectName'
 import { PlansSection } from '../plans/PlansSection'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
@@ -251,7 +252,7 @@ export function ProjectView({
   const liveUptime = `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`
 
   // ── Derived ──
-  const projectName = project.realPath.split('/').pop() ?? project.realPath
+  const projectName = projectDisplayName(project.realPath)
   const retentionDays = normalizeRetentionDays(cleanupDays)
   const statsSessions = useMemo(() => {
     const now = Date.now()
