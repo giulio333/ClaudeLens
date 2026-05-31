@@ -2,7 +2,6 @@ import { app, BrowserWindow, dialog, ipcMain, session, shell } from 'electron';
 import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import chokidar from 'chokidar';
 import { execFile, spawn, ChildProcess } from 'child_process';
 
 import { listProjectsWithMemory, readMemory } from './modules/memory-reader';
@@ -958,11 +957,13 @@ function resumeWatcher() {
   if (watcherPauseDepth > 0) watcherPauseDepth -= 1;
 }
 
-function startWatcher() {
+async function startWatcher() {
   // Osserva le sessioni dei progetti, i task creati durante le sessioni
   // (~/.claude/tasks/{sessionUUID}/*.json) e i piani (~/.claude/plans/*.md):
   // così i subtab Tasks e Plans si aggiornano live.
-  const watcher = chokidar.watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR], {
+  // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
+  const { watch } = await import('chokidar');
+  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR], {
     ignoreInitial: true,
     depth: 3,
   });
@@ -983,7 +984,7 @@ app.whenReady().then(() => {
   }
   setupContentSecurityPolicy();
   createWindow();
-  if (!process.env.SCREENSHOT_MODE) startWatcher();
+  if (!process.env.SCREENSHOT_MODE) void startWatcher();
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow();

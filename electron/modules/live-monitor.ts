@@ -1,7 +1,14 @@
 import { existsSync, statSync, openSync, fstatSync, readSync, closeSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
-import chokidar from 'chokidar';
+
+// chokidar 5 è ESM-only: il modulo si carica con un import dinamico (vedi sotto).
+// Tipizziamo il watcher in modo strutturale con i soli metodi usati, così da
+// evitare un import di tipo da un modulo ESM in questo bundle CommonJS.
+interface FileWatcher {
+  on(event: string, listener: (...args: unknown[]) => void): FileWatcher;
+  close(): Promise<void>;
+}
 
 export interface LiveEvent {
   id: string;
@@ -17,7 +24,7 @@ export interface LiveEvent {
 type EventCallback = (event: LiveEvent) => void;
 
 interface MonitorState {
-  watcher: ReturnType<typeof chokidar.watch>;
+  watcher: FileWatcher;
   filePath: string;
   fileOffset: number;
 }
@@ -56,7 +63,9 @@ export async function startLiveMonitor(
   // Parte dalla fine del file (solo eventi nuovi)
   const initialSize = statSync(filePath).size;
 
-  const watcher = chokidar.watch(filePath, { ignoreInitial: true, usePolling: false });
+  // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
+  const { watch } = await import('chokidar');
+  const watcher = watch(filePath, { ignoreInitial: true, usePolling: false });
 
   state = { watcher, filePath, fileOffset: initialSize };
 
