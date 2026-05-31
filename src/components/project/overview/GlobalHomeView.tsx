@@ -244,7 +244,14 @@ export function GlobalHomeView({
                 const isLive = procs.some(pr => pr.cwd === p.realPath)
                 const pinnedNow = isPinned(p.hash)
                 return (
-                  <button key={p.hash} type="button" className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`} onClick={() => onSelectProject(p)}>
+                  <div
+                    key={p.hash}
+                    role="button"
+                    tabIndex={0}
+                    className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`}
+                    onClick={() => onSelectProject(p)}
+                    onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onSelectProject(p) } }}
+                  >
                     <button
                       type="button"
                       className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
@@ -262,7 +269,7 @@ export function GlobalHomeView({
                     <span className="when" style={{ textAlign: 'left' }}>{c?.sessionsCount ?? 0} sessions</span>
                     <span className="toks">{tokens.value}{tokens.unit}<small>tok</small></span>
                     <span className="when">{c ? `$${c.cost.toFixed(2)}` : '—'}</span>
-                  </button>
+                  </div>
                 )
               })}
             </div>
