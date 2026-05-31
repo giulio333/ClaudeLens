@@ -15,6 +15,7 @@ import { DuplicateProjectsBadge } from './DuplicateProjectsNotice'
 import { McpServerGrid } from '../mcp/McpServerGrid'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { PinIcon } from '../shared/SearchPopover'
+import { projectDisplayName } from '../shared/projectName'
 
 type Project = { hash: string; realPath: string }
 
@@ -94,7 +95,7 @@ export function GlobalHomeView({
       ? allProjects.filter(p => pinned.has(p.hash))
       : allProjects
     const arr = [...base]
-    const nameOf = (p: Project) => (p.realPath.split('/').pop() ?? p.realPath).toLowerCase()
+    const nameOf = (p: Project) => projectDisplayName(p.realPath).toLowerCase()
     switch (sortKey) {
       case 'cost':
         return arr.sort((a, b) => (costByHash.get(b.hash)?.cost ?? 0) - (costByHash.get(a.hash)?.cost ?? 0))
@@ -238,7 +239,7 @@ export function GlobalHomeView({
           <>
             <div>
               {pagedProjects.map(p => {
-                const name = p.realPath.split('/').pop() ?? p.realPath
+                const name = projectDisplayName(p.realPath)
                 const c = costByHash.get(p.hash)
                 const tokens = formatTokens(c?.totalTokens ?? 0)
                 const isLive = procs.some(pr => pr.cwd === p.realPath)

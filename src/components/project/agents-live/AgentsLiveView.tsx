@@ -6,6 +6,7 @@ import {
 } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
+import { projectDisplayName } from '../shared/projectName'
 
 type Project = { hash: string; realPath: string }
 
@@ -280,7 +281,7 @@ export function AgentsLiveView({
   embedded?: boolean
   hideHero?: boolean
 }) {
-  const projectName = project?.realPath.split('/').pop()
+  const projectName = project ? projectDisplayName(project.realPath) : undefined
   const { data, isLoading } = useLiveSessions()
 
   const { data: globalAgents = [] } = useGlobalAgents()

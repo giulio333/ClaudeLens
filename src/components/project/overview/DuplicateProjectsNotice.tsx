@@ -10,6 +10,7 @@ import {
 import { View } from '../types'
 import { BackButton } from '../shared/BackButton'
 import { MergeConfirmDialog } from '../shared/MergeConfirmDialog'
+import { projectDisplayName } from '../shared/projectName'
 
 function shortWhen(iso: string | null): string {
   if (!iso) return 'no sessions'
@@ -146,7 +147,7 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
   const [result, setResult] = useState<MergeResult | null>(null)
 
   function name(realPath: string): string {
-    return realPath.split('/').pop() || realPath
+    return projectDisplayName(realPath)
   }
 
   async function openMerge(source: DuplicateFolder, dest: DuplicateFolder) {

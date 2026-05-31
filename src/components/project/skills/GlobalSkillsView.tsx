@@ -1,6 +1,7 @@
 import { useGlobalSkills, useAllSkills, Skill } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
+import { projectDisplayName } from '../shared/projectName'
 
 function SkillTile({ skill, index, onClick }: { skill: Skill; index: number; onClick: () => void }) {
   return (
@@ -32,7 +33,7 @@ export function GlobalSkillsView({
   onCreate: () => void
   project?: { hash: string; realPath: string }
 }) {
-  const projectName = project?.realPath.split('/').pop()
+  const projectName = project ? projectDisplayName(project.realPath) : undefined
   const { data: globalSkills, isLoading: loadingGlobal } = useGlobalSkills()
   const { data: allSkills, isLoading: loadingAll } = useAllSkills(project?.realPath ?? null)
 
