@@ -775,7 +775,14 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
         const sessionTags = tagsForSession(s.filename)
         const isPickerOpen = pickerFor?.filename === s.filename
         return (
-          <button key={s.filename} type="button" className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`} onClick={() => onOpen(s)}>
+          <div
+            key={s.filename}
+            role="button"
+            tabIndex={0}
+            className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`}
+            onClick={() => onOpen(s)}
+            onKeyDown={e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpen(s) } }}
+          >
             <button
               type="button"
               className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
@@ -825,7 +832,7 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
             <span className="toks">{fmt(s.totalTokens)}<small>tok</small></span>
             <span className="when">{shortWhen(s.date)}</span>
-          </button>
+          </div>
         )
       })}
       {pickerFor && (
