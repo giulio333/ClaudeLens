@@ -324,7 +324,9 @@ export function parseMemoryFrontmatter(content: string): ParsedMemory | null {
 export function isMemoryFile(input: Record<string, unknown>): boolean {
   const path = input.file_path as string | undefined
   if (!path) return false
-  return path.includes('/.claude/') && path.includes('/memory/')
+  // Normalize backslashes so the check works on Windows paths too
+  const normalized = path.replace(/\\/g, '/')
+  return normalized.includes('/.claude/') && normalized.includes('/memory/')
 }
 
 export function resolveToolIcon(name: string, input: Record<string, unknown>): string {

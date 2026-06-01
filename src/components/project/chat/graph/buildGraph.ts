@@ -75,7 +75,9 @@ function classifyTool(name: string, input: Record<string, unknown>): { kind: Lan
   if (name === 'Read' || name === 'Write' || name === 'Edit') {
     const path = typeof input.file_path === 'string' ? input.file_path : null
     if (path) {
-      const isMemory = path.includes('/.claude/') && path.includes('/memory/')
+      // Normalize backslashes so the check works on Windows paths too
+      const normalizedPath = path.replace(/\\/g, '/')
+      const isMemory = normalizedPath.includes('/.claude/') && normalizedPath.includes('/memory/')
       return {
         kind: isMemory ? 'memory' : 'file',
         laneId: isMemory ? `memory:${path}` : `file:${path}`,

@@ -1,5 +1,5 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import os from 'os';
 
 const CLAUDE_DIR = join(os.homedir(), '.claude');
@@ -118,7 +118,7 @@ export function getBgSessions(): BgSession[] {
       intent: (state.intent as string) ?? '',
       result: readResult(state.output),
       cwd,
-      projectName: cwd ? cwd.split('/').filter(Boolean).pop() ?? cwd : '',
+      projectName: cwd ? (basename(cwd) || cwd) : '',
       template: (state.template as string) ?? '',
       inFlightTasks:
         state.inFlight && typeof state.inFlight === 'object'
