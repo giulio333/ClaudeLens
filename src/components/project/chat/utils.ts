@@ -235,6 +235,10 @@ export type TurnDescriptor = {
   hasAgent: boolean
   /** True when MessageBubble would render something for this turn+filter. */
   visible: boolean
+  /** Minimal mode only: the turn renders solely as a collapsed "tools hidden"
+   *  badge (no text / thinking / agent / question), so it isn't a real message
+   *  turn — the navigation rail skips it even though it stays `visible`. */
+  toolsOnly: boolean
 }
 
 const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: string }> = {
@@ -266,12 +270,16 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
   const hasQuestion = showQuestions
   const hasAgent = agentGroups.length > 0
 
-  const visible =
+  const hasVisibleContent =
     hasText ||
     (showThinking && hasThinking) ||
-    hasTools ||
+    (showTools && hasTools) ||
     showAgentStrip ||
     showQuestions
+  // Minimal mode collapses a tool-only turn into a single badge; it's not a
+  // standalone message, so the minimap skips it — but it still counts as visible.
+  const toolsOnly = !hasVisibleContent && !showTools && hasTools
+  const visible = hasVisibleContent || toolsOnly
 
   const isAgentTurn = showAgentStrip && textBlocks.length === 0
   const isQuestionTurn =
@@ -285,7 +293,7 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
     : isUser ? 'user'
     : 'claude'
 
-  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, visible }
+  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, visible, toolsOnly }
 }
 
 export const TOOL_ICON: Record<string, string> = {

@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, RefObject } from 'react'
+import type { CSSProperties, RefObject, MouseEvent as ReactMouseEvent } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
 import { fmt, fmtModel, modelColor, sessionTitle } from '../utils'
 import { buildProcessedMessages, describeTurn, isMemoryFile, ChatDetailsFilter, ToolGroup, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
-import { MessageBubble } from './MessageBubble'
+import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
 import { SessionGraphView } from './graph/SessionGraphView'
 import { QueryError } from '../../QueryError'
@@ -299,8 +299,17 @@ function ChatModelBar({ models }: { models: [string, number][] }) {
 
 type MinimapItem = TurnDescriptor & { n: number; time: string }
 
-/** Navigable turn-index rail with scroll-spy. Mirrors the prototype's da-rail:
- *  one colour-coded dot per turn, hover label, click to jump, active dot enlarged. */
+/** One row in the transcript stream: either a real message turn, or a run of
+ *  consecutive tool-only turns collapsed into a single "tools hidden" badge. */
+type RenderItem =
+  | { kind: 'turn'; idx: number }
+  | { kind: 'tools'; key: string; count: number }
+
+/** Navigable turn-index rail with scroll-spy. One colour-coded dot per turn,
+ *  hover label, click to jump, active dot enlarged. The dots are deliberately
+ *  tiny so long sessions fit; a Dock-style fisheye lens swells the dots near
+ *  the pointer so they stay easy to read and click. The lens writes a `--mag`
+ *  CSS var per dot straight to the DOM (inside rAF) — no React re-render. */
 function TurnMinimap({
   items,
   active,
@@ -312,8 +321,63 @@ function TurnMinimap({
   matches: (d: TurnDescriptor) => boolean
   onJump: (n: number) => void
 }) {
+  const navRef = useRef<HTMLElement | null>(null)
+  const rafRef = useRef<number | null>(null)
+  const pointerY = useRef(0)
+
+  // Falloff of the lens, in viewport px around the pointer. Dots sit on a fixed
+  // row pitch, so we read one rect (the first button) and extrapolate the rest —
+  // cheap and reflow-free (one read, then only --mag writes).
+  // BOOST is capped so the peak dot's visual diameter (8px × (1+BOOST) ≈ 15px,
+  // plus its ring) stays under the 20px row pitch — that's what keeps swollen
+  // neighbours from ever overlapping, no matter how many the lens catches.
+  const LENS_RADIUS = 50
+  const LENS_BOOST = 0.85
+
+  const applyLens = useCallback(() => {
+    rafRef.current = null
+    const nav = navRef.current
+    const first = nav?.firstElementChild as HTMLElement | null
+    if (!nav || !first) return
+    const rect = first.getBoundingClientRect()
+    const firstCenter = rect.top + rect.height / 2
+    const rowH = rect.height || 16
+    const y = pointerY.current
+    const dots = nav.children
+    for (let i = 0; i < dots.length; i++) {
+      const dist = Math.abs(firstCenter + i * rowH - y)
+      const t = Math.max(0, 1 - dist / LENS_RADIUS)
+      const scale = 1 + LENS_BOOST * t * t
+      ;(dots[i] as HTMLElement).style.setProperty('--mag', scale.toFixed(3))
+    }
+  }, [])
+
+  const handleMove = useCallback((e: ReactMouseEvent<HTMLElement>) => {
+    pointerY.current = e.clientY
+    if (rafRef.current === null) rafRef.current = requestAnimationFrame(applyLens)
+  }, [applyLens])
+
+  const resetLens = useCallback(() => {
+    if (rafRef.current !== null) {
+      cancelAnimationFrame(rafRef.current)
+      rafRef.current = null
+    }
+    const nav = navRef.current
+    if (!nav) return
+    const dots = nav.children
+    for (let i = 0; i < dots.length; i++) (dots[i] as HTMLElement).style.setProperty('--mag', '1')
+  }, [])
+
+  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current) }, [])
+
   return (
-    <nav className="cl-minimap" aria-label="Turn index">
+    <nav
+      className="cl-minimap"
+      ref={navRef}
+      aria-label="Turn index"
+      onMouseMove={handleMove}
+      onMouseLeave={resetLens}
+    >
       {items.map(it => (
         <button
           key={it.n}
@@ -359,9 +423,9 @@ function ChatTypeFilters({
   return (
     <div className="cl-chat-filters" role="group" aria-label="Filter turns by type">
       <Chip id="all" label="All" c={counts.all} />
-      <Chip id="tools" label="Tools" c={counts.tools} />
-      {showThinking && <Chip id="thinking" label="Thinking" c={counts.thinking} />}
-      <Chip id="questions" label="Questions" c={counts.questions} />
+      {counts.tools > 0 && <Chip id="tools" label="Tools" c={counts.tools} />}
+      {showThinking && counts.thinking > 0 && <Chip id="thinking" label="Thinking" c={counts.thinking} />}
+      {counts.questions > 0 && <Chip id="questions" label="Questions" c={counts.questions} />}
     </div>
   )
 }
@@ -434,12 +498,43 @@ export function ChatView({
       : ''),
     []
   )
-  const minimapItems = useMemo<MinimapItem[]>(
+  // Every turn that renders something — drives the type-filter counts so
+  // "Tools" still reflects the collapsed tool-only turns.
+  const visibleItems = useMemo<MinimapItem[]>(
     () => descriptors
       .map((d, i) => ({ ...d, n: i + 1, time: fmtTurnTime(processed[i]?.msg.timestamp) }))
       .filter(d => d.visible),
     [descriptors, processed, fmtTurnTime]
   )
+  // The navigation rail shows one dot per *message* turn: tool-only turns
+  // collapse into a single in-stream badge, so they don't earn a dot.
+  const minimapItems = useMemo(() => visibleItems.filter(d => !d.toolsOnly), [visibleItems])
+  // Collapse runs of consecutive tool-only turns into one badge. Non-rendering
+  // turns are skipped without breaking a run (nothing shows between them).
+  const renderItems = useMemo<RenderItem[]>(() => {
+    const items: RenderItem[] = []
+    let run: { count: number; firstIdx: number } | null = null
+    const flush = () => {
+      if (run) {
+        items.push({ kind: 'tools', key: `tools-${run.firstIdx}`, count: run.count })
+        run = null
+      }
+    }
+    descriptors.forEach((d, idx) => {
+      if (d.toolsOnly) {
+        // toolsOnly guarantees the turn holds only standard tools (no question/agent).
+        const n = processed[idx].toolGroups.length
+        if (run) run.count += n
+        else run = { count: n, firstIdx: idx }
+      } else if (d.visible) {
+        flush()
+        items.push({ kind: 'turn', idx })
+      }
+    })
+    flush()
+    return items
+  }, [processed, descriptors])
+
   // Per-turn match against the active type filter (non-matching turns are dimmed,
   // never removed, so the conversation thread stays continuous).
   const matchesFilter = useCallback(
@@ -455,12 +550,12 @@ export function ChatView({
   )
   const filterCounts = useMemo(
     () => ({
-      all: minimapItems.length,
-      tools: minimapItems.filter(d => d.hasTools).length,
-      thinking: minimapItems.filter(d => d.hasThinking).length,
-      questions: minimapItems.filter(d => d.hasQuestion).length,
+      all: visibleItems.length,
+      tools: visibleItems.filter(d => d.hasTools).length,
+      thinking: visibleItems.filter(d => d.hasThinking).length,
+      questions: visibleItems.filter(d => d.hasQuestion).length,
     }),
-    [minimapItems]
+    [visibleItems]
   )
   // Model token distribution (descending), excluding the synthetic bucket.
   const modelEntries = useMemo<[string, number][]>(
@@ -493,10 +588,14 @@ export function ChatView({
     return () => io.disconnect()
   }, [minimapItems, viewMode])
 
-  // Minimal mode hides thinking, so the Thinking filter no longer applies.
+  // Reset to "All" when the active filter no longer has matching turns — e.g.
+  // Thinking in minimal mode, or any chip that just dropped to 0 (and is now
+  // hidden), so the transcript never gets stuck fully dimmed with no way back.
   useEffect(() => {
-    if (detailsFilter === 'minimal' && turnFilter === 'thinking') setTurnFilter('all')
-  }, [detailsFilter, turnFilter])
+    if (turnFilter === 'all') return
+    if (turnFilter === 'thinking' && detailsFilter === 'minimal') { setTurnFilter('all'); return }
+    if (filterCounts[turnFilter] === 0) setTurnFilter('all')
+  }, [detailsFilter, turnFilter, filterCounts])
 
   const jumpToTurn = useCallback((n: number) => {
     const el = turnRefs.current[n]
@@ -659,17 +758,25 @@ export function ChatView({
                   onJump={jumpToTurn}
                 />
                 <div className="cl-transcript-inner">
-                  {processed.map((p, idx) => (
-                    <MessageBubble
-                      key={p.msg.uuid}
-                      processed={p}
-                      detailsFilter={detailsFilter}
-                      onOpenToolDetail={setSelectedTool}
-                      turnIndex={idx + 1}
-                      dimmed={turnFilter !== 'all' && descriptors[idx]?.visible && !matchesFilter(descriptors[idx])}
-                      innerRef={setTurnRef}
-                    />
-                  ))}
+                  {renderItems.map(item =>
+                    item.kind === 'turn' ? (
+                      <MessageBubble
+                        key={processed[item.idx].msg.uuid}
+                        processed={processed[item.idx]}
+                        detailsFilter={detailsFilter}
+                        onOpenToolDetail={setSelectedTool}
+                        turnIndex={item.idx + 1}
+                        dimmed={turnFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
+                        innerRef={setTurnRef}
+                      />
+                    ) : (
+                      <ToolsHiddenBadge
+                        key={item.key}
+                        count={item.count}
+                        dimmed={turnFilter !== 'all' && turnFilter !== 'tools'}
+                      />
+                    )
+                  )}
                 </div>
               </div>
             )}
