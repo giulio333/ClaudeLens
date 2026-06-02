@@ -157,8 +157,21 @@ describe('parseClaudeSlashCommand', () => {
     expect(result?.command).toBe('clear');
   });
 
-  it('returns null for unknown XML command', () => {
-    expect(parseClaudeSlashCommand('<command-name>/nope</command-name>')).toBeNull();
+  it('falls back to a generic description for unknown XML commands', () => {
+    // Il framing XML è inequivocabile: trattalo come comando anche se non è noto,
+    // così il testo grezzo non trapela mai nella chat (es. /exit, /clear).
+    const result = parseClaudeSlashCommand('<command-name>/nope</command-name>');
+    expect(result).toEqual({
+      command: 'nope',
+      args: '',
+      description: 'Claude Code command',
+    });
+  });
+
+  it('recognizes /exit as a known command', () => {
+    const result = parseClaudeSlashCommand('<command-name>/exit</command-name>');
+    expect(result?.command).toBe('exit');
+    expect(result?.description).toBe('End the current session');
   });
 
   it('parses plain textual "/cmd args" format', () => {
@@ -201,6 +214,12 @@ describe('parseLocalCommandOutput', () => {
       '  <local-command-stdout>  padded  </local-command-stdout>  '
     );
     expect(result).toBe('padded');
+  });
+
+  it('normalizes the "(no content)" placeholder to an empty string', () => {
+    expect(
+      parseLocalCommandOutput('<local-command-stdout>(no content)</local-command-stdout>')
+    ).toBe('');
   });
 
   it('returns null when text is not pure stdout', () => {

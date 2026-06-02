@@ -33,6 +33,7 @@ export const CLAUDE_BUILTIN_SLASH_COMMANDS: Record<string, string> = {
   config: 'View or modify configuration',
   cost: 'Show token usage statistics',
   doctor: 'Check the Claude Code installation',
+  exit: 'End the current session',
   help: 'Get usage help',
   init: 'Initialize project guidance',
   login: 'Switch Anthropic accounts',
@@ -42,6 +43,8 @@ export const CLAUDE_BUILTIN_SLASH_COMMANDS: Record<string, string> = {
   model: 'Select or change the AI model',
   permissions: 'View or update permissions',
   pr_comments: 'View pull request comments',
+  quit: 'End the current session',
+  resume: 'Resume a previous conversation',
   review: 'Request code review',
   status: 'View account and system status',
   'terminal-setup': 'Install Shift+Enter newline binding',
@@ -129,8 +132,9 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
   const cmdMatch = text.match(/<command-name>\s*\/?([a-z][a-z0-9_-]*)\s*<\/command-name>/i)
   if (cmdMatch) {
     const command = cmdMatch[1].toLowerCase()
-    const description = CLAUDE_BUILTIN_SLASH_COMMANDS[command]
-    if (!description) return null
+    // Il framing XML <command-name> è inequivocabile: trattalo sempre come comando,
+    // anche se non è nella lista nota — così il testo grezzo non trapela mai nella chat.
+    const description = CLAUDE_BUILTIN_SLASH_COMMANDS[command] ?? 'Claude Code command'
 
     const argsMatch = text.match(/<command-args>([\s\S]*?)<\/command-args>/i)
     const args = argsMatch?.[1].trim() ?? ''
@@ -158,7 +162,9 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
 export function parseLocalCommandOutput(text: string): string | null {
   const match = text.match(/^\s*<local-command-stdout>([\s\S]*)<\/local-command-stdout>\s*$/i)
   if (!match) return null
-  return stripAnsi(match[1]).trim()
+  const out = stripAnsi(match[1]).trim()
+  // "(no content)" è il placeholder di Claude Code per stdout vuoto: normalizzalo a stringa vuota
+  return out === '(no content)' ? '' : out
 }
 
 // AskUserQuestion: i campi sono nel tool_use.input.questions[] e la risposta
