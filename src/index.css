@@ -2251,14 +2251,18 @@ body {
   height: max-content;
   display: flex;
   flex-direction: column;
-  padding: 28px 0 28px 16px;
+  padding: 22px 0 22px 16px;
   z-index: 5;
 }
 .cl-minimap-item {
   position: relative;
   display: flex;
   align-items: center;
-  height: 30px;
+  /* Tight row pitch keeps long sessions compact; the fisheye lens (JS-driven
+     --mag) restores legibility/hit-area near the pointer. The button box stays
+     a fixed 20px so the lens math can extrapolate row centres without reflow —
+     and so a swollen dot's diameter never reaches the row pitch (no overlap). */
+  height: 20px;
   padding: 0;
   border: none;
   background: none;
@@ -2266,29 +2270,34 @@ body {
   transition: opacity 0.2s;
 }
 .cl-minimap-item .d {
-  width: 11px;
-  height: 11px;
+  width: 8px;
+  height: 8px;
+  box-sizing: border-box;
   border-radius: 50%;
   background: var(--c);
-  border: 2px solid var(--cl-paper);
+  border: 1.5px solid var(--cl-paper);
   box-shadow: 0 0 0 1px color-mix(in oklch, var(--c) 50%, transparent);
-  transition: transform 0.18s, box-shadow 0.18s;
+  /* Lens scale (--mag, default 1) and active emphasis (--active) combine via
+     max() so a hovered active dot doesn't compound into a giant blob. */
+  transform: scale(max(var(--mag, 1), var(--active, 1)));
+  transform-origin: center;
+  transition: transform 0.09s ease-out, box-shadow 0.18s;
   flex: 0 0 auto;
 }
 .cl-minimap-item::after {
   content: '';
   position: absolute;
-  left: 5px;
-  top: 21px;
+  left: 4px;
+  top: 10px;
   width: 1px;
-  height: 9px;
+  height: 20px;
   background: var(--cl-line);
 }
 .cl-minimap-item:last-child::after { display: none; }
 .cl-minimap-item[data-dim] { opacity: 0.32; }
 .cl-minimap-item .n {
   position: absolute;
-  left: 18px;
+  left: 20px;
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -2306,10 +2315,10 @@ body {
 }
 .cl-minimap-item:hover .n { opacity: 1; }
 .cl-minimap-item[data-active] .d {
-  transform: scale(1.5);
+  --active: 1.5;
   box-shadow:
     0 0 0 1px color-mix(in oklch, var(--c) 60%, transparent),
-    0 0 0 4px color-mix(in oklch, var(--c) 16%, transparent);
+    0 0 0 2px color-mix(in oklch, var(--c) 16%, transparent);
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -2457,6 +2466,12 @@ body {
 .cl-turn-tools-hidden-badge::before {
   content: ''; width: 5px; height: 5px; border-radius: 50%;
   background: var(--cl-ink-4); flex-shrink: 0;
+}
+/* Multiplier chip for a collapsed run of tool-only turns ("× 4"). */
+.cl-turn-tools-hidden-x {
+  font-weight: 700;
+  color: var(--cl-ink-2);
+  letter-spacing: 0.02em;
 }
 .cl-turn-content {
   display: grid;

@@ -1,4 +1,4 @@
-import React, { memo, useState } from 'react'
+import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
@@ -124,6 +124,21 @@ function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand;
   )
 }
 
+/** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
+ *  A single badge with a "× N" multiplier replaces the stack of identical
+ *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
+export function ToolsHiddenBadge({ count, dimmed }: { count: number; dimmed?: boolean }) {
+  if (count <= 0) return null
+  return (
+    <div className="cl-turn-tools-hidden" data-dim={dimmed || undefined}>
+      <span className="cl-turn-tools-hidden-badge">
+        {count === 1 ? '1 tool hidden' : 'tools hidden'}
+        {count > 1 && <span className="cl-turn-tools-hidden-x">×{count}</span>}
+      </span>
+    </div>
+  )
+}
+
 // Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
 // `onOpenToolDetail` setter, bubbles don't re-render on header-collapse / export
 // state changes — only when their own props actually change.
@@ -172,12 +187,10 @@ export const MessageBubble = memo(function MessageBubble({
     showAgentStrip ||
     showQuestions
 
-  // In minimal mode, tool-only turns (no text, no agents, no questions) are
-  // otherwise invisible. Render a compact "X tools hidden" badge so the user
-  // can see that tool activity happened.
-  const isHiddenToolsOnly = !hasVisibleContent && !showTools && standardToolGroups.length > 0
-
-  if (!hasVisibleContent && !isHiddenToolsOnly) return null
+  // Tool-only turns (no text/agents/questions) render nothing here: in minimal
+  // mode ChatView collapses runs of them into a single <ToolsHiddenBadge>, and
+  // in full mode they always have visible content. So a bare turn is dropped.
+  if (!hasVisibleContent) return null
 
   // Role identity is resolved by the shared describeTurn() so the minimap and
   // the rendered bubble always agree on who's speaking.
@@ -192,22 +205,6 @@ export const MessageBubble = memo(function MessageBubble({
     hour12: false,
   })
   const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
-
-  // Tool-only turn in minimal mode: render a compact inline badge instead of full article.
-  if (isHiddenToolsOnly) {
-    return (
-      <div
-        className="cl-turn-tools-hidden"
-        ref={innerRef as React.Ref<HTMLDivElement>}
-        data-n={turnIndex}
-        data-dim={dimmed || undefined}
-      >
-        <span className="cl-turn-tools-hidden-badge">
-          {standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'} hidden
-        </span>
-      </div>
-    )
-  }
 
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
   if (isCommandTurn && command) {
