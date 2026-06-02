@@ -1,8 +1,11 @@
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
+import remarkMath from 'remark-math'
 import rehypeHighlight from 'rehype-highlight'
+import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
+import 'katex/dist/katex.min.css'
 
 const components: Components = {
   // Link: apre nel browser di sistema tramite shell, non nel renderer Electron
@@ -76,8 +79,8 @@ export default function Markdown({ children, className = '' }: Props) {
   return (
     <div className={`prose prose-sm prose-lens max-w-none ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkFrontmatter]}
-        rehypePlugins={[rehypeHighlight]}
+        remarkPlugins={[remarkGfm, remarkFrontmatter, remarkMath]}
+        rehypePlugins={[rehypeHighlight, rehypeKatex]}
         components={components}
       >
         {children}
