@@ -326,7 +326,7 @@ export async function calculateCostSummary(claudeDir: string): Promise<ProjectCo
         if (a.totalTokens === 0) continue;
 
         costs.push({
-          project: projectPath.split('/').pop() || 'unknown',
+          project: basename(projectPath) || 'unknown',
           inputTokens: a.inputTokens,
           outputTokens: a.outputTokens,
           totalTokens: a.totalTokens,
