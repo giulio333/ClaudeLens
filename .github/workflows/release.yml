@@ -1,0 +1,75 @@
+name: Release
+
+# Publishes a GitHub Release with cross-platform binaries when a v* tag is pushed.
+# Build the three platforms on their native runners, then attach every binary
+# to the Release in a single publish job (auto-generated changelog from commits).
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build ${{ matrix.platform }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            platform: mac
+            pattern: release/*.dmg
+          - os: ubuntu-latest
+            platform: linux
+            pattern: release/*.AppImage
+          - os: windows-latest
+            platform: win
+            pattern: release/*.exe
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build renderer + electron
+        run: npm run build
+
+      - name: Package ${{ matrix.platform }} (x64 + arm64)
+        run: npx electron-builder --${{ matrix.platform }} --publish never
+
+      - name: Upload binaries
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-${{ matrix.platform }}
+          path: ${{ matrix.pattern }}
+          if-no-files-found: error
+
+  release:
+    name: Publish GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all binaries
+        uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/**/*
+          generate_release_notes: true
+          fail_on_unmatched_files: true
