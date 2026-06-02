@@ -1873,6 +1873,11 @@ body {
   overflow-y: auto;
   position: relative;
   background: var(--cl-paper);
+  /* L'header collassabile vive in questo contenitore: quando cambia altezza lo
+     scroll anchoring sposterebbe scrollTop da solo, rendendo instabili le soglie
+     di collapse/expand (scrollbar che oscilla, header che si richiude da solo).
+     Disabilitarlo tiene scrollTop sotto il controllo dell'utente. */
+  overflow-anchor: none;
 }
 .cl-transcript-state {
   padding: 36px 88px;
@@ -1885,28 +1890,26 @@ body {
 /* ──────────────────────────────────────────────────────────
    CHAT HERO (v3 dossier mist) — collapsible on scroll
    ────────────────────────────────────────────────────────── */
+/* Collapse via grid-template-rows 1fr→0fr: anima l'altezza REALE del contenuto
+   in modo continuo. (max-height animava fino a 720px anche quando l'header era
+   alto ~300px, creando un "dead time" iniziale e poi un crollo a scatti.) */
 .cl-chat-collapsible {
   display: grid;
-  gap: 0;
-  overflow: hidden;
-  max-height: 720px;
+  grid-template-rows: 1fr;
   opacity: 1;
-  transform: translateY(0);
   transition:
-    max-height 640ms cubic-bezier(0.22, 1, 0.36, 1),
-    opacity 460ms cubic-bezier(0.22, 1, 0.36, 1) 60ms,
-    transform 640ms cubic-bezier(0.22, 1, 0.36, 1);
-  will-change: max-height, opacity, transform;
+    grid-template-rows 440ms cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 240ms cubic-bezier(0.4, 0, 0.2, 1);
+  will-change: grid-template-rows, opacity;
 }
 .cl-chat-collapsible.is-collapsed {
-  max-height: 0;
+  grid-template-rows: 0fr;
   opacity: 0;
-  transform: translateY(-18px);
   pointer-events: none;
-  transition:
-    max-height 720ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 320ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 720ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.cl-chat-collapsible-inner {
+  min-height: 0;
+  overflow: hidden;
 }
 
 .cl-chat-hero {
