@@ -217,6 +217,7 @@ function ChatSessionHeader({
 
   return (
     <div className={`cl-chat-collapsible${collapsed ? ' is-collapsed' : ''}`}>
+      <div className="cl-chat-collapsible-inner">
       <section className="cl-chat-hero">
         <div className="cl-chat-hero-text">
           <div className="cl-eyebrow cl-chat-eyebrow">
@@ -259,6 +260,7 @@ function ChatSessionHeader({
           <div className="n">{cost.whole}{cost.decimals && <small>{cost.decimals}</small>}</div>
         </div>
       </section>
+      </div>
     </div>
   )
 }
@@ -707,10 +709,26 @@ export function ChatView({
             className="cl-chat-feed"
             ref={feedRef}
             onScroll={e => {
-              const top = (e.target as HTMLElement).scrollTop
+              const el = e.target as HTMLElement
+              const top = el.scrollTop
               // hysteresis: collapse at 220px, expand back only under 80px — evita flicker
-              const next = headerCollapsed ? top > 80 : top > 220
-              if (next !== headerCollapsed) setHeaderCollapsed(next)
+              if (headerCollapsed) {
+                if (top <= 80) setHeaderCollapsed(false)
+                return
+              }
+              // Collassare l'header riduce lo scrollHeight di tutta la sua altezza.
+              // Su chat corte ciò forzerebbe il browser a clampare scrollTop verso
+              // l'alto (la scrollbar "salta" da sola) e l'isteresi rimbalzerebbe in
+              // un loop collapse↔expand. Collassa solo se, tolto l'header, il
+              // contenuto resta scrollabile almeno fino alla posizione corrente:
+              // così scrollTop non viene mai clampato → niente salto, niente loop.
+              if (top <= 220) return
+              let collapsibleH = 0
+              el.querySelectorAll('.cl-chat-collapsible').forEach(c => {
+                collapsibleH += (c as HTMLElement).offsetHeight
+              })
+              const maxScrollAfter = el.scrollHeight - el.clientHeight - collapsibleH
+              if (maxScrollAfter >= top) setHeaderCollapsed(true)
             }}
           >
             <ChatSessionHeader
@@ -725,7 +743,9 @@ export function ChatView({
 
             {modelEntries.length > 0 && (
               <div className={`cl-chat-collapsible${headerCollapsed ? ' is-collapsed' : ''}`}>
-                <ChatModelBar models={modelEntries} />
+                <div className="cl-chat-collapsible-inner">
+                  <ChatModelBar models={modelEntries} />
+                </div>
               </div>
             )}
 
