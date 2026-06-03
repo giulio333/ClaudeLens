@@ -147,6 +147,14 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
+### `settings/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `SettingsView.tsx` | `SettingsView`, `SettingsGearIcon`, `GeneralTab`/`PermissionsTab`/`ToolsTab`/`McpTab`/`ExtensionsTab`/`SourcesTab`, `ReadOnlyHint` | Pagina Settings **globale** (deep view, trigger = ingranaggio nella top bar). Legge la config **effettiva** via `useEffectiveConfig()` (cwd = home) → IPC `config:getEffective` → SDK ufficiale. Rail di tab a sinistra (General, Permissions, Tools, MCP Servers, Extensions, Sources) + ricerca; read-only. I dati runtime (model risolto, status MCP, tool, versione) vengono dall'init dell'SDK; il merge settings + provenance da `resolveSettings`. I renderer di tab sono esportati per riuso |
+| `ProjectConfigView.tsx` | `ProjectConfigView` | Variante **scoped al progetto** (subtab "Config" della vista progetto). `useEffectiveConfig(project.realPath)` → include i tier `project`/`local` di `.claude/settings*.json`. Riusa i renderer di `SettingsView` impilati verticalmente (scroll piatto, niente rail interno) per stare nella chrome editoriale. Read-only |
+
+---
+
 ### `overview/`
 | File | Esporta | Descrizione |
 |---|---|---|

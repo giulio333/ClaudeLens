@@ -68,6 +68,7 @@ export function ProjectSubtabs({
     { key: 'live-agents', label: 'Agent View', count: liveCount, view: { type: 'agents-live', project } },
     { key: 'tasks', label: 'Tasks', count: taskCount, view: { type: 'project-tasks', project } },
     { key: 'plans', label: 'Plans', count: planCount, view: { type: 'project-plans', project } },
+    { key: 'config', label: 'Config', view: { type: 'project-config', project } },
   ]
 
   return (

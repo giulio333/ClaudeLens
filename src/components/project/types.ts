@@ -16,6 +16,7 @@ export type View =
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
   | { type: 'project-mcp'; project: { hash: string; realPath: string } }
   | { type: 'project-tasks'; project: { hash: string; realPath: string } }
+  | { type: 'project-config'; project: { hash: string; realPath: string } }
   | { type: 'project-plans'; project: { hash: string; realPath: string } }
   | { type: 'plan-detail'; project: { hash: string; realPath: string }; plan: Plan }
   | { type: 'project-claudemd'; project: { hash: string; realPath: string }; layer: ClaudeMdLayer }

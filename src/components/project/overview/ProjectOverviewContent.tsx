@@ -20,6 +20,7 @@ import { AgentsLiveView } from '../agents-live/AgentsLiveView'
 import { TasksSection } from '../tasks/TasksSection'
 import { projectDisplayName } from '../shared/projectName'
 import { PlansSection } from '../plans/PlansSection'
+import { ProjectConfigView } from '../settings/ProjectConfigView'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
 import { useSessionTags } from '../../../hooks/useSessionTags'
@@ -28,7 +29,7 @@ import { TagChip } from '../sessions/TagChip'
 import { TagBar } from '../sessions/TagBar'
 import { TagPicker } from '../sessions/TagPicker'
 
-export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks' | 'plans'
+export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks' | 'plans' | 'config'
 
 type Project = { hash: string; realPath: string }
 
@@ -727,6 +728,8 @@ export function ProjectView({
           onOpenSession={(p, s) => onNavigate({ type: 'chat', project: p, session: s, from: 'agents-live' })}
         />
       )}
+
+      {section === 'config' && <ProjectConfigView project={project} />}
     </div>
   )
 }
