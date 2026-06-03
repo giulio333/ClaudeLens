@@ -26,6 +26,7 @@ import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
+import { readEffectiveConfig } from './modules/config-reader';
 import { findClaudeProcesses } from './modules/process-scanner';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
@@ -479,6 +480,17 @@ ipcMain.handle('settings:getCleanupPeriodDays', async () => {
     return ok(days);
   } catch {
     return ok(30);
+  }
+});
+
+// Reads the effective Claude Code configuration via the official Agent SDK.
+// `cwd` is optional; when omitted the reader resolves against the user's home
+// (the global/user scope shown by the Settings page).
+ipcMain.handle('config:getEffective', async (_event, cwd?: string) => {
+  try {
+    return ok(await readEffectiveConfig(cwd));
+  } catch (e) {
+    return err(e);
   }
 });
 

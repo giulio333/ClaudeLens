@@ -92,6 +92,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settings: {
     getCleanupPeriodDays: () => ipcRenderer.invoke('settings:getCleanupPeriodDays'),
   },
+  config: {
+    getEffective: (cwd?: string) => ipcRenderer.invoke('config:getEffective', cwd),
+  },
   onDataChanged: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('data:changed', handler);

@@ -29,6 +29,9 @@ import type {
   Plan,
   PlanStatus,
   PlanGroup,
+  EffectiveConfig,
+  InitInfo,
+  SettingsSourceEntry,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -60,6 +63,9 @@ export type {
   Plan,
   PlanStatus,
   PlanGroup,
+  EffectiveConfig,
+  InitInfo,
+  SettingsSourceEntry,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -199,6 +205,9 @@ declare global {
       }
       settings: {
         getCleanupPeriodDays: () => Promise<IpcResult<number>>
+      }
+      config: {
+        getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>
       }
       onDataChanged: (callback: () => void) => () => void
       live: {
@@ -582,4 +591,18 @@ export function useDataChangedRefetch() {
     })
     return unsubscribe
   }, [qc])
+}
+
+/**
+ * Effective Claude Code configuration via the official Agent SDK.
+ * Expensive (spawns a one-turn SDK query to read the init message), so it is
+ * cached aggressively and intentionally left out of the `data:changed` refetch.
+ */
+export function useEffectiveConfig(cwd?: string) {
+  return useQuery({
+    queryKey: ['config:effective', cwd ?? null],
+    queryFn: () => unwrap(window.electronAPI.config.getEffective(cwd)),
+    staleTime: 5 * 60 * 1000,
+    refetchOnWindowFocus: false,
+  })
 }

@@ -51,6 +51,7 @@ import { ProjectView, type ProjectSection } from '../components/project/overview
 import { GlobalHomeView } from '../components/project/overview/GlobalHomeView'
 import { DuplicateProjectsView } from '../components/project/overview/DuplicateProjectsNotice'
 import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs'
+import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView'
 
 type Project = { hash: string; realPath: string }
 type Theme = 'light' | 'dark'
@@ -371,6 +372,8 @@ export default function ProjectOverview() {
       // `agents-live` (project & global) is rendered inside the editorial chrome below.
       case 'duplicates':
         return <DuplicateProjectsView onBack={goGlobal} />
+      case 'settings':
+        return <SettingsView onBack={goGlobal} />
       default:
         return null
     }
@@ -438,6 +441,15 @@ export default function ProjectOverview() {
             aria-label="Toggle theme"
           >
             {theme === 'light' ? <MoonIcon /> : <SunIcon />}
+          </button>
+          <button
+            className="cl-theme-toggle"
+            type="button"
+            onClick={() => setView({ type: 'settings' })}
+            title="Settings"
+            aria-label="Settings"
+          >
+            <SettingsGearIcon />
           </button>
         </div>
       </header>
