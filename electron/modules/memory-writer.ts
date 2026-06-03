@@ -6,6 +6,7 @@ export interface TopicInput {
   description: string;
   type: 'user' | 'feedback' | 'project' | 'reference';
   content: string;
+  originSessionId?: string;
 }
 
 function nameToFilename(type: string, name: string): string {
@@ -32,7 +33,14 @@ function sanitizeInline(value: string): string {
 function buildTopicFileContent(input: TopicInput): string {
   const name = sanitizeInline(input.name);
   const description = sanitizeInline(input.description);
-  return `---\nname: ${name}\ndescription: ${description}\ntype: ${input.type}\n---\n\n${input.content.trimEnd()}\n`;
+  // Preserva la provenienza (sessione che ha generato la memoria) attraverso
+  // un re-save dalla UI: senza questa riga l'edit di un topic ne perderebbe
+  // l'originSessionId. Annidato sotto `metadata:` per restare compatibile col
+  // formato dell'auto-memory dell'harness.
+  const origin = input.originSessionId
+    ? `metadata:\n  originSessionId: ${sanitizeInline(input.originSessionId)}\n`
+    : '';
+  return `---\nname: ${name}\ndescription: ${description}\ntype: ${input.type}\n${origin}---\n\n${input.content.trimEnd()}\n`;
 }
 
 function addLineToMemoryMd(memoryPath: string, filename: string, description: string): void {

@@ -10,6 +10,50 @@ export interface MemoryTopic {
   createdAt: string;
   updatedAt: string;
   isProjectLevel?: boolean; // true = in {realPath}/.claude/memory/ (committed to repo)
+  originSessionId?: string; // sessione (.jsonl UUID) che ha generato la memoria, se dichiarata nel frontmatter
+}
+
+type TopicType = 'user' | 'feedback' | 'project' | 'reference';
+
+interface TopicFrontmatter {
+  name?: string;
+  description?: string;
+  type?: TopicType;
+  originSessionId?: string;
+}
+
+// Inferenza di fallback: il prefisso del filename codifica il tipo per i topic
+// scritti da ClaudeLens. Usato solo quando il frontmatter non dichiara `type`.
+function typeFromFilename(file: string): TopicType {
+  if (file.startsWith('feedback_')) return 'feedback';
+  if (file.startsWith('project_')) return 'project';
+  if (file.startsWith('reference_')) return 'reference';
+  return 'user';
+}
+
+// Legge i campi rilevanti dal frontmatter YAML, gestendo sia il formato piatto
+// di ClaudeLens (`type:` top-level) sia quello annidato dell'auto-memory
+// dell'harness (`metadata:` → `type:`/`originSessionId:`). Le chiavi sono
+// cercate ovunque nel blocco frontmatter, così entrambe le forme funzionano.
+function parseTopicFrontmatter(content: string): TopicFrontmatter {
+  const m = content.match(/^---\n([\s\S]*?)\n---/);
+  if (!m) return {};
+  const fm = m[1];
+  // `^\s*type:` non matcha `node_type:` perché dopo lo spazio iniziale serve
+  // esattamente `type:`.
+  const get = (k: string) =>
+    fm.match(new RegExp(`^\\s*${k}:\\s*(.+)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const rawType = get('type');
+  const type =
+    rawType === 'user' || rawType === 'feedback' || rawType === 'project' || rawType === 'reference'
+      ? rawType
+      : undefined;
+  return {
+    name: get('name'),
+    description: get('description'),
+    type,
+    originSessionId: get('originSessionId'),
+  };
 }
 
 export interface MemoryData {
@@ -35,22 +79,18 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
         if (match) {
           const [, linkText, file, description] = match;
 
-          // Inferisce il tipo dal nome del file (fonte più affidabile)
-          let type: 'user' | 'feedback' | 'project' | 'reference' = 'user';
-          if (file.startsWith('feedback_')) type = 'feedback';
-          else if (file.startsWith('project_')) type = 'project';
-          else if (file.startsWith('reference_')) type = 'reference';
+          // Legge il frontmatter del file topic: il `type` dichiarato prevale
+          // sull'inferenza dal nome file, ed espone l'eventuale originSessionId.
+          const topicPath = join(memoryDir, file);
+          const fm: TopicFrontmatter = existsSync(topicPath)
+            ? parseTopicFrontmatter(readFileSync(topicPath, 'utf-8'))
+            : {};
+
+          const type = fm.type ?? typeFromFilename(file);
 
           // Preferisce il nome dalla frontmatter del file topic se il link text è un filename
           let name = linkText;
-          if (linkText.endsWith('.md')) {
-            const topicPath = join(memoryDir, file);
-            if (existsSync(topicPath)) {
-              const topicContent = readFileSync(topicPath, 'utf-8');
-              const nameMatch = topicContent.match(/^name:\s*(.+)$/m);
-              if (nameMatch) name = nameMatch[1].trim();
-            }
-          }
+          if (linkText.endsWith('.md') && fm.name) name = fm.name;
 
           let createdAt = new Date().toISOString();
           let updatedAt = new Date().toISOString();
@@ -60,7 +100,7 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
             updatedAt = s.mtime.toISOString();
           } catch {}
 
-          topics.push({ name, description, type, filename: file, createdAt, updatedAt });
+          topics.push({ name, description, type, filename: file, createdAt, updatedAt, originSessionId: fm.originSessionId });
         }
       }
 
@@ -80,17 +120,12 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
 
       try {
         const content = readFileSync(join(memoryDir, file), 'utf-8');
-        const nameMatch = content.match(/^---\nname:\s*(.+?)\n/m);
-        const descMatch = content.match(/^---\nname:.*?\ndescription:\s*(.+?)\n/ms);
+        const fm = parseTopicFrontmatter(content);
 
-        if (nameMatch) {
-          const name = nameMatch[1];
-          const description = descMatch ? descMatch[1] : `(from ${file})`;
-
-          let type: 'user' | 'feedback' | 'project' | 'reference' = 'user';
-          if (file.startsWith('feedback_')) type = 'feedback';
-          else if (file.startsWith('project_')) type = 'project';
-          else if (file.startsWith('reference_')) type = 'reference';
+        if (fm.name) {
+          const name = fm.name;
+          const description = fm.description ?? `(from ${file})`;
+          const type = fm.type ?? typeFromFilename(file);
 
           let createdAt = new Date().toISOString();
           let updatedAt = new Date().toISOString();
@@ -100,7 +135,7 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
             updatedAt = s.mtime.toISOString();
           } catch {}
 
-          topics.push({ name, description, type, filename: file, createdAt, updatedAt });
+          topics.push({ name, description, type, filename: file, createdAt, updatedAt, originSessionId: fm.originSessionId });
         }
       } catch (e) {
         // Ignora file non leggibili
