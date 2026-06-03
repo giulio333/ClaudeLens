@@ -1,6 +1,6 @@
 import { useState } from 'react'
-import { MemoryTopic, TopicInput } from '../../../hooks/useIPC'
-import { useUpdateTopic, useDeleteTopic } from '../../../hooks/useIPC'
+import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC'
+import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC'
 import { MarkdownDocView } from '../shared/MarkdownDocView'
 import { parseMemoryContent, readingTime, formatDate } from './utils'
 
@@ -143,6 +143,55 @@ function StatRow({ label, value }: { label: string; value: string }) {
   )
 }
 
+/**
+ * Riga "Origin session": mostra la sessione che ha generato la memoria. Se la
+ * sessione esiste ancora nel progetto, è un link cliccabile verso la chat;
+ * altrimenti degrada a un id mono-spaziato (sessione cancellata o di un altro
+ * progetto).
+ */
+function OriginRow({
+  sessionId,
+  session,
+  onOpen,
+}: {
+  sessionId: string
+  session?: SessionSummary
+  onOpen?: (session: SessionSummary) => void
+}) {
+  const label = (
+    <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
+      Origin session
+    </div>
+  )
+
+  if (session && onOpen) {
+    const title = session.customTitle ?? session.aiTitle ?? sessionId.slice(0, 8)
+    return (
+      <div className="py-2.5">
+        {label}
+        <button
+          type="button"
+          onClick={() => onOpen(session)}
+          className="mt-1 text-left text-[13px] hover:underline"
+          style={{ color: 'var(--cl-accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
+          title={`Open chat · ${sessionId}`}
+        >
+          {title}
+        </button>
+      </div>
+    )
+  }
+
+  return (
+    <div className="py-2.5">
+      {label}
+      <div className="mt-1 text-[10px] font-mono break-all" style={{ color: 'var(--cl-ink-3)' }} title="Session not found in this project">
+        {sessionId}
+      </div>
+    </div>
+  )
+}
+
 /** Estrae name/description/type/body dal markdown grezzo con frontmatter YAML. */
 function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
   const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
@@ -151,18 +200,21 @@ function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
   let type: TopicInput['type'] = fallback.type
   let body = raw
 
+  let originSessionId = fallback.originSessionId
+
   if (m) {
     const fm = m[1]
     const get = (k: string) =>
-      fm.match(new RegExp(`^${k}:\\s*(.*)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '')
+      fm.match(new RegExp(`^\\s*${k}:\\s*(.*)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '')
     name = get('name') ?? name
     description = get('description') ?? description
     const t = get('type')
     if (t === 'user' || t === 'feedback' || t === 'project' || t === 'reference') type = t
+    originSessionId = get('originSessionId') ?? originSessionId
     body = raw.slice(m[0].length)
   }
 
-  return { name, description, type, content: body }
+  return { name, description, type, content: body, originSessionId }
 }
 
 export function MemoryTopicView({
@@ -170,16 +222,26 @@ export function MemoryTopicView({
   content,
   hash,
   onBack,
+  onOpenSession,
 }: {
   topic: MemoryTopic
   content: string
   hash: string
   onBack: () => void
+  onOpenSession?: (session: SessionSummary) => void
 }) {
   const { wordCount, charCount, linkCount } = parseMemoryContent(content)
   const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
   const [confirmDelete, setConfirmDelete] = useState(false)
+
+  // Risolve la sessione che ha generato la memoria: l'originSessionId è l'UUID
+  // del file .jsonl di sessione nello stesso progetto. La lista è già in cache
+  // (stessa queryKey della vista Sessions), quindi nessuna fetch extra.
+  const { data: sessions } = useSessionList(topic.originSessionId ? hash : null)
+  const originSession = topic.originSessionId
+    ? sessions?.find(s => s.filename === `${topic.originSessionId}.jsonl`)
+    : undefined
 
   const createdAt = topic.createdAt ?? null
   const updatedAt = topic.updatedAt ?? null
@@ -203,6 +265,13 @@ export function MemoryTopicView({
         <StatRow label="Type" value={TYPE_LABEL[topic.type] ?? topic.type} />
         {createdAt && <StatRow label="Created" value={formatDate(createdAt)} />}
         {updatedAt && !sameDate && <StatRow label="Updated" value={formatDate(updatedAt)} />}
+        {topic.originSessionId && (
+          <OriginRow
+            sessionId={topic.originSessionId}
+            session={originSession}
+            onOpen={onOpenSession}
+          />
+        )}
         <div style={{ borderTop: '1px solid var(--cl-line)' }} />
         <StatRow label="Reading" value={readingTime(wordCount)} />
         <StatRow label="Words" value={String(wordCount)} />

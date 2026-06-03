@@ -355,6 +355,9 @@ export default function ProjectOverview() {
             content={view.content}
             hash={view.hash}
             onBack={() => selected ? setView({ type: 'project-memory', project: selected }) : goGlobal()}
+            onOpenSession={selected
+              ? session => setView({ type: 'chat', project: selected, session, from: 'sessions' })
+              : undefined}
           />
         )
       case 'plan-detail':

@@ -8,6 +8,7 @@ export interface MemoryTopic {
   createdAt: string
   updatedAt: string
   isProjectLevel?: boolean
+  originSessionId?: string
 }
 
 export interface TopicInput {
@@ -15,6 +16,7 @@ export interface TopicInput {
   description: string
   type: 'user' | 'feedback' | 'project' | 'reference'
   content: string
+  originSessionId?: string
 }
 
 export interface MemoryData {

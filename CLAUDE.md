@@ -34,7 +34,7 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `onDataChanged(callback)` lets the renderer subscribe to file watcher events
 
 **Backend modules** (`electron/modules/`) — pure functions except `memory-writer.ts`:
-- `memory-reader.ts` — parses `MEMORY.md` index and topic `.md` files; infers topic type from filename prefix (`feedback_`, `project_`, `reference_`; default `user`)
+- `memory-reader.ts` — parses `MEMORY.md` index and topic `.md` files; reads `type` and `originSessionId` from the topic frontmatter (flat or nested under `metadata:`), falling back to filename-prefix inference for the type (`feedback_`, `project_`, `reference_`; default `user`)
 - `memory-writer.ts` — creates/updates/deletes topic files, keeps `MEMORY.md` in sync; normalizes accented chars in filenames
 - `cost-tracker.ts` — parses `.jsonl` session files; hardcoded pricing table per model with fuzzy fallback to Sonnet
 - `claude-md-reader.ts` — reads CLAUDE.md hierarchy: global → project → local (`CLAUDE.local.md`) → subdir (`.claude/CLAUDE.md`)

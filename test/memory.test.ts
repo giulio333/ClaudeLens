@@ -107,6 +107,53 @@ describe('readMemory', () => {
     expect(byFile['notes_d.md']).toBe('user');
   });
 
+  it('prefers the frontmatter type over the filename prefix', async () => {
+    // Filename says feedback_, but frontmatter declares project: the declared
+    // type wins so a rename can't silently reclassify the topic.
+    writeTopicFile('feedback_misnamed.md', 'Misnamed', 'desc', 'project', 'body');
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      '- [feedback_misnamed.md](feedback_misnamed.md) — desc\n',
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.index[0].type).toBe('project');
+  });
+
+  it('reads type and originSessionId from a nested metadata block', async () => {
+    const content =
+      '---\n' +
+      'name: Evaluation publishes to senders\n' +
+      'description: The CorrelationEngine is bypassed\n' +
+      'metadata:\n' +
+      '  node_type: memory\n' +
+      '  type: project\n' +
+      '  originSessionId: 040655d3-6b0c-4c51-8a5a-29d6fa0d8614\n' +
+      '---\n\nbody\n';
+    writeFileSync(join(memoryDir, 'notes_eval.md'), content, 'utf-8');
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      '- [notes_eval.md](notes_eval.md) — The CorrelationEngine is bypassed\n',
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    const t = data.index[0];
+    // node_type must not be mistaken for type; nested type still wins over the
+    // 'user' default the filename would imply.
+    expect(t.type).toBe('project');
+    expect(t.originSessionId).toBe('040655d3-6b0c-4c51-8a5a-29d6fa0d8614');
+  });
+
+  it('leaves originSessionId undefined when the frontmatter omits it', async () => {
+    writeTopicFile('user_plain.md', 'Plain', 'desc', 'user', 'body');
+    writeFileSync(join(memoryDir, 'MEMORY.md'), '- [user_plain.md](user_plain.md) — desc\n', 'utf-8');
+
+    const data = await readMemory(tmp);
+    expect(data.index[0].originSessionId).toBeUndefined();
+  });
+
   it('handles a missing memory dir (returns empty structures)', async () => {
     const data = await readMemory(join(tmp, 'does-not-exist'));
     expect(data.index).toEqual([]);
@@ -352,5 +399,34 @@ describe('round-trip', () => {
     expect(topic.description).toBe('a full cycle');
     expect(topic.type).toBe('project');
     expect(data.topics.get(filename)).toContain('Round trip body.');
+  });
+
+  it('preserves originSessionId through a create/read/update cycle', async () => {
+    const filename = createTopic(memoryDir, {
+      name: 'With Origin',
+      description: 'carries provenance',
+      type: 'project',
+      content: 'body',
+      originSessionId: '040655d3-6b0c-4c51-8a5a-29d6fa0d8614',
+    });
+
+    let data = await readMemory(tmp);
+    expect(data.index.find(t => t.filename === filename)!.originSessionId).toBe(
+      '040655d3-6b0c-4c51-8a5a-29d6fa0d8614'
+    );
+
+    // A UI edit must not drop the provenance.
+    updateTopic(memoryDir, filename, {
+      name: 'With Origin',
+      description: 'edited',
+      type: 'project',
+      content: 'new body',
+      originSessionId: '040655d3-6b0c-4c51-8a5a-29d6fa0d8614',
+    });
+
+    data = await readMemory(tmp);
+    expect(data.index.find(t => t.filename === filename)!.originSessionId).toBe(
+      '040655d3-6b0c-4c51-8a5a-29d6fa0d8614'
+    );
   });
 });
