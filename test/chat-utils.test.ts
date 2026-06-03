@@ -77,6 +77,29 @@ describe('buildProcessedMessages', () => {
     expect(groups.find(g => g.use.id === 'b')?.result?.content).toBe('wrote');
   });
 
+  it('matches parallel agents written as separate assistant lines with out-of-order results', () => {
+    // Repro of the real-world bug: Claude Code writes each parallel Agent
+    // tool_use on its own assistant line and each tool_result on its own user
+    // line, often in a different order. Matching only the immediately-next
+    // message left every agent with result=null ("No result available").
+    const messages = [
+      msg('assistant', [toolUse('a', 'Agent', { description: 'Explore A' })]),
+      msg('assistant', [toolUse('b', 'Agent', { description: 'Explore B' })]),
+      msg('assistant', [toolUse('c', 'Agent', { description: 'Explore C' })]),
+      msg('user', [toolResult('b', 'result B')]),
+      msg('user', [toolResult('a', 'result A')]),
+      msg('user', [toolResult('c', 'result C')]),
+    ];
+    const processed = buildProcessedMessages(messages);
+    // The three tool-only user messages are absorbed, leaving the 3 assistant msgs
+    expect(processed).toHaveLength(3);
+    const groupFor = (id: string) =>
+      processed.flatMap(p => p.toolGroups).find(g => g.use.id === id);
+    expect(groupFor('a')?.result?.content).toBe('result A');
+    expect(groupFor('b')?.result?.content).toBe('result B');
+    expect(groupFor('c')?.result?.content).toBe('result C');
+  });
+
   it('keeps plain user/assistant messages with no tools (empty toolGroups)', () => {
     const messages = [msg('user', [text('Hello')]), msg('assistant', [text('Hi there')])];
     const processed = buildProcessedMessages(messages);
