@@ -215,7 +215,6 @@ export function ProjectView({
   const pinnedNow = isPinned(project.hash)
   const { isPinned: isSessionPinned } = usePinnedSessions()
   const { tags: projectTags, tagCounts, tagsForSession } = useSessionTags(project.hash)
-  const [sessionsFilter, setSessionsFilter] = useState<'pinned' | 'all'>('all')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
@@ -279,12 +278,10 @@ export function ProjectView({
     [sessions, project.hash, isSessionPinned],
   )
   const hasPinnedSession = pinnedSessions.length > 0
-  const effectiveSessionsFilter: 'pinned' | 'all' = hasPinnedSession ? sessionsFilter : 'all'
   const visibleSessions = useMemo(() => {
-    const base = effectiveSessionsFilter === 'pinned' ? pinnedSessions : sessions
-    if (!tagFilter) return base
-    return base.filter(s => tagsForSession(s.filename).includes(tagFilter))
-  }, [effectiveSessionsFilter, pinnedSessions, sessions, tagFilter, tagsForSession])
+    if (!tagFilter) return sessions
+    return sessions.filter(s => tagsForSession(s.filename).includes(tagFilter))
+  }, [sessions, tagFilter, tagsForSession])
   useEffect(() => {
     if (tagFilter && !projectTags.some(t => t.name === tagFilter)) setTagFilter(null)
   }, [tagFilter, projectTags])
@@ -399,15 +396,12 @@ export function ProjectView({
             </div>
           </section>
 
-          {hasPinnedSession && (
-            <section className="cl-section">
-              <div className="cl-sec-head">
-                <h2>Pinned sessions</h2>
-                <span className="ct">{pinnedSessions.length} pinned</span>
-              </div>
-              <SessionRows sessions={pinnedSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
-            </section>
-          )}
+          <PinnedSessionsSection
+            sessions={pinnedSessions}
+            projectHash={project.hash}
+            cleanupDays={cleanupDays}
+            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+          />
 
           <section className="cl-section">
             <div className="cl-sec-head">
@@ -482,51 +476,39 @@ export function ProjectView({
       )}
 
       {section === 'sessions' && (
-        <section className="cl-section" style={{ paddingTop: 38 }}>
-          <div className="cl-sec-head">
-            <h2>{effectiveSessionsFilter === 'pinned' ? 'Pinned sessions' : 'Sessions'}</h2>
-            <span className="ct">
-              {tagFilter
-                ? `${visibleSessions.length} tagged #${tagFilter}`
-                : effectiveSessionsFilter === 'pinned'
-                  ? `${visibleSessions.length} pinned`
-                  : `${sessions.length} total · sorted by last activity`}
-            </span>
-            {hasPinnedSession && (
-              <span className="cl-pinfilter">
-                <button
-                  type="button"
-                  className={sessionsFilter === 'pinned' ? 'on' : ''}
-                  onClick={() => setSessionsFilter('pinned')}
-                >Pinned</button>
-                <span className="sep">·</span>
-                <button
-                  type="button"
-                  className={sessionsFilter === 'all' ? 'on' : ''}
-                  onClick={() => setSessionsFilter('all')}
-                >All</button>
-              </span>
-            )}
-          </div>
-          <TagBar
-            tags={projectTags}
-            counts={tagCounts}
-            activeTag={tagFilter}
-            totalCount={effectiveSessionsFilter === 'pinned' ? pinnedSessions.length : sessions.length}
-            onSelect={setTagFilter}
+        <>
+          <PinnedSessionsSection
+            sessions={pinnedSessions}
+            projectHash={project.hash}
+            cleanupDays={cleanupDays}
+            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+            style={{ paddingTop: 38 }}
           />
-          {visibleSessions.length === 0 ? (
-            <div className="cl-empty">
-              {tagFilter
-                ? `No sessions tagged #${tagFilter}.`
-                : effectiveSessionsFilter === 'pinned'
-                  ? 'No pinned sessions. Hover a session row to pin it.'
-                  : 'No sessions yet.'}
+          <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
+            <div className="cl-sec-head">
+              <h2>Sessions</h2>
+              <span className="ct">
+                {tagFilter
+                  ? `${visibleSessions.length} tagged #${tagFilter}`
+                  : `${sessions.length} total · sorted by last activity`}
+              </span>
             </div>
-          ) : (
-            <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
-          )}
-        </section>
+            <TagBar
+              tags={projectTags}
+              counts={tagCounts}
+              activeTag={tagFilter}
+              totalCount={sessions.length}
+              onSelect={setTagFilter}
+            />
+            {visibleSessions.length === 0 ? (
+              <div className="cl-empty">
+                {tagFilter ? `No sessions tagged #${tagFilter}.` : 'No sessions yet.'}
+              </div>
+            ) : (
+              <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            )}
+          </section>
+        </>
       )}
 
       {section === 'memory' && (
@@ -762,6 +744,19 @@ function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number })
       <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
       {label}
     </span>
+  )
+}
+
+function PinnedSessionsSection({ sessions, projectHash, cleanupDays, onOpen, style }: { sessions: SessionSummary[]; projectHash: string; cleanupDays: number; onOpen: (s: SessionSummary) => void; style?: CSSProperties }) {
+  if (sessions.length === 0) return null
+  return (
+    <section className="cl-section" style={style}>
+      <div className="cl-sec-head">
+        <h2>Pinned sessions</h2>
+        <span className="ct">{sessions.length} pinned</span>
+      </div>
+      <SessionRows sessions={sessions} projectHash={projectHash} cleanupDays={cleanupDays} onOpen={onOpen} />
+    </section>
   )
 }
 
