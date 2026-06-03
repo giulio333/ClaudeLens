@@ -194,6 +194,57 @@ describe('createTopic', () => {
     });
     expect(filename).toBe('user_hello_world.md');
   });
+
+  it('collapses newlines in a description so frontmatter and index stay single-line', async () => {
+    const filename = createTopic(memoryDir, {
+      name: 'Multi',
+      description: 'line one\nline two\n  line three',
+      type: 'user',
+      content: 'body',
+    });
+
+    const fileContent = readFileSync(join(memoryDir, filename), 'utf-8');
+    // frontmatter description must remain on a single line
+    expect(fileContent).toContain('description: line one line two line three\n');
+    // and the frontmatter block is still parseable end-to-end
+    expect(fileContent.startsWith('---\nname: Multi\n')).toBe(true);
+
+    const index = readFileSync(join(memoryDir, 'MEMORY.md'), 'utf-8');
+    expect(index).toContain(`- [${filename}](${filename}) — line one line two line three`);
+
+    // the reader round-trips it without corruption
+    const data = await readMemory(tmp);
+    const topic = data.index.find(t => t.filename === filename)!;
+    expect(topic.description).toBe('line one line two line three');
+  });
+
+  it('does not overwrite an existing topic when names fold to the same slug', () => {
+    const first = createTopic(memoryDir, {
+      name: 'Café',
+      description: 'the original',
+      type: 'user',
+      content: 'first body',
+    });
+    const second = createTopic(memoryDir, {
+      name: 'Cafe',
+      description: 'the second',
+      type: 'user',
+      content: 'second body',
+    });
+
+    expect(first).toBe('user_cafe.md');
+    expect(second).toBe('user_cafe_2.md');
+    expect(first).not.toBe(second);
+
+    // both files survive with their own content
+    expect(readFileSync(join(memoryDir, first), 'utf-8')).toContain('first body');
+    expect(readFileSync(join(memoryDir, second), 'utf-8')).toContain('second body');
+
+    // index has two distinct entries, no desync
+    const index = readFileSync(join(memoryDir, 'MEMORY.md'), 'utf-8');
+    expect(index).toContain('- [user_cafe.md](user_cafe.md) — the original');
+    expect(index).toContain('- [user_cafe_2.md](user_cafe_2.md) — the second');
+  });
 });
 
 describe('updateTopic', () => {
@@ -220,6 +271,27 @@ describe('updateTopic', () => {
     const index = readFileSync(join(memoryDir, 'MEMORY.md'), 'utf-8');
     expect(index).toContain(`- [${filename}](${filename}) — updated desc`);
     expect(index).not.toContain('original');
+  });
+
+  it('collapses newlines in the updated description', () => {
+    const filename = createTopic(memoryDir, {
+      name: 'Topic',
+      description: 'original',
+      type: 'user',
+      content: 'body',
+    });
+
+    updateTopic(memoryDir, filename, {
+      name: 'Topic',
+      description: 'updated\nover\nlines',
+      type: 'user',
+      content: 'body',
+    });
+
+    const index = readFileSync(join(memoryDir, 'MEMORY.md'), 'utf-8').split('\n');
+    // exactly one index line still references this file (no extra lines injected)
+    expect(index.filter(l => l.includes(`(${filename})`))).toHaveLength(1);
+    expect(index).toContain(`- [${filename}](${filename}) — updated over lines`);
   });
 });
 

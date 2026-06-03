@@ -21,17 +21,35 @@ function nameToFilename(type: string, name: string): string {
   return `${type}_${slug}.md`;
 }
 
+// Both the YAML frontmatter and the line-oriented MEMORY.md index are
+// single-line structures. Collapse any newline/whitespace run to a single
+// space so a multi-line value can't break the frontmatter block or inject a
+// stray line into the index.
+function sanitizeInline(value: string): string {
+  return value.replace(/\s+/g, ' ').trim();
+}
+
 function buildTopicFileContent(input: TopicInput): string {
-  return `---\nname: ${input.name}\ndescription: ${input.description}\ntype: ${input.type}\n---\n\n${input.content.trimEnd()}\n`;
+  const name = sanitizeInline(input.name);
+  const description = sanitizeInline(input.description);
+  return `---\nname: ${name}\ndescription: ${description}\ntype: ${input.type}\n---\n\n${input.content.trimEnd()}\n`;
 }
 
 function addLineToMemoryMd(memoryPath: string, filename: string, description: string): void {
-  const line = `- [${filename}](${filename}) — ${description}`;
-  if (existsSync(memoryPath)) {
-    const current = readFileSync(memoryPath, 'utf-8').trimEnd();
-    writeFileSync(memoryPath, current + '\n' + line + '\n', 'utf-8');
-  } else {
+  const line = `- [${filename}](${filename}) — ${sanitizeInline(description)}`;
+  if (!existsSync(memoryPath)) {
     writeFileSync(memoryPath, `# Memory Index\n\n${line}\n`, 'utf-8');
+    return;
+  }
+  const lines = readFileSync(memoryPath, 'utf-8').split('\n');
+  const idx = lines.findIndex(l => l.includes(`(${filename})`));
+  if (idx >= 0) {
+    // Already indexed: replace in place rather than appending a duplicate.
+    lines[idx] = line;
+    writeFileSync(memoryPath, lines.join('\n'), 'utf-8');
+  } else {
+    const current = lines.join('\n').trimEnd();
+    writeFileSync(memoryPath, current + '\n' + line + '\n', 'utf-8');
   }
 }
 
@@ -47,15 +65,26 @@ function updateLineInMemoryMd(memoryPath: string, filename: string, newDescripti
   if (!existsSync(memoryPath)) return;
   const lines = readFileSync(memoryPath, 'utf-8').split('\n').map(l =>
     l.includes(`(${filename})`)
-      ? `- [${filename}](${filename}) — ${newDescription}`
+      ? `- [${filename}](${filename}) — ${sanitizeInline(newDescription)}`
       : l
   );
   writeFileSync(memoryPath, lines.join('\n'), 'utf-8');
 }
 
+// Distinct display names can fold to the same slug (e.g. `Café`, `Cafe`,
+// `Café!` → `user_cafe.md`). Append a numeric suffix so a new topic never
+// silently overwrites an existing one.
+function uniqueFilename(memoryDir: string, base: string): string {
+  if (!existsSync(join(memoryDir, base))) return base;
+  const stem = base.replace(/\.md$/, '');
+  let n = 2;
+  while (existsSync(join(memoryDir, `${stem}_${n}.md`))) n++;
+  return `${stem}_${n}.md`;
+}
+
 export function createTopic(memoryDir: string, input: TopicInput): string {
   if (!existsSync(memoryDir)) mkdirSync(memoryDir, { recursive: true });
-  const filename = nameToFilename(input.type, input.name);
+  const filename = uniqueFilename(memoryDir, nameToFilename(input.type, input.name));
   writeFileSync(join(memoryDir, filename), buildTopicFileContent(input), 'utf-8');
   addLineToMemoryMd(join(memoryDir, 'MEMORY.md'), filename, input.description);
   return filename;
