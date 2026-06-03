@@ -30,7 +30,7 @@ interface PlanRef {
   gitBranch?: string;
 }
 
-// plan_mode_exit (piano approvato) ha priorità su plan_mode (piano proposto).
+// A parità di timestamp, plan_mode_exit (approvato) ha priorità su plan_mode (proposto).
 function statusRank(s: PlanStatus): number {
   return s === 'approved' ? 1 : 0;
 }
@@ -81,26 +81,20 @@ function extractPlanRefs(sessionFilePath: string): PlanRef[] {
   return refs;
 }
 
-// Dedup per planFilePath: mantiene lo status più avanzato e il timestamp più recente.
+// Dedup per planFilePath: mantiene l'evento più recente per timestamp, così lo
+// status riflette l'ultima transizione. Un piano approvato e poi riaperto in
+// plan mode torna quindi "proposed". A parità di timestamp vince l'approvazione.
 function dedupeRefs(refs: PlanRef[]): PlanRef[] {
   const byPath = new Map<string, PlanRef>();
   for (const ref of refs) {
     const prev = byPath.get(ref.filePath);
-    if (!prev) {
-      byPath.set(ref.filePath, ref);
-      continue;
-    }
     const better =
-      statusRank(ref.status) > statusRank(prev.status) ||
-      (statusRank(ref.status) === statusRank(prev.status) && ref.timestamp > prev.timestamp);
-    if (better) byPath.set(ref.filePath, { ...ref, status: maxStatus(prev.status, ref.status) });
-    else byPath.set(ref.filePath, { ...prev, status: maxStatus(prev.status, ref.status) });
+      !prev ||
+      ref.timestamp > prev.timestamp ||
+      (ref.timestamp === prev.timestamp && statusRank(ref.status) > statusRank(prev.status));
+    if (better) byPath.set(ref.filePath, ref);
   }
   return [...byPath.values()];
-}
-
-function maxStatus(a: PlanStatus, b: PlanStatus): PlanStatus {
-  return statusRank(a) >= statusRank(b) ? a : b;
 }
 
 function toPlan(ref: PlanRef): Plan {

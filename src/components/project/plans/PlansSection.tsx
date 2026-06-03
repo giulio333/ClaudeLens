@@ -174,6 +174,14 @@ export function PlansSection({
 
   const visibleCount = visibleGroups.reduce((n, g) => n + g.items.length, 0)
 
+  // Header: conta i piani distinti per filePath (lo stesso piano può comparire
+  // in più sessioni; nella lista lo mostriamo comunque per ogni sessione).
+  const distinctCount = useMemo(() => {
+    const seen = new Set<string>()
+    for (const g of visibleGroups) for (const it of g.items) seen.add(it.plan.filePath)
+    return seen.size
+  }, [visibleGroups])
+
   const chips: [FilterKey, string][] = [
     ['all', 'ALL'],
     ['approved', 'APPROVED'],
@@ -187,7 +195,7 @@ export function PlansSection({
         <div className="cl-plans-title-wrap">
           <h2>Plans</h2>
           <span className="cl-plans-sub cl-mono">
-            {visibleCount} {visibleCount === 1 ? 'plan' : 'plans'} · {visibleGroups.length}{' '}
+            {distinctCount} {distinctCount === 1 ? 'plan' : 'plans'} · {visibleGroups.length}{' '}
             {visibleGroups.length === 1 ? 'session' : 'sessions'}
           </span>
         </div>
@@ -256,10 +264,17 @@ export function PlansSection({
 
               <div className="cl-plan-rows">
                 {g.items.map(f => {
-                  const { plan, k, key } = f
+                  const { plan, key } = f
                   const expanded = openKey === key
+                  // Status reale (proposed/approved) e cancellazione sono dimensioni
+                  // ortogonali: il badge mostra sempre lo status, la cancellazione è
+                  // indicata dal titolo barrato + opacità ridotta.
+                  const statusK: StatusKey = plan.status === 'approved' ? 'approved' : 'proposed'
                   return (
-                    <div key={key} className={`cl-plan-row ${k}${expanded ? ' is-expanded' : ''}`}>
+                    <div
+                      key={key}
+                      className={`cl-plan-row ${statusK}${plan.exists ? '' : ' is-deleted'}${expanded ? ' is-expanded' : ''}`}
+                    >
                       <div
                         className="cl-plan-row-head"
                         role="button"
@@ -274,8 +289,10 @@ export function PlansSection({
                       >
                         <div className="cl-plan-row-body">
                           <div className="cl-plan-title-line">
-                            <span className="cl-plan-title">{plan.title || '(untitled plan)'}</span>
-                            <StatusBadge k={k} />
+                            <span className={`cl-plan-title${plan.exists ? '' : ' is-deleted'}`}>
+                              {plan.title || '(untitled plan)'}
+                            </span>
+                            <StatusBadge k={statusK} />
                           </div>
                           {plan.content ? (
                             <p className="cl-plan-summary">{planPreview(plan.content)}</p>
