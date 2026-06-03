@@ -50,7 +50,7 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `duplicate-detector.ts` / `duplicate-merger.ts` / `duplicate-merge-executor.ts` — detect duplicate project history folders (by authoritative cwd from `.jsonl`), plan and execute the merge (session move + memory merge)
 
 **Renderer** (`src/`):
-- Single page, no routing — `tabs/ProjectOverview.tsx` manages all views with internal navigation state via a `View` discriminated union (`components/project/types.ts`, ~27 cases: `global-home`, `overview`, `sessions`, `chat`, `memory-topic`, `analytics`, global/project `skills`/`agents`/`mcp`/`claudemd`, `*-detail`, `*-create`, `tasks`, `plans`, `plan-detail`, `live-monitor`, `agents-live`, `duplicates`, `settings`, …)
+- Single page, no routing — `tabs/ProjectOverview.tsx` manages all views with internal navigation state via a `View` discriminated union (`components/project/types.ts`, ~27 cases: `global-home`, `overview`, `sessions`, `chat`, `memory-topic`, `analytics`, global/project `skills`/`agents`/`mcp`/`claudemd`, `*-detail`, `*-create`, `tasks`, `plans`, `plan-detail`, `live-monitor`, `agents-live`, `duplicates`, `settings`, `project-config`, …)
 - `useIPC.ts` — all React Query hooks + `window.electronAPI` type declarations; `unwrap()` raises on error
 - Mutations (`useCreateTopic`, `useUpdateTopic`, `useDeleteTopic`) invalidate `['memory:project', hash]` on success
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
