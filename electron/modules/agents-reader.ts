@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
-import os from 'os';
+import { CLAUDE_DIR } from '../utils';
 
 export interface Agent {
   name: string;
@@ -147,7 +147,7 @@ function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
 }
 
 export function getGlobalAgents(): Agent[] {
-  const agentsDir = join(os.homedir(), '.claude', 'agents');
+  const agentsDir = join(CLAUDE_DIR, 'agents');
   return readAgentsFromDir(agentsDir, 'global');
 }
 

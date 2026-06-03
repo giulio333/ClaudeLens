@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
-import os from 'os';
+import { CLAUDE_DIR } from '../utils';
 
 export interface ClaudeMdLayer {
   scope: 'global' | 'project' | 'local' | 'subdir';
@@ -98,7 +98,7 @@ export function writeClaudeMdFile(filePath: string, content: string): void {
 }
 
 export function getClaudeMdHierarchy(realPath: string): ClaudeMdHierarchy {
-  const claudeDir = join(os.homedir(), '.claude');
+  const claudeDir = CLAUDE_DIR;
   const layers: ClaudeMdLayer[] = [];
 
   // 1. Global

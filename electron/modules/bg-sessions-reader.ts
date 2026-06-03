@@ -1,8 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
-import os from 'os';
-
-const CLAUDE_DIR = join(os.homedir(), '.claude');
+import { CLAUDE_DIR } from '../utils';
 const JOBS_DIR = join(CLAUDE_DIR, 'jobs');
 const ROSTER_PATH = join(CLAUDE_DIR, 'daemon', 'roster.json');
 

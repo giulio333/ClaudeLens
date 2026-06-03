@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import os from 'os';
+import { CLAUDE_DIR } from '../utils';
 
 export interface SkillInput {
   name: string;
@@ -35,7 +35,7 @@ function buildSkillMarkdown(input: SkillInput): string {
 }
 
 export function createSkill(input: SkillInput, projectPath?: string): string {
-  const baseDir = projectPath ? join(projectPath, '.claude') : join(os.homedir(), '.claude');
+  const baseDir = projectPath ? join(projectPath, '.claude') : CLAUDE_DIR;
   const skillDir = join(baseDir, 'skills', input.name);
   if (!existsSync(skillDir)) {
     mkdirSync(skillDir, { recursive: true });
