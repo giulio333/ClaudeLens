@@ -4158,7 +4158,10 @@ button.cl-task-group-head:disabled { cursor: default; }
 .cl-plan-row.is-expanded { box-shadow: 0 8px 28px -16px rgba(40, 30, 20, 0.32); }
 .cl-plan-row.approved.is-expanded { border-color: var(--cl-task-green); }
 .cl-plan-row.proposed.is-expanded { border-color: var(--cl-accent); }
-.cl-plan-row.deleted { opacity: 0.82; }
+/* Piano cancellato: status reale conservato nel badge, ma riga attenuata e
+   barra laterale neutra per segnalare che il file non è più su disco. */
+.cl-plan-row.is-deleted { opacity: 0.78; }
+.cl-plan-row.is-deleted::before { background: var(--cl-ink-4); }
 
 .cl-plan-row-head {
   display: flex; align-items: flex-start; gap: 14px; padding: 16px 20px 16px 23px; cursor: pointer;
@@ -4166,6 +4169,7 @@ button.cl-task-group-head:disabled { cursor: default; }
 .cl-plan-row-body { flex: 1 1 auto; min-width: 0; }
 .cl-plan-title-line { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
 .cl-plan-title { font-size: 16px; font-weight: 600; letter-spacing: -0.01em; color: var(--cl-ink); }
+.cl-plan-title.is-deleted { text-decoration: line-through; color: var(--cl-ink-4); font-weight: 500; }
 
 .cl-plan-badge {
   display: inline-flex; align-items: center; gap: 6px; font-size: 10px; letter-spacing: 0.07em;
