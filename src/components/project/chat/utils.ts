@@ -59,6 +59,20 @@ export const CLAUDE_BUILTIN_SLASH_COMMANDS: Record<string, string> = {
 export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessage[] {
   const result: ProcessedMessage[] = []
 
+  // Mappa globale toolUseId → tool_result, costruita su tutta la sessione.
+  // Necessaria perché Claude Code, con tool/agenti paralleli, scrive ogni
+  // tool_use su una riga assistant separata e ogni tool_result su una riga user
+  // separata, spesso in ordine non corrispondente. Abbinare guardando solo il
+  // messaggio immediatamente successivo fallirebbe (vedi #parallel-agents).
+  const resultsById = new Map<string, Extract<ChatContentBlock, { type: 'tool_result' }>>()
+  for (const m of messages) {
+    for (const b of m.content) {
+      if (b.type === 'tool_result' && !resultsById.has(b.toolUseId)) {
+        resultsById.set(b.toolUseId, b as Extract<ChatContentBlock, { type: 'tool_result' }>)
+      }
+    }
+  }
+
   for (let i = 0; i < messages.length; i++) {
     const msg = messages[i]
 
@@ -101,15 +115,9 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
 
     let toolGroups: ToolGroup[] = []
     if (toolUseBlocks.length > 0) {
-      const next = messages[i + 1]
-      const resultBlocks =
-        next?.role === 'user' && next.content.every(b => b.type === 'tool_result')
-          ? (next.content as Extract<ChatContentBlock, { type: 'tool_result' }>[])
-          : []
-
       toolGroups = toolUseBlocks.map(use => ({
         use,
-        result: resultBlocks.find(r => r.toolUseId === use.id) ?? null,
+        result: resultsById.get(use.id) ?? null,
       }))
     }
 
