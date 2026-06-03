@@ -395,15 +395,12 @@ export function ProjectView({
             </div>
           </section>
 
-          {hasPinnedSession && (
-            <section className="cl-section">
-              <div className="cl-sec-head">
-                <h2>Pinned sessions</h2>
-                <span className="ct">{pinnedSessions.length} pinned</span>
-              </div>
-              <SessionRows sessions={pinnedSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
-            </section>
-          )}
+          <PinnedSessionsSection
+            sessions={pinnedSessions}
+            projectHash={project.hash}
+            cleanupDays={cleanupDays}
+            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+          />
 
           <section className="cl-section">
             <div className="cl-sec-head">
@@ -479,15 +476,13 @@ export function ProjectView({
 
       {section === 'sessions' && (
         <>
-          {hasPinnedSession && (
-            <section className="cl-section" style={{ paddingTop: 38 }}>
-              <div className="cl-sec-head">
-                <h2>Pinned sessions</h2>
-                <span className="ct">{pinnedSessions.length} pinned</span>
-              </div>
-              <SessionRows sessions={pinnedSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
-            </section>
-          )}
+          <PinnedSessionsSection
+            sessions={pinnedSessions}
+            projectHash={project.hash}
+            cleanupDays={cleanupDays}
+            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+            style={{ paddingTop: 38 }}
+          />
           <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
             <div className="cl-sec-head">
               <h2>Sessions</h2>
@@ -746,6 +741,19 @@ function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number })
       <svg width="7" height="7" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>
       {label}
     </span>
+  )
+}
+
+function PinnedSessionsSection({ sessions, projectHash, cleanupDays, onOpen, style }: { sessions: SessionSummary[]; projectHash: string; cleanupDays: number; onOpen: (s: SessionSummary) => void; style?: CSSProperties }) {
+  if (sessions.length === 0) return null
+  return (
+    <section className="cl-section" style={style}>
+      <div className="cl-sec-head">
+        <h2>Pinned sessions</h2>
+        <span className="ct">{sessions.length} pinned</span>
+      </div>
+      <SessionRows sessions={sessions} projectHash={projectHash} cleanupDays={cleanupDays} onOpen={onOpen} />
+    </section>
   )
 }
 
