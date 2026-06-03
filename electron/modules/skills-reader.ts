@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
-import os from 'os';
+import { CLAUDE_DIR } from '../utils';
 
 export interface Skill {
   name: string;
@@ -123,8 +123,7 @@ function readSkillsFromDir(dir: string, scope: 'global' | 'project'): Skill[] {
 }
 
 export function getGlobalSkills(): Skill[] {
-  const claudeDir = join(os.homedir(), '.claude');
-  const skillsDir = join(claudeDir, 'skills');
+  const skillsDir = join(CLAUDE_DIR, 'skills');
   return readSkillsFromDir(skillsDir, 'global');
 }
 

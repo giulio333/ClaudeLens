@@ -33,10 +33,8 @@ import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
-import { hashToPath, resolveRealPath, invalidateCwdCache } from './utils';
+import { hashToPath, resolveRealPath, invalidateCwdCache, CLAUDE_DIR } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
-
-const CLAUDE_DIR = join(os.homedir(), '.claude');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 const PLANS_DIR = join(CLAUDE_DIR, 'plans');

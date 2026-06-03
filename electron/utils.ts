@@ -1,5 +1,9 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
 import { join } from 'path';
+import os from 'os';
+
+// Respect CLAUDE_CONFIG_DIR if the user has relocated their Claude data dir.
+export const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR ?? join(os.homedir(), '.claude');
 
 export function hashToPath(hash: string): string {
   // Fallback ingenuo: Claude Code converte sia '/' sia '.' in '-' nel nome cartella,

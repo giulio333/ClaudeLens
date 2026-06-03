@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import os from 'os';
+import { CLAUDE_DIR } from '../utils';
 
 export interface AgentInput {
   name: string;
@@ -48,7 +48,7 @@ function buildAgentMarkdown(input: AgentInput): string {
 }
 
 export function createAgent(input: AgentInput, projectPath?: string): string {
-  const baseDir = projectPath ? join(projectPath, '.claude') : join(os.homedir(), '.claude');
+  const baseDir = projectPath ? join(projectPath, '.claude') : CLAUDE_DIR;
   const agentsDir = join(baseDir, 'agents');
   if (!existsSync(agentsDir)) {
     mkdirSync(agentsDir, { recursive: true });
