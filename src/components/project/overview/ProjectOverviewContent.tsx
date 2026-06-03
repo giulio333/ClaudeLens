@@ -214,7 +214,6 @@ export function ProjectView({
   const pinnedNow = isPinned(project.hash)
   const { isPinned: isSessionPinned } = usePinnedSessions()
   const { tags: projectTags, tagCounts, tagsForSession } = useSessionTags(project.hash)
-  const [sessionsFilter, setSessionsFilter] = useState<'pinned' | 'all'>('all')
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
@@ -278,12 +277,10 @@ export function ProjectView({
     [sessions, project.hash, isSessionPinned],
   )
   const hasPinnedSession = pinnedSessions.length > 0
-  const effectiveSessionsFilter: 'pinned' | 'all' = hasPinnedSession ? sessionsFilter : 'all'
   const visibleSessions = useMemo(() => {
-    const base = effectiveSessionsFilter === 'pinned' ? pinnedSessions : sessions
-    if (!tagFilter) return base
-    return base.filter(s => tagsForSession(s.filename).includes(tagFilter))
-  }, [effectiveSessionsFilter, pinnedSessions, sessions, tagFilter, tagsForSession])
+    if (!tagFilter) return sessions
+    return sessions.filter(s => tagsForSession(s.filename).includes(tagFilter))
+  }, [sessions, tagFilter, tagsForSession])
   useEffect(() => {
     if (tagFilter && !projectTags.some(t => t.name === tagFilter)) setTagFilter(null)
   }, [tagFilter, projectTags])
@@ -481,51 +478,41 @@ export function ProjectView({
       )}
 
       {section === 'sessions' && (
-        <section className="cl-section" style={{ paddingTop: 38 }}>
-          <div className="cl-sec-head">
-            <h2>{effectiveSessionsFilter === 'pinned' ? 'Pinned sessions' : 'Sessions'}</h2>
-            <span className="ct">
-              {tagFilter
-                ? `${visibleSessions.length} tagged #${tagFilter}`
-                : effectiveSessionsFilter === 'pinned'
-                  ? `${visibleSessions.length} pinned`
-                  : `${sessions.length} total · sorted by last activity`}
-            </span>
-            {hasPinnedSession && (
-              <span className="cl-pinfilter">
-                <button
-                  type="button"
-                  className={sessionsFilter === 'pinned' ? 'on' : ''}
-                  onClick={() => setSessionsFilter('pinned')}
-                >Pinned</button>
-                <span className="sep">·</span>
-                <button
-                  type="button"
-                  className={sessionsFilter === 'all' ? 'on' : ''}
-                  onClick={() => setSessionsFilter('all')}
-                >All</button>
-              </span>
-            )}
-          </div>
-          <TagBar
-            tags={projectTags}
-            counts={tagCounts}
-            activeTag={tagFilter}
-            totalCount={effectiveSessionsFilter === 'pinned' ? pinnedSessions.length : sessions.length}
-            onSelect={setTagFilter}
-          />
-          {visibleSessions.length === 0 ? (
-            <div className="cl-empty">
-              {tagFilter
-                ? `No sessions tagged #${tagFilter}.`
-                : effectiveSessionsFilter === 'pinned'
-                  ? 'No pinned sessions. Hover a session row to pin it.'
-                  : 'No sessions yet.'}
-            </div>
-          ) : (
-            <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+        <>
+          {hasPinnedSession && (
+            <section className="cl-section" style={{ paddingTop: 38 }}>
+              <div className="cl-sec-head">
+                <h2>Pinned sessions</h2>
+                <span className="ct">{pinnedSessions.length} pinned</span>
+              </div>
+              <SessionRows sessions={pinnedSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            </section>
           )}
-        </section>
+          <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
+            <div className="cl-sec-head">
+              <h2>Sessions</h2>
+              <span className="ct">
+                {tagFilter
+                  ? `${visibleSessions.length} tagged #${tagFilter}`
+                  : `${sessions.length} total · sorted by last activity`}
+              </span>
+            </div>
+            <TagBar
+              tags={projectTags}
+              counts={tagCounts}
+              activeTag={tagFilter}
+              totalCount={sessions.length}
+              onSelect={setTagFilter}
+            />
+            {visibleSessions.length === 0 ? (
+              <div className="cl-empty">
+                {tagFilter ? `No sessions tagged #${tagFilter}.` : 'No sessions yet.'}
+              </div>
+            ) : (
+              <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
+            )}
+          </section>
+        </>
       )}
 
       {section === 'memory' && (
