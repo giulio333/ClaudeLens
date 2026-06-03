@@ -2,7 +2,7 @@ import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, AGENT_TOOLS, QUESTION_TOOL } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { ToolGroupCard } from './ToolGroupCard'
 
@@ -101,6 +101,35 @@ function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => 
   )
 }
 
+/** Plan-mode milestone rendered as an editorial card. EnterPlanMode is a bare
+ *  marker; ExitPlanMode carries the proposed plan (title + snippet), click → detail. */
+function PlanCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
+  const input = group.use.input as Record<string, unknown>
+  const isExit = group.use.name === 'ExitPlanMode'
+  const planText = typeof input.plan === 'string' ? input.plan : ''
+  const titleMatch = planText.match(/^#+\s*(.+)$/m)
+  const title = titleMatch ? titleMatch[1].trim() : 'Plan presented'
+  const snippet = planText.replace(/^#+\s*.+$/m, '').replace(/\s+/g, ' ').trim().slice(0, 280)
+
+  return (
+    <button type="button" className="cl-plan-card" onClick={onOpen} title="View plan detail">
+      <span className="top">
+        <span className="ic">P</span>
+        <span className="lbl">{isExit ? 'Plan' : 'Plan mode'}</span>
+        {isExit && <span className="chip">presented</span>}
+      </span>
+      {isExit ? (
+        <>
+          <span className="title">{title}</span>
+          {snippet && <span className="snippet">{snippet}</span>}
+        </>
+      ) : (
+        <span className="desc">Claude entered plan mode to design an approach before editing.</span>
+      )}
+    </button>
+  )
+}
+
 function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand; timestamp?: string }) {
   // Nascondi args se è solo l'echo del command name (es. <command-message>model</command-message> per /model)
   const showArgs = command.args && command.args !== command.command
@@ -165,6 +194,7 @@ export const MessageBubble = memo(function MessageBubble({
   const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
+  const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name))
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
@@ -177,6 +207,8 @@ export const MessageBubble = memo(function MessageBubble({
   // In minimal mode tools are hidden, but agent dispatches stay visible so the
   // reader can see when Claude Code delegated work to a sub-agent.
   const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
+  // Plan-mode milestones surface as a dedicated strip in minimal (raw card in full).
+  const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0
   // Questions are first-class content: always visible regardless of filter.
   const showQuestions = questionGroups.length > 0
 
@@ -185,6 +217,7 @@ export const MessageBubble = memo(function MessageBubble({
     (showThinking && thinkingBlocks.some(b => b.thinking)) ||
     (showTools && standardToolGroups.length > 0) ||
     showAgentStrip ||
+    showPlanStrip ||
     showQuestions
 
   // Tool-only turns (no text/agents/questions) render nothing here: in minimal
@@ -291,6 +324,14 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="cl-agent-stack">
             {agentGroups.map((group, i) => (
               <AgentDispatchCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
+            ))}
+          </div>
+        )}
+
+        {showPlanStrip && (
+          <div className="cl-plan-stack">
+            {planGroups.map((group, i) => (
+              <PlanCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
             ))}
           </div>
         )}

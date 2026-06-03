@@ -227,9 +227,10 @@ export function parseAnswersFromResultText(text: string): Record<string, string>
 // "Direction A — editorial transcript" prototype: one identity per turn.
 // ──────────────────────────────────────────────────────────────────────────
 export const AGENT_TOOLS = new Set(['Agent', 'Task'])
+export const PLAN_TOOLS = new Set(['EnterPlanMode', 'ExitPlanMode'])
 export const QUESTION_TOOL = 'AskUserQuestion'
 
-export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'question'
+export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'question' | 'plan'
 
 export type TurnDescriptor = {
   variant: TurnVariant
@@ -241,6 +242,7 @@ export type TurnDescriptor = {
   hasTools: boolean
   hasQuestion: boolean
   hasAgent: boolean
+  hasPlan: boolean
   /** True when MessageBubble would render something for this turn+filter. */
   visible: boolean
   /** Minimal mode only: the turn renders solely as a collapsed "tools hidden"
@@ -255,6 +257,7 @@ const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: st
   agent:    { label: 'Agent',    initial: 'A', color: 'var(--cl-violet)' },
   command:  { label: 'Command',  initial: '/', color: 'var(--cl-accent)' },
   question: { label: 'Question', initial: '?', color: 'var(--cl-warn)' },
+  plan:     { label: 'Plan',     initial: 'P', color: 'var(--cl-accent)' },
 }
 
 export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilter): TurnDescriptor {
@@ -264,12 +267,16 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
   const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
+  const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name))
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
   const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL)
 
   const showThinking = detailsFilter === 'all'
   const showTools = detailsFilter === 'all'
   const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
+  // Plan-mode tools carry the proposed/approved plan — surface them in minimal
+  // as a dedicated strip, mirroring the agent strip (full mode keeps the raw card).
+  const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0
   const showQuestions = questionGroups.length > 0
 
   const hasText = textBlocks.length > 0
@@ -277,12 +284,14 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
   const hasTools = standardToolGroups.length > 0
   const hasQuestion = showQuestions
   const hasAgent = agentGroups.length > 0
+  const hasPlan = planGroups.length > 0
 
   const hasVisibleContent =
     hasText ||
     (showThinking && hasThinking) ||
     (showTools && hasTools) ||
     showAgentStrip ||
+    showPlanStrip ||
     showQuestions
   // Minimal mode collapses a tool-only turn into a single badge; it's not a
   // standalone message, so the minimap skips it — but it still counts as visible.
@@ -292,16 +301,19 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
   const isAgentTurn = showAgentStrip && textBlocks.length === 0
   const isQuestionTurn =
     showQuestions && textBlocks.length === 0 && !showAgentStrip && (!showTools || standardToolGroups.length === 0)
+  const isPlanTurn =
+    showPlanStrip && textBlocks.length === 0 && !showAgentStrip && !showQuestions
   const isCommandTurn = !!command
 
   const variant: TurnVariant =
     isCommandTurn ? 'command'
     : isQuestionTurn ? 'question'
     : isAgentTurn ? 'agent'
+    : isPlanTurn ? 'plan'
     : isUser ? 'user'
     : 'claude'
 
-  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, visible, toolsOnly }
+  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
 }
 
 export const TOOL_ICON: Record<string, string> = {

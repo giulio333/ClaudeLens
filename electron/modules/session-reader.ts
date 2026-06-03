@@ -41,8 +41,15 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
     } else if (b.type === 'tool_result') {
       const content =
         typeof b.content === 'string' ? b.content :
-        Array.isArray(b.content) ? (b.content as Array<{ text?: string }>).map(c => c.text ?? '').join('\n') :
-        '';
+        Array.isArray(b.content)
+          ? (b.content as Array<{ type?: string; text?: string; tool_name?: string }>)
+              .map(c =>
+                c.type === 'tool_reference' && c.tool_name
+                  ? `→ ${c.tool_name}`
+                  : (c.text ?? '')
+              )
+              .join('\n')
+          : '';
       blocks.push({
         type: 'tool_result',
         toolUseId: String(b.tool_use_id ?? ''),
