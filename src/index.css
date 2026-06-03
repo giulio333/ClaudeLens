@@ -2658,7 +2658,8 @@ body {
 }
 .cl-agent-stack,
 .cl-tool-stack,
-.cl-ask-stack {
+.cl-ask-stack,
+.cl-plan-stack {
   max-width: 780px;
   margin-top: 12px;
   display: grid;
@@ -3055,6 +3056,59 @@ body {
   content: '↳'; position: absolute; left: 0; top: -1px;
   color: var(--cl-violet); font-family: var(--font-mono); font-size: 13px;
 }
+
+/* Plan-mode milestone card — mirrors agent-card, accent (terracotta) spine. */
+.cl-plan-card {
+  display: block; position: relative; overflow: hidden; width: 100%;
+  text-align: left; cursor: pointer;
+  border: 1px solid var(--cl-line);
+  border-left: 3px solid var(--cl-accent);
+  border-radius: var(--cl-r-card);
+  padding: 13px 15px 14px;
+  background: var(--cl-paper);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-elev-card, 0 1px 2px oklch(0 0 0 / 0.04));
+}
+.cl-plan-card::after {
+  content: ''; position: absolute; inset: 0 0 auto auto; width: 55%; height: 75%; pointer-events: none;
+  background: radial-gradient(80% 90% at 100% 0%, color-mix(in oklch, var(--cl-accent) 14%, transparent), transparent 70%);
+}
+.cl-plan-card:hover { border-color: color-mix(in oklch, var(--cl-accent) 32%, var(--cl-line)); }
+.cl-plan-card .top { display: flex; align-items: center; gap: 10px; position: relative; }
+.cl-plan-card .ic {
+  width: 26px; height: 26px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 8px;
+  color: var(--cl-on-accent);
+  font-family: var(--font-mono); font-size: 12px; font-weight: 600; line-height: 1;
+  background: radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.45), transparent 55%), var(--cl-accent);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.4), 0 3px 8px -3px color-mix(in oklch, var(--cl-accent) 55%, transparent);
+}
+.cl-plan-card .lbl {
+  font-family: var(--font-mono); font-size: 10.5px;
+  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 400;
+  color: var(--cl-ink-3); flex-shrink: 0; white-space: nowrap;
+}
+.cl-plan-card .chip {
+  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; white-space: nowrap;
+  padding: 4px 9px; border-radius: 999px;
+  color: var(--cl-accent);
+  border: 1px solid color-mix(in oklch, var(--cl-accent) 38%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-accent) 10%, var(--cl-paper));
+  flex-shrink: 0;
+}
+.cl-plan-card .title {
+  display: block; position: relative;
+  font: 600 14px/1.45 var(--font-sans); color: var(--cl-ink); margin: 11px 0 0;
+}
+.cl-plan-card .snippet {
+  display: block; position: relative;
+  font: 400 12.5px/1.55 var(--font-sans); color: var(--cl-ink-2); margin: 6px 0 0;
+}
+.cl-plan-card .desc {
+  display: block; position: relative;
+  font: 400 13px/1.55 var(--font-sans); color: var(--cl-ink-2); margin: 10px 0 0;
+}
+.cl-turn--plan .cl-turn-who { color: var(--cl-accent); }
 
 /* AskUserQuestion card — editorial (prototype's cx-q): paper + warn spine. */
 .cl-ask-card {

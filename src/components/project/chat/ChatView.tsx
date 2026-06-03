@@ -265,7 +265,7 @@ function ChatSessionHeader({
   )
 }
 
-type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions'
+type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan'
 
 function fmtK(n: number): string {
   if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm'
@@ -408,7 +408,7 @@ function ChatTypeFilters({
 }: {
   filter: TurnFilter
   setFilter: (f: TurnFilter) => void
-  counts: { all: number; tools: number; thinking: number; questions: number }
+  counts: { all: number; tools: number; thinking: number; questions: number; plan: number }
   showThinking: boolean
 }) {
   const Chip = ({ id, label, c }: { id: TurnFilter; label: string; c: number }) => (
@@ -428,6 +428,7 @@ function ChatTypeFilters({
       {counts.tools > 0 && <Chip id="tools" label="Tools" c={counts.tools} />}
       {showThinking && counts.thinking > 0 && <Chip id="thinking" label="Thinking" c={counts.thinking} />}
       {counts.questions > 0 && <Chip id="questions" label="Questions" c={counts.questions} />}
+      {counts.plan > 0 && <Chip id="plan" label="Plan" c={counts.plan} />}
     </div>
   )
 }
@@ -545,6 +546,7 @@ export function ChatView({
         case 'tools': return d.hasTools
         case 'thinking': return d.hasThinking && detailsFilter === 'all'
         case 'questions': return d.hasQuestion
+        case 'plan': return d.hasPlan
         default: return true
       }
     },
@@ -556,6 +558,7 @@ export function ChatView({
       tools: visibleItems.filter(d => d.hasTools).length,
       thinking: visibleItems.filter(d => d.hasThinking).length,
       questions: visibleItems.filter(d => d.hasQuestion).length,
+      plan: visibleItems.filter(d => d.hasPlan).length,
     }),
     [visibleItems]
   )
