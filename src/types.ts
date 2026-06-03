@@ -264,3 +264,38 @@ export interface AgentInput {
   effort?: string
   color?: string
 }
+
+// ─── Effective Claude Code config (read via the official Agent SDK) ───────────
+
+/** Runtime view captured from the SDK `system/init` message. */
+export interface InitInfo {
+  permissionMode: string
+  model: string
+  cwd: string
+  apiKeySource: string
+  claudeCodeVersion: string
+  tools: string[]
+  mcpServers: { name: string; status: string }[]
+  slashCommands: string[]
+  outputStyle: string
+  skills: string[]
+  agents: string[]
+  plugins: { name: string; path: string }[]
+}
+
+/** One tier of the settings cascade, with its file path when filesystem-backed. */
+export interface SettingsSourceEntry {
+  source: string
+  path?: string
+  settings: Record<string, unknown>
+}
+
+export interface EffectiveConfig {
+  cwd: string
+  init: InitInfo | null
+  initError: string | null
+  effective: Record<string, unknown>
+  provenance: Record<string, { source: string; path?: string }>
+  sources: SettingsSourceEntry[]
+  settingsError: string | null
+}

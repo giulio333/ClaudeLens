@@ -28,3 +28,4 @@ export type View =
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
   | { type: 'agents-live'; project?: { hash: string; realPath: string } }
   | { type: 'duplicates' }
+  | { type: 'settings' }

@@ -11,7 +11,7 @@ This directory contains the Electron renderer process: a single-page React app t
 
 **ProjectOverview.tsx** (`tabs/ProjectOverview.tsx`) — Root navigation shell
 - Manages all UI state in a single `View` discriminated union (no router)
-- Views (~27 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `project-skills` | `project-agents` | `project-mcp` | `project-tasks` | `project-plans` | `plan-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates`
+- Views (~27 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `project-skills` | `project-agents` | `project-mcp` | `project-tasks` | `project-plans` | `plan-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates` | `settings`
 - Thin shell (~340 righe): sidebar + `switch(view.type)` → delegates to feature components
 - All feature components live in `components/project/`
 

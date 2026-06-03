@@ -25,7 +25,7 @@ test + build on every push/PR.
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.
 
 **Main process** (`electron/main.ts`):
-- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*`, `rules:*`, `tasks:*`, `plans:*`, `agents:*`, `skills:*`, `mcp:*`, `projects:*` (duplicate detect/merge), `live:*` (Live Monitor), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`
+- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*`, `rules:*`, `tasks:*`, `plans:*`, `agents:*`, `skills:*`, `mcp:*`, `projects:*` (duplicate detect/merge), `live:*` (Live Monitor), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`, `config:*` (effective config via Agent SDK)
 - Watches `~/.claude/projects/`, `~/.claude/tasks/` and `~/.claude/plans/` with chokidar (depth 3); emits `data:changed` to renderer on any change
 - Serializes `Map` → plain object before IPC (Maps are not transferable)
 
@@ -45,11 +45,12 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `agents-reader.ts` / `agents-writer.ts` — read/create global & project agents (`.claude/agents/**/*.md`); writer creates agent files and dispatches/attaches/respawns/stops background agents
 - `skills-reader.ts` / `skills-writer.ts` — read/create global & project skills (`.claude/skills/<name>/SKILL.md`)
 - `mcp-reader.ts` — reads MCP server config (global `~/.claude.json` + per-project enabled/disabled state)
+- `config-reader.ts` — reads the *effective* Claude Code config via the official `@anthropic-ai/claude-agent-sdk` (ESM, dynamic import): `resolveSettings()` for the merged settings cascade + provenance (no spawn), and the `system/init` message of a one-turn `query()` (aborted before any model turn) for runtime info (resolved model, live MCP status, tools, skills, agents, slash commands, version)
 - `live-monitor.ts` — watches running Claude sessions in real time (ESM-only chokidar via dynamic import); `process-scanner.ts` enumerates live `claude` processes; `bg-sessions-reader.ts` reads background agent sessions
 - `duplicate-detector.ts` / `duplicate-merger.ts` / `duplicate-merge-executor.ts` — detect duplicate project history folders (by authoritative cwd from `.jsonl`), plan and execute the merge (session move + memory merge)
 
 **Renderer** (`src/`):
-- Single page, no routing — `tabs/ProjectOverview.tsx` manages all views with internal navigation state via a `View` discriminated union (`components/project/types.ts`, ~27 cases: `global-home`, `overview`, `sessions`, `chat`, `memory-topic`, `analytics`, global/project `skills`/`agents`/`mcp`/`claudemd`, `*-detail`, `*-create`, `tasks`, `plans`, `plan-detail`, `live-monitor`, `agents-live`, `duplicates`, …)
+- Single page, no routing — `tabs/ProjectOverview.tsx` manages all views with internal navigation state via a `View` discriminated union (`components/project/types.ts`, ~27 cases: `global-home`, `overview`, `sessions`, `chat`, `memory-topic`, `analytics`, global/project `skills`/`agents`/`mcp`/`claudemd`, `*-detail`, `*-create`, `tasks`, `plans`, `plan-detail`, `live-monitor`, `agents-live`, `duplicates`, `settings`, …)
 - `useIPC.ts` — all React Query hooks + `window.electronAPI` type declarations; `unwrap()` raises on error
 - Mutations (`useCreateTopic`, `useUpdateTopic`, `useDeleteTopic`) invalidate `['memory:project', hash]` on success
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
