@@ -1888,6 +1888,166 @@ body {
 }
 
 /* ──────────────────────────────────────────────────────────
+   AGENT RAIL — right-hand sub-agent activity column
+   ────────────────────────────────────────────────────────── */
+.cl-chat-workspace--with-rail { grid-template-columns: minmax(0, 1fr) 296px; }
+
+/* Trasparente: stesso canvas della chat, nessuna linea di separazione — sono
+   le card a comparire "appoggiate" a destra. */
+.cl-agent-rail {
+  min-width: 0; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--cl-paper);
+  overflow-y: auto;
+  overflow-anchor: none;
+}
+.cl-agent-rail-head {
+  position: sticky; top: 0; z-index: 1;
+  display: flex; align-items: center; gap: 8px;
+  padding: 18px 18px 10px;
+  background: var(--cl-paper);
+}
+.cl-agent-rail-head .t {
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.2em; text-transform: uppercase; color: var(--cl-ink-4);
+}
+.cl-agent-rail-head .c {
+  margin-left: auto;
+  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+  color: var(--cl-ink-3);
+}
+/* Lista editoriale come le tile (Skills/Agents): righe separate da hairline,
+   sfondo trasparente, glyph circolare, hover glass — nessun box arrotondato. */
+.cl-agent-rail-list {
+  display: flex; flex-direction: column;
+  border-top: 1px solid var(--cl-line-soft);
+}
+
+.cl-agent-rail-row {
+  position: relative;
+  border-bottom: 1px solid var(--cl-line-soft);
+  transition: background 120ms;
+}
+.cl-agent-rail-row:hover {
+  background: var(--cl-glass-hover-bg);
+  -webkit-backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
+  backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
+  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
+}
+/* Agente "attivo" rispetto allo scroll: marcatore a filo sinistro + glyph pieno,
+   senza incorniciare la riga in un box. */
+.cl-agent-rail-row[data-active]::before {
+  content: ''; position: absolute; left: 0; top: 0; bottom: -1px; width: 2px;
+  background: var(--cl-violet);
+}
+
+.cl-agent-rail-main {
+  width: 100%; min-width: 0;
+  display: grid; grid-template-columns: 30px 1fr; gap: 13px; align-items: start;
+  padding: 15px 16px 15px 18px;
+  text-align: left; cursor: pointer; background: none; border: 0;
+}
+.cl-agent-rail-main .glyph {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%; border: 1.5px solid color-mix(in oklch, var(--cl-violet) 55%, var(--cl-line));
+  font-family: var(--font-mono); font-weight: 700; font-size: 12px;
+  color: var(--cl-violet-ink); background: transparent;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+.cl-agent-rail-row[data-active] .glyph {
+  background: var(--cl-violet); border-color: var(--cl-violet); color: var(--cl-on-accent);
+}
+.cl-agent-rail-row[data-error] .glyph {
+  border-color: color-mix(in oklch, var(--cl-danger) 50%, var(--cl-line)); color: var(--cl-danger);
+}
+.cl-agent-rail-row[data-error][data-active] .glyph {
+  background: var(--cl-danger); border-color: var(--cl-danger); color: var(--cl-on-accent);
+}
+
+.cl-agent-rail-main .body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.cl-agent-rail-main .row { display: flex; align-items: center; gap: 8px; }
+.cl-agent-rail-main .name {
+  font: 600 14px/1.2 var(--font-sans); letter-spacing: -0.01em;
+  color: var(--cl-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.cl-agent-rail-main .status {
+  margin-left: auto; flex: 0 0 auto;
+  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
+  text-transform: uppercase; letter-spacing: 0.12em; color: var(--cl-ink-4);
+}
+.cl-agent-rail-row[data-error] .status { color: var(--cl-danger); }
+.cl-agent-rail-main .desc {
+  font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--cl-ink-3);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.cl-agent-rail-main .meta {
+  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;
+  font-family: var(--font-mono); font-size: 10px; color: var(--cl-ink-4); letter-spacing: 0.02em;
+}
+.cl-agent-rail-main .meta .steps { color: var(--cl-ink-3); }
+.cl-agent-rail-main .meta .steps::before { content: '· '; color: var(--cl-ink-4); }
+/* Locate: icona ghost in basso a destra, rivelata all'hover della riga. */
+.cl-agent-rail-locate {
+  position: absolute; bottom: 9px; right: 10px;
+  width: 24px; height: 24px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 7px; background: none; border: 0; cursor: pointer;
+  color: var(--cl-ink-4); opacity: 0;
+  transition: opacity 0.16s, color 0.16s, background 0.16s;
+}
+.cl-agent-rail-row:hover .cl-agent-rail-locate,
+.cl-agent-rail-locate:focus-visible { opacity: 1; }
+.cl-agent-rail-locate:hover {
+  color: var(--cl-violet-ink);
+  background: color-mix(in oklch, var(--cl-violet-soft) 40%, transparent);
+}
+
+/* ──────────────────────────────────────────────────────────
+   SUB-AGENT TRANSCRIPT PANEL — full internal transcript overlay
+   ────────────────────────────────────────────────────────── */
+.cl-subagent-panel {
+  flex: 1; min-height: 0;
+  display: flex; flex-direction: column;
+  background: var(--cl-paper);
+}
+.cl-subagent-panel-head {
+  display: flex; align-items: center; gap: 14px;
+  padding: 12px 20px; border-bottom: 1px solid var(--cl-line);
+  background: var(--cl-paper-2);
+}
+.cl-subagent-back {
+  display: inline-flex; align-items: center; gap: 6px;
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500;
+  color: var(--cl-ink-2); background: none; border: 0; cursor: pointer; padding: 4px 2px;
+}
+.cl-subagent-back:hover { color: var(--cl-ink); }
+.cl-subagent-head-id { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.cl-subagent-head-id .ic {
+  width: 24px; height: 24px; flex: 0 0 auto;
+  display: inline-flex; align-items: center; justify-content: center; border-radius: 7px;
+  color: var(--cl-on-accent); font-family: var(--font-mono); font-size: 11px; font-weight: 600;
+  background: radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.45), transparent 55%), var(--cl-violet);
+}
+.cl-subagent-head-id .chip {
+  font-family: var(--font-mono); font-size: 11px; font-weight: 500; white-space: nowrap;
+  padding: 4px 10px; border-radius: 999px; color: var(--cl-violet-ink);
+  border: 1px solid color-mix(in oklch, var(--cl-violet) 38%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-violet-soft) 40%, var(--cl-paper));
+}
+.cl-subagent-head-id .desc {
+  font: 400 12.5px/1.4 var(--font-sans); color: var(--cl-ink-2);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0;
+}
+.cl-subagent-feed { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px 60px; }
+.cl-subagent-feed .cl-transcript-inner { max-width: 820px; margin: 0 auto; }
+
+@media (max-width: 1080px) {
+  .cl-chat-workspace--with-rail { grid-template-columns: minmax(0, 1fr); }
+  .cl-agent-rail { display: none; }
+}
+
+/* ──────────────────────────────────────────────────────────
    CHAT HERO (v3 dossier mist) — collapsible on scroll
    ────────────────────────────────────────────────────────── */
 /* Collapse via grid-template-rows 1fr→0fr: anima l'altezza REALE del contenuto

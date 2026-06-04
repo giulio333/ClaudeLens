@@ -62,7 +62,13 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
   return blocks;
 }
 
-export function readChatSession(filePath: string): ChatMessage[] {
+export interface ReadChatOptions {
+  // I file dei subagent (`subagents/agent-*.jsonl`) hanno ogni riga con
+  // isSidechain=true: per leggerne il transcript interno occorre NON saltarli.
+  includeSidechain?: boolean;
+}
+
+export function readChatSession(filePath: string, options: ReadChatOptions = {}): ChatMessage[] {
   if (!existsSync(filePath)) return [];
 
   const messages: ChatMessage[] = [];
@@ -78,8 +84,8 @@ export function readChatSession(filePath: string): ChatMessage[] {
         if (json.type !== 'user' && json.type !== 'assistant') continue;
         // Salta messaggi di sistema/meta
         if (json.isMeta === true) continue;
-        // Salta sidechain (subagent internals)
-        if (json.isSidechain === true) continue;
+        // Salta sidechain (subagent internals) salvo lettura esplicita del transcript
+        if (json.isSidechain === true && !options.includeSidechain) continue;
 
         const msg = json.message as Record<string, unknown> | undefined;
         if (!msg) continue;

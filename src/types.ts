@@ -68,6 +68,18 @@ export interface ChatMessage {
   content: ChatContentBlock[]
 }
 
+// Metadati di un subagent eseguito durante una sessione (transcript interno in
+// `{sessionId}/subagents/agent-*.jsonl`). `firstPrompt` è la chiave con cui il
+// renderer correla il subagente al suo `Task`/`Agent` tool_use nella chat.
+export interface SubagentMeta {
+  agentId: string
+  filePath: string
+  firstPrompt: string
+  startedAt: string
+  endedAt: string
+  messageCount: number
+}
+
 export interface SessionSummary {
   filename: string
   date: string

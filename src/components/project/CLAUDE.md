@@ -39,12 +39,14 @@ Formatter puri (nessuna dipendenza React):
 ### `chat/` — Rendering sessioni chat
 | File | Esporta | Descrizione |
 |---|---|---|
-| `utils.ts` | `buildProcessedMessages`, `resolveToolIcon`, `stripLineNumbers`, `fileExt`, `parseMemoryFrontmatter`, tipi `ToolGroup`, `ProcessedMessage`, `ChatDetailsFilter` | Pre-processing messaggi raw: abbina `tool_use` + `tool_result` per ID; rimuove messaggi utente con soli tool_result |
+| `utils.ts` | `buildProcessedMessages`, `correlateSessionAgents`, `resolveToolIcon`, `stripLineNumbers`, `fileExt`, `parseMemoryFrontmatter`, tipi `ToolGroup`, `ProcessedMessage`, `SessionAgent`, `ChatDetailsFilter` | Pre-processing messaggi raw: abbina `tool_use` + `tool_result` per ID; rimuove messaggi utente con soli tool_result; `correlateSessionAgents` collega ogni dispatch `Task`/`Agent` al suo transcript subagent per prefisso-prompt |
 | `atoms.tsx` | `PathChip`, `SectionLabel`, `CodeBlock` | UI atoms per il rendering degli input/output tool |
 | `ToolDetailPanel.tsx` | `ToolDetailPanel` | Pannello fullscreen dettaglio tool: rendering specifico per Read, Write, Edit, Bash, Grep, Glob, Agent, operazioni memoria |
 | `ToolGroupCard.tsx` | `ToolGroupCard` | Card compatta che mostra una coppia `tool_use` + `tool_result` |
 | `MessageBubble.tsx` | `ThinkingBlock`, `MessageBubble` | Singolo messaggio con testo, thinking espandibile, tool cards |
-| `ChatView.tsx` | `ChatView` | Vista completa chat: header stats, filtro minimal/all, lista messaggi, overlay `ToolDetailPanel` |
+| `AgentRail.tsx` | `AgentRail` | Rail destro persistente con i sub-agenti della sessione (`correlateSessionAgents`): chip `subagent_type`, span orario, stato; evidenzia l'agente al/sopra lo scroll corrente (via `activeTurn`). Click → apre il transcript; bottone locate → scrolla alla dispatch card nella chat |
+| `SubagentTranscriptPanel.tsx` | `SubagentTranscriptPanel` | Overlay col transcript interno completo di un sub-agente (`useSubagentTranscript`), reso con la stessa pipeline `buildProcessedMessages`+`MessageBubble`; ToolDetailPanel annidato per i tool interni |
+| `ChatView.tsx` | `ChatView` | Vista completa chat: header stats, filtro minimal/all, lista messaggi, overlay `ToolDetailPanel`; quando ci sono sub-agenti aggiunge `AgentRail` a destra (`cl-chat-workspace--with-rail`) e apre `SubagentTranscriptPanel` |
 
 **Props navigation pattern:**
 ```tsx

@@ -1,4 +1,4 @@
-import { ChatMessage, ChatContentBlock } from '../../../hooks/useIPC'
+import { ChatMessage, ChatContentBlock, SubagentMeta } from '../../../hooks/useIPC'
 
 export type ChatDetailsFilter = 'all' | 'minimal'
 
@@ -314,6 +314,80 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
     : 'claude'
 
   return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Sub-agent correlation — links each Task/Agent dispatch in the transcript to
+// its internal transcript file (`subagents/agent-*.jsonl`). The subagent file
+// carries no readable type (only a codename `slug`), so the human name comes
+// from the parent dispatch's `subagent_type`; the link is by prompt prefix
+// (the subagent's first user message IS the dispatch prompt). 100% reliable on
+// the observed corpus. Both lists are chronological, so we consume metas in
+// order to disambiguate identical prompts dispatched more than once.
+// ──────────────────────────────────────────────────────────────────────────
+export type SessionAgent = {
+  /** Stable key (turn + group index). */
+  key: string
+  /** 1-based turn index of the dispatch — used to jump/scroll to its card. */
+  turnN: number
+  subagentType: string
+  description: string
+  prompt: string
+  isError: boolean
+  /** Correlated transcript metadata, when the subagent file exists. */
+  agentId: string | null
+  startedAt?: string
+  endedAt?: string
+  messageCount?: number
+}
+
+const AGENT_PROMPT_PREFIX = 100
+function promptKey(s: string): string {
+  return s.replace(/\s+/g, ' ').trim().slice(0, AGENT_PROMPT_PREFIX)
+}
+
+export function correlateSessionAgents(
+  processed: ProcessedMessage[],
+  metas: SubagentMeta[],
+): SessionAgent[] {
+  const pool = metas.map(m => ({ m, used: false }))
+  const agents: SessionAgent[] = []
+
+  processed.forEach((p, idx) => {
+    p.toolGroups.forEach((g, gi) => {
+      if (!AGENT_TOOLS.has(g.use.name)) return
+      const input = g.use.input as Record<string, unknown>
+      const subagentType =
+        (input.subagent_type as string) || (input.subagentType as string) || 'general-purpose'
+      const description = (input.description as string) || ''
+      const prompt = (input.prompt as string) || ''
+      const pk = promptKey(prompt)
+
+      let match: SubagentMeta | null = null
+      if (pk) {
+        const entry = pool.find(e => !e.used && promptKey(e.m.firstPrompt) === pk)
+        if (entry) {
+          entry.used = true
+          match = entry.m
+        }
+      }
+
+      agents.push({
+        key: `${idx + 1}-${gi}`,
+        turnN: idx + 1,
+        subagentType,
+        description,
+        prompt,
+        isError: g.result?.isError ?? false,
+        agentId: match?.agentId ?? null,
+        startedAt: match?.startedAt,
+        endedAt: match?.endedAt,
+        messageCount: match?.messageCount,
+      })
+    })
+  })
+
+  return agents
 }
 
 export const TOOL_ICON: Record<string, string> = {
