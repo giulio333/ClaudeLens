@@ -1,12 +1,13 @@
 import {
   buildProcessedMessages,
+  correlateSessionAgents,
   stripAnsi,
   parseClaudeSlashCommand,
   parseLocalCommandOutput,
   parseAskUserQuestions,
   parseAnswersFromResultText,
 } from '../src/components/project/chat/utils';
-import { ChatMessage, ChatContentBlock } from '../src/types';
+import { ChatMessage, ChatContentBlock, SubagentMeta } from '../src/types';
 
 // ---- fixture helpers ----
 
@@ -315,5 +316,89 @@ describe('parseAnswersFromResultText', () => {
 
   it('returns empty object for empty input', () => {
     expect(parseAnswersFromResultText('')).toEqual({});
+  });
+});
+
+describe('correlateSessionAgents', () => {
+  const meta = (overrides: Partial<SubagentMeta>): SubagentMeta => ({
+    agentId: 'a1',
+    filePath: '/x/agent-a1.jsonl',
+    firstPrompt: '',
+    startedAt: '2026-05-30T00:00:00.000Z',
+    endedAt: '2026-05-30T00:01:00.000Z',
+    messageCount: 5,
+    ...overrides,
+  });
+
+  it('links a Task dispatch to its transcript by prompt prefix', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', description: 'find X', prompt: 'Search the workspace for foo' })]),
+      msg('user', [toolResult('t1', 'found it')]),
+    ]);
+    const metas = [meta({ agentId: 'aExplore', firstPrompt: 'Search the workspace for foo' })];
+    const agents = correlateSessionAgents(processed, metas);
+    expect(agents).toHaveLength(1);
+    expect(agents[0].subagentType).toBe('Explore');
+    expect(agents[0].agentId).toBe('aExplore');
+    expect(agents[0].turnN).toBe(1);
+    expect(agents[0].isError).toBe(false);
+  });
+
+  it('matches across whitespace differences and reader truncation', () => {
+    // The dispatch prompt carries raw newlines; the stored firstPrompt is the
+    // same text the reader sliced to 400 chars. Only the first 100 chars (after
+    // whitespace normalization) need to agree — and here they do.
+    const head = 'Commit the changes in /Users/me/Projects/Repo. The working tree has several staged files ready now';
+    const dispatchPrompt = head + '.\n\nFull status:\n- a.ts\n- b.ts\n- c.ts';
+    const storedPrompt = head + '. Full status: - a.ts - b.ts'; // truncated tail, same prefix
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'git-committer', prompt: dispatchPrompt })]),
+      msg('user', [toolResult('t1', 'done')]),
+    ]);
+    const agents = correlateSessionAgents(processed, [meta({ agentId: 'aGit', firstPrompt: storedPrompt })]);
+    expect(agents[0].agentId).toBe('aGit');
+  });
+
+  it('disambiguates identical prompts by chronological order', () => {
+    const p = 'Run the same task twice';
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: p })]),
+      msg('user', [toolResult('t1', 'a')]),
+      msg('assistant', [toolUse('t2', 'Task', { subagent_type: 'Explore', prompt: p })]),
+      msg('user', [toolResult('t2', 'b')]),
+    ]);
+    const metas = [
+      meta({ agentId: 'first', firstPrompt: p }),
+      meta({ agentId: 'second', firstPrompt: p }),
+    ];
+    const agents = correlateSessionAgents(processed, metas);
+    expect(agents.map(a => a.agentId)).toEqual(['first', 'second']);
+  });
+
+  it('leaves agentId null when no transcript file matches', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'orphan dispatch' })]),
+      msg('user', [toolResult('t1', 'ok')]),
+    ]);
+    const agents = correlateSessionAgents(processed, []);
+    expect(agents[0].agentId).toBeNull();
+    expect(agents[0].subagentType).toBe('Explore');
+  });
+
+  it('propagates the error state from the dispatch tool_result', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'boom' })]),
+      msg('user', [toolResult('t1', 'failure', true)]),
+    ]);
+    const agents = correlateSessionAgents(processed, []);
+    expect(agents[0].isError).toBe(true);
+  });
+
+  it('ignores non-agent tools', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Bash', { command: 'ls' })]),
+      msg('user', [toolResult('t1', 'out')]),
+    ]);
+    expect(correlateSessionAgents(processed, [])).toHaveLength(0);
   });
 });

@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties, RefObject, MouseEvent as ReactMouseEvent } from 'react'
-import { saveMarkdownExport, savePdfExport, useChatSession } from '../../../hooks/useIPC'
+import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
 import { fmt, fmtModel, modelColor, sessionTitle } from '../utils'
-import { buildProcessedMessages, describeTurn, isMemoryFile, ChatDetailsFilter, ToolGroup, TurnDescriptor } from './utils'
+import { buildProcessedMessages, correlateSessionAgents, describeTurn, isMemoryFile, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
+import { AgentRail } from './AgentRail'
+import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
 import { SessionGraphView } from './graph/SessionGraphView'
@@ -443,10 +445,12 @@ export function ChatView({
   onBack: () => void
 }) {
   const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
+  const { data: subagentMetas } = useSessionSubagents(project.hash, session.filename)
   const projectName = projectDisplayName(project.realPath)
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
+  const [transcriptAgent, setTranscriptAgent] = useState<SessionAgent | null>(null)
   const [exportOpen, setExportOpen] = useState(false)
   const [exportPreset, setExportPreset] = useState<ChatExportPreset>('team')
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null)
@@ -463,6 +467,13 @@ export function ChatView({
   // not on every render (e.g. header collapse toggles fired during scroll).
   const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
   const canExport = processed.length > 0 && !isLoading
+
+  // Sub-agents dispatched in this session, correlated to their internal
+  // transcript files. Drives the right-hand activity rail.
+  const agents = useMemo(
+    () => correlateSessionAgents(processed, subagentMetas ?? []),
+    [processed, subagentMetas]
+  )
 
   // Derived session stats — also O(n), so memoize on the processed list.
   const stats = useMemo(() => {
@@ -609,6 +620,20 @@ export function ChatView({
     setActiveTurn(n)
   }, [])
 
+  // The rail's "active" agent = the latest dispatch at or above the current
+  // scroll position. As you scroll past one agent's card toward the next, the
+  // highlight advances — the recorded-session echo of Claude Code's live pill.
+  const activeAgentKey = useMemo(() => {
+    if (agents.length === 0) return null
+    if (activeTurn === null) return agents[0].key
+    let key: string | null = null
+    for (const a of agents) {
+      if (a.turnN <= activeTurn) key = a.key
+      else break
+    }
+    return key ?? agents[0].key
+  }, [agents, activeTurn])
+
   const title = sessionTitle(session)
   const selectedExportPreset = CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
 
@@ -694,6 +719,15 @@ export function ChatView({
 
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
+      ) : transcriptAgent && transcriptAgent.agentId ? (
+        <SubagentTranscriptPanel
+          hash={project.hash}
+          sessionFilename={session.filename}
+          agentId={transcriptAgent.agentId}
+          subagentType={transcriptAgent.subagentType}
+          description={transcriptAgent.description}
+          onBack={() => setTranscriptAgent(null)}
+        />
       ) : isError ? (
         <div className="cl-chat-workspace">
           <QueryError title="Failed to load transcript" error={error} onRetry={() => refetch()} />
@@ -707,7 +741,7 @@ export function ChatView({
           )}
         </div>
       ) : (
-        <div className="cl-chat-workspace">
+        <div className={`cl-chat-workspace${agents.length > 0 ? ' cl-chat-workspace--with-rail' : ''}`}>
           <main
             className="cl-chat-feed"
             ref={feedRef}
@@ -804,6 +838,14 @@ export function ChatView({
               </div>
             )}
           </main>
+          {agents.length > 0 && (
+            <AgentRail
+              agents={agents}
+              activeKey={activeAgentKey}
+              onOpen={setTranscriptAgent}
+              onLocate={jumpToTurn}
+            />
+          )}
         </div>
       )}
     </div>

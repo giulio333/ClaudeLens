@@ -39,7 +39,8 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 - `cost-tracker.ts` — parses `.jsonl` session files; hardcoded pricing table per model with fuzzy fallback to Sonnet
 - `claude-md-reader.ts` — reads CLAUDE.md hierarchy: global → project → local (`CLAUDE.local.md`) → subdir (`.claude/CLAUDE.md`)
 - `rules-reader.ts` — reads conditional rules from `.claude/rules/**/*.md`; extracts `paths` from YAML frontmatter
-- `session-reader.ts` — parses JSONL chat sessions; skips meta/sidechain lines; normalizes content (string or block array)
+- `session-reader.ts` — parses JSONL chat sessions; skips meta/sidechain lines (unless `includeSidechain` is set, used to read sub-agent transcripts); normalizes content (string or block array)
+- `subagents-reader.ts` — reads the per-session sub-agent transcripts Claude Code stores in `{sessionId}/subagents/agent-*.jsonl` (sidechain lines); returns metadata (`agentId`, `firstPrompt`, start/end, message count). The renderer correlates each to its `Task`/`Agent` dispatch by prompt prefix (`firstPrompt`), since the file only carries a codename `slug`, not the `subagent_type`
 - `tasks-reader.ts` — reads tasks Claude creates during sessions from `~/.claude/tasks/{sessionUUID}/*.json`; maps each session UUID (the project's `.jsonl` filename) back to the project and groups tasks per session
 - `plans-reader.ts` — reads plan-mode plans: scans the project's session `.jsonl` for `plan_mode`/`plan_mode_exit` attachments (carrying `planFilePath`), dedupes per file (approved > proposed), then reads the markdown from the global `~/.claude/plans/*.md`; groups per session, flags missing files as deleted
 - `agents-reader.ts` / `agents-writer.ts` — read/create global & project agents (`.claude/agents/**/*.md`); writer creates agent files and dispatches/attaches/respawns/stops background agents

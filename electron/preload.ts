@@ -34,6 +34,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
     getChat: (hash: string, filename: string) => ipcRenderer.invoke('sessions:getChat', hash, filename),
+    getSubagents: (hash: string, filename: string) => ipcRenderer.invoke('sessions:getSubagents', hash, filename),
+    getSubagentTranscript: (hash: string, filename: string, agentId: string) =>
+      ipcRenderer.invoke('sessions:getSubagentTranscript', hash, filename, agentId),
     openInTerminal: (realPath: string, sessionId: string) => ipcRenderer.invoke('sessions:openInTerminal', realPath, sessionId),
     newInTerminal: (realPath: string) => ipcRenderer.invoke('sessions:newInTerminal', realPath),
   },

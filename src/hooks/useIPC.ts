@@ -12,6 +12,7 @@ import type {
   ChatContentBlock,
   ChatMessage,
   SessionSummary,
+  SubagentMeta,
   ExportSaveResult,
   RuleFile,
   Agent,
@@ -46,6 +47,7 @@ export type {
   ChatContentBlock,
   ChatMessage,
   SessionSummary,
+  SubagentMeta,
   ExportSaveResult,
   RuleFile,
   Agent,
@@ -166,6 +168,8 @@ declare global {
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>
         getChat: (hash: string, filename: string) => Promise<IpcResult<ChatMessage[]>>
+        getSubagents: (hash: string, filename: string) => Promise<IpcResult<SubagentMeta[]>>
+        getSubagentTranscript: (hash: string, filename: string, agentId: string) => Promise<IpcResult<ChatMessage[]>>
         openInTerminal: (realPath: string, sessionId: string) => Promise<IpcResult<null>>
         newInTerminal: (realPath: string) => Promise<IpcResult<null>>
       }
@@ -420,6 +424,22 @@ export function useChatSession(hash: string, filename: string | null) {
     queryKey: ['sessions:chat', hash, filename],
     queryFn: () => unwrap(window.electronAPI.sessions.getChat(hash, filename!)),
     enabled: filename !== null,
+  })
+}
+
+export function useSessionSubagents(hash: string, filename: string | null) {
+  return useQuery({
+    queryKey: ['sessions:subagents', hash, filename],
+    queryFn: () => unwrap(window.electronAPI.sessions.getSubagents(hash, filename!)),
+    enabled: filename !== null,
+  })
+}
+
+export function useSubagentTranscript(hash: string, filename: string | null, agentId: string | null) {
+  return useQuery({
+    queryKey: ['sessions:subagentTranscript', hash, filename, agentId],
+    queryFn: () => unwrap(window.electronAPI.sessions.getSubagentTranscript(hash, filename!, agentId!)),
+    enabled: filename !== null && agentId !== null,
   })
 }
 
