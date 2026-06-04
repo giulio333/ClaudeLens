@@ -896,9 +896,14 @@ function openInTerminal(cwd: string, command: string): void {
 
   if (process.platform === 'win32') {
     // `start` is a cmd builtin (hence `cmd /c start`); the empty "" is the
-    // window title. `cmd /k` runs the command and keeps the window open.
-    // `cd /d` switches drive and directory in one go.
-    execFile('cmd.exe', ['/c', 'start', '', 'cmd', '/k', `cd /d "${dir}" && ${command}`]);
+    // window title. `start /d <dir>` sets the working directory for the new
+    // window, so we avoid the `cd /d "..." && ...` chain — that broke under
+    // cmd's quoting rules (the `&&` plus the quotes around the path stopped
+    // cmd /k from stripping the outer quotes, yielding "The filename,
+    // directory name, or volume label syntax is incorrect").
+    // `cmd /k` runs the command and keeps the window open. The command tokens
+    // are passed individually so Node doesn't wrap them in a single quoted arg.
+    execFile('cmd.exe', ['/c', 'start', '', '/d', dir, 'cmd', '/k', ...command.split(' ')]);
     return;
   }
 
