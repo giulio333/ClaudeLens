@@ -1601,13 +1601,14 @@ body {
 }
 
 /* export — ghost glass pill */
-.cl-export {
+/* overflow (kebab) — icon-only glass pill for low-frequency actions */
+.cl-overflow {
   position: relative;
   display: inline-flex;
 }
-.cl-export-trigger {
-  display: inline-flex; align-items: center; justify-content: center; gap: 7px;
-  padding: 7px 14px;
+.cl-overflow-trigger {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 32px; height: 32px;
   border-radius: 999px;
   background: oklch(1 0 0 / 0.55);
   border: 1px solid oklch(1 0 0 / 0.7);
@@ -1616,32 +1617,60 @@ body {
     0 2px 6px -2px oklch(0.20 0.02 60 / 0.10);
   -webkit-backdrop-filter: blur(12px) saturate(180%);
   backdrop-filter: blur(12px) saturate(180%);
-  font-family: var(--font-sans); font-size: 12.5px; font-weight: 500;
-  color: var(--cl-ink);
+  color: var(--cl-ink-3);
   cursor: pointer;
-  transition: background 140ms, color 140ms, border-color 140ms, box-shadow 140ms;
+  transition: background 140ms, color 140ms, border-color 140ms;
 }
-:root[data-theme='dark'] .cl-export-trigger {
+:root[data-theme='dark'] .cl-overflow-trigger {
   background: oklch(1 0 0 / 0.06);
   border-color: oklch(1 0 0 / 0.14);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.08),
     0 2px 6px -2px oklch(0 0 0 / 0.40);
 }
-.cl-export-trigger:hover:not(:disabled) {
+.cl-overflow-trigger:hover {
   background: oklch(1 0 0 / 0.75);
-  border-color: color-mix(in oklch, var(--cl-accent) 45%, oklch(1 0 0 / 0.7));
-  color: var(--cl-accent-ink);
+  color: var(--cl-ink);
 }
-:root[data-theme='dark'] .cl-export-trigger:hover:not(:disabled) {
+:root[data-theme='dark'] .cl-overflow-trigger:hover {
   background: oklch(1 0 0 / 0.12);
-  border-color: color-mix(in oklch, var(--cl-accent) 50%, oklch(1 0 0 / 0.14));
 }
-.cl-export-trigger:disabled {
-  cursor: not-allowed;
-  opacity: 0.55;
+.cl-overflow-panel {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  width: 308px;
+  padding: 5px;
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  background: var(--cl-paper);
+  box-shadow: 0 18px 42px -24px oklch(0.20 0.015 60 / 0.42);
 }
-.cl-export-trigger svg { flex: 0 0 auto; }
+.cl-overflow-section { padding: 7px 7px 3px; }
+.cl-overflow-sep {
+  height: 1px;
+  margin: 5px 2px;
+  background: var(--cl-line);
+}
+.cl-overflow-item {
+  display: flex; align-items: center; gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  font-family: var(--font-sans); font-size: 12.5px; font-weight: 500;
+  color: var(--cl-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: background 120ms, color 120ms;
+}
+.cl-overflow-item svg { flex: 0 0 auto; }
+.cl-overflow-item.is-danger { color: var(--cl-danger); }
+.cl-overflow-item.is-danger:hover {
+  background: color-mix(in oklch, var(--cl-danger) 12%, transparent);
+}
 
 /* resume — dark glass slab with accent play */
 .cl-resume {
@@ -1671,18 +1700,6 @@ body {
   background: var(--cl-accent);
   clip-path: polygon(0 0, 100% 50%, 0 100%);
   flex: 0 0 auto;
-}
-.cl-export-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  width: 308px;
-  padding: 12px;
-  border: 1px solid var(--cl-line);
-  border-radius: 8px;
-  background: var(--cl-paper);
-  box-shadow: 0 18px 42px -24px oklch(0.20 0.015 60 / 0.42);
 }
 .cl-export-label {
   font-family: var(--font-mono);
@@ -3104,11 +3121,9 @@ body {
     padding: 5px 8px;
     font-size: 9px;
   }
-  .cl-export-trigger,
   .cl-resume {
     padding: 7px 10px;
   }
-  .cl-export-trigger span,
   .cl-resume span {
     display: none;
   }
@@ -3285,11 +3300,26 @@ body {
 .cl-agent-card .res {
   display: block; position: relative; padding-left: 16px;
   font: 400 12.5px/1.55 var(--font-sans); color: var(--cl-ink-2);
+  /* Clamp the rendered markdown preview; full text lives in the detail view. */
+  max-height: 9.5em; overflow: hidden;
 }
 .cl-agent-card .res::before {
-  content: '↳'; position: absolute; left: 0; top: -1px;
+  content: '↳'; position: absolute; left: 0; top: -1px; z-index: 1;
   color: var(--cl-violet); font-family: var(--font-mono); font-size: 13px;
 }
+/* Soft fade at the bottom hinting the preview is truncated. */
+.cl-agent-card .res::after {
+  content: ''; position: absolute; inset: auto 0 0; height: 1.6em; pointer-events: none;
+  background: linear-gradient(transparent, var(--cl-paper));
+}
+/* Neutralize prose vertical rhythm so the preview reads as a tight excerpt. */
+.cl-agent-card .res .prose { font-size: 12.5px; line-height: 1.55; color: var(--cl-ink-2); }
+.cl-agent-card .res .prose > :first-child { margin-top: 0; }
+.cl-agent-card .res .prose > :last-child { margin-bottom: 0; }
+.cl-agent-card .res .prose :is(h1, h2, h3, h4) { font-size: 13px; margin: 8px 0 4px; padding-bottom: 0; border: 0; }
+.cl-agent-card .res .prose p { margin: 0 0 6px; }
+.cl-agent-card .res .prose pre { margin: 6px 0; padding: 8px 10px; font-size: 11px; }
+.cl-agent-card .res .prose ul, .cl-agent-card .res .prose ol { margin: 4px 0; }
 
 /* Plan-mode milestone card — mirrors agent-card, accent (terracotta) spine. */
 .cl-plan-card {
