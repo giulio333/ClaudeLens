@@ -28,6 +28,7 @@ import { PinIcon } from '../shared/SearchPopover'
 import { TagChip } from '../sessions/TagChip'
 import { TagBar } from '../sessions/TagBar'
 import { TagPicker } from '../sessions/TagPicker'
+import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
 
 export type ProjectSection = 'overview' | 'sessions' | 'memory' | 'skills' | 'agents' | 'mcp' | 'live-agents' | 'tasks' | 'plans' | 'config'
 
@@ -766,6 +767,7 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
   const { isPinned, togglePin } = usePinnedSessions()
   const { tags: allTags, tagsForSession, toggleTagOnSession, removeTagFromSession } = useSessionTags(projectHash)
   const [pickerFor, setPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(null)
+  const [deleteFor, setDeleteFor] = useState<SessionSummary | null>(null)
 
   if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>
   return (
@@ -828,6 +830,14 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
                     setPickerFor({ filename: s.filename, rect })
                   }}
                 >+ tag</button>
+                <button
+                  type="button"
+                  className="cl-row-tag-add"
+                  aria-label="Delete session"
+                  title="Delete session"
+                  style={{ color: 'var(--cl-danger)' }}
+                  onClick={e => { e.stopPropagation(); setDeleteFor(s) }}
+                >Delete</button>
               </div>
             </div>
             <span className={`model ${fam}`}><span className="dot" /> {s.model ? fmtModel(s.model) : '—'}</span>
@@ -843,6 +853,15 @@ function SessionRows({ sessions, projectHash, cleanupDays, onOpen }: { sessions:
           selected={tagsForSession(pickerFor.filename)}
           onToggle={name => toggleTagOnSession(pickerFor.filename, name)}
           onClose={() => setPickerFor(null)}
+        />
+      )}
+      {deleteFor && (
+        <DeleteSessionDialog
+          hash={projectHash}
+          sessionFilename={deleteFor.filename}
+          title={sessionTitle(deleteFor)}
+          onCancel={() => setDeleteFor(null)}
+          onDeleted={() => setDeleteFor(null)}
         />
       )}
     </div>

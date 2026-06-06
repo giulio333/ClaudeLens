@@ -13,6 +13,8 @@ import type {
   ChatMessage,
   SessionSummary,
   SubagentMeta,
+  SessionArtifacts,
+  DeleteSessionResult,
   ExportSaveResult,
   RuleFile,
   Agent,
@@ -48,6 +50,8 @@ export type {
   ChatMessage,
   SessionSummary,
   SubagentMeta,
+  SessionArtifacts,
+  DeleteSessionResult,
   ExportSaveResult,
   RuleFile,
   Agent,
@@ -170,6 +174,8 @@ declare global {
         getChat: (hash: string, filename: string) => Promise<IpcResult<ChatMessage[]>>
         getSubagents: (hash: string, filename: string) => Promise<IpcResult<SubagentMeta[]>>
         getSubagentTranscript: (hash: string, filename: string, agentId: string) => Promise<IpcResult<ChatMessage[]>>
+        getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>
+        deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>
         openInTerminal: (realPath: string, sessionId: string) => Promise<IpcResult<null>>
         newInTerminal: (realPath: string) => Promise<IpcResult<null>>
       }
@@ -400,6 +406,30 @@ export function useProjectPlans(hash: string | null) {
     queryKey: ['plans:project', hash],
     queryFn: () => unwrap(window.electronAPI.plans.getByProject(hash!)),
     enabled: hash !== null,
+  })
+}
+
+// Inventario degli artefatti di una sessione (transcript, sub-agenti, task, piani).
+// On-demand: abilitato solo quando il dialog di conferma è aperto.
+export function useSessionArtifacts(hash: string | null, filename: string | null) {
+  return useQuery({
+    queryKey: ['sessions:artifacts', hash, filename],
+    queryFn: () => unwrap(window.electronAPI.sessions.getArtifacts(hash!, filename!)),
+    enabled: hash !== null && filename !== null,
+    staleTime: 0,
+    gcTime: 0,
+  })
+}
+
+export function useDeleteSession(hash: string) {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (paths: string[]) => unwrap(window.electronAPI.sessions.deleteSession(paths)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['sessions:project', hash] })
+      qc.invalidateQueries({ queryKey: ['tasks:project', hash] })
+      qc.invalidateQueries({ queryKey: ['plans:project', hash] })
+    },
   })
 }
 

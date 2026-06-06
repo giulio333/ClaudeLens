@@ -103,6 +103,30 @@ export interface ExportSaveResult {
   filePath: string | null
 }
 
+export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan'
+
+export interface SessionArtifact {
+  kind: ArtifactKind
+  label: string
+  path: string
+  isDir: boolean
+  count?: number
+  locked?: boolean
+  shared?: boolean
+  referencedBy?: number
+  defaultSelected: boolean
+}
+
+export interface SessionArtifacts {
+  sessionId: string
+  artifacts: SessionArtifact[]
+}
+
+export interface DeleteSessionResult {
+  deleted: string[]
+  warnings: string[]
+}
+
 export type TaskStatus = 'pending' | 'in_progress' | 'completed'
 
 export interface Task {

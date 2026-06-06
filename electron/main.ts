@@ -20,6 +20,7 @@ import {
 import { readProjectRules } from './modules/rules-reader';
 import { readChatSession, findSessionFile } from './modules/session-reader';
 import { readSessionSubagents, resolveSubagentPath } from './modules/subagents-reader';
+import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
@@ -570,6 +571,27 @@ ipcMain.handle('sessions:getSubagentTranscript', async (_event, hash: string, fi
     if (!filePath) return err(new Error(`Subagent transcript non trovato: ${agentId}`));
     const messages = readChatSession(filePath, { includeSidechain: true });
     return ok(messages);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('sessions:getArtifacts', async (_event, hash: string, filename: string) => {
+  try {
+    assertValidFilename(filename);
+    const projectPath = projectDir(hash);
+    const artifacts = await getSessionArtifacts(projectPath, TASKS_DIR, filename);
+    return ok(artifacts);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('sessions:deleteSession', async (_event, paths: string[]) => {
+  try {
+    if (!Array.isArray(paths)) throw new Error('paths must be an array');
+    const result = deleteSessionArtifacts(paths, CLAUDE_DIR);
+    return ok(result);
   } catch (e) {
     return err(e);
   }

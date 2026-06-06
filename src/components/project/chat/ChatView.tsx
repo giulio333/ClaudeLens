@@ -10,6 +10,7 @@ import { AgentRail } from './AgentRail'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
+import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
 import { SessionGraphView } from './graph/SessionGraphView'
 import { QueryError } from '../../QueryError'
 import { projectDisplayName } from '../shared/projectName'
@@ -28,6 +29,14 @@ function ExportIcon() {
 
 function PlayGlyph() {
   return <span className="cl-resume-play" aria-hidden />
+}
+
+function TrashGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
+    </svg>
+  )
 }
 
 function ChatExportMenu({
@@ -124,6 +133,7 @@ function ChatTopActions({
   onExportPreset,
   onExport,
   onResume,
+  onDelete,
 }: {
   viewMode: ViewMode
   setViewMode: (mode: ViewMode) => void
@@ -141,6 +151,7 @@ function ChatTopActions({
   onExportPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
   onResume: () => void
+  onDelete: () => void
 }) {
   return (
     <>
@@ -187,6 +198,16 @@ function ChatTopActions({
       <button className="cl-resume" type="button" onClick={onResume}>
         <PlayGlyph />
         <span>Resume</span>
+      </button>
+      <button
+        className="cl-resume"
+        type="button"
+        onClick={onDelete}
+        title="Delete session"
+        style={{ color: 'var(--cl-danger)' }}
+      >
+        <TrashGlyph />
+        <span>Delete</span>
       </button>
     </>
   )
@@ -457,6 +478,7 @@ export function ChatView({
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [headerCollapsed, setHeaderCollapsed] = useState(false)
+  const [showDelete, setShowDelete] = useState(false)
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
   const [activeTurn, setActiveTurn] = useState<number | null>(null)
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
@@ -713,9 +735,23 @@ export function ChatView({
             onExportPreset={setExportPreset}
             onExport={handleExport}
             onResume={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
+            onDelete={() => setShowDelete(true)}
           />
         }
       />
+
+      {showDelete && (
+        <DeleteSessionDialog
+          hash={project.hash}
+          sessionFilename={session.filename}
+          title={title}
+          onCancel={() => setShowDelete(false)}
+          onDeleted={() => {
+            setShowDelete(false)
+            onBack()
+          }}
+        />
+      )}
 
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
