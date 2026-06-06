@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { CLAUDE_DIR } from '../utils';
+import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
 
 export interface SkillInput {
   name: string;
@@ -35,8 +35,13 @@ function buildSkillMarkdown(input: SkillInput): string {
 }
 
 export function createSkill(input: SkillInput, projectPath?: string): string {
-  const baseDir = projectPath ? join(projectPath, '.claude') : CLAUDE_DIR;
-  const skillDir = join(baseDir, 'skills', input.name);
+  const name = validateEntityName(input.name);
+  const skillsDir = join(projectPath ? join(projectPath, '.claude') : CLAUDE_DIR, 'skills');
+  const skillDir = join(skillsDir, name);
+  assertWithin(skillsDir, skillDir);
+  if (existsSync(join(skillDir, 'SKILL.md'))) {
+    throw new Error(`A skill named "${name}" already exists.`);
+  }
   if (!existsSync(skillDir)) {
     mkdirSync(skillDir, { recursive: true });
   }

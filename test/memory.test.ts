@@ -209,6 +209,24 @@ describe('createTopic', () => {
     expect(indexContent.startsWith('# Memory Index')).toBe(true);
   });
 
+  it('rejects an invalid topic type (issue #58)', () => {
+    expect(() =>
+      createTopic(memoryDir, {
+        name: 'Evil',
+        description: 'd',
+        // @ts-expect-error — exercising the runtime guard for an out-of-union type
+        type: '../../../etc',
+        content: 'x',
+      })
+    ).toThrow(/Invalid topic type/);
+  });
+
+  it('rejects a name that slugs to empty (issue #58)', () => {
+    expect(() =>
+      createTopic(memoryDir, { name: '../../', description: 'd', type: 'user', content: 'x' })
+    ).toThrow(/empty slug/);
+  });
+
   it('appends to an existing MEMORY.md without clobbering existing lines', () => {
     writeFileSync(
       join(memoryDir, 'MEMORY.md'),

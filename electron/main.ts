@@ -35,7 +35,7 @@ import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
-import { hashToPath, resolveRealPath, invalidateCwdCache, CLAUDE_DIR } from './utils';
+import { hashToPath, resolveRealPath, invalidateCwdCache, CLAUDE_DIR, isValidSessionId } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
@@ -930,10 +930,15 @@ function openInTerminal(cwd: string, command: string): void {
   const dir = cwd || os.homedir();
 
   if (process.platform === 'darwin') {
-    const escapedCwd = dir.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    // Both values are embedded in an AppleScript double-quoted string, so
+    // backslashes and quotes must be escaped or a crafted path/command could
+    // break out of the string literal.
+    const escapeAppleScript = (s: string): string => s.replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+    const escapedCwd = escapeAppleScript(dir);
+    const escapedCommand = escapeAppleScript(command);
     const script = [
       'tell application "Terminal"',
-      `do script "cd \\"${escapedCwd}\\" && ${command}"`,
+      `do script "cd \\"${escapedCwd}\\" && ${escapedCommand}"`,
       'activate',
       'end tell',
     ].join('\n');
@@ -989,7 +994,9 @@ function openInTerminal(cwd: string, command: string): void {
 function buildResumeCommand(sessionId: string): string {
   try {
     const bg = getBgSessions().find(s => s.sessionId === sessionId);
-    if (bg) return `claude attach ${bg.id}`;
+    // bg.id is read from disk; only use it if it's a clean session id, else
+    // fall back to the validated --resume form below.
+    if (bg && isValidSessionId(bg.id)) return `claude attach ${bg.id}`;
   } catch {
     // fall through to default
   }
@@ -998,6 +1005,9 @@ function buildResumeCommand(sessionId: string): string {
 
 ipcMain.handle('sessions:openInTerminal', async (_event, realPath: string, sessionId: string) => {
   try {
+    if (!isValidSessionId(sessionId)) {
+      return err(new Error(`Invalid session id: ${sessionId}`));
+    }
     openInTerminal(realPath, buildResumeCommand(sessionId));
     return ok(null);
   } catch (e) {
