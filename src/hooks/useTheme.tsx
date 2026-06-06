@@ -38,16 +38,18 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   const [preference, setPreferenceState] = useState<ThemePreference>(readStoredPreference)
   const [systemResolved, setSystemResolved] = useState<ResolvedTheme>(systemTheme)
 
-  // Track the OS color scheme only while following the system; this keeps the
-  // app in sync if the user flips their OS theme while ClaudeLens is open.
+  // Track the OS color scheme so the app stays in sync if the user flips their
+  // OS theme while ClaudeLens is open. The listener runs regardless of the
+  // current preference (the initial value already comes from systemTheme()),
+  // which avoids a synchronous re-sync inside the effect; `resolved` below only
+  // consumes it when the preference is 'system'.
   useEffect(() => {
-    if (preference !== 'system' || typeof window === 'undefined' || !window.matchMedia) return
+    if (typeof window === 'undefined' || !window.matchMedia) return
     const mq = window.matchMedia(DARK_QUERY)
     const onChange = (e: MediaQueryListEvent) => setSystemResolved(e.matches ? 'dark' : 'light')
-    setSystemResolved(mq.matches ? 'dark' : 'light')
     mq.addEventListener('change', onChange)
     return () => mq.removeEventListener('change', onChange)
-  }, [preference])
+  }, [])
 
   const resolved: ResolvedTheme = preference === 'system' ? systemResolved : preference
 
