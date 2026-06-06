@@ -1,6 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import { CLAUDE_DIR } from '../utils';
+import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
 
 export interface AgentInput {
   name: string;
@@ -48,12 +48,16 @@ function buildAgentMarkdown(input: AgentInput): string {
 }
 
 export function createAgent(input: AgentInput, projectPath?: string): string {
-  const baseDir = projectPath ? join(projectPath, '.claude') : CLAUDE_DIR;
-  const agentsDir = join(baseDir, 'agents');
+  const name = validateEntityName(input.name);
+  const agentsDir = join(projectPath ? join(projectPath, '.claude') : CLAUDE_DIR, 'agents');
+  const filePath = join(agentsDir, `${name}.md`);
+  assertWithin(agentsDir, filePath);
+  if (existsSync(filePath)) {
+    throw new Error(`An agent named "${name}" already exists.`);
+  }
   if (!existsSync(agentsDir)) {
     mkdirSync(agentsDir, { recursive: true });
   }
-  const filePath = join(agentsDir, `${input.name}.md`);
-  writeFileSync(filePath, buildAgentMarkdown(input), 'utf-8');
+  writeFileSync(filePath, buildAgentMarkdown({ ...input, name }), 'utf-8');
   return filePath;
 }
