@@ -71,15 +71,47 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
   )
 }
 
+/** Truncate raw markdown for a preview while keeping it renderable: cut to a
+ *  char budget, then close any dangling code fence so the parser doesn't eat the
+ *  rest of the card. The clamp on line-count lives in CSS (-webkit-line-clamp). */
+function previewMarkdown(raw: string, max = 400): string {
+  const trimmed = raw.trim()
+  const truncated = trimmed.length > max
+  let preview = truncated ? trimmed.slice(0, max).trimEnd() : trimmed
+  if (((preview.match(/```/g)?.length ?? 0) % 2) === 1) preview += '\n```'
+  if (truncated) preview += ' …'
+  return preview
+}
+
 /** Sub-agent dispatch rendered as an editorial "delegated task receipt". */
 function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
   const input = group.use.input as Record<string, unknown>
   const subagent = (input.subagent_type as string) || 'general-purpose'
   const desc = (input.description as string) || (input.prompt as string) || ''
   const result = group.result
-  const resultText = result ? result.content.replace(/\s+/g, ' ').trim().slice(0, 320) : ''
+  const resultText = result ? previewMarkdown(result.content) : ''
+
+  // Root is a div (not a button) so the rendered markdown — which contains block
+  // elements and links — stays valid HTML; clicks anywhere open the detail, while
+  // clicks inside a link are left to Markdown's own handler.
+  const onClick = (e: React.MouseEvent) => {
+    if ((e.target as HTMLElement).closest('a')) return
+    onOpen()
+  }
   return (
-    <button type="button" className="cl-agent-card" onClick={onOpen} title="View agent detail">
+    <div
+      role="button"
+      tabIndex={0}
+      className="cl-agent-card"
+      onClick={onClick}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault()
+          onOpen()
+        }
+      }}
+      title="View agent detail"
+    >
       <span className="top">
         <span className="ic">A</span>
         <span className="lbl">Sub-agent</span>
@@ -94,10 +126,12 @@ function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => 
       {resultText && (
         <span className="return">
           <span className="mini">Returned</span>
-          <span className="res">{resultText}</span>
+          <div className="res">
+            <Markdown>{resultText}</Markdown>
+          </div>
         </span>
       )}
-    </button>
+    </div>
   )
 }
 
