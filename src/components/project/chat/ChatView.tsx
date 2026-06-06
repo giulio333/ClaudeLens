@@ -512,6 +512,10 @@ export function ChatView({
   const feedRef = useRef<HTMLElement | null>(null)
   const turnRefs = useRef<Record<number, HTMLElement | null>>({})
   const bottomRef = useRef<HTMLDivElement | null>(null)
+  // Tracks whether the feed was anchored near the bottom *before* the latest
+  // re-render. Captured in onScroll (pre-update scrollHeight) so the auto-scroll
+  // effect doesn't mistake a tall incoming message for the user scrolling away.
+  const wasNearBottomRef = useRef(true)
 
   // Heavy: rebuild the processed transcript only when the raw messages change,
   // not on every render (e.g. header collapse toggles fired during scroll).
@@ -703,10 +707,7 @@ export function ChatView({
   // Scroll to bottom when new messages arrive, but only when already near the bottom
   // so manual scrolling up isn't interrupted.
   useEffect(() => {
-    const feed = feedRef.current
-    if (!feed) return
-    const distanceFromBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight
-    if (distanceFromBottom < 200) {
+    if (wasNearBottomRef.current) {
       bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
     }
   }, [renderItems.length])
@@ -825,6 +826,10 @@ export function ChatView({
             onScroll={e => {
               const el = e.target as HTMLElement
               const top = el.scrollTop
+              // Capture anchoring with the current (pre-render) scrollHeight so the
+              // auto-scroll effect knows the user was at the bottom even when the
+              // next message is taller than the 200px threshold.
+              wasNearBottomRef.current = el.scrollHeight - top - el.clientHeight < 200
               // hysteresis: collapse at 220px, expand back only under 80px — evita flicker
               if (headerCollapsed) {
                 if (top <= 80) setHeaderCollapsed(false)
