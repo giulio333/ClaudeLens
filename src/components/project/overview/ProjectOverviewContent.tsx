@@ -214,7 +214,7 @@ export function ProjectView({
   const { isPinned, togglePin } = usePinnedProjects()
   const pinnedNow = isPinned(project.hash)
   const { isPinned: isSessionPinned } = usePinnedSessions()
-  const { tags: projectTags, tagCounts, tagsForSession } = useSessionTags(project.hash)
+  const { tags: projectTags, tagCounts, tagsForSession, renameTag, deleteTag } = useSessionTags(project.hash)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
@@ -499,6 +499,8 @@ export function ProjectView({
               activeTag={tagFilter}
               totalCount={sessions.length}
               onSelect={setTagFilter}
+              onRename={renameTag}
+              onDelete={deleteTag}
             />
             {visibleSessions.length === 0 ? (
               <div className="cl-empty">
