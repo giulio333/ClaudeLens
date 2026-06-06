@@ -38,11 +38,15 @@ function assistantLine(opts: {
   cacheWrite?: number;
   cacheRead?: number;
   timestamp?: string;
+  id?: string;
+  requestId?: string;
 }): string {
   return JSON.stringify({
     type: 'assistant',
     timestamp: opts.timestamp ?? '2026-05-01T10:00:00.000Z',
+    requestId: opts.requestId,
     message: {
+      id: opts.id,
       model: opts.model,
       usage: {
         input_tokens: opts.input ?? 0,
@@ -118,6 +122,67 @@ describe('getProjectUsage — token summation & known-model cost', () => {
     expect(usage.outputTokens).toBe(200);
     expect(sessionCount).toBe(2);
     expect(cost).toBeCloseTo(expectedCost(PRICE.opus, { input: 400, output: 200 }), 10);
+  });
+});
+
+describe('usage dedup by message.id / requestId (issue #56)', () => {
+  it('counts a usage carried by repeated message.id+requestId lines only once', async () => {
+    // Claude Code emits one line per content block of an assistant turn, each
+    // repeating the same message-level usage tagged with the same ids.
+    writeSession(tmp, 'dup.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 6,
+        output: 185,
+        cacheRead: 16906,
+        id: 'msg_01XHZ',
+        requestId: 'req_011Cb',
+      }),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 6,
+        output: 185,
+        cacheRead: 16906,
+        id: 'msg_01XHZ',
+        requestId: 'req_011Cb',
+      }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    expect(s.inputTokens).toBe(6);
+    expect(s.outputTokens).toBe(185);
+    expect(s.cacheReadTokens).toBe(16906);
+    expect(s.messageCount).toBe(1);
+  });
+
+  it('counts distinct ids separately and reports unique messageCount', async () => {
+    writeSession(tmp, 'mixed.jsonl', [
+      // turn A — two duplicated content-block lines
+      assistantLine({ model: 'claude-sonnet-4-5', input: 1, output: 10, id: 'a', requestId: 'r1' }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 1, output: 10, id: 'a', requestId: 'r1' }),
+      // turn B — single line, different ids
+      assistantLine({ model: 'claude-sonnet-4-5', input: 2, output: 20, id: 'b', requestId: 'r2' }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    expect(s.inputTokens).toBe(3); // 1 (A, once) + 2 (B)
+    expect(s.outputTokens).toBe(30); // 10 + 20
+    expect(s.messageCount).toBe(2); // two unique turns, not three lines
+  });
+
+  it('does not dedup lines that lack both message.id and requestId', async () => {
+    // Without a stable key we cannot tell duplicates apart, so keep summing.
+    writeSession(tmp, 'nokey.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 5, output: 5 }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 5, output: 5 }),
+    ]);
+
+    const { usage } = await getProjectUsage(tmp);
+
+    expect(usage.inputTokens).toBe(10);
+    expect(usage.outputTokens).toBe(10);
   });
 });
 

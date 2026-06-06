@@ -147,6 +147,8 @@ interface LineData {
   cacheWriteTokens: number;
   cacheReadTokens: number;
   model: string | undefined;
+  // Stable identity of the message-level usage, used to dedup repeated lines.
+  usageKey: string | undefined;
 }
 
 function extractFirstUserText(json: Record<string, unknown>): string | undefined {
@@ -190,6 +192,15 @@ function extractLineData(json: any): LineData | null {
   if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
 
   const model: string | undefined = json.message?.model;
+  // Claude Code writes one JSONL line per content block of an assistant turn
+  // (text + tool_use, …) and each repeats the same message-level usage, tagged
+  // with the same message.id / requestId. Build a stable key so the caller can
+  // count each unique turn once instead of inflating tokens/cost (issue #56).
+  const messageId: string | undefined = json.message?.id;
+  const requestId: string | undefined = json.requestId;
+  const usageKey = usage && (messageId || requestId)
+    ? `${messageId ?? ''}:${requestId ?? ''}`
+    : undefined;
   return {
     date,
     customTitle,
@@ -200,6 +211,7 @@ function extractLineData(json: any): LineData | null {
     cacheWriteTokens: usage?.cache_creation_input_tokens   ?? 0,
     cacheReadTokens:  usage?.cache_read_input_tokens       ?? 0,
     model:            model && model !== '<synthetic>' ? model : undefined,
+    usageKey,
   };
 }
 
@@ -215,6 +227,7 @@ function parseJsonlSession(filePath: string): ParsedSession {
   try {
     const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
     const modelCounts: Record<string, number> = {};
+    const seenUsage = new Set<string>();
     let dropped = 0;
 
     for (const line of lines) {
@@ -234,6 +247,11 @@ function parseJsonlSession(filePath: string): ParsedSession {
       if (parsed.date) result.date = parsed.date;
 
       if (parsed.inputTokens || parsed.outputTokens) {
+        // Skip lines that repeat a usage we've already counted for this turn.
+        if (parsed.usageKey) {
+          if (seenUsage.has(parsed.usageKey)) continue;
+          seenUsage.add(parsed.usageKey);
+        }
         result.messageCount++;
         if (parsed.model) modelCounts[parsed.model] = (modelCounts[parsed.model] ?? 0) + 1;
         result.inputTokens      += parsed.inputTokens;

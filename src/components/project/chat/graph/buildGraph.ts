@@ -136,8 +136,16 @@ export function buildTimeline(processed: ProcessedMessage[]): TimelineModel {
     }
   }
 
-  const start = Math.min(...stamps)
-  const end = Math.max(...stamps)
+  // Compute min/max in a single linear pass. Spreading `stamps` into
+  // Math.min/max would pass each element as an argument, and engines cap the
+  // argument count — very long sessions throw a RangeError and the graph fails
+  // to render (issue #62).
+  let start = stamps[0]
+  let end = stamps[0]
+  for (const t of stamps) {
+    if (t < start) start = t
+    if (t > end) end = t
+  }
   // Pad domain by 2% on each side so first/last events aren't flush with edge.
   const span = Math.max(end - start, 1000)
   const padded = { start: start - span * 0.02, end: end + span * 0.02 }
