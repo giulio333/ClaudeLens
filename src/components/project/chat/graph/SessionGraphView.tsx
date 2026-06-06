@@ -299,7 +299,7 @@ export function SessionGraphView({ processed, onSelectTool }: Props) {
         <div
           className="cl-tl-tip"
           style={{
-            left: Math.max(8, Math.min((tooltip.x ?? 0), (wrapRef.current?.clientWidth ?? 800) - 280)),
+            left: Math.max(8, Math.min((tooltip.x ?? 0), viewportWidth - 280)),
             top: tooltip.y,
           }}
         >

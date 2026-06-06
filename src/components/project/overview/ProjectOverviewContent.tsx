@@ -242,27 +242,51 @@ export function ProjectView({
     return () => { alive = false; clearInterval(t) }
   }, [])
   const liveProc = procs.find(p => p.cwd === project.realPath)
-  const liveStart = useMemo(() => Date.now(), [liveProc?.pid])
-  const [, tick] = useState(0)
+  const livePid = liveProc?.pid
+  // Live uptime in state, computed inside the interval callback (never during
+  // render) so the render stays pure. Reseeds whenever the observed PID changes.
+  const [liveSec, setLiveSec] = useState(0)
   useEffect(() => {
-    if (!liveProc) return
-    const t = setInterval(() => tick(x => x + 1), 1000)
-    return () => clearInterval(t)
-  }, [liveProc])
-  const liveSec = liveProc ? Math.floor((Date.now() - liveStart) / 1000) : 0
+    if (livePid === undefined) return
+    let start: number | null = null
+    const update = () => {
+      if (start === null) start = Date.now()
+      setLiveSec(Math.floor((Date.now() - start) / 1000))
+    }
+    const seed = setTimeout(update, 0)
+    const t = setInterval(update, 1000)
+    return () => {
+      clearTimeout(seed)
+      clearInterval(t)
+    }
+  }, [livePid])
   const liveUptime = `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`
+
+  // Wall-clock for the retention window, kept in state so render never calls
+  // Date.now() directly. Seeded right after mount and refreshed each minute;
+  // 0 until the first tick (statsSessions falls back to all sessions then).
+  const [nowMs, setNowMs] = useState(0)
+  useEffect(() => {
+    const tick = () => setNowMs(Date.now())
+    const seed = setTimeout(tick, 0)
+    const t = setInterval(tick, 60_000)
+    return () => {
+      clearTimeout(seed)
+      clearInterval(t)
+    }
+  }, [])
 
   // ── Derived ──
   const projectName = projectDisplayName(project.realPath)
   const retentionDays = normalizeRetentionDays(cleanupDays)
   const statsSessions = useMemo(() => {
-    const now = Date.now()
-    const cutoff = now - retentionDays * DAY_MS
+    if (nowMs === 0) return sessions
+    const cutoff = nowMs - retentionDays * DAY_MS
     return sessions.filter(s => {
       const t = new Date(s.date).getTime()
-      return !isNaN(t) && t >= cutoff && t <= now
+      return !isNaN(t) && t >= cutoff && t <= nowMs
     })
-  }, [sessions, retentionDays])
+  }, [sessions, retentionDays, nowMs])
   const sessionCount = statsSessions.length
   const totalTokens = statsSessions.reduce((s, x) => s + x.totalTokens, 0)
   const totalCost = statsSessions.reduce((s, x) => s + x.estimatedCost, 0)
@@ -279,13 +303,13 @@ export function ProjectView({
     [sessions, project.hash, isSessionPinned],
   )
   const hasPinnedSession = pinnedSessions.length > 0
+  // Effective tag filter: a selection whose tag was deleted is treated as no
+  // filter (derived, not an effect, so it can never get stuck on a stale tag).
+  const activeTag = tagFilter && projectTags.some(t => t.name === tagFilter) ? tagFilter : null
   const visibleSessions = useMemo(() => {
-    if (!tagFilter) return sessions
-    return sessions.filter(s => tagsForSession(s.filename).includes(tagFilter))
-  }, [sessions, tagFilter, tagsForSession])
-  useEffect(() => {
-    if (tagFilter && !projectTags.some(t => t.name === tagFilter)) setTagFilter(null)
-  }, [tagFilter, projectTags])
+    if (!activeTag) return sessions
+    return sessions.filter(s => tagsForSession(s.filename).includes(activeTag))
+  }, [sessions, activeTag, tagsForSession])
 
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
@@ -489,15 +513,15 @@ export function ProjectView({
             <div className="cl-sec-head">
               <h2>Sessions</h2>
               <span className="ct">
-                {tagFilter
-                  ? `${visibleSessions.length} tagged #${tagFilter}`
+                {activeTag
+                  ? `${visibleSessions.length} tagged #${activeTag}`
                   : `${sessions.length} total · sorted by last activity`}
               </span>
             </div>
             <TagBar
               tags={projectTags}
               counts={tagCounts}
-              activeTag={tagFilter}
+              activeTag={activeTag}
               totalCount={sessions.length}
               onSelect={setTagFilter}
               onRename={renameTag}
@@ -505,7 +529,7 @@ export function ProjectView({
             />
             {visibleSessions.length === 0 ? (
               <div className="cl-empty">
-                {tagFilter ? `No sessions tagged #${tagFilter}.` : 'No sessions yet.'}
+                {activeTag ? `No sessions tagged #${activeTag}.` : 'No sessions yet.'}
               </div>
             ) : (
               <SessionRows sessions={visibleSessions} projectHash={project.hash} cleanupDays={cleanupDays} onOpen={s => onNavigate({ type: 'chat', project, session: s })} />
