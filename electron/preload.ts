@@ -101,6 +101,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   config: {
     getEffective: (cwd?: string) => ipcRenderer.invoke('config:getEffective', cwd),
   },
+  prefs: {
+    getAll: () => ipcRenderer.invoke('prefs:getAll'),
+    set: (key: string, value: unknown) => ipcRenderer.invoke('prefs:set', key, value),
+  },
   onDataChanged: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('data:changed', handler);

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from 'react'
+import { persistToDisk } from './prefsBackend'
 
 const STORAGE_KEY = 'cl-pinned-projects'
 const EVENT = 'cl-pinned-projects-changed'
@@ -16,9 +17,11 @@ function read(): Set<string> {
 }
 
 function write(next: Set<string>) {
+  const arr = [...next]
   try {
-    localStorage.setItem(STORAGE_KEY, JSON.stringify([...next]))
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(arr))
   } catch { /* ignore */ }
+  persistToDisk(STORAGE_KEY, arr)
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
+import { persistToDisk } from './prefsBackend'
 
 const STORAGE_KEY = 'cl-session-tags'
 const EVENT = 'cl-session-tags-changed'
@@ -35,6 +36,7 @@ function write(next: RootState) {
   try {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(next))
   } catch { /* ignore */ }
+  persistToDisk(STORAGE_KEY, next)
   window.dispatchEvent(new CustomEvent(EVENT))
 }
 

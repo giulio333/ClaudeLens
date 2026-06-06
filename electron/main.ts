@@ -29,6 +29,7 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { readEffectiveConfig } from './modules/config-reader';
+import { readPrefs, setPref } from './modules/prefs-store';
 import { findClaudeProcesses } from './modules/process-scanner';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
@@ -480,6 +481,25 @@ ipcMain.handle('settings:getCleanupPeriodDays', async () => {
     return ok(days);
   } catch {
     return ok(30);
+  }
+});
+
+// ClaudeLens UI preferences (pinned projects/sessions, session tags) persisted
+// to ~/.claudelens/preferences.json — see modules/prefs-store.ts.
+ipcMain.handle('prefs:getAll', async () => {
+  try {
+    return ok(readPrefs());
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('prefs:set', async (_event, key: string, value: unknown) => {
+  try {
+    setPref(key, value);
+    return ok(true);
+  } catch (e) {
+    return err(e);
   }
 });
 
