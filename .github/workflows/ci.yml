@@ -62,7 +62,7 @@ jobs:
         run: npx electron-builder --linux --publish never
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: claudelens-linux
           path: release/*.AppImage
@@ -91,7 +91,7 @@ jobs:
         run: npx electron-builder --win --publish never
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: claudelens-windows
           path: release/*.exe
