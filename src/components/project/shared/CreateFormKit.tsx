@@ -1,14 +1,94 @@
-import { useState, useRef, useEffect, useMemo } from 'react'
+import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react'
+import { createPortal } from 'react-dom'
 
 // Shared building blocks for the "create" pages (skills, agents).
 
 export const MODEL_PRESETS = ['default', 'best', 'sonnet', 'opus', 'haiku', 'sonnet[1m]', 'opus[1m]', 'opusplan'] as const
 
 // Curated list of common Claude Code tools for the tools autocomplete.
+// Exact tool names as used in subagent `tools` frontmatter / permission rules.
+// Users can still type any custom value (e.g. MCP tools) by hand.
 export const KNOWN_TOOLS = [
-  'Bash', 'Read', 'Write', 'Edit', 'Glob', 'Grep', 'WebFetch', 'WebSearch',
-  'Task', 'TodoWrite', 'NotebookEdit',
+  // File & shell
+  'Read', 'Write', 'Edit', 'NotebookEdit', 'Bash',
+  // Search & navigation
+  'Glob', 'Grep', 'LSP',
+  // Web
+  'WebFetch', 'WebSearch',
+  // Delegation & skills
+  'Agent', 'Skill', 'AskUserQuestion',
+  // Tasks
+  'TaskCreate', 'TaskGet', 'TaskList', 'TaskUpdate', 'TaskStop',
+  // Plan & worktree
+  'EnterPlanMode', 'ExitPlanMode', 'EnterWorktree', 'ExitWorktree',
+  // Misc
+  'TodoWrite', 'Monitor', 'PowerShell',
+  'ListMcpResourcesTool', 'ReadMcpResourceTool',
 ] as const
+
+// One-line descriptions for the known tools, shown muted under each name in
+// the autocomplete dropdown. Custom (typed) tools simply have none.
+export const TOOL_DESCRIPTIONS: Record<string, string> = {
+  Read: 'Read file contents',
+  Write: 'Create or overwrite files',
+  Edit: 'Make targeted edits to a file',
+  NotebookEdit: 'Modify Jupyter notebook cells',
+  Bash: 'Run shell commands',
+  Glob: 'Find files by name pattern',
+  Grep: 'Search file contents (ripgrep)',
+  LSP: 'Code intelligence via language servers',
+  WebFetch: 'Fetch and extract content from a URL',
+  WebSearch: 'Run web searches',
+  Agent: 'Spawn a subagent with its own context',
+  Skill: 'Run a skill in the conversation',
+  AskUserQuestion: 'Ask multiple-choice questions',
+  TaskCreate: 'Create a task in the task list',
+  TaskGet: 'Get details for a specific task',
+  TaskList: 'List all tasks with their status',
+  TaskUpdate: 'Update task status, deps or details',
+  TaskStop: 'Kill a running background task',
+  EnterPlanMode: 'Switch to plan mode before coding',
+  ExitPlanMode: 'Present a plan and exit plan mode',
+  EnterWorktree: 'Create / switch to an isolated git worktree',
+  ExitWorktree: 'Return from a worktree session',
+  TodoWrite: 'Manage the session task checklist',
+  Monitor: 'Run a command in the background and react to output',
+  PowerShell: 'Run PowerShell commands natively',
+  ListMcpResourcesTool: 'List resources from MCP servers',
+  ReadMcpResourceTool: 'Read a specific MCP resource by URI',
+}
+
+// Full descriptions + permission flag, shown in the hover popover next to a
+// dropdown row. `permission` = the tool prompts for permission when it runs.
+export const TOOL_DETAILS: Record<string, { full: string; permission: boolean }> = {
+  Read: { full: 'Reads the contents of files.', permission: false },
+  Write: { full: 'Creates or overwrites files with the full content provided. Does not append or merge.', permission: true },
+  Edit: { full: 'Makes targeted edits to specific files via exact string replacement.', permission: true },
+  NotebookEdit: { full: 'Modifies Jupyter notebook cells one cell at a time (replace, insert or delete).', permission: true },
+  Bash: { full: 'Executes shell commands in your environment, with an optional background mode for long-running processes.', permission: true },
+  Glob: { full: 'Finds files based on glob pattern matching (e.g. **/*.ts), sorted by modification time.', permission: false },
+  Grep: { full: 'Searches for patterns in file contents using ripgrep regex syntax. Respects .gitignore.', permission: false },
+  LSP: { full: 'Code intelligence via language servers: jump to definitions, find references, report type errors and warnings. Requires a code-intelligence plugin.', permission: false },
+  WebFetch: { full: 'Fetches content from a URL, converts HTML to Markdown and runs an extraction prompt against it. Lossy by design.', permission: true },
+  WebSearch: { full: 'Runs a web search and returns result titles and URLs. Does not fetch the pages — follow up with WebFetch.', permission: true },
+  Agent: { full: 'Spawns a subagent with its own context window to handle a task autonomously, returning a single text result to the parent.', permission: false },
+  Skill: { full: 'Executes a skill within the main conversation.', permission: true },
+  AskUserQuestion: { full: 'Asks multiple-choice questions to gather requirements or clarify ambiguity.', permission: false },
+  TaskCreate: { full: 'Creates a new task in the task list.', permission: false },
+  TaskGet: { full: 'Retrieves full details for a specific task.', permission: false },
+  TaskList: { full: 'Lists all tasks with their current status.', permission: false },
+  TaskUpdate: { full: 'Updates task status, dependencies, details, or deletes tasks.', permission: false },
+  TaskStop: { full: 'Kills a running background task by ID.', permission: false },
+  EnterPlanMode: { full: 'Switches to plan mode to design an approach before coding.', permission: false },
+  ExitPlanMode: { full: 'Presents a plan for approval and exits plan mode.', permission: true },
+  EnterWorktree: { full: 'Creates an isolated git worktree and switches into it, or switches into an existing one by path.', permission: false },
+  ExitWorktree: { full: 'Exits a worktree session and returns to the original directory.', permission: false },
+  TodoWrite: { full: 'Manages the session task checklist. Disabled by default as of v2.1.142 in favor of TaskCreate / TaskGet / TaskList / TaskUpdate.', permission: false },
+  Monitor: { full: 'Runs a command in the background and feeds each output line back to Claude, so it can react to logs, file changes or polled status mid-conversation.', permission: true },
+  PowerShell: { full: 'Executes PowerShell commands natively (availability depends on platform and settings).', permission: true },
+  ListMcpResourcesTool: { full: 'Lists resources exposed by connected MCP servers.', permission: false },
+  ReadMcpResourceTool: { full: 'Reads a specific MCP resource by URI.', permission: false },
+}
 
 export const NAME_MAX = 64
 export const DESC_MAX = 250
@@ -75,6 +155,29 @@ export function ToolsInput({ value, onChange, placeholder, accent }: {
   const [draft, setDraft] = useState('')
   const [open, setOpen] = useState(false)
   const inputRef = useRef<HTMLInputElement>(null)
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [rect, setRect] = useState<{ left: number; top: number; width: number } | null>(null)
+  const [hover, setHover] = useState<{ tool: string; rowTop: number } | null>(null)
+
+  // The dropdown is portaled to <body> so it escapes ancestors that clip
+  // (e.g. the edit card uses backdrop-filter, which clips descendants in
+  // Chromium even with overflow: visible). Position is tracked from the box.
+  useLayoutEffect(() => {
+    if (!open) { setRect(null); setHover(null); return }
+    const update = () => {
+      const el = boxRef.current
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      setRect({ left: r.left, top: r.bottom, width: r.width })
+    }
+    update()
+    window.addEventListener('scroll', update, true)
+    window.addEventListener('resize', update)
+    return () => {
+      window.removeEventListener('scroll', update, true)
+      window.removeEventListener('resize', update)
+    }
+  }, [open])
 
   // Literal class strings (no dynamic interpolation) so Tailwind's JIT keeps them.
   const chipCls = accent === 'violet'
@@ -102,6 +205,7 @@ export function ToolsInput({ value, onChange, placeholder, accent }: {
   return (
     <div className="relative">
       <div
+        ref={boxRef}
         onClick={() => inputRef.current?.focus()}
         className="flex flex-wrap items-center gap-1.5 w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-2 py-1.5 min-h-[40px] cursor-text focus-within:border-[var(--cl-ink)] transition-colors"
       >
@@ -125,19 +229,57 @@ export function ToolsInput({ value, onChange, placeholder, accent }: {
           }}
         />
       </div>
-      {open && suggestions.length > 0 && (
-        <div className="absolute z-50 left-0 right-0 mt-1 bg-[var(--cl-paper)] border border-[var(--cl-ink)] shadow-xl max-h-48 overflow-y-auto">
+      {open && suggestions.length > 0 && rect && createPortal(
+        <div
+          className="fixed z-[100] bg-[var(--cl-paper)] border border-[var(--cl-ink)] shadow-xl max-h-48 overflow-y-auto"
+          style={{ left: rect.left, top: rect.top + 4, width: rect.width }}
+        >
           {suggestions.map(t => (
             <button
               key={t}
               type="button"
               onMouseDown={e => { e.preventDefault(); add(t) }}
-              className={`block w-full text-left px-3 py-1.5 font-mono text-[12px] text-[var(--cl-ink-2)] transition-colors ${optionCls}`}
+              onMouseEnter={e => setHover({ tool: t, rowTop: e.currentTarget.getBoundingClientRect().top })}
+              onMouseLeave={() => setHover(h => (h?.tool === t ? null : h))}
+              className={`block w-full text-left px-3 py-1.5 transition-colors ${optionCls}`}
             >
-              {t}
+              <span className="block font-mono text-[12px] text-[var(--cl-ink-2)]">{t}</span>
+              {TOOL_DESCRIPTIONS[t] && (
+                <span className="block text-[10.5px] leading-tight text-[var(--cl-ink-4)] mt-0.5">{TOOL_DESCRIPTIONS[t]}</span>
+              )}
             </button>
           ))}
-        </div>
+        </div>,
+        document.body
+      )}
+      {open && hover && TOOL_DETAILS[hover.tool] && rect && createPortal(
+        (() => {
+          const W = 260
+          const rightX = rect.left + rect.width + 8
+          // Flip to the left of the dropdown if it would overflow the viewport.
+          const left = rightX + W > window.innerWidth ? Math.max(8, rect.left - W - 8) : rightX
+          const detail = TOOL_DETAILS[hover.tool]
+          return (
+            <div
+              className="fixed z-[101] bg-[var(--cl-paper)] border border-[var(--cl-ink)] shadow-xl px-3 py-2.5 pointer-events-none"
+              style={{ left, top: hover.rowTop, width: W }}
+            >
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="font-mono text-[12px] text-[var(--cl-ink)]">{hover.tool}</span>
+                <span
+                  className="font-mono text-[9px] uppercase tracking-[0.12em] px-1.5 py-0.5 border"
+                  style={detail.permission
+                    ? { color: 'var(--cl-accent-ink)', background: 'var(--cl-accent-soft)', borderColor: 'transparent' }
+                    : { color: 'var(--cl-ink-4)', borderColor: 'var(--cl-line)' }}
+                >
+                  {detail.permission ? 'asks permission' : 'no prompt'}
+                </span>
+              </div>
+              <p className="text-[11px] leading-relaxed text-[var(--cl-ink-3)]">{detail.full}</p>
+            </div>
+          )
+        })(),
+        document.body
       )}
     </div>
   )

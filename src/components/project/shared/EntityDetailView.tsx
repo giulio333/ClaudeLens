@@ -12,6 +12,7 @@ import {
   optionsDirty,
   fluidTitleSize,
 } from './entityOptions'
+import { ToolsInput } from './CreateFormKit'
 
 /* ════════════════════════════════════════════════════════════════════
    EntityDetailView — vista detail unificata config-driven (markdown +
@@ -128,6 +129,17 @@ function OptionEditor({
   }
   if (def.isArray) {
     const arr = Array.isArray(value) ? value : []
+    if (def.isTools) {
+      // Tool-list field: chips + autocomplete of known tools, free text still allowed.
+      return (
+        <ToolsInput
+          value={arr}
+          onChange={v => onChange(v)}
+          placeholder="Read, Grep, Bash…"
+          accent="accent"
+        />
+      )
+    }
     return (
       <input
         type="text"
