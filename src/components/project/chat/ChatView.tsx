@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, RefObject, MouseEvent as ReactMouseEvent } from 'react'
+import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
 import { fmt, fmtModel, modelColor, sessionTitle } from '../utils'
@@ -17,16 +17,6 @@ import { projectDisplayName } from '../shared/projectName'
 
 type ViewMode = 'chat' | 'timeline'
 
-function ExportIcon() {
-  return (
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-      <path d="M8 2v7" />
-      <path d="M5.5 6.5 8 9l2.5-2.5" />
-      <path d="M3 10.5V13h10v-2.5" />
-    </svg>
-  )
-}
-
 function PlayGlyph() {
   return <span className="cl-resume-play" aria-hidden />
 }
@@ -39,77 +29,121 @@ function TrashGlyph() {
   )
 }
 
-function ChatExportMenu({
+function MoreGlyph() {
+  return (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
+      <circle cx="12" cy="5" r="1.6" />
+      <circle cx="12" cy="12" r="1.6" />
+      <circle cx="12" cy="19" r="1.6" />
+    </svg>
+  )
+}
+
+/** Overflow menu (kebab) gathering Export and the destructive Delete action. */
+function ChatOverflowMenu({
   canExport,
-  exportOpen,
   exporting,
   exportPreset,
   exportMessage,
   exportError,
   selectedExportPreset,
-  menuRef,
-  onToggle,
+  onOpen,
   onPreset,
   onExport,
+  onDelete,
 }: {
   canExport: boolean
-  exportOpen: boolean
   exporting: ChatExportFormat | null
   exportPreset: ChatExportPreset
   exportMessage: string | null
   exportError: string | null
   selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  menuRef: RefObject<HTMLDivElement | null>
-  onToggle: () => void
+  onOpen: () => void
   onPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
+  onDelete: () => void
 }) {
+  const [open, setOpen] = useState(false)
+  const menuRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (menuRef.current?.contains(event.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [open])
+
+  const toggle = () => {
+    setOpen(o => {
+      if (!o) onOpen()
+      return !o
+    })
+  }
+
   return (
-    <div className="cl-export" ref={menuRef}>
+    <div className="cl-overflow" ref={menuRef}>
       <button
         type="button"
-        className="cl-export-trigger"
-        disabled={!canExport || exporting !== null}
-        aria-expanded={exportOpen}
-        onClick={onToggle}
+        className="cl-overflow-trigger"
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title="More actions"
+        onClick={toggle}
       >
-        <ExportIcon />
-        <span>{exporting ? 'Exporting' : 'Export'}</span>
+        <MoreGlyph />
       </button>
-      {exportOpen && (
-        <div className="cl-export-panel">
-          <div className="cl-export-label">Preset</div>
-          <div className="cl-export-presets">
-            {CHAT_EXPORT_PRESETS.map(preset => (
+      {open && (
+        <div className="cl-overflow-panel" role="menu">
+          <div className="cl-overflow-section">
+            <div className="cl-export-label">Export</div>
+            <div className="cl-export-presets">
+              {CHAT_EXPORT_PRESETS.map(preset => (
+                <button
+                  key={preset.value}
+                  type="button"
+                  className={exportPreset === preset.value ? 'is-active' : ''}
+                  onClick={() => onPreset(preset.value)}
+                >
+                  {preset.label}
+                </button>
+              ))}
+            </div>
+            <p className="cl-export-desc">{selectedExportPreset.description}</p>
+            <div className="cl-export-actions">
               <button
-                key={preset.value}
                 type="button"
-                className={exportPreset === preset.value ? 'is-active' : ''}
-                onClick={() => onPreset(preset.value)}
+                disabled={!canExport || exporting !== null}
+                onClick={() => onExport('markdown')}
               >
-                {preset.label}
+                {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
               </button>
-            ))}
+              <button
+                type="button"
+                disabled={!canExport || exporting !== null}
+                onClick={() => onExport('pdf')}
+              >
+                {exporting === 'pdf' ? 'Saving...' : 'PDF'}
+              </button>
+            </div>
+            {exportMessage && <p className="cl-export-status is-ok">{exportMessage}</p>}
+            {exportError && <p className="cl-export-status is-error">{exportError}</p>}
           </div>
-          <p className="cl-export-desc">{selectedExportPreset.description}</p>
-          <div className="cl-export-actions">
-            <button
-              type="button"
-              disabled={!canExport || exporting !== null}
-              onClick={() => onExport('markdown')}
-            >
-              {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
-            </button>
-            <button
-              type="button"
-              disabled={!canExport || exporting !== null}
-              onClick={() => onExport('pdf')}
-            >
-              {exporting === 'pdf' ? 'Saving...' : 'PDF'}
-            </button>
-          </div>
-          {exportMessage && <p className="cl-export-status is-ok">{exportMessage}</p>}
-          {exportError && <p className="cl-export-status is-error">{exportError}</p>}
+          <div className="cl-overflow-sep" />
+          <button
+            type="button"
+            role="menuitem"
+            className="cl-overflow-item is-danger"
+            onClick={() => {
+              setOpen(false)
+              onDelete()
+            }}
+          >
+            <TrashGlyph />
+            <span>Delete session</span>
+          </button>
         </div>
       )}
     </div>
@@ -122,14 +156,12 @@ function ChatTopActions({
   detailsFilter,
   setDetailsFilter,
   canExport,
-  exportOpen,
   exporting,
   exportPreset,
   exportMessage,
   exportError,
   selectedExportPreset,
-  exportMenuRef,
-  onToggleExport,
+  onOpenExport,
   onExportPreset,
   onExport,
   onResume,
@@ -140,14 +172,12 @@ function ChatTopActions({
   detailsFilter: ChatDetailsFilter
   setDetailsFilter: (filter: ChatDetailsFilter) => void
   canExport: boolean
-  exportOpen: boolean
   exporting: ChatExportFormat | null
   exportPreset: ChatExportPreset
   exportMessage: string | null
   exportError: string | null
   selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  exportMenuRef: RefObject<HTMLDivElement | null>
-  onToggleExport: () => void
+  onOpenExport: () => void
   onExportPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
   onResume: () => void
@@ -182,33 +212,22 @@ function ChatTopActions({
           ))}
         </div>
       )}
-      <ChatExportMenu
+      <button className="cl-resume" type="button" onClick={onResume}>
+        <PlayGlyph />
+        <span>Resume</span>
+      </button>
+      <ChatOverflowMenu
         canExport={canExport}
-        exportOpen={exportOpen}
         exporting={exporting}
         exportPreset={exportPreset}
         exportMessage={exportMessage}
         exportError={exportError}
         selectedExportPreset={selectedExportPreset}
-        menuRef={exportMenuRef}
-        onToggle={onToggleExport}
+        onOpen={onOpenExport}
         onPreset={onExportPreset}
         onExport={onExport}
+        onDelete={onDelete}
       />
-      <button className="cl-resume" type="button" onClick={onResume}>
-        <PlayGlyph />
-        <span>Resume</span>
-      </button>
-      <button
-        className="cl-resume"
-        type="button"
-        onClick={onDelete}
-        title="Delete session"
-        style={{ color: 'var(--cl-danger)' }}
-      >
-        <TrashGlyph />
-        <span>Delete</span>
-      </button>
     </>
   )
 }
@@ -499,7 +518,6 @@ export function ChatView({
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
   const [transcriptAgent, setTranscriptAgent] = useState<SessionAgent | null>(null)
-  const [exportOpen, setExportOpen] = useState(false)
   const [exportPreset, setExportPreset] = useState<ChatExportPreset>('team')
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
@@ -508,7 +526,6 @@ export function ChatView({
   const [showDelete, setShowDelete] = useState(false)
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
   const [activeTurn, setActiveTurn] = useState<number | null>(null)
-  const exportMenuRef = useRef<HTMLDivElement | null>(null)
   const feedRef = useRef<HTMLElement | null>(null)
   const turnRefs = useRef<Record<number, HTMLElement | null>>({})
   const bottomRef = useRef<HTMLDivElement | null>(null)
@@ -712,16 +729,6 @@ export function ChatView({
     }
   }, [renderItems.length])
 
-  useEffect(() => {
-    if (!exportOpen) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (exportMenuRef.current?.contains(event.target as Node)) return
-      setExportOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [exportOpen])
-
   async function handleExport(format: ChatExportFormat) {
     if (!canExport) return
     setExporting(format)
@@ -762,15 +769,12 @@ export function ChatView({
             detailsFilter={detailsFilter}
             setDetailsFilter={setDetailsFilter}
             canExport={canExport}
-            exportOpen={exportOpen}
             exporting={exporting}
             exportPreset={exportPreset}
             exportMessage={exportMessage}
             exportError={exportError}
             selectedExportPreset={selectedExportPreset}
-            exportMenuRef={exportMenuRef}
-            onToggleExport={() => {
-              setExportOpen(open => !open)
+            onOpenExport={() => {
               setExportError(null)
               setExportMessage(null)
             }}
