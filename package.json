@@ -40,7 +40,7 @@
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.3.161",
     "@tailwindcss/typography": "^0.5.19",
-    "@tanstack/react-query": "^5.100.14",
+    "@tanstack/react-query": "^5.101.0",
     "chokidar": "^5.0.0",
     "glob": "^13.0.6",
     "highlight.js": "^11.11.1",
