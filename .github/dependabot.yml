@@ -4,14 +4,24 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
-    open-pull-requests-limit: 10
+    open-pull-requests-limit: 5
     groups:
-      # Bundle low-risk dev/type/lint tooling into a single PR to reduce noise.
-      dev-dependencies:
-        dependency-type: development
+      # All minor/patch updates in one PR — safe to merge after CI.
+      npm-minor-patch:
         update-types:
           - minor
           - patch
+      # Major version bumps in a separate grouped PR for manual review.
+      npm-major:
+        update-types:
+          - major
+        exclude-patterns:
+          # Tailwind CSS 4 requires a manual migration — keep it out of automation.
+          - "tailwindcss"
+    ignore:
+      - dependency-name: "tailwindcss"
+        update-types:
+          - version-update:semver-major
     labels:
       - dependencies
 
@@ -19,5 +29,11 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    groups:
+      github-actions:
+        update-types:
+          - minor
+          - patch
+          - major
     labels:
       - dependencies
