@@ -52,14 +52,16 @@ export type OptionDef = {
   isArray?: boolean
   isBool?: boolean
   isNumber?: boolean
+  /** Array di tool name: l'editor mostra l'autocomplete dei tool noti (input libero comunque consentito). */
+  isTools?: boolean
   enum?: string[]
 }
 
 export const AGENT_OPTION_DEFS: OptionDef[] = [
   { key: 'color',                  label: 'color',                     frontmatterKey: 'color',                   blurb: 'Accent color for the agent identity: red · orange · yellow · green · cyan · blue · purple · pink.', enum: ['green', 'red', 'orange', 'yellow', 'cyan', 'blue', 'purple', 'pink'] },
   { key: 'model',                  label: 'model',                     frontmatterKey: 'model',                   blurb: 'Model alias or full model ID. Omit to inherit from the current session.' },
-  { key: 'allowedTools',           label: 'tools',                     frontmatterKey: 'tools',                   blurb: 'Tools the subagent can use. Inherits all if omitted.', isArray: true },
-  { key: 'disallowedTools',        label: 'disallowedTools',           frontmatterKey: 'disallowedTools',         blurb: 'Tools to deny, removed from the inherited list.', isArray: true },
+  { key: 'allowedTools',           label: 'tools',                     frontmatterKey: 'tools',                   blurb: 'Tools the subagent can use. Inherits all if omitted.', isArray: true, isTools: true },
+  { key: 'disallowedTools',        label: 'disallowedTools',           frontmatterKey: 'disallowedTools',         blurb: 'Tools to deny, removed from the inherited list.', isArray: true, isTools: true },
   { key: 'permissionMode',         label: 'permissionMode',            frontmatterKey: 'permissionMode',          blurb: 'default · acceptEdits · auto · dontAsk · bypassPermissions · plan', enum: ['default', 'acceptEdits', 'auto', 'dontAsk', 'bypassPermissions', 'plan'] },
   { key: 'maxTurns',               label: 'maxTurns',                  frontmatterKey: 'maxTurns',                blurb: 'Maximum agentic turns before the subagent stops.', isNumber: true },
   { key: 'isolation',              label: 'isolation',                 frontmatterKey: 'isolation',               blurb: 'Set to worktree to run in an isolated git worktree.', enum: ['worktree'] },
@@ -73,7 +75,7 @@ export const AGENT_OPTION_DEFS: OptionDef[] = [
 
 export const SKILL_OPTION_DEFS: OptionDef[] = [
   { key: 'argumentHint',           label: 'argument-hint',            frontmatterKey: 'argument-hint',            blurb: 'Hint shown in autocomplete — e.g. [filename] [format].' },
-  { key: 'allowedTools',           label: 'allowed-tools',            frontmatterKey: 'allowed-tools',            blurb: 'Tools Claude can use without requesting permission when the skill is active.', isArray: true },
+  { key: 'allowedTools',           label: 'allowed-tools',            frontmatterKey: 'allowed-tools',            blurb: 'Tools Claude can use without requesting permission when the skill is active.', isArray: true, isTools: true },
   { key: 'model',                  label: 'model',                    frontmatterKey: 'model',                    blurb: 'Model to use when the skill is active — e.g. claude-sonnet-4-6.' },
   { key: 'context',                label: 'context',                  frontmatterKey: 'context',                  blurb: 'Set to fork to run in an isolated forked subagent.', enum: ['fork'] },
   { key: 'agent',                  label: 'agent',                    frontmatterKey: 'agent',                    blurb: 'Type of subagent to use when context: fork is set.' },
