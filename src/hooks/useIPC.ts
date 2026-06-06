@@ -219,6 +219,10 @@ declare global {
       config: {
         getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>
       }
+      prefs: {
+        getAll: () => Promise<IpcResult<Record<string, unknown>>>
+        set: (key: string, value: unknown) => Promise<IpcResult<boolean>>
+      }
       onDataChanged: (callback: () => void) => () => void
       live: {
         getProcesses: () => Promise<IpcResult<ClaudeProcess[]>>

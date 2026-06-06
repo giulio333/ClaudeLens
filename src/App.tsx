@@ -1,10 +1,19 @@
+import { useEffect } from 'react'
 import { useDataChangedRefetch } from './hooks/useIPC'
+import { hydratePrefs } from './hooks/prefsBackend'
 import { ThemeProvider } from './hooks/useTheme'
 import ProjectOverview from './tabs/ProjectOverview'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
 export default function App() {
   useDataChangedRefetch()
+
+  // Load persisted UI state (pinned projects/sessions, tags) from disk into
+  // localStorage once at startup, and migrate any localStorage-only data from
+  // older builds. See hooks/prefsBackend.ts.
+  useEffect(() => {
+    void hydratePrefs()
+  }, [])
 
   return (
     <ThemeProvider>
