@@ -1,5 +1,8 @@
 import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
+import { assertWithin } from '../utils';
+
+const VALID_TOPIC_TYPES = ['user', 'feedback', 'project', 'reference'] as const;
 
 export interface TopicInput {
   name: string;
@@ -90,10 +93,26 @@ function uniqueFilename(memoryDir: string, base: string): string {
   return `${stem}_${n}.md`;
 }
 
+// The slug only keeps [a-z0-9_], so the name can't traverse; but `type` is
+// interpolated into the filename, and a name that slugs to empty would yield a
+// bare "type_.md". Guard both before touching the filesystem.
+function validateTopicInput(input: TopicInput): void {
+  if (!VALID_TOPIC_TYPES.includes(input.type)) {
+    throw new Error(`Invalid topic type "${input.type}".`);
+  }
+  const slug = nameToFilename(input.type, input.name).replace(`${input.type}_`, '').replace(/\.md$/, '');
+  if (!slug) {
+    throw new Error(`Invalid topic name "${input.name}": produces an empty slug.`);
+  }
+}
+
 export function createTopic(memoryDir: string, input: TopicInput): string {
+  validateTopicInput(input);
   if (!existsSync(memoryDir)) mkdirSync(memoryDir, { recursive: true });
   const filename = uniqueFilename(memoryDir, nameToFilename(input.type, input.name));
-  writeFileSync(join(memoryDir, filename), buildTopicFileContent(input), 'utf-8');
+  const target = join(memoryDir, filename);
+  assertWithin(memoryDir, target);
+  writeFileSync(target, buildTopicFileContent(input), 'utf-8');
   addLineToMemoryMd(join(memoryDir, 'MEMORY.md'), filename, input.description);
   return filename;
 }
