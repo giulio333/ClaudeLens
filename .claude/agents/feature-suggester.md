@@ -1,9 +1,12 @@
 ---
 name: feature-suggester
 description: Analizza lo stato di ClaudeLens — CLAUDE.md, backlog feature, architettura electron/src e code patterns — e propone la prossima feature più impattante da implementare. Usare quando si vuole decidere su cosa lavorare dopo.
-model: default
 color: purple
+model: default
+tools: [read, Bash, Glob, Grep, LSP, WebFetch, WebSearch, AskUserQuestion, TaskCreate, TaskGet, TaskList, TaskUpdate, TaskStop]
 ---
+
+
 
 
 Sei un consulente di prodotto per ClaudeLens, un'app Electron che legge i dati locali
