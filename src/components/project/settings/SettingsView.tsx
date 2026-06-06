@@ -1,6 +1,7 @@
 import { useState, type ReactNode } from 'react'
 import { TopBar } from '../shared/TopBar'
 import { useEffectiveConfig, type EffectiveConfig } from '../../../hooks/useIPC'
+import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 // Reads the *effective* Claude Code configuration through the official Agent SDK
@@ -8,9 +9,10 @@ import { useEffectiveConfig, type EffectiveConfig } from '../../../hooks/useIPC'
 // left-rail of tabs, mirroring the native Claude settings dialog. Read-only:
 // ClaudeLens inspects configuration, it does not mutate ~/.claude settings here.
 
-type TabId = 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'sources'
+type TabId = 'appearance' | 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'sources'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
+  { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
   { id: 'general', label: 'General', icon: <GearIcon /> },
   { id: 'permissions', label: 'Permissions', icon: <ShieldIcon /> },
   { id: 'tools', label: 'Tools', icon: <WrenchIcon /> },
@@ -79,7 +81,9 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 
         {/* ─── Content ─── */}
         <main className="flex-1 min-w-0 overflow-y-auto" style={{ padding: '28px 40px 60px' }}>
-          {isLoading ? (
+          {tab === 'appearance' ? (
+            <AppearanceTab />
+          ) : isLoading ? (
             <Centered>Reading configuration via the Agent SDK…</Centered>
           ) : error ? (
             <Centered>Failed to read configuration: {(error as Error).message}</Centered>
@@ -99,6 +103,7 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 
 function TabContent({ tab, cfg, q }: { tab: TabId; cfg: EffectiveConfig; q: string }) {
   switch (tab) {
+    case 'appearance': return null // handled before TabContent (editable, config-independent)
     case 'general': return <GeneralTab cfg={cfg} q={q} />
     case 'permissions': return <PermissionsTab cfg={cfg} q={q} />
     case 'tools': return <ToolsTab cfg={cfg} q={q} />
@@ -137,6 +142,55 @@ export function GeneralTab({ cfg, q }: { cfg: EffectiveConfig; q: string }) {
         </Row>
       </Section>
     </Filtered>
+  )
+}
+
+// ─── Appearance (editable, ClaudeLens-own preference) ─────────────────────────
+// Unlike the rest of this page, this section is *not* read-only and is unrelated
+// to Claude Code's config: it controls ClaudeLens's own light/dark theme via
+// useTheme(). Choosing "System" follows the OS.
+
+const THEME_OPTIONS: { id: ThemePreference; label: string; icon: ReactNode; hint: string }[] = [
+  { id: 'light', label: 'Light', icon: <SunIcon />, hint: 'Always light' },
+  { id: 'dark', label: 'Dark', icon: <MoonIcon />, hint: 'Always dark' },
+  { id: 'system', label: 'System', icon: <DisplayIcon />, hint: 'Follow the OS' },
+]
+
+export function AppearanceTab() {
+  const { preference, resolved, setPreference } = useTheme()
+  return (
+    <Section
+      title="Theme"
+      hint="Choose how ClaudeLens looks. With System, it follows your operating system."
+    >
+      <div className="flex gap-2.5 pt-1">
+        {THEME_OPTIONS.map(opt => {
+          const active = preference === opt.id
+          return (
+            <button
+              key={opt.id}
+              onClick={() => setPreference(opt.id)}
+              className="flex flex-col items-center gap-2 rounded-xl px-5 py-4 transition-colors"
+              style={{
+                flex: 1,
+                background: active ? 'var(--cl-accent-soft)' : 'var(--cl-paper-2)',
+                border: `1px solid ${active ? 'var(--cl-accent)' : 'var(--cl-line)'}`,
+                color: active ? 'var(--cl-accent-ink)' : 'var(--cl-ink-2)',
+              }}
+            >
+              <span style={{ display: 'flex' }}>{opt.icon}</span>
+              <span style={{ fontSize: 13.5, fontWeight: active ? 600 : 500 }}>{opt.label}</span>
+              <span style={{ fontSize: 11, color: 'var(--cl-ink-4)' }}>{opt.hint}</span>
+            </button>
+          )
+        })}
+      </div>
+      {preference === 'system' && (
+        <p className="mt-3" style={{ fontSize: 12, color: 'var(--cl-ink-4)' }}>
+          Currently following your system: <strong style={{ color: 'var(--cl-ink-3)' }}>{resolved}</strong>.
+        </p>
+      )}
+    </Section>
   )
 }
 
@@ -409,6 +463,10 @@ function WrenchIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" f
 function PlugIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22v-5M9 8V2M15 8V2M5 8h14v3a7 7 0 0 1-14 0z" /></svg> }
 function BlocksIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M17 3v8M3 17h8M7 13v8" /></svg> }
 function LayersIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 2 9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" /></svg> }
+function PaletteIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="17.5" cy="10.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="8.5" cy="7.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="6.5" cy="12.5" r="1.2" fill="currentColor" stroke="none" /><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1 .9-1.5 2-1.5h1.5A3.5 3.5 0 0 0 22 12 10 10 0 0 0 12 2z" /></svg> }
+function SunIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" /></svg> }
+function MoonIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg> }
+function DisplayIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="3.5" width="19" height="13" rx="1.6" /><path d="M8 21h8M12 16.5V21" /></svg> }
 
 /** Gear glyph for the top-bar trigger (exported for ProjectOverview). */
 export function SettingsGearIcon() {
