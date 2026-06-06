@@ -1,4 +1,5 @@
 import { useDataChangedRefetch } from './hooks/useIPC'
+import { ThemeProvider } from './hooks/useTheme'
 import ProjectOverview from './tabs/ProjectOverview'
 import { ErrorBoundary } from './components/ErrorBoundary'
 
@@ -6,6 +7,7 @@ export default function App() {
   useDataChangedRefetch()
 
   return (
+    <ThemeProvider>
     <div
       className="flex flex-col h-screen"
       style={{ background: 'var(--cl-paper)', color: 'var(--cl-ink)' }}
@@ -35,5 +37,6 @@ export default function App() {
         </ErrorBoundary>
       </main>
     </div>
+    </ThemeProvider>
   )
 }

@@ -54,7 +54,6 @@ import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs'
 import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView'
 
 type Project = { hash: string; realPath: string }
-type Theme = 'light' | 'dark'
 
 // View types that render inside the editorial chrome (top bar + subtabs)
 const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks', 'project-plans', 'project-config']
@@ -89,30 +88,11 @@ function viewForSection(section: ProjectSection, project: Project): View {
   }
 }
 
-function SunIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="4.2" /><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-    </svg>
-  )
-}
-function MoonIcon() {
-  return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
-    </svg>
-  )
-}
-
 export default function ProjectOverview() {
   const [selected, setSelected] = useState<Project | null>(null)
   const [scope, setScope] = useState<'global' | 'project'>('global')
   const [view, setView] = useState<View>({ type: 'global-home' })
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
-  const [theme, setTheme] = useState<Theme>(() => {
-    const saved = (typeof localStorage !== 'undefined' && localStorage.getItem('cl-theme')) as Theme | null
-    return saved === 'dark' ? 'dark' : 'light'
-  })
 
   const { data: projects } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
@@ -216,11 +196,6 @@ export default function ProjectOverview() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [searchMode, searchOpen, selected, togglePin])
-
-  useEffect(() => {
-    document.documentElement.setAttribute('data-theme', theme)
-    try { localStorage.setItem('cl-theme', theme) } catch { /* ignore */ }
-  }, [theme])
 
   function selectProject(p: Project) {
     setSelected(p)
@@ -437,15 +412,6 @@ export default function ProjectOverview() {
             title="Search"
           >
             <LensTriggerIcon />
-          </button>
-          <button
-            className="cl-theme-toggle"
-            type="button"
-            onClick={() => setTheme(t => (t === 'light' ? 'dark' : 'light'))}
-            title={theme === 'light' ? 'Switch to dark' : 'Switch to light'}
-            aria-label="Toggle theme"
-          >
-            {theme === 'light' ? <MoonIcon /> : <SunIcon />}
           </button>
           <button
             className="cl-theme-toggle"
