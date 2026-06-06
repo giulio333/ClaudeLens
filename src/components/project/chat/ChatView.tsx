@@ -511,6 +511,7 @@ export function ChatView({
   const exportMenuRef = useRef<HTMLDivElement | null>(null)
   const feedRef = useRef<HTMLElement | null>(null)
   const turnRefs = useRef<Record<number, HTMLElement | null>>({})
+  const bottomRef = useRef<HTMLDivElement | null>(null)
 
   // Heavy: rebuild the processed transcript only when the raw messages change,
   // not on every render (e.g. header collapse toggles fired during scroll).
@@ -698,6 +699,17 @@ export function ChatView({
     const m = Math.floor(s / 60)
     return m > 0 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`
   }, [processed])
+
+  // Scroll to bottom when new messages arrive, but only when already near the bottom
+  // so manual scrolling up isn't interrupted.
+  useEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
+    const distanceFromBottom = feed.scrollHeight - feed.scrollTop - feed.clientHeight
+    if (distanceFromBottom < 200) {
+      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
+    }
+  }, [renderItems.length])
 
   useEffect(() => {
     if (!exportOpen) return
@@ -899,6 +911,7 @@ export function ChatView({
                       />
                     )
                   )}
+                  <div ref={bottomRef} />
                 </div>
               </div>
             )}
