@@ -22,7 +22,7 @@ export interface PlanGroup {
 }
 
 // Una riga `attachment` di tipo plan estratta da una sessione .jsonl.
-interface PlanRef {
+export interface PlanRef {
   filePath: string;
   status: PlanStatus;
   timestamp: string;
@@ -49,7 +49,7 @@ function deriveTitle(content: string | null, slug: string): string {
 }
 
 // Estrae i riferimenti ai piani dalle righe attachment di una sessione .jsonl.
-function extractPlanRefs(sessionFilePath: string): PlanRef[] {
+export function extractPlanRefs(sessionFilePath: string): PlanRef[] {
   let raw: string;
   try {
     raw = readFileSync(sessionFilePath, 'utf-8');
