@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 
 import { useSessionArtifacts, useDeleteSession } from '../../../hooks/useIPC'
 import type { SessionArtifact } from '../../../types'
@@ -36,13 +36,15 @@ export function DeleteSessionDialog({
 
   const artifacts = useMemo(() => data?.artifacts ?? [], [data])
 
-  // Inizializza le checkbox dai default del backend quando arrivano gli artefatti.
-  useEffect(() => {
-    if (!data) return
+  // Seed the checkboxes from the backend defaults as soon as the artifacts
+  // arrive (React's "adjust state during render" pattern — no effect needed).
+  const [lastData, setLastData] = useState(data)
+  if (data && data !== lastData) {
+    setLastData(data)
     const init: Record<string, boolean> = {}
     for (const a of data.artifacts) init[a.path] = a.locked ? true : a.defaultSelected
     setSelected(init)
-  }, [data])
+  }
 
   const toggle = (a: SessionArtifact) => {
     if (a.locked) return

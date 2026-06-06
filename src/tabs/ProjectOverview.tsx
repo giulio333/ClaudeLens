@@ -147,10 +147,13 @@ export default function ProjectOverview() {
     [mcpData],
   )
 
+  // Clear the loading flag whenever the global search is closed (render-time
+  // adjustment; the async loader below owns the flag while it's open).
+  if (!searchOpen && searchSessionsLoading) setSearchSessionsLoading(false)
+
   useEffect(() => {
     const projectsForSearch = projects ?? []
     if (!searchOpen || searchMode !== 'global' || projectsForSearch.length === 0) {
-      if (!searchOpen) setSearchSessionsLoading(false)
       return
     }
 

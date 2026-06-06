@@ -534,8 +534,15 @@ function ToolOutput({ name, input, result }: {
   }
 
   if (name.startsWith('memory:')) {
+    // Parse inside try/catch, but keep JSX returns outside it so a render-time
+    // throw propagates to the error boundary instead of being swallowed.
+    let json: { data?: { filename?: string }; filename?: string } | null = null
     try {
-      const json = JSON.parse(raw)
+      json = JSON.parse(raw)
+    } catch {
+      // Not JSON — fall through to the raw code block below.
+    }
+    if (json) {
       if (name === 'memory:createTopic' || name === 'memory:updateTopic') {
         const filename = json.data?.filename || json.filename
         return filename ? (
@@ -555,8 +562,6 @@ function ToolOutput({ name, input, result }: {
           </div>
         )
       }
-    } catch {
-      // Se non è JSON, fallback
     }
   }
 

@@ -423,6 +423,25 @@ function TurnMinimap({
   )
 }
 
+function ChatFilterChip({
+  label,
+  c,
+  active,
+  onToggle,
+}: {
+  label: string
+  c: number
+  active: boolean
+  onToggle: () => void
+}) {
+  return (
+    <button type="button" className="cl-filter" data-on={active || undefined} onClick={onToggle}>
+      {label}
+      <span className="c">{c}</span>
+    </button>
+  )
+}
+
 function ChatTypeFilters({
   filter,
   setFilter,
@@ -434,24 +453,32 @@ function ChatTypeFilters({
   counts: { all: number; tools: number; thinking: number; questions: number; plan: number }
   showThinking: boolean
 }) {
-  const Chip = ({ id, label, c }: { id: TurnFilter; label: string; c: number }) => (
-    <button
-      type="button"
-      className="cl-filter"
-      data-on={filter === id || undefined}
-      onClick={() => setFilter(filter === id ? 'all' : id)}
-    >
-      {label}
-      <span className="c">{c}</span>
-    </button>
-  )
+  const toggle = (id: TurnFilter) => () => setFilter(filter === id ? 'all' : id)
   return (
     <div className="cl-chat-filters" role="group" aria-label="Filter turns by type">
-      <Chip id="all" label="All" c={counts.all} />
-      {counts.tools > 0 && <Chip id="tools" label="Tools" c={counts.tools} />}
-      {showThinking && counts.thinking > 0 && <Chip id="thinking" label="Thinking" c={counts.thinking} />}
-      {counts.questions > 0 && <Chip id="questions" label="Questions" c={counts.questions} />}
-      {counts.plan > 0 && <Chip id="plan" label="Plan" c={counts.plan} />}
+      <ChatFilterChip label="All" c={counts.all} active={filter === 'all'} onToggle={toggle('all')} />
+      {counts.tools > 0 && (
+        <ChatFilterChip label="Tools" c={counts.tools} active={filter === 'tools'} onToggle={toggle('tools')} />
+      )}
+      {showThinking && counts.thinking > 0 && (
+        <ChatFilterChip
+          label="Thinking"
+          c={counts.thinking}
+          active={filter === 'thinking'}
+          onToggle={toggle('thinking')}
+        />
+      )}
+      {counts.questions > 0 && (
+        <ChatFilterChip
+          label="Questions"
+          c={counts.questions}
+          active={filter === 'questions'}
+          onToggle={toggle('questions')}
+        />
+      )}
+      {counts.plan > 0 && (
+        <ChatFilterChip label="Plan" c={counts.plan} active={filter === 'plan'} onToggle={toggle('plan')} />
+      )}
     </div>
   )
 }
@@ -571,20 +598,6 @@ export function ChatView({
     return items
   }, [processed, descriptors])
 
-  // Per-turn match against the active type filter (non-matching turns are dimmed,
-  // never removed, so the conversation thread stays continuous).
-  const matchesFilter = useCallback(
-    (d: TurnDescriptor) => {
-      switch (turnFilter) {
-        case 'tools': return d.hasTools
-        case 'thinking': return d.hasThinking && detailsFilter === 'all'
-        case 'questions': return d.hasQuestion
-        case 'plan': return d.hasPlan
-        default: return true
-      }
-    },
-    [turnFilter, detailsFilter]
-  )
   const filterCounts = useMemo(
     () => ({
       all: visibleItems.length,
@@ -594,6 +607,31 @@ export function ChatView({
       plan: visibleItems.filter(d => d.hasPlan).length,
     }),
     [visibleItems]
+  )
+
+  // Derived (not stored) so it can never get stuck: the active filter falls back
+  // to "All" when it no longer has matching turns — e.g. Thinking in minimal
+  // mode, or any chip that just dropped to 0 (and is now hidden) — otherwise the
+  // transcript would stay fully dimmed with no way back.
+  const activeFilter: TurnFilter =
+    turnFilter !== 'all' &&
+    ((turnFilter === 'thinking' && detailsFilter === 'minimal') || filterCounts[turnFilter] === 0)
+      ? 'all'
+      : turnFilter
+
+  // Per-turn match against the active type filter (non-matching turns are dimmed,
+  // never removed, so the conversation thread stays continuous).
+  const matchesFilter = useCallback(
+    (d: TurnDescriptor) => {
+      switch (activeFilter) {
+        case 'tools': return d.hasTools
+        case 'thinking': return d.hasThinking && detailsFilter === 'all'
+        case 'questions': return d.hasQuestion
+        case 'plan': return d.hasPlan
+        default: return true
+      }
+    },
+    [activeFilter, detailsFilter]
   )
   // Model token distribution (descending), excluding the synthetic bucket.
   const modelEntries = useMemo<[string, number][]>(
@@ -625,15 +663,6 @@ export function ChatView({
     Object.values(turnRefs.current).forEach(el => el && io.observe(el))
     return () => io.disconnect()
   }, [minimapItems, viewMode])
-
-  // Reset to "All" when the active filter no longer has matching turns — e.g.
-  // Thinking in minimal mode, or any chip that just dropped to 0 (and is now
-  // hidden), so the transcript never gets stuck fully dimmed with no way back.
-  useEffect(() => {
-    if (turnFilter === 'all') return
-    if (turnFilter === 'thinking' && detailsFilter === 'minimal') { setTurnFilter('all'); return }
-    if (filterCounts[turnFilter] === 0) setTurnFilter('all')
-  }, [detailsFilter, turnFilter, filterCounts])
 
   const jumpToTurn = useCallback((n: number) => {
     const el = turnRefs.current[n]
@@ -824,7 +853,7 @@ export function ChatView({
 
             {processed.length > 0 && (
               <ChatTypeFilters
-                filter={turnFilter}
+                filter={activeFilter}
                 setFilter={setTurnFilter}
                 counts={filterCounts}
                 showThinking={detailsFilter === 'all'}
@@ -859,14 +888,14 @@ export function ChatView({
                         detailsFilter={detailsFilter}
                         onOpenToolDetail={setSelectedTool}
                         turnIndex={item.idx + 1}
-                        dimmed={turnFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
+                        dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
                         innerRef={setTurnRef}
                       />
                     ) : (
                       <ToolsHiddenBadge
                         key={item.key}
                         count={item.count}
-                        dimmed={turnFilter !== 'all' && turnFilter !== 'tools'}
+                        dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
                       />
                     )
                   )}

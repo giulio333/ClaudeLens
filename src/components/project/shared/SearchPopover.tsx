@@ -146,12 +146,23 @@ export function SearchPopover({
   const [hl, setHl] = useState(0)
   const [activeFilter, setActiveFilter] = useState<SearchFilter>('all')
 
+  // Reset the search buffer each time the popover opens or switches mode
+  // (render-time adjustment; the focus side-effect stays in the effect below).
+  const resetKey = open ? mode : 'closed'
+  const [lastResetKey, setLastResetKey] = useState(resetKey)
+  if (resetKey !== lastResetKey) {
+    setLastResetKey(resetKey)
+    if (open) {
+      setQuery('')
+      setHl(0)
+      setActiveFilter(mode === 'projects' ? 'projects' : 'all')
+    }
+  }
+
   useEffect(() => {
     if (!open) return
-    setQuery('')
-    setHl(0)
-    setActiveFilter(mode === 'projects' ? 'projects' : 'all')
-    setTimeout(() => inputRef.current?.focus(), 10)
+    const id = setTimeout(() => inputRef.current?.focus(), 10)
+    return () => clearTimeout(id)
   }, [mode, open])
 
   useEffect(() => {
@@ -297,9 +308,11 @@ export function SearchPopover({
     return { sections: out, flat: out.flatMap(s => s.rows), counts }
   }, [activeFilter, agents, costByHash, currentHash, mcpServers, mcpTotalProjects, mode, pinned, pinnedSessions, projects, query, sessions, skills])
 
-  useEffect(() => {
-    if (hl >= flat.length) setHl(Math.max(0, flat.length - 1))
-  }, [flat.length, hl])
+  // Keep the highlighted row within range when the result set shrinks
+  // (render-time adjustment — converges as hl drops back into range).
+  if (hl > 0 && hl >= flat.length) {
+    setHl(Math.max(0, flat.length - 1))
+  }
 
   function selectRow(row: SearchRow) {
     if (row.kind === 'project') onSelectProject(row.project)

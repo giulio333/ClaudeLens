@@ -277,6 +277,8 @@ export function executeMerge(projectsDir: string, sourceHash: string, destHash: 
   } catch (e) {
     rollback();
     const msg = e instanceof Error ? e.message : String(e);
-    throw new Error(`Merge failed and was rolled back (backup at ${backupPath}): ${msg}`);
+    throw new Error(`Merge failed and was rolled back (backup at ${backupPath}): ${msg}`, {
+      cause: e,
+    });
   }
 }

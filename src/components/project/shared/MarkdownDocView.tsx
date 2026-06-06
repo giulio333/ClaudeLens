@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useState } from 'react'
+import { ReactNode, useState } from 'react'
 import Markdown from '../../Markdown'
 import { TopBar } from './TopBar'
 
@@ -111,10 +111,14 @@ export function MarkdownDocView({
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+  // Re-seed local state when the source content prop changes (React's
+  // "adjust state during render" pattern — no effect needed).
+  const [lastContent, setLastContent] = useState(content)
+  if (content !== lastContent) {
+    setLastContent(content)
     setCurrent(content)
     setDraft(content)
-  }, [content])
+  }
 
   const dirty = mode === 'edit' && draft !== current
 

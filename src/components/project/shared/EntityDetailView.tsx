@@ -593,8 +593,19 @@ export function EntityDetailView({
   )
 
   const [editState, setEditState] = useState<EditState>(initial)
-  useEffect(() => { setEditState(initial) }, [initial])
-  useEffect(() => { setError(null) }, [mode])
+  // Re-seed the edit buffer when the source content changes, and clear any
+  // stale error when toggling view/edit — both via React's "adjust state during
+  // render" pattern instead of effects.
+  const [lastInitial, setLastInitial] = useState(initial)
+  if (initial !== lastInitial) {
+    setLastInitial(initial)
+    setEditState(initial)
+  }
+  const [lastMode, setLastMode] = useState(mode)
+  if (mode !== lastMode) {
+    setLastMode(mode)
+    setError(null)
+  }
 
   const dirty =
     mode === 'edit' &&

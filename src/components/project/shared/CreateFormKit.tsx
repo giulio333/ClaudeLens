@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo, useLayoutEffect } from 'react'
+import { useState, useRef, useEffect, useMemo, useCallback } from 'react'
 import { createPortal } from 'react-dom'
 
 // Shared building blocks for the "create" pages (skills, agents).
@@ -162,22 +162,30 @@ export function ToolsInput({ value, onChange, placeholder, accent }: {
   // The dropdown is portaled to <body> so it escapes ancestors that clip
   // (e.g. the edit card uses backdrop-filter, which clips descendants in
   // Chromium even with overflow: visible). Position is tracked from the box.
-  useLayoutEffect(() => {
-    if (!open) { setRect(null); setHover(null); return }
-    const update = () => {
-      const el = boxRef.current
-      if (!el) return
-      const r = el.getBoundingClientRect()
-      setRect({ left: r.left, top: r.bottom, width: r.width })
-    }
-    update()
-    window.addEventListener('scroll', update, true)
-    window.addEventListener('resize', update)
+  const measure = useCallback(() => {
+    const el = boxRef.current
+    if (!el) return
+    const r = el.getBoundingClientRect()
+    setRect({ left: r.left, top: r.bottom, width: r.width })
+  }, [])
+
+  // Opening the dropdown measures the box up-front (in the event handler, so no
+  // synchronous setState lands in an effect); the effect below only keeps it
+  // anchored on scroll/resize while open. The portal renders solely when
+  // `open && rect`, so a stale rect after close is never visible.
+  const openMenu = () => {
+    measure()
+    setOpen(true)
+  }
+  useEffect(() => {
+    if (!open) return
+    window.addEventListener('scroll', measure, true)
+    window.addEventListener('resize', measure)
     return () => {
-      window.removeEventListener('scroll', update, true)
-      window.removeEventListener('resize', update)
+      window.removeEventListener('scroll', measure, true)
+      window.removeEventListener('resize', measure)
     }
-  }, [open])
+  }, [open, measure])
 
   // Literal class strings (no dynamic interpolation) so Tailwind's JIT keeps them.
   const chipCls = accent === 'violet'
@@ -220,9 +228,9 @@ export function ToolsInput({ value, onChange, placeholder, accent }: {
           className="flex-1 min-w-[100px] bg-transparent px-1 py-0.5 text-[13px] font-mono text-[var(--cl-ink)] placeholder:text-[var(--cl-ink-4)] outline-none"
           placeholder={value.length ? '' : placeholder}
           value={draft}
-          onChange={e => { setDraft(e.target.value); setOpen(true) }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 120)}
+          onChange={e => { setDraft(e.target.value); openMenu() }}
+          onFocus={openMenu}
+          onBlur={() => setTimeout(() => { setOpen(false); setHover(null) }, 120)}
           onKeyDown={e => {
             if (e.key === 'Enter' || e.key === ',') { e.preventDefault(); if (draft.trim()) add(draft) }
             else if (e.key === 'Backspace' && !draft && value.length) removeAt(value.length - 1)
