@@ -2457,6 +2457,11 @@ body {
 }
 .cl-turn:last-child .cl-turn-spine { display: none; }
 
+/* Tool-only turns (full mode, no text) collapse the inter-turn gap when consecutive. */
+.cl-turn--tool-only {
+  margin-top: calc(-18px + 3px);
+}
+
 /* Continuation turn: same role follows — orb is visually hidden (DOM stays intact
    to avoid reflow during scroll), spine is neutral, header trimmed. */
 .cl-turn--continuation .cl-turn-rail {
@@ -2799,9 +2804,9 @@ body {
 .cl-ask-stack,
 .cl-plan-stack {
   max-width: 920px;
-  margin-top: 12px;
+  margin-top: 6px;
   display: grid;
-  gap: 7px;
+  gap: 1px;
 }
 .cl-tool-card {
   overflow: hidden;
