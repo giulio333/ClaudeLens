@@ -13,6 +13,7 @@ const KEY_EVENTS: Record<string, string> = {
   'cl-pinned-projects': 'cl-pinned-projects-changed',
   'cl-pinned-sessions': 'cl-pinned-sessions-changed',
   'cl-session-tags': 'cl-session-tags-changed',
+  'cl-theme': 'cl-theme-changed',
 }
 
 function hasBackend(): boolean {
