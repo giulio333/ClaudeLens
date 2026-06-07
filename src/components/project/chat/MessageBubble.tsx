@@ -178,6 +178,7 @@ export const MessageBubble = memo(function MessageBubble({
   agentColorOf,
   turnIndex,
   dimmed,
+  isContinuation,
   innerRef,
 }: {
   processed: ProcessedMessage
@@ -188,6 +189,8 @@ export const MessageBubble = memo(function MessageBubble({
   turnIndex?: number
   /** Faded out because it doesn't match the active type filter (kept visible for context). */
   dimmed?: boolean
+  /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
+  isContinuation?: boolean
   /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
   innerRef?: Ref<HTMLElement>
 }) {
@@ -249,7 +252,7 @@ export const MessageBubble = memo(function MessageBubble({
   if (isCommandTurn && command) {
     return (
       <article
-        className="cl-turn cl-turn--command"
+        className={`cl-turn cl-turn--command${isContinuation ? ' cl-turn--continuation' : ''}`}
         style={{ '--turn-role-color': roleColor } as CSSProperties}
         ref={innerRef}
         data-n={turnIndex}
@@ -269,7 +272,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <article
-      className={`cl-turn cl-turn--${roleVariant}`}
+      className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}`}
       style={{ '--turn-role-color': roleColor } as CSSProperties}
       ref={innerRef}
       data-n={turnIndex}
@@ -288,7 +291,7 @@ export const MessageBubble = memo(function MessageBubble({
           <time>{timestamp}</time>
           {msg.model && msg.role === 'assistant' && (
             <>
-              <span className="cl-turn-sep">·</span>
+              <span className="cl-turn-sep cl-turn-sep--model">·</span>
               <span className="cl-turn-model-chip" style={{ '--mt': modelColor(msg.model) } as CSSProperties}>
                 {fmtModel(msg.model)}
               </span>

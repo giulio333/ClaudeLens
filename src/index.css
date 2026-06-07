@@ -2457,6 +2457,39 @@ body {
 }
 .cl-turn:last-child .cl-turn-spine { display: none; }
 
+/* Continuation turn: same role follows — orb is visually hidden (DOM stays intact
+   to avoid reflow during scroll), spine is neutral, header trimmed. */
+.cl-turn--continuation .cl-turn-rail {
+  padding-top: 0;
+}
+.cl-turn--continuation .cl-turn-orb {
+  opacity: 0;
+  pointer-events: none;
+}
+.cl-turn--continuation .cl-turn-index {
+  visibility: hidden;
+}
+.cl-turn--continuation .cl-turn-spine {
+  background: var(--cl-line);
+  margin-top: 0;
+}
+.cl-turn--continuation .cl-turn-body {
+  padding-top: 0;
+}
+.cl-turn--continuation .cl-turn-head {
+  margin-bottom: 6px;
+}
+.cl-turn--continuation .cl-turn-who,
+.cl-turn--continuation .cl-turn-sep:not(.cl-turn-sep--model) {
+  display: none;
+}
+.cl-turn--continuation .cl-turn-sep--model {
+  display: none;
+}
+.cl-turn--continuation .cl-turn-model-chip {
+  display: none;
+}
+
 /* Flat editorial body — no card, just the conversation on paper. */
 .cl-turn-body {
   min-width: 0;
