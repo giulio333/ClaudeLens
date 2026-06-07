@@ -9,6 +9,7 @@ import { fmt, fmtModel, modelColor } from '../utils'
 import { BackButton } from '../shared/BackButton'
 import { StatChip } from '../shared/StatChip'
 import { projectDisplayName } from '../shared/projectName'
+import { QueryError } from '../../QueryError'
 
 const SIZE_BUCKETS = [
   { label: '< 10k',   min: 0,       max: 10_000 },
@@ -43,7 +44,7 @@ export function AnalyticsView({
   project: { hash: string; realPath: string }
   onBack: () => void
 }) {
-  const { data: allSessions, isLoading } = useSessionList(project.hash)
+  const { data: allSessions, isLoading, isError, error, refetch } = useSessionList(project.hash)
   const { data: pricingMeta } = usePricingMeta()
   const projectName = projectDisplayName(project.realPath)
 
@@ -59,42 +60,54 @@ export function AnalyticsView({
     return sorted.slice(-MAX_SESSIONS)
   }, [allSessions])
 
-  const tokenData = sessionsToProcess.map(s => ({
+  // Derived chart datasets: memoized so Recharts hover/resize re-renders don't
+  // recompute them over up to MAX_SESSIONS sessions on every paint (#96).
+  const tokenData = useMemo(() => sessionsToProcess.map(s => ({
     label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
     Input: Math.round(s.inputTokens / 1000),
     Output: Math.round(s.outputTokens / 1000),
-  }))
+  })), [sessionsToProcess])
 
-  const modelTotals: Record<string, number> = {}
-  sessionsToProcess.forEach(s => Object.entries(s.models).forEach(([m, c]) => {
-    modelTotals[m] = (modelTotals[m] ?? 0) + c
-  }))
-  const pieData = Object.entries(modelTotals).map(([m, count]) => ({
-    name: fmtModel(m),
-    value: count,
-    color: modelColor(m),
-    estimated: isEstimated(m),
-  }))
+  const pieData = useMemo(() => {
+    const modelTotals: Record<string, number> = {}
+    sessionsToProcess.forEach(s => Object.entries(s.models).forEach(([m, c]) => {
+      modelTotals[m] = (modelTotals[m] ?? 0) + c
+    }))
+    return Object.entries(modelTotals).map(([m, count]) => ({
+      name: fmtModel(m),
+      value: count,
+      color: modelColor(m),
+      estimated: isEstimated(m),
+    }))
+    // isEstimated depends on knownModels; recompute when either changes.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionsToProcess, knownModels])
   const estimatedCount = pieData.filter(d => d.estimated).length
 
-  const messagesData = sessionsToProcess.map(s => ({
+  const messagesData = useMemo(() => sessionsToProcess.map(s => ({
     label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
     Messages: s.messageCount,
-  }))
+  })), [sessionsToProcess])
 
-  const histData = SIZE_BUCKETS.map(b => ({
+  const histData = useMemo(() => SIZE_BUCKETS.map(b => ({
     label: b.label,
     Sessions: sessionsToProcess.filter(s => s.totalTokens >= b.min && s.totalTokens < b.max).length,
-  }))
+  })), [sessionsToProcess])
 
-  const totalTokens = sessionsToProcess.reduce((a, s) => a + s.totalTokens, 0)
-  const totalInput = sessionsToProcess.reduce((a, s) => a + s.inputTokens, 0)
-  const totalOutput = sessionsToProcess.reduce((a, s) => a + s.outputTokens, 0)
-  const inputPct = totalTokens > 0 ? Math.round((totalInput / (totalInput + totalOutput)) * 100) : 0
-  const outputPct = totalTokens > 0 ? 100 - inputPct : 0
-  const avgMessages = sessionsToProcess.length > 0
-    ? Math.round(sessionsToProcess.reduce((a, s) => a + s.messageCount, 0) / sessionsToProcess.length)
-    : 0
+  const { totalTokens, inputPct, outputPct, avgMessages } = useMemo(() => {
+    const tokens = sessionsToProcess.reduce((a, s) => a + s.totalTokens, 0)
+    const input = sessionsToProcess.reduce((a, s) => a + s.inputTokens, 0)
+    const output = sessionsToProcess.reduce((a, s) => a + s.outputTokens, 0)
+    const inPct = tokens > 0 ? Math.round((input / (input + output)) * 100) : 0
+    return {
+      totalTokens: tokens,
+      inputPct: inPct,
+      outputPct: tokens > 0 ? 100 - inPct : 0,
+      avgMessages: sessionsToProcess.length > 0
+        ? Math.round(sessionsToProcess.reduce((a, s) => a + s.messageCount, 0) / sessionsToProcess.length)
+        : 0,
+    }
+  }, [sessionsToProcess])
 
   const AXIS = { tick: { fontSize: 10, fill: 'var(--cl-ink-3)' }, tickLine: false, axisLine: false }
   const TOOLTIP_STYLE = {
@@ -127,11 +140,13 @@ export function AnalyticsView({
 
       <div className="px-8 py-5 space-y-4">
         {isLoading && <p className="text-sm text-[var(--cl-ink-3)]">Loading data...</p>}
-        {!isLoading && sessionsToProcess.length === 0 && (
+        {/* Distinguish a failed query from a legitimately empty project (#96). */}
+        {!isLoading && isError && <QueryError error={error} onRetry={refetch} />}
+        {!isLoading && !isError && sessionsToProcess.length === 0 && (
           <p className="text-sm text-[var(--cl-ink-3)] italic">No sessions found.</p>
         )}
 
-        {sessionsToProcess.length > 0 && (
+        {!isError && sessionsToProcess.length > 0 && (
           <>
             <div className="grid grid-cols-[1fr_260px] gap-4">
               <ChartCard
