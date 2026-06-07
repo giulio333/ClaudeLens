@@ -1,6 +1,7 @@
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
+import { stripFramingTags } from '../utils';
 
 export type ChatContentBlock =
   | { type: 'text'; text: string }
@@ -112,8 +113,9 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
           if (isCommand) {
             blocks = [{ type: 'text', text: rawContent }];
           } else {
-            // Salta messaggi tecnici (caveat, ecc.)
-            const stripped = rawContent.replace(/<[^>]+>/g, '').trim();
+            // Salta messaggi tecnici (caveat, ecc.) rimuovendo solo i tag di
+            // framing noti, così prosa con `<`/`>` da codice resta intatta (#93).
+            const stripped = stripFramingTags(rawContent).trim();
             if (!stripped) continue;
             blocks = [{ type: 'text', text: stripped }];
           }
