@@ -4,6 +4,7 @@ import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
 import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
+import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
 
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
@@ -66,70 +67,6 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
       </button>
       {open && (
         <pre className="cl-thinking-body">{thinking}</pre>
-      )}
-    </div>
-  )
-}
-
-/** Truncate raw markdown for a preview while keeping it renderable: cut to a
- *  char budget, then close any dangling code fence so the parser doesn't eat the
- *  rest of the card. The clamp on line-count lives in CSS (-webkit-line-clamp). */
-function previewMarkdown(raw: string, max = 400): string {
-  const trimmed = raw.trim()
-  const truncated = trimmed.length > max
-  let preview = truncated ? trimmed.slice(0, max).trimEnd() : trimmed
-  if (((preview.match(/```/g)?.length ?? 0) % 2) === 1) preview += '\n```'
-  if (truncated) preview += ' …'
-  return preview
-}
-
-/** Sub-agent dispatch rendered as an editorial "delegated task receipt". */
-function AgentDispatchCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
-  const input = group.use.input as Record<string, unknown>
-  const subagent = (input.subagent_type as string) || 'general-purpose'
-  const desc = (input.description as string) || (input.prompt as string) || ''
-  const result = group.result
-  const resultText = result ? previewMarkdown(result.content) : ''
-
-  // Root is a div (not a button) so the rendered markdown — which contains block
-  // elements and links — stays valid HTML; clicks anywhere open the detail, while
-  // clicks inside a link are left to Markdown's own handler.
-  const onClick = (e: React.MouseEvent) => {
-    if ((e.target as HTMLElement).closest('a')) return
-    onOpen()
-  }
-  return (
-    <div
-      role="button"
-      tabIndex={0}
-      className="cl-agent-card"
-      onClick={onClick}
-      onKeyDown={e => {
-        if (e.key === 'Enter' || e.key === ' ') {
-          e.preventDefault()
-          onOpen()
-        }
-      }}
-      title="View agent detail"
-    >
-      <span className="top">
-        <span className="ic">A</span>
-        <span className="lbl">Sub-agent</span>
-        <span className="chip">{subagent}</span>
-        {result && (
-          <span className="status" data-error={result.isError || undefined}>
-            {result.isError ? 'failed' : 'done'}
-          </span>
-        )}
-      </span>
-      {desc && <span className="desc">{String(desc)}</span>}
-      {resultText && (
-        <span className="return">
-          <span className="mini">Returned</span>
-          <div className="res">
-            <Markdown>{resultText}</Markdown>
-          </div>
-        </span>
       )}
     </div>
   )
@@ -209,6 +146,7 @@ export const MessageBubble = memo(function MessageBubble({
   processed,
   detailsFilter,
   onOpenToolDetail,
+  agentColorOf,
   turnIndex,
   dimmed,
   innerRef,
@@ -216,6 +154,8 @@ export const MessageBubble = memo(function MessageBubble({
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
   onOpenToolDetail: (group: ToolGroup) => void
+  /** Resolves a dispatched sub-agent's identity color from its `subagent_type`. */
+  agentColorOf?: (subagentType: string) => string | undefined
   turnIndex?: number
   /** Faded out because it doesn't match the active type filter (kept visible for context). */
   dimmed?: boolean
@@ -262,8 +202,11 @@ export const MessageBubble = memo(function MessageBubble({
   // Role identity is resolved by the shared describeTurn() so the minimap and
   // the rendered bubble always agree on who's speaking.
   const isCommandTurn = !!command
+  // The rail orb of an agent turn wears the dispatched sub-agent's identity color
+  // (same resolution the dispatch card uses); resolved inside describeTurn so the
+  // minimap dots and the bubble orb always agree.
   const { variant: roleVariant, label: roleLabel, initial: roleInitial, color: roleColor } =
-    describeTurn(processed, detailsFilter)
+    describeTurn(processed, detailsFilter, t => agentTintColor(agentColorOf?.(t)))
 
   const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
     hour: '2-digit',
@@ -355,9 +298,15 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {showAgentStrip && (
-          <div className="cl-agent-stack">
+          <div className="cl-tool-stack">
             {agentGroups.map((group, i) => (
-              <AgentDispatchCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
+              <ToolGroupCard
+                key={i}
+                group={group}
+                showDetails
+                tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
+                onOpenDetail={() => onOpenToolDetail(group)}
+              />
             ))}
           </div>
         )}
@@ -377,6 +326,9 @@ export const MessageBubble = memo(function MessageBubble({
                 key={i}
                 group={group}
                 showDetails={showToolDetails}
+                tint={AGENT_TOOLS.has(group.use.name)
+                  ? agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))
+                  : undefined}
                 onOpenDetail={() => onOpenToolDetail(group)}
               />
             ))}
