@@ -173,9 +173,12 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
     return { command, args, description }
   }
 
-  // 2. Formato testuale plain "/cmd args"
-  const trimmed = text.trimStart()
-  const match = trimmed.match(/^\/([a-z][a-z0-9_:-]*)(?:\s+([\s\S]*))?$/)
+  // 2. Formato testuale plain "/cmd" — senza il framing XML è ambiguo: una frase
+  // utente come "/clear the cache" o "/help me debug" inizia con uno slash ma NON
+  // è un comando. Trattalo come comando solo se è il bare "/cmd" senza testo a
+  // seguire (gli args reali arrivano sempre dal flow XML <command-args>). (#92)
+  const trimmed = text.trim()
+  const match = trimmed.match(/^\/([a-z][a-z0-9_:-]*)$/)
   if (!match) return null
 
   const command = match[1]
@@ -184,7 +187,7 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
 
   return {
     command,
-    args: match[2]?.trim() ?? '',
+    args: '',
     description,
   }
 }
