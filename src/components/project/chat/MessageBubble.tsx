@@ -1,8 +1,8 @@
 import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
-import { ChatContentBlock } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
+import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
@@ -154,6 +154,91 @@ function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand;
   )
 }
 
+/** Inline card for a Skill invocation — a first-class sibling of SlashCommandCard
+ *  with a first-letter orb (no icon), the skill description, and an expandable
+ *  body surfacing the skill's definition (scope / model / tools / arguments) plus
+ *  a "View skill →" deep link. The link only shows once the card is expanded. */
+function SkillCommandCard({ command, timestamp, skill, onOpenSkill }: {
+  command: ClaudeSlashCommand
+  timestamp?: string
+  skill?: Skill
+  onOpenSkill?: (skill: Skill) => void
+}) {
+  const [open, setOpen] = useState(false)
+  const desc = skill?.description ?? (command.description !== 'Claude Code command' ? command.description : '')
+  const showArgs = command.args && command.args !== command.command
+  const metaRows: [string, string][] = []
+  if (skill?.scope) metaRows.push(['Scope', skill.scope])
+  if (skill?.model) metaRows.push(['Model', skill.model])
+  if (skill?.argumentHint) metaRows.push(['Arguments', skill.argumentHint])
+  if (skill?.allowedTools?.length) metaRows.push(['Tools', skill.allowedTools.join(', ')])
+  const canOpen = !!(skill && onOpenSkill)
+  const hasExpandable = metaRows.length > 0 || !!showArgs || !!command.output || canOpen
+  const status = hasExpandable ? (open ? '▾' : '→') : ''
+
+  return (
+    <div
+      className={`cl-command-card cl-skill-card${open ? ' is-open' : ''}`}
+      style={{ '--tint': 'var(--cl-accent)' } as CSSProperties}
+    >
+      <div className="cl-command-card-row">
+        <button
+          type="button"
+          onClick={() => hasExpandable && setOpen(o => !o)}
+          className={`cl-command-card-main${!hasExpandable ? ' is-static' : ''}`}
+          aria-expanded={hasExpandable ? open : undefined}
+        >
+          <span className="cl-command-mono" aria-hidden>{skillInitial(command.command)}</span>
+          <span className="cl-command-id">
+            <span className="cl-command-name">
+              <span className="cl-skill-tag">Skill</span>
+              /{command.command}
+            </span>
+            {desc && <span className="cl-command-preview">{desc}</span>}
+          </span>
+          <span className="cl-command-right">
+            {timestamp && <time className="cl-command-time">{timestamp}</time>}
+            {status && <span className="cl-command-status">{status}</span>}
+          </span>
+        </button>
+      </div>
+      {open && (
+        <div className="cl-command-expanded">
+          {metaRows.length > 0 && (
+            <div className="cl-command-section cl-skill-meta">
+              {metaRows.map(([label, value]) => (
+                <div key={label} className="cl-skill-meta-row">
+                  <span className="k">{label}</span>
+                  <span className="v">{value}</span>
+                </div>
+              ))}
+            </div>
+          )}
+          {showArgs && (
+            <div className="cl-command-section">
+              <div className="cl-command-section-title">Args</div>
+              <pre>{command.args}</pre>
+            </div>
+          )}
+          {command.output && (
+            <div className="cl-command-section">
+              <div className="cl-command-section-title">Output</div>
+              <pre>{command.output}</pre>
+            </div>
+          )}
+          {canOpen && (
+            <div className="cl-command-section cl-entity-link-row">
+              <button type="button" className="cl-entity-link" onClick={() => onOpenSkill!(skill!)}>
+                View skill →
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
 /** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
  *  A single badge with a "× N" multiplier replaces the stack of identical
  *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
@@ -221,6 +306,10 @@ export const MessageBubble = memo(function MessageBubble({
   detailsFilter,
   onOpenToolDetail,
   agentColorOf,
+  skillOf,
+  onOpenSkill,
+  agentOf,
+  onOpenAgent,
   turnIndex,
   dimmed,
   isContinuation,
@@ -233,6 +322,14 @@ export const MessageBubble = memo(function MessageBubble({
   onOpenToolDetail: (group: ToolGroup) => void
   /** Resolves a dispatched sub-agent's identity color from its `subagent_type`. */
   agentColorOf?: (subagentType: string) => string | undefined
+  /** Resolves a skill definition from a slash-command name (for the skill card link). */
+  skillOf?: (name: string) => Skill | undefined
+  /** Navigates to the skill detail view (deep link from an expanded skill card). */
+  onOpenSkill?: (skill: Skill) => void
+  /** Resolves an agent definition from its `subagent_type` (for the agent card link). */
+  agentOf?: (subagentType: string) => Agent | undefined
+  /** Navigates to the agent detail view (deep link from an expanded agent card). */
+  onOpenAgent?: (agent: Agent) => void
   turnIndex?: number
   /** Faded out because it doesn't match the active type filter (kept visible for context). */
   dimmed?: boolean
@@ -291,6 +388,15 @@ export const MessageBubble = memo(function MessageBubble({
   const { variant: roleVariant, label: roleLabel, initial: roleInitial, color: roleColor } =
     describeTurn(processed, detailsFilter, t => agentTintColor(agentColorOf?.(t)))
 
+  // Deep link surfaced at the foot of an expanded agent-dispatch card — resolves
+  // the dispatched sub-agent's definition by type, mirroring the skill card link.
+  const agentLink = (group: ToolGroup): { label: string; onClick: () => void } | undefined => {
+    if (!AGENT_TOOLS.has(group.use.name) || !agentOf || !onOpenAgent) return undefined
+    const t = (group.use.input as Record<string, unknown>).subagent_type as string | undefined
+    const agent = t ? agentOf(t) : undefined
+    return agent ? { label: 'View agent', onClick: () => onOpenAgent(agent) } : undefined
+  }
+
   const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
     hour: '2-digit',
     minute: '2-digit',
@@ -300,10 +406,14 @@ export const MessageBubble = memo(function MessageBubble({
   const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
 
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
+  // Una skill (slash command con `isSkill` o che risolve a una skill nota) usa
+  // la SkillCommandCard di prima classe; un comando normale la SlashCommandCard.
   if (isCommandTurn && command) {
+    const skill = skillOf?.(command.command)
+    const isSkill = command.isSkill || !!skill
     return (
       <article
-        className={`cl-turn cl-turn--command${isContinuation ? ' cl-turn--continuation' : ''}`}
+        className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}`}
         style={{ '--turn-role-color': roleColor } as CSSProperties}
         ref={innerRef}
         data-n={turnIndex}
@@ -315,7 +425,11 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
-          <SlashCommandCard command={command} timestamp={timestamp} />
+          {isSkill ? (
+            <SkillCommandCard command={command} timestamp={timestamp} skill={skill} onOpenSkill={onOpenSkill} />
+          ) : (
+            <SlashCommandCard command={command} timestamp={timestamp} />
+          )}
         </section>
       </article>
     )
@@ -409,14 +523,19 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showAgentStrip && (
           <div className="cl-tool-stack">
-            {agentGroups.map((group, i) => (
-              <ToolGroupCard
-                key={i}
-                group={group}
-                showDetails
-                tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
-              />
-            ))}
+            {agentGroups.map((group, i) => {
+              const link = agentLink(group)
+              return (
+                <ToolGroupCard
+                  key={i}
+                  group={group}
+                  showDetails
+                  tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
+                  detailLabel={link?.label}
+                  onViewDetail={link?.onClick}
+                />
+              )
+            })}
           </div>
         )}
 
@@ -430,16 +549,21 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showTools && standardToolGroups.length > 0 && (
           <div className="cl-tool-stack">
-            {standardToolGroups.map((group, i) => (
-              <ToolGroupCard
-                key={i}
-                group={group}
-                showDetails={showToolDetails}
-                tint={AGENT_TOOLS.has(group.use.name)
-                  ? agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))
-                  : undefined}
-              />
-            ))}
+            {standardToolGroups.map((group, i) => {
+              const link = agentLink(group)
+              return (
+                <ToolGroupCard
+                  key={i}
+                  group={group}
+                  showDetails={showToolDetails}
+                  tint={AGENT_TOOLS.has(group.use.name)
+                    ? agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))
+                    : undefined}
+                  detailLabel={link?.label}
+                  onViewDetail={link?.onClick}
+                />
+              )
+            })}
           </div>
         )}
       </section>

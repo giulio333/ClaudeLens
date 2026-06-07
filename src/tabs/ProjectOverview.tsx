@@ -324,6 +324,8 @@ export default function ProjectOverview() {
               ? setView({ type: 'agents-live', project: view.project })
               : setView({ type: 'sessions', project: view.project })
             }
+            onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
+            onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
           />
         )
       case 'memory-topic':
