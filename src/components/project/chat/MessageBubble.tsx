@@ -102,23 +102,52 @@ function PlanCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
 }
 
 function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand; timestamp?: string }) {
+  const [open, setOpen] = useState(false)
   // Nascondi args se è solo l'echo del command name (es. <command-message>model</command-message> per /model)
   const showArgs = command.args && command.args !== command.command
+  const hasExpandable = !!(showArgs || command.output)
+  const status = hasExpandable ? (open ? '▾' : '→') : ''
+
   return (
-    <div className="cl-command-card">
-      <div className="cl-command-kicker">
-        <span>Claude Code command</span>
-        {timestamp && <time>{timestamp}</time>}
+    <div
+      className={`cl-command-card${open ? ' is-open' : ''}`}
+      style={{ '--tint': 'var(--cl-accent)' } as CSSProperties}
+    >
+      <div className="cl-command-card-row">
+        <button
+          type="button"
+          onClick={() => hasExpandable && setOpen(o => !o)}
+          className={`cl-command-card-main${!hasExpandable ? ' is-static' : ''}`}
+          aria-expanded={hasExpandable ? open : undefined}
+        >
+          <span className="cl-command-mono">/</span>
+          <span className="cl-command-id">
+            <span className="cl-command-name">/{command.command}</span>
+            {command.description && (
+              <span className="cl-command-preview">{command.description}</span>
+            )}
+          </span>
+          <span className="cl-command-right">
+            {timestamp && <time className="cl-command-time">{timestamp}</time>}
+            {status && <span className="cl-command-status">{status}</span>}
+          </span>
+        </button>
       </div>
-      <div className="cl-command-main">
-        <code>/{command.command}</code>
-        <span>{command.description}</span>
-      </div>
-      {showArgs && (
-        <pre className="cl-command-args">{command.args}</pre>
-      )}
-      {command.output && (
-        <div className="cl-command-output">{command.output}</div>
+      {open && (
+        <div className="cl-command-expanded">
+          {showArgs && (
+            <div className="cl-command-section">
+              <div className="cl-command-section-title">Args</div>
+              <pre>{command.args}</pre>
+            </div>
+          )}
+          {command.output && (
+            <div className="cl-command-section">
+              <div className="cl-command-section-title">Output</div>
+              <pre>{command.output}</pre>
+            </div>
+          )}
+        </div>
       )}
     </div>
   )
