@@ -184,7 +184,11 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
 // for well-formed lines that carry nothing we track (kept separate from JSON
 // parse failures, which the caller counts and logs).
 function extractLineData(json: any): LineData | null {
-  const date = json.timestamp ? new Date(json.timestamp).toISOString() : '';
+  // Guard against malformed timestamps: `new Date('not-a-date').toISOString()`
+  // throws RangeError, which (called outside the per-line JSON.parse try) would
+  // abort the whole file and under-count every later line (issue #88).
+  const d = json.timestamp ? new Date(json.timestamp) : null;
+  const date = d && !isNaN(d.getTime()) ? d.toISOString() : '';
   const customTitle = json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
   const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
   const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
