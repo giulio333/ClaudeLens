@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import type { CSSProperties, MouseEvent as ReactMouseEvent } from 'react'
+import type { CSSProperties } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
-import { fmt, fmtModel, modelColor, sessionTitle } from '../utils'
-import { buildProcessedMessages, correlateSessionAgents, describeTurn, isMemoryFile, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
+import { sessionTitle } from '../utils'
+import { buildProcessedMessages, correlateSessionAgents, describeTurn, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { AgentRail } from './AgentRail'
@@ -29,317 +29,15 @@ function TrashGlyph() {
   )
 }
 
-function MoreGlyph() {
+function ChevronUpGlyph() {
   return (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-      <circle cx="12" cy="5" r="1.6" />
-      <circle cx="12" cy="12" r="1.6" />
-      <circle cx="12" cy="19" r="1.6" />
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M6 15l6-6 6 6" />
     </svg>
   )
 }
 
-/** Overflow menu (kebab) gathering Export and the destructive Delete action. */
-function ChatOverflowMenu({
-  canExport,
-  exporting,
-  exportPreset,
-  exportMessage,
-  exportError,
-  selectedExportPreset,
-  onOpen,
-  onPreset,
-  onExport,
-  onDelete,
-}: {
-  canExport: boolean
-  exporting: ChatExportFormat | null
-  exportPreset: ChatExportPreset
-  exportMessage: string | null
-  exportError: string | null
-  selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  onOpen: () => void
-  onPreset: (preset: ChatExportPreset) => void
-  onExport: (format: ChatExportFormat) => void
-  onDelete: () => void
-}) {
-  const [open, setOpen] = useState(false)
-  const menuRef = useRef<HTMLDivElement | null>(null)
-
-  useEffect(() => {
-    if (!open) return
-    const onPointerDown = (event: MouseEvent) => {
-      if (menuRef.current?.contains(event.target as Node)) return
-      setOpen(false)
-    }
-    document.addEventListener('mousedown', onPointerDown)
-    return () => document.removeEventListener('mousedown', onPointerDown)
-  }, [open])
-
-  const toggle = () => {
-    setOpen(o => {
-      if (!o) onOpen()
-      return !o
-    })
-  }
-
-  return (
-    <div className="cl-overflow" ref={menuRef}>
-      <button
-        type="button"
-        className="cl-overflow-trigger"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        title="More actions"
-        onClick={toggle}
-      >
-        <MoreGlyph />
-      </button>
-      {open && (
-        <div className="cl-overflow-panel" role="menu">
-          <div className="cl-overflow-section">
-            <div className="cl-export-label">Export</div>
-            <div className="cl-export-presets">
-              {CHAT_EXPORT_PRESETS.map(preset => (
-                <button
-                  key={preset.value}
-                  type="button"
-                  className={exportPreset === preset.value ? 'is-active' : ''}
-                  onClick={() => onPreset(preset.value)}
-                >
-                  {preset.label}
-                </button>
-              ))}
-            </div>
-            <p className="cl-export-desc">{selectedExportPreset.description}</p>
-            <div className="cl-export-actions">
-              <button
-                type="button"
-                disabled={!canExport || exporting !== null}
-                onClick={() => onExport('markdown')}
-              >
-                {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
-              </button>
-              <button
-                type="button"
-                disabled={!canExport || exporting !== null}
-                onClick={() => onExport('pdf')}
-              >
-                {exporting === 'pdf' ? 'Saving...' : 'PDF'}
-              </button>
-            </div>
-            {exportMessage && <p className="cl-export-status is-ok">{exportMessage}</p>}
-            {exportError && <p className="cl-export-status is-error">{exportError}</p>}
-          </div>
-          <div className="cl-overflow-sep" />
-          <button
-            type="button"
-            role="menuitem"
-            className="cl-overflow-item is-danger"
-            onClick={() => {
-              setOpen(false)
-              onDelete()
-            }}
-          >
-            <TrashGlyph />
-            <span>Delete session</span>
-          </button>
-        </div>
-      )}
-    </div>
-  )
-}
-
-function ChatTopActions({
-  viewMode,
-  setViewMode,
-  detailsFilter,
-  setDetailsFilter,
-  canExport,
-  exporting,
-  exportPreset,
-  exportMessage,
-  exportError,
-  selectedExportPreset,
-  onOpenExport,
-  onExportPreset,
-  onExport,
-  onResume,
-  onDelete,
-}: {
-  viewMode: ViewMode
-  setViewMode: (mode: ViewMode) => void
-  detailsFilter: ChatDetailsFilter
-  setDetailsFilter: (filter: ChatDetailsFilter) => void
-  canExport: boolean
-  exporting: ChatExportFormat | null
-  exportPreset: ChatExportPreset
-  exportMessage: string | null
-  exportError: string | null
-  selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
-  onOpenExport: () => void
-  onExportPreset: (preset: ChatExportPreset) => void
-  onExport: (format: ChatExportFormat) => void
-  onResume: () => void
-  onDelete: () => void
-}) {
-  return (
-    <>
-      <div className="cl-view-mode" aria-label="View mode">
-        {(['chat', 'timeline'] as ViewMode[]).map(v => (
-          <button
-            key={v}
-            type="button"
-            className={viewMode === v ? 'on' : ''}
-            onClick={() => setViewMode(v)}
-            title={v === 'timeline' ? 'Session timeline (swimlanes by file/tool)' : 'Linear transcript'}
-          >
-            {v === 'chat' ? 'Chat' : 'Timeline'}
-          </button>
-        ))}
-      </div>
-      {viewMode === 'chat' && (
-        <div className="cl-seg" aria-label="Transcript detail">
-          {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
-            <button
-              key={v}
-              type="button"
-              className={detailsFilter === v ? 'on' : ''}
-              onClick={() => setDetailsFilter(v)}
-            >
-              {v === 'minimal' ? 'Minimal' : 'Full'}
-            </button>
-          ))}
-        </div>
-      )}
-      <button className="cl-resume" type="button" onClick={onResume}>
-        <PlayGlyph />
-        <span>Resume</span>
-      </button>
-      <ChatOverflowMenu
-        canExport={canExport}
-        exporting={exporting}
-        exportPreset={exportPreset}
-        exportMessage={exportMessage}
-        exportError={exportError}
-        selectedExportPreset={selectedExportPreset}
-        onOpen={onOpenExport}
-        onPreset={onExportPreset}
-        onExport={onExport}
-        onDelete={onDelete}
-      />
-    </>
-  )
-}
-
-function splitCost(value: number): { whole: string; decimals: string | null } {
-  const fixed = value.toFixed(2)
-  const [whole, dec] = fixed.split('.')
-  return { whole: `$${whole}`, decimals: `.${dec}` }
-}
-
-function ChatSessionHeader({
-  title,
-  session,
-  projectName,
-  totalMessages,
-  totalToolCalls,
-  duration,
-  collapsed,
-}: {
-  title: string
-  session: SessionSummary
-  projectName: string
-  totalMessages: number
-  totalToolCalls: number
-  duration: string | null
-  collapsed: boolean
-}) {
-  const cost = splitCost(session.estimatedCost)
-
-  return (
-    <div className={`cl-chat-collapsible${collapsed ? ' is-collapsed' : ''}`}>
-      <div className="cl-chat-collapsible-inner">
-      <section className="cl-chat-hero">
-        <div className="cl-chat-hero-text">
-          <div className="cl-eyebrow cl-chat-eyebrow">
-            <span className="pip" />
-            <span>Session · {projectName}</span>
-          </div>
-          <h1>
-            {title}
-            <span className="cl-chat-h1-dot">.</span>
-          </h1>
-          <div className="cl-chat-submeta">
-            <span className="cl-chat-file">{session.filename}</span>
-            {session.template && session.template !== 'claude' && (
-              <>
-                <span className="sep">·</span>
-                <span style={{ textTransform: 'uppercase' }}>{session.template}</span>
-              </>
-            )}
-          </div>
-        </div>
-      </section>
-
-      <section className="cl-chat-stats">
-        <div className="cl-chat-stat">
-          <div className="l">Turns</div>
-          <div className="n">{fmt(totalMessages)}</div>
-        </div>
-        <div className="cl-chat-stat">
-          <div className="l">Tool calls</div>
-          <div className="n">{fmt(totalToolCalls)}</div>
-        </div>
-        {duration && (
-          <div className="cl-chat-stat">
-            <div className="l">Duration</div>
-            <div className="n cl-chat-duration">{duration}</div>
-          </div>
-        )}
-        <div className="cl-chat-stat is-dark">
-          <div className="l">Cost</div>
-          <div className="n">{cost.whole}{cost.decimals && <small>{cost.decimals}</small>}</div>
-        </div>
-      </section>
-      </div>
-    </div>
-  )
-}
-
 type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan'
-
-function fmtK(n: number): string {
-  if (n >= 1e6) return (n / 1e6).toFixed(1).replace(/\.0$/, '') + 'm'
-  if (n >= 1e3) return Math.round(n / 1e3) + 'k'
-  return String(n)
-}
-
-/** Per-model token distribution — a single stacked bar + legend (prototype's da-models). */
-function ChatModelBar({ models }: { models: [string, number][] }) {
-  const total = models.reduce((s, [, t]) => s + t, 0)
-  if (total <= 0) return null
-  return (
-    <div className="cl-chat-models">
-      <div className="cl-chat-mbar" role="img" aria-label="Token distribution by model">
-        {models.map(([name, tokens]) => (
-          <span
-            key={name}
-            style={{ width: `${(tokens / total) * 100}%`, background: modelColor(name) }}
-            title={`${fmtModel(name)} · ${fmtK(tokens)} tok`}
-          />
-        ))}
-      </div>
-      {models.map(([name, tokens]) => (
-        <span key={name} className="cl-chat-mkey">
-          <i style={{ background: modelColor(name) }} />
-          {fmtModel(name)}
-          <span className="t">{fmtK(tokens)}</span>
-        </span>
-      ))}
-    </div>
-  )
-}
 
 type MinimapItem = TurnDescriptor & { n: number; time: string }
 
@@ -349,12 +47,11 @@ type RenderItem =
   | { kind: 'turn'; idx: number }
   | { kind: 'tools'; key: string; count: number }
 
-/** Navigable turn-index rail with scroll-spy. One colour-coded dot per turn,
- *  hover label, click to jump, active dot enlarged. The dots are deliberately
- *  tiny so long sessions fit; a Dock-style fisheye lens swells the dots near
- *  the pointer so they stay easy to read and click. The lens writes a `--mag`
- *  CSS var per dot straight to the DOM (inside rAF) — no React re-render. */
-function TurnMinimap({
+/** Right-edge timeline minimap (Focus layout). A hairline vertical track with
+ *  one proportionally-placed dot per message turn — accent-coloured & larger for
+ *  Claude/agent turns, muted & small for user turns. Labels surface on hover only
+ *  so the chrome stays out of the way; click jumps, active dot is emphasised. */
+function FocusMinimap({
   items,
   active,
   matches,
@@ -365,139 +62,193 @@ function TurnMinimap({
   matches: (d: TurnDescriptor) => boolean
   onJump: (n: number) => void
 }) {
-  const navRef = useRef<HTMLElement | null>(null)
-  const rafRef = useRef<number | null>(null)
-  const pointerY = useRef(0)
-
-  // Falloff of the lens, in viewport px around the pointer. Dots sit on a fixed
-  // row pitch, so we read one rect (the first button) and extrapolate the rest —
-  // cheap and reflow-free (one read, then only --mag writes).
-  // BOOST is capped so the peak dot's visual diameter (8px × (1+BOOST) ≈ 15px,
-  // plus its ring) stays under the 20px row pitch — that's what keeps swollen
-  // neighbours from ever overlapping, no matter how many the lens catches.
-  const LENS_RADIUS = 50
-  const LENS_BOOST = 0.85
-
-  const applyLens = useCallback(() => {
-    rafRef.current = null
-    const nav = navRef.current
-    const first = nav?.firstElementChild as HTMLElement | null
-    if (!nav || !first) return
-    const rect = first.getBoundingClientRect()
-    const firstCenter = rect.top + rect.height / 2
-    const rowH = rect.height || 16
-    const y = pointerY.current
-    const dots = nav.children
-    for (let i = 0; i < dots.length; i++) {
-      const dist = Math.abs(firstCenter + i * rowH - y)
-      const t = Math.max(0, 1 - dist / LENS_RADIUS)
-      const scale = 1 + LENS_BOOST * t * t
-      ;(dots[i] as HTMLElement).style.setProperty('--mag', scale.toFixed(3))
-    }
-  }, [])
-
-  const handleMove = useCallback((e: ReactMouseEvent<HTMLElement>) => {
-    pointerY.current = e.clientY
-    if (rafRef.current === null) rafRef.current = requestAnimationFrame(applyLens)
-  }, [applyLens])
-
-  const resetLens = useCallback(() => {
-    if (rafRef.current !== null) {
-      cancelAnimationFrame(rafRef.current)
-      rafRef.current = null
-    }
-    const nav = navRef.current
-    if (!nav) return
-    const dots = nav.children
-    for (let i = 0; i < dots.length; i++) (dots[i] as HTMLElement).style.setProperty('--mag', '1')
-  }, [])
-
-  useEffect(() => () => { if (rafRef.current !== null) cancelAnimationFrame(rafRef.current) }, [])
-
+  if (items.length === 0) return null
   return (
-    <nav
-      className="cl-minimap"
-      ref={navRef}
-      aria-label="Turn index"
-      onMouseMove={handleMove}
-      onMouseLeave={resetLens}
-    >
-      {items.map(it => (
-        <button
-          key={it.n}
-          type="button"
-          className="cl-minimap-item"
-          style={{ '--c': it.color } as CSSProperties}
-          data-active={active === it.n || undefined}
-          data-dim={!matches(it) || undefined}
-          onClick={() => onJump(it.n)}
-          title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
-          aria-label={`Jump to turn ${it.n}, ${it.label}`}
-        >
-          <span className="d" />
-          <span className="n">{String(it.n).padStart(2, '0')} {it.label}</span>
-        </button>
-      ))}
+    <nav className="cl-focus-rail" aria-label="Turn index">
+      <div className="cl-focus-rail-track">
+        {items.map((it, i) => {
+          const top = items.length <= 1 ? 50 : (i / (items.length - 1)) * 100
+          return (
+            <button
+              key={it.n}
+              type="button"
+              className="cl-focus-dot"
+              style={{ top: `${top}%`, '--c': it.color } as CSSProperties}
+              data-accent={it.variant !== 'user' || undefined}
+              data-active={active === it.n || undefined}
+              data-dim={!matches(it) || undefined}
+              onClick={() => onJump(it.n)}
+              title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
+              aria-label={`Jump to turn ${it.n}, ${it.label}`}
+            >
+              <span className="lbl">{String(it.n).padStart(2, '0')} {it.label}</span>
+            </button>
+          )
+        })}
+      </div>
     </nav>
   )
 }
 
-function ChatFilterChip({
-  label,
-  c,
-  active,
-  onToggle,
-}: {
-  label: string
-  c: number
-  active: boolean
-  onToggle: () => void
-}) {
-  return (
-    <button type="button" className="cl-filter" data-on={active || undefined} onClick={onToggle}>
-      {label}
-      <span className="c">{c}</span>
-    </button>
-  )
-}
-
-function ChatTypeFilters({
+/** Floating glass control pill (Focus layout) — bottom-centre. Holds the
+ *  transcript filters + density toggle (chat mode only), the Resume action, and
+ *  a "more" trigger that raises the export / delete sheet above the pill. */
+function ChatControlPill({
+  showTranscriptControls,
   filter,
   setFilter,
   counts,
   showThinking,
+  density,
+  setDensity,
+  onResume,
+  canExport,
+  exporting,
+  exportPreset,
+  exportMessage,
+  exportError,
+  selectedExportPreset,
+  onOpenSheet,
+  onExportPreset,
+  onExport,
+  onDelete,
 }: {
+  showTranscriptControls: boolean
   filter: TurnFilter
   setFilter: (f: TurnFilter) => void
   counts: { all: number; tools: number; thinking: number; questions: number; plan: number }
   showThinking: boolean
+  density: ChatDetailsFilter
+  setDensity: (d: ChatDetailsFilter) => void
+  onResume: () => void
+  canExport: boolean
+  exporting: ChatExportFormat | null
+  exportPreset: ChatExportPreset
+  exportMessage: string | null
+  exportError: string | null
+  selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number]
+  onOpenSheet: () => void
+  onExportPreset: (preset: ChatExportPreset) => void
+  onExport: (format: ChatExportFormat) => void
+  onDelete: () => void
 }) {
-  const toggle = (id: TurnFilter) => () => setFilter(filter === id ? 'all' : id)
+  const [sheet, setSheet] = useState(false)
+  const rootRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!sheet) return
+    const onPointerDown = (event: MouseEvent) => {
+      if (rootRef.current?.contains(event.target as Node)) return
+      setSheet(false)
+    }
+    document.addEventListener('mousedown', onPointerDown)
+    return () => document.removeEventListener('mousedown', onPointerDown)
+  }, [sheet])
+
+  const toggleSheet = () => {
+    setSheet(s => {
+      if (!s) onOpenSheet()
+      return !s
+    })
+  }
+
+  const chip = (id: TurnFilter, label: string, c: number) => (
+    <button
+      key={id}
+      type="button"
+      className="cl-pill-filter"
+      data-on={filter === id || undefined}
+      onClick={() => setFilter(filter === id ? 'all' : id)}
+    >
+      {label}
+      <b>{c}</b>
+    </button>
+  )
+
   return (
-    <div className="cl-chat-filters" role="group" aria-label="Filter turns by type">
-      <ChatFilterChip label="All" c={counts.all} active={filter === 'all'} onToggle={toggle('all')} />
-      {counts.tools > 0 && (
-        <ChatFilterChip label="Tools" c={counts.tools} active={filter === 'tools'} onToggle={toggle('tools')} />
+    <div className="cl-pill-wrap" ref={rootRef}>
+      {sheet && (
+        <div className="cl-sheet" role="menu">
+          <div className="cl-sheet-head">
+            <span className="cl-export-label">Export</span>
+            <button type="button" className="cl-sheet-close" aria-label="Close" onClick={() => setSheet(false)}>✕</button>
+          </div>
+          <div className="cl-export-presets">
+            {CHAT_EXPORT_PRESETS.map(preset => (
+              <button
+                key={preset.value}
+                type="button"
+                className={exportPreset === preset.value ? 'is-active' : ''}
+                onClick={() => onExportPreset(preset.value)}
+              >
+                {preset.label}
+              </button>
+            ))}
+          </div>
+          <p className="cl-export-desc">{selectedExportPreset.description}</p>
+          <div className="cl-export-actions">
+            <button type="button" disabled={!canExport || exporting !== null} onClick={() => onExport('markdown')}>
+              {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
+            </button>
+            <button type="button" disabled={!canExport || exporting !== null} onClick={() => onExport('pdf')}>
+              {exporting === 'pdf' ? 'Saving...' : 'PDF'}
+            </button>
+          </div>
+          {exportMessage && <p className="cl-export-status is-ok">{exportMessage}</p>}
+          {exportError && <p className="cl-export-status is-error">{exportError}</p>}
+          <div className="cl-sheet-sep" />
+          <button
+            type="button"
+            role="menuitem"
+            className="cl-sheet-item is-danger"
+            onClick={() => {
+              setSheet(false)
+              onDelete()
+            }}
+          >
+            <TrashGlyph />
+            <span>Delete session</span>
+          </button>
+        </div>
       )}
-      {showThinking && counts.thinking > 0 && (
-        <ChatFilterChip
-          label="Thinking"
-          c={counts.thinking}
-          active={filter === 'thinking'}
-          onToggle={toggle('thinking')}
-        />
-      )}
-      {counts.questions > 0 && (
-        <ChatFilterChip
-          label="Questions"
-          c={counts.questions}
-          active={filter === 'questions'}
-          onToggle={toggle('questions')}
-        />
-      )}
-      {counts.plan > 0 && (
-        <ChatFilterChip label="Plan" c={counts.plan} active={filter === 'plan'} onToggle={toggle('plan')} />
-      )}
+
+      <div className="cl-pill" role="toolbar" aria-label="Transcript controls">
+        {showTranscriptControls && (
+          <>
+            <div className="cl-pill-filters" role="group" aria-label="Filter turns by type">
+              {chip('all', 'All', counts.all)}
+              {counts.tools > 0 && chip('tools', 'Tools', counts.tools)}
+              {showThinking && counts.thinking > 0 && chip('thinking', 'Thinking', counts.thinking)}
+              {counts.questions > 0 && chip('questions', 'Questions', counts.questions)}
+              {counts.plan > 0 && chip('plan', 'Plan', counts.plan)}
+            </div>
+            <span className="cl-pill-div" />
+            <div className="cl-seg" aria-label="Transcript detail">
+              {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
+                <button key={v} type="button" className={density === v ? 'on' : ''} onClick={() => setDensity(v)}>
+                  {v === 'minimal' ? 'Min' : 'Full'}
+                </button>
+              ))}
+            </div>
+            <span className="cl-pill-div" />
+          </>
+        )}
+        <button className="cl-resume" type="button" onClick={onResume}>
+          <PlayGlyph />
+          <span>Resume</span>
+        </button>
+        <button
+          type="button"
+          className="cl-pill-more"
+          aria-haspopup="menu"
+          aria-expanded={sheet}
+          data-on={sheet || undefined}
+          title="Export & more"
+          onClick={toggleSheet}
+        >
+          <ChevronUpGlyph />
+        </button>
+      </div>
     </div>
   )
 }
@@ -522,7 +273,6 @@ export function ChatView({
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null)
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
-  const [headerCollapsed, setHeaderCollapsed] = useState(false)
   const [showDelete, setShowDelete] = useState(false)
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
   const [activeTurn, setActiveTurn] = useState<number | null>(null)
@@ -534,8 +284,7 @@ export function ChatView({
   // effect doesn't mistake a tall incoming message for the user scrolling away.
   const wasNearBottomRef = useRef(true)
 
-  // Heavy: rebuild the processed transcript only when the raw messages change,
-  // not on every render (e.g. header collapse toggles fired during scroll).
+  // Heavy: rebuild the processed transcript only when the raw messages change.
   const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
   const canExport = processed.length > 0 && !isLoading
 
@@ -545,31 +294,6 @@ export function ChatView({
     () => correlateSessionAgents(processed, subagentMetas ?? []),
     [processed, subagentMetas]
   )
-
-  // Derived session stats — also O(n), so memoize on the processed list.
-  const stats = useMemo(() => {
-    const realUserCount = processed.filter(p => p.msg.role === 'user').length
-    const realAssistantCount = processed.filter(p => p.msg.role === 'assistant').length
-
-    const toolCounts = processed.reduce(
-      (acc, p) => {
-        for (const g of p.toolGroups) {
-          acc[g.use.name] = (acc[g.use.name] ?? 0) + 1
-          if (isMemoryFile(g.use.input as Record<string, unknown>)) {
-            acc['_memory'] = (acc['_memory'] ?? 0) + 1
-          }
-        }
-        return acc
-      },
-      {} as Record<string, number>
-    )
-    const toolEntries = Object.entries(toolCounts).filter(([k]) => k !== '_memory')
-    return {
-      totalMessages: realUserCount + realAssistantCount,
-      totalToolCalls: toolEntries.reduce((s, [, c]) => s + c, 0),
-    }
-  }, [processed])
-  const { totalMessages, totalToolCalls } = stats
 
   // The detail filter (Minimal/Full) drives which turns are visible — Minimal
   // hides thinking/tools — so the navigation descriptors depend on it too.
@@ -655,13 +379,6 @@ export function ChatView({
     },
     [activeFilter, detailsFilter]
   )
-  // Model token distribution (descending), excluding the synthetic bucket.
-  const modelEntries = useMemo<[string, number][]>(
-    () => Object.entries(session.models ?? {})
-      .filter(([k, v]) => k !== '<synthetic>' && v > 0)
-      .sort((a, b) => b[1] - a[1]),
-    [session.models]
-  )
 
   // Stable ref setter (keyed by the turn's data-n) so MessageBubble's memo holds.
   const setTurnRef = useCallback((el: HTMLElement | null) => {
@@ -710,17 +427,6 @@ export function ChatView({
   const title = sessionTitle(session)
   const selectedExportPreset = CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
 
-  const duration = useMemo(() => {
-    const t0 = processed[0]?.msg.timestamp
-    const t1 = processed[processed.length - 1]?.msg.timestamp
-    if (!t0 || !t1) return null
-    const ms = new Date(t1).getTime() - new Date(t0).getTime()
-    if (ms <= 0) return null
-    const s = Math.round(ms / 1000)
-    const m = Math.floor(s / 60)
-    return m > 0 ? `${m}m ${String(s % 60).padStart(2, '0')}s` : `${s}s`
-  }, [processed])
-
   // Scroll to bottom when new messages arrive, but only when already near the bottom
   // so manual scrolling up isn't interrupted.
   useEffect(() => {
@@ -756,6 +462,32 @@ export function ChatView({
     }
   }
 
+  const controlPill = (showTranscriptControls: boolean) => (
+    <ChatControlPill
+      showTranscriptControls={showTranscriptControls && processed.length > 0}
+      filter={activeFilter}
+      setFilter={setTurnFilter}
+      counts={filterCounts}
+      showThinking={detailsFilter === 'all'}
+      density={detailsFilter}
+      setDensity={setDetailsFilter}
+      onResume={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
+      canExport={canExport}
+      exporting={exporting}
+      exportPreset={exportPreset}
+      exportMessage={exportMessage}
+      exportError={exportError}
+      selectedExportPreset={selectedExportPreset}
+      onOpenSheet={() => {
+        setExportError(null)
+        setExportMessage(null)
+      }}
+      onExportPreset={setExportPreset}
+      onExport={handleExport}
+      onDelete={() => setShowDelete(true)}
+    />
+  )
+
   return (
     <div className="cl-chat">
       <TopBar
@@ -763,26 +495,19 @@ export function ChatView({
         backLabel={`${projectName} · Sessions`}
         crumbs={[{ label: title, accent: true }]}
         right={
-          <ChatTopActions
-            viewMode={viewMode}
-            setViewMode={setViewMode}
-            detailsFilter={detailsFilter}
-            setDetailsFilter={setDetailsFilter}
-            canExport={canExport}
-            exporting={exporting}
-            exportPreset={exportPreset}
-            exportMessage={exportMessage}
-            exportError={exportError}
-            selectedExportPreset={selectedExportPreset}
-            onOpenExport={() => {
-              setExportError(null)
-              setExportMessage(null)
-            }}
-            onExportPreset={setExportPreset}
-            onExport={handleExport}
-            onResume={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
-            onDelete={() => setShowDelete(true)}
-          />
+          <div className="cl-view-mode" aria-label="View mode">
+            {(['chat', 'timeline'] as ViewMode[]).map(v => (
+              <button
+                key={v}
+                type="button"
+                className={viewMode === v ? 'on' : ''}
+                onClick={() => setViewMode(v)}
+                title={v === 'timeline' ? 'Session timeline (swimlanes by file/tool)' : 'Linear transcript'}
+              >
+                {v === 'chat' ? 'Chat' : 'Timeline'}
+              </button>
+            ))}
+          </div>
         }
       />
 
@@ -821,85 +546,30 @@ export function ChatView({
           ) : (
             <SessionGraphView processed={processed} onSelectTool={setSelectedTool} />
           )}
+          {controlPill(false)}
         </div>
       ) : (
-        <div className={`cl-chat-workspace${agents.length > 0 ? ' cl-chat-workspace--with-rail' : ''}`}>
+        <div className={`cl-chat-workspace cl-chat-workspace--focus${agents.length > 0 ? ' cl-chat-workspace--with-rail' : ''}`}>
           <main
             className="cl-chat-feed"
             ref={feedRef}
             onScroll={e => {
               const el = e.target as HTMLElement
-              const top = el.scrollTop
               // Capture anchoring with the current (pre-render) scrollHeight so the
               // auto-scroll effect knows the user was at the bottom even when the
               // next message is taller than the 200px threshold.
-              wasNearBottomRef.current = el.scrollHeight - top - el.clientHeight < 200
-              // hysteresis: collapse at 220px, expand back only under 80px — evita flicker
-              if (headerCollapsed) {
-                if (top <= 80) setHeaderCollapsed(false)
-                return
-              }
-              // Collassare l'header riduce lo scrollHeight di tutta la sua altezza.
-              // Su chat corte ciò forzerebbe il browser a clampare scrollTop verso
-              // l'alto (la scrollbar "salta" da sola) e l'isteresi rimbalzerebbe in
-              // un loop collapse↔expand. Collassa solo se, tolto l'header, il
-              // contenuto resta scrollabile almeno fino alla posizione corrente:
-              // così scrollTop non viene mai clampato → niente salto, niente loop.
-              if (top <= 220) return
-              let collapsibleH = 0
-              el.querySelectorAll('.cl-chat-collapsible').forEach(c => {
-                collapsibleH += (c as HTMLElement).offsetHeight
-              })
-              const maxScrollAfter = el.scrollHeight - el.clientHeight - collapsibleH
-              if (maxScrollAfter >= top) setHeaderCollapsed(true)
+              wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200
             }}
           >
-            <ChatSessionHeader
-              title={title}
-              session={session}
-              projectName={projectName}
-              totalMessages={totalMessages}
-              totalToolCalls={totalToolCalls}
-              duration={duration}
-              collapsed={headerCollapsed}
-            />
-
-            {modelEntries.length > 0 && (
-              <div className={`cl-chat-collapsible${headerCollapsed ? ' is-collapsed' : ''}`}>
-                <div className="cl-chat-collapsible-inner">
-                  <ChatModelBar models={modelEntries} />
-                </div>
-              </div>
-            )}
-
-            {processed.length > 0 && (
-              <ChatTypeFilters
-                filter={activeFilter}
-                setFilter={setTurnFilter}
-                counts={filterCounts}
-                showThinking={detailsFilter === 'all'}
-              />
-            )}
-
             {isLoading && (
-              <p className="cl-transcript-state">
-                Loading transcript…
-              </p>
+              <p className="cl-transcript-state">Loading transcript…</p>
             )}
             {messages?.length === 0 && !isLoading && (
-              <p className="cl-transcript-state">
-                No messages found in this session.
-              </p>
+              <p className="cl-transcript-state">No messages found in this session.</p>
             )}
 
             {processed.length > 0 && (
-              <div className="cl-chat-main">
-                <TurnMinimap
-                  items={minimapItems}
-                  active={activeTurn}
-                  matches={matchesFilter}
-                  onJump={jumpToTurn}
-                />
+              <div className="cl-chat-reading">
                 <div className="cl-transcript-inner">
                   {renderItems.map(item =>
                     item.kind === 'turn' ? (
@@ -925,6 +595,14 @@ export function ChatView({
               </div>
             )}
           </main>
+
+          <FocusMinimap
+            items={minimapItems}
+            active={activeTurn}
+            matches={matchesFilter}
+            onJump={jumpToTurn}
+          />
+
           {agents.length > 0 && (
             <AgentRail
               agents={agents}
@@ -933,6 +611,8 @@ export function ChatView({
               onLocate={jumpToTurn}
             />
           )}
+
+          {controlPill(true)}
         </div>
       )}
     </div>

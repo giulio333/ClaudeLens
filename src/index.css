@@ -1600,77 +1600,6 @@ body {
     0 1px 4px -1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
 }
 
-/* export — ghost glass pill */
-/* overflow (kebab) — icon-only glass pill for low-frequency actions */
-.cl-overflow {
-  position: relative;
-  display: inline-flex;
-}
-.cl-overflow-trigger {
-  display: inline-flex; align-items: center; justify-content: center;
-  width: 32px; height: 32px;
-  border-radius: 999px;
-  background: oklch(1 0 0 / 0.55);
-  border: 1px solid oklch(1 0 0 / 0.7);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.7),
-    0 2px 6px -2px oklch(0.20 0.02 60 / 0.10);
-  -webkit-backdrop-filter: blur(12px) saturate(180%);
-  backdrop-filter: blur(12px) saturate(180%);
-  color: var(--cl-ink-3);
-  cursor: pointer;
-  transition: background 140ms, color 140ms, border-color 140ms;
-}
-:root[data-theme='dark'] .cl-overflow-trigger {
-  background: oklch(1 0 0 / 0.06);
-  border-color: oklch(1 0 0 / 0.14);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.08),
-    0 2px 6px -2px oklch(0 0 0 / 0.40);
-}
-.cl-overflow-trigger:hover {
-  background: oklch(1 0 0 / 0.75);
-  color: var(--cl-ink);
-}
-:root[data-theme='dark'] .cl-overflow-trigger:hover {
-  background: oklch(1 0 0 / 0.12);
-}
-.cl-overflow-panel {
-  position: absolute;
-  top: calc(100% + 8px);
-  right: 0;
-  z-index: 80;
-  width: 308px;
-  padding: 5px;
-  border: 1px solid var(--cl-line);
-  border-radius: 8px;
-  background: var(--cl-paper);
-  box-shadow: 0 18px 42px -24px oklch(0.20 0.015 60 / 0.42);
-}
-.cl-overflow-section { padding: 7px 7px 3px; }
-.cl-overflow-sep {
-  height: 1px;
-  margin: 5px 2px;
-  background: var(--cl-line);
-}
-.cl-overflow-item {
-  display: flex; align-items: center; gap: 9px;
-  width: 100%;
-  padding: 8px 10px;
-  border: 0;
-  border-radius: 6px;
-  background: transparent;
-  font-family: var(--font-sans); font-size: 12.5px; font-weight: 500;
-  color: var(--cl-ink);
-  text-align: left;
-  cursor: pointer;
-  transition: background 120ms, color 120ms;
-}
-.cl-overflow-item svg { flex: 0 0 auto; }
-.cl-overflow-item.is-danger { color: var(--cl-danger); }
-.cl-overflow-item.is-danger:hover {
-  background: color-mix(in oklch, var(--cl-danger) 12%, transparent);
-}
 
 /* resume — dark glass slab with accent play */
 .cl-resume {
@@ -2139,419 +2068,92 @@ body {
 }
 
 /* ──────────────────────────────────────────────────────────
-   CHAT HERO (v3 dossier mist) — collapsible on scroll
+   CHAT — "Focus" layout
+   Chrome stripped to a floating control pill · one centred reading
+   column · a hairline right-edge minimap timeline · export & delete
+   on a sheet raised from the pill. Maximum content, minimum furniture.
    ────────────────────────────────────────────────────────── */
-/* Collapse via grid-template-rows 1fr→0fr: anima l'altezza REALE del contenuto
-   in modo continuo. (max-height animava fino a 720px anche quando l'header era
-   alto ~300px, creando un "dead time" iniziale e poi un crollo a scatti.) */
-.cl-chat-collapsible {
-  display: grid;
-  grid-template-rows: 1fr;
-  opacity: 1;
-  transition:
-    grid-template-rows 440ms cubic-bezier(0.4, 0, 0.2, 1),
-    opacity 240ms cubic-bezier(0.4, 0, 0.2, 1);
-  will-change: grid-template-rows, opacity;
+.cl-chat-workspace--focus {
+  position: relative;
+  grid-template-columns: 1fr;
 }
-.cl-chat-collapsible.is-collapsed {
-  grid-template-rows: 0fr;
-  opacity: 0;
-  pointer-events: none;
-}
-.cl-chat-collapsible-inner {
-  min-height: 0;
-  overflow: hidden;
+.cl-chat-workspace--focus.cl-chat-workspace--with-rail {
+  grid-template-columns: minmax(0, 1fr) 296px;
 }
 
-.cl-chat-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: end;
-  gap: 56px;
-  padding: 36px 64px 30px 88px;
-  border-bottom: 1.5px solid var(--cl-ink);
-  position: relative;
+/* centred reading column — ~78% of the feed so it fills the window while
+   leaving the right gutter for the minimap (and room for the agent rail). */
+.cl-chat-reading {
+  width: 78%;
+  max-width: 1180px;
+  margin: 0 auto;
 }
-.cl-chat-hero-text { min-width: 0; }
-.cl-chat-eyebrow { margin-bottom: 18px; }
-.cl-chat-hero h1 {
-  margin: 0;
-  color: var(--cl-ink);
-  font-size: clamp(34px, 4.2vw, 52px);
-  font-weight: 700;
-  line-height: 1.02;
-  letter-spacing: -0.035em;
-  text-wrap: balance;
-  max-width: 760px;
+.cl-chat-reading .cl-transcript-inner {
+  max-width: none;
+  /* bottom padding clears the floating pill so the last turn can scroll above it */
+  padding: 28px 16px 140px 32px;
 }
-.cl-chat-h1-dot {
-  color: var(--cl-accent);
-  margin-left: 2px;
+.cl-chat-reading .cl-transcript-inner::before {
+  left: calc(32px + 22px);
+  top: 28px;
+  bottom: 140px;
 }
-.cl-chat-submeta {
+.cl-chat-reading .cl-turn {
+  scroll-margin-top: 64px;
+  transition: opacity 0.2s, filter 0.2s;
+}
+.cl-chat-reading .cl-turn[data-dim] { opacity: 0.28; filter: saturate(0.4); }
+
+/* right-edge minimap timeline — a hairline track with proportional dots */
+.cl-focus-rail {
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 46px;
   display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  margin-top: 18px;
-  color: var(--cl-ink-3);
-  font-family: var(--font-mono);
-  font-size: 11.5px;
+  justify-content: center;
+  padding: 64px 0 104px;
+  pointer-events: none;
+  z-index: 12;
 }
-.cl-chat-submeta .sep { color: var(--cl-ink-4); opacity: 0.5; }
-.cl-chat-submeta b {
-  color: var(--cl-ink);
-  font-weight: 500;
+.cl-chat-workspace--focus.cl-chat-workspace--with-rail .cl-focus-rail { right: 296px; }
+.cl-focus-rail-track {
+  position: relative;
+  width: 2px;
+  border-radius: 2px;
+  background: var(--cl-line);
+  pointer-events: auto;
 }
-.cl-chat-file {
-  min-width: 0;
-  max-width: 360px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cl-chat-model {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-}
-.cl-chat-model .led {
+.cl-focus-dot {
+  position: absolute;
+  left: 50%;
   width: 7px;
   height: 7px;
-  border-radius: 50%;
-}
-
-/* lens cluster — 3 glass orbs on hero right */
-.cl-lens-cluster {
-  position: relative;
-  width: 200px;
-  height: 180px;
-  flex-shrink: 0;
-}
-.cl-lens-cluster .orb-big,
-.cl-lens-cluster .orb-mid,
-.cl-lens-cluster .orb-sm {
-  position: absolute;
-  border-radius: 50%;
-  border: 1px solid oklch(1 0 0 / 0.6);
-  backdrop-filter: blur(18px);
-  -webkit-backdrop-filter: blur(18px);
-}
-.cl-lens-cluster .orb-big {
-  right: 16px;
-  top: 0;
-  width: 132px;
-  height: 132px;
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.75), transparent 55%),
-    radial-gradient(circle at 70% 80%, color-mix(in oklch, var(--cl-violet) 56%, transparent), transparent 65%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-violet-soft) 80%, var(--cl-paper)),
-      color-mix(in oklch, var(--cl-violet) 22%, var(--cl-paper)));
-  box-shadow:
-    inset 0 2px 4px oklch(1 0 0 / 0.55),
-    inset 0 -2px 4px color-mix(in oklch, var(--cl-violet) 24%, transparent),
-    0 12px 28px -10px color-mix(in oklch, var(--cl-violet) 38%, transparent);
-}
-.cl-lens-cluster .orb-mid {
-  right: 80px;
-  bottom: 6px;
-  width: 64px;
-  height: 64px;
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.75), transparent 55%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-accent-soft) 80%, var(--cl-paper)),
-      color-mix(in oklch, var(--cl-accent) 24%, var(--cl-paper)));
-  box-shadow:
-    inset 0 2px 4px oklch(1 0 0 / 0.55),
-    0 6px 18px -6px color-mix(in oklch, var(--cl-accent) 44%, transparent);
-}
-.cl-lens-cluster .orb-sm {
-  right: 6px;
-  bottom: 30px;
-  width: 32px;
-  height: 32px;
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.75), transparent 55%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-cyan) 22%, var(--cl-paper)),
-      color-mix(in oklch, var(--cl-cyan) 38%, var(--cl-paper)));
-  box-shadow:
-    inset 0 2px 4px oklch(1 0 0 / 0.55),
-    0 4px 12px -4px color-mix(in oklch, var(--cl-cyan) 38%, transparent);
-}
-
-/* STATS · 4 col, last is a dark slab */
-.cl-chat-stats {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
-  border-bottom: 1.5px solid var(--cl-ink);
-}
-.cl-chat-stat {
-  padding: 22px 28px 24px;
-  border-left: 1px solid var(--cl-line);
-  position: relative;
-  min-width: 0;
-}
-.cl-chat-stat:first-child {
-  border-left: none;
-  padding-left: 88px;
-}
-.cl-chat-stat:last-child { padding-right: 64px; }
-.cl-chat-stat .l {
-  color: var(--cl-ink-3);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.20em;
-  text-transform: uppercase;
-}
-.cl-chat-stat .n {
-  margin-top: 14px;
-  color: var(--cl-ink);
-  font-size: clamp(28px, 3.4vw, 44px);
-  font-weight: 600;
-  letter-spacing: -0.035em;
-  line-height: 1;
-  font-variant-numeric: tabular-nums;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.cl-chat-stat .n small {
-  margin-left: 4px;
-  color: var(--cl-ink-4);
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 400;
-}
-.cl-chat-stat.is-dark {
-  background:
-    radial-gradient(circle at 80% 10%, color-mix(in oklch, var(--cl-violet) 26%, transparent), transparent 60%),
-    linear-gradient(180deg, oklch(0.22 0.02 60), oklch(0.13 0.015 60));
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.14),
-    inset 0 -1px 0 oklch(0 0 0 / 0.35);
-}
-.cl-chat-stat.is-dark .l { color: oklch(0.78 0.005 80); }
-.cl-chat-stat.is-dark .n { color: oklch(1 0 0); }
-.cl-chat-stat.is-dark .n small { color: oklch(0.62 0.005 80); }
-
-/* TOOLSTRIP — io flow + tool chips */
-.cl-chat-toolstrip {
-  display: flex;
-  align-items: center;
-  gap: 28px;
-  padding: 13px 64px 13px 88px;
-  background: var(--cl-glass-bg, oklch(1 0 0 / 0.30));
-  border-bottom: 1px solid var(--cl-line-soft);
-  backdrop-filter: blur(20px) saturate(1.8);
-  -webkit-backdrop-filter: blur(20px) saturate(1.8);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.55);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-3);
-  letter-spacing: 0.04em;
-  overflow-x: auto;
-}
-.cl-chat-io {
-  display: inline-flex;
-  align-items: center;
-  gap: 12px;
-  flex-shrink: 0;
-}
-.cl-chat-io b {
-  color: var(--cl-ink);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.cl-chat-io .sep {
-  color: var(--cl-ink-4);
-  opacity: 0.55;
-}
-.cl-chat-tool-chips {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-.cl-chat-tool-chips.is-empty {
-  color: var(--cl-ink-4);
-  font-style: italic;
-}
-.cl-tk {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 4px 10px 4px 8px;
-  border-radius: 999px;
-  background: oklch(1 0 0 / 0.55);
-  border: 1px solid oklch(1 0 0 / 0.7);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.65);
-  color: var(--cl-ink-2);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.cl-tk b {
-  color: var(--cl-ink);
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-}
-.cl-tk .d {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--tk-tint, var(--cl-ink-3));
-}
-
-/* ──────────────────────────────────────────────────────────
-   MODEL DISTRIBUTION BAR — per-model token split (da-models)
-   ────────────────────────────────────────────────────────── */
-.cl-chat-models {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  flex-wrap: wrap;
-  padding: 13px 64px 13px 88px;
-  border-bottom: 1px solid var(--cl-line);
-  font-family: var(--font-mono);
-}
-.cl-chat-mbar {
-  flex: 1 1 240px;
-  min-width: 200px;
-  height: 8px;
-  border-radius: 999px;
-  overflow: hidden;
-  display: flex;
-  background: var(--cl-paper-2);
-  box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.10);
-}
-.cl-chat-mbar > span { height: 100%; }
-.cl-chat-mkey {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  font-size: 10.5px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cl-ink-3);
-  white-space: nowrap;
-}
-.cl-chat-mkey i { width: 9px; height: 9px; border-radius: 3px; flex: 0 0 auto; }
-.cl-chat-mkey .t { color: var(--cl-ink-4); }
-
-/* ──────────────────────────────────────────────────────────
-   TYPE FILTERS — sticky chips (All / Tools / Thinking / Questions)
-   ────────────────────────────────────────────────────────── */
-.cl-chat-filters {
-  position: sticky;
-  top: 0;
-  z-index: 8;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-wrap: wrap;
-  padding: 12px 64px 12px 88px;
-  background: color-mix(in oklch, var(--cl-paper) 86%, transparent);
-  backdrop-filter: blur(16px) saturate(1.4);
-  -webkit-backdrop-filter: blur(16px) saturate(1.4);
-  border-bottom: 1px solid var(--cl-line);
-}
-.cl-filter {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--cl-ink-3);
-  padding: 7px 13px;
-  border-radius: 999px;
-  border: 1px solid var(--cl-line);
-  background: var(--cl-paper);
-  cursor: pointer;
-  transition: color 0.15s, background 0.15s, border-color 0.15s;
-}
-.cl-filter:hover {
-  color: var(--cl-ink);
-  border-color: color-mix(in oklch, var(--cl-accent) 35%, var(--cl-line));
-}
-.cl-filter[data-on] {
-  background: var(--cl-ink);
-  color: var(--cl-paper);
-  border-color: var(--cl-ink);
-}
-.cl-filter .c { opacity: 0.55; margin-left: 5px; }
-
-/* ──────────────────────────────────────────────────────────
-   TRANSCRIPT LAYOUT — navigable minimap rail + turn stream
-   ────────────────────────────────────────────────────────── */
-.cl-chat-main {
-  display: grid;
-  grid-template-columns: 56px minmax(0, 1fr);
-}
-/* the minimap consumes 56px of the 88px editorial gutter, so the stream's
-   orbs stay aligned with the hero's left edge (56 + 32 = 88px). */
-.cl-chat-main .cl-transcript-inner { padding-left: 32px; }
-.cl-chat-main .cl-transcript-inner::before { left: calc(32px + 22px); }
-.cl-chat-main .cl-turn { scroll-margin-top: 64px; transition: opacity 0.2s, filter 0.2s; }
-.cl-chat-main .cl-turn[data-dim] { opacity: 0.28; filter: saturate(0.4); }
-
-.cl-minimap {
-  position: sticky;
-  top: 60px;
-  align-self: start;
-  height: max-content;
-  display: flex;
-  flex-direction: column;
-  padding: 22px 0 22px 16px;
-  z-index: 5;
-}
-.cl-minimap-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  /* Tight row pitch keeps long sessions compact; the fisheye lens (JS-driven
-     --mag) restores legibility/hit-area near the pointer. The button box stays
-     a fixed 20px so the lens math can extrapolate row centres without reflow —
-     and so a swollen dot's diameter never reaches the row pitch (no overlap). */
-  height: 20px;
   padding: 0;
-  border: none;
-  background: none;
-  cursor: pointer;
-  transition: opacity 0.2s;
-}
-.cl-minimap-item .d {
-  width: 8px;
-  height: 8px;
-  box-sizing: border-box;
+  border: 0;
   border-radius: 50%;
   background: var(--c);
-  border: 1.5px solid var(--cl-paper);
-  box-shadow: 0 0 0 1px color-mix(in oklch, var(--c) 50%, transparent);
-  /* Lens scale (--mag, default 1) and active emphasis (--active) combine via
-     max() so a hovered active dot doesn't compound into a giant blob. */
-  transform: scale(max(var(--mag, 1), var(--active, 1)));
-  transform-origin: center;
-  transition: transform 0.09s ease-out, box-shadow 0.18s;
-  flex: 0 0 auto;
+  transform: translate(-50%, -50%);
+  cursor: pointer;
+  transition: width 0.12s, height 0.12s, box-shadow 0.18s, opacity 0.2s;
 }
-.cl-minimap-item::after {
-  content: '';
-  position: absolute;
-  left: 4px;
-  top: 10px;
-  width: 1px;
-  height: 20px;
-  background: var(--cl-line);
+.cl-focus-dot[data-accent] {
+  width: 9px;
+  height: 9px;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--c) 18%, transparent);
 }
-.cl-minimap-item:last-child::after { display: none; }
-.cl-minimap-item[data-dim] { opacity: 0.32; }
-.cl-minimap-item .n {
+.cl-focus-dot[data-active] {
+  width: 11px;
+  height: 11px;
+  box-shadow: 0 0 0 3px color-mix(in oklch, var(--c) 30%, transparent);
+}
+.cl-focus-dot[data-dim] { opacity: 0.3; }
+.cl-focus-dot .lbl {
   position: absolute;
-  left: 20px;
+  right: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
   white-space: nowrap;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -2565,14 +2167,145 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
-  z-index: 3;
 }
-.cl-minimap-item:hover .n { opacity: 1; }
-.cl-minimap-item[data-active] .d {
-  --active: 1.5;
+.cl-focus-dot:hover .lbl { opacity: 1; }
+
+/* floating control pill — bottom centre, glass */
+.cl-pill-wrap {
+  position: absolute;
+  left: 50%;
+  bottom: 20px;
+  transform: translateX(-50%);
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 10px;
+}
+/* with the agent rail present, recentre the pill over the reading column */
+.cl-chat-workspace--with-rail .cl-pill-wrap { left: calc(50% - 148px); }
+.cl-pill {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px;
+  border-radius: 999px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
   box-shadow:
-    0 0 0 1px color-mix(in oklch, var(--c) 60%, transparent),
-    0 0 0 2px color-mix(in oklch, var(--c) 16%, transparent);
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+}
+.cl-pill-div {
+  width: 1px;
+  height: 18px;
+  background: color-mix(in oklch, var(--cl-ink) 16%, transparent);
+}
+.cl-pill-filters { display: flex; align-items: center; gap: 3px; }
+.cl-pill-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.cl-pill-filter:hover { color: var(--cl-ink); }
+.cl-pill-filter b { font-weight: 600; color: var(--cl-ink-4); }
+.cl-pill-filter[data-on] {
+  background: color-mix(in oklch, var(--cl-accent) 18%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-pill-filter[data-on] b { color: var(--cl-accent-ink); }
+.cl-pill-more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.cl-pill-more:hover,
+.cl-pill-more[data-on] {
+  background: color-mix(in oklch, var(--cl-ink) 12%, transparent);
+  color: var(--cl-ink);
+}
+
+/* export / delete sheet — raised above the pill, never covers the transcript */
+.cl-sheet {
+  width: 300px;
+  padding: 14px;
+  border-radius: 14px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+}
+.cl-sheet-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+.cl-sheet-close {
+  border: 0;
+  background: none;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  font-size: 12px;
+  line-height: 1;
+  transition: color 0.12s;
+}
+.cl-sheet-close:hover { color: var(--cl-ink); }
+.cl-sheet-sep {
+  height: 1px;
+  margin: 12px 2px 6px;
+  background: var(--cl-line);
+}
+.cl-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 6px 2px;
+  border: 0;
+  background: none;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--cl-ink);
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.12s;
+}
+.cl-sheet-item svg { flex: 0 0 auto; }
+.cl-sheet-item.is-danger { color: var(--cl-danger); }
+.cl-sheet-item.is-danger:hover { color: color-mix(in oklch, var(--cl-danger) 80%, var(--cl-ink)); }
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-focus-dot,
+  .cl-pill-filter,
+  .cl-pill-more,
+  .cl-sheet-close,
+  .cl-sheet-item { transition: none; }
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -2911,7 +2644,7 @@ body {
 .cl-tool-stack,
 .cl-ask-stack,
 .cl-plan-stack {
-  max-width: 780px;
+  max-width: 920px;
   margin-top: 12px;
   display: grid;
   gap: 7px;
@@ -2930,69 +2663,73 @@ body {
   display: flex;
   align-items: stretch;
 }
+.cl-tool-card.is-open {
+  border-color: color-mix(in oklch, var(--tint) 45%, var(--cl-line));
+  background: color-mix(in oklch, var(--tint) 6%, var(--cl-paper));
+}
 .cl-tool-card-main {
   flex: 1;
   min-width: 0;
-  display: flex;
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  padding: 8px 10px;
+  gap: 10px;
+  padding: 9px 12px;
   border: 0;
   background: transparent;
-  color: var(--cl-ink-2);
   text-align: left;
   cursor: pointer;
 }
-.cl-tool-card-main:hover { background: color-mix(in oklch, var(--cl-paper-2) 68%, transparent); }
+.cl-tool-card-main:hover { background: color-mix(in oklch, var(--tint) 8%, transparent); }
 .cl-tool-card-main.is-static { cursor: default; }
 .cl-tool-card-main.is-static:hover { background: transparent; }
-.cl-tool-card-icon {
-  width: 21px;
-  height: 21px;
+/* letter-monogram tile, tinted per tool (--tint) */
+.cl-tool-card-mono {
+  width: 22px;
+  height: 22px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--cl-line);
+  border: 1px solid color-mix(in oklch, var(--tint) 32%, var(--cl-line));
   border-radius: 6px;
-  background: var(--cl-paper-2);
-  font-size: 12px;
+  background: color-mix(in oklch, var(--tint) 16%, var(--cl-paper-2));
+  color: var(--tint);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
   flex: 0 0 auto;
+}
+.cl-tool-card-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
 }
 .cl-tool-card-name {
   color: var(--cl-ink);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  flex: 0 0 auto;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 500;
+  line-height: 1.2;
 }
 .cl-tool-card-preview {
   min-width: 0;
   overflow: hidden;
-  color: var(--cl-ink-3);
+  color: var(--cl-ink-4);
   font-family: var(--font-mono);
   font-size: 10.5px;
+  line-height: 1.3;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cl-tool-card-badge {
+.cl-tool-card-status {
   flex: 0 0 auto;
-  color: var(--cl-violet-ink);
+  color: var(--cl-ink-4);
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11px;
 }
-.cl-tool-card-toggle {
-  margin-left: auto;
-  color: var(--cl-ink-3);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  flex: 0 0 auto;
-}
+.cl-tool-card-status.is-ok { color: var(--cl-ok); }
+.cl-tool-card-status.is-error { color: var(--cl-danger); }
 .cl-tool-card-detail {
   width: 38px;
   display: inline-flex;
@@ -3076,31 +2813,11 @@ body {
 .cl-tool-card-section.is-error pre { color: var(--cl-danger); }
 
 @media (max-width: 980px) {
-  .cl-chat-hero {
-    grid-template-columns: 1fr;
-    gap: 24px;
-    padding: 28px 32px 22px;
-  }
-  .cl-lens-cluster {
-    transform: scale(0.7);
-    transform-origin: top left;
-  }
-  .cl-chat-stat:first-child {
-    padding-left: 32px;
-  }
-  .cl-chat-stat:last-child {
-    padding-right: 32px;
-  }
-  .cl-chat-toolstrip {
-    padding: 13px 32px;
-  }
-  .cl-chat-models,
-  .cl-chat-filters {
-    padding-left: 32px;
-    padding-right: 32px;
-  }
-  .cl-chat-main { grid-template-columns: 1fr; }
-  .cl-minimap { display: none; }
+  .cl-focus-rail { display: none; }
+  .cl-chat-reading { width: 88%; }
+  .cl-chat-workspace--focus.cl-chat-workspace--with-rail { grid-template-columns: 1fr; }
+  .cl-chat-workspace--with-rail .cl-pill-wrap { left: 50%; }
+  .cl-pill-filter { padding: 7px 9px; font-size: 9px; }
   .cl-tool-detail-scroll {
     padding: 24px 26px 46px;
   }
@@ -3127,51 +2844,12 @@ body {
   .cl-resume span {
     display: none;
   }
-  .cl-chat-hero {
-    padding: 22px 18px 18px;
-  }
-  .cl-chat-hero h1 {
-    font-size: 30px;
-  }
-  .cl-lens-cluster {
-    display: none;
-  }
-  .cl-chat-stats {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-  .cl-chat-stat {
-    padding: 16px 18px;
-  }
-  .cl-chat-stat:first-child,
-  .cl-chat-stat:last-child {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
-  .cl-chat-stat:nth-child(odd) {
-    border-left: 0;
-  }
-  .cl-chat-stat:nth-child(n + 3) {
-    border-top: 1px solid var(--cl-line-soft);
-  }
-  .cl-chat-toolstrip {
-    padding: 10px 18px;
-    gap: 14px;
-    flex-wrap: wrap;
-  }
-  .cl-chat-tool-chips {
-    margin-left: 0;
-    flex-wrap: wrap;
-  }
   .cl-transcript-inner {
     padding: 18px 18px 40px;
   }
-  .cl-chat-main .cl-transcript-inner { padding-left: 18px; }
-  .cl-chat-main .cl-transcript-inner::before { left: 31px; }
-  .cl-chat-models,
-  .cl-chat-filters {
-    padding-left: 18px;
-    padding-right: 18px;
-  }
+  .cl-chat-reading { width: 94%; }
+  .cl-chat-reading .cl-transcript-inner { padding-left: 18px; }
+  .cl-chat-reading .cl-transcript-inner::before { left: 31px; }
   .cl-turn {
     grid-template-columns: 36px minmax(0, 1fr);
     gap: 12px;
@@ -4997,63 +4675,10 @@ button.cl-task-group-head:disabled { cursor: default; }
 :root[data-theme='dark'] .cl-chat-feed {
   background: var(--cl-paper);
 }
-:root[data-theme='dark'] .cl-chat-hero,
-:root[data-theme='dark'] .cl-chat-stats {
-  border-bottom-color: color-mix(in oklch, var(--cl-ink) 38%, var(--cl-line));
-}
-:root[data-theme='dark'] .cl-chat-stat:first-child,
-:root[data-theme='dark'] .cl-chat-stat {
-  border-left-color: color-mix(in oklch, var(--cl-line) 80%, transparent);
-}
-:root[data-theme='dark'] .cl-chat-stat.is-dark {
-  background:
-    radial-gradient(circle at 80% 10%, color-mix(in oklch, var(--cl-accent) 32%, transparent), transparent 60%),
-    linear-gradient(180deg,
-      color-mix(in oklch, var(--cl-accent) 28%, var(--cl-paper-3)),
-      color-mix(in oklch, var(--cl-accent) 14%, var(--cl-paper-3)));
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.08);
-}
-:root[data-theme='dark'] .cl-chat-stat.is-dark .l { color: color-mix(in oklch, var(--cl-on-accent) 75%, transparent); }
-:root[data-theme='dark'] .cl-chat-stat.is-dark .n { color: oklch(1 0 0); }
-:root[data-theme='dark'] .cl-chat-stat.is-dark .n small { color: color-mix(in oklch, var(--cl-on-accent) 60%, transparent); }
-
-:root[data-theme='dark'] .cl-chat-toolstrip {
-  background: oklch(1 0 0 / 0.04);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.05);
-  border-bottom-color: var(--cl-line-soft);
-}
 :root[data-theme='dark'] .cl-tk {
   background: oklch(1 0 0 / 0.06);
   border-color: oklch(1 0 0 / 0.10);
   box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
-}
-
-:root[data-theme='dark'] .cl-lens-cluster .orb-big,
-:root[data-theme='dark'] .cl-lens-cluster .orb-mid,
-:root[data-theme='dark'] .cl-lens-cluster .orb-sm {
-  border-color: oklch(1 0 0 / 0.20);
-}
-:root[data-theme='dark'] .cl-lens-cluster .orb-big {
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.30), transparent 55%),
-    radial-gradient(circle at 70% 80%, color-mix(in oklch, var(--cl-violet) 70%, transparent), transparent 65%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-violet) 30%, var(--cl-paper-2)),
-      color-mix(in oklch, var(--cl-violet) 12%, var(--cl-paper-3)));
-}
-:root[data-theme='dark'] .cl-lens-cluster .orb-mid {
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.30), transparent 55%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-accent) 32%, var(--cl-paper-2)),
-      color-mix(in oklch, var(--cl-accent) 16%, var(--cl-paper-3)));
-}
-:root[data-theme='dark'] .cl-lens-cluster .orb-sm {
-  background:
-    radial-gradient(circle at 28% 22%, oklch(1 0 0 / 0.30), transparent 55%),
-    linear-gradient(160deg,
-      color-mix(in oklch, var(--cl-cyan) 32%, var(--cl-paper-2)),
-      color-mix(in oklch, var(--cl-cyan) 16%, var(--cl-paper-3)));
 }
 
 :root[data-theme='dark'] .cl-turn-orb {
@@ -5072,18 +4697,7 @@ button.cl-task-group-head:disabled { cursor: default; }
     transparent 100%
   );
 }
-:root[data-theme='dark'] .cl-chat-models { border-bottom-color: var(--cl-line); }
-:root[data-theme='dark'] .cl-chat-mbar { background: var(--cl-paper-3); box-shadow: inset 0 1px 2px oklch(0 0 0 / 0.40); }
-:root[data-theme='dark'] .cl-chat-filters {
-  background: color-mix(in oklch, var(--cl-paper) 80%, transparent);
-}
-:root[data-theme='dark'] .cl-filter[data-on] {
-  background: var(--cl-paper-2);
-  color: var(--cl-ink);
-  border-color: var(--cl-line);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
-}
-:root[data-theme='dark'] .cl-minimap-item .n { box-shadow: 0 8px 20px -8px oklch(0 0 0 / 0.6); }
+:root[data-theme='dark'] .cl-focus-dot .lbl { box-shadow: 0 8px 20px -8px oklch(0 0 0 / 0.6); }
 
 /* ════════════════════════════════════════════════════════════════════════
    AGENT TOPBAR — shared chrome (View/Edit pill + actions)

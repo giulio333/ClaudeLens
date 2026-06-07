@@ -1,5 +1,6 @@
 import { useState } from 'react'
-import { ToolGroup, isMemoryFile, resolveToolIcon } from './utils'
+import type { CSSProperties } from 'react'
+import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT } from './utils'
 
 export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   group: ToolGroup
@@ -9,7 +10,8 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   const [open, setOpen] = useState(false)
   const { use, result } = group
   const isMemory = isMemoryFile(use.input as Record<string, unknown>)
-  const icon = resolveToolIcon(use.name, use.input as Record<string, unknown>)
+  const monogram = isMemory ? 'M' : toolMonogram(use.name)
+  const tint = isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)')
   const inputPreview = (
     use.input.description as string ??
     use.input.command as string ??
@@ -18,11 +20,17 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
     use.input.prompt as string ??
     ''
   )
-  const resultPreview = result ? result.content.split('\n')[0]?.slice(0, 80) ?? '' : null
+  const resultPreview = result ? result.content.split('\n')[0]?.slice(0, 120) ?? '' : null
   const hasExpandable = showDetails || (result && result.content.length > 80)
+  // Right-edge status glyph: resolved result → ✓/✕, otherwise a hint that the
+  // row expands (caret when open, arrow when collapsed).
+  const status = result ? (result.isError ? '✕' : '✓') : (hasExpandable ? (open ? '▾' : '→') : '')
 
   return (
-    <div className={`cl-tool-card ${isMemory ? 'cl-tool-card--memory' : ''}`}>
+    <div
+      className={`cl-tool-card${isMemory ? ' cl-tool-card--memory' : ''}${open ? ' is-open' : ''}`}
+      style={{ '--tint': tint } as CSSProperties}
+    >
       <div className="cl-tool-card-row">
         <button
           type="button"
@@ -31,16 +39,17 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
           aria-label={`${use.name} tool — ${open ? 'collapse' : 'expand'} details`}
           aria-expanded={hasExpandable ? open : undefined}
         >
-          <span className="cl-tool-card-icon">{icon}</span>
-          <span className="cl-tool-card-name">{use.name}</span>
-          {inputPreview && !open && (
-            <span className="cl-tool-card-preview">{String(inputPreview).slice(0, 80)}</span>
-          )}
-          {isMemory && (
-            <span className="cl-tool-card-badge">Memory</span>
-          )}
-          {hasExpandable && (
-            <span className="cl-tool-card-toggle">{open ? 'Close' : 'Open'}</span>
+          <span className="cl-tool-card-mono" aria-hidden>{monogram}</span>
+          <span className="cl-tool-card-id">
+            <span className="cl-tool-card-name">{use.name}</span>
+            {inputPreview && (
+              <span className="cl-tool-card-preview">{String(inputPreview)}</span>
+            )}
+          </span>
+          {status && (
+            <span className={`cl-tool-card-status ${result ? (result.isError ? 'is-error' : 'is-ok') : ''}`}>
+              {status}
+            </span>
           )}
         </button>
         {showDetails && (
@@ -59,9 +68,9 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
         )}
       </div>
 
-      {result && !open && (
-        <div className={`cl-tool-card-result ${result.isError ? 'is-error' : 'is-ok'}`}>
-          <span>{result.isError ? 'Error' : 'Result'}</span>
+      {result && result.isError && !open && (
+        <div className="cl-tool-card-result is-error">
+          <span>Error</span>
           <code>{resultPreview}</code>
         </div>
       )}
