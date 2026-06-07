@@ -180,6 +180,7 @@ export const MessageBubble = memo(function MessageBubble({
   dimmed,
   isContinuation,
   innerRef,
+  hiddenToolCount = 0,
 }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
@@ -193,6 +194,8 @@ export const MessageBubble = memo(function MessageBubble({
   isContinuation?: boolean
   /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
   innerRef?: Ref<HTMLElement>
+  /** Number of tool-only turns collapsed before this message in minimal mode. */
+  hiddenToolCount?: number
 }) {
   const { msg, toolGroups, command } = processed
   const isUser = msg.role === 'user'
@@ -270,9 +273,11 @@ export const MessageBubble = memo(function MessageBubble({
     )
   }
 
+  const isAgentOnly = showAgentStrip && textBlocks.length === 0
+
   return (
     <article
-      className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}${showTools && textBlocks.length === 0 && thinkingBlocks.length === 0 ? ' cl-turn--tool-only' : ''}`}
+      className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}${showTools && textBlocks.length === 0 && thinkingBlocks.length === 0 ? ' cl-turn--tool-only' : ''}${isAgentOnly ? ' cl-turn--agent-only' : ''}`}
       style={{ '--turn-role-color': roleColor } as CSSProperties}
       ref={innerRef}
       data-n={turnIndex}
@@ -287,7 +292,8 @@ export const MessageBubble = memo(function MessageBubble({
       <section className="cl-turn-body">
         <header className="cl-turn-head">
           <span className="cl-turn-who">{roleLabel}</span>
-          {!(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) && (
+          {!(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
+           !(showAgentStrip && textBlocks.length === 0) && (
             <>
               <span className="cl-turn-sep">·</span>
               <time>{timestamp}</time>
@@ -301,9 +307,20 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             </>
           )}
-          {standardToolGroups.length > 0 && !showTools && (
-            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}</span>
+          {hiddenToolCount > 0 && (
+            <span className="cl-turn-tools-hidden-badge">
+              {hiddenToolCount === 1 ? '1 tool hidden' : 'tools hidden'}
+              {hiddenToolCount > 1 && <span className="cl-turn-tools-hidden-x">×{hiddenToolCount}</span>}
+            </span>
           )}
+          {(() => {
+            const nonAgentHidden = showAgentStrip
+              ? standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name)).length
+              : standardToolGroups.length
+            return nonAgentHidden > 0 && !showTools ? (
+              <span className="cl-turn-tool-count">{nonAgentHidden} tool{nonAgentHidden === 1 ? '' : 's'}</span>
+            ) : null
+          })()}
         </header>
 
         {showThinking && thinkingBlocks.map((b, i) => (

@@ -2461,6 +2461,9 @@ body {
 .cl-turn--tool-only {
   margin-top: calc(-18px + 3px);
 }
+/* Agent-only turns (minimal mode, no text): compress vertical rhythm */
+.cl-turn--agent-only .cl-turn-body { padding-bottom: 4px; }
+.cl-turn--continuation.cl-turn--agent-only .cl-turn-head { display: none; }
 
 /* Continuation turn: same role follows — orb is visually hidden (DOM stays intact
    to avoid reflow during scroll), spine is neutral, header trimmed. */
