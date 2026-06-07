@@ -52,7 +52,10 @@ function parseTaskFile(filePath: string): Task | null {
 // con file JSON e li raggruppa. Restituisce solo i gruppi non vuoti, sessione più recente prima.
 export async function getProjectTasks(projectPath: string, tasksDir: string): Promise<TaskGroup[]> {
   try {
-    const sessionFiles = await glob('**/*.jsonl', { cwd: projectPath, absolute: false });
+    // Non-recursive: real session files are direct children. `**/*.jsonl` would
+    // also match `{sessionId}/subagents/**/agent-*.jsonl`, triggering an extra
+    // per-file glob for transcripts that never have a tasks folder (#95).
+    const sessionFiles = await glob('*.jsonl', { cwd: projectPath, absolute: false });
     const groups: { group: TaskGroup; mtime: number }[] = [];
 
     for (const sessionFile of sessionFiles) {
