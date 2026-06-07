@@ -853,26 +853,38 @@ export function ChatView({
             {processed.length > 0 && (
               <div className="cl-chat-reading">
                 <div className="cl-transcript-inner">
-                  {renderItems.map(item =>
-                    item.kind === 'turn' ? (
-                      <MessageBubble
-                        key={processed[item.idx].msg.uuid}
-                        processed={processed[item.idx]}
-                        detailsFilter={detailsFilter}
-                        onOpenToolDetail={setSelectedTool}
-                        agentColorOf={agentColorOf}
-                        turnIndex={item.idx + 1}
-                        dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
-                        innerRef={setTurnRef}
-                      />
-                    ) : (
-                      <ToolsHiddenBadge
-                        key={item.key}
-                        count={item.count}
-                        dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
-                      />
-                    )
-                  )}
+                  {(() => {
+                    let prevRole: string | null = null
+                    return renderItems.map(item => {
+                      if (item.kind !== 'turn') {
+                        prevRole = null
+                        return (
+                          <ToolsHiddenBadge
+                            key={item.key}
+                            count={item.count}
+                            dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
+                          />
+                        )
+                      }
+                      const curRole = processed[item.idx].msg.role
+                      const hasText = processed[item.idx].msg.content.some(b => b.type === 'text')
+                      const isContinuation = !hasText && curRole === prevRole && curRole === 'assistant'
+                      prevRole = curRole
+                      return (
+                        <MessageBubble
+                          key={processed[item.idx].msg.uuid}
+                          processed={processed[item.idx]}
+                          detailsFilter={detailsFilter}
+                          onOpenToolDetail={setSelectedTool}
+                          agentColorOf={agentColorOf}
+                          turnIndex={item.idx + 1}
+                          dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
+                          isContinuation={isContinuation}
+                          innerRef={setTurnRef}
+                        />
+                      )
+                    })
+                  })()}
                   <div ref={bottomRef} />
                 </div>
               </div>
