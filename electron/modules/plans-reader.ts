@@ -124,7 +124,10 @@ function toPlan(ref: PlanRef): Plan {
 // Restituisce solo i gruppi non vuoti, sessione più recente prima.
 export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]> {
   try {
-    const sessionFiles = await glob('**/*.jsonl', { cwd: projectPath, absolute: true });
+    // Non-recursive: real session files are direct children. `**/*.jsonl` would
+    // also match `{sessionId}/subagents/**/agent-*.jsonl`, roughly doubling I/O
+    // by re-reading every sub-agent transcript (#95). Aligned with findSessionFiles.
+    const sessionFiles = await glob('*.jsonl', { cwd: projectPath, absolute: true });
     const groups: { group: PlanGroup; sortKey: string }[] = [];
 
     for (const sessionFile of sessionFiles) {
