@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
-import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT } from './utils'
+import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils'
 
 export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   group: ToolGroup
@@ -12,6 +12,11 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
   const isMemory = isMemoryFile(use.input as Record<string, unknown>)
   const monogram = isMemory ? 'M' : toolMonogram(use.name)
   const tint = isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)')
+  // For an agent dispatch ("Agent"/"Task") the tool name carries no signal —
+  // surface the delegated sub-agent type instead (e.g. "git-committer").
+  const displayName = AGENT_TOOLS.has(use.name)
+    ? ((use.input.subagent_type as string) || use.name)
+    : use.name
   const inputPreview = (
     use.input.description as string ??
     use.input.command as string ??
@@ -41,7 +46,7 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
         >
           <span className="cl-tool-card-mono" aria-hidden>{monogram}</span>
           <span className="cl-tool-card-id">
-            <span className="cl-tool-card-name">{use.name}</span>
+            <span className="cl-tool-card-name">{displayName}</span>
             {inputPreview && (
               <span className="cl-tool-card-preview">{String(inputPreview)}</span>
             )}
