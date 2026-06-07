@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents } from '../../../hooks/useIPC'
-import { SessionSummary } from '../../../hooks/useIPC'
+import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents, useAllSkills } from '../../../hooks/useIPC'
+import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC'
 import { sessionTitle } from '../utils'
-import { buildProcessedMessages, correlateSessionAgents, describeTurn, touchedFiles, ChatDetailsFilter, SessionAgent, ToolGroup, TouchedFile, TurnDescriptor } from './utils'
+import { buildProcessedMessages, correlateSessionAgents, correlateSessionSkills, describeTurn, touchedFiles, skillInitial, ChatDetailsFilter, SessionAgent, SessionSkill, ToolGroup, TouchedFile, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
@@ -13,7 +13,6 @@ import { TopBar } from '../shared/TopBar'
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
 import { SessionGraphView } from './graph/SessionGraphView'
 import { QueryError } from '../../QueryError'
-import { projectDisplayName } from '../shared/projectName'
 
 type ViewMode = 'chat' | 'timeline'
 
@@ -204,6 +203,81 @@ function AgentOrbCluster({
   )
 }
 
+/** Skill counterpart of AgentOrbCluster — overlapping first-letter orbs (all in
+ *  the brand accent, skills carry no per-identity color) for the footer dock. */
+function SkillOrbCluster({ skills }: { skills: SessionSkill[] }) {
+  const shown = skills.slice(0, 4)
+  const overflow = skills.length - shown.length
+  return (
+    <span className="cl-dock-orbs">
+      {shown.map((s, i) => (
+        <span key={s.key} className="cl-dock-orb" style={{ zIndex: shown.length - i, ...orbStyle('var(--cl-accent)') }}>{skillInitial(s.name)}</span>
+      ))}
+      {overflow > 0 && <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>+{overflow}</span>}
+    </span>
+  )
+}
+
+/** The skill dock sheet — sibling of AgentDockSheet. Lists every skill invoked in
+ *  the session; a row deep-links to the skill detail when the definition resolves,
+ *  otherwise it just locates the invocation in the transcript. The locate button
+ *  always jumps to the invocation card. */
+function SkillDockSheet({
+  skills,
+  activeKey,
+  onOpen,
+  onLocate,
+}: {
+  skills: SessionSkill[]
+  activeKey: string | null
+  onOpen: (skill: Skill) => void
+  onLocate: (turnN: number) => void
+}) {
+  return (
+    <div className="cl-sheet cl-sheet--agents" role="menu">
+      <div className="cl-sheet-head">
+        <span className="cl-dock-sheet-label">Skills used · {skills.length}</span>
+      </div>
+      <div className="cl-dock-rows">
+        {skills.map(s => {
+          const canOpen = s.skill !== null
+          return (
+            <div key={s.key} className="cl-dock-row" data-active={activeKey === s.key || undefined}>
+              <button
+                type="button"
+                className="cl-dock-row-main"
+                onClick={() => (canOpen ? onOpen(s.skill!) : onLocate(s.turnN))}
+                title={canOpen ? 'View skill' : 'Locate invocation in chat'}
+              >
+                <span className="orb" aria-hidden style={orbStyle('var(--cl-accent)')}>{skillInitial(s.name)}</span>
+                <span className="body">
+                  <span className="r1">
+                    <span className="name">{s.name}</span>
+                    {s.scope && <span className="status">{s.scope}</span>}
+                  </span>
+                  {s.description && <span className="desc">{s.description}</span>}
+                  {!canOpen && (
+                    <span className="meta"><span className="steps">no definition</span></span>
+                  )}
+                </span>
+              </button>
+              <button
+                type="button"
+                className="cl-dock-row-locate"
+                onClick={() => onLocate(s.turnN)}
+                title="Jump to invocation in chat"
+                aria-label="Jump to invocation in chat"
+              >
+                <LocateGlyph />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /** The agent dock that lives inside the control pill (Focus layout, variant 4):
  *  an overlapping avatar cluster + count that toggles a sheet listing every
  *  sub-agent. The sheet is rendered by ChatControlPill above the pill; this just
@@ -312,6 +386,10 @@ function ChatControlPill({
   agentColorOf,
   onOpenAgent,
   onLocateAgent,
+  skills,
+  activeSkillKey,
+  onOpenSkill,
+  onLocateSkill,
 }: {
   showTranscriptControls: boolean
   filter: TurnFilter
@@ -336,10 +414,14 @@ function ChatControlPill({
   agentColorOf: (agent: SessionAgent) => string | undefined
   onOpenAgent: (agent: SessionAgent) => void
   onLocateAgent: (turnN: number) => void
+  skills: SessionSkill[]
+  activeSkillKey: string | null
+  onOpenSkill: (skill: Skill) => void
+  onLocateSkill: (turnN: number) => void
 }) {
-  // Only one sheet is raised above the pill at a time: the agent dock list or
-  // the export/delete menu.
-  const [sheet, setSheet] = useState<'export' | 'agents' | null>(null)
+  // Only one sheet is raised above the pill at a time: the agent dock list, the
+  // skill dock list, or the export/delete menu.
+  const [sheet, setSheet] = useState<'export' | 'agents' | 'skills' | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
@@ -360,6 +442,7 @@ function ChatControlPill({
     })
   }
   const toggleAgents = () => setSheet(s => (s === 'agents' ? null : 'agents'))
+  const toggleSkills = () => setSheet(s => (s === 'skills' ? null : 'skills'))
 
   const chip = (id: TurnFilter, label: string, c: number) => (
     <button
@@ -388,6 +471,20 @@ function ChatControlPill({
           onLocate={turnN => {
             setSheet(null)
             onLocateAgent(turnN)
+          }}
+        />
+      )}
+      {sheet === 'skills' && skills.length > 0 && (
+        <SkillDockSheet
+          skills={skills}
+          activeKey={activeSkillKey}
+          onOpen={skill => {
+            setSheet(null)
+            onOpenSkill(skill)
+          }}
+          onLocate={turnN => {
+            setSheet(null)
+            onLocateSkill(turnN)
           }}
         />
       )}
@@ -476,6 +573,24 @@ function ChatControlPill({
             <span className="cl-pill-div" />
           </>
         )}
+        {skills.length > 0 && (
+          <>
+            <button
+              type="button"
+              className="cl-pill-dock"
+              aria-haspopup="menu"
+              aria-expanded={sheet === 'skills'}
+              data-on={sheet === 'skills' || undefined}
+              title={`${skills.length} skill${skills.length > 1 ? 's' : ''} used`}
+              onClick={toggleSkills}
+            >
+              <SkillOrbCluster skills={skills} />
+              <span className="cl-dock-count">{skills.length} <span>skills</span></span>
+              <DockCaretGlyph open={sheet === 'skills'} />
+            </button>
+            <span className="cl-pill-div" />
+          </>
+        )}
         <button className="cl-resume" type="button" onClick={onResume}>
           <PlayGlyph />
           <span>Resume</span>
@@ -500,16 +615,22 @@ export function ChatView({
   project,
   session,
   onBack,
+  onOpenSkill,
+  onOpenAgent,
 }: {
   project: { hash: string; realPath: string }
   session: SessionSummary
   onBack: () => void
+  /** Deep-link to a skill detail view (from an inline skill card or the dock). */
+  onOpenSkill?: (skill: Skill) => void
+  /** Deep-link to an agent detail view (from an inline agent card). */
+  onOpenAgent?: (agent: Agent) => void
 }) {
   const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
   const { data: subagentMetas } = useSessionSubagents(project.hash, session.filename)
   const { data: globalAgents } = useGlobalAgents()
   const { data: projectAgents } = useProjectAgents(project.realPath)
-  const projectName = projectDisplayName(project.realPath)
+  const { data: allSkills } = useAllSkills(project.realPath)
 
   // Resolve a dispatched sub-agent's identity color from its definition
   // (`subagent_type` → agent.color). Project agents win over globals on name
@@ -521,6 +642,23 @@ export function ChatView({
     for (const a of projectAgents ?? []) if (a.color) byName.set(a.name, a.color)
     return (subagentType: string) => byName.get(subagentType)
   }, [globalAgents, projectAgents])
+
+  // Resolve a sub-agent's full definition by name (project wins on clash) so an
+  // expanded agent card can deep-link to its detail view.
+  const agentOf = useMemo(() => {
+    const byName = new Map<string, Agent>()
+    for (const a of globalAgents ?? []) byName.set(a.name, a)
+    for (const a of projectAgents ?? []) byName.set(a.name, a)
+    return (subagentType: string) => byName.get(subagentType)
+  }, [globalAgents, projectAgents])
+
+  // Resolve a skill's full definition by name (the slash-command id) — feeds both
+  // the inline skill card link and the footer skill dock.
+  const skillOf = useMemo(() => {
+    const byName = new Map<string, Skill>()
+    for (const s of allSkills ?? []) byName.set(s.name, s)
+    return (name: string) => byName.get(name)
+  }, [allSkills])
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
@@ -553,6 +691,13 @@ export function ChatView({
   const agents = useMemo(
     () => correlateSessionAgents(processed, subagentMetas ?? []),
     [processed, subagentMetas]
+  )
+
+  // Skills invoked in this session, linked to their definitions — drives the
+  // footer skill dock (sibling of the agent dock).
+  const skills = useMemo(
+    () => correlateSessionSkills(processed, allSkills ?? []),
+    [processed, allSkills]
   )
 
   // The detail filter (Minimal/Full) drives which turns are visible — Minimal
@@ -704,6 +849,17 @@ export function ChatView({
     return key ?? agents[0].key
   }, [agents, activeTurn])
 
+  const activeSkillKey = useMemo(() => {
+    if (skills.length === 0) return null
+    if (activeTurn === null) return skills[0].key
+    let key: string | null = null
+    for (const s of skills) {
+      if (s.turnN <= activeTurn) key = s.key
+      else break
+    }
+    return key ?? skills[0].key
+  }, [skills, activeTurn])
+
   const title = sessionTitle(session)
   const selectedExportPreset = CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
 
@@ -770,6 +926,10 @@ export function ChatView({
       agentColorOf={a => agentTintColor(agentColorOf(a.subagentType))}
       onOpenAgent={setTranscriptAgent}
       onLocateAgent={jumpToTurn}
+      skills={skills}
+      activeSkillKey={activeSkillKey}
+      onOpenSkill={skill => onOpenSkill?.(skill)}
+      onLocateSkill={jumpToTurn}
     />
   )
 
@@ -882,6 +1042,10 @@ export function ChatView({
                           detailsFilter={detailsFilter}
                           onOpenToolDetail={setSelectedTool}
                           agentColorOf={agentColorOf}
+                          skillOf={skillOf}
+                          onOpenSkill={onOpenSkill}
+                          agentOf={agentOf}
+                          onOpenAgent={onOpenAgent}
                           turnIndex={item.idx + 1}
                           dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
                           isContinuation={isContinuation}

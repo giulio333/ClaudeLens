@@ -1,4 +1,4 @@
-import { ChatMessage, ChatContentBlock, SubagentMeta } from '../../../hooks/useIPC'
+import { ChatMessage, ChatContentBlock, SubagentMeta, Skill } from '../../../hooks/useIPC'
 
 export type ChatDetailsFilter = 'all' | 'minimal'
 
@@ -22,6 +22,22 @@ export type ClaudeSlashCommand = {
   args: string
   description: string
   output?: string
+  /** True when this slash command is actually a Skill invocation — detected by
+   *  the skill-expansion message Claude Code injects right after ("Base directory
+   *  for this skill: …"). Skills are surfaced as first-class cards, not plain
+   *  `/commands`. */
+  isSkill?: boolean
+}
+
+// Claude Code injects this as the first line of the user message that follows a
+// skill slash command — the skill's expanded prompt. It's the most reliable
+// signal that `/foo` is a Skill (works for project, global, and plugin skills,
+// none of which we'd otherwise be able to tell apart from a built-in command).
+const SKILL_EXPANSION_RE = /^\s*Base directory for this skill:/i
+
+function firstText(m: ChatMessage): string {
+  const t = m.content.find(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }> | undefined
+  return t?.text ?? ''
 }
 
 export const CLAUDE_BUILTIN_SLASH_COMMANDS: Record<string, string> = {
@@ -103,9 +119,15 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
     // Riconosci command flow
     let command: ClaudeSlashCommand | undefined
     if (msg.role === 'user') {
-      const firstText = msg.content.find(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }> | undefined
-      if (firstText) {
-        command = parseClaudeSlashCommand(firstText.text) ?? undefined
+      const text = msg.content.find(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }> | undefined
+      if (text) {
+        command = parseClaudeSlashCommand(text.text) ?? undefined
+        // A skill invocation is a slash command immediately followed by Claude
+        // Code's skill-expansion message — peek the next raw message to tell a
+        // skill apart from a plain built-in command.
+        if (command && i + 1 < messages.length && SKILL_EXPANSION_RE.test(firstText(messages[i + 1]))) {
+          command.isSkill = true
+        }
       }
     }
 
@@ -136,8 +158,10 @@ export function stripAnsi(text: string): string {
 // Riconosce sia il flusso XML di Claude Code (<command-name>/X</command-name>...)
 // sia il formato testuale "/X args". Ritorna null se non è un command noto.
 export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null {
-  // 1. XML flow di Claude Code
-  const cmdMatch = text.match(/<command-name>\s*\/?([a-z][a-z0-9_-]*)\s*<\/command-name>/i)
+  // 1. XML flow di Claude Code — il nome può essere namespaced (`plugin:skill`),
+  // quindi la classe include `:` (senza, le skill di plugin non venivano
+  // riconosciute e il tag XML grezzo trapelava nella chat).
+  const cmdMatch = text.match(/<command-name>\s*\/?([a-z][a-z0-9_:-]*)\s*<\/command-name>/i)
   if (cmdMatch) {
     const command = cmdMatch[1].toLowerCase()
     // Il framing XML <command-name> è inequivocabile: trattalo sempre come comando,
@@ -151,7 +175,7 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
 
   // 2. Formato testuale plain "/cmd args"
   const trimmed = text.trimStart()
-  const match = trimmed.match(/^\/([a-z][a-z0-9_-]*)(?:\s+([\s\S]*))?$/)
+  const match = trimmed.match(/^\/([a-z][a-z0-9_:-]*)(?:\s+([\s\S]*))?$/)
   if (!match) return null
 
   const command = match[1]
@@ -230,7 +254,14 @@ export const AGENT_TOOLS = new Set(['Agent', 'Task'])
 export const PLAN_TOOLS = new Set(['EnterPlanMode', 'ExitPlanMode'])
 export const QUESTION_TOOL = 'AskUserQuestion'
 
-export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'question' | 'plan'
+export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'skill' | 'question' | 'plan'
+
+/** First-letter monogram for a skill, mirroring the agent orb rule (no icons,
+ *  just the initial). Strips a `plugin:` namespace so `document-skills:pdf` → "P". */
+export function skillInitial(command: string): string {
+  const seg = command.includes(':') ? command.split(':').pop()! : command
+  return (seg.match(/[A-Za-z]/)?.[0] ?? 'S').toUpperCase()
+}
 
 export type TurnDescriptor = {
   variant: TurnVariant
@@ -259,6 +290,9 @@ const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: st
   // own identity tint (resolved in MessageBubble); accent is the unconfigured default.
   agent:    { label: 'Agent',    initial: 'C', color: 'var(--cl-accent)' },
   command:  { label: 'Command',  initial: '/', color: 'var(--cl-accent)' },
+  // A skill turn wears the brand accent and a first-letter orb (resolved below
+  // from the skill name); the static initial here is just a fallback.
+  skill:    { label: 'Skill',    initial: 'S', color: 'var(--cl-accent)' },
   question: { label: 'Question', initial: '?', color: 'var(--cl-warn)' },
   plan:     { label: 'Plan',     initial: 'P', color: 'var(--cl-accent)' },
 }
@@ -315,9 +349,10 @@ export function describeTurn(
   const isPlanTurn =
     showPlanStrip && textBlocks.length === 0 && !showAgentStrip && !showQuestions
   const isCommandTurn = !!command
+  const isSkillTurn = !!command?.isSkill
 
   const variant: TurnVariant =
-    isCommandTurn ? 'command'
+    isCommandTurn ? (isSkillTurn ? 'skill' : 'command')
     : isQuestionTurn ? 'question'
     : isAgentTurn ? 'agent'
     : isPlanTurn ? 'plan'
@@ -331,8 +366,10 @@ export function describeTurn(
     variant === 'agent'
       ? agentColor?.((agentGroups[0]?.use.input as Record<string, unknown>)?.subagent_type as string) ?? meta.color
       : meta.color
+  // Skill turns wear a first-letter orb (same rule as agents — no icons).
+  const initial = variant === 'skill' && command ? skillInitial(command.command) : meta.initial
 
-  return { variant, label: meta.label, initial: meta.initial, color, hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
+  return { variant, label: meta.label, initial, color, hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -407,6 +444,49 @@ export function correlateSessionAgents(
   })
 
   return agents
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Skill correlation — collects every skill invoked in the session (slash
+// commands flagged `isSkill`) and links each to its definition from the skills
+// registry by name, so the footer dock can list them and the inline card can
+// deep-link to the skill detail. Plugin/namespaced skills won't resolve to a
+// local definition (`skill: null`) — they still appear, just without a link.
+// ──────────────────────────────────────────────────────────────────────────
+export type SessionSkill = {
+  /** Stable key (turn index). */
+  key: string
+  /** 1-based turn index of the invocation — used to jump/scroll to its card. */
+  turnN: number
+  /** Display id (the slash-command name, e.g. `build-dmg`). */
+  name: string
+  description: string
+  scope?: 'global' | 'project'
+  /** Resolved skill definition, when one matches by name; null otherwise. */
+  skill: Skill | null
+}
+
+export function correlateSessionSkills(
+  processed: ProcessedMessage[],
+  skills: Skill[],
+): SessionSkill[] {
+  const byName = new Map(skills.map(s => [s.name, s]))
+  const out: SessionSkill[] = []
+  processed.forEach((p, idx) => {
+    const c = p.command
+    if (!c) return
+    const skill = byName.get(c.command) ?? null
+    if (!c.isSkill && !skill) return
+    out.push({
+      key: `skill-${idx + 1}`,
+      turnN: idx + 1,
+      name: c.command,
+      description: skill?.description ?? (c.description !== 'Claude Code command' ? c.description : ''),
+      scope: skill?.scope,
+      skill,
+    })
+  })
+  return out
 }
 
 export const TOOL_ICON: Record<string, string> = {

@@ -2697,6 +2697,28 @@ body {
     0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 50%, transparent);
 }
 
+/* Skill turn shares the command turn's quiet body + accent orb; the orb glyph is
+ * the skill's first letter (resolved upstream), per the agent no-icon rule. */
+.cl-turn--skill .cl-turn-body {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.cl-turn--skill:hover .cl-turn-body { background: transparent; }
+.cl-turn--skill .cl-turn-orb {
+  background:
+    radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.55), transparent 55%),
+    linear-gradient(180deg,
+      color-mix(in oklch, var(--cl-accent) 90%, white),
+      var(--cl-accent));
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.45),
+    0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 50%, transparent);
+}
+
 /* Command card — editorial (prototype's cx-cmd): paper + accent spine. */
 /* Command card — same visual grammar as .cl-tool-card */
 .cl-command-card {
@@ -2811,6 +2833,64 @@ body {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+/* Skill card — a SlashCommandCard subtype: a "Skill" tag chip before the name,
+ * a properties grid (scope/model/tools/arguments), and the shared entity link. */
+.cl-skill-tag {
+  display: inline-flex;
+  align-items: center;
+  margin-right: 7px;
+  padding: 1px 6px;
+  border-radius: 5px;
+  background: color-mix(in oklch, var(--cl-accent) 16%, transparent);
+  color: var(--cl-accent);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  vertical-align: middle;
+}
+.cl-skill-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cl-skill-meta-row {
+  display: grid;
+  grid-template-columns: 84px minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+}
+.cl-skill-meta-row .k {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-skill-meta-row .v {
+  min-width: 0;
+  color: var(--cl-ink-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+
+/* Shared deep-link row at the foot of an expanded skill/agent card. */
+.cl-entity-link-row { padding-top: 9px; padding-bottom: 9px; }
+.cl-entity-link {
+  border: 0;
+  background: transparent;
+  padding: 0;
+  color: var(--cl-accent);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cl-entity-link:hover { text-decoration: underline; }
 /* Thinking — quiet editorial disclosure (prototype's cx-think). */
 .cl-thinking {
   width: 100%;
