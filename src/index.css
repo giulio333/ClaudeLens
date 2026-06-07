@@ -2124,12 +2124,19 @@ body {
   border-radius: 2px;
   background: var(--cl-line);
   pointer-events: auto;
+  /* Adaptive ruler sizes — set inline by FocusMinimap from the measured
+     per-dot spacing; these are the roomy (low-density) fallbacks. */
+  --dot: 7px;
+  --dot-accent: 9px;
+  --dot-active: 11px;
+  --ring: 3px;
+  --ring-active: 3px;
 }
 .cl-focus-dot {
   position: absolute;
   left: 50%;
-  width: 7px;
-  height: 7px;
+  width: var(--dot);
+  height: var(--dot);
   padding: 0;
   border: 0;
   border-radius: 50%;
@@ -2138,15 +2145,25 @@ body {
   cursor: pointer;
   transition: width 0.12s, height 0.12s, box-shadow 0.18s, opacity 0.2s;
 }
+/* Invisible hit area keeps tiny high-density dots easy to hover/click. */
+.cl-focus-dot::before {
+  content: '';
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 16px;
+  height: 16px;
+  transform: translate(-50%, -50%);
+}
 .cl-focus-dot[data-accent] {
-  width: 9px;
-  height: 9px;
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--c) 18%, transparent);
+  width: var(--dot-accent);
+  height: var(--dot-accent);
+  box-shadow: 0 0 0 var(--ring) color-mix(in oklch, var(--c) 18%, transparent);
 }
 .cl-focus-dot[data-active] {
-  width: 11px;
-  height: 11px;
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--c) 30%, transparent);
+  width: var(--dot-active);
+  height: var(--dot-active);
+  box-shadow: 0 0 0 var(--ring-active) color-mix(in oklch, var(--c) 30%, transparent);
 }
 .cl-focus-dot[data-dim] { opacity: 0.3; }
 .cl-focus-dot .lbl {
