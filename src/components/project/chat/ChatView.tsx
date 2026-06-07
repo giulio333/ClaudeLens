@@ -3,7 +3,7 @@ import type { CSSProperties } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
 import { sessionTitle } from '../utils'
-import { buildProcessedMessages, correlateSessionAgents, describeTurn, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
+import { buildProcessedMessages, correlateSessionAgents, describeTurn, touchedFiles, ChatDetailsFilter, SessionAgent, ToolGroup, TouchedFile, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
@@ -91,7 +91,7 @@ type MinimapItem = TurnDescriptor & { n: number; time: string }
  *  consecutive tool-only turns collapsed into a single "tools hidden" badge. */
 type RenderItem =
   | { kind: 'turn'; idx: number }
-  | { kind: 'tools'; key: string; count: number }
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
 
 /** Right-edge timeline minimap (Focus layout). A hairline vertical track with
  *  one proportionally-placed dot per message turn — accent-coloured & larger for
@@ -582,19 +582,22 @@ export function ChatView({
   // turns are skipped without breaking a run (nothing shows between them).
   const renderItems = useMemo<RenderItem[]>(() => {
     const items: RenderItem[] = []
-    let run: { count: number; firstIdx: number } | null = null
+    let run: { count: number; firstIdx: number; files: TouchedFile[] } | null = null
     const flush = () => {
       if (run) {
-        items.push({ kind: 'tools', key: `tools-${run.firstIdx}`, count: run.count })
+        items.push({ kind: 'tools', key: `tools-${run.firstIdx}`, count: run.count, files: run.files })
         run = null
       }
     }
     descriptors.forEach((d, idx) => {
       if (d.toolsOnly) {
         // toolsOnly guarantees the turn holds only standard tools (no question/agent).
-        const n = processed[idx].toolGroups.length
-        if (run) run.count += n
-        else run = { count: n, firstIdx: idx }
+        const groups = processed[idx].toolGroups
+        const files = touchedFiles(groups)
+        if (run) {
+          run.count += groups.length
+          run.files.push(...files)
+        } else run = { count: groups.length, firstIdx: idx, files }
       } else if (d.visible) {
         flush()
         items.push({ kind: 'turn', idx })
@@ -856,10 +859,12 @@ export function ChatView({
                   {(() => {
                     let prevRole: string | null = null
                     let pendingHidden = 0
+                    let pendingFiles: TouchedFile[] = []
                     return renderItems.map(item => {
                       if (item.kind !== 'turn') {
                         prevRole = null
                         pendingHidden = item.count
+                        pendingFiles = item.files
                         return null
                       }
                       const curRole = processed[item.idx].msg.role
@@ -867,7 +872,9 @@ export function ChatView({
                       const isContinuation = !hasText && curRole === prevRole && curRole === 'assistant'
                       prevRole = curRole
                       const hiddenToolCount = pendingHidden
+                      const hiddenFiles = pendingFiles
                       pendingHidden = 0
+                      pendingFiles = []
                       return (
                         <MessageBubble
                           key={processed[item.idx].msg.uuid}
@@ -880,6 +887,7 @@ export function ChatView({
                           isContinuation={isContinuation}
                           innerRef={setTurnRef}
                           hiddenToolCount={hiddenToolCount}
+                          hiddenFiles={hiddenFiles}
                         />
                       )
                     })
