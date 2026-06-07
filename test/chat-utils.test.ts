@@ -201,13 +201,12 @@ describe('parseClaudeSlashCommand', () => {
     expect(result?.description).toBe('End the current session');
   });
 
-  it('parses plain textual "/cmd args" format', () => {
-    const result = parseClaudeSlashCommand('/model opus');
-    expect(result).toEqual({
-      command: 'model',
-      args: 'opus',
-      description: 'Select or change the AI model',
-    });
+  it('does not treat plain "/cmd words..." as a command — it is user prose (#92)', () => {
+    // Without XML framing, "/clear the cache" / "/help me debug" are sentences a
+    // user typed, not slash commands. Real command args always arrive via XML.
+    expect(parseClaudeSlashCommand('/clear the cache')).toBeNull();
+    expect(parseClaudeSlashCommand('/help me debug this')).toBeNull();
+    expect(parseClaudeSlashCommand('/model opus')).toBeNull();
   });
 
   it('parses plain textual command without args', () => {
