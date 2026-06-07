@@ -24,6 +24,7 @@ import { ProjectConfigView } from '../settings/ProjectConfigView'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions'
 import { useSessionTags } from '../../../hooks/useSessionTags'
+import { useMemoryTags } from '../../../hooks/useMemoryTags'
 import { PinIcon } from '../shared/SearchPopover'
 import { TagChip } from '../sessions/TagChip'
 import { TagBar } from '../sessions/TagBar'
@@ -217,6 +218,8 @@ export function ProjectView({
   const { isPinned: isSessionPinned } = usePinnedSessions()
   const { tags: projectTags, tagCounts, tagsForSession, renameTag, deleteTag } = useSessionTags(project.hash)
   const [tagFilter, setTagFilter] = useState<string | null>(null)
+  const { tags: memTags, tagCounts: memTagCounts, tagsForMemory, deleteTag: deleteMemTag, renameTag: renameMemTag } = useMemoryTags(project.hash)
+  const [memTagFilter, setMemTagFilter] = useState<string | null>(null)
   const { data: memory } = useMemoryProject(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath)
@@ -317,6 +320,11 @@ export function ProjectView({
   )
   const topicContent = (filename: string) =>
     memory?.topics[filename] ?? memory?.projectLevelTopics[filename] ?? ''
+  const activeMemTag = memTagFilter && memTags.some(t => t.name === memTagFilter) ? memTagFilter : null
+  const visibleMemTopics = useMemo(() => {
+    if (!activeMemTag) return memTopics
+    return memTopics.filter(t => tagsForMemory(t.filename).includes(activeMemTag))
+  }, [memTopics, activeMemTag, tagsForMemory])
 
   const enabledMcp = useMemo(() => {
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])]
@@ -544,21 +552,44 @@ export function ProjectView({
             <h2>Project memory</h2>
             <span className="ct">MEMORY.md · {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}</span>
           </div>
+          {memTags.length > 0 && (
+            <TagBar
+              tags={memTags}
+              counts={memTagCounts}
+              activeTag={activeMemTag}
+              totalCount={memTopics.length}
+              onSelect={setMemTagFilter}
+              onRename={renameMemTag}
+              onDelete={deleteMemTag}
+            />
+          )}
           {memTopics.length === 0 ? (
             <div className="cl-empty">No memory topics yet.</div>
+          ) : visibleMemTopics.length === 0 ? (
+            <div className="cl-empty">No topics with this tag.</div>
           ) : (
             <div className="cl-tile-grid">
-              {memTopics.map((t, i) => (
-                <button key={t.filename} type="button" className={`cl-tile ${i === 0 ? 'accent' : ''}`}
-                  onClick={() => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.filename), hash: project.hash })}>
-                  <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
-                  <div style={{ minWidth: 0 }}>
-                    <div className="t-name">{t.name}</div>
-                    <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
-                  </div>
-                  <span className="t-meta"><b>{t.type}</b></span>
-                </button>
-              ))}
+              {visibleMemTopics.map((t, i) => {
+                const tTags = tagsForMemory(t.filename)
+                return (
+                  <button key={t.filename} type="button" className={`cl-tile ${i === 0 && !activeMemTag ? 'accent' : ''}`}
+                    onClick={() => onNavigate({ type: 'memory-topic', topic: t, content: topicContent(t.filename), hash: project.hash })}>
+                    <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
+                    <div style={{ minWidth: 0 }}>
+                      <div className="t-name">{t.name}</div>
+                      <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
+                      {tTags.length > 0 && (
+                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
+                          {tTags.map(name => (
+                            <TagChip key={name} name={name} tone="soft" style={{ pointerEvents: 'none', fontSize: 10, height: 18 }} />
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                    <span className="t-meta"><b>{t.type}</b></span>
+                  </button>
+                )
+              })}
             </div>
           )}
         </section>

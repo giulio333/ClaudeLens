@@ -1,8 +1,11 @@
-import { useState } from 'react'
+import { useRef, useState } from 'react'
 import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC'
 import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC'
 import { MarkdownDocView } from '../shared/MarkdownDocView'
 import { parseMemoryContent, readingTime, formatDate } from './utils'
+import { useMemoryTags } from '../../../hooks/useMemoryTags'
+import { TagChip } from '../sessions/TagChip'
+import { TagPicker } from '../sessions/TagPicker'
 
 const TYPE_LABEL: Record<string, string> = {
   user: 'User',
@@ -234,6 +237,10 @@ export function MemoryTopicView({
   const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
   const [confirmDelete, setConfirmDelete] = useState(false)
+  const { tags, tagsForMemory, toggleTagOnMemory } = useMemoryTags(hash)
+  const [pickerOpen, setPickerOpen] = useState(false)
+  const addBtnRef = useRef<HTMLButtonElement>(null)
+  const topicTags = tagsForMemory(topic.filename)
 
   // Risolve la sessione che ha generato la memoria: l'originSessionId è l'UUID
   // del file .jsonl di sessione nello stesso progetto. La lista è già in cache
@@ -263,6 +270,43 @@ export function MemoryTopicView({
 
       <div className="flex-1">
         <StatRow label="Type" value={TYPE_LABEL[topic.type] ?? topic.type} />
+        <div className="py-2.5">
+          <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
+            Tags
+          </div>
+          <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
+            {topicTags.map(name => (
+              <TagChip key={name} name={name} tone="muted" removable onRemove={() => toggleTagOnMemory(topic.filename, name)} />
+            ))}
+            <button
+              ref={addBtnRef}
+              type="button"
+              onClick={() => setPickerOpen(v => !v)}
+              style={{
+                height: 22,
+                padding: '0 8px',
+                borderRadius: 4,
+                border: '1px dashed var(--cl-line)',
+                background: 'transparent',
+                color: 'var(--cl-ink-3)',
+                fontSize: 11,
+                cursor: 'pointer',
+              }}
+            >
+              + Add
+            </button>
+            {pickerOpen && addBtnRef.current && (
+              <TagPicker
+                anchorRect={addBtnRef.current.getBoundingClientRect()}
+                allTags={tags}
+                selected={topicTags}
+                onToggle={name => toggleTagOnMemory(topic.filename, name)}
+                onClose={() => setPickerOpen(false)}
+              />
+            )}
+          </div>
+        </div>
+        <div style={{ borderTop: '1px solid var(--cl-line)' }} />
         {createdAt && <StatRow label="Created" value={formatDate(createdAt)} />}
         {updatedAt && !sameDate && <StatRow label="Updated" value={formatDate(updatedAt)} />}
         {topic.originSessionId && (
