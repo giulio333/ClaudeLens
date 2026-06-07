@@ -2577,23 +2577,23 @@ body {
 }
 /* File chips at the foot of a turn: which files the hidden tools touched. */
 .cl-turn-files {
-  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
-  margin-top: 8px;
+  display: flex; flex-wrap: wrap; align-items: center; gap: 4px;
+  margin-top: 14px;
 }
 .cl-file-chip {
   position: relative;
-  display: inline-flex; align-items: center; gap: 4px;
+  display: inline-flex; align-items: center; gap: 3px;
   flex-shrink: 0;
-  padding: 3px 7px;
-  border: 1px solid color-mix(in oklab, var(--ft, var(--cl-ink-4)) 32%, var(--cl-line));
+  padding: 2px 5px;
+  border: none;
   border-radius: 999px;
-  background: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 9%, transparent);
-  color: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 70%, var(--cl-ink-3));
+  background: transparent;
+  color: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 65%, var(--cl-ink-3));
   line-height: 1;
   cursor: default;
 }
-.cl-file-chip svg { opacity: 0.9; }
-.cl-file-chip-logo { width: 12px; height: 12px; flex-shrink: 0; }
+.cl-file-chip svg { opacity: 0.85; }
+.cl-file-chip-logo { width: 10px; height: 10px; flex-shrink: 0; }
 /* CSS-only tooltip (native title is unreliable in Electron) — shows the file
  *  name(s) above the chip on hover/focus. */
 .cl-file-chip[data-file]:hover::after,
@@ -2629,11 +2629,12 @@ body {
   pointer-events: none;
 }
 .cl-file-chip-ext {
-  font: 600 9.5px/1 var(--font-mono);
-  text-transform: uppercase; letter-spacing: 0.06em;
+  font: 600 9px/1 var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.05em;
+  padding-top: 1px;
 }
 .cl-file-chip--more {
-  font: 600 9.5px/1 var(--font-mono);
+  font: 600 9px/1 var(--font-mono);
   letter-spacing: 0.04em;
   color: var(--cl-ink-4);
   border-color: var(--cl-line);
