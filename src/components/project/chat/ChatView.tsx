@@ -7,7 +7,7 @@ import { buildProcessedMessages, correlateSessionAgents, describeTurn, ChatDetai
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
-import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
+import { MessageBubble } from './MessageBubble'
 import { agentTintColor } from '../shared/entityOptions'
 import { TopBar } from '../shared/TopBar'
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
@@ -855,21 +855,19 @@ export function ChatView({
                 <div className="cl-transcript-inner">
                   {(() => {
                     let prevRole: string | null = null
+                    let pendingHidden = 0
                     return renderItems.map(item => {
                       if (item.kind !== 'turn') {
                         prevRole = null
-                        return (
-                          <ToolsHiddenBadge
-                            key={item.key}
-                            count={item.count}
-                            dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
-                          />
-                        )
+                        pendingHidden = item.count
+                        return null
                       }
                       const curRole = processed[item.idx].msg.role
                       const hasText = processed[item.idx].msg.content.some(b => b.type === 'text')
                       const isContinuation = !hasText && curRole === prevRole && curRole === 'assistant'
                       prevRole = curRole
+                      const hiddenToolCount = pendingHidden
+                      pendingHidden = 0
                       return (
                         <MessageBubble
                           key={processed[item.idx].msg.uuid}
@@ -881,6 +879,7 @@ export function ChatView({
                           dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
                           isContinuation={isContinuation}
                           innerRef={setTurnRef}
+                          hiddenToolCount={hiddenToolCount}
                         />
                       )
                     })
