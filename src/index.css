@@ -2222,18 +2222,14 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 6px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 700;
-  color: var(--cl-on-accent);
-  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--orb-color, var(--cl-violet));
-  box-shadow: 0 0 0 1.5px var(--cl-paper);
+  color: var(--orb-color, var(--cl-violet));
 }
-.cl-dock-orb + .cl-dock-orb { margin-left: -7px; }
+.cl-dock-orb + .cl-dock-orb { margin-left: -4px; }
 .cl-dock-orb--more {
-  color: var(--cl-violet-ink);
-  background: color-mix(in oklch, var(--cl-violet-soft) 60%, var(--cl-paper));
+  color: var(--cl-violet);
 }
 .cl-dock-count {
   font-family: var(--font-mono);
@@ -2241,6 +2237,7 @@ body {
   font-weight: 600;
   letter-spacing: 0.06em;
   white-space: nowrap;
+  line-height: 1;
 }
 .cl-dock-count span { text-transform: uppercase; color: var(--cl-ink-4); font-weight: 500; }
 .cl-dock-fail {
