@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react'
+import { useState } from 'react'
 import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC'
 import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC'
 import { MarkdownDocView } from '../shared/MarkdownDocView'
@@ -238,8 +238,9 @@ export function MemoryTopicView({
   const deleteMut = useDeleteTopic(hash)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const { tags, tagsForMemory, toggleTagOnMemory } = useMemoryTags(hash)
-  const [pickerOpen, setPickerOpen] = useState(false)
-  const addBtnRef = useRef<HTMLButtonElement>(null)
+  // Capture the anchor rect when opening the picker instead of reading the ref
+  // during render (which the react-hooks rule flags as unsafe).
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
   const topicTags = tagsForMemory(topic.filename)
 
   // Risolve la sessione che ha generato la memoria: l'originSessionId è l'UUID
@@ -279,9 +280,10 @@ export function MemoryTopicView({
               <TagChip key={name} name={name} tone="muted" removable onRemove={() => toggleTagOnMemory(topic.filename, name)} />
             ))}
             <button
-              ref={addBtnRef}
               type="button"
-              onClick={() => setPickerOpen(v => !v)}
+              onClick={e =>
+                setPickerAnchor(prev => (prev ? null : e.currentTarget.getBoundingClientRect()))
+              }
               style={{
                 height: 22,
                 padding: '0 8px',
@@ -295,13 +297,13 @@ export function MemoryTopicView({
             >
               + Add
             </button>
-            {pickerOpen && addBtnRef.current && (
+            {pickerAnchor && (
               <TagPicker
-                anchorRect={addBtnRef.current.getBoundingClientRect()}
+                anchorRect={pickerAnchor}
                 allTags={tags}
                 selected={topicTags}
                 onToggle={name => toggleTagOnMemory(topic.filename, name)}
-                onClose={() => setPickerOpen(false)}
+                onClose={() => setPickerAnchor(null)}
               />
             )}
           </div>
