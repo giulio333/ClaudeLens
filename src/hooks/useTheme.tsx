@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { persistToDisk } from './prefsBackend'
 
 // ─── Theme preference ─────────────────────────────────────────────────────────
 // A single source of truth shared between the top-bar toggle and the Settings
@@ -13,6 +14,9 @@ export type ThemePreference = 'light' | 'dark' | 'system'
 export type ResolvedTheme = 'light' | 'dark'
 
 const STORAGE_KEY = 'cl-theme'
+// Custom event dispatched by hydratePrefs() after it loads the on-disk theme
+// into localStorage at startup; keep in sync with prefsBackend's KEY_EVENTS.
+const STORAGE_EVENT = 'cl-theme-changed'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
 type ThemeContextValue = {
@@ -23,10 +27,22 @@ type ThemeContextValue = {
 
 const ThemeContext = createContext<ThemeContextValue | null>(null)
 
+function isPreference(v: unknown): v is ThemePreference {
+  return v === 'dark' || v === 'system' || v === 'light'
+}
+
 function readStoredPreference(): ThemePreference {
   if (typeof localStorage === 'undefined') return 'light'
   const saved = localStorage.getItem(STORAGE_KEY)
-  return saved === 'dark' || saved === 'system' ? saved : 'light'
+  if (saved === null) return 'light'
+  // hydratePrefs() mirrors disk values as JSON (e.g. `"dark"`); older builds
+  // wrote the bare string (`dark`). Accept both.
+  if (isPreference(saved)) return saved
+  try {
+    const parsed = JSON.parse(saved)
+    if (isPreference(parsed)) return parsed
+  } catch { /* ignore */ }
+  return 'light'
 }
 
 function systemTheme(): ResolvedTheme {
@@ -51,13 +67,28 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
     return () => mq.removeEventListener('change', onChange)
   }, [])
 
+  // Re-read the preference when hydratePrefs() loads the on-disk value into
+  // localStorage at startup (or another window changes it). Under the packaged
+  // file:// origin localStorage isn't durable, so disk is the source of truth.
+  useEffect(() => {
+    const sync = () => setPreferenceState(readStoredPreference())
+    window.addEventListener(STORAGE_EVENT, sync)
+    window.addEventListener('storage', sync)
+    return () => {
+      window.removeEventListener(STORAGE_EVENT, sync)
+      window.removeEventListener('storage', sync)
+    }
+  }, [])
+
   const resolved: ResolvedTheme = preference === 'system' ? systemResolved : preference
 
-  // Apply the resolved theme to <html>, but persist the *preference* so a
-  // 'system' choice survives reloads.
+  // Apply the resolved theme to <html>, and persist the *preference* (so a
+  // 'system' choice survives reloads) to both localStorage and the on-disk
+  // prefs store. localStorage is the synchronous cache; disk is durable.
   useEffect(() => {
     document.documentElement.setAttribute('data-theme', resolved)
-    try { localStorage.setItem(STORAGE_KEY, preference) } catch { /* ignore */ }
+    try { localStorage.setItem(STORAGE_KEY, JSON.stringify(preference)) } catch { /* ignore */ }
+    persistToDisk(STORAGE_KEY, preference)
   }, [resolved, preference])
 
   const value: ThemeContextValue = {

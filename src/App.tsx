@@ -8,9 +8,9 @@ import { ErrorBoundary } from './components/ErrorBoundary'
 export default function App() {
   useDataChangedRefetch()
 
-  // Load persisted UI state (pinned projects/sessions, tags) from disk into
-  // localStorage once at startup, and migrate any localStorage-only data from
-  // older builds. See hooks/prefsBackend.ts.
+  // Load persisted UI state (pinned projects/sessions, tags, theme) from disk
+  // into localStorage once at startup, and migrate any localStorage-only data
+  // from older builds. See hooks/prefsBackend.ts.
   useEffect(() => {
     void hydratePrefs()
   }, [])
