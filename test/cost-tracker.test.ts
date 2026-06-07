@@ -125,6 +125,28 @@ describe('getProjectUsage — token summation & known-model cost', () => {
   });
 });
 
+describe('malformed timestamp does not abort the file (issue #88)', () => {
+  it('keeps counting later lines when one line has a non-ISO timestamp', async () => {
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 1000, output: 500 }),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 9999,
+        output: 9999,
+        timestamp: 'not-a-date',
+      }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 2000, output: 1500 }),
+    ]);
+
+    const { usage } = await getProjectUsage(tmp);
+
+    // The malformed line is still counted (only its date is dropped), and the
+    // line after it is NOT lost — before the fix the loop aborted on line 2.
+    expect(usage.inputTokens).toBe(1000 + 9999 + 2000);
+    expect(usage.outputTokens).toBe(500 + 9999 + 1500);
+  });
+});
+
 describe('usage dedup by message.id / requestId (issue #56)', () => {
   it('counts a usage carried by repeated message.id+requestId lines only once', async () => {
     // Claude Code emits one line per content block of an assistant turn, each
