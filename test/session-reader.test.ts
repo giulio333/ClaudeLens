@@ -133,6 +133,29 @@ describe('readChatSession', () => {
     ]);
   });
 
+  it('handles tool_result array content with string and null elements (no message drop)', () => {
+    // Nel formato Anthropic content può essere `["text"]` o contenere `null`:
+    // senza guardia sul tipo l'intero messaggio veniva scartato (TypeError).
+    const p = writeJsonl('s.jsonl', [
+      line({
+        type: 'user',
+        uuid: 'r1',
+        timestamp: 't',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'tu_1', content: ['plain', null, { text: 'block' }], is_error: false },
+          ],
+        },
+      }),
+    ]);
+    const msgs = readChatSession(p);
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toEqual([
+      { type: 'tool_result', toolUseId: 'tu_1', content: 'plain\n\nblock', isError: false },
+    ]);
+  });
+
   it('skips meta and sidechain lines', () => {
     const p = writeJsonl('s.jsonl', [
       line({
