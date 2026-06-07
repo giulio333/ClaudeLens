@@ -8,6 +8,7 @@ import {
   parseLocalCommandOutput,
   parseAskUserQuestions,
   parseAnswersFromResultText,
+  isQuestionDismissed,
 } from '../src/components/project/chat/utils';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill } from '../src/types';
 
@@ -318,6 +319,25 @@ describe('parseAnswersFromResultText', () => {
 
   it('returns empty object for empty input', () => {
     expect(parseAnswersFromResultText('')).toEqual({});
+  });
+});
+
+describe('isQuestionDismissed', () => {
+  it('detects a rejected AskUserQuestion result (user kept talking)', () => {
+    const text =
+      "The user doesn't want to proceed with this tool use. The tool use was rejected " +
+      '(eg. if it was a file edit, the new_string was NOT written to the file).\n' +
+      'Questions asked:\n- "Cosa deve fare il clic?"\n  (No answer provided)';
+    expect(isQuestionDismissed(text)).toBe(true);
+  });
+
+  it('detects the "(No answer provided)" marker alone', () => {
+    expect(isQuestionDismissed('Questions asked:\n- "Q"\n  (No answer provided)')).toBe(true);
+  });
+
+  it('returns false for an answered result and empty input', () => {
+    expect(isQuestionDismissed('Your questions have been answered: "Color"="Red".')).toBe(false);
+    expect(isQuestionDismissed('')).toBe(false);
   });
 });
 

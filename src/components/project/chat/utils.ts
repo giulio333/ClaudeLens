@@ -245,6 +245,16 @@ export function parseAnswersFromResultText(text: string): Record<string, string>
   return out
 }
 
+// L'utente ha chiuso AskUserQuestion SENZA rispondere (ha chiesto di chiarire /
+// ha continuato a parlare). Claude Code emette un tool_result di rejection con
+// "The tool use was rejected" e "(No answer provided)" per ogni domanda. In quel
+// caso il result è presente ma non c'è nessuna risposta da parsare: va distinto
+// sia da "answered" che da "pending".
+export function isQuestionDismissed(text: string): boolean {
+  if (!text) return false
+  return /tool use was rejected/i.test(text) || /no answer provided/i.test(text)
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Turn role resolution — single source of truth shared by MessageBubble
 // (rendering) and ChatView (navigation minimap + type filters). Mirrors the

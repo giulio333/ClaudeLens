@@ -2,7 +2,7 @@ import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
@@ -12,22 +12,30 @@ import { FileIcon } from './fileIcons'
 function AskQuestionCard({ group }: { group: ToolGroup }) {
   const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>)
   if (questions.length === 0) return null
-  const answers = group.result ? parseAnswersFromResultText(group.result.content) : {}
+  const resultText = group.result?.content ?? ''
+  const answers = group.result ? parseAnswersFromResultText(resultText) : {}
   const pending = !group.result
+  // L'utente ha chiuso la domanda senza rispondere (clarify / continua a parlare):
+  // il result esiste ma è una rejection, non ci sono risposte da evidenziare.
+  const dismissed = !pending && Object.keys(answers).length === 0 && isQuestionDismissed(resultText)
 
   return (
     <div className="cl-ask-card">
       <div className="cl-ask-card-kicker">
         <span className="cl-ask-card-ic">?</span>
         <span className="lbl">Question asked</span>
-        <span className="cl-ask-card-status" data-pending={pending || undefined}>
-          {pending ? 'Waiting for reply' : 'Answered'}
+        <span
+          className="cl-ask-card-status"
+          data-pending={pending || undefined}
+          data-dismissed={dismissed || undefined}
+        >
+          {pending ? 'Waiting for reply' : dismissed ? 'No answer · kept talking' : 'Answered'}
         </span>
       </div>
       {questions.map((q, i) => {
         const chosen = answers[q.question]
         return (
-          <div key={i} className="cl-ask-card-q">
+          <div key={i} className="cl-ask-card-q" data-dismissed={dismissed || undefined}>
             <div className="cl-ask-card-question">{q.question}</div>
             <div className="cl-ask-card-options">
               {q.options.map((opt, j) => {
@@ -44,6 +52,11 @@ function AskQuestionCard({ group }: { group: ToolGroup }) {
                 )
               })}
             </div>
+            {dismissed && (
+              <div className="cl-ask-card-custom cl-ask-card-custom--dismissed">
+                No answer provided — the user replied without picking an option.
+              </div>
+            )}
             {chosen && !q.options.some(o => o.label === chosen) && (
               <div className="cl-ask-card-custom">Reply: <b>{chosen}</b></div>
             )}
