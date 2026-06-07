@@ -42,12 +42,21 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
       const content =
         typeof b.content === 'string' ? b.content :
         Array.isArray(b.content)
-          ? (b.content as Array<{ type?: string; text?: string; tool_name?: string }>)
-              .map(c =>
-                c.type === 'tool_reference' && c.tool_name
-                  ? `→ ${c.tool_name}`
-                  : (c.text ?? '')
-              )
+          ? (b.content as Array<unknown>)
+              .map(c => {
+                // Nel formato Anthropic gli elementi possono essere stringhe
+                // semplici (`["text"]`) o anche `null`: senza guardia sul tipo
+                // l'accesso a `c.type` lancerebbe TypeError, scartando l'intero
+                // messaggio dal try/catch per-riga.
+                if (typeof c === 'string') return c;
+                if (c && typeof c === 'object') {
+                  const block = c as { type?: string; text?: string; tool_name?: string };
+                  return block.type === 'tool_reference' && block.tool_name
+                    ? `→ ${block.tool_name}`
+                    : (block.text ?? '');
+                }
+                return '';
+              })
               .join('\n')
           : '';
       blocks.push({

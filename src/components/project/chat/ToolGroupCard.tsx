@@ -3,12 +3,16 @@ import type { CSSProperties } from 'react'
 import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils'
 import { ToolInput, ToolOutput } from './ToolDetailPanel'
 
-export function ToolGroupCard({ group, showDetails, tint: tintOverride }: {
+export function ToolGroupCard({ group, showDetails, tint: tintOverride, detailLabel, onViewDetail }: {
   group: ToolGroup
   showDetails: boolean
   /** Explicit tint color (e.g. a dispatched agent's identity color) overriding
    *  the tool-name default. */
   tint?: string
+  /** Optional deep-link shown at the foot of the expanded card (e.g. "View
+   *  agent" on an agent dispatch). Only rendered when the card is open. */
+  detailLabel?: string
+  onViewDetail?: () => void
 }) {
   const [open, setOpen] = useState(false)
   const { use, result } = group
@@ -33,7 +37,7 @@ export function ToolGroupCard({ group, showDetails, tint: tintOverride }: {
     ''
   )
   const resultPreview = result ? result.content.split('\n')[0]?.slice(0, 120) ?? '' : null
-  const hasExpandable = showDetails || (result && result.content.length > 80)
+  const hasExpandable = showDetails || (result && result.content.length > 80) || !!onViewDetail
   // Right-edge status glyph: resolved result → ✓/✕, otherwise a hint that the
   // row expands (caret when open, arrow when collapsed).
   const status = result ? (result.isError ? '✕' : '✓') : (hasExpandable ? (open ? '▾' : '→') : '')
@@ -87,6 +91,13 @@ export function ToolGroupCard({ group, showDetails, tint: tintOverride }: {
                 {result.isError ? 'Error' : 'Result'}
               </div>
               <ToolOutput name={use.name} input={use.input as Record<string, unknown>} result={result} />
+            </div>
+          )}
+          {onViewDetail && (
+            <div className="cl-tool-card-section cl-entity-link-row">
+              <button type="button" className="cl-entity-link" onClick={onViewDetail}>
+                {detailLabel ?? 'View detail'} →
+              </button>
             </div>
           )}
         </div>

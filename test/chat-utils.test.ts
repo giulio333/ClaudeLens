@@ -1,13 +1,15 @@
 import {
   buildProcessedMessages,
   correlateSessionAgents,
+  correlateSessionSkills,
+  skillInitial,
   stripAnsi,
   parseClaudeSlashCommand,
   parseLocalCommandOutput,
   parseAskUserQuestions,
   parseAnswersFromResultText,
 } from '../src/components/project/chat/utils';
-import { ChatMessage, ChatContentBlock, SubagentMeta } from '../src/types';
+import { ChatMessage, ChatContentBlock, SubagentMeta, Skill } from '../src/types';
 
 // ---- fixture helpers ----
 
@@ -400,5 +402,103 @@ describe('correlateSessionAgents', () => {
       msg('user', [toolResult('t1', 'out')]),
     ]);
     expect(correlateSessionAgents(processed, [])).toHaveLength(0);
+  });
+});
+
+// Skill expansion message Claude Code injects right after a skill slash command.
+const skillExpansion = (name: string) =>
+  text(`Base directory for this skill: /Users/x/.claude/skills/${name}\n\nDo the thing.`);
+
+const skillDef = (name: string, extra: Partial<Skill> = {}): Skill => ({
+  name,
+  path: `/Users/x/.claude/skills/${name}/SKILL.md`,
+  scope: 'project',
+  content: '',
+  rawContent: '',
+  ...extra,
+});
+
+describe('parseClaudeSlashCommand — namespaced (plugin) skills', () => {
+  it('recognizes a namespaced skill command (colon in name)', () => {
+    const result = parseClaudeSlashCommand('<command-name>/document-skills:pdf</command-name>');
+    expect(result?.command).toBe('document-skills:pdf');
+  });
+
+  it('does not treat an unknown plain-text namespaced command as a command', () => {
+    // The plain textual branch only recognizes known built-ins (to avoid turning
+    // arbitrary "/foo" prose into a command); skills always arrive via the XML
+    // <command-name> framing, which IS recognized above.
+    expect(parseClaudeSlashCommand('/document-skills:pdf')).toBeNull();
+  });
+});
+
+describe('skill detection in buildProcessedMessages', () => {
+  it('flags a slash command followed by the skill-expansion message as a skill', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/build-dmg</command-name>')]),
+      msg('user', [skillExpansion('build-dmg')]),
+    ]);
+    expect(processed[0].command?.isSkill).toBe(true);
+  });
+
+  it('does not flag a plain command not followed by a skill expansion', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/clear</command-name>')]),
+      msg('user', [text('hello')]),
+    ]);
+    expect(processed[0].command?.isSkill).toBeFalsy();
+  });
+});
+
+describe('skillInitial', () => {
+  it('takes the first letter, uppercased', () => {
+    expect(skillInitial('build-dmg')).toBe('B');
+  });
+  it('strips a plugin namespace and uses the skill segment', () => {
+    expect(skillInitial('document-skills:pdf')).toBe('P');
+  });
+});
+
+describe('correlateSessionSkills', () => {
+  it('collects a flagged skill and links it to its definition by name', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/build-dmg</command-name>')]),
+      msg('user', [skillExpansion('build-dmg')]),
+    ]);
+    const skills = correlateSessionSkills(processed, [skillDef('build-dmg', { description: 'Builds the DMG', scope: 'project' })]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe('build-dmg');
+    expect(skills[0].description).toBe('Builds the DMG');
+    expect(skills[0].scope).toBe('project');
+    expect(skills[0].skill).not.toBeNull();
+    expect(skills[0].turnN).toBe(1);
+  });
+
+  it('collects a skill known by name even without the expansion message', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/arch-analysis</command-name>')]),
+      msg('user', [text('regular follow-up')]),
+    ]);
+    const skills = correlateSessionSkills(processed, [skillDef('arch-analysis')]);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].skill).not.toBeNull();
+  });
+
+  it('includes a flagged skill with no local definition (skill: null)', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/document-skills:pdf</command-name>')]),
+      msg('user', [skillExpansion('document-skills/pdf')]),
+    ]);
+    const skills = correlateSessionSkills(processed, []);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].skill).toBeNull();
+  });
+
+  it('ignores plain commands that are neither flagged nor known skills', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('<command-name>/clear</command-name>')]),
+      msg('user', [text('hello')]),
+    ]);
+    expect(correlateSessionSkills(processed, [])).toHaveLength(0);
   });
 });
