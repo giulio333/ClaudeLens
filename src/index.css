@@ -1908,122 +1908,6 @@ body {
 }
 
 /* ──────────────────────────────────────────────────────────
-   AGENT RAIL — right-hand sub-agent activity column
-   ────────────────────────────────────────────────────────── */
-.cl-chat-workspace--with-rail { grid-template-columns: minmax(0, 1fr) 296px; }
-
-/* Trasparente: stesso canvas della chat, nessuna linea di separazione — sono
-   le card a comparire "appoggiate" a destra. */
-.cl-agent-rail {
-  min-width: 0; min-height: 0;
-  display: flex; flex-direction: column;
-  background: var(--cl-paper);
-  overflow-y: auto;
-  overflow-anchor: none;
-}
-.cl-agent-rail-head {
-  position: sticky; top: 0; z-index: 1;
-  display: flex; align-items: center; gap: 8px;
-  padding: 18px 18px 10px;
-  background: var(--cl-paper);
-}
-.cl-agent-rail-head .t {
-  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
-  letter-spacing: 0.2em; text-transform: uppercase; color: var(--cl-ink-4);
-}
-.cl-agent-rail-head .c {
-  margin-left: auto;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 600;
-  color: var(--cl-ink-3);
-}
-/* Lista editoriale come le tile (Skills/Agents): righe separate da hairline,
-   sfondo trasparente, glyph circolare, hover glass — nessun box arrotondato. */
-.cl-agent-rail-list {
-  display: flex; flex-direction: column;
-  border-top: 1px solid var(--cl-line-soft);
-}
-
-.cl-agent-rail-row {
-  position: relative;
-  border-bottom: 1px solid var(--cl-line-soft);
-  transition: background 120ms;
-}
-.cl-agent-rail-row:hover {
-  background: var(--cl-glass-hover-bg);
-  -webkit-backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
-  backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
-  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
-}
-/* Agente "attivo" rispetto allo scroll: marcatore a filo sinistro + glyph pieno,
-   senza incorniciare la riga in un box. */
-.cl-agent-rail-row[data-active]::before {
-  content: ''; position: absolute; left: 0; top: 0; bottom: -1px; width: 2px;
-  background: var(--cl-violet);
-}
-
-.cl-agent-rail-main {
-  width: 100%; min-width: 0;
-  display: grid; grid-template-columns: 30px 1fr; gap: 13px; align-items: start;
-  padding: 15px 16px 15px 18px;
-  text-align: left; cursor: pointer; background: none; border: 0;
-}
-.cl-agent-rail-main .glyph {
-  width: 30px; height: 30px; flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 50%; border: 1.5px solid color-mix(in oklch, var(--cl-violet) 55%, var(--cl-line));
-  font-family: var(--font-mono); font-weight: 700; font-size: 12px;
-  color: var(--cl-violet-ink); background: transparent;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
-}
-.cl-agent-rail-row[data-active] .glyph {
-  background: var(--cl-violet); border-color: var(--cl-violet); color: var(--cl-on-accent);
-}
-.cl-agent-rail-row[data-error] .glyph {
-  border-color: color-mix(in oklch, var(--cl-danger) 50%, var(--cl-line)); color: var(--cl-danger);
-}
-.cl-agent-rail-row[data-error][data-active] .glyph {
-  background: var(--cl-danger); border-color: var(--cl-danger); color: var(--cl-on-accent);
-}
-
-.cl-agent-rail-main .body { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
-.cl-agent-rail-main .row { display: flex; align-items: center; gap: 8px; }
-.cl-agent-rail-main .name {
-  font: 600 14px/1.2 var(--font-sans); letter-spacing: -0.01em;
-  color: var(--cl-ink); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-}
-.cl-agent-rail-main .status {
-  margin-left: auto; flex: 0 0 auto;
-  font-family: var(--font-mono); font-size: 9px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.12em; color: var(--cl-ink-4);
-}
-.cl-agent-rail-row[data-error] .status { color: var(--cl-danger); }
-.cl-agent-rail-main .desc {
-  font-family: var(--font-mono); font-size: 11px; line-height: 1.5; color: var(--cl-ink-3);
-  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
-}
-.cl-agent-rail-main .meta {
-  display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-top: 2px;
-  font-family: var(--font-mono); font-size: 10px; color: var(--cl-ink-4); letter-spacing: 0.02em;
-}
-.cl-agent-rail-main .meta .steps { color: var(--cl-ink-3); }
-.cl-agent-rail-main .meta .steps::before { content: '· '; color: var(--cl-ink-4); }
-/* Locate: icona ghost in basso a destra, rivelata all'hover della riga. */
-.cl-agent-rail-locate {
-  position: absolute; bottom: 9px; right: 10px;
-  width: 24px; height: 24px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 7px; background: none; border: 0; cursor: pointer;
-  color: var(--cl-ink-4); opacity: 0;
-  transition: opacity 0.16s, color 0.16s, background 0.16s;
-}
-.cl-agent-rail-row:hover .cl-agent-rail-locate,
-.cl-agent-rail-locate:focus-visible { opacity: 1; }
-.cl-agent-rail-locate:hover {
-  color: var(--cl-violet-ink);
-  background: color-mix(in oklch, var(--cl-violet-soft) 40%, transparent);
-}
-
-/* ──────────────────────────────────────────────────────────
    SUB-AGENT TRANSCRIPT PANEL — full internal transcript overlay
    ────────────────────────────────────────────────────────── */
 .cl-subagent-panel {
@@ -2062,11 +1946,6 @@ body {
 .cl-subagent-feed { flex: 1; min-height: 0; overflow-y: auto; padding: 18px 24px 60px; }
 .cl-subagent-feed .cl-transcript-inner { max-width: 820px; margin: 0 auto; }
 
-@media (max-width: 1080px) {
-  .cl-chat-workspace--with-rail { grid-template-columns: minmax(0, 1fr); }
-  .cl-agent-rail { display: none; }
-}
-
 /* ──────────────────────────────────────────────────────────
    CHAT — "Focus" layout
    Chrome stripped to a floating control pill · one centred reading
@@ -2076,9 +1955,6 @@ body {
 .cl-chat-workspace--focus {
   position: relative;
   grid-template-columns: 1fr;
-}
-.cl-chat-workspace--focus.cl-chat-workspace--with-rail {
-  grid-template-columns: minmax(0, 1fr) 296px;
 }
 
 /* centred reading column — ~78% of the feed so it fills the window while
@@ -2117,7 +1993,6 @@ body {
   pointer-events: none;
   z-index: 12;
 }
-.cl-chat-workspace--focus.cl-chat-workspace--with-rail .cl-focus-rail { right: 296px; }
 .cl-focus-rail-track {
   position: relative;
   width: 2px;
@@ -2199,8 +2074,6 @@ body {
   align-items: stretch;
   gap: 10px;
 }
-/* with the agent rail present, recentre the pill over the reading column */
-.cl-chat-workspace--with-rail .cl-pill-wrap { left: calc(50% - 148px); }
 .cl-pill {
   display: flex;
   align-items: center;
@@ -2267,6 +2140,8 @@ body {
 .cl-sheet {
   width: 300px;
   padding: 14px;
+  /* Centred over the pill (the wrap left-aligns its children by default). */
+  align-self: center;
   border-radius: 14px;
   background: var(--cl-glass-bg-strong);
   border: 1px solid var(--cl-glass-border);
@@ -2317,10 +2192,196 @@ body {
 .cl-sheet-item.is-danger { color: var(--cl-danger); }
 .cl-sheet-item.is-danger:hover { color: color-mix(in oklch, var(--cl-danger) 80%, var(--cl-ink)); }
 
+/* ──────────────────────────────────────────────────────────
+   AGENT DOCK (Focus layout, variant 4) — sub-agents collapse into
+   the control pill as an overlapping avatar cluster + count; the
+   trigger raises an agents sheet above the pill. Replaces the old
+   right-hand AgentRail so the transcript keeps the full width.
+   ────────────────────────────────────────────────────────── */
+.cl-pill-dock {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 5px 11px 5px 7px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: background 0.14s, color 0.14s;
+}
+.cl-pill-dock:hover {
+  background: color-mix(in oklch, var(--cl-violet) 12%, transparent);
+  color: var(--cl-violet-ink);
+}
+.cl-pill-dock[data-on] {
+  background: color-mix(in oklch, var(--cl-violet) 18%, transparent);
+  color: var(--cl-violet-ink);
+}
+.cl-dock-orbs { display: inline-flex; align-items: center; }
+.cl-dock-orb {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  color: var(--cl-on-accent);
+  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--cl-violet);
+  box-shadow: 0 0 0 1.5px var(--cl-paper);
+}
+.cl-dock-orb + .cl-dock-orb { margin-left: -7px; }
+.cl-dock-orb--more {
+  color: var(--cl-violet-ink);
+  background: color-mix(in oklch, var(--cl-violet-soft) 60%, var(--cl-paper));
+}
+.cl-dock-count {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+}
+.cl-dock-count span { text-transform: uppercase; color: var(--cl-ink-4); font-weight: 500; }
+.cl-dock-fail {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-danger);
+  flex: 0 0 auto;
+}
+
+/* agents sheet — same glass as the export sheet, denser row list. Centred over
+   the pill (the wrap defaults its children to the left edge via align-items). */
+.cl-sheet--agents {
+  width: 348px;
+  padding: 8px;
+  align-self: center;
+}
+.cl-dock-sheet-label {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  padding: 4px 6px 2px;
+}
+.cl-dock-sheet-fail { color: var(--cl-danger); font-style: normal; }
+.cl-dock-rows { display: flex; flex-direction: column; gap: 1px; }
+.cl-dock-row {
+  position: relative;
+  border-radius: 10px;
+  transition: background 0.12s;
+}
+.cl-dock-row:hover { background: color-mix(in oklch, var(--cl-ink) 6%, transparent); }
+.cl-dock-row[data-active] { background: color-mix(in oklch, var(--cl-violet) 12%, transparent); }
+.cl-dock-row-main {
+  width: 100%;
+  min-width: 0;
+  display: grid;
+  grid-template-columns: 24px 1fr;
+  gap: 11px;
+  align-items: start;
+  padding: 9px 9px 9px 8px;
+  text-align: left;
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+.cl-dock-row-main .orb {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--cl-on-accent);
+  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--cl-violet);
+}
+.cl-dock-row[data-error] .orb {
+  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.4), transparent 55%), var(--cl-danger);
+}
+.cl-dock-row-main .body { min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.cl-dock-row-main .r1 { display: flex; align-items: baseline; gap: 8px; }
+.cl-dock-row-main .name {
+  font: 600 13px/1.2 var(--font-sans);
+  letter-spacing: -0.01em;
+  color: var(--cl-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-dock-row-main .status {
+  margin-left: auto;
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--cl-ink-4);
+}
+.cl-dock-row[data-error] .status { color: var(--cl-danger); }
+.cl-dock-row-main .desc {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1.45;
+  color: var(--cl-ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-dock-row-main .meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+}
+.cl-dock-row-main .meta .steps::before { content: '· '; }
+.cl-dock-row-locate {
+  position: absolute;
+  bottom: 7px;
+  right: 8px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  color: var(--cl-ink-4);
+  opacity: 0;
+  transition: opacity 0.16s, color 0.16s, background 0.16s;
+}
+.cl-dock-row:hover .cl-dock-row-locate,
+.cl-dock-row-locate:focus-visible { opacity: 1; }
+.cl-dock-row-locate:hover {
+  color: var(--cl-violet-ink);
+  background: color-mix(in oklch, var(--cl-violet-soft) 40%, transparent);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cl-focus-dot,
   .cl-pill-filter,
   .cl-pill-more,
+  .cl-pill-dock,
+  .cl-dock-row,
+  .cl-dock-row-locate,
   .cl-sheet-close,
   .cl-sheet-item { transition: none; }
 }
@@ -2832,21 +2893,12 @@ body {
 @media (max-width: 980px) {
   .cl-focus-rail { display: none; }
   .cl-chat-reading { width: 88%; }
-  .cl-chat-workspace--focus.cl-chat-workspace--with-rail { grid-template-columns: 1fr; }
-  .cl-chat-workspace--with-rail .cl-pill-wrap { left: 50%; }
   .cl-pill-filter { padding: 7px 9px; font-size: 9px; }
   .cl-tool-detail-scroll {
     padding: 24px 26px 46px;
   }
   .cl-agent-detail-layout {
     grid-template-columns: 1fr;
-  }
-  .cl-agent-rail {
-    position: static;
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
-  }
-  .cl-agent-rail-list {
-    align-self: stretch;
   }
 }
 

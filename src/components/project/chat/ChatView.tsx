@@ -6,7 +6,6 @@ import { sessionTitle } from '../utils'
 import { buildProcessedMessages, correlateSessionAgents, describeTurn, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
 import { ToolDetailPanel } from './ToolDetailPanel'
-import { AgentRail } from './AgentRail'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
 import { TopBar } from '../shared/TopBar'
@@ -35,6 +34,52 @@ function ChevronUpGlyph() {
       <path d="M6 15l6-6 6 6" />
     </svg>
   )
+}
+
+/** Caret on the agent dock — points up when collapsed (the sheet opens upward),
+ *  flips down once the sheet is open. */
+function DockCaretGlyph({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={{ transform: open ? 'rotate(180deg)' : 'none', transition: 'transform 0.18s' }}
+    >
+      <path d="M6 15l6-6 6 6" />
+    </svg>
+  )
+}
+
+function LocateGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <path d="M8 2v9" />
+      <path d="M4.5 7.5 8 11l3.5-3.5" />
+      <path d="M3 13h10" />
+    </svg>
+  )
+}
+
+function fmtAgentSpan(startedAt?: string, endedAt?: string): string | null {
+  if (!startedAt || !endedAt) return null
+  const ms = new Date(endedAt).getTime() - new Date(startedAt).getTime()
+  if (!Number.isFinite(ms) || ms < 0) return null
+  const s = Math.round(ms / 1000)
+  if (s < 60) return `${s}s`
+  const m = Math.floor(s / 60)
+  return `${m}m ${String(s % 60).padStart(2, '0')}s`
+}
+
+function fmtAgentClock(ts?: string): string {
+  if (!ts) return ''
+  return new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
 }
 
 type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan'
@@ -129,9 +174,104 @@ function FocusMinimap({
   )
 }
 
+/** Overlapping avatar cluster shown on the footer agent dock — the collapsed
+ *  representation of every sub-agent this session spawned. Caps at four orbs and
+ *  spills the remainder into a "+N" chip so a busy session stays compact. */
+function AgentOrbCluster({ count }: { count: number }) {
+  const shown = Math.min(count, 4)
+  const overflow = count - shown
+  return (
+    <span className="cl-dock-orbs">
+      {Array.from({ length: shown }).map((_, i) => (
+        <span key={i} className="cl-dock-orb" style={{ zIndex: shown - i }}>A</span>
+      ))}
+      {overflow > 0 && <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>+{overflow}</span>}
+    </span>
+  )
+}
+
+/** The agent dock that lives inside the control pill (Focus layout, variant 4):
+ *  an overlapping avatar cluster + count that toggles a sheet listing every
+ *  sub-agent. The sheet is rendered by ChatControlPill above the pill; this just
+ *  owns the trigger and the row list. Replaces the old right-hand AgentRail so
+ *  the transcript keeps the full width. */
+function AgentDockSheet({
+  agents,
+  activeKey,
+  onOpen,
+  onLocate,
+}: {
+  agents: SessionAgent[]
+  activeKey: string | null
+  onOpen: (agent: SessionAgent) => void
+  onLocate: (turnN: number) => void
+}) {
+  const failed = agents.filter(a => a.isError).length
+  return (
+    <div className="cl-sheet cl-sheet--agents" role="menu">
+      <div className="cl-sheet-head">
+        <span className="cl-dock-sheet-label">
+          Agents used · {agents.length}
+          {failed > 0 && <em className="cl-dock-sheet-fail"> · {failed} failed</em>}
+        </span>
+      </div>
+      <div className="cl-dock-rows">
+        {agents.map(a => {
+          const span = fmtAgentSpan(a.startedAt, a.endedAt)
+          const hasTranscript = a.agentId !== null
+          return (
+            <div
+              key={a.key}
+              className="cl-dock-row"
+              data-active={activeKey === a.key || undefined}
+              data-error={a.isError || undefined}
+            >
+              <button
+                type="button"
+                className="cl-dock-row-main"
+                onClick={() => (hasTranscript ? onOpen(a) : onLocate(a.turnN))}
+                title={hasTranscript ? 'View agent transcript' : 'Locate dispatch in chat'}
+              >
+                <span className="orb" aria-hidden>A</span>
+                <span className="body">
+                  <span className="r1">
+                    <span className="name">{a.subagentType}</span>
+                    <span className="status">{a.isError ? 'failed' : 'done'}</span>
+                  </span>
+                  {a.description && <span className="desc">{a.description}</span>}
+                  <span className="meta">
+                    {a.startedAt && (
+                      <span className="time">
+                        {fmtAgentClock(a.startedAt)}
+                        {span && <> · {span}</>}
+                      </span>
+                    )}
+                    {typeof a.messageCount === 'number' && <span className="steps">{a.messageCount} steps</span>}
+                    {!hasTranscript && <span className="steps">no transcript</span>}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="cl-dock-row-locate"
+                onClick={() => onLocate(a.turnN)}
+                title="Jump to dispatch in chat"
+                aria-label="Jump to dispatch in chat"
+              >
+                <LocateGlyph />
+              </button>
+            </div>
+          )
+        })}
+      </div>
+    </div>
+  )
+}
+
 /** Floating glass control pill (Focus layout) — bottom-centre. Holds the
- *  transcript filters + density toggle (chat mode only), the Resume action, and
- *  a "more" trigger that raises the export / delete sheet above the pill. */
+ *  transcript filters + density toggle (chat mode only), the agent dock, the
+ *  Resume action, and a "more" trigger that raises the export / delete sheet
+ *  above the pill. Only one sheet (agents or export) is open at a time. */
 function ChatControlPill({
   showTranscriptControls,
   filter,
@@ -151,6 +291,10 @@ function ChatControlPill({
   onExportPreset,
   onExport,
   onDelete,
+  agents,
+  activeAgentKey,
+  onOpenAgent,
+  onLocateAgent,
 }: {
   showTranscriptControls: boolean
   filter: TurnFilter
@@ -170,26 +314,34 @@ function ChatControlPill({
   onExportPreset: (preset: ChatExportPreset) => void
   onExport: (format: ChatExportFormat) => void
   onDelete: () => void
+  agents: SessionAgent[]
+  activeAgentKey: string | null
+  onOpenAgent: (agent: SessionAgent) => void
+  onLocateAgent: (turnN: number) => void
 }) {
-  const [sheet, setSheet] = useState(false)
+  // Only one sheet is raised above the pill at a time: the agent dock list or
+  // the export/delete menu.
+  const [sheet, setSheet] = useState<'export' | 'agents' | null>(null)
   const rootRef = useRef<HTMLDivElement | null>(null)
 
   useEffect(() => {
     if (!sheet) return
     const onPointerDown = (event: MouseEvent) => {
       if (rootRef.current?.contains(event.target as Node)) return
-      setSheet(false)
+      setSheet(null)
     }
     document.addEventListener('mousedown', onPointerDown)
     return () => document.removeEventListener('mousedown', onPointerDown)
   }, [sheet])
 
-  const toggleSheet = () => {
+  const toggleExport = () => {
     setSheet(s => {
-      if (!s) onOpenSheet()
-      return !s
+      const next = s === 'export' ? null : 'export'
+      if (next === 'export') onOpenSheet()
+      return next
     })
   }
+  const toggleAgents = () => setSheet(s => (s === 'agents' ? null : 'agents'))
 
   const chip = (id: TurnFilter, label: string, c: number) => (
     <button
@@ -206,11 +358,25 @@ function ChatControlPill({
 
   return (
     <div className="cl-pill-wrap" ref={rootRef}>
-      {sheet && (
+      {sheet === 'agents' && agents.length > 0 && (
+        <AgentDockSheet
+          agents={agents}
+          activeKey={activeAgentKey}
+          onOpen={agent => {
+            setSheet(null)
+            onOpenAgent(agent)
+          }}
+          onLocate={turnN => {
+            setSheet(null)
+            onLocateAgent(turnN)
+          }}
+        />
+      )}
+      {sheet === 'export' && (
         <div className="cl-sheet" role="menu">
           <div className="cl-sheet-head">
             <span className="cl-export-label">Export</span>
-            <button type="button" className="cl-sheet-close" aria-label="Close" onClick={() => setSheet(false)}>✕</button>
+            <button type="button" className="cl-sheet-close" aria-label="Close" onClick={() => setSheet(null)}>✕</button>
           </div>
           <div className="cl-export-presets">
             {CHAT_EXPORT_PRESETS.map(preset => (
@@ -241,7 +407,7 @@ function ChatControlPill({
             role="menuitem"
             className="cl-sheet-item is-danger"
             onClick={() => {
-              setSheet(false)
+              setSheet(null)
               onDelete()
             }}
           >
@@ -272,6 +438,25 @@ function ChatControlPill({
             <span className="cl-pill-div" />
           </>
         )}
+        {agents.length > 0 && (
+          <>
+            <button
+              type="button"
+              className="cl-pill-dock"
+              aria-haspopup="menu"
+              aria-expanded={sheet === 'agents'}
+              data-on={sheet === 'agents' || undefined}
+              title={`${agents.length} sub-agent${agents.length > 1 ? 's' : ''} used`}
+              onClick={toggleAgents}
+            >
+              <AgentOrbCluster count={agents.length} />
+              <span className="cl-dock-count">{agents.length} <span>agents</span></span>
+              {agents.some(a => a.isError) && <span className="cl-dock-fail" aria-hidden />}
+              <DockCaretGlyph open={sheet === 'agents'} />
+            </button>
+            <span className="cl-pill-div" />
+          </>
+        )}
         <button className="cl-resume" type="button" onClick={onResume}>
           <PlayGlyph />
           <span>Resume</span>
@@ -280,10 +465,10 @@ function ChatControlPill({
           type="button"
           className="cl-pill-more"
           aria-haspopup="menu"
-          aria-expanded={sheet}
-          data-on={sheet || undefined}
+          aria-expanded={sheet === 'export'}
+          data-on={sheet === 'export' || undefined}
           title="Export & more"
-          onClick={toggleSheet}
+          onClick={toggleExport}
         >
           <ChevronUpGlyph />
         </button>
@@ -524,6 +709,10 @@ export function ChatView({
       onExportPreset={setExportPreset}
       onExport={handleExport}
       onDelete={() => setShowDelete(true)}
+      agents={agents}
+      activeAgentKey={activeAgentKey}
+      onOpenAgent={setTranscriptAgent}
+      onLocateAgent={jumpToTurn}
     />
   )
 
@@ -588,7 +777,7 @@ export function ChatView({
           {controlPill(false)}
         </div>
       ) : (
-        <div className={`cl-chat-workspace cl-chat-workspace--focus${agents.length > 0 ? ' cl-chat-workspace--with-rail' : ''}`}>
+        <div className="cl-chat-workspace cl-chat-workspace--focus">
           <main
             className="cl-chat-feed"
             ref={feedRef}
@@ -641,15 +830,6 @@ export function ChatView({
             matches={matchesFilter}
             onJump={jumpToTurn}
           />
-
-          {agents.length > 0 && (
-            <AgentRail
-              agents={agents}
-              activeKey={activeAgentKey}
-              onOpen={setTranscriptAgent}
-              onLocate={jumpToTurn}
-            />
-          )}
 
           {controlPill(true)}
         </div>
