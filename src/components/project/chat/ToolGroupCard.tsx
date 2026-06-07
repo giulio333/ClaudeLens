@@ -1,11 +1,11 @@
 import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils'
+import { ToolInput, ToolOutput } from './ToolDetailPanel'
 
-export function ToolGroupCard({ group, showDetails, onOpenDetail, tint: tintOverride }: {
+export function ToolGroupCard({ group, showDetails, tint: tintOverride }: {
   group: ToolGroup
   showDetails: boolean
-  onOpenDetail: () => void
   /** Explicit tint color (e.g. a dispatched agent's identity color) overriding
    *  the tool-name default. */
   tint?: string
@@ -64,20 +64,6 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail, tint: tintOver
             </span>
           )}
         </button>
-        {showDetails && (
-          <button
-            type="button"
-            onClick={e => { e.stopPropagation(); onOpenDetail() }}
-            className="cl-tool-card-detail"
-            title="Open detail"
-          >
-            <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.8">
-              <path d="M6 3H3a1 1 0 00-1 1v9a1 1 0 001 1h9a1 1 0 001-1v-3" strokeLinecap="round"/>
-              <path d="M10 2h4v4" strokeLinecap="round" strokeLinejoin="round"/>
-              <path d="M14 2L8 8" strokeLinecap="round"/>
-            </svg>
-          </button>
-        )}
       </div>
 
       {result && result.isError && !open && (
@@ -92,9 +78,7 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail, tint: tintOver
           {showDetails && (
             <div className="cl-tool-card-section">
               <div className="cl-tool-card-section-title">Input</div>
-              <pre>
-                {JSON.stringify(use.input, null, 2)}
-              </pre>
+              <ToolInput name={use.name} input={use.input as Record<string, unknown>} />
             </div>
           )}
           {result && (
@@ -102,9 +86,7 @@ export function ToolGroupCard({ group, showDetails, onOpenDetail, tint: tintOver
               <div className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}>
                 {result.isError ? 'Error' : 'Result'}
               </div>
-              <pre>
-                {result.content}
-              </pre>
+              <ToolOutput name={use.name} input={use.input as Record<string, unknown>} result={result} />
             </div>
           )}
         </div>

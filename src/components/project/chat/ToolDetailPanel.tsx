@@ -283,7 +283,7 @@ function AgentDetailBody({
   )
 }
 
-function ToolInput({ name, input }: { name: string; input: Record<string, unknown> }) {
+export function ToolInput({ name, input }: { name: string; input: Record<string, unknown> }) {
   if (name === 'Read') {
     const fp = input.file_path as string
     const ext = fileExt(fp)
@@ -450,7 +450,7 @@ function ToolInput({ name, input }: { name: string; input: Record<string, unknow
   return <CodeBlock code={JSON.stringify(input, null, 2)} dark={false} />
 }
 
-function ToolOutput({ name, input, result }: {
+export function ToolOutput({ name, input, result }: {
   name: string
   input: Record<string, unknown>
   result: ToolGroup['result']

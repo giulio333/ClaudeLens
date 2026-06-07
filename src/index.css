@@ -2892,21 +2892,6 @@ body {
 }
 .cl-tool-card-status.is-ok { color: var(--cl-ok); }
 .cl-tool-card-status.is-error { color: var(--cl-danger); }
-.cl-tool-card-detail {
-  width: 38px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border: 0;
-  border-left: 1px solid var(--cl-line);
-  background: transparent;
-  color: var(--cl-ink-3);
-  cursor: pointer;
-}
-.cl-tool-card-detail:hover {
-  color: var(--cl-accent-ink);
-  background: var(--cl-accent-soft);
-}
 .cl-tool-card-result {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);

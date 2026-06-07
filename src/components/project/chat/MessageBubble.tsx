@@ -358,7 +358,6 @@ export const MessageBubble = memo(function MessageBubble({
                 group={group}
                 showDetails
                 tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
-                onOpenDetail={() => onOpenToolDetail(group)}
               />
             ))}
           </div>
@@ -382,7 +381,6 @@ export const MessageBubble = memo(function MessageBubble({
                 tint={AGENT_TOOLS.has(group.use.name)
                   ? agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))
                   : undefined}
-                onOpenDetail={() => onOpenToolDetail(group)}
               />
             ))}
           </div>
