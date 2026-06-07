@@ -481,3 +481,53 @@ export function stripLineNumbers(text: string): string {
 export function fileExt(path: string): string {
   return path.split('.').pop()?.toLowerCase() ?? ''
 }
+
+// Tool che operano su un singolo file su disco: ne estraiamo il path per i chip
+// file mostrati nell'header minimal ("tools hidden" → quali file ha toccato).
+const FILE_PATH_TOOLS = new Set(['Read', 'Write', 'Edit', 'NotebookEdit'])
+
+/** Path del file su cui ha agito un tool, se è un tool file-oriented; altrimenti null. */
+export function toolFilePath(name: string, input: Record<string, unknown>): string | null {
+  if (!FILE_PATH_TOOLS.has(name)) return null
+  const p = input.file_path ?? input.notebook_path
+  return typeof p === 'string' && p ? p : null
+}
+
+export type TouchedFile = { path: string; ext: string }
+
+/** Raccoglie i file toccati da un insieme di tool group, in ordine, deduplicati per path. */
+export function touchedFiles(groups: ToolGroup[]): TouchedFile[] {
+  const seen = new Set<string>()
+  const out: TouchedFile[] = []
+  for (const g of groups) {
+    const p = toolFilePath(g.use.name, g.use.input as Record<string, unknown>)
+    if (p && !seen.has(p)) {
+      seen.add(p)
+      out.push({ path: p, ext: fileExt(p) })
+    }
+  }
+  return out
+}
+
+// Categoria d'estensione → tinta del chip file (riusa i token --cl-* esistenti,
+// stessa famiglia cromatica del resto della chat: nessuna nuova tinta).
+const FILE_CAT_BY_EXT: Record<string, 'code' | 'data' | 'web' | 'doc'> = {
+  ts: 'code', tsx: 'code', js: 'code', jsx: 'code', mjs: 'code', cjs: 'code',
+  py: 'code', go: 'code', rs: 'code', java: 'code', c: 'code', cc: 'code',
+  cpp: 'code', h: 'code', hpp: 'code', rb: 'code', php: 'code', swift: 'code',
+  kt: 'code', sh: 'code', bash: 'code', zsh: 'code', lua: 'code', ipynb: 'code',
+  json: 'data', csv: 'data', tsv: 'data', xlsx: 'data', xls: 'data', sql: 'data',
+  yaml: 'data', yml: 'data', toml: 'data', parquet: 'data', xml: 'data', env: 'data',
+  html: 'web', htm: 'web', css: 'web', scss: 'web', sass: 'web', less: 'web', svg: 'web',
+  md: 'doc', mdx: 'doc', txt: 'doc', pdf: 'doc', docx: 'doc', rst: 'doc',
+}
+
+export function fileCategoryTint(ext: string): string {
+  switch (FILE_CAT_BY_EXT[ext]) {
+    case 'code': return 'var(--cl-violet)'
+    case 'data': return 'var(--cl-cyan)'
+    case 'web': return 'var(--cl-haiku)'
+    case 'doc': return 'var(--cl-accent)'
+    default: return 'var(--cl-ink-3)'
+  }
+}

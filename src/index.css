@@ -2575,6 +2575,70 @@ body {
   color: var(--cl-ink-2);
   letter-spacing: 0.02em;
 }
+/* File chips at the foot of a turn: which files the hidden tools touched. */
+.cl-turn-files {
+  display: flex; flex-wrap: wrap; align-items: center; gap: 5px;
+  margin-top: 8px;
+}
+.cl-file-chip {
+  position: relative;
+  display: inline-flex; align-items: center; gap: 4px;
+  flex-shrink: 0;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in oklab, var(--ft, var(--cl-ink-4)) 32%, var(--cl-line));
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 9%, transparent);
+  color: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 70%, var(--cl-ink-3));
+  line-height: 1;
+  cursor: default;
+}
+.cl-file-chip svg { opacity: 0.9; }
+.cl-file-chip-logo { width: 12px; height: 12px; flex-shrink: 0; }
+/* CSS-only tooltip (native title is unreliable in Electron) — shows the file
+ *  name(s) above the chip on hover/focus. */
+.cl-file-chip[data-file]:hover::after,
+.cl-file-chip[data-file]:focus-visible::after {
+  content: attr(data-file);
+  position: absolute;
+  bottom: calc(100% + 7px);
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: pre;
+  max-width: 60vw;
+  background: var(--cl-ink);
+  color: var(--cl-paper);
+  font: 500 11px/1.35 var(--font-mono);
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 5px 9px;
+  border-radius: 7px;
+  box-shadow: 0 4px 14px rgb(0 0 0 / 0.22);
+  z-index: 40;
+  pointer-events: none;
+}
+.cl-file-chip[data-file]:hover::before,
+.cl-file-chip[data-file]:focus-visible::before {
+  content: '';
+  position: absolute;
+  bottom: calc(100% + 2px);
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: var(--cl-ink);
+  z-index: 40;
+  pointer-events: none;
+}
+.cl-file-chip-ext {
+  font: 600 9.5px/1 var(--font-mono);
+  text-transform: uppercase; letter-spacing: 0.06em;
+}
+.cl-file-chip--more {
+  font: 600 9.5px/1 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+  border-color: var(--cl-line);
+  background: transparent;
+}
 .cl-turn-content {
   display: grid;
   gap: 8px;

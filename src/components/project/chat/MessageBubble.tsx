@@ -2,10 +2,11 @@ import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
+import { FileIcon } from './fileIcons'
 
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
 function AskQuestionCard({ group }: { group: ToolGroup }) {
@@ -168,6 +169,50 @@ export function ToolsHiddenBadge({ count, dimmed }: { count: number; dimmed?: bo
   )
 }
 
+/** Row of file chips at the foot of a turn: one icon per file the (hidden) tools
+ *  touched, tinted by file kind, with the file name on hover. */
+function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: number }) {
+  if (files.length === 0) return null
+  // One chip per distinct file (dedupe by path across the run + own tools).
+  const seen = new Set<string>()
+  const distinct: TouchedFile[] = []
+  for (const f of files) {
+    if (!seen.has(f.path)) {
+      seen.add(f.path)
+      distinct.push(f)
+    }
+  }
+  const shown = distinct.slice(0, max)
+  const overflow = distinct.length - shown.length
+  return (
+    <div className="cl-turn-files">
+      {shown.map((f, i) => {
+        const name = f.path.split('/').pop() ?? f.path
+        return (
+          <span
+            key={i}
+            className="cl-file-chip"
+            style={{ '--ft': fileCategoryTint(f.ext) } as CSSProperties}
+            data-file={name}
+            aria-label={name}
+          >
+            <FileIcon ext={f.ext} />
+            {f.ext && <span className="cl-file-chip-ext">{f.ext}</span>}
+          </span>
+        )
+      })}
+      {overflow > 0 && (
+        <span
+          className="cl-file-chip cl-file-chip--more"
+          data-file={distinct.slice(max).map(f => f.path.split('/').pop()).join('\n')}
+        >
+          +{overflow}
+        </span>
+      )}
+    </div>
+  )
+}
+
 // Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
 // `onOpenToolDetail` setter, bubbles don't re-render on header-collapse / export
 // state changes — only when their own props actually change.
@@ -181,6 +226,7 @@ export const MessageBubble = memo(function MessageBubble({
   isContinuation,
   innerRef,
   hiddenToolCount = 0,
+  hiddenFiles = [],
 }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
@@ -196,6 +242,8 @@ export const MessageBubble = memo(function MessageBubble({
   innerRef?: Ref<HTMLElement>
   /** Number of tool-only turns collapsed before this message in minimal mode. */
   hiddenToolCount?: number
+  /** Files touched by the collapsed run of hidden tools preceding this message. */
+  hiddenFiles?: TouchedFile[]
 }) {
   const { msg, toolGroups, command } = processed
   const isUser = msg.role === 'user'
@@ -341,6 +389,15 @@ export const MessageBubble = memo(function MessageBubble({
             )
           ))}
         </div>
+
+        {!showTools && (() => {
+          // Files touched in this turn — the collapsed run of hidden tools that
+          // precede it plus this turn's own (hidden) file tools. One chip per
+          // file, sitting at the foot of the turn so the header stays uncluttered.
+          const ownFiles = touchedFiles(standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name)))
+          const allFiles = [...hiddenFiles, ...ownFiles]
+          return allFiles.length > 0 ? <FileChipCluster files={allFiles} /> : null
+        })()}
 
         {showQuestions && (
           <div className="cl-ask-stack">
