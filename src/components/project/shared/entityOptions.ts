@@ -32,6 +32,17 @@ export function entityTint(color?: string, opts?: { neutral?: boolean }): CSSPro
   return { '--agent-h': String(COLOR_MAP.green.h), '--agent-c': String(COLOR_MAP.green.c) } as CSSProperties
 }
 
+/**
+ * A single resolved oklch color string for a named agent color (for surfaces
+ * that take one `--tint` value, e.g. the compact tool card). `undefined` when
+ * the color is missing/unknown.
+ */
+export function agentTintColor(color?: string): string | undefined {
+  const m = color ? COLOR_MAP[color.toLowerCase()] : undefined
+  if (!m) return undefined
+  return `oklch(0.62 ${m.c} ${m.h})`
+}
+
 export function initialOf(name: string) {
   return name.trim()[0]?.toUpperCase() ?? '?'
 }

@@ -254,13 +254,24 @@ export type TurnDescriptor = {
 const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: string }> = {
   user:     { label: 'You',      initial: 'U', color: 'var(--cl-ink)' },
   claude:   { label: 'Claude',   initial: 'C', color: 'var(--cl-accent)' },
-  agent:    { label: 'Agent',    initial: 'A', color: 'var(--cl-violet)' },
+  // An agent dispatch is still a Claude turn — the "A" identity lives inside the
+  // dispatch card, so the rail orb shows "C". The color is the dispatched agent's
+  // own identity tint (resolved in MessageBubble); accent is the unconfigured default.
+  agent:    { label: 'Agent',    initial: 'C', color: 'var(--cl-accent)' },
   command:  { label: 'Command',  initial: '/', color: 'var(--cl-accent)' },
   question: { label: 'Question', initial: '?', color: 'var(--cl-warn)' },
   plan:     { label: 'Plan',     initial: 'P', color: 'var(--cl-accent)' },
 }
 
-export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilter): TurnDescriptor {
+/** Resolves a dispatched sub-agent's identity tint (final color string) from its
+ *  `subagent_type`; returns undefined to fall back to the variant default. */
+export type AgentColorResolver = (subagentType: string) => string | undefined
+
+export function describeTurn(
+  p: ProcessedMessage,
+  detailsFilter: ChatDetailsFilter,
+  agentColor?: AgentColorResolver
+): TurnDescriptor {
   const { msg, toolGroups, command } = p
   const isUser = msg.role === 'user'
 
@@ -313,7 +324,15 @@ export function describeTurn(p: ProcessedMessage, detailsFilter: ChatDetailsFilt
     : isUser ? 'user'
     : 'claude'
 
-  return { variant, ...ROLE_META[variant], hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
+  // Agent turns wear the dispatched sub-agent's identity color (resolved by the
+  // caller, who knows the agent registry); accent is the unconfigured default.
+  const meta = ROLE_META[variant]
+  const color =
+    variant === 'agent'
+      ? agentColor?.((agentGroups[0]?.use.input as Record<string, unknown>)?.subagent_type as string) ?? meta.color
+      : meta.color
+
+  return { variant, label: meta.label, initial: meta.initial, color, hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
 }
 
 // ──────────────────────────────────────────────────────────────────────────

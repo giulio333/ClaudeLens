@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents } from '../../../hooks/useIPC'
+import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents } from '../../../hooks/useIPC'
 import { SessionSummary } from '../../../hooks/useIPC'
 import { sessionTitle } from '../utils'
 import { buildProcessedMessages, correlateSessionAgents, describeTurn, ChatDetailsFilter, SessionAgent, ToolGroup, TurnDescriptor } from './utils'
@@ -8,6 +8,7 @@ import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExp
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble, ToolsHiddenBadge } from './MessageBubble'
+import { agentTintColor } from '../shared/entityOptions'
 import { TopBar } from '../shared/TopBar'
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
 import { SessionGraphView } from './graph/SessionGraphView'
@@ -174,16 +175,29 @@ function FocusMinimap({
   )
 }
 
+/** Inline style that paints an orb with a sub-agent's identity color, falling
+ *  back to the default violet (handled in CSS) when the agent has no color. */
+function orbStyle(color?: string): CSSProperties {
+  return color ? ({ '--orb-color': color } as CSSProperties) : {}
+}
+
 /** Overlapping avatar cluster shown on the footer agent dock — the collapsed
  *  representation of every sub-agent this session spawned. Caps at four orbs and
- *  spills the remainder into a "+N" chip so a busy session stays compact. */
-function AgentOrbCluster({ count }: { count: number }) {
-  const shown = Math.min(count, 4)
-  const overflow = count - shown
+ *  spills the remainder into a "+N" chip so a busy session stays compact. Each
+ *  orb wears its sub-agent's identity color. */
+function AgentOrbCluster({
+  agents,
+  colorOf,
+}: {
+  agents: SessionAgent[]
+  colorOf: (agent: SessionAgent) => string | undefined
+}) {
+  const shown = agents.slice(0, 4)
+  const overflow = agents.length - shown.length
   return (
     <span className="cl-dock-orbs">
-      {Array.from({ length: shown }).map((_, i) => (
-        <span key={i} className="cl-dock-orb" style={{ zIndex: shown - i }}>A</span>
+      {shown.map((a, i) => (
+        <span key={a.key} className="cl-dock-orb" style={{ zIndex: shown.length - i, ...orbStyle(colorOf(a)) }}>{(a.subagentType?.[0] ?? 'A').toUpperCase()}</span>
       ))}
       {overflow > 0 && <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>+{overflow}</span>}
     </span>
@@ -198,11 +212,13 @@ function AgentOrbCluster({ count }: { count: number }) {
 function AgentDockSheet({
   agents,
   activeKey,
+  colorOf,
   onOpen,
   onLocate,
 }: {
   agents: SessionAgent[]
   activeKey: string | null
+  colorOf: (agent: SessionAgent) => string | undefined
   onOpen: (agent: SessionAgent) => void
   onLocate: (turnN: number) => void
 }) {
@@ -232,7 +248,7 @@ function AgentDockSheet({
                 onClick={() => (hasTranscript ? onOpen(a) : onLocate(a.turnN))}
                 title={hasTranscript ? 'View agent transcript' : 'Locate dispatch in chat'}
               >
-                <span className="orb" aria-hidden>A</span>
+                <span className="orb" aria-hidden style={orbStyle(colorOf(a))}>{(a.subagentType?.[0] ?? 'A').toUpperCase()}</span>
                 <span className="body">
                   <span className="r1">
                     <span className="name">{a.subagentType}</span>
@@ -293,6 +309,7 @@ function ChatControlPill({
   onDelete,
   agents,
   activeAgentKey,
+  agentColorOf,
   onOpenAgent,
   onLocateAgent,
 }: {
@@ -316,6 +333,7 @@ function ChatControlPill({
   onDelete: () => void
   agents: SessionAgent[]
   activeAgentKey: string | null
+  agentColorOf: (agent: SessionAgent) => string | undefined
   onOpenAgent: (agent: SessionAgent) => void
   onLocateAgent: (turnN: number) => void
 }) {
@@ -362,6 +380,7 @@ function ChatControlPill({
         <AgentDockSheet
           agents={agents}
           activeKey={activeAgentKey}
+          colorOf={agentColorOf}
           onOpen={agent => {
             setSheet(null)
             onOpenAgent(agent)
@@ -449,7 +468,7 @@ function ChatControlPill({
               title={`${agents.length} sub-agent${agents.length > 1 ? 's' : ''} used`}
               onClick={toggleAgents}
             >
-              <AgentOrbCluster count={agents.length} />
+              <AgentOrbCluster agents={agents} colorOf={agentColorOf} />
               <span className="cl-dock-count">{agents.length} <span>agents</span></span>
               {agents.some(a => a.isError) && <span className="cl-dock-fail" aria-hidden />}
               <DockCaretGlyph open={sheet === 'agents'} />
@@ -488,7 +507,20 @@ export function ChatView({
 }) {
   const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
   const { data: subagentMetas } = useSessionSubagents(project.hash, session.filename)
+  const { data: globalAgents } = useGlobalAgents()
+  const { data: projectAgents } = useProjectAgents(project.realPath)
   const projectName = projectDisplayName(project.realPath)
+
+  // Resolve a dispatched sub-agent's identity color from its definition
+  // (`subagent_type` → agent.color). Project agents win over globals on name
+  // clash. Returns undefined when the agent is unknown or has no color, so the
+  // cards fall back to their default tint.
+  const agentColorOf = useMemo(() => {
+    const byName = new Map<string, string>()
+    for (const a of globalAgents ?? []) if (a.color) byName.set(a.name, a.color)
+    for (const a of projectAgents ?? []) if (a.color) byName.set(a.name, a.color)
+    return (subagentType: string) => byName.get(subagentType)
+  }, [globalAgents, projectAgents])
   const [viewMode, setViewMode] = useState<ViewMode>('chat')
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal')
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
@@ -507,6 +539,10 @@ export function ChatView({
   // re-render. Captured in onScroll (pre-update scrollHeight) so the auto-scroll
   // effect doesn't mistake a tall incoming message for the user scrolling away.
   const wasNearBottomRef = useRef(true)
+  // Ref mirror of activeTurn so the density-change layout effect can read
+  // the current turn without listing activeTurn as a dependency (which would
+  // cause it to fire on every scroll-spy update, fighting user scrolling).
+  const activeTurnRef = useRef<number | null>(null)
 
   // Heavy: rebuild the processed transcript only when the raw messages change.
   const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
@@ -522,8 +558,8 @@ export function ChatView({
   // The detail filter (Minimal/Full) drives which turns are visible — Minimal
   // hides thinking/tools — so the navigation descriptors depend on it too.
   const descriptors = useMemo(
-    () => processed.map(p => describeTurn(p, detailsFilter)),
-    [processed, detailsFilter]
+    () => processed.map(p => describeTurn(p, detailsFilter, t => agentTintColor(agentColorOf(t)))),
+    [processed, detailsFilter, agentColorOf]
   )
   const fmtTurnTime = useCallback(
     (ts: string | undefined) => (ts
@@ -627,6 +663,23 @@ export function ChatView({
     return () => io.disconnect()
   }, [minimapItems, viewMode])
 
+  // Keep activeTurnRef in sync so layout effects can read it without deps.
+  useEffect(() => { activeTurnRef.current = activeTurn }, [activeTurn])
+
+  // Anchor the feed after a density change: if near the bottom, snap back to
+  // bottom; otherwise keep the scroll-spy turn in view. useLayoutEffect fires
+  // after DOM mutations but before paint, so the corrected position never flashes.
+  useLayoutEffect(() => {
+    const feed = feedRef.current
+    if (!feed) return
+    if (wasNearBottomRef.current) {
+      feed.scrollTop = feed.scrollHeight - feed.clientHeight
+    } else {
+      const turn = activeTurnRef.current
+      if (turn !== null) turnRefs.current[turn]?.scrollIntoView({ block: 'nearest' })
+    }
+  }, [detailsFilter])
+
   const jumpToTurn = useCallback((n: number) => {
     const el = turnRefs.current[n]
     if (!el) return
@@ -711,6 +764,7 @@ export function ChatView({
       onDelete={() => setShowDelete(true)}
       agents={agents}
       activeAgentKey={activeAgentKey}
+      agentColorOf={a => agentTintColor(agentColorOf(a.subagentType))}
       onOpenAgent={setTranscriptAgent}
       onLocateAgent={jumpToTurn}
     />
@@ -720,7 +774,7 @@ export function ChatView({
     <div className="cl-chat">
       <TopBar
         onBack={onBack}
-        backLabel={`${projectName} · Sessions`}
+        backLabel="Sessions"
         crumbs={[{ label: title, accent: true }]}
         right={
           <div className="cl-view-mode" aria-label="View mode">
@@ -806,6 +860,7 @@ export function ChatView({
                         processed={processed[item.idx]}
                         detailsFilter={detailsFilter}
                         onOpenToolDetail={setSelectedTool}
+                        agentColorOf={agentColorOf}
                         turnIndex={item.idx + 1}
                         dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
                         innerRef={setTurnRef}

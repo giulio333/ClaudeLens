@@ -1603,25 +1603,21 @@ body {
 
 /* resume — dark glass slab with accent play */
 .cl-resume {
-  display: inline-flex; align-items: center; gap: 8px;
-  padding: 7px 14px;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 7px 12px;
   border-radius: 999px;
-  background:
-    radial-gradient(circle at 30% 0%, oklch(1 0 0 / 0.12), transparent 60%),
-    linear-gradient(180deg, oklch(0.28 0.02 60), oklch(0.13 0.02 60));
-  border: 1px solid oklch(0.13 0.02 60);
-  color: oklch(0.97 0.005 90);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.20),
-    0 4px 12px -4px oklch(0.10 0.02 60 / 0.40);
-  font-family: var(--font-sans); font-size: 12.5px; font-weight: 500;
+  border: 0;
+  background: transparent;
+  color: var(--cl-ink-3);
+  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
-  transition: box-shadow 140ms, transform 140ms;
+  transition: background 0.14s, color 0.14s;
 }
 .cl-resume:hover {
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.24),
-    0 6px 16px -4px oklch(0.10 0.02 60 / 0.50);
+  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  color: var(--cl-accent-ink);
 }
 .cl-resume:active { transform: translateY(0.5px); }
 .cl-resume-play {
@@ -2231,7 +2227,7 @@ body {
   font-size: 9px;
   font-weight: 700;
   color: var(--cl-on-accent);
-  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--cl-violet);
+  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--orb-color, var(--cl-violet));
   box-shadow: 0 0 0 1.5px var(--cl-paper);
 }
 .cl-dock-orb + .cl-dock-orb { margin-left: -7px; }
@@ -2304,7 +2300,7 @@ body {
   font-size: 11px;
   font-weight: 700;
   color: var(--cl-on-accent);
-  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--cl-violet);
+  background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.5), transparent 55%), var(--orb-color, var(--cl-violet));
 }
 .cl-dock-row[data-error] .orb {
   background: radial-gradient(circle at 30% 24%, oklch(1 0 0 / 0.4), transparent 55%), var(--cl-danger);
@@ -2485,7 +2481,7 @@ body {
   text-transform: uppercase;
 }
 .cl-turn--claude .cl-turn-who { color: var(--cl-accent-ink); }
-.cl-turn--agent .cl-turn-who { color: var(--cl-violet-ink); }
+.cl-turn--agent .cl-turn-who { color: var(--turn-role-color, var(--cl-violet-ink)); }
 .cl-turn-sep { color: var(--cl-line); }
 .cl-turn-head time {
   color: var(--cl-ink-4);
@@ -2718,7 +2714,6 @@ body {
   font-size: 12.5px;
   line-height: 1.65;
 }
-.cl-agent-stack,
 .cl-tool-stack,
 .cl-ask-stack,
 .cl-plan-stack {
@@ -2978,97 +2973,7 @@ body {
   }
 }
 
-/* agent dispatch card — surfaces sub-agent runs even in minimal mode */
-/* Agent dispatch — "delegated task receipt" (prototype's cx-agent). */
-.cl-agent-card {
-  display: block; position: relative; overflow: hidden; width: 100%;
-  text-align: left; cursor: pointer;
-  border: 1px solid var(--cl-line);
-  border-left: 3px solid var(--cl-violet);
-  border-radius: var(--cl-r-card);
-  padding: 13px 15px 14px;
-  background: var(--cl-paper);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-elev-card, 0 1px 2px oklch(0 0 0 / 0.04));
-}
-.cl-agent-card::after {
-  content: ''; position: absolute; inset: 0 0 auto auto; width: 55%; height: 75%; pointer-events: none;
-  background: radial-gradient(80% 90% at 100% 0%, color-mix(in oklch, var(--cl-violet-soft) 55%, transparent), transparent 70%);
-}
-.cl-agent-card:hover { border-color: color-mix(in oklch, var(--cl-violet) 32%, var(--cl-line)); }
-.cl-agent-card .top { display: flex; align-items: center; gap: 10px; position: relative; }
-.cl-agent-card .ic {
-  width: 26px; height: 26px; flex: 0 0 auto;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 8px;
-  color: var(--cl-on-accent);
-  font-family: var(--font-mono); font-size: 12px; font-weight: 600; line-height: 1;
-  background: radial-gradient(circle at 32% 26%, oklch(1 0 0 / 0.45), transparent 55%), var(--cl-violet);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.4), 0 3px 8px -3px color-mix(in oklch, var(--cl-violet) 55%, transparent);
-}
-.cl-agent-card .lbl {
-  font-family: var(--font-mono); font-size: 10.5px;
-  letter-spacing: 0.16em; text-transform: uppercase; font-weight: 400;
-  color: var(--cl-ink-3); flex-shrink: 0; white-space: nowrap;
-}
-.cl-agent-card .chip {
-  font-family: var(--font-mono); font-size: 10.5px; font-weight: 500; white-space: nowrap;
-  padding: 4px 9px; border-radius: 999px;
-  color: var(--cl-violet-ink);
-  border: 1px solid color-mix(in oklch, var(--cl-violet) 38%, var(--cl-line));
-  background: color-mix(in oklch, var(--cl-violet-soft) 40%, var(--cl-paper));
-  flex-shrink: 0;
-}
-.cl-agent-card .status {
-  margin-left: auto; flex-shrink: 0;
-  display: inline-flex; align-items: center; gap: 6px;
-  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
-  text-transform: uppercase; letter-spacing: 0.08em; color: var(--cl-ink-3);
-}
-.cl-agent-card .status::before {
-  content: ''; width: 7px; height: 7px; border-radius: 50%;
-  background: var(--cl-ok); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-ok) 18%, transparent);
-}
-.cl-agent-card .status[data-error] { color: var(--cl-danger); }
-.cl-agent-card .status[data-error]::before {
-  background: var(--cl-danger); box-shadow: 0 0 0 3px color-mix(in oklch, var(--cl-danger) 18%, transparent);
-}
-.cl-agent-card .desc {
-  display: block; position: relative;
-  font: 400 13px/1.55 var(--font-sans); color: var(--cl-ink-2); margin: 10px 0 0;
-}
-.cl-agent-card .return {
-  display: block; position: relative;
-  margin-top: 11px; padding-top: 11px; border-top: 1px solid var(--cl-line-soft);
-}
-.cl-agent-card .mini {
-  display: block; font: 400 9px/1 var(--font-mono);
-  text-transform: uppercase; letter-spacing: 0.18em; color: var(--cl-ink-4); margin-bottom: 6px;
-}
-.cl-agent-card .res {
-  display: block; position: relative; padding-left: 16px;
-  font: 400 12.5px/1.55 var(--font-sans); color: var(--cl-ink-2);
-  /* Clamp the rendered markdown preview; full text lives in the detail view. */
-  max-height: 9.5em; overflow: hidden;
-}
-.cl-agent-card .res::before {
-  content: '↳'; position: absolute; left: 0; top: -1px; z-index: 1;
-  color: var(--cl-violet); font-family: var(--font-mono); font-size: 13px;
-}
-/* Soft fade at the bottom hinting the preview is truncated. */
-.cl-agent-card .res::after {
-  content: ''; position: absolute; inset: auto 0 0; height: 1.6em; pointer-events: none;
-  background: linear-gradient(transparent, var(--cl-paper));
-}
-/* Neutralize prose vertical rhythm so the preview reads as a tight excerpt. */
-.cl-agent-card .res .prose { font-size: 12.5px; line-height: 1.55; color: var(--cl-ink-2); }
-.cl-agent-card .res .prose > :first-child { margin-top: 0; }
-.cl-agent-card .res .prose > :last-child { margin-bottom: 0; }
-.cl-agent-card .res .prose :is(h1, h2, h3, h4) { font-size: 13px; margin: 8px 0 4px; padding-bottom: 0; border: 0; }
-.cl-agent-card .res .prose p { margin: 0 0 6px; }
-.cl-agent-card .res .prose pre { margin: 6px 0; padding: 8px 10px; font-size: 11px; }
-.cl-agent-card .res .prose ul, .cl-agent-card .res .prose ol { margin: 4px 0; }
-
-/* Plan-mode milestone card — mirrors agent-card, accent (terracotta) spine. */
+/* Plan-mode milestone card — accent (terracotta) spine. */
 .cl-plan-card {
   display: block; position: relative; overflow: hidden; width: 100%;
   text-align: left; cursor: pointer;

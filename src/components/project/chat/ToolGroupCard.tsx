@@ -2,16 +2,23 @@ import { useState } from 'react'
 import type { CSSProperties } from 'react'
 import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils'
 
-export function ToolGroupCard({ group, showDetails, onOpenDetail }: {
+export function ToolGroupCard({ group, showDetails, onOpenDetail, tint: tintOverride }: {
   group: ToolGroup
   showDetails: boolean
   onOpenDetail: () => void
+  /** Explicit tint color (e.g. a dispatched agent's identity color) overriding
+   *  the tool-name default. */
+  tint?: string
 }) {
   const [open, setOpen] = useState(false)
   const { use, result } = group
   const isMemory = isMemoryFile(use.input as Record<string, unknown>)
-  const monogram = isMemory ? 'M' : toolMonogram(use.name)
-  const tint = isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)')
+  const monogram = isMemory
+    ? 'M'
+    : AGENT_TOOLS.has(use.name)
+      ? ((use.input.subagent_type as string)?.[0] ?? 'A').toUpperCase()
+      : toolMonogram(use.name)
+  const tint = tintOverride ?? (isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)'))
   // For an agent dispatch ("Agent"/"Task") the tool name carries no signal —
   // surface the delegated sub-agent type instead (e.g. "git-committer").
   const displayName = AGENT_TOOLS.has(use.name)
