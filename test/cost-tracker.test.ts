@@ -373,6 +373,22 @@ describe('getSessionList', () => {
     );
   });
 
+  it('firstUserMessage strips only framing tags, keeping code/generics (#93)', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-05-01T09:00:00.000Z',
+        message: {
+          content: '<system-reminder></system-reminder>Compare List<String> to Map<K,V>',
+        },
+      }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.firstUserMessage).toBe('Compare List<String> to Map<K,V>');
+  });
+
   it('sorts sessions by date descending', async () => {
     writeSession(tmp, 'older.jsonl', [
       assistantLine({

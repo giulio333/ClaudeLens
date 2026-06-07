@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join, basename } from 'path';
 import { glob } from 'glob';
+import { stripFramingTags } from '../utils';
 
 export interface UsageData {
   inputTokens: number;
@@ -173,8 +174,9 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
     }
   }
 
-  // Salta messaggi tecnici (caveat, comandi, tool_result)
-  const stripped = text.replace(/<[^>]+>/g, '').trim();
+  // Salta messaggi tecnici (caveat, comandi, tool_result) rimuovendo solo i tag
+  // di framing noti, così prosa con `<`/`>` da codice resta intatta (#93).
+  const stripped = stripFramingTags(text).trim();
   if (!stripped) return undefined;
   if (stripped.startsWith('Caveat:') || stripped.startsWith('[Request interrupted')) return undefined;
   return stripped;
