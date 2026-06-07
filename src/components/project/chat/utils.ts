@@ -442,6 +442,14 @@ export function resolveToolIcon(name: string, input: Record<string, unknown>): s
   return TOOL_ICON[name] ?? '🔧'
 }
 
+/** Letter-monogram glyph for a tool (ClaudeLens icon language — no emoji). Takes
+ *  the first letter of the tool name, or of the segment after a `namespace:`
+ *  prefix (e.g. `memory:createTopic` → `C`); falls back to `#`. */
+export function toolMonogram(name: string): string {
+  const seg = name.includes(':') ? name.split(':').pop()! : name
+  return (seg.match(/[A-Za-z]/)?.[0] ?? '#').toUpperCase()
+}
+
 // Rimuove i prefissi riga "     1→" dall'output di Read
 export function stripLineNumbers(text: string): string {
   return text.split('\n').map(line => {
