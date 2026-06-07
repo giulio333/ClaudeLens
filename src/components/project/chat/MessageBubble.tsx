@@ -272,7 +272,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   return (
     <article
-      className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}`}
+      className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}${showTools && textBlocks.length === 0 && thinkingBlocks.length === 0 ? ' cl-turn--tool-only' : ''}`}
       style={{ '--turn-role-color': roleColor } as CSSProperties}
       ref={innerRef}
       data-n={turnIndex}
@@ -287,8 +287,12 @@ export const MessageBubble = memo(function MessageBubble({
       <section className="cl-turn-body">
         <header className="cl-turn-head">
           <span className="cl-turn-who">{roleLabel}</span>
-          <span className="cl-turn-sep">·</span>
-          <time>{timestamp}</time>
+          {!(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) && (
+            <>
+              <span className="cl-turn-sep">·</span>
+              <time>{timestamp}</time>
+            </>
+          )}
           {msg.model && msg.role === 'assistant' && (
             <>
               <span className="cl-turn-sep cl-turn-sep--model">·</span>
@@ -297,8 +301,8 @@ export const MessageBubble = memo(function MessageBubble({
               </span>
             </>
           )}
-          {standardToolGroups.length > 0 && (
-            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}{!showTools ? ' hidden' : ''}</span>
+          {standardToolGroups.length > 0 && !showTools && (
+            <span className="cl-turn-tool-count">{standardToolGroups.length} tool{standardToolGroups.length === 1 ? '' : 's'}</span>
           )}
         </header>
 
