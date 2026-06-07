@@ -28,13 +28,17 @@ describe('readChatSession', () => {
     expect(readChatSession(join(dir, 'nope.jsonl'))).toEqual([]);
   });
 
-  it('parses a user message with string content (tags stripped)', () => {
+  it('strips only known framing tags, preserving code/generics (#93)', () => {
     const p = writeJsonl('s.jsonl', [
       line({
         type: 'user',
         uuid: 'u1',
         timestamp: '2026-01-01T00:00:00Z',
-        message: { role: 'user', content: 'Hello <foo>tagged</foo> world' },
+        message: {
+          role: 'user',
+          content:
+            '<system-reminder></system-reminder>if (a < b && c > d) return List<String>;',
+        },
       }),
     ]);
     const msgs = readChatSession(p);
@@ -42,7 +46,10 @@ describe('readChatSession', () => {
     expect(msgs[0].uuid).toBe('u1');
     expect(msgs[0].role).toBe('user');
     expect(msgs[0].timestamp).toBe('2026-01-01T00:00:00Z');
-    expect(msgs[0].content).toEqual([{ type: 'text', text: 'Hello tagged world' }]);
+    // Known framing tags removed; code generics like List<String> survive.
+    expect(msgs[0].content).toEqual([
+      { type: 'text', text: 'if (a < b && c > d) return List<String>;' },
+    ]);
   });
 
   it('preserves command-name string content without stripping tags', () => {
@@ -68,11 +75,11 @@ describe('readChatSession', () => {
         timestamp: 't',
         message: {
           role: 'user',
-          content: '<caveat>system reminder</caveat>'.replace('system reminder', ''),
+          content: '<system-reminder></system-reminder>',
         },
       }),
     ]);
-    // content "<caveat></caveat>" -> stripped -> "" -> skipped
+    // content "<system-reminder></system-reminder>" -> stripped -> "" -> skipped
     expect(readChatSession(p)).toEqual([]);
   });
 

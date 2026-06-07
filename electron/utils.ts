@@ -121,3 +121,27 @@ function readCwdFromJsonl(filePath: string): string | null {
   }
   return null;
 }
+
+// Framing tags Claude Code wraps around technical/system content in transcripts.
+// We strip these (rather than any `<...>`) so prose containing code or generics —
+// `if (a < b && c > d)`, `List<String>` — survives intact (issue #93).
+const FRAMING_TAGS = [
+  'command-name',
+  'command-message',
+  'command-args',
+  'command-contents',
+  'local-command-stdout',
+  'local-command-stderr',
+  'local-command-caveat',
+  'system-reminder',
+].join('|');
+
+const FRAMING_TAG_RE = new RegExp(`<\\/?(?:${FRAMING_TAGS})\\b[^>]*>`, 'gi');
+
+/**
+ * Remove only the known Claude Code framing tags from a transcript string,
+ * leaving user prose (including `<`/`>` from code) untouched.
+ */
+export function stripFramingTags(text: string): string {
+  return text.replace(FRAMING_TAG_RE, '');
+}
