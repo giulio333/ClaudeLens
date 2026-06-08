@@ -362,6 +362,9 @@ export function ProjectView({
             <PinIcon filled={pinnedNow} />
             <span>{pinnedNow ? 'Pinned' : 'Pin'}</span>
           </button>
+          <button className="cl-btn cl-btn--primary" type="button" onClick={() => onNavigate({ type: 'new-chat', project })}>
+            New chat
+          </button>
           <button className="cl-btn" type="button" onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}>
             Open in Claude Code
           </button>
@@ -525,6 +528,7 @@ export function ProjectView({
                   ? `${visibleSessions.length} tagged #${activeTag}`
                   : `${sessions.length} total · sorted by last activity`}
               </span>
+              <button className="all" type="button" onClick={() => onNavigate({ type: 'new-chat', project })}>New chat</button>
             </div>
             <TagBar
               tags={projectTags}

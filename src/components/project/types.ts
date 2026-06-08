@@ -24,6 +24,7 @@ export type View =
   | { type: 'sessions'; project: { hash: string; realPath: string } }
   | { type: 'analytics'; project: { hash: string; realPath: string } }
   | { type: 'chat'; project: { hash: string; realPath: string }; session: SessionSummary; from?: 'agents-live' | 'sessions' }
+  | { type: 'new-chat'; project: { hash: string; realPath: string } }
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }

@@ -178,6 +178,24 @@ declare global {
         deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>
         openInTerminal: (realPath: string, sessionId: string) => Promise<IpcResult<null>>
         newInTerminal: (realPath: string) => Promise<IpcResult<null>>
+        sendMessage: (
+          realPath: string,
+          sessionId: string,
+          message: string,
+          model?: string,
+          permissionMode?: string
+        ) => Promise<IpcResult<null>>
+        startMessage: (
+          realPath: string,
+          message: string,
+          model?: string,
+          permissionMode?: string
+        ) => Promise<IpcResult<null>>
+        stopMessage: () => Promise<IpcResult<null>>
+        onChatStarted: (cb: (sessionId: string) => void) => void
+        onChatChunk: (cb: (chunk: string) => void) => void
+        onChatDone: (cb: () => void) => void
+        onChatError: (cb: (error: string) => void) => void
       }
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>
