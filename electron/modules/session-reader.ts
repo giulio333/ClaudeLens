@@ -82,6 +82,12 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   if (!existsSync(filePath)) return [];
 
   const messages: ChatMessage[] = [];
+  // Una sessione ripresa in modalità headless (`claude -p --resume`, lanciato
+  // da ClaudeLens) e poi riaperta nella CLI interattiva riscrive lo stesso
+  // range di righe nel `.jsonl` con `uuid`/`timestamp` identici (cambia solo
+  // `entrypoint`: "sdk-cli" → "cli"). Senza dedup il transcript mostra ogni
+  // turno due volte e le key React duplicate rompono la riconciliazione.
+  const seenUuids = new Set<string>();
 
   try {
     const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
@@ -125,8 +131,15 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
 
         if (blocks.length === 0) continue;
 
+        // Scarta i duplicati esatti per uuid (vedi nota su sdk-cli/cli sopra).
+        // Gli uuid vuoti non vengono deduplicati per non collassare righe
+        // distinte che ne fossero prive.
+        const uuid = String(json.uuid ?? '');
+        if (uuid && seenUuids.has(uuid)) continue;
+        if (uuid) seenUuids.add(uuid);
+
         messages.push({
-          uuid: String(json.uuid ?? ''),
+          uuid,
           role,
           timestamp: String(json.timestamp ?? ''),
           model: msg.model as string | undefined,

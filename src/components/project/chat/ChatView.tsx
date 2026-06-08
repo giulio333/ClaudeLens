@@ -8,6 +8,7 @@ import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExp
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble } from './MessageBubble'
+import { ChatComposer } from './ChatComposer'
 import { agentTintColor } from '../shared/entityOptions'
 import { TopBar } from '../shared/TopBar'
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
@@ -686,6 +687,19 @@ export function ChatView({
   const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
   const canExport = processed.length > 0 && !isLoading
 
+  // Model the session is already on — its last assistant turn that recorded one.
+  // The composer reuses it so a reply from ClaudeLens stays on the same model the
+  // chat was using; undefined falls back to the configured default.
+  const inheritedModel = useMemo(() => {
+    for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
+      const m = messages![i]
+      if (m.role === 'assistant' && m.model) return m.model
+    }
+    return undefined
+  }, [messages])
+
+  const sessionId = useMemo(() => session.filename.replace(/\.jsonl$/, ''), [session.filename])
+
   // Sub-agents dispatched in this session, correlated to their internal
   // transcript files. Drives the right-hand activity rail.
   const agents = useMemo(
@@ -994,7 +1008,7 @@ export function ChatView({
           {controlPill(false)}
         </div>
       ) : (
-        <div className="cl-chat-workspace cl-chat-workspace--focus">
+        <div className="cl-chat-workspace cl-chat-workspace--focus" data-composer>
           <main
             className="cl-chat-feed"
             ref={feedRef}
@@ -1037,7 +1051,7 @@ export function ChatView({
                       pendingFiles = []
                       return (
                         <MessageBubble
-                          key={processed[item.idx].msg.uuid}
+                          key={`${item.idx}:${processed[item.idx].msg.uuid}`}
                           processed={processed[item.idx]}
                           detailsFilter={detailsFilter}
                           onOpenToolDetail={setSelectedTool}
@@ -1070,6 +1084,14 @@ export function ChatView({
           />
 
           {controlPill(true)}
+
+          <ChatComposer
+            key={sessionId}
+            realPath={project.realPath}
+            sessionId={sessionId}
+            model={inheritedModel}
+            onTurnComplete={refetch}
+          />
         </div>
       )}
     </div>

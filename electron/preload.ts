@@ -42,6 +42,36 @@ contextBridge.exposeInMainWorld('electronAPI', {
     deleteSession: (paths: string[]) => ipcRenderer.invoke('sessions:deleteSession', paths),
     openInTerminal: (realPath: string, sessionId: string) => ipcRenderer.invoke('sessions:openInTerminal', realPath, sessionId),
     newInTerminal: (realPath: string) => ipcRenderer.invoke('sessions:newInTerminal', realPath),
+    sendMessage: (
+      realPath: string,
+      sessionId: string,
+      message: string,
+      model?: string,
+      permissionMode?: string
+    ) => ipcRenderer.invoke('sessions:sendMessage', realPath, sessionId, message, model, permissionMode),
+    startMessage: (
+      realPath: string,
+      message: string,
+      model?: string,
+      permissionMode?: string
+    ) => ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
+    stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
+    onChatStarted: (cb: (sessionId: string) => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatStarted');
+      ipcRenderer.on('sessions:chatStarted', (_event, sessionId) => cb(sessionId));
+    },
+    onChatChunk: (cb: (chunk: string) => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatChunk');
+      ipcRenderer.on('sessions:chatChunk', (_event, chunk) => cb(chunk));
+    },
+    onChatDone: (cb: () => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatDone');
+      ipcRenderer.on('sessions:chatDone', () => cb());
+    },
+    onChatError: (cb: (error: string) => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatError');
+      ipcRenderer.on('sessions:chatError', (_event, error) => cb(error));
+    },
   },
   rules: {
     getByProject: (realPath: string) => ipcRenderer.invoke('rules:getByProject', realPath),

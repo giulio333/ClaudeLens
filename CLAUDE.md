@@ -25,7 +25,7 @@ test + build on every push/PR.
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.
 
 **Main process** (`electron/main.ts`):
-- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*`, `rules:*`, `tasks:*`, `plans:*`, `agents:*`, `skills:*`, `mcp:*`, `projects:*` (duplicate detect/merge), `live:*` (Live Monitor), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`, `config:*` (effective config via Agent SDK)
+- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*` (incl. `sessions:sendMessage`/`sessions:stopMessage` — continue an existing session via `claude -p --resume`, streaming over `sessions:chatChunk`/`chatDone`/`chatError`; and `sessions:startMessage` — start a *new* session via `claude -p` without `--resume`, parsing `--output-format stream-json` to surface the freshly-minted session id over `sessions:chatStarted`), `rules:*`, `tasks:*`, `plans:*`, `agents:*`, `skills:*`, `mcp:*`, `projects:*` (duplicate detect/merge), `live:*` (Live Monitor), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`, `config:*` (effective config via Agent SDK)
 - Watches `~/.claude/projects/`, `~/.claude/tasks/` and `~/.claude/plans/` with chokidar (depth 3); emits `data:changed` to renderer on any change
 - Serializes `Map` → plain object before IPC (Maps are not transferable)
 

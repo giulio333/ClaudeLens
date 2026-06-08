@@ -241,6 +241,32 @@ describe('readChatSession', () => {
     ]);
     expect(readChatSession(p)).toEqual([]);
   });
+
+  it('deduplicates messages with the same uuid (sdk-cli + cli re-write)', () => {
+    // Una sessione ripresa via `claude -p --resume` e poi riaperta nella CLI
+    // riscrive lo stesso turno con uuid identico (solo entrypoint diverso).
+    const turn = (entrypoint: string) => ({
+      type: 'user',
+      uuid: 'dup1',
+      timestamp: '2026-01-01T00:00:00Z',
+      entrypoint,
+      message: { role: 'user', content: 'hello from the UI' },
+    });
+    const p = writeJsonl('s.jsonl', [line(turn('sdk-cli')), line(turn('cli'))]);
+    const out = readChatSession(p);
+    expect(out).toHaveLength(1);
+    expect(out[0].uuid).toBe('dup1');
+  });
+
+  it('does not deduplicate distinct messages lacking a uuid', () => {
+    const noUuid = (text: string) => ({
+      type: 'assistant',
+      timestamp: 't',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const p = writeJsonl('s.jsonl', [line(noUuid('one')), line(noUuid('two'))]);
+    expect(readChatSession(p)).toHaveLength(2);
+  });
 });
 
 describe('findSessionFile', () => {

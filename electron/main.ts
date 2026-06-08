@@ -917,6 +917,230 @@ ipcMain.handle('ai:stop', async () => {
   return ok(null);
 });
 
+// ─── Chat composer (continue an existing session) ─────────────────────────────
+// Resumes a real Claude Code session with `claude -p --resume <sessionId>` so the
+// new turns append to the *same* `~/.claude/projects/<hash>/<sessionId>.jsonl`.
+// This makes a message sent from ClaudeLens identical to one typed via
+// `claude --resume <id>` in the terminal — the sessions stay interchangeable.
+// stdout streams the assistant text back live (channel `sessions:chat*`); once the
+// turn completes the file watcher fires `data:changed`, the transcript refetches,
+// and the full turn (tools/thinking included) renders through the normal pipeline.
+let currentChatProcess: ChildProcess | null = null;
+
+// Resume default: the session file records no permission mode, so we pick a
+// sensible faithful default. `acceptEdits` lets the agent do real work (file
+// edits auto-approved) while the riskiest bash still requires interaction —
+// closest to the live chat without a blind bypass. Callers may override.
+const RESUME_PERMISSION_MODE = 'acceptEdits';
+
+ipcMain.handle(
+  'sessions:sendMessage',
+  async (
+    event,
+    realPath: string,
+    sessionId: string,
+    message: string,
+    model?: string,
+    permissionMode?: string
+  ) => {
+    if (currentChatProcess) {
+      currentChatProcess.kill();
+      currentChatProcess = null;
+    }
+
+    const { existsSync, statSync } = await import('fs');
+    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+      return err(
+        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+      );
+    }
+    if (!sessionId) return err(new Error('Missing session id.'));
+    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+
+    return new Promise<IpcResult<null>>(resolve => {
+      // execFile-style: no shell, the message is a separate argv entry (no fragile
+      // escaping — cfr. ai:run / agents:dispatchBg). `--resume` without
+      // `--fork-session` reuses the original session id and appends to its file.
+      const args = [
+        '-p',
+        message,
+        '--resume',
+        sessionId,
+        '--permission-mode',
+        permissionMode || RESUME_PERMISSION_MODE,
+      ];
+      if (model) args.push('--model', model);
+
+      const proc = spawn('claude', args, {
+        cwd: realPath,
+        env: claudeEnv(),
+      });
+      currentChatProcess = proc;
+      proc.stdin?.end();
+
+      // Buffer stderr instead of streaming it: `claude` prints benign warnings
+      // there even on success, which would surface as spurious chat errors. Only
+      // emit it if the process actually fails (non-zero exit).
+      let stderrBuf = '';
+
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        event.sender.send('sessions:chatChunk', chunk.toString());
+      });
+
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        stderrBuf += chunk.toString();
+      });
+
+      proc.on('close', code => {
+        currentChatProcess = null;
+        if (code === 0 || code === null) {
+          event.sender.send('sessions:chatDone');
+          resolve(ok(null));
+        } else {
+          const detail = stderrBuf.trim();
+          event.sender.send(
+            'sessions:chatError',
+            detail || `Process exited with code ${code}`
+          );
+          event.sender.send('sessions:chatDone');
+          resolve(err(new Error(detail || `Process exited with code ${code}`)));
+        }
+      });
+
+      proc.on('error', e => {
+        currentChatProcess = null;
+        event.sender.send('sessions:chatError', e.message);
+        event.sender.send('sessions:chatDone');
+        resolve(err(e));
+      });
+    });
+  }
+);
+
+// Starts a *brand-new* Claude Code session from ClaudeLens: `claude -p <msg>`
+// without `--resume`, so the CLI mints a fresh session id and writes a new
+// `~/.claude/projects/<hash>/<id>.jsonl`. We use `--output-format stream-json`
+// (vs the plain-text stream of the resume path) precisely to capture that new id
+// from the `init` event — it's forwarded to the renderer on `sessions:chatStarted`
+// so it can open the new transcript once the turn closes. Live token deltas still
+// stream over the shared `sessions:chatChunk` channel (from the partial-message
+// `stream_event`s), and `chatDone`/`chatError` close the turn as in the resume path.
+ipcMain.handle(
+  'sessions:startMessage',
+  async (
+    event,
+    realPath: string,
+    message: string,
+    model?: string,
+    permissionMode?: string
+  ) => {
+    if (currentChatProcess) {
+      currentChatProcess.kill();
+      currentChatProcess = null;
+    }
+
+    const { existsSync, statSync } = await import('fs');
+    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+      return err(
+        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+      );
+    }
+    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+
+    return new Promise<IpcResult<null>>(resolve => {
+      const args = [
+        '-p',
+        message,
+        '--output-format',
+        'stream-json',
+        '--verbose',
+        '--include-partial-messages',
+        '--permission-mode',
+        permissionMode || RESUME_PERMISSION_MODE,
+      ];
+      if (model) args.push('--model', model);
+
+      const proc = spawn('claude', args, { cwd: realPath, env: claudeEnv() });
+      currentChatProcess = proc;
+      proc.stdin?.end();
+
+      let stderrBuf = '';
+      // stdout is NDJSON; chunks can split a line, so buffer until each newline.
+      let buf = '';
+      let started = false;
+
+      const handleLine = (line: string) => {
+        const trimmed = line.trim();
+        if (!trimmed) return;
+        let evt: { type?: string; session_id?: string; is_error?: boolean; result?: string;
+          event?: { type?: string; delta?: { type?: string; text?: string } } };
+        try {
+          evt = JSON.parse(trimmed);
+        } catch {
+          return; // ignore any non-JSON noise
+        }
+        // The first event carrying a session id reveals the freshly-minted id.
+        if (!started && evt.session_id) {
+          started = true;
+          event.sender.send('sessions:chatStarted', evt.session_id);
+        }
+        // Live text deltas (only present with --include-partial-messages).
+        if (evt.type === 'stream_event' && evt.event?.type === 'content_block_delta'
+          && evt.event.delta?.type === 'text_delta' && evt.event.delta.text) {
+          event.sender.send('sessions:chatChunk', evt.event.delta.text);
+        }
+        // A result with is_error surfaces a model/permission failure even on exit 0.
+        if (evt.type === 'result' && evt.is_error) {
+          event.sender.send('sessions:chatError', evt.result || 'The session reported an error.');
+        }
+      };
+
+      proc.stdout?.on('data', (chunk: Buffer) => {
+        buf += chunk.toString();
+        let nl: number;
+        while ((nl = buf.indexOf('\n')) >= 0) {
+          const line = buf.slice(0, nl);
+          buf = buf.slice(nl + 1);
+          handleLine(line);
+        }
+      });
+
+      proc.stderr?.on('data', (chunk: Buffer) => {
+        stderrBuf += chunk.toString();
+      });
+
+      proc.on('close', code => {
+        currentChatProcess = null;
+        if (buf.trim()) handleLine(buf); // flush any unterminated trailing line
+        if (code === 0 || code === null) {
+          event.sender.send('sessions:chatDone');
+          resolve(ok(null));
+        } else {
+          const detail = stderrBuf.trim();
+          event.sender.send('sessions:chatError', detail || `Process exited with code ${code}`);
+          event.sender.send('sessions:chatDone');
+          resolve(err(new Error(detail || `Process exited with code ${code}`)));
+        }
+      });
+
+      proc.on('error', e => {
+        currentChatProcess = null;
+        event.sender.send('sessions:chatError', e.message);
+        event.sender.send('sessions:chatDone');
+        resolve(err(e));
+      });
+    });
+  }
+);
+
+ipcMain.handle('sessions:stopMessage', async () => {
+  if (currentChatProcess) {
+    currentChatProcess.kill();
+    currentChatProcess = null;
+  }
+  return ok(null);
+});
+
 // ─── Live Monitor IPC ─────────────────────────────────────────────────────────
 
 ipcMain.handle('live:getProcesses', async () => {

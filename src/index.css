@@ -2070,6 +2070,213 @@ body {
   align-items: stretch;
   gap: 10px;
 }
+
+/* ──────────────────────────────────────────────────────────
+   CHAT COMPOSER — continue an existing session from ClaudeLens.
+   A bottom bar pinned to the focus workspace; the control pill lifts
+   above it and the reading column gains extra bottom padding so the
+   last turn clears both.
+   ────────────────────────────────────────────────────────── */
+.cl-chat-workspace--focus[data-composer] .cl-chat-reading .cl-transcript-inner {
+  padding-bottom: 228px;
+}
+.cl-chat-workspace--focus[data-composer] .cl-pill-wrap {
+  bottom: 112px;
+}
+.cl-composer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 38;
+  padding: 12px 0 16px;
+  background: linear-gradient(to top, var(--cl-paper) 62%, transparent);
+}
+.cl-composer-inner {
+  width: 78%;
+  max-width: 1180px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.cl-composer-stream {
+  max-height: 132px;
+  overflow-y: auto;
+  padding: 10px 13px;
+  border-radius: 12px;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  font: 400 12.5px/1.55 var(--font-sans);
+  color: var(--cl-ink-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cl-composer-stream.is-waiting {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-3);
+  font-style: italic;
+}
+.cl-composer-caret {
+  display: inline-block;
+  width: 7px;
+  height: 13px;
+  vertical-align: text-bottom;
+  margin-left: 1px;
+  background: var(--cl-accent);
+  border-radius: 1px;
+  animation: cl-composer-blink 1s steps(2) infinite;
+}
+@keyframes cl-composer-blink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.cl-composer-error {
+  padding: 8px 12px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--cl-danger) 12%, var(--cl-paper));
+  border: 1px solid color-mix(in oklch, var(--cl-danger) 34%, var(--cl-line));
+  font: 400 12px/1.45 var(--font-mono);
+  color: var(--cl-danger);
+  white-space: pre-wrap;
+}
+.cl-composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 9px;
+  padding: 7px;
+  border-radius: 16px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+}
+.cl-composer-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  max-height: 160px;
+  padding: 8px 10px;
+  border: 0;
+  background: transparent;
+  font: 400 13.5px/1.5 var(--font-sans);
+  color: var(--cl-ink);
+}
+.cl-composer-input::placeholder { color: var(--cl-ink-4); }
+.cl-composer-input:focus { outline: none; }
+.cl-composer-input:disabled { opacity: 0.55; }
+.cl-composer-btn {
+  flex: 0 0 auto;
+  align-self: stretch;
+  padding: 0 18px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font: 600 12.5px/1 var(--font-sans);
+  cursor: pointer;
+  transition: opacity 0.15s, background 0.15s;
+}
+.cl-composer-btn:hover:not(:disabled) { opacity: 0.9; }
+.cl-composer-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.cl-composer-btn.is-stop { background: var(--cl-danger); }
+.cl-composer-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 0 4px;
+  font: 400 10.5px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-composer-meta-tags { display: inline-flex; align-items: center; gap: 6px; }
+.cl-composer-select { position: relative; display: inline-flex; }
+.cl-composer-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  font: 400 10.5px/1 var(--font-mono);
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+.cl-composer-chip:hover:not(:disabled) { color: var(--cl-ink-2); border-color: var(--cl-ink-4); }
+.cl-composer-chip:disabled { opacity: 0.5; cursor: not-allowed; }
+.cl-composer-chip[data-on] {
+  color: var(--cl-accent);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-accent) 8%, var(--cl-paper-2));
+}
+.cl-composer-chip-caret {
+  width: 0;
+  height: 0;
+  border-left: 3.5px solid transparent;
+  border-right: 3.5px solid transparent;
+  border-top: 4px solid currentColor;
+  opacity: 0.65;
+}
+.cl-composer-menu {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  right: 0;
+  z-index: 40;
+  min-width: 138px;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+}
+.cl-composer-menu-label {
+  padding: 3px 8px 5px;
+  font: 600 9.5px/1 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-composer-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: 400 12px/1 var(--font-sans);
+  color: var(--cl-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cl-composer-menu button:hover { background: var(--cl-paper-2); color: var(--cl-ink); }
+.cl-composer-menu button.is-active { color: var(--cl-accent); font-weight: 600; }
+.cl-composer-menu button.is-active::after {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 999px;
+  background: var(--cl-accent);
+}
+.cl-composer-menu button.is-danger { color: var(--cl-danger); }
+.cl-composer-menu button.is-danger:hover { background: color-mix(in oklch, var(--cl-danger) 12%, var(--cl-paper)); color: var(--cl-danger); }
+.cl-composer-menu button.is-danger.is-active::after { background: var(--cl-danger); }
+.cl-composer-chip[data-danger] {
+  color: var(--cl-danger);
+  border-color: color-mix(in oklch, var(--cl-danger) 45%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-danger) 8%, var(--cl-paper-2));
+}
+.cl-composer-chip[data-danger]:hover:not(:disabled) { color: var(--cl-danger); border-color: color-mix(in oklch, var(--cl-danger) 60%, var(--cl-line)); }
 .cl-pill {
   display: flex;
   align-items: center;
