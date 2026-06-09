@@ -2100,34 +2100,20 @@ body {
   flex-direction: column;
   gap: 7px;
 }
-.cl-composer-stream {
-  max-height: 132px;
-  overflow-y: auto;
-  padding: 10px 13px;
-  border-radius: 12px;
-  background: var(--cl-paper-2);
-  border: 1px solid var(--cl-line);
-  font: 400 12.5px/1.55 var(--font-sans);
-  color: var(--cl-ink-2);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-.cl-composer-stream.is-waiting {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-3);
-  font-style: italic;
-}
-.cl-composer-caret {
+/* Live (provisional) assistant turn — streamed inline in the reading column.
+   Inherits the assistant markdown prose via cl-message-text--assistant; we only
+   add the blinking caret here. */
+.cl-live-caret {
   display: inline-block;
   width: 7px;
-  height: 13px;
+  height: 14px;
   vertical-align: text-bottom;
-  margin-left: 1px;
+  margin-left: 2px;
   background: var(--cl-accent);
   border-radius: 1px;
   animation: cl-composer-blink 1s steps(2) infinite;
 }
+.cl-turn--live .cl-turn-head time { font-style: italic; }
 @keyframes cl-composer-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
@@ -2142,6 +2128,7 @@ body {
   white-space: pre-wrap;
 }
 .cl-composer-row {
+  position: relative;
   display: flex;
   align-items: flex-end;
   gap: 9px;
@@ -2227,6 +2214,7 @@ body {
   right: 0;
   z-index: 40;
   min-width: 138px;
+  max-width: 230px;
   display: flex;
   flex-direction: column;
   gap: 1px;
@@ -2246,23 +2234,32 @@ body {
   color: var(--cl-ink-4);
 }
 .cl-composer-menu button {
+  position: relative;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 8px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 18px 6px 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
-  font: 400 12px/1 var(--font-sans);
   color: var(--cl-ink-2);
   text-align: left;
   cursor: pointer;
   transition: background 0.12s, color 0.12s;
 }
+.cl-composer-menu-item-label { font: 400 12px/1.2 var(--font-sans); }
+.cl-composer-menu-item-hint {
+  font: 400 10.5px/1.3 var(--font-sans);
+  color: var(--cl-ink-4);
+}
 .cl-composer-menu button:hover { background: var(--cl-paper-2); color: var(--cl-ink); }
-.cl-composer-menu button.is-active { color: var(--cl-accent); font-weight: 600; }
+.cl-composer-menu button.is-active .cl-composer-menu-item-label { color: var(--cl-accent); font-weight: 600; }
 .cl-composer-menu button.is-active::after {
   content: '';
+  position: absolute;
+  top: 8px;
+  right: 7px;
   width: 5px;
   height: 5px;
   border-radius: 999px;
@@ -2277,6 +2274,43 @@ body {
   background: color-mix(in oklch, var(--cl-danger) 8%, var(--cl-paper-2));
 }
 .cl-composer-chip[data-danger]:hover:not(:disabled) { color: var(--cl-danger); border-color: color-mix(in oklch, var(--cl-danger) 60%, var(--cl-line)); }
+/* Slash-command autocomplete — anchored above the composer input, left-aligned. */
+.cl-slash-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 40;
+  min-width: 220px;
+  max-width: 340px;
+  max-height: 260px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 5px;
+  border-radius: 12px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight), var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+}
+.cl-slash-menu button {
+  display: flex;
+  align-items: center;
+  padding: 6px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cl-ink-2);
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.cl-slash-menu button:hover,
+.cl-slash-menu button.is-active { background: var(--cl-paper-2); color: var(--cl-ink); }
+.cl-slash-name { font: 500 12.5px/1.2 var(--font-mono); }
+.cl-slash-menu button.is-active .cl-slash-name { color: var(--cl-accent); }
 .cl-pill {
   display: flex;
   align-items: center;
@@ -2743,6 +2777,9 @@ body {
   background: var(--mt, var(--cl-ink-3));
   flex-shrink: 0;
 }
+/* Output of a built-in slash command — neutral warm-gray, not a model colour. */
+.cl-turn-model-chip--synthetic { color: var(--cl-ink-4); }
+.cl-turn-model-chip--synthetic::before { background: var(--cl-ink-4); }
 /* tools-strip badge (prototype's da-tools-strip) */
 .cl-turn-tool-count {
   margin-left: auto;

@@ -1,14 +1,22 @@
-import { useRef } from 'react'
-import { SessionSummary } from '../../../hooks/useIPC'
+import { useMemo, useRef, useState } from 'react'
+import { SessionSummary, ChatMessage } from '../../../hooks/useIPC'
 import { TopBar } from '../shared/TopBar'
+import { buildProcessedMessages } from './utils'
 import { ChatComposer } from './ChatComposer'
+import { MessageBubble } from './MessageBubble'
+import { LiveTurn } from './ChatView'
 
 /** Start a new Claude Code session from inside ClaudeLens. Renders the empty
- *  Focus layout with a composer in new-chat mode: the first message spawns
- *  `claude -p` (no --resume), Claude mints a fresh session id (surfaced via
- *  `onChatStarted`), and once the turn closes we hand a minimal `SessionSummary`
- *  to the parent so it can open the real `chat` view — from there the session is
- *  indistinguishable from any other (resume composer, transcript, export…).
+ *  Focus layout with a composer in new-chat mode: the first message starts a new
+ *  SDK session with a pre-generated id (surfaced via `onChatStarted`), and once
+ *  the turn closes we hand a minimal `SessionSummary` to the parent so it can
+ *  open the real `chat` view — from there the session is indistinguishable from
+ *  any other (resume composer, transcript, export…).
+ *
+ *  During the turn the transcript is built entirely from the SDK stream: an
+ *  optimistic bubble for the prompt + the fully-formed messages the SDK emits
+ *  (`liveMessages`), run through the same processing pipeline as a real session,
+ *  with a trailing `LiveTurn` for the assistant text still streaming in.
  *
  *  The summary is intentionally minimal (zeroed token/cost fields): `ChatView`
  *  loads the actual transcript from disk via `useChatSession`, and the file
@@ -27,6 +35,29 @@ export function NewChatView({
   // stale inside the composer's done handler).
   const createdIdRef = useRef<string | null>(null)
   const firstMessageRef = useRef('')
+  const [pendingAt, setPendingAt] = useState('')
+  const [liveText, setLiveText] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  // The just-sent message, echoed as a user turn the moment it leaves the
+  // composer — the SDK only streams the assistant's reply, so without this the
+  // empty canvas shows Claude answering before the prompt ever appears.
+  const [sentText, setSentText] = useState('')
+  // Fully-formed messages streamed from the SDK during the turn (assistant turns
+  // + tool results), lifted up from the composer.
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([])
+
+  // The in-flight turn, assembled and run through the same processing pipeline as
+  // a real transcript so tools/thinking render live and correctly structured.
+  const processed = useMemo(() => {
+    if (!sentText) return []
+    const synthetic: ChatMessage = {
+      uuid: '__pending_user__',
+      role: 'user',
+      timestamp: pendingAt,
+      content: [{ type: 'text', text: sentText }],
+    }
+    return buildProcessedMessages([synthetic, ...liveMessages])
+  }, [sentText, pendingAt, liveMessages])
 
   return (
     <div className="cl-chat">
@@ -36,18 +67,44 @@ export function NewChatView({
         <main className="cl-chat-feed">
           <div className="cl-chat-reading">
             <div className="cl-transcript-inner">
-              <p className="cl-transcript-state">
-                Start a new session in this project. Your first message creates the
-                transcript — from then on it behaves like any other session.
-              </p>
+              {sentText ? (
+                <>
+                  {processed.map((p, i) => (
+                    <MessageBubble
+                      key={`${i}:${p.msg.uuid}`}
+                      processed={p}
+                      // New chat has no Min/Full toggle; default to minimal so the
+                      // live turn shows the prompt + assistant text but not the
+                      // raw tool cards (Bash/Read/…), matching ChatView's default.
+                      detailsFilter="minimal"
+                      onOpenToolDetail={() => {}}
+                      turnIndex={i + 1}
+                    />
+                  ))}
+                  {streaming && (liveText !== '' || liveMessages.length === 0) && (
+                    <LiveTurn text={liveText} turnNumber={processed.length + 1} />
+                  )}
+                </>
+              ) : (
+                <p className="cl-transcript-state">
+                  Start a new session in this project. Your first message creates the
+                  transcript — from then on it behaves like any other session.
+                </p>
+              )}
             </div>
           </div>
         </main>
 
         <ChatComposer
           realPath={project.realPath}
+          onStreamChange={setLiveText}
+          onStreamingChange={setStreaming}
+          onLiveMessagesChange={setLiveMessages}
           onSend={text => {
             firstMessageRef.current = text
+            setPendingAt(new Date().toISOString())
+            setLiveMessages([])
+            setSentText(text)
           }}
           onStarted={id => {
             createdIdRef.current = id

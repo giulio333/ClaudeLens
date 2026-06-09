@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execFile, spawn, ChildProcess } from 'child_process';
 
@@ -29,6 +30,13 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { readEffectiveConfig } from './modules/config-reader';
+import {
+  runChat,
+  RunChatCallbacks,
+  CanUseTool,
+  PermissionResult,
+  PermissionUpdate,
+} from './modules/chat-runner';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { findClaudeProcesses } from './modules/process-scanner';
 import { getBgSessions } from './modules/bg-sessions-reader';
@@ -918,22 +926,111 @@ ipcMain.handle('ai:stop', async () => {
   return ok(null);
 });
 
-// ─── Chat composer (continue an existing session) ─────────────────────────────
-// Resumes a real Claude Code session with `claude -p --resume <sessionId>` so the
-// new turns append to the *same* `~/.claude/projects/<hash>/<sessionId>.jsonl`.
-// This makes a message sent from ClaudeLens identical to one typed via
-// `claude --resume <id>` in the terminal — the sessions stay interchangeable.
-// stdout streams the assistant text back live (channel `sessions:chat*`); once the
-// turn completes the file watcher fires `data:changed`, the transcript refetches,
-// and the full turn (tools/thinking included) renders through the normal pipeline.
-let currentChatProcess: ChildProcess | null = null;
+// ─── Chat composer (Agent SDK with in-app approvals) ──────────────────────────
+// Runs chat turns through the official Agent SDK (`modules/chat-runner.ts`) rather
+// than spawning `claude -p`. The SDK persists to the same
+// `~/.claude/projects/<hash>/<id>.jsonl` the terminal reads, so a message sent
+// from ClaudeLens stays interchangeable with one typed via `claude --resume <id>`.
+// Crucially the SDK exposes `canUseTool`: when Claude wants a non-auto-approved
+// tool the callback fires here, we forward it to the renderer
+// (`sessions:permissionRequest`), the user picks Allow / Always / Deny, and the
+// decision (`sessions:permissionResponse`) flows back to the SDK — the interactive
+// terminal experience, inside the app. Assistant text still streams live over
+// `sessions:chatChunk`; on `chatDone` the watcher refetch renders the full turn.
+let currentChatAbort: AbortController | null = null;
+
+// Pending tool-approval requests, keyed by the requestId sent to the renderer.
+// Each resolver settles the Promise that `canUseTool` returned to the SDK.
+const pendingPermissions = new Map<string, (r: PermissionResult) => void>();
 
 // Resume default: the session file records no permission mode, so we pick a
-// sensible faithful default. `acceptEdits` lets the agent do real work (file
-// edits auto-approved) while the riskiest bash still requires interaction —
-// closest to the live chat without a blind bypass. Callers may override.
-const RESUME_PERMISSION_MODE = 'acceptEdits';
+// faithful default. `default` means "ask every time" — now that the SDK can
+// actually prompt in-app via canUseTool, this matches the live terminal chat
+// rather than silently bypassing or blocking. Callers may override.
+const RESUME_PERMISSION_MODE = 'default';
 
+type PermissionDecision =
+  | { kind: 'allow'; input: Record<string, unknown> }
+  | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionUpdate[] }
+  | { kind: 'deny'; message?: string };
+
+function toPermissionResult(d: PermissionDecision): PermissionResult {
+  if (d.kind === 'deny') return { behavior: 'deny', message: d.message || 'Denied by the user.' };
+  if (d.kind === 'always')
+    return { behavior: 'allow', updatedInput: d.input, updatedPermissions: d.suggestions };
+  return { behavior: 'allow', updatedInput: d.input };
+}
+
+// Resolve every still-pending approval as a denial and clear the map. Used when a
+// turn is stopped or superseded so the SDK never hangs on an unanswered request.
+function denyAllPending(message: string): void {
+  for (const resolve of pendingPermissions.values()) {
+    resolve({ behavior: 'deny', message });
+  }
+  pendingPermissions.clear();
+}
+
+// Builds the `canUseTool` callback: forwards each request to the renderer and
+// returns a Promise the matching `sessions:permissionResponse` settles. Honors
+// the per-call abort signal by resolving as a denial.
+function makeCanUseTool(event: Electron.IpcMainInvokeEvent): CanUseTool {
+  return (toolName, input, options) =>
+    new Promise<PermissionResult>(resolve => {
+      const requestId = randomUUID();
+      // A dedup-guarded resolver: the first of {user response, abort, supersede}
+      // to fire wins, the rest are no-ops.
+      const settle = (r: PermissionResult) => {
+        if (!pendingPermissions.has(requestId)) return;
+        pendingPermissions.delete(requestId);
+        resolve(r);
+      };
+      pendingPermissions.set(requestId, settle);
+
+      options.signal.addEventListener('abort', () =>
+        settle({ behavior: 'deny', message: 'Aborted.' })
+      );
+
+      event.sender.send('sessions:permissionRequest', {
+        requestId,
+        toolName,
+        title: options.title,
+        displayName: options.displayName,
+        description: options.description,
+        input,
+        suggestions: options.suggestions,
+        blockedPath: options.blockedPath,
+        decisionReason: options.decisionReason,
+        toolUseID: options.toolUseID,
+      });
+    });
+}
+
+function chatCallbacks(
+  event: Electron.IpcMainInvokeEvent,
+  abort: AbortController
+): RunChatCallbacks {
+  return {
+    onStarted: id => event.sender.send('sessions:chatStarted', id),
+    onChunk: text => event.sender.send('sessions:chatChunk', text),
+    onMessage: message => event.sender.send('sessions:chatMessage', message),
+    onError: message => event.sender.send('sessions:chatError', message),
+    onDone: () => {
+      event.sender.send('sessions:chatDone');
+      if (currentChatAbort === abort) currentChatAbort = null;
+    },
+  };
+}
+
+const PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
+type ChatPermissionMode = (typeof PERMISSION_MODES)[number];
+function asPermissionMode(m?: string): ChatPermissionMode {
+  return PERMISSION_MODES.includes(m as ChatPermissionMode)
+    ? (m as ChatPermissionMode)
+    : RESUME_PERMISSION_MODE;
+}
+
+// Continue an existing session: `resume: sessionId` (no fork) appends to the same
+// transcript. Tool calls route through the in-app approval dialog via canUseTool.
 ipcMain.handle(
   'sessions:sendMessage',
   async (
@@ -944,10 +1041,8 @@ ipcMain.handle(
     model?: string,
     permissionMode?: string
   ) => {
-    if (currentChatProcess) {
-      currentChatProcess.kill();
-      currentChatProcess = null;
-    }
+    currentChatAbort?.abort();
+    denyAllPending('Superseded by a new request.');
 
     const { existsSync, statSync } = await import('fs');
     if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
@@ -958,87 +1053,34 @@ ipcMain.handle(
     if (!sessionId) return err(new Error('Missing session id.'));
     if (!message.trim()) return err(new Error('Cannot send an empty message.'));
 
-    return new Promise<IpcResult<null>>(resolve => {
-      // execFile-style: no shell, the message is a separate argv entry (no fragile
-      // escaping — cfr. ai:run / agents:dispatchBg). `--resume` without
-      // `--fork-session` reuses the original session id and appends to its file.
-      const args = [
-        '-p',
-        message,
-        '--resume',
-        sessionId,
-        '--permission-mode',
-        permissionMode || RESUME_PERMISSION_MODE,
-      ];
-      if (model) args.push('--model', model);
-
-      const proc = spawn('claude', args, {
+    const abort = new AbortController();
+    currentChatAbort = abort;
+    await runChat(
+      {
         cwd: realPath,
+        prompt: message,
+        resume: sessionId,
+        model,
+        permissionMode: asPermissionMode(permissionMode),
+        canUseTool: makeCanUseTool(event),
+        abortController: abort,
         env: claudeEnv(),
-      });
-      currentChatProcess = proc;
-      proc.stdin?.end();
-
-      // Buffer stderr instead of streaming it: `claude` prints benign warnings
-      // there even on success, which would surface as spurious chat errors. Only
-      // emit it if the process actually fails (non-zero exit).
-      let stderrBuf = '';
-
-      proc.stdout?.on('data', (chunk: Buffer) => {
-        event.sender.send('sessions:chatChunk', chunk.toString());
-      });
-
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        stderrBuf += chunk.toString();
-      });
-
-      proc.on('close', code => {
-        currentChatProcess = null;
-        if (code === 0 || code === null) {
-          event.sender.send('sessions:chatDone');
-          resolve(ok(null));
-        } else {
-          const detail = stderrBuf.trim();
-          event.sender.send(
-            'sessions:chatError',
-            detail || `Process exited with code ${code}`
-          );
-          event.sender.send('sessions:chatDone');
-          resolve(err(new Error(detail || `Process exited with code ${code}`)));
-        }
-      });
-
-      proc.on('error', e => {
-        currentChatProcess = null;
-        event.sender.send('sessions:chatError', e.message);
-        event.sender.send('sessions:chatDone');
-        resolve(err(e));
-      });
-    });
+      },
+      chatCallbacks(event, abort)
+    );
+    return ok(null);
   }
 );
 
-// Starts a *brand-new* Claude Code session from ClaudeLens: `claude -p <msg>`
-// without `--resume`, so the CLI mints a fresh session id and writes a new
-// `~/.claude/projects/<hash>/<id>.jsonl`. We use `--output-format stream-json`
-// (vs the plain-text stream of the resume path) precisely to capture that new id
-// from the `init` event — it's forwarded to the renderer on `sessions:chatStarted`
-// so it can open the new transcript once the turn closes. Live token deltas still
-// stream over the shared `sessions:chatChunk` channel (from the partial-message
-// `stream_event`s), and `chatDone`/`chatError` close the turn as in the resume path.
+// Start a brand-new session: we pre-generate the session id (`crypto.randomUUID`)
+// and pass it as `sessionId`, so the new `~/.claude/projects/<hash>/<id>.jsonl` id
+// is known up front. We emit `sessions:chatStarted` immediately (no race in the
+// new-chat view), then run the turn — tool calls still flow through canUseTool.
 ipcMain.handle(
   'sessions:startMessage',
-  async (
-    event,
-    realPath: string,
-    message: string,
-    model?: string,
-    permissionMode?: string
-  ) => {
-    if (currentChatProcess) {
-      currentChatProcess.kill();
-      currentChatProcess = null;
-    }
+  async (event, realPath: string, message: string, model?: string, permissionMode?: string) => {
+    currentChatAbort?.abort();
+    denyAllPending('Superseded by a new request.');
 
     const { existsSync, statSync } = await import('fs');
     if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
@@ -1048,97 +1090,43 @@ ipcMain.handle(
     }
     if (!message.trim()) return err(new Error('Cannot send an empty message.'));
 
-    return new Promise<IpcResult<null>>(resolve => {
-      const args = [
-        '-p',
-        message,
-        '--output-format',
-        'stream-json',
-        '--verbose',
-        '--include-partial-messages',
-        '--permission-mode',
-        permissionMode || RESUME_PERMISSION_MODE,
-      ];
-      if (model) args.push('--model', model);
+    const id = randomUUID();
+    event.sender.send('sessions:chatStarted', id);
 
-      const proc = spawn('claude', args, { cwd: realPath, env: claudeEnv() });
-      currentChatProcess = proc;
-      proc.stdin?.end();
+    const abort = new AbortController();
+    currentChatAbort = abort;
+    await runChat(
+      {
+        cwd: realPath,
+        prompt: message,
+        sessionId: id,
+        model,
+        permissionMode: asPermissionMode(permissionMode),
+        canUseTool: makeCanUseTool(event),
+        abortController: abort,
+        env: claudeEnv(),
+      },
+      chatCallbacks(event, abort)
+    );
+    return ok(null);
+  }
+);
 
-      let stderrBuf = '';
-      // stdout is NDJSON; chunks can split a line, so buffer until each newline.
-      let buf = '';
-      let started = false;
-
-      const handleLine = (line: string) => {
-        const trimmed = line.trim();
-        if (!trimmed) return;
-        let evt: { type?: string; session_id?: string; is_error?: boolean; result?: string;
-          event?: { type?: string; delta?: { type?: string; text?: string } } };
-        try {
-          evt = JSON.parse(trimmed);
-        } catch {
-          return; // ignore any non-JSON noise
-        }
-        // The first event carrying a session id reveals the freshly-minted id.
-        if (!started && evt.session_id) {
-          started = true;
-          event.sender.send('sessions:chatStarted', evt.session_id);
-        }
-        // Live text deltas (only present with --include-partial-messages).
-        if (evt.type === 'stream_event' && evt.event?.type === 'content_block_delta'
-          && evt.event.delta?.type === 'text_delta' && evt.event.delta.text) {
-          event.sender.send('sessions:chatChunk', evt.event.delta.text);
-        }
-        // A result with is_error surfaces a model/permission failure even on exit 0.
-        if (evt.type === 'result' && evt.is_error) {
-          event.sender.send('sessions:chatError', evt.result || 'The session reported an error.');
-        }
-      };
-
-      proc.stdout?.on('data', (chunk: Buffer) => {
-        buf += chunk.toString();
-        let nl: number;
-        while ((nl = buf.indexOf('\n')) >= 0) {
-          const line = buf.slice(0, nl);
-          buf = buf.slice(nl + 1);
-          handleLine(line);
-        }
-      });
-
-      proc.stderr?.on('data', (chunk: Buffer) => {
-        stderrBuf += chunk.toString();
-      });
-
-      proc.on('close', code => {
-        currentChatProcess = null;
-        if (buf.trim()) handleLine(buf); // flush any unterminated trailing line
-        if (code === 0 || code === null) {
-          event.sender.send('sessions:chatDone');
-          resolve(ok(null));
-        } else {
-          const detail = stderrBuf.trim();
-          event.sender.send('sessions:chatError', detail || `Process exited with code ${code}`);
-          event.sender.send('sessions:chatDone');
-          resolve(err(new Error(detail || `Process exited with code ${code}`)));
-        }
-      });
-
-      proc.on('error', e => {
-        currentChatProcess = null;
-        event.sender.send('sessions:chatError', e.message);
-        event.sender.send('sessions:chatDone');
-        resolve(err(e));
-      });
-    });
+// The renderer's verdict on a pending approval. Settling resolves the Promise the
+// SDK's canUseTool is awaiting; an unknown requestId (already aborted) is a no-op.
+ipcMain.handle(
+  'sessions:permissionResponse',
+  async (_event, requestId: string, decision: PermissionDecision) => {
+    const resolve = pendingPermissions.get(requestId);
+    if (resolve) resolve(toPermissionResult(decision));
+    return ok(null);
   }
 );
 
 ipcMain.handle('sessions:stopMessage', async () => {
-  if (currentChatProcess) {
-    currentChatProcess.kill();
-    currentChatProcess = null;
-  }
+  currentChatAbort?.abort();
+  currentChatAbort = null;
+  denyAllPending('Stopped by the user.');
   return ok(null);
 });
 

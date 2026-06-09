@@ -56,6 +56,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       permissionMode?: string
     ) => ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
     stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
+    respondPermission: (requestId: string, decision: unknown) =>
+      ipcRenderer.invoke('sessions:permissionResponse', requestId, decision),
+    onPermissionRequest: (cb: (request: unknown) => void) => {
+      ipcRenderer.removeAllListeners('sessions:permissionRequest');
+      ipcRenderer.on('sessions:permissionRequest', (_event, request) => cb(request));
+    },
     onChatStarted: (cb: (sessionId: string) => void) => {
       ipcRenderer.removeAllListeners('sessions:chatStarted');
       ipcRenderer.on('sessions:chatStarted', (_event, sessionId) => cb(sessionId));
@@ -63,6 +69,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatChunk: (cb: (chunk: string) => void) => {
       ipcRenderer.removeAllListeners('sessions:chatChunk');
       ipcRenderer.on('sessions:chatChunk', (_event, chunk) => cb(chunk));
+    },
+    onChatMessage: (cb: (message: unknown) => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatMessage');
+      ipcRenderer.on('sessions:chatMessage', (_event, message) => cb(message));
     },
     onChatDone: (cb: () => void) => {
       ipcRenderer.removeAllListeners('sessions:chatDone');

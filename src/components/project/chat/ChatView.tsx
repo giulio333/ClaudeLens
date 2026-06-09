@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
 import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents, useAllSkills } from '../../../hooks/useIPC'
-import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC'
+import { SessionSummary, Skill, Agent, ChatMessage } from '../../../hooks/useIPC'
 import { sessionTitle } from '../utils'
 import { buildProcessedMessages, correlateSessionAgents, correlateSessionSkills, describeTurn, touchedFiles, skillInitial, ChatDetailsFilter, SessionAgent, SessionSkill, ToolGroup, TouchedFile, TurnDescriptor } from './utils'
 import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
@@ -14,6 +14,7 @@ import { TopBar } from '../shared/TopBar'
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog'
 import { SessionGraphView } from './graph/SessionGraphView'
 import { QueryError } from '../../QueryError'
+import Markdown from '../../Markdown'
 
 type ViewMode = 'chat' | 'timeline'
 
@@ -612,6 +613,54 @@ function ChatControlPill({
   )
 }
 
+/** Provisional assistant turn shown while the SDK streams the reply. Mirrors the
+ *  real assistant-turn markup (`cl-turn--claude`) so the live text appears inline
+ *  in the reading column, exactly where the final message will render once the
+ *  turn closes and the transcript refetches. Plain text + a blinking caret keeps
+ *  the typing feel without mid-stream markdown reflow. */
+export function LiveTurn({ text, turnNumber }: { text: string; turnNumber: number }) {
+  return (
+    <article className="cl-turn cl-turn--claude cl-turn--live" aria-live="polite">
+      <aside className="cl-turn-rail">
+        <span className="cl-turn-orb">C</span>
+        <span className="cl-turn-index">{String(turnNumber).padStart(2, '0')}</span>
+        <span className="cl-turn-spine" aria-hidden />
+      </aside>
+      <section className="cl-turn-body">
+        <header className="cl-turn-head">
+          <span className="cl-turn-who">Claude</span>
+          <span className="cl-turn-sep">·</span>
+          <time>{text ? 'responding…' : 'thinking…'}</time>
+        </header>
+        <div className="cl-turn-content">
+          <div className="cl-message-text cl-message-text--assistant cl-live-text">
+            {text && <Markdown>{text}</Markdown>}
+            <span className="cl-live-caret" aria-hidden />
+          </div>
+        </div>
+      </section>
+    </article>
+  )
+}
+
+
+// The bare command name from a slash prompt the user sent (e.g. "/context …" →
+// "context"); null when the prompt isn't a slash command.
+function slashCommandOf(prompt: string): string | null {
+  const m = /^\/([\w:-]+)/.exec(prompt.trim())
+  return m ? m[1] : null
+}
+
+// The bare command name from a persisted command-card user message (the message
+// Claude Code writes as `<command-name>/context</command-name> …`); null otherwise.
+function cardCommandOf(msg: ChatMessage): string | null {
+  if (msg.role !== 'user') return null
+  const text = msg.content.find(b => b.type === 'text')
+  if (!text || text.type !== 'text') return null
+  const m = /<command-name>\s*\/?\s*([\w:-]+)\s*<\/command-name>/.exec(text.text)
+  return m ? m[1] : null
+}
+
 export function ChatView({
   project,
   session,
@@ -669,6 +718,41 @@ export function ChatView({
   const [exportMessage, setExportMessage] = useState<string | null>(null)
   const [exportError, setExportError] = useState<string | null>(null)
   const [showDelete, setShowDelete] = useState(false)
+  // Live streaming, lifted from the composer: the assistant's partial reply is
+  // rendered inline as a provisional turn at the foot of the transcript (where the
+  // final message will land), instead of a detached preview strip in the composer.
+  const [liveText, setLiveText] = useState('')
+  const [streaming, setStreaming] = useState(false)
+  // In-flight turn rendering, driven entirely from the SDK stream (not a
+  // mid-stream disk re-read). When a turn is active (`pendingUser !== null`) we
+  // render the transcript from: the pre-turn history snapshot (`frozenMessages`),
+  // an optimistic bubble for the prompt (`pendingUser`), and the fully-formed
+  // messages the SDK emits as it works (`liveMessages` — assistant turns + tool
+  // results). The file watcher still refetches `messages` in the background, but
+  // we ignore it for display until the turn closes, so the persisted reply can't
+  // double the live one. On completion we reconcile to the canonical disk read.
+  const [pendingUser, setPendingUser] = useState<string | null>(null)
+  const [pendingAt, setPendingAt] = useState('')
+  const pendingBaseCount = useRef(0)
+  const [frozenMessages, setFrozenMessages] = useState<ChatMessage[] | null>(null)
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([])
+  // Real output of built-in slash commands (/context, /usage, /compact, …) is
+  // streamed live as a `<synthetic>`-model assistant message but never persisted —
+  // Claude Code writes only a placeholder we filter out (session-reader). To keep
+  // it on screen after we reconcile to the disk read, we pin each turn's synthetic
+  // output keyed by the UUID of the on-disk command-card that produced it, bound
+  // at reconcile time (when that card is on disk), and weave it back in right
+  // after that exact card. Keying by card UUID — not command name + positional
+  // consumption — means repeated calls and pre-existing cards never misalign the
+  // output. Lives only while this view is mounted (the data isn't on disk).
+  const [pinnedSlash, setPinnedSlash] = useState<Record<string, ChatMessage[]>>({})
+
+  // Lift live messages from the composer. The synthetic slash-command output they
+  // may carry is pinned later, at reconcile time, when the command-card it belongs
+  // to is on disk and can be addressed by UUID (see the reconcile effect below).
+  const handleLiveMessages = useCallback((msgs: ChatMessage[]) => {
+    setLiveMessages(msgs)
+  }, [])
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
   const [activeTurn, setActiveTurn] = useState<number | null>(null)
   const feedRef = useRef<HTMLElement | null>(null)
@@ -683,8 +767,75 @@ export function ChatView({
   // cause it to fire on every scroll-spy update, fighting user scrolling).
   const activeTurnRef = useRef<number | null>(null)
 
-  // Heavy: rebuild the processed transcript only when the raw messages change.
-  const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
+  // Reconcile to the canonical disk read once the turn has ended AND the refetch
+  // contains it (length grew past the count captured at send time). We gate on
+  // `!streaming` so background mid-stream refetches never tear down the live turn.
+  // When both hold, the persisted transcript already has the full turn, so
+  // dropping the optimistic state is seamless.
+  useEffect(() => {
+    if (streaming) return
+    if (pendingUser === null) return
+    if ((messages?.length ?? 0) > pendingBaseCount.current) {
+      // If the just-finished turn was a built-in slash command, its real output
+      // streamed as `<synthetic>` messages that Claude Code never persists. Bind
+      // them to the command-card now on disk so they survive the reconcile,
+      // anchored under the exact card that produced them. The card we just created
+      // is the last command-card matching this command name.
+      const cmd = slashCommandOf(pendingUser)
+      const synth = cmd ? liveMessages.filter(m => m.model === '<synthetic>') : []
+      if (cmd && synth.length) {
+        const base = messages ?? []
+        let cardUuid: string | null = null
+        for (let i = base.length - 1; i >= 0; i--) {
+          if (cardCommandOf(base[i]) === cmd) {
+            cardUuid = base[i].uuid
+            break
+          }
+        }
+        if (cardUuid) {
+          const key = cardUuid
+          // Reconcile-time state sync (the turn just landed on disk), not a render
+          // loop: pin once, guarded by the existing key.
+          // eslint-disable-next-line react-hooks/set-state-in-effect
+          setPinnedSlash(prev => (prev[key] ? prev : { ...prev, [key]: synth }))
+        }
+      }
+      setPendingUser(null)
+      setFrozenMessages(null)
+      setLiveMessages([])
+    }
+  }, [streaming, messages, pendingUser, liveMessages])
+
+  // The messages actually rendered. Idle: the live disk transcript. In-flight: the
+  // pre-turn snapshot + an optimistic prompt bubble + the streamed messages —
+  // assembled here and run through the SAME processing pipeline as history, so
+  // tools/thinking render live and correctly structured.
+  const displayMessages = useMemo<ChatMessage[]>(() => {
+    if (pendingUser === null) {
+      const base = messages ?? []
+      // Weave pinned slash-command output back in right after the command-card
+      // that produced it, addressed by that card's UUID (set at reconcile time).
+      if (Object.keys(pinnedSlash).length === 0) return base
+      const woven: ChatMessage[] = []
+      for (const m of base) {
+        woven.push(m)
+        const pinned = pinnedSlash[m.uuid]
+        if (pinned) woven.push(...pinned)
+      }
+      return woven
+    }
+    const base = frozenMessages ?? messages ?? []
+    const synthetic: ChatMessage = {
+      uuid: '__pending_user__',
+      role: 'user',
+      timestamp: pendingAt,
+      content: [{ type: 'text', text: pendingUser }],
+    }
+    return [...base, synthetic, ...liveMessages]
+  }, [pendingUser, pendingAt, frozenMessages, messages, liveMessages, pinnedSlash])
+
+  // Heavy: rebuild the processed transcript only when the displayed messages change.
+  const processed = useMemo(() => buildProcessedMessages(displayMessages), [displayMessages])
   const canExport = processed.length > 0 && !isLoading
 
   // Model the session is already on — its last assistant turn that recorded one.
@@ -885,6 +1036,16 @@ export function ChatView({
     }
   }, [renderItems.length])
 
+  // While streaming, pin the feed to the bottom on every token so the growing
+  // live turn stays in view. A direct scrollTop write (not smooth) is used because
+  // rapid successive smooth scrolls interrupt each other and never settle; this
+  // also respects the user scrolling up mid-stream (wasNearBottomRef goes false).
+  useEffect(() => {
+    if (!streaming || !wasNearBottomRef.current) return
+    const feed = feedRef.current
+    if (feed) feed.scrollTop = feed.scrollHeight
+  }, [liveText, liveMessages, streaming])
+
   async function handleExport(format: ChatExportFormat) {
     if (!canExport) return
     setExporting(format)
@@ -1070,6 +1231,9 @@ export function ChatView({
                       )
                     })
                   })()}
+                  {streaming && (liveText !== '' || liveMessages.length === 0) && (
+                    <LiveTurn text={liveText} turnNumber={processed.length + 1} />
+                  )}
                   <div ref={bottomRef} />
                 </div>
               </div>
@@ -1091,6 +1255,16 @@ export function ChatView({
             sessionId={sessionId}
             model={inheritedModel}
             onTurnComplete={refetch}
+            onSend={text => {
+              pendingBaseCount.current = messages?.length ?? 0
+              setPendingAt(new Date().toISOString())
+              setFrozenMessages(messages ?? [])
+              setLiveMessages([])
+              setPendingUser(text)
+            }}
+            onStreamChange={setLiveText}
+            onStreamingChange={setStreaming}
+            onLiveMessagesChange={handleLiveMessages}
           />
         </div>
       )}
