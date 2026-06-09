@@ -103,6 +103,40 @@ export interface ExportSaveResult {
   filePath: string | null
 }
 
+/** A `PermissionUpdate` suggestion from the SDK — the rule(s) to persist when the
+ *  user picks "Always allow". Shape is opaque to the renderer; it round-trips
+ *  back to the SDK verbatim, so we keep it loosely typed. */
+export type PermissionSuggestion = Record<string, unknown>
+
+/** A tool-approval request forwarded from the main process (`canUseTool`). The
+ *  renderer renders an Allow / Always / Deny dialog and answers with
+ *  `respondPermission(requestId, decision)`. */
+export interface PermissionRequest {
+  requestId: string
+  toolName: string
+  /** Full prompt sentence from the bridge (e.g. "Claude wants to read foo.txt"). */
+  title?: string
+  /** Short noun phrase for the action (e.g. "Read file"). */
+  displayName?: string
+  /** Human-readable subtitle. */
+  description?: string
+  /** The tool input (e.g. `{ command }` for Bash). */
+  input: Record<string, unknown>
+  /** Permission rules to persist on "Always allow". */
+  suggestions?: PermissionSuggestion[]
+  /** Path that triggered the request, when applicable. */
+  blockedPath?: string
+  /** Why the request was triggered. */
+  decisionReason?: string
+  toolUseID: string
+}
+
+/** The renderer's verdict on a `PermissionRequest`, returned to the SDK. */
+export type PermissionDecision =
+  | { kind: 'allow'; input: Record<string, unknown> }
+  | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionSuggestion[] }
+  | { kind: 'deny'; message?: string }
+
 export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan'
 
 export interface SessionArtifact {

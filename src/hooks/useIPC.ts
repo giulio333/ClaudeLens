@@ -35,6 +35,8 @@ import type {
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
+  PermissionRequest,
+  PermissionDecision,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -72,6 +74,8 @@ export type {
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
+  PermissionRequest,
+  PermissionDecision,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -192,8 +196,11 @@ declare global {
           permissionMode?: string
         ) => Promise<IpcResult<null>>
         stopMessage: () => Promise<IpcResult<null>>
+        respondPermission: (requestId: string, decision: PermissionDecision) => Promise<IpcResult<null>>
+        onPermissionRequest: (cb: (request: PermissionRequest) => void) => void
         onChatStarted: (cb: (sessionId: string) => void) => void
         onChatChunk: (cb: (chunk: string) => void) => void
+        onChatMessage: (cb: (message: ChatMessage) => void) => void
         onChatDone: (cb: () => void) => void
         onChatError: (cb: (error: string) => void) => void
       }
