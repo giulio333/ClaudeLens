@@ -18,8 +18,8 @@ import {
   writeClaudeMdFile,
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
-import { readChatSession, findSessionFile } from './modules/session-reader';
-import { readSessionSubagents, resolveSubagentPath } from './modules/subagents-reader';
+import { readChatSessionViaSdk, readSubagentTranscriptViaSdk } from './modules/session-reader';
+import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
@@ -568,37 +568,38 @@ ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: stri
   }
 });
 
-ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string) => {
+ipcMain.handle('sessions:getChat', async (_event, _hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const filePath = await findSessionFile(projectPath, filename);
-    if (!filePath) return err(new Error(`File sessione non trovato: ${filename}`));
-    const messages = readChatSession(filePath);
+    // POC: lo storico è letto ESCLUSIVAMENTE via Agent SDK (getSessionMessages).
+    // L'SDK cerca l'id in tutte le project dir di ~/.claude, quindi `hash` non
+    // serve. NB: tronca alla compaction (perde la storia pre-`/compact`).
+    const sessionId = filename.replace(/\.jsonl$/, '');
+    const messages = await readChatSessionViaSdk(sessionId);
     return ok(messages);
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('sessions:getSubagents', async (_event, hash: string, filename: string) => {
+ipcMain.handle('sessions:getSubagents', async (_event, _hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const metas = readSessionSubagents(projectPath, filename);
+    // POC: metadati sub-agenti via SDK (listSubagents + getSubagentMessages).
+    const sessionId = filename.replace(/\.jsonl$/, '');
+    const metas = await readSessionSubagentsViaSdk(sessionId);
     return ok(metas);
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('sessions:getSubagentTranscript', async (_event, hash: string, filename: string, agentId: string) => {
+ipcMain.handle('sessions:getSubagentTranscript', async (_event, _hash: string, filename: string, agentId: string) => {
   try {
     assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const filePath = resolveSubagentPath(projectPath, filename, agentId);
-    if (!filePath) return err(new Error(`Subagent transcript non trovato: ${agentId}`));
-    const messages = readChatSession(filePath, { includeSidechain: true });
+    // POC: transcript sub-agente via SDK (getSubagentMessages).
+    const sessionId = filename.replace(/\.jsonl$/, '');
+    const messages = await readSubagentTranscriptViaSdk(sessionId, agentId);
     return ok(messages);
   } catch (e) {
     return err(e);

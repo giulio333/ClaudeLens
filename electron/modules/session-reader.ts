@@ -17,6 +17,19 @@ export interface ChatMessage {
   content: ChatContentBlock[];
 }
 
+// Built-in slash commands (/context, /usage, /clear, …) run with no model turn,
+// and Claude Code persists a placeholder assistant message — `<synthetic>` model,
+// text "No response requested." — while discarding the command's real output. The
+// placeholder carries no information, so we drop it: the live output (which the
+// SDK *does* stream) is shown and pinned by the renderer instead.
+function isPlaceholderNote(blocks: ChatContentBlock[]): boolean {
+  return (
+    blocks.length === 1 &&
+    blocks[0].type === 'text' &&
+    blocks[0].text.trim() === 'No response requested.'
+  );
+}
+
 function parseContentArray(raw: unknown[]): ChatContentBlock[] {
   const blocks: ChatContentBlock[] = [];
 
@@ -72,6 +85,18 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
   return blocks;
 }
 
+// Normalizza un content stringa (messaggi user testuali) in blocchi.
+// Preserva i tag noti del flow Claude Code command così il frontend può
+// renderizzarli come card dedicata; altrimenti rimuove solo i tag di framing
+// noti (caveat, ecc.) lasciando intatta la prosa con `<`/`>` da codice (#93).
+function parseStringContent(rawContent: string): ChatContentBlock[] {
+  const isCommand = /<(command-name|local-command-stdout)\b/.test(rawContent);
+  if (isCommand) return [{ type: 'text', text: rawContent }];
+  const stripped = stripFramingTags(rawContent).trim();
+  if (!stripped) return [];
+  return [{ type: 'text', text: stripped }];
+}
+
 export interface ReadChatOptions {
   // I file dei subagent (`subagents/agent-*.jsonl`) hanno ogni riga con
   // isSidechain=true: per leggerne il transcript interno occorre NON saltarli.
@@ -113,23 +138,15 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
         let blocks: ChatContentBlock[] = [];
 
         if (typeof rawContent === 'string') {
-          // Preserva i tag noti del flow Claude Code command così il frontend
-          // può parsarli e renderizzarli come card dedicata.
-          const isCommand = /<(command-name|local-command-stdout)\b/.test(rawContent);
-          if (isCommand) {
-            blocks = [{ type: 'text', text: rawContent }];
-          } else {
-            // Salta messaggi tecnici (caveat, ecc.) rimuovendo solo i tag di
-            // framing noti, così prosa con `<`/`>` da codice resta intatta (#93).
-            const stripped = stripFramingTags(rawContent).trim();
-            if (!stripped) continue;
-            blocks = [{ type: 'text', text: stripped }];
-          }
+          blocks = parseStringContent(rawContent);
+          if (blocks.length === 0) continue;
         } else if (Array.isArray(rawContent)) {
           blocks = parseContentArray(rawContent);
         }
 
         if (blocks.length === 0) continue;
+        // Salta il placeholder "No response requested." dei comandi locali.
+        if (role === 'assistant' && isPlaceholderNote(blocks)) continue;
 
         // Scarta i duplicati esatti per uuid (vedi nota su sdk-cli/cli sopra).
         // Gli uuid vuoti non vengono deduplicati per non collassare righe
@@ -154,6 +171,85 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   }
 
   return messages;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// POC — lettura dello storico via Agent SDK (`getSessionMessages`) invece del
+// parsing diretto del JSONL. Restituisce lo stesso `ChatMessage[]` (riusa
+// `parseContentArray`/`parseStringContent`), quindi la UI è invariata. L'SDK
+// ricostruisce la catena canonica via `parentUuid` (ordine corretto sui fork,
+// dedup sdk-cli/cli, stitching dei resume) ed espone `timestamp`/`model`/`usage`
+// nativi — ma TRONCA alla compaction (perde la storia pre-`/compact`).
+// L'SDK è ESM-only: caricato con `import()` dinamico dal main CommonJS.
+// ──────────────────────────────────────────────────────────────────────────
+// Forma minima di un SDKSessionMessage (il tipo dell'SDK è ESM-only e `message`
+// è `unknown`); `timestamp` esiste a runtime ma non nel tipo dichiarato.
+export type SdkSessionMessage = {
+  type: string;
+  uuid?: string;
+  message?: unknown;
+  timestamp?: string;
+};
+
+// Mapping di un singolo SDK message → ChatMessage, riusando lo stesso parsing dei
+// blocchi del reader da file. Restituisce null per i messaggi non-chat o vuoti.
+// Usato sia dalla lettura storica (mapSdkMessagesToChat) sia, in tempo reale, dal
+// chat-runner che inoltra ogni messaggio appena l'SDK lo emette nello stream.
+export function mapSdkMessageToChat(m: SdkSessionMessage): ChatMessage | null {
+  if (m.type !== 'user' && m.type !== 'assistant') return null;
+  const msg = m.message as Record<string, unknown> | undefined;
+  if (!msg) return null;
+
+  const rawContent = msg.content;
+  let blocks: ChatContentBlock[] = [];
+  if (typeof rawContent === 'string') blocks = parseStringContent(rawContent);
+  else if (Array.isArray(rawContent)) blocks = parseContentArray(rawContent);
+  if (blocks.length === 0) return null;
+  // Drop the local-command placeholder (see isPlaceholderNote). The live output
+  // streamed for the same turn is a distinct, real message and is kept.
+  if (m.type === 'assistant' && isPlaceholderNote(blocks)) return null;
+
+  // Built-in slash commands (/context, /usage, …) stream their output as a
+  // `<synthetic>`-model assistant message that the SDK emits WITHOUT a timestamp
+  // (verified against the live stream). An empty timestamp renders as "Invalid
+  // Date" downstream, so fall back to now — for a live-streamed message that is
+  // its emission time, which is what we want to show.
+  return {
+    uuid: String(m.uuid ?? ''),
+    role: m.type,
+    timestamp: String(m.timestamp ?? '') || new Date().toISOString(),
+    model: msg.model as string | undefined,
+    content: blocks,
+  };
+}
+
+// Mapping condiviso SessionMessage[] (SDK) → ChatMessage[]. Usato sia per il
+// transcript principale sia per quelli dei sub-agenti.
+function mapSdkMessagesToChat(raw: SdkSessionMessage[]): ChatMessage[] {
+  const messages: ChatMessage[] = [];
+  for (const m of raw) {
+    const mapped = mapSdkMessageToChat(m);
+    if (mapped) messages.push(mapped);
+  }
+  return messages;
+}
+
+export async function readChatSessionViaSdk(sessionId: string): Promise<ChatMessage[]> {
+  const sdk = await import('@anthropic-ai/claude-agent-sdk');
+  // Senza `dir` l'SDK cerca l'id in tutte le project directory di ~/.claude.
+  const raw = (await sdk.getSessionMessages(sessionId, {})) as SdkSessionMessage[];
+  return mapSdkMessagesToChat(raw);
+}
+
+// Transcript interno di un sub-agente via SDK (`getSubagentMessages`), in luogo
+// della lettura diretta del file `subagents/agent-*.jsonl`.
+export async function readSubagentTranscriptViaSdk(
+  sessionId: string,
+  agentId: string,
+): Promise<ChatMessage[]> {
+  const sdk = await import('@anthropic-ai/claude-agent-sdk');
+  const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
+  return mapSdkMessagesToChat(raw);
 }
 
 export async function findSessionFile(projectPath: string, filename: string): Promise<string | null> {
