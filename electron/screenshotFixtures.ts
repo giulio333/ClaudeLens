@@ -387,11 +387,28 @@ const MOCK_MCP = {
   totalProjects: 5,
 };
 
-// ─── Processi live ────────────────────────────────────────────────────────────
+// ─── Sessioni live ────────────────────────────────────────────────────────────
 
-const MOCK_PROCESSES = [
-  { pid: 18423, cwd: '/Users/alice/projects/webapp', cmdline: 'claude --resume 20260329T091500_000042' },
-  { pid: 19871, cwd: '/Users/alice/experiments/llm-playground', cmdline: 'claude' },
+const MOCK_ACTIVE_SESSIONS = [
+  {
+    pid: 18423,
+    sessionId: 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10',
+    cwd: '/Users/alice/projects/webapp',
+    startedAt: Date.now() - 25 * 60_000,
+    status: 'busy',
+    version: '2.1.173',
+    source: 'registry' as const,
+  },
+  {
+    pid: 19871,
+    sessionId: 'b7d1e9f4-2a8c-4f6b-8e3d-1c9a5f7e4b22',
+    cwd: '/Users/alice/experiments/llm-playground',
+    startedAt: Date.now() - 4 * 60_000,
+    status: 'waiting',
+    waitingFor: 'permission prompt',
+    version: '2.1.173',
+    source: 'registry' as const,
+  },
 ];
 
 // ─── Rules ────────────────────────────────────────────────────────────────────
@@ -750,7 +767,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'projects:delete',
     'mcp:getGlobal',
     'ai:run', 'ai:stop',
-    'live:getProcesses', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
+    'live:getActiveSessions', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
     'tasks:getByProject', 'plans:getByProject',
     'settings:getCleanupPeriodDays',
   ];
@@ -819,7 +836,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   });
   ipcMain.handle('ai:stop', () => ok(null));
 
-  ipcMain.handle('live:getProcesses', () => ok(MOCK_PROCESSES));
+  ipcMain.handle('live:getActiveSessions', () => ok(MOCK_ACTIVE_SESSIONS));
   ipcMain.handle('live:getSessions', () => ok(MOCK_BG_SESSIONS));
   ipcMain.handle('live:startWatch', () => ok({ started: true }));
   ipcMain.handle('live:stopWatch', () => ok(null));

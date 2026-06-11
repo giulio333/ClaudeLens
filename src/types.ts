@@ -137,6 +137,15 @@ export type PermissionDecision =
   | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionSuggestion[] }
   | { kind: 'deny'; message?: string }
 
+/** Live tool indicator for the in-flight turn (`sessions:chatToolActivity`):
+ *  emitted when the model starts writing a tool call's input (elapsedSeconds
+ *  null) and periodically while the tool runs (elapsedSeconds set, from the
+ *  SDK's `tool_progress`). Mirrors `ToolActivity` in `chat-runner.ts`. */
+export interface ToolActivity {
+  toolName: string
+  elapsedSeconds: number | null
+}
+
 export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan'
 
 export interface SessionArtifact {
@@ -289,10 +298,19 @@ export interface LiveEvent {
   model?: string
 }
 
-export interface ClaudeProcess {
+// Mirrors electron/modules/sessions-registry-reader.ts ActiveSession.
+export interface ActiveSession {
   pid: number
+  /** Empty when the entry comes from the process-scanner fallback. */
+  sessionId: string
   cwd: string
-  cmdline: string
+  startedAt?: number
+  /** Known values: 'busy', 'waiting', 'idle'. 'unknown' for fallback entries. */
+  status: string
+  waitingFor?: string
+  version?: string
+  updatedAt?: number
+  source: 'registry' | 'process-scan'
 }
 
 export interface BgSession {

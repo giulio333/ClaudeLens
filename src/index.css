@@ -1600,32 +1600,6 @@ body {
     0 1px 4px -1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
 }
 
-
-/* resume — dark glass slab with accent play */
-.cl-resume {
-  display: inline-flex; align-items: center; gap: 6px;
-  padding: 7px 12px;
-  border-radius: 999px;
-  border: 0;
-  background: transparent;
-  color: var(--cl-ink-3);
-  font-family: var(--font-mono); font-size: 10px; font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.14s, color 0.14s;
-}
-.cl-resume:hover {
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
-  color: var(--cl-accent-ink);
-}
-.cl-resume:active { transform: translateY(0.5px); }
-.cl-resume-play {
-  width: 10px; height: 10px;
-  background: var(--cl-accent);
-  clip-path: polygon(0 0, 100% 50%, 0 100%);
-  flex: 0 0 auto;
-}
 .cl-export-label {
   font-family: var(--font-mono);
   font-size: 9px;
@@ -2117,6 +2091,34 @@ body {
 @keyframes cl-composer-blink {
   0%, 100% { opacity: 1; }
   50% { opacity: 0; }
+}
+/* Tool-in-progress chip in the live turn — shown while the model writes a tool
+   call's input and while the tool runs (no text streams then, so it replaces
+   the caret). Elapsed seconds appear once the SDK reports tool_progress. */
+.cl-live-tool {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 2px;
+  padding: 4px 11px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  background: var(--cl-paper-2);
+  font: 500 12px/1.4 var(--font-mono);
+  color: var(--cl-ink-3);
+}
+.cl-live-tool b {
+  font-weight: 600;
+  color: var(--cl-ink);
+}
+.cl-live-tool .s { color: var(--cl-ink-4); }
+.cl-live-tool .dot {
+  flex: none;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  animation: cl-composer-blink 1s steps(2) infinite;
 }
 .cl-composer-error {
   padding: 8px 12px;
@@ -3361,12 +3363,6 @@ body {
   .cl-seg button {
     padding: 5px 8px;
     font-size: 9px;
-  }
-  .cl-resume {
-    padding: 7px 10px;
-  }
-  .cl-resume span {
-    display: none;
   }
   .cl-transcript-inner {
     padding: 18px 18px 40px;

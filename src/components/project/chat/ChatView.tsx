@@ -1,10 +1,37 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type { CSSProperties } from 'react'
-import { saveMarkdownExport, savePdfExport, useChatSession, useSessionSubagents, useGlobalAgents, useProjectAgents, useAllSkills } from '../../../hooks/useIPC'
-import { SessionSummary, Skill, Agent, ChatMessage } from '../../../hooks/useIPC'
+import {
+  saveMarkdownExport,
+  savePdfExport,
+  useChatSession,
+  useSessionSubagents,
+  useGlobalAgents,
+  useProjectAgents,
+  useAllSkills,
+} from '../../../hooks/useIPC'
+import { SessionSummary, Skill, Agent, ChatMessage, ToolActivity } from '../../../hooks/useIPC'
 import { sessionTitle } from '../utils'
-import { buildProcessedMessages, correlateSessionAgents, correlateSessionSkills, describeTurn, touchedFiles, skillInitial, ChatDetailsFilter, SessionAgent, SessionSkill, ToolGroup, TouchedFile, TurnDescriptor } from './utils'
-import { buildChatExportDocument, CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export'
+import {
+  buildProcessedMessages,
+  correlateSessionAgents,
+  correlateSessionSkills,
+  describeTurn,
+  touchedFiles,
+  skillInitial,
+  ChatDetailsFilter,
+  SessionAgent,
+  SessionSkill,
+  ToolGroup,
+  TouchedFile,
+  TurnDescriptor,
+} from './utils'
+import {
+  buildChatExportDocument,
+  CHAT_EXPORT_PRESETS,
+  ChatExportFormat,
+  ChatExportPreset,
+} from './export'
+import { useChatAutoScroll } from './useAutoScroll'
 import { ToolDetailPanel } from './ToolDetailPanel'
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel'
 import { MessageBubble } from './MessageBubble'
@@ -18,13 +45,19 @@ import Markdown from '../../Markdown'
 
 type ViewMode = 'chat' | 'timeline'
 
-function PlayGlyph() {
-  return <span className="cl-resume-play" aria-hidden />
-}
-
 function TrashGlyph() {
   return (
-    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       <path d="M3 6h18M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2m3 0v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6" />
     </svg>
   )
@@ -32,7 +65,17 @@ function TrashGlyph() {
 
 function ChevronUpGlyph() {
   return (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       <path d="M6 15l6-6 6 6" />
     </svg>
   )
@@ -61,7 +104,17 @@ function DockCaretGlyph({ open }: { open: boolean }) {
 
 function LocateGlyph() {
   return (
-    <svg width="13" height="13" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
       <path d="M8 2v9" />
       <path d="M4.5 7.5 8 11l3.5-3.5" />
       <path d="M3 13h10" />
@@ -81,7 +134,11 @@ function fmtAgentSpan(startedAt?: string, endedAt?: string): string | null {
 
 function fmtAgentClock(ts?: string): string {
   if (!ts) return ''
-  return new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
+  return new Date(ts).toLocaleTimeString('it-IT', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+  })
 }
 
 type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan'
@@ -167,7 +224,9 @@ function FocusMinimap({
               title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
               aria-label={`Jump to turn ${it.n}, ${it.label}`}
             >
-              <span className="lbl">{String(it.n).padStart(2, '0')} {it.label}</span>
+              <span className="lbl">
+                {String(it.n).padStart(2, '0')} {it.label}
+              </span>
             </button>
           )
         })}
@@ -198,9 +257,19 @@ function AgentOrbCluster({
   return (
     <span className="cl-dock-orbs">
       {shown.map((a, i) => (
-        <span key={a.key} className="cl-dock-orb" style={{ zIndex: shown.length - i, ...orbStyle(colorOf(a)) }}>{(a.subagentType?.[0] ?? 'A').toUpperCase()}</span>
+        <span
+          key={a.key}
+          className="cl-dock-orb"
+          style={{ zIndex: shown.length - i, ...orbStyle(colorOf(a)) }}
+        >
+          {(a.subagentType?.[0] ?? 'A').toUpperCase()}
+        </span>
       ))}
-      {overflow > 0 && <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>+{overflow}</span>}
+      {overflow > 0 && (
+        <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>
+          +{overflow}
+        </span>
+      )}
     </span>
   )
 }
@@ -213,9 +282,19 @@ function SkillOrbCluster({ skills }: { skills: SessionSkill[] }) {
   return (
     <span className="cl-dock-orbs">
       {shown.map((s, i) => (
-        <span key={s.key} className="cl-dock-orb" style={{ zIndex: shown.length - i, ...orbStyle('var(--cl-accent)') }}>{skillInitial(s.name)}</span>
+        <span
+          key={s.key}
+          className="cl-dock-orb"
+          style={{ zIndex: shown.length - i, ...orbStyle('var(--cl-accent)') }}
+        >
+          {skillInitial(s.name)}
+        </span>
       ))}
-      {overflow > 0 && <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>+{overflow}</span>}
+      {overflow > 0 && (
+        <span className="cl-dock-orb cl-dock-orb--more" style={{ zIndex: 0 }}>
+          +{overflow}
+        </span>
+      )}
     </span>
   )
 }
@@ -251,7 +330,9 @@ function SkillDockSheet({
                 onClick={() => (canOpen ? onOpen(s.skill!) : onLocate(s.turnN))}
                 title={canOpen ? 'View skill' : 'Locate invocation in chat'}
               >
-                <span className="orb" aria-hidden style={orbStyle('var(--cl-accent)')}>{skillInitial(s.name)}</span>
+                <span className="orb" aria-hidden style={orbStyle('var(--cl-accent)')}>
+                  {skillInitial(s.name)}
+                </span>
                 <span className="body">
                   <span className="r1">
                     <span className="name">{s.name}</span>
@@ -259,7 +340,9 @@ function SkillDockSheet({
                   </span>
                   {s.description && <span className="desc">{s.description}</span>}
                   {!canOpen && (
-                    <span className="meta"><span className="steps">no definition</span></span>
+                    <span className="meta">
+                      <span className="steps">no definition</span>
+                    </span>
                   )}
                 </span>
               </button>
@@ -324,7 +407,9 @@ function AgentDockSheet({
                 onClick={() => (hasTranscript ? onOpen(a) : onLocate(a.turnN))}
                 title={hasTranscript ? 'View agent transcript' : 'Locate dispatch in chat'}
               >
-                <span className="orb" aria-hidden style={orbStyle(colorOf(a))}>{(a.subagentType?.[0] ?? 'A').toUpperCase()}</span>
+                <span className="orb" aria-hidden style={orbStyle(colorOf(a))}>
+                  {(a.subagentType?.[0] ?? 'A').toUpperCase()}
+                </span>
                 <span className="body">
                   <span className="r1">
                     <span className="name">{a.subagentType}</span>
@@ -338,7 +423,9 @@ function AgentDockSheet({
                         {span && <> · {span}</>}
                       </span>
                     )}
-                    {typeof a.messageCount === 'number' && <span className="steps">{a.messageCount} steps</span>}
+                    {typeof a.messageCount === 'number' && (
+                      <span className="steps">{a.messageCount} steps</span>
+                    )}
                     {!hasTranscript && <span className="steps">no transcript</span>}
                   </span>
                 </span>
@@ -361,9 +448,9 @@ function AgentDockSheet({
 }
 
 /** Floating glass control pill (Focus layout) — bottom-centre. Holds the
- *  transcript filters + density toggle (chat mode only), the agent dock, the
- *  Resume action, and a "more" trigger that raises the export / delete sheet
- *  above the pill. Only one sheet (agents or export) is open at a time. */
+ *  transcript filters + density toggle (chat mode only), the agent dock, and a
+ *  "more" trigger that raises the export / delete sheet above the pill. Only
+ *  one sheet (agents or export) is open at a time. */
 function ChatControlPill({
   showTranscriptControls,
   filter,
@@ -372,7 +459,6 @@ function ChatControlPill({
   showThinking,
   density,
   setDensity,
-  onResume,
   canExport,
   exporting,
   exportPreset,
@@ -400,7 +486,6 @@ function ChatControlPill({
   showThinking: boolean
   density: ChatDetailsFilter
   setDensity: (d: ChatDetailsFilter) => void
-  onResume: () => void
   canExport: boolean
   exporting: ChatExportFormat | null
   exportPreset: ChatExportPreset
@@ -494,7 +579,14 @@ function ChatControlPill({
         <div className="cl-sheet" role="menu">
           <div className="cl-sheet-head">
             <span className="cl-export-label">Export</span>
-            <button type="button" className="cl-sheet-close" aria-label="Close" onClick={() => setSheet(null)}>✕</button>
+            <button
+              type="button"
+              className="cl-sheet-close"
+              aria-label="Close"
+              onClick={() => setSheet(null)}
+            >
+              ✕
+            </button>
           </div>
           <div className="cl-export-presets">
             {CHAT_EXPORT_PRESETS.map(preset => (
@@ -510,10 +602,18 @@ function ChatControlPill({
           </div>
           <p className="cl-export-desc">{selectedExportPreset.description}</p>
           <div className="cl-export-actions">
-            <button type="button" disabled={!canExport || exporting !== null} onClick={() => onExport('markdown')}>
+            <button
+              type="button"
+              disabled={!canExport || exporting !== null}
+              onClick={() => onExport('markdown')}
+            >
               {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
             </button>
-            <button type="button" disabled={!canExport || exporting !== null} onClick={() => onExport('pdf')}>
+            <button
+              type="button"
+              disabled={!canExport || exporting !== null}
+              onClick={() => onExport('pdf')}
+            >
               {exporting === 'pdf' ? 'Saving...' : 'PDF'}
             </button>
           </div>
@@ -548,7 +648,12 @@ function ChatControlPill({
             <span className="cl-pill-div" />
             <div className="cl-seg" aria-label="Transcript detail">
               {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
-                <button key={v} type="button" className={density === v ? 'on' : ''} onClick={() => setDensity(v)}>
+                <button
+                  key={v}
+                  type="button"
+                  className={density === v ? 'on' : ''}
+                  onClick={() => setDensity(v)}
+                >
                   {v === 'minimal' ? 'Min' : 'Full'}
                 </button>
               ))}
@@ -568,7 +673,9 @@ function ChatControlPill({
               onClick={toggleAgents}
             >
               <AgentOrbCluster agents={agents} colorOf={agentColorOf} />
-              <span className="cl-dock-count">{agents.length} <span>agents</span></span>
+              <span className="cl-dock-count">
+                {agents.length} <span>agents</span>
+              </span>
               {agents.some(a => a.isError) && <span className="cl-dock-fail" aria-hidden />}
               <DockCaretGlyph open={sheet === 'agents'} />
             </button>
@@ -587,16 +694,14 @@ function ChatControlPill({
               onClick={toggleSkills}
             >
               <SkillOrbCluster skills={skills} />
-              <span className="cl-dock-count">{skills.length} <span>skills</span></span>
+              <span className="cl-dock-count">
+                {skills.length} <span>skills</span>
+              </span>
               <DockCaretGlyph open={sheet === 'skills'} />
             </button>
             <span className="cl-pill-div" />
           </>
         )}
-        <button className="cl-resume" type="button" onClick={onResume}>
-          <PlayGlyph />
-          <span>Resume</span>
-        </button>
         <button
           type="button"
           className="cl-pill-more"
@@ -617,8 +722,19 @@ function ChatControlPill({
  *  real assistant-turn markup (`cl-turn--claude`) so the live text appears inline
  *  in the reading column, exactly where the final message will render once the
  *  turn closes and the transcript refetches. Plain text + a blinking caret keeps
- *  the typing feel without mid-stream markdown reflow. */
-export function LiveTurn({ text, turnNumber }: { text: string; turnNumber: number }) {
+ *  the typing feel without mid-stream markdown reflow. While a tool call's input
+ *  is being generated or the tool runs (`tool`), no text streams — the caret
+ *  gives way to a "Using X…" chip (with the elapsed time once the SDK reports
+ *  `tool_progress` heartbeats). */
+export function LiveTurn({
+  text,
+  tool,
+  turnNumber,
+}: {
+  text: string
+  tool?: ToolActivity | null
+  turnNumber: number
+}) {
   return (
     <article className="cl-turn cl-turn--claude cl-turn--live" aria-live="polite">
       <aside className="cl-turn-rail">
@@ -630,19 +746,28 @@ export function LiveTurn({ text, turnNumber }: { text: string; turnNumber: numbe
         <header className="cl-turn-head">
           <span className="cl-turn-who">Claude</span>
           <span className="cl-turn-sep">·</span>
-          <time>{text ? 'responding…' : 'thinking…'}</time>
+          <time>{tool ? 'working…' : text ? 'responding…' : 'thinking…'}</time>
         </header>
         <div className="cl-turn-content">
           <div className="cl-message-text cl-message-text--assistant cl-live-text">
             {text && <Markdown>{text}</Markdown>}
-            <span className="cl-live-caret" aria-hidden />
+            {tool ? (
+              <span className="cl-live-tool">
+                <span className="dot" aria-hidden />
+                Using <b>{tool.toolName}</b>
+                {tool.elapsedSeconds != null && (
+                  <span className="s">· {Math.round(tool.elapsedSeconds)}s</span>
+                )}
+              </span>
+            ) : (
+              <span className="cl-live-caret" aria-hidden />
+            )}
           </div>
         </div>
       </section>
     </article>
   )
 }
-
 
 // The bare command name from a slash prompt the user sent (e.g. "/context …" →
 // "context"); null when the prompt isn't a slash command.
@@ -676,7 +801,13 @@ export function ChatView({
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void
 }) {
-  const { data: messages, isLoading, isError, error, refetch } = useChatSession(project.hash, session.filename)
+  const {
+    data: messages,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useChatSession(project.hash, session.filename)
   const { data: subagentMetas } = useSessionSubagents(project.hash, session.filename)
   const { data: globalAgents } = useGlobalAgents()
   const { data: projectAgents } = useProjectAgents(project.realPath)
@@ -723,6 +854,8 @@ export function ChatView({
   // final message will land), instead of a detached preview strip in the composer.
   const [liveText, setLiveText] = useState('')
   const [streaming, setStreaming] = useState(false)
+  // The tool currently being prepared/executed in the live turn (null = none).
+  const [liveTool, setLiveTool] = useState<ToolActivity | null>(null)
   // In-flight turn rendering, driven entirely from the SDK stream (not a
   // mid-stream disk re-read). When a turn is active (`pendingUser !== null`) we
   // render the transcript from: the pre-turn history snapshot (`frozenMessages`),
@@ -755,13 +888,18 @@ export function ChatView({
   }, [])
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all')
   const [activeTurn, setActiveTurn] = useState<number | null>(null)
-  const feedRef = useRef<HTMLElement | null>(null)
   const turnRefs = useRef<Record<number, HTMLElement | null>>({})
-  const bottomRef = useRef<HTMLDivElement | null>(null)
-  // Tracks whether the feed was anchored near the bottom *before* the latest
-  // re-render. Captured in onScroll (pre-update scrollHeight) so the auto-scroll
-  // effect doesn't mistake a tall incoming message for the user scrolling away.
-  const wasNearBottomRef = useRef(true)
+  // Bottom-pinning scroll: open at the bottom, follow every content growth
+  // (stream, tool cards, density, late reflows) while anchored, detach on user
+  // scroll-up, re-attach near the bottom — see useAutoScroll.ts.
+  const {
+    feedRef,
+    innerRef: transcriptInnerRef,
+    followRef,
+    pin,
+    onScroll: onFeedScroll,
+    onWheel: onFeedWheel,
+  } = useChatAutoScroll(session.filename)
   // Ref mirror of activeTurn so the density-change layout effect can read
   // the current turn without listing activeTurn as a dependency (which would
   // cause it to fire on every scroll-spy update, fighting user scrolling).
@@ -809,12 +947,12 @@ export function ChatView({
   // The messages actually rendered. Idle: the live disk transcript. In-flight: the
   // pre-turn snapshot + an optimistic prompt bubble + the streamed messages —
   // assembled here and run through the SAME processing pipeline as history, so
-  // tools/thinking render live and correctly structured.
+  // tools/thinking render live and correctly structured. Both branches weave the
+  // pinned slash-command output back in right after the command-card that
+  // produced it (addressed by that card's UUID, set at reconcile time), so a
+  // pinned `/context` doesn't vanish for the duration of the next turn.
   const displayMessages = useMemo<ChatMessage[]>(() => {
-    if (pendingUser === null) {
-      const base = messages ?? []
-      // Weave pinned slash-command output back in right after the command-card
-      // that produced it, addressed by that card's UUID (set at reconcile time).
+    const weave = (base: ChatMessage[]): ChatMessage[] => {
       if (Object.keys(pinnedSlash).length === 0) return base
       const woven: ChatMessage[] = []
       for (const m of base) {
@@ -824,14 +962,14 @@ export function ChatView({
       }
       return woven
     }
-    const base = frozenMessages ?? messages ?? []
+    if (pendingUser === null) return weave(messages ?? [])
     const synthetic: ChatMessage = {
       uuid: '__pending_user__',
       role: 'user',
       timestamp: pendingAt,
       content: [{ type: 'text', text: pendingUser }],
     }
-    return [...base, synthetic, ...liveMessages]
+    return [...weave(frozenMessages ?? messages ?? []), synthetic, ...liveMessages]
   }, [pendingUser, pendingAt, frozenMessages, messages, liveMessages, pinnedSlash])
 
   // Heavy: rebuild the processed transcript only when the displayed messages change.
@@ -840,11 +978,13 @@ export function ChatView({
 
   // Model the session is already on — its last assistant turn that recorded one.
   // The composer reuses it so a reply from ClaudeLens stays on the same model the
-  // chat was using; undefined falls back to the configured default.
+  // chat was using; undefined falls back to the configured default. `<synthetic>`
+  // turns (persisted local-command output) aren't a real model — sending that
+  // string as a model id would error, so skip past them.
   const inheritedModel = useMemo(() => {
     for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
       const m = messages![i]
-      if (m.role === 'assistant' && m.model) return m.model
+      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model
     }
     return undefined
   }, [messages])
@@ -872,17 +1012,24 @@ export function ChatView({
     [processed, detailsFilter, agentColorOf]
   )
   const fmtTurnTime = useCallback(
-    (ts: string | undefined) => (ts
-      ? new Date(ts).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
-      : ''),
+    (ts: string | undefined) =>
+      ts
+        ? new Date(ts).toLocaleTimeString('it-IT', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit',
+            hour12: false,
+          })
+        : '',
     []
   )
   // Every turn that renders something — drives the type-filter counts so
   // "Tools" still reflects the collapsed tool-only turns.
   const visibleItems = useMemo<MinimapItem[]>(
-    () => descriptors
-      .map((d, i) => ({ ...d, n: i + 1, time: fmtTurnTime(processed[i]?.msg.timestamp) }))
-      .filter(d => d.visible),
+    () =>
+      descriptors
+        .map((d, i) => ({ ...d, n: i + 1, time: fmtTurnTime(processed[i]?.msg.timestamp) }))
+        .filter(d => d.visible),
     [descriptors, processed, fmtTurnTime]
   )
   // The navigation rail shows one dot per *message* turn: tool-only turns
@@ -895,7 +1042,12 @@ export function ChatView({
     let run: { count: number; firstIdx: number; files: TouchedFile[] } | null = null
     const flush = () => {
       if (run) {
-        items.push({ kind: 'tools', key: `tools-${run.firstIdx}`, count: run.count, files: run.files })
+        items.push({
+          kind: 'tools',
+          key: `tools-${run.firstIdx}`,
+          count: run.count,
+          files: run.files,
+        })
         run = null
       }
     }
@@ -943,11 +1095,16 @@ export function ChatView({
   const matchesFilter = useCallback(
     (d: TurnDescriptor) => {
       switch (activeFilter) {
-        case 'tools': return d.hasTools
-        case 'thinking': return d.hasThinking && detailsFilter === 'all'
-        case 'questions': return d.hasQuestion
-        case 'plan': return d.hasPlan
-        default: return true
+        case 'tools':
+          return d.hasTools
+        case 'thinking':
+          return d.hasThinking && detailsFilter === 'all'
+        case 'questions':
+          return d.hasQuestion
+        case 'plan':
+          return d.hasPlan
+        default:
+          return true
       }
     },
     [activeFilter, detailsFilter]
@@ -974,24 +1131,39 @@ export function ChatView({
     )
     Object.values(turnRefs.current).forEach(el => el && io.observe(el))
     return () => io.disconnect()
-  }, [minimapItems, viewMode])
+  }, [minimapItems, viewMode, feedRef])
 
   // Keep activeTurnRef in sync so layout effects can read it without deps.
-  useEffect(() => { activeTurnRef.current = activeTurn }, [activeTurn])
+  useEffect(() => {
+    activeTurnRef.current = activeTurn
+  }, [activeTurn])
 
-  // Anchor the feed after a density change: if near the bottom, snap back to
-  // bottom; otherwise keep the scroll-spy turn in view. useLayoutEffect fires
-  // after DOM mutations but before paint, so the corrected position never flashes.
+  // Anchor the feed after a density change: if anchored to the bottom, snap
+  // back to bottom; otherwise keep the scroll-spy turn in view. useLayoutEffect
+  // fires after DOM mutations but before paint, so the corrected position never
+  // flashes.
   useLayoutEffect(() => {
-    const feed = feedRef.current
-    if (!feed) return
-    if (wasNearBottomRef.current) {
-      feed.scrollTop = feed.scrollHeight - feed.clientHeight
+    if (followRef.current) {
+      pin()
     } else {
       const turn = activeTurnRef.current
       if (turn !== null) turnRefs.current[turn]?.scrollIntoView({ block: 'nearest' })
     }
-  }, [detailsFilter])
+  }, [detailsFilter, followRef, pin])
+
+  // The feed hides (display:none) behind overlays (tool detail, sub-agent
+  // transcript) and in Timeline mode — it stays mounted so the composer keeps
+  // the SDK session alive, but a hidden scroller collapses and loses its scroll
+  // offset anyway. On return, an anchored view is re-pinned by the resize
+  // observer; a detached one gets its active turn back instead of silently
+  // restarting at the top.
+  useLayoutEffect(() => {
+    if (selectedTool || transcriptAgent || viewMode !== 'chat') return
+    if (!followRef.current) {
+      const turn = activeTurnRef.current
+      if (turn !== null) turnRefs.current[turn]?.scrollIntoView({ block: 'start' })
+    }
+  }, [selectedTool, transcriptAgent, viewMode, followRef])
 
   const jumpToTurn = useCallback((n: number) => {
     const el = turnRefs.current[n]
@@ -1026,25 +1198,16 @@ export function ChatView({
   }, [skills, activeTurn])
 
   const title = sessionTitle(session)
-  const selectedExportPreset = CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
-
-  // Scroll to bottom when new messages arrive, but only when already near the bottom
-  // so manual scrolling up isn't interrupted.
-  useEffect(() => {
-    if (wasNearBottomRef.current) {
-      bottomRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' })
-    }
-  }, [renderItems.length])
-
-  // While streaming, pin the feed to the bottom on every token so the growing
-  // live turn stays in view. A direct scrollTop write (not smooth) is used because
-  // rapid successive smooth scrolls interrupt each other and never settle; this
-  // also respects the user scrolling up mid-stream (wasNearBottomRef goes false).
-  useEffect(() => {
-    if (!streaming || !wasNearBottomRef.current) return
-    const feed = feedRef.current
-    if (feed) feed.scrollTop = feed.scrollHeight
-  }, [liveText, liveMessages, streaming])
+  const selectedExportPreset =
+    CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0]
+  // Whether an overlay / alternate mode is covering the chat workspace. The
+  // workspace is then hidden (display:none) but never unmounted — see the
+  // comment at the render site.
+  const chatHidden =
+    Boolean(selectedTool) ||
+    Boolean(transcriptAgent && transcriptAgent.agentId) ||
+    isError ||
+    viewMode !== 'chat'
 
   async function handleExport(format: ChatExportFormat) {
     if (!canExport) return
@@ -1059,12 +1222,15 @@ export function ChatView({
         processed,
         preset: exportPreset,
       })
-      const result = format === 'markdown'
-        ? await saveMarkdownExport(`${doc.defaultBaseName}.md`, doc.markdown)
-        : await savePdfExport(`${doc.defaultBaseName}.pdf`, doc.html)
+      const result =
+        format === 'markdown'
+          ? await saveMarkdownExport(`${doc.defaultBaseName}.md`, doc.markdown)
+          : await savePdfExport(`${doc.defaultBaseName}.pdf`, doc.html)
 
       if (!result.canceled) {
-        setExportMessage(`Saved ${format === 'markdown' ? 'Markdown' : 'PDF'}${result.filePath ? ` to ${result.filePath}` : ''}`)
+        setExportMessage(
+          `Saved ${format === 'markdown' ? 'Markdown' : 'PDF'}${result.filePath ? ` to ${result.filePath}` : ''}`
+        )
       }
     } catch (e) {
       setExportError(e instanceof Error ? e.message : String(e))
@@ -1082,7 +1248,6 @@ export function ChatView({
       showThinking={detailsFilter === 'all'}
       density={detailsFilter}
       setDensity={setDetailsFilter}
-      onResume={() => window.electronAPI.sessions.openInTerminal(project.realPath, session.filename.replace('.jsonl', ''))}
       canExport={canExport}
       exporting={exporting}
       exportPreset={exportPreset}
@@ -1122,7 +1287,11 @@ export function ChatView({
                 type="button"
                 className={viewMode === v ? 'on' : ''}
                 onClick={() => setViewMode(v)}
-                title={v === 'timeline' ? 'Session timeline (swimlanes by file/tool)' : 'Linear transcript'}
+                title={
+                  v === 'timeline'
+                    ? 'Session timeline (swimlanes by file/tool)'
+                    : 'Linear transcript'
+                }
               >
                 {v === 'chat' ? 'Chat' : 'Timeline'}
               </button>
@@ -1144,6 +1313,13 @@ export function ChatView({
         />
       )}
 
+      {/* Overlays and alternate modes visually replace the chat workspace, but
+          the workspace below stays MOUNTED (hidden via display:none): the
+          composer inside it owns the persistent SDK session and the stream
+          listeners, so unmounting it mid-turn would dispose the session and
+          silently abort whatever Claude is doing. The composer's dialogs
+          (permission requests) render through a portal, so they stay visible
+          and answerable even while the workspace is hidden. */}
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
       ) : transcriptAgent && transcriptAgent.agentId ? (
@@ -1168,106 +1344,111 @@ export function ChatView({
           )}
           {controlPill(false)}
         </div>
-      ) : (
-        <div className="cl-chat-workspace cl-chat-workspace--focus" data-composer>
-          <main
-            className="cl-chat-feed"
-            ref={feedRef}
-            onScroll={e => {
-              const el = e.target as HTMLElement
-              // Capture anchoring with the current (pre-render) scrollHeight so the
-              // auto-scroll effect knows the user was at the bottom even when the
-              // next message is taller than the 200px threshold.
-              wasNearBottomRef.current = el.scrollHeight - el.scrollTop - el.clientHeight < 200
-            }}
-          >
-            {isLoading && (
-              <p className="cl-transcript-state">Loading transcript…</p>
-            )}
-            {messages?.length === 0 && !isLoading && (
-              <p className="cl-transcript-state">No messages found in this session.</p>
-            )}
+      ) : null}
 
-            {processed.length > 0 && (
-              <div className="cl-chat-reading">
-                <div className="cl-transcript-inner">
-                  {(() => {
-                    let prevRole: string | null = null
-                    let pendingHidden = 0
-                    let pendingFiles: TouchedFile[] = []
-                    return renderItems.map(item => {
-                      if (item.kind !== 'turn') {
-                        prevRole = null
-                        pendingHidden = item.count
-                        pendingFiles = item.files
-                        return null
-                      }
-                      const curRole = processed[item.idx].msg.role
-                      const hasText = processed[item.idx].msg.content.some(b => b.type === 'text')
-                      const isContinuation = !hasText && curRole === prevRole && curRole === 'assistant'
-                      prevRole = curRole
-                      const hiddenToolCount = pendingHidden
-                      const hiddenFiles = pendingFiles
-                      pendingHidden = 0
-                      pendingFiles = []
-                      return (
-                        <MessageBubble
-                          key={`${item.idx}:${processed[item.idx].msg.uuid}`}
-                          processed={processed[item.idx]}
-                          detailsFilter={detailsFilter}
-                          onOpenToolDetail={setSelectedTool}
-                          agentColorOf={agentColorOf}
-                          skillOf={skillOf}
-                          onOpenSkill={onOpenSkill}
-                          agentOf={agentOf}
-                          onOpenAgent={onOpenAgent}
-                          turnIndex={item.idx + 1}
-                          dimmed={activeFilter !== 'all' && descriptors[item.idx]?.visible && !matchesFilter(descriptors[item.idx])}
-                          isContinuation={isContinuation}
-                          innerRef={setTurnRef}
-                          hiddenToolCount={hiddenToolCount}
-                          hiddenFiles={hiddenFiles}
-                        />
-                      )
-                    })
-                  })()}
-                  {streaming && (liveText !== '' || liveMessages.length === 0) && (
-                    <LiveTurn text={liveText} turnNumber={processed.length + 1} />
+      <div
+        className="cl-chat-workspace cl-chat-workspace--focus"
+        data-composer
+        style={chatHidden ? { display: 'none' } : undefined}
+      >
+        <main className="cl-chat-feed" ref={feedRef} onScroll={onFeedScroll} onWheel={onFeedWheel}>
+          {isLoading && <p className="cl-transcript-state">Loading transcript…</p>}
+          {messages?.length === 0 && !isLoading && (
+            <p className="cl-transcript-state">No messages found in this session.</p>
+          )}
+
+          {processed.length > 0 && (
+            <div className="cl-chat-reading">
+              <div className="cl-transcript-inner" ref={transcriptInnerRef}>
+                {(() => {
+                  let prevRole: string | null = null
+                  let pendingHidden = 0
+                  let pendingFiles: TouchedFile[] = []
+                  return renderItems.map(item => {
+                    if (item.kind !== 'turn') {
+                      prevRole = null
+                      pendingHidden = item.count
+                      pendingFiles = item.files
+                      return null
+                    }
+                    const curRole = processed[item.idx].msg.role
+                    const hasText = processed[item.idx].msg.content.some(b => b.type === 'text')
+                    const isContinuation =
+                      !hasText && curRole === prevRole && curRole === 'assistant'
+                    prevRole = curRole
+                    const hiddenToolCount = pendingHidden
+                    const hiddenFiles = pendingFiles
+                    pendingHidden = 0
+                    pendingFiles = []
+                    return (
+                      <MessageBubble
+                        key={`${item.idx}:${processed[item.idx].msg.uuid}`}
+                        processed={processed[item.idx]}
+                        detailsFilter={detailsFilter}
+                        onOpenToolDetail={setSelectedTool}
+                        agentColorOf={agentColorOf}
+                        skillOf={skillOf}
+                        onOpenSkill={onOpenSkill}
+                        agentOf={agentOf}
+                        onOpenAgent={onOpenAgent}
+                        turnIndex={item.idx + 1}
+                        dimmed={
+                          activeFilter !== 'all' &&
+                          descriptors[item.idx]?.visible &&
+                          !matchesFilter(descriptors[item.idx])
+                        }
+                        isContinuation={isContinuation}
+                        innerRef={setTurnRef}
+                        hiddenToolCount={hiddenToolCount}
+                        hiddenFiles={hiddenFiles}
+                      />
+                    )
+                  })
+                })()}
+                {streaming &&
+                  (liveText !== '' || liveTool !== null || liveMessages.length === 0) && (
+                    <LiveTurn text={liveText} tool={liveTool} turnNumber={processed.length + 1} />
                   )}
-                  <div ref={bottomRef} />
-                </div>
               </div>
-            )}
-          </main>
+            </div>
+          )}
+        </main>
 
-          <FocusMinimap
-            items={minimapItems}
-            active={activeTurn}
-            matches={matchesFilter}
-            onJump={jumpToTurn}
-          />
+        <FocusMinimap
+          items={minimapItems}
+          active={activeTurn}
+          matches={matchesFilter}
+          onJump={jumpToTurn}
+        />
 
-          {controlPill(true)}
+        {controlPill(true)}
 
-          <ChatComposer
-            key={sessionId}
-            realPath={project.realPath}
-            sessionId={sessionId}
-            model={inheritedModel}
-            onTurnComplete={refetch}
-            onSend={text => {
-              pendingBaseCount.current = messages?.length ?? 0
-              setPendingAt(new Date().toISOString())
-              setFrozenMessages(messages ?? [])
-              setLiveMessages([])
-              setPendingUser(text)
-            }}
-            onStreamChange={setLiveText}
-            onStreamingChange={setStreaming}
-            onLiveMessagesChange={handleLiveMessages}
-          />
-        </div>
-      )}
+        <ChatComposer
+          key={sessionId}
+          realPath={project.realPath}
+          sessionId={sessionId}
+          model={inheritedModel}
+          onTurnComplete={refetch}
+          onSend={text => {
+            pendingBaseCount.current = messages?.length ?? 0
+            setPendingAt(new Date().toISOString())
+            setFrozenMessages(messages ?? [])
+            setLiveMessages([])
+            setPendingUser(text)
+          }}
+          onSendFailed={() => {
+            // The send never became a turn — roll back the optimistic bubble
+            // and the frozen snapshot so the transcript shows the disk truth.
+            setPendingUser(null)
+            setFrozenMessages(null)
+            setLiveMessages([])
+          }}
+          onStreamChange={setLiveText}
+          onStreamingChange={setStreaming}
+          onLiveMessagesChange={handleLiveMessages}
+          onLiveToolChange={setLiveTool}
+        />
+      </div>
     </div>
   )
 }
