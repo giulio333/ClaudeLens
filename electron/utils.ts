@@ -1,5 +1,5 @@
 import { readdirSync, readFileSync, statSync } from 'fs';
-import { join, resolve, sep } from 'path';
+import { dirname, join, resolve, sep } from 'path';
 import os from 'os';
 
 // Respect CLAUDE_CONFIG_DIR if the user has relocated their Claude data dir.
@@ -120,6 +120,33 @@ function readCwdFromJsonl(filePath: string): string | null {
     // file illeggibile
   }
   return null;
+}
+
+/**
+ * Locate the Agent SDK's native CLI binary when running from a packaged app.
+ *
+ * The SDK resolves its platform binary (`@anthropic-ai/claude-agent-sdk-
+ * {platform}-{arch}/claude`) relative to its own module path — inside an
+ * Electron package that lands in `app.asar`, which is a *file*, so the SDK's
+ * `child_process.spawn` fails with ENOTDIR (Electron does not rewrite spawn
+ * paths into the asar). electron-builder ships the binary outside the archive
+ * (`asarUnpack`); this returns that `app.asar.unpacked` path to pass as
+ * `pathToClaudeCodeExecutable`. Returns undefined in dev (real node_modules on
+ * disk), where the SDK's own resolution — including musl detection — works.
+ */
+export function resolveClaudeExecutablePath(): string | undefined {
+  try {
+    const pkg = `@anthropic-ai/claude-agent-sdk-${process.platform}-${process.arch}`;
+    const pkgJson = require.resolve(`${pkg}/package.json`);
+    if (!pkgJson.includes(`app.asar${sep}`)) return undefined;
+    const binary = process.platform === 'win32' ? 'claude.exe' : 'claude';
+    return join(dirname(pkgJson), binary).replace(
+      `app.asar${sep}`,
+      `app.asar.unpacked${sep}`
+    );
+  } catch {
+    return undefined;
+  }
 }
 
 // Framing tags Claude Code wraps around technical/system content in transcripts.

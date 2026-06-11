@@ -9,7 +9,7 @@ import {
   useGlobalAgents,
   useProjectAgents,
   useCleanupPeriodDays,
-  ClaudeProcess,
+  useActiveSessions,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import { fmt, fmtModel, sessionTitle } from '../utils'
@@ -230,31 +230,22 @@ export function ProjectView({
   const { data: projectAgents = [] } = useProjectAgents(project.realPath)
   const { data: cleanupDays = 30 } = useCleanupPeriodDays()
 
-  // ── Live process ──
-  const [procs, setProcs] = useState<ClaudeProcess[]>([])
-  useEffect(() => {
-    let alive = true
-    async function load() {
-      try {
-        const r = await window.electronAPI.live.getProcesses()
-        if (alive && r.data) setProcs(r.data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 5000)
-    return () => { alive = false; clearInterval(t) }
-  }, [])
+  // ── Live session (registry ~/.claude/sessions, push dal main) ──
+  const { data: procs = [] } = useActiveSessions()
   const liveProc = procs.find(p => p.cwd === project.realPath)
   const livePid = liveProc?.pid
+  const liveStartedAt = liveProc?.startedAt
   // Live uptime in state, computed inside the interval callback (never during
-  // render) so the render stays pure. Reseeds whenever the observed PID changes.
+  // render) so the render stays pure. With a registry entry the base is the
+  // real session start; fallback entries reuse the old "first observed" base.
   const [liveSec, setLiveSec] = useState(0)
   useEffect(() => {
     if (livePid === undefined) return
-    let start: number | null = null
+    let observedStart: number | null = null
     const update = () => {
-      if (start === null) start = Date.now()
-      setLiveSec(Math.floor((Date.now() - start) / 1000))
+      if (observedStart === null) observedStart = Date.now()
+      const base = liveStartedAt ?? observedStart
+      setLiveSec(Math.max(0, Math.floor((Date.now() - base) / 1000)))
     }
     const seed = setTimeout(update, 0)
     const t = setInterval(update, 1000)
@@ -262,8 +253,11 @@ export function ProjectView({
       clearTimeout(seed)
       clearInterval(t)
     }
-  }, [livePid])
-  const liveUptime = `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`
+  }, [livePid, liveStartedAt])
+  const liveUptime =
+    liveSec >= 3600
+      ? `${Math.floor(liveSec / 3600)}h ${Math.floor((liveSec % 3600) / 60)}m`
+      : `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`
 
   // Wall-clock for the retention window, kept in state so render never calls
   // Date.now() directly. Seeded right after mount and refreshed each minute;
@@ -423,7 +417,13 @@ export function ProjectView({
               {liveProc ? (
                 <>
                   <div className="pid">PID {liveProc.pid}</div>
-                  <div className="cmd">{liveProc.cmdline || 'claude'}</div>
+                  <div className="cmd">
+                    {liveProc.status === 'waiting'
+                      ? `waiting for ${liveProc.waitingFor ?? 'input'}`
+                      : liveProc.source === 'registry'
+                        ? liveProc.status
+                        : 'claude'}
+                  </div>
                   <div className="uptime">↑ {liveUptime} · attached</div>
                 </>
               ) : (

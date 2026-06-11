@@ -56,6 +56,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
       permissionMode?: string
     ) => ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
     stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
+    endChat: () => ipcRenderer.invoke('sessions:endChat'),
     respondPermission: (requestId: string, decision: unknown) =>
       ipcRenderer.invoke('sessions:permissionResponse', requestId, decision),
     onPermissionRequest: (cb: (request: unknown) => void) => {
@@ -69,6 +70,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatChunk: (cb: (chunk: string) => void) => {
       ipcRenderer.removeAllListeners('sessions:chatChunk');
       ipcRenderer.on('sessions:chatChunk', (_event, chunk) => cb(chunk));
+    },
+    onChatToolActivity: (cb: (activity: unknown) => void) => {
+      ipcRenderer.removeAllListeners('sessions:chatToolActivity');
+      ipcRenderer.on('sessions:chatToolActivity', (_event, activity) => cb(activity));
     },
     onChatMessage: (cb: (message: unknown) => void) => {
       ipcRenderer.removeAllListeners('sessions:chatMessage');
@@ -151,9 +156,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     return () => ipcRenderer.removeListener('data:changed', handler);
   },
   live: {
-    getProcesses: () => ipcRenderer.invoke('live:getProcesses'),
+    getActiveSessions: () => ipcRenderer.invoke('live:getActiveSessions'),
+    onActiveSessionsChanged: (callback: (sessions: unknown) => void) => {
+      const handler = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('live:activeSessions', handler);
+      return () => ipcRenderer.removeListener('live:activeSessions', handler);
+    },
     getSessions: () => ipcRenderer.invoke('live:getSessions'),
-    startWatch: (hash: string) => ipcRenderer.invoke('live:startWatch', hash),
+    startWatch: (hash: string, sessionId?: string) =>
+      ipcRenderer.invoke('live:startWatch', hash, sessionId),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),
     onEvent: (cb: (event: unknown) => void) => {
       ipcRenderer.removeAllListeners('live:event');

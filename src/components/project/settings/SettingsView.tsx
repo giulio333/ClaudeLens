@@ -2,6 +2,7 @@ import { useState, type ReactNode } from 'react'
 import { TopBar } from '../shared/TopBar'
 import { useEffectiveConfig, type EffectiveConfig } from '../../../hooks/useIPC'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
+import { version as appVersion } from '../../../../package.json'
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 // Reads the *effective* Claude Code configuration through the official Agent SDK
@@ -71,12 +72,17 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
               {t.label}
             </button>
           ))}
-          {data?.cwd && (
-            <div className="mt-auto px-2 pt-4" style={{ fontSize: 10.5, color: 'var(--cl-ink-4)' }}>
-              <div className="font-mono uppercase" style={{ letterSpacing: '0.14em' }}>Scope</div>
-              <div className="mt-1 break-all" style={{ color: 'var(--cl-ink-3)' }}>{data.cwd}</div>
+          <div className="mt-auto px-2 pt-4" style={{ fontSize: 10.5, color: 'var(--cl-ink-4)' }}>
+            {data?.cwd && (
+              <>
+                <div className="font-mono uppercase" style={{ letterSpacing: '0.14em' }}>Scope</div>
+                <div className="mt-1 break-all" style={{ color: 'var(--cl-ink-3)' }}>{data.cwd}</div>
+              </>
+            )}
+            <div className="mt-3 font-mono" style={{ letterSpacing: '0.1em', color: 'var(--cl-ink-3)' }}>
+              ClaudeLens v{appVersion}
             </div>
-          )}
+          </div>
         </aside>
 
         {/* ─── Content ─── */}

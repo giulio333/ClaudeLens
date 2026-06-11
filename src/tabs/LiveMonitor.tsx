@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react'
-import { LiveEvent, ClaudeProcess } from '../hooks/useIPC'
+import { LiveEvent, useActiveSessions } from '../hooks/useIPC'
 import { UsedItem, VISIBLE_TYPES, MAX_EVENTS, CHART_H } from './live/types'
 import { ActivityChart } from './live/ActivityChart'
 import { ProjectContextPanel } from './live/ProjectContextPanel'
@@ -29,7 +29,7 @@ export default function LiveMonitor({
   onBack: () => void
 }) {
   const [events, setEvents]         = useState<LiveEvent[]>([])
-  const [processes, setProcesses]   = useState<ClaudeProcess[]>([])
+  const { data: processes = [] }    = useActiveSessions()
   const [watching, setWatching]     = useState(false)
   const [claudeStatus, setClaudeStatus] = useState<'idle' | 'thinking' | 'busy'>('idle')
   const [activeTool, setActiveTool] = useState<{ name: string; arg: string; status: 'running' | 'done'; finalDuration?: number } | null>(null)
@@ -49,19 +49,6 @@ export default function LiveMonitor({
     const t = setInterval(() => setElapsed(Date.now() - toolStartRef.current), 100)
     return () => clearInterval(t)
   }, [activeTool])
-
-  // Polling processi
-  useEffect(() => {
-    async function load() {
-      try {
-        const r = await window.electronAPI.live.getProcesses()
-        if (r.data) setProcesses(r.data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 5000)
-    return () => clearInterval(t)
-  }, [])
 
   const handleEvent = useCallback((ev: LiveEvent) => {
     // Status change — gestito separatamente, non aggiunto agli eventi chart
@@ -120,17 +107,21 @@ export default function LiveMonitor({
     }
   }, [])
 
-  useEffect(() => {
-    window.electronAPI.live.onEvent(e => handleEvent(e as LiveEvent))
-    window.electronAPI.live.startWatch(project.hash).then(r => {
-      if (r.data?.started) setWatching(true)
-    })
-    return () => { window.electronAPI.live.stopWatch() }
-  }, [project.hash, handleEvent])
-
   const activeProcs = processes.filter(p =>
     p.cwd === project.realPath || p.cwd.startsWith(project.realPath + '/')
   )
+  // Con un sessionId dal registro il main taila il transcript esatto della
+  // sessione viva; senza (fallback scanner o lista non ancora arrivata) il
+  // main ripiega sul .jsonl più recente. Cambia sessionId → restart del watch.
+  const liveSessionId = activeProcs.find(p => p.sessionId)?.sessionId
+
+  useEffect(() => {
+    window.electronAPI.live.onEvent(e => handleEvent(e as LiveEvent))
+    window.electronAPI.live.startWatch(project.hash, liveSessionId).then(r => {
+      if (r.data?.started) setWatching(true)
+    })
+    return () => { window.electronAPI.live.stopWatch() }
+  }, [project.hash, liveSessionId, handleEvent])
 
   const toolFreq = events
     .filter(e => e.type === 'tool_use')
