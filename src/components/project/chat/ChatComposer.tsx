@@ -1,14 +1,14 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { fmtModel } from '../utils'
-import { PermissionRequestDialog } from './PermissionRequestDialog'
-import { useEffectiveConfig } from '../../../hooks/useIPC'
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { fmtModel } from '../utils';
+import { PermissionRequestDialog } from './PermissionRequestDialog';
+import { useEffectiveConfig } from '../../../hooks/useIPC';
 import type {
   PermissionRequest,
   PermissionDecision,
   ChatMessage,
   ToolActivity,
-} from '../../../hooks/useIPC'
+} from '../../../hooks/useIPC';
 
 /** The four permission modes Claude Code accepts, labelled for what they now do
  *  with *interactive* approvals: the chat runs through the Agent SDK's
@@ -39,19 +39,19 @@ const PERMISSION_OPTIONS = [
     danger: true,
     hint: 'Runs every tool — edits and shell — with no approval',
   },
-] as const
+] as const;
 
-type PermissionMode = (typeof PERMISSION_OPTIONS)[number]['value']
+type PermissionMode = (typeof PERMISSION_OPTIONS)[number]['value'];
 
 /** Permission modes that need an explicit confirmation before sending. With real
  *  in-app prompts only `bypassPermissions` auto-approves *everything* with no
  *  further asking, so it's the only one gated. `acceptEdits` still routes shell
  *  through `canUseTool`, and `default`/`plan` ask for each action. */
-const CONFIRM_MODES: PermissionMode[] = ['bypassPermissions']
+const CONFIRM_MODES: PermissionMode[] = ['bypassPermissions'];
 
 /** Model aliases the CLI resolves on `--model`. The empty value means "send no
  *  --model flag" → Claude Code falls back to its configured default. */
-const MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const
+const MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const;
 
 /** A small upward popover anchored to a chip in the composer meta-row. Renders a
  *  trigger showing the current selection; clicking opens a menu of options above
@@ -63,25 +63,25 @@ function ComposerSelect<T extends string>({
   onChange,
   disabled,
 }: {
-  label: string
-  value: T
-  options: { value: T; label: string; danger?: boolean; hint?: string }[]
-  onChange: (value: T) => void
-  disabled?: boolean
+  label: string;
+  value: T;
+  options: { value: T; label: string; danger?: boolean; hint?: string }[];
+  onChange: (value: T) => void;
+  disabled?: boolean;
 }) {
-  const [open, setOpen] = useState(false)
-  const rootRef = useRef<HTMLSpanElement | null>(null)
+  const [open, setOpen] = useState(false);
+  const rootRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {
-    if (!open) return
+    if (!open) return;
     const onDown = (e: MouseEvent) => {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
-    }
-    document.addEventListener('mousedown', onDown)
-    return () => document.removeEventListener('mousedown', onDown)
-  }, [open])
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener('mousedown', onDown);
+    return () => document.removeEventListener('mousedown', onDown);
+  }, [open]);
 
-  const current = options.find(o => o.value === value)
+  const current = options.find(o => o.value === value);
 
   return (
     <span className="cl-composer-select" ref={rootRef}>
@@ -98,8 +98,8 @@ function ComposerSelect<T extends string>({
                 .filter(Boolean)
                 .join(' ')}
               onClick={() => {
-                onChange(o.value)
-                setOpen(false)
+                onChange(o.value);
+                setOpen(false);
               }}
             >
               <span className="cl-composer-menu-item-label">{o.label}</span>
@@ -122,7 +122,7 @@ function ComposerSelect<T extends string>({
         <span className="cl-composer-chip-caret" aria-hidden />
       </button>
     </span>
-  )
+  );
 }
 
 /** Bottom composer for the Focus chat layout — lets the user continue an existing
@@ -158,109 +158,114 @@ export function ChatComposer({
   onLiveMessagesChange,
   onLiveToolChange,
   onSendFailed,
+  lockNotice,
 }: {
-  realPath: string
+  realPath: string;
   /** Resume mode when set; new-chat mode when omitted. */
-  sessionId?: string
-  model?: string
+  sessionId?: string;
+  model?: string;
+  /** When set, sending is disabled and this message is shown instead — used
+   *  while the session is live in a terminal, where replying here would both
+   *  race the CLI on the same transcript and silently spend SDK credits. */
+  lockNotice?: string | null;
   /** Fired when a turn finishes so the parent can refetch the transcript. */
-  onTurnComplete: () => void
+  onTurnComplete: () => void;
   /** New-chat mode: the freshly-minted session id, as soon as Claude reports it. */
-  onStarted?: (sessionId: string) => void
+  onStarted?: (sessionId: string) => void;
   /** Fired with the message text at send time (used by the new-chat view to
    *  title the session before its transcript exists). */
-  onSend?: (text: string) => void
+  onSend?: (text: string) => void;
   /** Fired when a send fails before a turn ever starts (invoke error, or the
    *  handler returned an error) — lets the parent roll back the optimistic
    *  state it set in `onSend`, so the prompt bubble doesn't linger as if sent. */
-  onSendFailed?: () => void
+  onSendFailed?: () => void;
   /** Lifts the live assistant text up so the parent can render it inline in the
    *  transcript (instead of the composer's own preview strip). */
-  onStreamChange?: (text: string) => void
+  onStreamChange?: (text: string) => void;
   /** Lifts the streaming on/off state up for the same inline rendering. */
-  onStreamingChange?: (active: boolean) => void
+  onStreamingChange?: (active: boolean) => void;
   /** Lifts up the fully-formed messages the SDK emits during the turn (assistant
    *  turns + tool results), so the parent can render the live turn — tools and
    *  all — without re-reading the half-written transcript from disk. */
-  onLiveMessagesChange?: (messages: ChatMessage[]) => void
+  onLiveMessagesChange?: (messages: ChatMessage[]) => void;
   /** Lifts up the tool currently being prepared or executed (null = none), so
    *  the parent's live turn can show a "Using X…" indicator while no text
    *  streams. */
-  onLiveToolChange?: (activity: ToolActivity | null) => void
+  onLiveToolChange?: (activity: ToolActivity | null) => void;
 }) {
-  const [draft, setDraft] = useState('')
-  const [sending, setSending] = useState(false)
-  const [stream, setStream] = useState('')
+  const [draft, setDraft] = useState('');
+  const [sending, setSending] = useState(false);
+  const [stream, setStream] = useState('');
   // Fully-formed messages received from the SDK during the in-flight turn.
-  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([])
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
   // The tool currently being prepared (input streaming in) or executed, if any.
-  const [liveTool, setLiveTool] = useState<ToolActivity | null>(null)
-  const [errorText, setErrorText] = useState<string | null>(null)
+  const [liveTool, setLiveTool] = useState<ToolActivity | null>(null);
+  const [errorText, setErrorText] = useState<string | null>(null);
   // The user's explicit model pick; null = follow the session's inherited model
   // (the `model` prop). Derived rather than seeded once because the prop resolves
   // asynchronously — the transcript may still be loading when the composer
   // mounts — so a one-shot `useState(model)` would lock in '' on first open.
   // Empty string = "Default" (send no model → Claude Code's configured default).
-  const [chosenModel, setChosenModel] = useState<string | null>(null)
-  const selectedModel = chosenModel !== null ? chosenModel : (model ?? '')
-  const [permission, setPermission] = useState<PermissionMode>('default')
+  const [chosenModel, setChosenModel] = useState<string | null>(null);
+  const selectedModel = chosenModel !== null ? chosenModel : (model ?? '');
+  const [permission, setPermission] = useState<PermissionMode>('default');
   // Tool-approval requests forwarded from the SDK's canUseTool, oldest first.
   // A queue, not a single slot: parallel read-only tools (or a Task subagent's
   // tools alongside the main agent's) can fire several canUseTool calls at once,
   // and overwriting the visible one would leave the hidden request pending
   // forever — deadlocking the turn. The dialog always shows the head.
-  const [permQueue, setPermQueue] = useState<PermissionRequest[]>([])
-  const permReq = permQueue[0] ?? null
+  const [permQueue, setPermQueue] = useState<PermissionRequest[]>([]);
+  const permReq = permQueue[0] ?? null;
   // The risky permission mode the user has already confirmed for this composer;
   // re-asked whenever they switch to a *different* risky mode. null = none yet.
-  const [confirmedMode, setConfirmedMode] = useState<PermissionMode | null>(null)
+  const [confirmedMode, setConfirmedMode] = useState<PermissionMode | null>(null);
   // Holds the drafted text while the confirmation dialog is open; non-null = open.
-  const [pendingText, setPendingText] = useState<string | null>(null)
-  const textareaRef = useRef<HTMLTextAreaElement | null>(null)
+  const [pendingText, setPendingText] = useState<string | null>(null);
+  const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // The scrollable slash popover — keyboard nav scrolls its active row into view.
-  const slashMenuRef = useRef<HTMLDivElement | null>(null)
+  const slashMenuRef = useRef<HTMLDivElement | null>(null);
 
   // Slash-command autocomplete. The available commands come from the project's
   // resolved Claude Code config (`init.slashCommands`, cached); sending one is
   // native — the Agent SDK runs a slash command passed in the prompt string.
-  const { data: config } = useEffectiveConfig(realPath)
-  const slashCommands = useMemo(() => config?.init?.slashCommands ?? [], [config])
-  const [slashIndex, setSlashIndex] = useState(0)
+  const { data: config } = useEffectiveConfig(realPath);
+  const slashCommands = useMemo(() => config?.init?.slashCommands ?? [], [config]);
+  const [slashIndex, setSlashIndex] = useState(0);
   // Set when the user presses Esc; cleared on the next keystroke so the menu
   // reappears as they keep typing.
-  const [slashDismissed, setSlashDismissed] = useState(false)
+  const [slashDismissed, setSlashDismissed] = useState(false);
 
   // The menu shows only while the draft is a single leading-slash token (no
   // space yet) — i.e. the command name is still being typed, not its arguments.
   const slashQuery = useMemo(() => {
-    const m = /^\/(\S*)$/.exec(draft)
-    return m ? m[1].toLowerCase() : null
-  }, [draft])
+    const m = /^\/(\S*)$/.exec(draft);
+    return m ? m[1].toLowerCase() : null;
+  }, [draft]);
   // The full prefix-filtered list — no cap. Typing `/` alone shows every command,
   // scrollable within the menu's max-height (see the active-row auto-scroll below).
   const slashMatches = useMemo(() => {
-    if (slashQuery === null) return []
-    return slashCommands.filter(c => c.toLowerCase().startsWith(slashQuery))
-  }, [slashQuery, slashCommands])
+    if (slashQuery === null) return [];
+    return slashCommands.filter(c => c.toLowerCase().startsWith(slashQuery));
+  }, [slashQuery, slashCommands]);
   // Clamp the highlight in case the candidate set shrank as the user typed.
-  const activeSlash = Math.min(slashIndex, slashMatches.length - 1)
-  const showSlash = slashMatches.length > 0 && !slashDismissed && !sending
+  const activeSlash = Math.min(slashIndex, slashMatches.length - 1);
+  const showSlash = slashMatches.length > 0 && !slashDismissed && !sending;
 
   // Fill the draft with the picked command (trailing space so args can follow)
   // and keep focus in the textarea. The trailing space closes the menu.
   function applySlash(cmd: string) {
-    setDraft(`/${cmd} `)
-    setSlashIndex(0)
-    textareaRef.current?.focus()
+    setDraft(`/${cmd} `);
+    setSlashIndex(0);
+    textareaRef.current?.focus();
   }
 
   // Keep the highlighted row visible while arrowing through the full list — the
   // menu scrolls at its max-height. `block: 'nearest'` only nudges the popover
   // when the active row is off-screen, so it's a no-op when it's already visible.
   useEffect(() => {
-    if (!showSlash) return
-    slashMenuRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' })
-  }, [activeSlash, showSlash])
+    if (!showSlash) return;
+    slashMenuRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
+  }, [activeSlash, showSlash]);
 
   // Build the model options: the inherited concrete id (if any) on top, then the
   // CLI aliases, then "Default" (no --model flag). De-duplicated by value.
@@ -271,49 +276,49 @@ export function ChatComposer({
       label: a[0].toUpperCase() + a.slice(1),
     })),
     { value: '', label: 'Default' },
-  ]
+  ];
 
   // Subscribe to the streaming channels. Only one composer is mounted at a time,
   // so claiming the listeners (the preload resets them on each subscribe) is safe.
   useEffect(() => {
-    window.electronAPI.sessions.onChatStarted(id => onStarted?.(id))
-    window.electronAPI.sessions.onChatChunk(chunk => setStream(prev => prev + chunk))
-    window.electronAPI.sessions.onChatToolActivity(activity => setLiveTool(activity))
+    window.electronAPI.sessions.onChatStarted(id => onStarted?.(id));
+    window.electronAPI.sessions.onChatChunk(chunk => setStream(prev => prev + chunk));
+    window.electronAPI.sessions.onChatToolActivity(activity => setLiveTool(activity));
     window.electronAPI.sessions.onChatMessage(message => {
-      setLiveMessages(prev => [...prev, message])
+      setLiveMessages(prev => [...prev, message]);
       // A completed assistant message absorbs the partial text we were streaming
       // into the preview; clear it so the next message's deltas start fresh and
       // the trailing LiveTurn doesn't echo text now shown as a real bubble.
-      if (message.role === 'assistant') setStream('')
+      if (message.role === 'assistant') setStream('');
       // A tool_result-bearing user message means the running tool finished;
       // drop the indicator (the next tool's stream events re-arm it).
-      if (message.role === 'user') setLiveTool(null)
-    })
+      if (message.role === 'user') setLiveTool(null);
+    });
     window.electronAPI.sessions.onChatError(message =>
       setErrorText(prev => (prev ? prev + '\n' : '') + message)
-    )
-    window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req]))
+    );
+    window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req]));
     window.electronAPI.sessions.onChatDone(() => {
-      setSending(false)
-      setStream('')
-      setLiveTool(null)
+      setSending(false);
+      setStream('');
+      setLiveTool(null);
       // A turn can't end with requests still on screen (the SDK denied any
       // pending ones on teardown); clear the stale queue.
-      setPermQueue([])
+      setPermQueue([]);
       // The watcher has likely refetched mid-stream already; refetch again so the
       // final turn is on screen the instant the run closes.
-      onTurnComplete()
-    })
+      onTurnComplete();
+    });
     return () => {
-      window.electronAPI.sessions.onChatStarted(() => {})
-      window.electronAPI.sessions.onChatChunk(() => {})
-      window.electronAPI.sessions.onChatToolActivity(() => {})
-      window.electronAPI.sessions.onChatMessage(() => {})
-      window.electronAPI.sessions.onChatError(() => {})
-      window.electronAPI.sessions.onPermissionRequest(() => {})
-      window.electronAPI.sessions.onChatDone(() => {})
-    }
-  }, [onTurnComplete, onStarted])
+      window.electronAPI.sessions.onChatStarted(() => {});
+      window.electronAPI.sessions.onChatChunk(() => {});
+      window.electronAPI.sessions.onChatToolActivity(() => {});
+      window.electronAPI.sessions.onChatMessage(() => {});
+      window.electronAPI.sessions.onChatError(() => {});
+      window.electronAPI.sessions.onPermissionRequest(() => {});
+      window.electronAPI.sessions.onChatDone(() => {});
+    };
+  }, [onTurnComplete, onStarted]);
 
   // Tear down the persistent SDK session when the composer unmounts (leaving the
   // chat, or switching session — ChatView keys the composer by sessionId). The
@@ -321,64 +326,64 @@ export function ChatComposer({
   // this fires solely on unmount, not on every listener re-subscribe.
   useEffect(() => {
     return () => {
-      void window.electronAPI.sessions.endChat()
-    }
-  }, [])
+      void window.electronAPI.sessions.endChat();
+    };
+  }, []);
 
   // Answer the tool-approval request at the head of the queue; the next pending
   // one (if any) takes its place in the dialog.
   function respondPermission(decision: PermissionDecision) {
-    if (!permReq) return
-    void window.electronAPI.sessions.respondPermission(permReq.requestId, decision)
-    setPermQueue(prev => prev.slice(1))
+    if (!permReq) return;
+    void window.electronAPI.sessions.respondPermission(permReq.requestId, decision);
+    setPermQueue(prev => prev.slice(1));
   }
 
   // Lift the live text + streaming state up so the parent renders the assistant's
   // partial reply inline in the transcript, where the final message will land —
   // no detached preview window that closes and re-appears.
   useEffect(() => {
-    onStreamChange?.(stream)
-  }, [stream, onStreamChange])
+    onStreamChange?.(stream);
+  }, [stream, onStreamChange]);
   useEffect(() => {
-    onStreamingChange?.(sending)
-  }, [sending, onStreamingChange])
+    onStreamingChange?.(sending);
+  }, [sending, onStreamingChange]);
   useEffect(() => {
-    onLiveMessagesChange?.(liveMessages)
-  }, [liveMessages, onLiveMessagesChange])
+    onLiveMessagesChange?.(liveMessages);
+  }, [liveMessages, onLiveMessagesChange]);
   useEffect(() => {
-    onLiveToolChange?.(liveTool)
-  }, [liveTool, onLiveToolChange])
+    onLiveToolChange?.(liveTool);
+  }, [liveTool, onLiveToolChange]);
 
   // Gate: a risky permission mode (auto-approves edits/bash) needs an explicit
   // confirmation before the first send, and again if the user switches to a
   // different risky mode. Safe modes send straight through.
   function handleSend() {
-    const text = draft.trim()
-    if (!text || sending) return
+    const text = draft.trim();
+    if (!text || sending || lockNotice) return;
     if (CONFIRM_MODES.includes(permission) && confirmedMode !== permission) {
-      setPendingText(text)
-      return
+      setPendingText(text);
+      return;
     }
-    void doSend(text)
+    void doSend(text);
   }
 
   function confirmAndSend() {
-    const text = pendingText
-    if (text == null) return
-    setConfirmedMode(permission)
-    setPendingText(null)
-    void doSend(text)
+    const text = pendingText;
+    if (text == null) return;
+    setConfirmedMode(permission);
+    setPendingText(null);
+    void doSend(text);
   }
 
   async function doSend(text: string) {
-    setStream('')
-    setLiveMessages([])
-    setLiveTool(null)
-    setErrorText(null)
-    setSending(true)
-    setDraft('')
-    setPermQueue([])
-    onSend?.(text)
+    setStream('');
+    setLiveMessages([]);
+    setLiveTool(null);
+    setErrorText(null);
+    setSending(true);
+    setDraft('');
+    setPermQueue([]);
+    onSend?.(text);
     try {
       const res = sessionId
         ? await window.electronAPI.sessions.sendMessage(
@@ -393,31 +398,37 @@ export function ChatComposer({
             text,
             selectedModel || undefined,
             permission
-          )
+          );
       if (res.error) {
-        setErrorText(res.error)
-        setSending(false)
-        onSendFailed?.()
+        setErrorText(res.error);
+        setSending(false);
+        onSendFailed?.();
       }
     } catch (e) {
-      setErrorText(e instanceof Error ? e.message : String(e))
-      setSending(false)
-      onSendFailed?.()
+      setErrorText(e instanceof Error ? e.message : String(e));
+      setSending(false);
+      onSendFailed?.();
     }
   }
 
   function handleStop() {
-    window.electronAPI.sessions.stopMessage()
-    setSending(false)
-    setStream('')
-    setLiveTool(null)
-    setPermQueue([])
+    window.electronAPI.sessions.stopMessage();
+    setSending(false);
+    setStream('');
+    setLiveTool(null);
+    setPermQueue([]);
   }
 
   return (
     <div className="cl-composer">
       <div className="cl-composer-inner">
         {errorText && <div className="cl-composer-error">{errorText}</div>}
+        {lockNotice && !sending && (
+          <div className="cl-composer-lock">
+            <span className="led" aria-hidden />
+            {lockNotice}
+          </div>
+        )}
 
         <div className="cl-composer-row">
           {showSlash && (
@@ -439,8 +450,8 @@ export function ChatComposer({
                   // mousedown (not click) + preventDefault: pick before the
                   // textarea loses focus, so the caret stays put.
                   onMouseDown={e => {
-                    e.preventDefault()
-                    applySlash(cmd)
+                    e.preventDefault();
+                    applySlash(cmd);
                   }}
                 >
                   <span className="cl-slash-name">/{cmd}</span>
@@ -453,43 +464,45 @@ export function ChatComposer({
             className="cl-composer-input"
             value={draft}
             onChange={e => {
-              setDraft(e.target.value)
-              setSlashDismissed(false)
-              setSlashIndex(0)
+              setDraft(e.target.value);
+              setSlashDismissed(false);
+              setSlashIndex(0);
             }}
             onKeyDown={e => {
               if (showSlash) {
                 if (e.key === 'ArrowDown') {
-                  e.preventDefault()
-                  setSlashIndex((activeSlash + 1) % slashMatches.length)
-                  return
+                  e.preventDefault();
+                  setSlashIndex((activeSlash + 1) % slashMatches.length);
+                  return;
                 }
                 if (e.key === 'ArrowUp') {
-                  e.preventDefault()
-                  setSlashIndex((activeSlash - 1 + slashMatches.length) % slashMatches.length)
-                  return
+                  e.preventDefault();
+                  setSlashIndex((activeSlash - 1 + slashMatches.length) % slashMatches.length);
+                  return;
                 }
                 if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault()
-                  applySlash(slashMatches[activeSlash])
-                  return
+                  e.preventDefault();
+                  applySlash(slashMatches[activeSlash]);
+                  return;
                 }
                 if (e.key === 'Escape') {
-                  e.preventDefault()
-                  setSlashDismissed(true)
-                  return
+                  e.preventDefault();
+                  setSlashDismissed(true);
+                  return;
                 }
               }
               if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
+                e.preventDefault();
+                handleSend();
               }
             }}
-            disabled={sending}
+            disabled={sending || !!lockNotice}
             placeholder={
-              sessionId
-                ? 'Continue this session…  (Enter to send · Shift+Enter for newline)'
-                : 'Start a new conversation…  (Enter to send · Shift+Enter for newline)'
+              lockNotice
+                ? 'This session is live in your terminal'
+                : sessionId
+                  ? 'Continue this session…  (Enter to send · Shift+Enter for newline)'
+                  : 'Start a new conversation…  (Enter to send · Shift+Enter for newline)'
             }
             rows={1}
           />
@@ -502,7 +515,7 @@ export function ChatComposer({
               type="button"
               className="cl-composer-btn"
               onClick={handleSend}
-              disabled={!draft.trim()}
+              disabled={!draft.trim() || !!lockNotice}
             >
               Send
             </button>
@@ -516,6 +529,12 @@ export function ChatComposer({
               : 'Starts a new session · a fresh transcript in this project'}
           </span>
           <span className="cl-composer-meta-tags">
+            <span
+              className="cl-composer-billing"
+              title="Replies here run through the Agent SDK and are billed to Agent SDK credits — separate from your subscription plan. Sessions in your terminal use the plan."
+            >
+              Agent SDK · credits
+            </span>
             <ComposerSelect
               label="Model"
               value={selectedModel}
@@ -565,7 +584,7 @@ export function ChatComposer({
           document.body
         )}
     </div>
-  )
+  );
 }
 
 /** Confirmation gate shown before sending in a permission mode that lets the
@@ -578,12 +597,12 @@ function SendConfirmDialog({
   onCancel,
   onConfirm,
 }: {
-  mode: PermissionMode
-  realPath: string
-  onCancel: () => void
-  onConfirm: () => void
+  mode: PermissionMode;
+  realPath: string;
+  onCancel: () => void;
+  onConfirm: () => void;
 }) {
-  const bypass = mode === 'bypassPermissions'
+  const bypass = mode === 'bypassPermissions';
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-[var(--cl-paper-2)] rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
@@ -632,5 +651,5 @@ function SendConfirmDialog({
         </div>
       </div>
     </div>
-  )
+  );
 }
