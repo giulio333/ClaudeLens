@@ -1375,6 +1375,9 @@ export function ChatView({
       <div
         className="cl-chat-workspace cl-chat-workspace--focus"
         data-composer
+        // The lock notice makes the composer taller; the pill's fixed offset
+        // must clear it or it floats on top of the notice text.
+        data-composer-lock={liveInTerminal || undefined}
         style={chatHidden ? { display: 'none' } : undefined}
       >
         <main className="cl-chat-feed" ref={feedRef} onScroll={onFeedScroll} onWheel={onFeedWheel}>
