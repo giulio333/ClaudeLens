@@ -2741,6 +2741,14 @@ body {
 .cl-chat-workspace--focus[data-composer] .cl-pill-wrap {
   bottom: 112px;
 }
+/* locked composer (session live in a terminal) carries an extra notice strip:
+   lift the pill and the reading padding so neither sits on top of it */
+.cl-chat-workspace--focus[data-composer-lock] .cl-chat-reading .cl-transcript-inner {
+  padding-bottom: 300px;
+}
+.cl-chat-workspace--focus[data-composer-lock] .cl-pill-wrap {
+  bottom: 184px;
+}
 .cl-composer {
   position: absolute;
   left: 0;
