@@ -7,6 +7,7 @@ import {
   getSessionList,
   getPricingMeta,
   isModelPriced,
+  calculateCacheSavings,
   PRICING_LAST_UPDATED,
 } from '../electron/modules/cost-tracker';
 
@@ -447,5 +448,21 @@ describe('pricing metadata', () => {
     expect(isModelPriced('gpt-mystery')).toBe(false);
     expect(isModelPriced(undefined)).toBe(false);
     expect(isModelPriced('<synthetic>')).toBe(false);
+  });
+});
+
+describe('calculateCacheSavings — avoided input cost from cache reads', () => {
+  it('is the delta between full input price and the cache-read price', () => {
+    // Sonnet: input $3.00, cacheRead $0.30 → saved $2.70 / 1M cached tokens.
+    expect(calculateCacheSavings(1_000_000, 'claude-sonnet-4-6')).toBeCloseTo(2.7, 6);
+    // Opus: input $15.00, cacheRead $1.50 → saved $13.50 / 1M.
+    expect(calculateCacheSavings(1_000_000, 'claude-opus-4-6')).toBeCloseTo(13.5, 6);
+  });
+
+  it('is zero with no cache reads and uses the fuzzy/default model fallback', () => {
+    expect(calculateCacheSavings(0, 'claude-opus-4-6')).toBe(0);
+    // unknown model → conservative Sonnet pricing (same delta as Sonnet)
+    expect(calculateCacheSavings(1_000_000, 'gpt-mystery')).toBeCloseTo(2.7, 6);
+    expect(calculateCacheSavings(1_000_000, undefined)).toBeCloseTo(2.7, 6);
   });
 });

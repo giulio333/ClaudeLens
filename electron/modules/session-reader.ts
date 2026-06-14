@@ -9,12 +9,35 @@ export type ChatContentBlock =
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean };
 
+// Message-level token usage (assistant turns only). `input + cacheRead +
+// cacheWrite` of the latest turn ≈ the current context-window occupancy — the
+// rail derives its CONTEXT gauge from it. Absent on user turns.
+export interface MessageUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+}
+
 export interface ChatMessage {
   uuid: string;
   role: 'user' | 'assistant';
   timestamp: string;
   model?: string;
   content: ChatContentBlock[];
+  usage?: MessageUsage;
+}
+
+/** Parse the message-level `usage` block (Anthropic field names) if present. */
+function parseUsage(msg: Record<string, unknown>): MessageUsage | undefined {
+  const u = msg.usage as Record<string, unknown> | undefined;
+  if (!u) return undefined;
+  return {
+    inputTokens: Number(u.input_tokens ?? 0),
+    outputTokens: Number(u.output_tokens ?? 0),
+    cacheReadTokens: Number(u.cache_read_input_tokens ?? 0),
+    cacheWriteTokens: Number(u.cache_creation_input_tokens ?? 0),
+  };
 }
 
 // Built-in slash commands (/context, /usage, /clear, …) run with no model turn,
@@ -161,6 +184,7 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
           timestamp: String(json.timestamp ?? ''),
           model: msg.model as string | undefined,
           content: blocks,
+          usage: parseUsage(msg),
         });
       } catch {
         // riga non-JSON
@@ -220,6 +244,7 @@ export function mapSdkMessageToChat(m: SdkSessionMessage): ChatMessage | null {
     timestamp: String(m.timestamp ?? '') || new Date().toISOString(),
     model: msg.model as string | undefined,
     content: blocks,
+    usage: parseUsage(msg),
   };
 }
 
