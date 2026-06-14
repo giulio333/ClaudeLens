@@ -182,8 +182,6 @@ declare global {
         getSubagentTranscript: (hash: string, filename: string, agentId: string) => Promise<IpcResult<ChatMessage[]>>
         getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>
         deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>
-        openInTerminal: (realPath: string, sessionId: string) => Promise<IpcResult<null>>
-        newInTerminal: (realPath: string) => Promise<IpcResult<null>>
         sendMessage: (
           realPath: string,
           sessionId: string,
@@ -207,6 +205,19 @@ declare global {
         onChatMessage: (cb: (message: ChatMessage) => void) => void
         onChatDone: (cb: () => void) => void
         onChatError: (cb: (error: string) => void) => void
+      }
+      terminal: {
+        create: (opts: {
+          cwd: string
+          resumeSessionId?: string
+          cols?: number
+          rows?: number
+        }) => Promise<IpcResult<{ id: string; pid: number }>>
+        write: (id: string, data: string) => Promise<IpcResult<null>>
+        resize: (id: string, cols: number, rows: number) => Promise<IpcResult<null>>
+        kill: (id: string) => Promise<IpcResult<null>>
+        onData: (cb: (id: string, data: string) => void) => void
+        onExit: (cb: (id: string, exitCode: number) => void) => void
       }
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>

@@ -266,6 +266,9 @@ export function isQuestionDismissed(text: string): boolean {
 export const AGENT_TOOLS = new Set(['Agent', 'Task'])
 export const PLAN_TOOLS = new Set(['EnterPlanMode', 'ExitPlanMode'])
 export const QUESTION_TOOL = 'AskUserQuestion'
+// A skill invoked agentically — the model calls the `Skill` tool (distinct from a
+// `/foo` slash-command skill, which arrives as a `command` flagged `isSkill`).
+export const SKILL_TOOL = 'Skill'
 
 export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'skill' | 'question' | 'plan'
 
@@ -287,6 +290,8 @@ export type TurnDescriptor = {
   hasQuestion: boolean
   hasAgent: boolean
   hasPlan: boolean
+  /** True when the turn invokes an agentic skill (a `Skill` tool_use). */
+  hasSkill: boolean
   /** True when MessageBubble would render something for this turn+filter. */
   visible: boolean
   /** Minimal mode only: the turn renders solely as a collapsed "tools hidden"
@@ -326,6 +331,7 @@ export function describeTurn(
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
   const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name))
+  const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL)
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
   const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL)
 
@@ -335,6 +341,9 @@ export function describeTurn(
   // Plan-mode tools carry the proposed/approved plan — surface them in minimal
   // as a dedicated strip, mirroring the agent strip (full mode keeps the raw card).
   const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0
+  // Agentic skills are first-class work units (like agents): surface them in
+  // minimal as a dedicated strip instead of hiding them as generic tools.
+  const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0
   const showQuestions = questionGroups.length > 0
 
   const hasText = textBlocks.length > 0
@@ -343,6 +352,7 @@ export function describeTurn(
   const hasQuestion = showQuestions
   const hasAgent = agentGroups.length > 0
   const hasPlan = planGroups.length > 0
+  const hasSkill = skillGroups.length > 0
 
   const hasVisibleContent =
     hasText ||
@@ -350,6 +360,7 @@ export function describeTurn(
     (showTools && hasTools) ||
     showAgentStrip ||
     showPlanStrip ||
+    showSkillStrip ||
     showQuestions
   // Minimal mode collapses a tool-only turn into a single badge; it's not a
   // standalone message, so the minimap skips it — but it still counts as visible.
@@ -363,12 +374,17 @@ export function describeTurn(
     showPlanStrip && textBlocks.length === 0 && !showAgentStrip && !showQuestions
   const isCommandTurn = !!command
   const isSkillTurn = !!command?.isSkill
+  // An agentic skill standing on its own (no prose) owns the turn identity, the
+  // way an agent dispatch does — same 'skill' variant as a slash-command skill.
+  const isSkillToolTurn =
+    showSkillStrip && textBlocks.length === 0 && !showAgentStrip && !showQuestions && !showPlanStrip && !isCommandTurn
 
   const variant: TurnVariant =
     isCommandTurn ? (isSkillTurn ? 'skill' : 'command')
     : isQuestionTurn ? 'question'
     : isAgentTurn ? 'agent'
     : isPlanTurn ? 'plan'
+    : isSkillToolTurn ? 'skill'
     : isUser ? 'user'
     : 'claude'
 
@@ -379,10 +395,19 @@ export function describeTurn(
     variant === 'agent'
       ? agentColor?.((agentGroups[0]?.use.input as Record<string, unknown>)?.subagent_type as string) ?? meta.color
       : meta.color
-  // Skill turns wear a first-letter orb (same rule as agents — no icons).
-  const initial = variant === 'skill' && command ? skillInitial(command.command) : meta.initial
+  // Skill turns wear a first-letter orb (same rule as agents — no icons). The
+  // name comes from the command for a slash-command skill, else from the `Skill`
+  // tool's `skill` input for an agentic one.
+  const initial =
+    variant === 'skill'
+      ? skillInitial(
+          command
+            ? command.command
+            : String((skillGroups[0]?.use.input as Record<string, unknown>)?.skill ?? 'skill')
+        )
+      : meta.initial
 
-  return { variant, label: meta.label, initial, color, hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, visible, toolsOnly }
+  return { variant, label: meta.label, initial, color, hasText, hasThinking, hasTools, hasQuestion, hasAgent, hasPlan, hasSkill, visible, toolsOnly }
 }
 
 // ──────────────────────────────────────────────────────────────────────────
@@ -477,6 +502,11 @@ export type SessionSkill = {
   scope?: 'global' | 'project'
   /** Resolved skill definition, when one matches by name; null otherwise. */
   skill: Skill | null
+  /** Set for an agentic skill (a `Skill` tool_use): the tool group, so the dock
+   *  and the minimal strip can open the output it produced (the tool_result).
+   *  Absent for a slash-command skill, whose output is the inline turn that
+   *  follows (no discrete artifact — those deep-link to the definition instead). */
+  group?: ToolGroup
 }
 
 export function correlateSessionSkills(
@@ -486,17 +516,33 @@ export function correlateSessionSkills(
   const byName = new Map(skills.map(s => [s.name, s]))
   const out: SessionSkill[] = []
   processed.forEach((p, idx) => {
+    // Slash-command skill (`/foo`): output is the inline turn that follows.
     const c = p.command
-    if (!c) return
-    const skill = byName.get(c.command) ?? null
-    if (!c.isSkill && !skill) return
-    out.push({
-      key: `skill-${idx + 1}`,
-      turnN: idx + 1,
-      name: c.command,
-      description: skill?.description ?? (c.description !== 'Claude Code command' ? c.description : ''),
-      scope: skill?.scope,
-      skill,
+    if (c && (c.isSkill || byName.has(c.command))) {
+      const skill = byName.get(c.command) ?? null
+      out.push({
+        key: `skill-${idx + 1}`,
+        turnN: idx + 1,
+        name: c.command,
+        description: skill?.description ?? (c.description !== 'Claude Code command' ? c.description : ''),
+        scope: skill?.scope,
+        skill,
+      })
+    }
+    // Agentic skill (a `Skill` tool_use): its output lives in the tool_result.
+    p.toolGroups.forEach((g, gi) => {
+      if (g.use.name !== SKILL_TOOL) return
+      const name = String((g.use.input as Record<string, unknown>).skill ?? 'skill')
+      const skill = byName.get(name) ?? null
+      out.push({
+        key: `skill-${idx + 1}-${gi}`,
+        turnN: idx + 1,
+        name,
+        description: skill?.description ?? '',
+        scope: skill?.scope,
+        skill,
+        group: g,
+      })
     })
   })
   return out

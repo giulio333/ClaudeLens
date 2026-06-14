@@ -404,8 +404,8 @@ export function ProjectView({
           <button
             className="cl-btn"
             type="button"
-            title="Opens the claude CLI in your terminal — usage counts against your subscription plan"
-            onClick={() => window.electronAPI.sessions.newInTerminal(project.realPath)}
+            title="Opens the interactive claude CLI embedded in ClaudeLens, with a Mission Control panel and a switch to read the same session as SDK chat (Lens). Terminal usage counts against your subscription plan."
+            onClick={() => onNavigate({ type: 'terminal', project })}
           >
             Open in Claude Code
             <span className="cl-btn-sub">Plan</span>
@@ -515,7 +515,10 @@ export function ProjectView({
             sessions={pinnedSessions}
             projectHash={project.hash}
             cleanupDays={cleanupDays}
-            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+            onOpen={s =>
+              onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+            }
+            onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
           />
 
           <section className="cl-section">
@@ -536,7 +539,10 @@ export function ProjectView({
               sessions={sessions.slice(0, 5)}
               projectHash={project.hash}
               cleanupDays={cleanupDays}
-              onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+              onOpen={s =>
+                onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+              }
+              onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
             />
           </section>
 
@@ -660,7 +666,10 @@ export function ProjectView({
             sessions={pinnedSessions}
             projectHash={project.hash}
             cleanupDays={cleanupDays}
-            onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+            onOpen={s =>
+              onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+            }
+            onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
             style={{ paddingTop: 38 }}
           />
           <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
@@ -698,7 +707,10 @@ export function ProjectView({
                 sessions={visibleSessions}
                 projectHash={project.hash}
                 cleanupDays={cleanupDays}
-                onOpen={s => onNavigate({ type: 'chat', project, session: s })}
+                onOpen={s =>
+                  onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+                }
+                onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
               />
             )}
           </section>
@@ -1016,14 +1028,18 @@ export function ProjectView({
       {section === 'tasks' && (
         <TasksSection
           project={project}
-          onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+          onOpenChat={s =>
+            onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+          }
         />
       )}
 
       {section === 'plans' && (
         <PlansSection
           project={project}
-          onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+          onOpenChat={s =>
+            onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+          }
           onOpenPlan={plan => onNavigate({ type: 'plan-detail', project, plan })}
         />
       )}
@@ -1138,12 +1154,14 @@ function PinnedSessionsSection({
   projectHash,
   cleanupDays,
   onOpen,
+  onOpenChat,
   style,
 }: {
   sessions: SessionSummary[];
   projectHash: string;
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
+  onOpenChat: (s: SessionSummary) => void;
   style?: CSSProperties;
 }) {
   if (sessions.length === 0) return null;
@@ -1158,6 +1176,7 @@ function PinnedSessionsSection({
         projectHash={projectHash}
         cleanupDays={cleanupDays}
         onOpen={onOpen}
+        onOpenChat={onOpenChat}
       />
     </section>
   );
@@ -1168,11 +1187,13 @@ function SessionRows({
   projectHash,
   cleanupDays,
   onOpen,
+  onOpenChat,
 }: {
   sessions: SessionSummary[];
   projectHash: string;
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
+  onOpenChat: (s: SessionSummary) => void;
 }) {
   const { isPinned, togglePin } = usePinnedSessions();
   const { data: activeSessions = [] } = useActiveSessions();
@@ -1255,6 +1276,18 @@ function SessionRows({
                     </span>
                   ))}
                 </span>
+                <button
+                  type="button"
+                  className="cl-row-tag-add"
+                  aria-label="Open in-app chat"
+                  title="Open as an in-app chat — runs through the Agent SDK, billed to SDK credits (separate from your subscription)"
+                  onClick={e => {
+                    e.stopPropagation();
+                    onOpenChat(s);
+                  }}
+                >
+                  Chat
+                </button>
                 <button
                   type="button"
                   className="cl-row-tag-add"
