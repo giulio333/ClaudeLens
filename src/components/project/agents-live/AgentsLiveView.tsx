@@ -26,6 +26,7 @@ function summaryFor(s: BgSession): SessionSummary {
     cacheReadTokens: 0,
     totalTokens: 0,
     estimatedCost: 0,
+    cacheSavings: 0,
     messageCount: 0,
     models: {},
     customTitle: s.name,

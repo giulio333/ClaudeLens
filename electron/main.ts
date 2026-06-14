@@ -38,6 +38,13 @@ import {
   PermissionUpdate,
 } from './modules/chat-runner';
 import { readPrefs, setPref } from './modules/prefs-store';
+import {
+  createTerminal,
+  writeTerminal,
+  resizeTerminal,
+  killTerminal,
+  disposeAllTerminals,
+} from './modules/terminal-manager';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
@@ -1181,6 +1188,80 @@ ipcMain.handle('sessions:endChat', async () => {
   return ok(null);
 });
 
+// ─── Embedded terminal IPC ────────────────────────────────────────────────────
+//
+// Runs the *interactive* `claude` CLI in a PTY (terminal-manager.ts) — the
+// heavy-use path that bills against the subscription's usage limits, unlike the
+// SDK chat above which draws from the separate Agent SDK monthly credit. The
+// renderer's xterm is a dumb pipe: keystrokes down `terminal:write`, raw output
+// up `terminal:data`, per-terminal id so views never cross streams.
+
+ipcMain.handle(
+  'terminal:create',
+  async (event, opts: { cwd: string; resumeSessionId?: string; cols?: number; rows?: number }) => {
+    try {
+      const { existsSync, statSync } = await import('fs');
+      const cwd = opts?.cwd;
+      if (!cwd || !existsSync(cwd) || !statSync(cwd).isDirectory()) {
+        return err(
+          `Project directory not found on disk: ${cwd}. The project may have been moved or deleted.`
+        );
+      }
+      if (opts.resumeSessionId && !isValidSessionId(opts.resumeSessionId)) {
+        return err(new Error('Invalid session id.'));
+      }
+
+      // Mutual exclusion: a terminal `claude --resume` and the SDK chat must not
+      // both write the same <id>.jsonl. If an SDK chat session is live, dispose it
+      // before spawning the PTY (both persist to the same transcript file).
+      if (currentChatSession) {
+        currentChatSession.dispose();
+        currentChatSession = null;
+        denyAllPending('Session moved to the terminal.');
+      }
+
+      const send = (channel: string, ...args: unknown[]) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
+      };
+      // Windows installs the CLI as claude.cmd; the explicit extension lets
+      // ConPTY spawn it without a shell wrapper.
+      const command = process.platform === 'win32' ? 'claude.cmd' : 'claude';
+      const { id, pid } = createTerminal(
+        {
+          cwd,
+          command,
+          args: opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : [],
+          env: claudeEnv(),
+          cols: opts.cols,
+          rows: opts.rows,
+        },
+        {
+          onData: data => send('terminal:data', id, data),
+          onExit: exitCode => send('terminal:exit', id, exitCode),
+        }
+      );
+      return ok({ id, pid });
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+ipcMain.handle('terminal:write', async (_event, id: string, data: string) => {
+  writeTerminal(id, data);
+  return ok(null);
+});
+
+ipcMain.handle('terminal:resize', async (_event, id: string, cols: number, rows: number) => {
+  resizeTerminal(id, cols, rows);
+  return ok(null);
+});
+
+ipcMain.handle('terminal:kill', async (_event, id: string) => {
+  killTerminal(id);
+  return ok(null);
+});
+
 // ─── Live Monitor IPC ─────────────────────────────────────────────────────────
 
 ipcMain.handle('live:getActiveSessions', async () => {
@@ -1277,45 +1358,6 @@ function openInTerminal(cwd: string, command: string): void {
   tryNext(0);
 }
 
-/**
- * Background sessions (managed by `claude agents`) reject plain `--resume`,
- * so we always use `claude attach <id>` — works for both alive and terminal
- * sessions and shows the real conversation rather than forking a copy.
- * Foreground sessions keep the regular `--resume` behavior.
- */
-function buildResumeCommand(sessionId: string): string {
-  try {
-    const bg = getBgSessions().find(s => s.sessionId === sessionId);
-    // bg.id is read from disk; only use it if it's a clean session id, else
-    // fall back to the validated --resume form below.
-    if (bg && isValidSessionId(bg.id)) return `claude attach ${bg.id}`;
-  } catch {
-    // fall through to default
-  }
-  return `claude --resume ${sessionId}`;
-}
-
-ipcMain.handle('sessions:openInTerminal', async (_event, realPath: string, sessionId: string) => {
-  try {
-    if (!isValidSessionId(sessionId)) {
-      return err(new Error(`Invalid session id: ${sessionId}`));
-    }
-    openInTerminal(realPath, buildResumeCommand(sessionId));
-    return ok(null);
-  } catch (e) {
-    return err(e);
-  }
-});
-
-ipcMain.handle('sessions:newInTerminal', async (_event, realPath: string) => {
-  try {
-    openInTerminal(realPath, 'claude');
-    return ok(null);
-  } catch (e) {
-    return err(e);
-  }
-});
-
 // File watcher — pausa rientrante (gestisce eventuali merge concorrenti).
 let watcherPauseDepth = 0;
 function pauseWatcher() {
@@ -1385,5 +1427,15 @@ app.whenReady().then(() => {
 });
 
 app.on('window-all-closed', () => {
+  // Closing the window must not leave orphan `claude` PTYs running. On macOS the
+  // app stays alive in the dock (no quit → `will-quit` never fires), so dispose
+  // the terminals here too — they should die with the window on every platform.
+  disposeAllTerminals();
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Embedded-terminal PTYs are real `claude` processes: kill them on shutdown so
+// none outlive the app.
+app.on('will-quit', () => {
+  disposeAllTerminals();
 });
