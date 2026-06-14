@@ -89,6 +89,9 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
         cwd,
         maxTurns: 1,
         abortController: abort,
+        // Don't write a transcript: this probe would otherwise show up in the
+        // session list as a ghost "noop" chat on every config read.
+        persistSession: false,
         // Packaged app: the CLI binary is unpacked outside app.asar (see utils).
         ...(claudeExecutable && { pathToClaudeCodeExecutable: claudeExecutable }),
       },
