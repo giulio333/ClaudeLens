@@ -40,8 +40,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getArtifacts: (hash: string, filename: string) =>
       ipcRenderer.invoke('sessions:getArtifacts', hash, filename),
     deleteSession: (paths: string[]) => ipcRenderer.invoke('sessions:deleteSession', paths),
-    openInTerminal: (realPath: string, sessionId: string) => ipcRenderer.invoke('sessions:openInTerminal', realPath, sessionId),
-    newInTerminal: (realPath: string) => ipcRenderer.invoke('sessions:newInTerminal', realPath),
     sendMessage: (
       realPath: string,
       sessionId: string,
@@ -86,6 +84,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatError: (cb: (error: string) => void) => {
       ipcRenderer.removeAllListeners('sessions:chatError');
       ipcRenderer.on('sessions:chatError', (_event, error) => cb(error));
+    },
+  },
+  terminal: {
+    create: (opts: { cwd: string; resumeSessionId?: string; cols?: number; rows?: number }) =>
+      ipcRenderer.invoke('terminal:create', opts),
+    write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
+    resize: (id: string, cols: number, rows: number) =>
+      ipcRenderer.invoke('terminal:resize', id, cols, rows),
+    kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
+    onData: (cb: (id: string, data: string) => void) => {
+      ipcRenderer.removeAllListeners('terminal:data');
+      ipcRenderer.on('terminal:data', (_event, id, data) => cb(id, data));
+    },
+    onExit: (cb: (id: string, exitCode: number) => void) => {
+      ipcRenderer.removeAllListeners('terminal:exit');
+      ipcRenderer.on('terminal:exit', (_event, id, exitCode) => cb(id, exitCode));
     },
   },
   rules: {

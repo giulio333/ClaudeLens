@@ -1,4 +1,33 @@
+import { useMemo } from 'react'
+import hljs from 'highlight.js/lib/common'
 import { ParsedMemory, MEMORY_TYPE_STYLE } from './utils'
+
+// File extension (or bare language name) → highlight.js language id. Limited to
+// the languages bundled in highlight.js' "common" build; anything not listed
+// falls back to plain (no tokenization) so an unknown extension never throws.
+const EXT_TO_LANG: Record<string, string> = {
+  py: 'python', pyw: 'python', pyi: 'python',
+  ts: 'typescript', tsx: 'typescript', mts: 'typescript', cts: 'typescript',
+  js: 'javascript', jsx: 'javascript', mjs: 'javascript', cjs: 'javascript',
+  go: 'go', rs: 'rust', java: 'java', kt: 'kotlin', kts: 'kotlin',
+  rb: 'ruby', php: 'php', swift: 'swift', lua: 'lua',
+  c: 'c', h: 'c', cpp: 'cpp', cc: 'cpp', cxx: 'cpp', hpp: 'cpp', hh: 'cpp',
+  sh: 'bash', bash: 'bash', zsh: 'bash', shell: 'bash',
+  json: 'json', jsonc: 'json',
+  yaml: 'yaml', yml: 'yaml', toml: 'ini', ini: 'ini',
+  xml: 'xml', html: 'xml', htm: 'xml', svg: 'xml', vue: 'xml',
+  css: 'css', scss: 'scss', sass: 'scss', less: 'less',
+  sql: 'sql', md: 'markdown', mdx: 'markdown', markdown: 'markdown',
+}
+
+/** Resolves an extension/language hint to a registered highlight.js language,
+ *  or null when we can't (so the block renders as plain monospace). */
+function resolveLang(hint?: string): string | null {
+  if (!hint) return null
+  const key = hint.toLowerCase().replace(/^\./, '')
+  const lang = EXT_TO_LANG[key] ?? key
+  return hljs.getLanguage(lang) ? lang : null
+}
 
 export function PathChip({ path }: { path: string }) {
   const parts = path.split('/')
@@ -21,15 +50,33 @@ export function SectionLabel({ label, meta }: { label: string; meta?: string }) 
   )
 }
 
-export function CodeBlock({ code, dark = true, className = '' }: { code: string; dark?: boolean; className?: string }) {
+export function CodeBlock({ code, lang, className = '' }: { code: string; lang?: string; className?: string }) {
   const lines = code.split('\n').length
+  const language = resolveLang(lang)
+  // Tokenize with highlight.js when we know the language; memoized so large
+  // files aren't re-highlighted on every render. Output is HTML-escaped by
+  // highlight.js, so dangerouslySetInnerHTML is safe here.
+  const highlighted = useMemo(() => {
+    if (!language) return null
+    try {
+      return hljs.highlight(code, { language }).value
+    } catch {
+      return null
+    }
+  }, [code, language])
+
   return (
-    <div className={`overflow-hidden border ${dark ? 'border-[var(--cl-line)]' : 'border-[var(--cl-line)]'} ${className}`} style={{ borderRadius: '2px' }}>
-      <div className={`flex items-center justify-between px-3 py-1.5 text-[10px] ${dark ? 'bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]' : 'bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]'}`}>
-        <span>{lines} lines</span>
+    <div className={`overflow-hidden border border-[var(--cl-line)] ${className}`} style={{ borderRadius: '2px' }}>
+      <div className="flex items-center justify-between px-3 py-1.5 text-[10px] bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]">
+        <span>{lines} {lines === 1 ? 'line' : 'lines'}</span>
+        {language && <span className="font-mono uppercase tracking-wider">{language}</span>}
       </div>
-      <pre className={`px-4 py-3 text-[12px] font-mono leading-relaxed overflow-x-auto whitespace-pre-wrap break-words ${dark ? 'bg-[var(--cl-paper-2)] text-[var(--cl-ink-2)]' : 'bg-[var(--cl-paper-2)] text-[var(--cl-ink-2)]'}`}>
-        {code}
+      <pre className="cl-code-pre m-0 px-4 py-3 text-[12px] font-mono leading-relaxed overflow-x-auto">
+        {highlighted ? (
+          <code className="hljs" dangerouslySetInnerHTML={{ __html: highlighted }} />
+        ) : (
+          <code className="hljs">{code}</code>
+        )}
       </pre>
     </div>
   )

@@ -145,6 +145,7 @@ export function NewChatView({
               cacheReadTokens: 0,
               totalTokens: 0,
               estimatedCost: 0,
+              cacheSavings: 0,
               messageCount: 0,
               models: {},
               firstUserMessage: firstMessageRef.current,

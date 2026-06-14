@@ -175,6 +175,28 @@ body {
   background-clip: padding-box;
 }
 
+/* Terminal Mission Control rail: hoverable rows + a pulsing "live" dot. */
+.tmc-row {
+  transition: background 140ms ease;
+}
+.tmc-row:hover {
+  background: var(--cl-paper-2);
+}
+.cl-live-dot {
+  animation: cl-live-pulse 2.2s ease-out infinite;
+}
+@keyframes cl-live-pulse {
+  0% {
+    box-shadow: 0 0 0 0 oklch(0.62 0.1 145 / 0.45);
+  }
+  70% {
+    box-shadow: 0 0 0 6px oklch(0.62 0.1 145 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.62 0.1 145 / 0);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    APP SHELL
    ════════════════════════════════════════════════════════════════════════ */
@@ -2468,6 +2490,11 @@ body {
 }
 .cl-tool-detail-panel {
   padding: 18px;
+  /* Grid items default to min-width:auto, so a wide child (a long code line or
+     a markdown table) would blow the track past the 980px centered cap. Let it
+     shrink and keep overflow inside the panel instead of spilling right. */
+  min-width: 0;
+  overflow: hidden;
 }
 .cl-tool-detail-panel.is-error {
   border-color: color-mix(in oklch, var(--cl-danger) 38%, var(--cl-line));
@@ -2748,6 +2775,16 @@ body {
 }
 .cl-chat-workspace--focus[data-composer-lock] .cl-pill-wrap {
   bottom: 184px;
+}
+/* Embedded Lens (Terminal ↔ Lens split): no composer (so `data-composer` is
+   absent) and no minimap — the mission rail lives in its own flex column. Clip
+   any horizontal overflow so a turn can never bleed under the rail, and let the
+   reading column run wider since there's no minimap gutter to reserve. */
+.cl-chat-workspace--focus:not([data-composer]) .cl-chat-feed {
+  overflow-x: hidden;
+}
+.cl-chat-workspace--focus:not([data-composer]) .cl-chat-reading {
+  width: 90%;
 }
 .cl-composer {
   position: absolute;
@@ -3816,6 +3853,9 @@ body {
   color: var(--cl-ink-2);
   font-size: 14.5px;
   line-height: 1.7;
+  /* Grid item of .cl-turn-content (an `auto` column): allow it to shrink below
+     its content's min-content so a long token can't widen the whole column. */
+  min-width: 0;
 }
 .cl-message-text--user {
   width: 100%;
@@ -3846,6 +3886,17 @@ body {
 }
 .cl-message-text--assistant > .prose-lens > :last-child {
   margin-bottom: 0;
+}
+/* Break long inline tokens (code spans, URLs, identifiers) in the markdown body.
+   overflow-wrap isn't inherited, so it must sit on the text elements themselves,
+   not just the wrapper — otherwise an unbreakable string keeps its full
+   min-content width, widening the `auto` grid column of .cl-turn-content and
+   pushing every sibling paragraph past the reading width (clipped lines, most
+   visible in the narrow embedded Lens). `anywhere` also shrinks the intrinsic
+   min-content so the track can stay inside its container. */
+.cl-message-text--assistant .prose-lens
+  :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th, a, code) {
+  overflow-wrap: anywhere;
 }
 /* Command turn — niente shell glass extra, card command è già stand-alone */
 .cl-turn--command .cl-turn-body {
@@ -7429,6 +7480,86 @@ button.cl-task-group-head:disabled {
   padding: 1rem;
   font-size: 0.8rem;
   line-height: 1.6;
+}
+
+/* ── Tool-detail code blocks (atoms `CodeBlock`) ──
+   Unlike the editorial markdown fences above (fixed dark surface,
+   github-dark-dimmed), these sit on the adaptive paper surface and follow the
+   light/dark theme. The global github-dark-dimmed palette is tuned for a dark
+   background, so we re-map highlight.js token colors to the brand `--cl-*`
+   tokens (same hues as the chat tool-tints) — these already lift in dark, so
+   one set of rules works in both themes. Scoped under `.cl-code-pre` so they
+   out-specify the global `.hljs-*` rules without touching `.prose-lens`. */
+.cl-code-pre {
+  background: var(--cl-paper-2);
+}
+.cl-code-pre code.hljs {
+  background: transparent;
+  padding: 0;
+  color: var(--cl-ink-2);
+}
+
+.cl-code-pre .hljs-comment,
+.cl-code-pre .hljs-quote {
+  color: var(--cl-ink-4);
+  font-style: italic;
+}
+.cl-code-pre .hljs-keyword,
+.cl-code-pre .hljs-selector-tag,
+.cl-code-pre .hljs-tag,
+.cl-code-pre .hljs-name,
+.cl-code-pre .hljs-template-tag {
+  color: var(--cl-violet);
+}
+.cl-code-pre .hljs-string,
+.cl-code-pre .hljs-regexp,
+.cl-code-pre .hljs-char.escape_,
+.cl-code-pre .hljs-addition {
+  color: var(--cl-ok);
+}
+.cl-code-pre .hljs-number,
+.cl-code-pre .hljs-literal,
+.cl-code-pre .hljs-variable.constant_ {
+  color: var(--cl-cyan);
+}
+.cl-code-pre .hljs-title,
+.cl-code-pre .hljs-title.function_,
+.cl-code-pre .hljs-section,
+.cl-code-pre .hljs-selector-id,
+.cl-code-pre .hljs-selector-class {
+  color: var(--cl-accent-ink);
+}
+.cl-code-pre .hljs-built_in,
+.cl-code-pre .hljs-type,
+.cl-code-pre .hljs-title.class_ {
+  color: var(--cl-haiku);
+}
+.cl-code-pre .hljs-attr,
+.cl-code-pre .hljs-attribute,
+.cl-code-pre .hljs-property,
+.cl-code-pre .hljs-variable,
+.cl-code-pre .hljs-template-variable,
+.cl-code-pre .hljs-selector-attr,
+.cl-code-pre .hljs-selector-pseudo {
+  color: var(--cl-cyan);
+}
+.cl-code-pre .hljs-symbol,
+.cl-code-pre .hljs-bullet,
+.cl-code-pre .hljs-link {
+  color: var(--cl-warn);
+}
+.cl-code-pre .hljs-meta,
+.cl-code-pre .hljs-meta .hljs-keyword {
+  color: var(--cl-ink-4);
+}
+.cl-code-pre .hljs-deletion {
+  color: var(--cl-danger);
+}
+.cl-code-pre .hljs-emphasis {
+  font-style: italic;
+}
+.cl-code-pre .hljs-strong {
+  font-weight: 600;
 }
 
 .prose-lens table {

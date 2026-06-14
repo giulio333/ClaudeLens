@@ -2,7 +2,7 @@ import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL, SKILL_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
@@ -255,7 +255,7 @@ function SkillCommandCard({ command, timestamp, skill, onOpenSkill }: {
 /** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
  *  A single badge with a "× N" multiplier replaces the stack of identical
  *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
-export function ToolsHiddenBadge({ count, dimmed }: { count: number; dimmed?: boolean }) {
+export function ToolsHiddenBadge({ count, files = [], dimmed }: { count: number; files?: TouchedFile[]; dimmed?: boolean }) {
   if (count <= 0) return null
   return (
     <div className="cl-turn-tools-hidden" data-dim={dimmed || undefined}>
@@ -263,6 +263,7 @@ export function ToolsHiddenBadge({ count, dimmed }: { count: number; dimmed?: bo
         {count === 1 ? '1 tool hidden' : 'tools hidden'}
         {count > 1 && <span className="cl-turn-tools-hidden-x">×{count}</span>}
       </span>
+      <FileChipCluster files={files} />
     </div>
   )
 }
@@ -350,9 +351,10 @@ export const MessageBubble = memo(function MessageBubble({
   isContinuation?: boolean
   /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
   innerRef?: Ref<HTMLElement>
-  /** Number of tool-only turns collapsed before this message in minimal mode. */
+  /** Count of tool-only turns collapsed *out of this same assistant turn* (their
+   *  tool_use lines were persisted separately) — surfaced as a header chip. */
   hiddenToolCount?: number
-  /** Files touched by the collapsed run of hidden tools preceding this message. */
+  /** Files touched by that collapsed run of hidden tools, shown at the turn foot. */
   hiddenFiles?: TouchedFile[]
 }) {
   const { msg, toolGroups, command } = processed
@@ -362,6 +364,7 @@ export const MessageBubble = memo(function MessageBubble({
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
   const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name))
+  const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL)
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
@@ -376,6 +379,9 @@ export const MessageBubble = memo(function MessageBubble({
   const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
   // Plan-mode milestones surface as a dedicated strip in minimal (raw card in full).
   const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0
+  // Agentic skills get a dedicated minimal strip too (raw tool card in full),
+  // so a skill reads as a first-class unit instead of a hidden tool.
+  const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0
   // Questions are first-class content: always visible regardless of filter.
   const showQuestions = questionGroups.length > 0
 
@@ -385,6 +391,7 @@ export const MessageBubble = memo(function MessageBubble({
     (showTools && standardToolGroups.length > 0) ||
     showAgentStrip ||
     showPlanStrip ||
+    showSkillStrip ||
     showQuestions
 
   // Tool-only turns (no text/agents/questions) render nothing here: in minimal
@@ -503,11 +510,13 @@ export const MessageBubble = memo(function MessageBubble({
             </span>
           )}
           {(() => {
-            const nonAgentHidden = showAgentStrip
-              ? standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name)).length
-              : standardToolGroups.length
-            return nonAgentHidden > 0 && !showTools ? (
-              <span className="cl-turn-tool-count">{nonAgentHidden} tool{nonAgentHidden === 1 ? '' : 's'}</span>
+            // Tools collapsed into the "N tools" badge — minus anything already
+            // surfaced as its own strip (agent dispatches, agentic skills).
+            const stripHidden = standardToolGroups.filter(
+              g => !(showAgentStrip && AGENT_TOOLS.has(g.use.name)) && !(showSkillStrip && g.use.name === SKILL_TOOL)
+            ).length
+            return stripHidden > 0 && !showTools ? (
+              <span className="cl-turn-tool-count">{stripHidden} tool{stripHidden === 1 ? '' : 's'}</span>
             ) : null
           })()}
         </header>
@@ -532,9 +541,9 @@ export const MessageBubble = memo(function MessageBubble({
         </div>
 
         {!showTools && (() => {
-          // Files touched in this turn — the collapsed run of hidden tools that
-          // precede it plus this turn's own (hidden) file tools. One chip per
-          // file, sitting at the foot of the turn so the header stays uncluttered.
+          // Files touched in this turn — the run of tool-only turns folded back
+          // into it (their tool_use lines were persisted separately) plus this
+          // turn's own (hidden) file tools. One chip per file at the turn foot.
           const ownFiles = touchedFiles(standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name)))
           const allFiles = [...hiddenFiles, ...ownFiles]
           return allFiles.length > 0 ? <FileChipCluster files={allFiles} /> : null
@@ -570,6 +579,20 @@ export const MessageBubble = memo(function MessageBubble({
           <div className="cl-plan-stack">
             {planGroups.map((group, i) => (
               <PlanCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
+            ))}
+          </div>
+        )}
+
+        {showSkillStrip && (
+          <div className="cl-tool-stack">
+            {skillGroups.map((group, i) => (
+              <ToolGroupCard
+                key={i}
+                group={group}
+                showDetails
+                detailLabel="View output"
+                onViewDetail={() => onOpenToolDetail(group)}
+              />
             ))}
           </div>
         )}
