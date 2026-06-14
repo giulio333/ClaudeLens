@@ -82,6 +82,10 @@ export async function startLiveMonitor(
       const fd = openSync(state.filePath, 'r');
       try {
         const st = fstatSync(fd);
+        // A truncated or recreated transcript (size shrank below our offset) leaves
+        // the offset past EOF: reset to 0 and re-read from the start, otherwise
+        // every later append is missed until the file grows past the stale offset.
+        if (st.size < state.fileOffset) state.fileOffset = 0;
         if (st.size <= state.fileOffset) return;
 
         // Read the delta in bounded chunks (never allocate the whole append at

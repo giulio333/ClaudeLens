@@ -12,7 +12,7 @@ import {
   useActiveSessions,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
-import { fmt, fmtModel, sessionTitle } from '../utils';
+import { fmt, fmtModel, sessionTitle, formatTokens } from '../utils';
 import type { SessionSummary } from '../../../types';
 import { Lens } from './Lens';
 import { McpServerGrid } from '../mcp/McpServerGrid';
@@ -44,13 +44,6 @@ export type ProjectSection =
   | 'config';
 
 type Project = { hash: string; realPath: string };
-
-function formatTokens(n: number): { value: string; unit: string } {
-  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'b' };
-  if (n >= 1_000_000) return { value: (n / 1_000_000).toFixed(1), unit: 'm' };
-  if (n >= 1_000) return { value: Math.round(n / 1_000).toString(), unit: 'k' };
-  return { value: String(n), unit: '' };
-}
 
 function relIso(iso: string): string {
   const t = new Date(iso).getTime();
