@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { parseFrontmatter, getString, getBoolean, getStringArray } from './frontmatter';
 
 export interface Skill {
   name: string;
@@ -32,48 +33,34 @@ interface SkillFrontmatter {
 }
 
 function parseSkillMarkdown(content: string): { frontmatter: SkillFrontmatter; body: string } {
-  // Estrai il frontmatter YAML se presente (---...---)
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
-  if (!frontmatterMatch) {
-    return { frontmatter: {}, body: content };
-  }
-
-  const frontmatterText = frontmatterMatch[1];
-  const body = frontmatterMatch[2];
+  const { frontmatter: raw, body } = parseFrontmatter(content);
   const fm: SkillFrontmatter = {};
 
-  // Helper per estrarre valori dal YAML
-  const getScalarValue = (key: string): string | undefined => {
-    const match = frontmatterText.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-    return match ? match[1].trim().replace(/^["']|["']$/g, '') : undefined;
-  };
+  // Ogni campo valutato una sola volta, assegnato solo se definito (preserva
+  // i campi opzionali come `undefined` invece di forzarli a un valore vuoto).
+  const description = getString(raw, 'description');
+  if (description !== undefined) fm.description = description;
 
-  const getBoolValue = (key: string): boolean | undefined => {
-    const val = getScalarValue(key);
-    return val ? val.toLowerCase() === 'true' : undefined;
-  };
+  const argumentHint = getString(raw, 'argument-hint');
+  if (argumentHint !== undefined) fm.argumentHint = argumentHint;
 
-  const getArrayValue = (key: string): string[] | undefined => {
-    const match = frontmatterText.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-    if (!match) return undefined;
-    const val = match[1].trim();
-    // Supporta sia "tool1, tool2" che "[tool1, tool2]"
-    return val
-      .replace(/^\[|\]$/g, '')
-      .split(',')
-      .map(s => s.trim())
-      .filter(s => s);
-  };
+  const disableModelInvocation = getBoolean(raw, 'disable-model-invocation');
+  if (disableModelInvocation !== undefined) fm.disableModelInvocation = disableModelInvocation;
 
-  // Parsifica tutti i campi
-  if (getScalarValue('description')) fm.description = getScalarValue('description');
-  if (getScalarValue('argument-hint')) fm.argumentHint = getScalarValue('argument-hint');
-  if (getBoolValue('disable-model-invocation')) fm.disableModelInvocation = getBoolValue('disable-model-invocation');
-  if (getBoolValue('user-invocable')) fm.userInvocable = getBoolValue('user-invocable');
-  if (getArrayValue('allowed-tools')) fm.allowedTools = getArrayValue('allowed-tools');
-  if (getScalarValue('model')) fm.model = getScalarValue('model');
-  if (getScalarValue('context')) fm.context = getScalarValue('context');
-  if (getScalarValue('agent')) fm.agent = getScalarValue('agent');
+  const userInvocable = getBoolean(raw, 'user-invocable');
+  if (userInvocable !== undefined) fm.userInvocable = userInvocable;
+
+  const allowedTools = getStringArray(raw, 'allowed-tools');
+  if (allowedTools !== undefined) fm.allowedTools = allowedTools;
+
+  const model = getString(raw, 'model');
+  if (model !== undefined) fm.model = model;
+
+  const context = getString(raw, 'context');
+  if (context !== undefined) fm.context = context;
+
+  const agent = getString(raw, 'agent');
+  if (agent !== undefined) fm.agent = agent;
 
   return { frontmatter: fm, body };
 }

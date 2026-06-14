@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { parseFrontmatter, getString, getBoolean, getStringArray, getNumber } from './frontmatter';
 
 export interface Agent {
   name: string;
@@ -50,50 +51,54 @@ interface AgentFrontmatter {
 }
 
 function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; body: string } {
-  const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
-  if (!match) return { frontmatter: {}, body: content };
-
-  const fmText = match[1];
-  const body = match[2];
+  const { frontmatter: raw, body } = parseFrontmatter(content);
   const fm: AgentFrontmatter = {};
 
-  const scalar = (key: string): string | undefined => {
-    const m = fmText.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-    return m ? m[1].trim().replace(/^["']|["']$/g, '') : undefined;
-  };
+  const name = getString(raw, 'name');
+  if (name !== undefined) fm.name = name;
 
-  const arr = (key: string): string[] | undefined => {
-    // Supporta sia "key: a, b, c" che "key: [a, b, c]"
-    const m = fmText.match(new RegExp(`^${key}:\\s*(.+)$`, 'm'));
-    if (!m) return undefined;
-    return m[1].trim().replace(/^\[|\]$/g, '').split(',').map(s => s.trim()).filter(Boolean);
-  };
+  const description = getString(raw, 'description');
+  if (description !== undefined) fm.description = description;
 
-  const bool = (key: string): boolean | undefined => {
-    const v = scalar(key);
-    return v !== undefined ? v.toLowerCase() === 'true' : undefined;
-  };
+  const model = getString(raw, 'model');
+  if (model !== undefined) fm.model = model;
 
-  const num = (key: string): number | undefined => {
-    const v = scalar(key);
-    return v !== undefined ? parseInt(v, 10) : undefined;
-  };
+  // Il frontmatter usa `tools:` ma il modello dati lo espone come allowedTools.
+  const allowedTools = getStringArray(raw, 'tools');
+  if (allowedTools !== undefined) fm.allowedTools = allowedTools;
 
-  if (scalar('name'))            fm.name            = scalar('name');
-  if (scalar('description'))     fm.description     = scalar('description');
-  if (scalar('model'))           fm.model           = scalar('model');
-  if (arr('tools'))              fm.allowedTools    = arr('tools');
-  if (arr('disallowedTools'))    fm.disallowedTools = arr('disallowedTools');
-  if (scalar('permissionMode'))  fm.permissionMode  = scalar('permissionMode');
-  if (scalar('isolation'))       fm.isolation       = scalar('isolation');
-  if (scalar('memory'))          fm.memory          = scalar('memory');
-  if (scalar('effort'))          fm.effort          = scalar('effort');
-  if (scalar('color'))           fm.color           = scalar('color');
-  if (arr('skills'))             fm.skills          = arr('skills');
-  if (arr('mcpServers'))         fm.mcpServers      = arr('mcpServers');
-  const mt = num('maxTurns');    if (mt !== undefined) fm.maxTurns = mt;
-  const bg = bool('background'); if (bg !== undefined) fm.background = bg;
-  const dm = bool('disable_model_invocation'); if (dm !== undefined) fm.disableModelInvocation = dm;
+  const disallowedTools = getStringArray(raw, 'disallowedTools');
+  if (disallowedTools !== undefined) fm.disallowedTools = disallowedTools;
+
+  const permissionMode = getString(raw, 'permissionMode');
+  if (permissionMode !== undefined) fm.permissionMode = permissionMode;
+
+  const isolation = getString(raw, 'isolation');
+  if (isolation !== undefined) fm.isolation = isolation;
+
+  const memory = getString(raw, 'memory');
+  if (memory !== undefined) fm.memory = memory;
+
+  const effort = getString(raw, 'effort');
+  if (effort !== undefined) fm.effort = effort;
+
+  const color = getString(raw, 'color');
+  if (color !== undefined) fm.color = color;
+
+  const skills = getStringArray(raw, 'skills');
+  if (skills !== undefined) fm.skills = skills;
+
+  const mcpServers = getStringArray(raw, 'mcpServers');
+  if (mcpServers !== undefined) fm.mcpServers = mcpServers;
+
+  const maxTurns = getNumber(raw, 'maxTurns');
+  if (maxTurns !== undefined) fm.maxTurns = maxTurns;
+
+  const background = getBoolean(raw, 'background');
+  if (background !== undefined) fm.background = background;
+
+  const disableModelInvocation = getBoolean(raw, 'disable_model_invocation');
+  if (disableModelInvocation !== undefined) fm.disableModelInvocation = disableModelInvocation;
 
   return { frontmatter: fm, body };
 }
