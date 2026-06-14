@@ -198,13 +198,13 @@ declare global {
         stopMessage: () => Promise<IpcResult<null>>
         endChat: () => Promise<IpcResult<null>>
         respondPermission: (requestId: string, decision: PermissionDecision) => Promise<IpcResult<null>>
-        onPermissionRequest: (cb: (request: PermissionRequest) => void) => void
-        onChatStarted: (cb: (sessionId: string) => void) => void
-        onChatChunk: (cb: (chunk: string) => void) => void
-        onChatToolActivity: (cb: (activity: ToolActivity) => void) => void
-        onChatMessage: (cb: (message: ChatMessage) => void) => void
-        onChatDone: (cb: () => void) => void
-        onChatError: (cb: (error: string) => void) => void
+        onPermissionRequest: (cb: (request: PermissionRequest) => void) => () => void
+        onChatStarted: (cb: (sessionId: string) => void) => () => void
+        onChatChunk: (cb: (chunk: string) => void) => () => void
+        onChatToolActivity: (cb: (activity: ToolActivity) => void) => () => void
+        onChatMessage: (cb: (message: ChatMessage) => void) => () => void
+        onChatDone: (cb: () => void) => () => void
+        onChatError: (cb: (error: string) => void) => () => void
       }
       terminal: {
         create: (opts: {
@@ -216,8 +216,8 @@ declare global {
         write: (id: string, data: string) => Promise<IpcResult<null>>
         resize: (id: string, cols: number, rows: number) => Promise<IpcResult<null>>
         kill: (id: string) => Promise<IpcResult<null>>
-        onData: (cb: (id: string, data: string) => void) => void
-        onExit: (cb: (id: string, exitCode: number) => void) => void
+        onData: (cb: (id: string, data: string) => void) => () => void
+        onExit: (cb: (id: string, exitCode: number) => void) => () => void
       }
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>
@@ -249,9 +249,9 @@ declare global {
       ai: {
         run: (instruction: string, inputContent: string, projectPath: string) => Promise<IpcResult<null>>
         stop: () => Promise<IpcResult<null>>
-        onChunk: (cb: (chunk: string) => void) => void
-        onDone: (cb: () => void) => void
-        onError: (cb: (error: string) => void) => void
+        onChunk: (cb: (chunk: string) => void) => () => void
+        onDone: (cb: () => void) => () => void
+        onError: (cb: (error: string) => void) => () => void
       }
       settings: {
         getCleanupPeriodDays: () => Promise<IpcResult<number>>
@@ -270,7 +270,7 @@ declare global {
         getSessions: () => Promise<IpcResult<BgSession[]>>
         startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>
         stopWatch: () => Promise<IpcResult<null>>
-        onEvent: (cb: (event: unknown) => void) => void
+        onEvent: (cb: (event: unknown) => void) => () => void
       }
     }
   }

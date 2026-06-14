@@ -183,14 +183,14 @@ export function TerminalPane({
       if (idRef.current) void window.electronAPI.terminal.write(idRef.current, data);
     });
 
-    window.electronAPI.terminal.onData((id, data) => {
+    const disposeData = window.electronAPI.terminal.onData((id, data) => {
       if (idRef.current === null) {
         earlyRef.current.push({ id, data });
         return;
       }
       if (id === idRef.current) termRef.current?.write(data);
     });
-    window.electronAPI.terminal.onExit((id, code) => {
+    const disposeExit = window.electronAPI.terminal.onExit((id, code) => {
       if (id !== idRef.current) return;
       idRef.current = null;
       onPidRef.current(null);
@@ -219,11 +219,11 @@ export function TerminalPane({
       // stale and kills its own PTY (see startSession), so none leaks.
       genRef.current += 1;
       ro.disconnect();
-      // Drop the PTY IPC listeners (the preload re-register pattern removes the
-      // prior one): otherwise they'd keep writing into this unmounted pane's
-      // refs. Mirrors how the chat composer resets its stream listeners.
-      window.electronAPI.terminal.onData(() => {});
-      window.electronAPI.terminal.onExit(() => {});
+      // Drop this pane's PTY IPC listeners so they stop writing into its
+      // (now unmounted) refs. Each subscribe returned a disposer that removes only
+      // its own handler — a parallel terminal pane keeps its listeners intact.
+      disposeData();
+      disposeExit();
       if (idRef.current) void window.electronAPI.terminal.kill(idRef.current);
       idRef.current = null;
       onPidRef.current(null);
