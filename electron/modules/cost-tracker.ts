@@ -177,6 +177,12 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   if (typeof raw === 'string') {
     text = raw;
   } else if (Array.isArray(raw)) {
+    // A user turn carrying a tool_result is the system's reply to a tool call,
+    // not text the user typed — never treat it as the "first user message".
+    // session-reader absorbs these into the preceding assistant turn the same way.
+    if (raw.some(b => b !== null && typeof b === 'object' && (b as Record<string, unknown>).type === 'tool_result')) {
+      return undefined;
+    }
     for (const block of raw) {
       if (block && typeof block === 'object') {
         const b = block as Record<string, unknown>;
@@ -266,7 +272,7 @@ function parseJsonlSession(filePath: string): ParsedSession {
       if (!result.firstUserMessage && parsed.firstUserMessage) result.firstUserMessage = parsed.firstUserMessage;
       if (parsed.date) result.date = parsed.date;
 
-      if (parsed.inputTokens || parsed.outputTokens) {
+      if (parsed.inputTokens || parsed.outputTokens || parsed.cacheWriteTokens || parsed.cacheReadTokens) {
         // Skip lines that repeat a usage we've already counted for this turn.
         if (parsed.usageKey) {
           if (seenUsage.has(parsed.usageKey)) continue;
