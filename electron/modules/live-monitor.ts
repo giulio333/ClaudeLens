@@ -40,6 +40,7 @@ export function stopLiveMonitor(): void {
 
 export async function startLiveMonitor(
   projectPath: string,
+  sessionId: string | null,
   onEvent: EventCallback
 ): Promise<boolean> {
   stopLiveMonitor();
@@ -47,19 +48,25 @@ export async function startLiveMonitor(
   // Cerca file JSONL nella cartella sessions o direttamente nel progetto
   const sessionsDir = join(projectPath, 'sessions');
   const searchDir = existsSync(sessionsDir) ? sessionsDir : projectPath;
-  const files = await glob(join(searchDir, '*.jsonl'));
 
-  if (files.length === 0) return false;
+  // Con un sessionId (dal registro delle sessioni vive) si taila il transcript
+  // esatto; senza, fallback al file più recente per mtime. Il pattern check
+  // evita che un id arbitrario esca dalla directory del progetto.
+  let filePath: string | null = null;
+  if (sessionId && /^[a-zA-Z0-9-]+$/.test(sessionId)) {
+    const exact = join(searchDir, `${sessionId}.jsonl`);
+    if (existsSync(exact)) filePath = exact;
+  }
 
-  // Prende il file più recente per data di modifica
-  const sorted = files
-    .filter(f => existsSync(f))
-    .map(f => ({ f, mtime: statSync(f).mtimeMs }))
-    .sort((a, b) => b.mtime - a.mtime);
-
-  if (sorted.length === 0) return false;
-
-  const filePath = sorted[0].f;
+  if (!filePath) {
+    const files = await glob(join(searchDir, '*.jsonl'));
+    const sorted = files
+      .filter(f => existsSync(f))
+      .map(f => ({ f, mtime: statSync(f).mtimeMs }))
+      .sort((a, b) => b.mtime - a.mtime);
+    if (sorted.length === 0) return false;
+    filePath = sorted[0].f;
+  }
   // Parte dalla fine del file (solo eventi nuovi)
   const initialSize = statSync(filePath).size;
 

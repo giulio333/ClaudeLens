@@ -24,7 +24,7 @@ import type {
   McpServer,
   McpData,
   LiveEvent,
-  ClaudeProcess,
+  ActiveSession,
   BgSession,
   Task,
   TaskStatus,
@@ -35,6 +35,9 @@ import type {
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
+  PermissionRequest,
+  PermissionDecision,
+  ToolActivity,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -61,7 +64,7 @@ export type {
   McpServer,
   McpData,
   LiveEvent,
-  ClaudeProcess,
+  ActiveSession,
   BgSession,
   Task,
   TaskStatus,
@@ -72,6 +75,9 @@ export type {
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
+  PermissionRequest,
+  PermissionDecision,
+  ToolActivity,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -178,6 +184,29 @@ declare global {
         deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>
         openInTerminal: (realPath: string, sessionId: string) => Promise<IpcResult<null>>
         newInTerminal: (realPath: string) => Promise<IpcResult<null>>
+        sendMessage: (
+          realPath: string,
+          sessionId: string,
+          message: string,
+          model?: string,
+          permissionMode?: string
+        ) => Promise<IpcResult<null>>
+        startMessage: (
+          realPath: string,
+          message: string,
+          model?: string,
+          permissionMode?: string
+        ) => Promise<IpcResult<null>>
+        stopMessage: () => Promise<IpcResult<null>>
+        endChat: () => Promise<IpcResult<null>>
+        respondPermission: (requestId: string, decision: PermissionDecision) => Promise<IpcResult<null>>
+        onPermissionRequest: (cb: (request: PermissionRequest) => void) => void
+        onChatStarted: (cb: (sessionId: string) => void) => void
+        onChatChunk: (cb: (chunk: string) => void) => void
+        onChatToolActivity: (cb: (activity: ToolActivity) => void) => void
+        onChatMessage: (cb: (message: ChatMessage) => void) => void
+        onChatDone: (cb: () => void) => void
+        onChatError: (cb: (error: string) => void) => void
       }
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>
@@ -225,9 +254,10 @@ declare global {
       }
       onDataChanged: (callback: () => void) => () => void
       live: {
-        getProcesses: () => Promise<IpcResult<ClaudeProcess[]>>
+        getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
+        onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void
         getSessions: () => Promise<IpcResult<BgSession[]>>
-        startWatch: (hash: string) => Promise<IpcResult<{ started: boolean }>>
+        startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>
         stopWatch: () => Promise<IpcResult<null>>
         onEvent: (cb: (event: unknown) => void) => void
       }
@@ -482,6 +512,25 @@ export function useLiveSessions() {
     queryKey: ['live:sessions'],
     queryFn: () => unwrap(window.electronAPI.live.getSessions()),
     refetchInterval: 4000,
+  })
+}
+
+// Sessioni Claude attive (registro ~/.claude/sessions): il main pusha gli
+// aggiornamenti via watcher, il refetch lento fa solo da rete di sicurezza
+// (es. watcher perso o pid morto senza unlink del file).
+export function useActiveSessions() {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      window.electronAPI.live.onActiveSessionsChanged(sessions =>
+        qc.setQueryData(['live:activeSessions'], sessions)
+      ),
+    [qc]
+  )
+  return useQuery({
+    queryKey: ['live:activeSessions'],
+    queryFn: () => unwrap(window.electronAPI.live.getActiveSessions()),
+    refetchInterval: 15000,
   })
 }
 

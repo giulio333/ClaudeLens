@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   useGlobalSkills,
   useGlobalAgents,
@@ -6,7 +6,7 @@ import {
   useMemoryProjects,
   useCostSummary,
   useGlobalClaudeMd,
-  ClaudeProcess,
+  useActiveSessions,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import type { ProjectCost } from '../../../types'
@@ -62,24 +62,12 @@ export function GlobalHomeView({
   const { data: costSummary } = useCostSummary()
   const { data: globalClaudeMd } = useGlobalClaudeMd()
 
-  const [procs, setProcs] = useState<ClaudeProcess[]>([])
+  const { data: procs = [] } = useActiveSessions()
   const [projectsPage, setProjectsPage] = useState(0)
   const [sortKey, setSortKey] = useState<SortKey>('tokens')
   const { pinned, isPinned, togglePin } = usePinnedProjects()
   // 'pinned' default when any pin exists; user can switch to 'all'
   const [projectsFilter, setProjectsFilter] = useState<'pinned' | 'all'>('pinned')
-  useEffect(() => {
-    let alive = true
-    async function load() {
-      try {
-        const r = await window.electronAPI.live.getProcesses()
-        if (alive && r.data) setProcs(r.data)
-      } catch { /* ignore */ }
-    }
-    load()
-    const t = setInterval(load, 5000)
-    return () => { alive = false; clearInterval(t) }
-  }, [])
 
   const costByHash = useMemo(() => {
     const m = new Map<string, ProjectCost>()
@@ -163,7 +151,7 @@ export function GlobalHomeView({
         <section className="cl-section">
           <div className="cl-sec-head">
             <h2>Live processes</h2>
-            <span className="ct">{procs.length} running · auto-refresh</span>
+            <span className="ct">{procs.length} running · live</span>
           </div>
           <div className="cl-proc-list">
             {procs.map(p => {
@@ -176,7 +164,13 @@ export function GlobalHomeView({
                   <span className="pid">PID {p.pid}</span>
                   <div style={{ minWidth: 0 }}>
                     <div className="pname">{name}</div>
-                    <div className="pcmd">{p.cmdline || 'claude'}</div>
+                    <div className="pcmd">
+                      {p.status === 'waiting'
+                        ? `waiting for ${p.waitingFor ?? 'input'}`
+                        : p.source === 'registry'
+                          ? p.status
+                          : 'claude'}
+                    </div>
                   </div>
                   <span className="ppath">{p.cwd}</span>
                   <span className="arrow">→</span>
