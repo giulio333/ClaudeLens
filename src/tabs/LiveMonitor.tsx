@@ -116,11 +116,14 @@ export default function LiveMonitor({
   const liveSessionId = activeProcs.find(p => p.sessionId)?.sessionId
 
   useEffect(() => {
-    window.electronAPI.live.onEvent(e => handleEvent(e as LiveEvent))
+    const disposeEvent = window.electronAPI.live.onEvent(e => handleEvent(e as LiveEvent))
     window.electronAPI.live.startWatch(project.hash, liveSessionId).then(r => {
       if (r.data?.started) setWatching(true)
     })
-    return () => { window.electronAPI.live.stopWatch() }
+    return () => {
+      disposeEvent()
+      window.electronAPI.live.stopWatch()
+    }
   }, [project.hash, liveSessionId, handleEvent])
 
   const toolFreq = events

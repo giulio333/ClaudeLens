@@ -35,21 +35,19 @@ export function AiAssistantView({
   const outputRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
-    window.electronAPI.ai.onChunk((chunk) => {
-      setOutput(prev => prev + chunk)
-    })
-    window.electronAPI.ai.onDone(() => {
-      setIsRunning(false)
-    })
-    window.electronAPI.ai.onError((error) => {
-      setOutput(prev => prev + (prev ? '\n\n' : '') + `**Error:** ${error}`)
-      setIsRunning(false)
-    })
-    return () => {
-      window.electronAPI.ai.onChunk(() => {})
-      window.electronAPI.ai.onDone(() => {})
-      window.electronAPI.ai.onError(() => {})
-    }
+    const disposers = [
+      window.electronAPI.ai.onChunk((chunk) => {
+        setOutput(prev => prev + chunk)
+      }),
+      window.electronAPI.ai.onDone(() => {
+        setIsRunning(false)
+      }),
+      window.electronAPI.ai.onError((error) => {
+        setOutput(prev => prev + (prev ? '\n\n' : '') + `**Error:** ${error}`)
+        setIsRunning(false)
+      }),
+    ]
+    return () => disposers.forEach(dispose => dispose())
   }, [])
 
   useEffect(() => {

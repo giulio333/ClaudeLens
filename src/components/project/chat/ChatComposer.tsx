@@ -224,6 +224,15 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // The scrollable slash popover — keyboard nav scrolls its active row into view.
   const slashMenuRef = useRef<HTMLDivElement | null>(null);
+  // Latest prop-derived callbacks, read inside the mount-only subscribe effect so
+  // it never re-subscribes when these props change identity (and so never drops a
+  // chunk/message in the gap between an unsubscribe and a re-subscribe mid-stream).
+  const onStartedRef = useRef(onStarted);
+  const onTurnCompleteRef = useRef(onTurnComplete);
+  useEffect(() => {
+    onStartedRef.current = onStarted;
+    onTurnCompleteRef.current = onTurnComplete;
+  });
 
   // Slash-command autocomplete. The available commands come from the project's
   // resolved Claude Code config (`init.slashCommands`, cached); sending one is
@@ -278,47 +287,45 @@ export function ChatComposer({
     { value: '', label: 'Default' },
   ];
 
-  // Subscribe to the streaming channels. Only one composer is mounted at a time,
-  // so claiming the listeners (the preload resets them on each subscribe) is safe.
+  // Subscribe to the streaming channels once, on mount. Prop-derived callbacks are
+  // read through refs (above), so this effect never re-runs mid-stream: a chunk,
+  // message or permission request can't be dropped in the window between an
+  // unsubscribe and a re-subscribe. Each subscribe returns a disposer that removes
+  // only its own listener (so a parallel terminal/AI view can't steal it); we run
+  // them all on unmount.
   useEffect(() => {
-    window.electronAPI.sessions.onChatStarted(id => onStarted?.(id));
-    window.electronAPI.sessions.onChatChunk(chunk => setStream(prev => prev + chunk));
-    window.electronAPI.sessions.onChatToolActivity(activity => setLiveTool(activity));
-    window.electronAPI.sessions.onChatMessage(message => {
-      setLiveMessages(prev => [...prev, message]);
-      // A completed assistant message absorbs the partial text we were streaming
-      // into the preview; clear it so the next message's deltas start fresh and
-      // the trailing LiveTurn doesn't echo text now shown as a real bubble.
-      if (message.role === 'assistant') setStream('');
-      // A tool_result-bearing user message means the running tool finished;
-      // drop the indicator (the next tool's stream events re-arm it).
-      if (message.role === 'user') setLiveTool(null);
-    });
-    window.electronAPI.sessions.onChatError(message =>
-      setErrorText(prev => (prev ? prev + '\n' : '') + message)
-    );
-    window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req]));
-    window.electronAPI.sessions.onChatDone(() => {
-      setSending(false);
-      setStream('');
-      setLiveTool(null);
-      // A turn can't end with requests still on screen (the SDK denied any
-      // pending ones on teardown); clear the stale queue.
-      setPermQueue([]);
-      // The watcher has likely refetched mid-stream already; refetch again so the
-      // final turn is on screen the instant the run closes.
-      onTurnComplete();
-    });
-    return () => {
-      window.electronAPI.sessions.onChatStarted(() => {});
-      window.electronAPI.sessions.onChatChunk(() => {});
-      window.electronAPI.sessions.onChatToolActivity(() => {});
-      window.electronAPI.sessions.onChatMessage(() => {});
-      window.electronAPI.sessions.onChatError(() => {});
-      window.electronAPI.sessions.onPermissionRequest(() => {});
-      window.electronAPI.sessions.onChatDone(() => {});
-    };
-  }, [onTurnComplete, onStarted]);
+    const disposers = [
+      window.electronAPI.sessions.onChatStarted(id => onStartedRef.current?.(id)),
+      window.electronAPI.sessions.onChatChunk(chunk => setStream(prev => prev + chunk)),
+      window.electronAPI.sessions.onChatToolActivity(activity => setLiveTool(activity)),
+      window.electronAPI.sessions.onChatMessage(message => {
+        setLiveMessages(prev => [...prev, message]);
+        // A completed assistant message absorbs the partial text we were streaming
+        // into the preview; clear it so the next message's deltas start fresh and
+        // the trailing LiveTurn doesn't echo text now shown as a real bubble.
+        if (message.role === 'assistant') setStream('');
+        // A tool_result-bearing user message means the running tool finished;
+        // drop the indicator (the next tool's stream events re-arm it).
+        if (message.role === 'user') setLiveTool(null);
+      }),
+      window.electronAPI.sessions.onChatError(message =>
+        setErrorText(prev => (prev ? prev + '\n' : '') + message)
+      ),
+      window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req])),
+      window.electronAPI.sessions.onChatDone(() => {
+        setSending(false);
+        setStream('');
+        setLiveTool(null);
+        // A turn can't end with requests still on screen (the SDK denied any
+        // pending ones on teardown); clear the stale queue.
+        setPermQueue([]);
+        // The watcher has likely refetched mid-stream already; refetch again so the
+        // final turn is on screen the instant the run closes.
+        onTurnCompleteRef.current();
+      }),
+    ];
+    return () => disposers.forEach(dispose => dispose());
+  }, []);
 
   // Tear down the persistent SDK session when the composer unmounts (leaving the
   // chat, or switching session — ChatView keys the composer by sessionId). The

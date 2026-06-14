@@ -1,4 +1,16 @@
-import { contextBridge, ipcRenderer } from 'electron';
+import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+
+// Subscribe to a renderer IPC channel with a *named* handler and return an
+// unsubscribe disposer. Unlike `removeAllListeners(channel)` (the old pattern),
+// this removes only this subscription, so two components can listen on the same
+// channel without silently clobbering each other's listener — and a re-render
+// can't drop an event in the gap between a removeAll and the re-add. Callers must
+// call the returned disposer on cleanup (mirrors `onDataChanged`).
+function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => void): () => void {
+  const handler = (_event: IpcRendererEvent, ...args: unknown[]) => cb(...(args as T));
+  ipcRenderer.on(channel, handler);
+  return () => ipcRenderer.removeListener(channel, handler);
+}
 
 contextBridge.exposeInMainWorld('electronAPI', {
   memory: {
@@ -57,34 +69,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     endChat: () => ipcRenderer.invoke('sessions:endChat'),
     respondPermission: (requestId: string, decision: unknown) =>
       ipcRenderer.invoke('sessions:permissionResponse', requestId, decision),
-    onPermissionRequest: (cb: (request: unknown) => void) => {
-      ipcRenderer.removeAllListeners('sessions:permissionRequest');
-      ipcRenderer.on('sessions:permissionRequest', (_event, request) => cb(request));
-    },
-    onChatStarted: (cb: (sessionId: string) => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatStarted');
-      ipcRenderer.on('sessions:chatStarted', (_event, sessionId) => cb(sessionId));
-    },
-    onChatChunk: (cb: (chunk: string) => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatChunk');
-      ipcRenderer.on('sessions:chatChunk', (_event, chunk) => cb(chunk));
-    },
-    onChatToolActivity: (cb: (activity: unknown) => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatToolActivity');
-      ipcRenderer.on('sessions:chatToolActivity', (_event, activity) => cb(activity));
-    },
-    onChatMessage: (cb: (message: unknown) => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatMessage');
-      ipcRenderer.on('sessions:chatMessage', (_event, message) => cb(message));
-    },
-    onChatDone: (cb: () => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatDone');
-      ipcRenderer.on('sessions:chatDone', () => cb());
-    },
-    onChatError: (cb: (error: string) => void) => {
-      ipcRenderer.removeAllListeners('sessions:chatError');
-      ipcRenderer.on('sessions:chatError', (_event, error) => cb(error));
-    },
+    onPermissionRequest: (cb: (request: unknown) => void) =>
+      subscribe('sessions:permissionRequest', cb),
+    onChatStarted: (cb: (sessionId: string) => void) => subscribe('sessions:chatStarted', cb),
+    onChatChunk: (cb: (chunk: string) => void) => subscribe('sessions:chatChunk', cb),
+    onChatToolActivity: (cb: (activity: unknown) => void) =>
+      subscribe('sessions:chatToolActivity', cb),
+    onChatMessage: (cb: (message: unknown) => void) => subscribe('sessions:chatMessage', cb),
+    onChatDone: (cb: () => void) => subscribe('sessions:chatDone', cb),
+    onChatError: (cb: (error: string) => void) => subscribe('sessions:chatError', cb),
   },
   terminal: {
     create: (opts: { cwd: string; resumeSessionId?: string; cols?: number; rows?: number }) =>
@@ -93,14 +86,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', id, cols, rows),
     kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
-    onData: (cb: (id: string, data: string) => void) => {
-      ipcRenderer.removeAllListeners('terminal:data');
-      ipcRenderer.on('terminal:data', (_event, id, data) => cb(id, data));
-    },
-    onExit: (cb: (id: string, exitCode: number) => void) => {
-      ipcRenderer.removeAllListeners('terminal:exit');
-      ipcRenderer.on('terminal:exit', (_event, id, exitCode) => cb(id, exitCode));
-    },
+    onData: (cb: (id: string, data: string) => void) => subscribe('terminal:data', cb),
+    onExit: (cb: (id: string, exitCode: number) => void) => subscribe('terminal:exit', cb),
   },
   rules: {
     getByProject: (realPath: string) => ipcRenderer.invoke('rules:getByProject', realPath),
@@ -141,18 +128,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     run: (instruction: string, inputContent: string, projectPath: string) =>
       ipcRenderer.invoke('ai:run', instruction, inputContent, projectPath),
     stop: () => ipcRenderer.invoke('ai:stop'),
-    onChunk: (cb: (chunk: string) => void) => {
-      ipcRenderer.removeAllListeners('ai:chunk');
-      ipcRenderer.on('ai:chunk', (_event, chunk) => cb(chunk));
-    },
-    onDone: (cb: () => void) => {
-      ipcRenderer.removeAllListeners('ai:done');
-      ipcRenderer.on('ai:done', () => cb());
-    },
-    onError: (cb: (error: string) => void) => {
-      ipcRenderer.removeAllListeners('ai:error');
-      ipcRenderer.on('ai:error', (_event, error) => cb(error));
-    },
+    onChunk: (cb: (chunk: string) => void) => subscribe('ai:chunk', cb),
+    onDone: (cb: () => void) => subscribe('ai:done', cb),
+    onError: (cb: (error: string) => void) => subscribe('ai:error', cb),
   },
   settings: {
     getCleanupPeriodDays: () => ipcRenderer.invoke('settings:getCleanupPeriodDays'),
@@ -180,9 +158,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     startWatch: (hash: string, sessionId?: string) =>
       ipcRenderer.invoke('live:startWatch', hash, sessionId),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),
-    onEvent: (cb: (event: unknown) => void) => {
-      ipcRenderer.removeAllListeners('live:event');
-      ipcRenderer.on('live:event', (_event, data) => cb(data));
-    },
+    onEvent: (cb: (event: unknown) => void) => subscribe('live:event', cb),
   },
 });
