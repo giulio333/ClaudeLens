@@ -1,4 +1,5 @@
 import os from 'os';
+import { resolveClaudeExecutablePath } from '../utils';
 
 // Reads the *effective* Claude Code configuration through the official Agent SDK
 // (`@anthropic-ai/claude-agent-sdk`) instead of hand-parsing the settings files.
@@ -10,6 +11,9 @@ import os from 'os';
 //      active tool list, slash commands, skills, agents, plugins and version.
 // The SDK is ESM-only, so it is loaded with a dynamic `import()` from the
 // CommonJS main process (same approach as chokidar in live-monitor.ts).
+
+// Packaged app only: points at the asar-unpacked CLI binary; undefined in dev.
+const claudeExecutable = resolveClaudeExecutablePath();
 
 /** Runtime view captured from the SDK `system/init` message. */
 export interface InitInfo {
@@ -81,7 +85,16 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
   try {
     const q = sdk.query({
       prompt: 'noop',
-      options: { cwd, maxTurns: 1, abortController: abort },
+      options: {
+        cwd,
+        maxTurns: 1,
+        abortController: abort,
+        // Don't write a transcript: this probe would otherwise show up in the
+        // session list as a ghost "noop" chat on every config read.
+        persistSession: false,
+        // Packaged app: the CLI binary is unpacked outside app.asar (see utils).
+        ...(claudeExecutable && { pathToClaudeCodeExecutable: claudeExecutable }),
+      },
     });
     for await (const msg of q) {
       if (msg.type === 'system' && msg.subtype === 'init') {

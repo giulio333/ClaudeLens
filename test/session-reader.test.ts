@@ -67,6 +67,47 @@ describe('readChatSession', () => {
     expect(msgs[0].content).toEqual([{ type: 'text', text: raw }]);
   });
 
+  it('drops the local-command placeholder assistant message', () => {
+    const p = writeJsonl('s.jsonl', [
+      line({
+        type: 'user',
+        uuid: 'cmd',
+        timestamp: 't1',
+        message: { role: 'user', content: '<command-name>/context</command-name>' },
+      }),
+      line({
+        type: 'assistant',
+        uuid: 'ph',
+        timestamp: 't2',
+        message: {
+          role: 'assistant',
+          model: '<synthetic>',
+          content: [{ type: 'text', text: 'No response requested.' }],
+        },
+      }),
+    ]);
+    const msgs = readChatSession(p);
+    // The command card survives; the "No response requested." placeholder is gone.
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].uuid).toBe('cmd');
+  });
+
+  it('keeps a real assistant message that merely mentions the placeholder text', () => {
+    const p = writeJsonl('s.jsonl', [
+      line({
+        type: 'assistant',
+        uuid: 'real',
+        timestamp: 't',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'No response requested. Here is why: …' }],
+        },
+      }),
+    ]);
+    // Only an exact, single-block match is the placeholder; this longer text stays.
+    expect(readChatSession(p)).toHaveLength(1);
+  });
+
   it('skips a string user message that is only tags (empty after strip)', () => {
     const p = writeJsonl('s.jsonl', [
       line({
@@ -240,6 +281,32 @@ describe('readChatSession', () => {
       }),
     ]);
     expect(readChatSession(p)).toEqual([]);
+  });
+
+  it('deduplicates messages with the same uuid (sdk-cli + cli re-write)', () => {
+    // Una sessione ripresa via `claude -p --resume` e poi riaperta nella CLI
+    // riscrive lo stesso turno con uuid identico (solo entrypoint diverso).
+    const turn = (entrypoint: string) => ({
+      type: 'user',
+      uuid: 'dup1',
+      timestamp: '2026-01-01T00:00:00Z',
+      entrypoint,
+      message: { role: 'user', content: 'hello from the UI' },
+    });
+    const p = writeJsonl('s.jsonl', [line(turn('sdk-cli')), line(turn('cli'))]);
+    const out = readChatSession(p);
+    expect(out).toHaveLength(1);
+    expect(out[0].uuid).toBe('dup1');
+  });
+
+  it('does not deduplicate distinct messages lacking a uuid', () => {
+    const noUuid = (text: string) => ({
+      type: 'assistant',
+      timestamp: 't',
+      message: { role: 'assistant', content: [{ type: 'text', text }] },
+    });
+    const p = writeJsonl('s.jsonl', [line(noUuid('one')), line(noUuid('two'))]);
+    expect(readChatSession(p)).toHaveLength(2);
   });
 });
 

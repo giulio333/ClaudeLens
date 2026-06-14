@@ -40,6 +40,7 @@ import { McpServerDetailView } from '../components/project/mcp/McpServerDetailVi
 import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView'
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView'
+import { NewChatView } from '../components/project/chat/NewChatView'
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
 import { PlanDetailView } from '../components/project/plans/PlanDetailView'
@@ -326,6 +327,16 @@ export default function ProjectOverview() {
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
+          />
+        )
+      case 'new-chat':
+        return (
+          <NewChatView
+            project={view.project}
+            onBack={() => setView({ type: 'sessions', project: view.project })}
+            onCreated={session =>
+              setView({ type: 'chat', project: view.project, session, from: 'sessions' })
+            }
           />
         )
       case 'memory-topic':

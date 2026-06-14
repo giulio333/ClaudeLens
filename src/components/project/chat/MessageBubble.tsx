@@ -410,12 +410,18 @@ export const MessageBubble = memo(function MessageBubble({
     return agent ? { label: 'View agent', onClick: () => onOpenAgent(agent) } : undefined
   }
 
-  const timestamp = new Date(msg.timestamp).toLocaleTimeString('it-IT', {
-    hour: '2-digit',
-    minute: '2-digit',
-    second: '2-digit',
-    hour12: false,
-  })
+  // Guard against a missing/invalid timestamp (e.g. a synthetic slash-command
+  // message): format only when the date is real, else render nothing — never the
+  // literal "Invalid Date".
+  const parsedTs = new Date(msg.timestamp)
+  const timestamp = Number.isNaN(parsedTs.getTime())
+    ? ''
+    : parsedTs.toLocaleTimeString('it-IT', {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      })
   const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
 
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
@@ -467,7 +473,8 @@ export const MessageBubble = memo(function MessageBubble({
       <section className="cl-turn-body">
         <header className="cl-turn-head">
           <span className="cl-turn-who">{roleLabel}</span>
-          {!(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
+          {timestamp &&
+           !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
            !(showAgentStrip && textBlocks.length === 0) && (
             <>
               <span className="cl-turn-sep">·</span>
@@ -477,9 +484,16 @@ export const MessageBubble = memo(function MessageBubble({
           {msg.model && msg.role === 'assistant' && (
             <>
               <span className="cl-turn-sep cl-turn-sep--model">·</span>
-              <span className="cl-turn-model-chip" style={{ '--mt': modelColor(msg.model) } as CSSProperties}>
-                {fmtModel(msg.model)}
-              </span>
+              {msg.model === '<synthetic>' ? (
+                // Output of a built-in slash command (/context, /usage, …) — not a
+                // real model turn, so label it as such instead of showing the raw
+                // "<synthetic>" model tag.
+                <span className="cl-turn-model-chip cl-turn-model-chip--synthetic">Command output</span>
+              ) : (
+                <span className="cl-turn-model-chip" style={{ '--mt': modelColor(msg.model) } as CSSProperties}>
+                  {fmtModel(msg.model)}
+                </span>
+              )}
             </>
           )}
           {hiddenToolCount > 0 && (

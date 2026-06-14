@@ -1,6 +1,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
 import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
 import os from 'os';
+import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { execFile, spawn, ChildProcess } from 'child_process';
 
@@ -18,8 +19,8 @@ import {
   writeClaudeMdFile,
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
-import { readChatSession, findSessionFile } from './modules/session-reader';
-import { readSessionSubagents, resolveSubagentPath } from './modules/subagents-reader';
+import { readChatSessionViaSdk, readSubagentTranscriptViaSdk } from './modules/session-reader';
+import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
@@ -29,14 +30,27 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { readEffectiveConfig } from './modules/config-reader';
+import {
+  ChatSession,
+  ChatSessionParams,
+  CanUseTool,
+  PermissionResult,
+  PermissionUpdate,
+} from './modules/chat-runner';
 import { readPrefs, setPref } from './modules/prefs-store';
-import { findClaudeProcesses } from './modules/process-scanner';
+import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
-import { hashToPath, resolveRealPath, invalidateCwdCache, CLAUDE_DIR, isValidSessionId } from './utils';
+import {
+  hashToPath,
+  resolveRealPath,
+  invalidateCwdCache,
+  CLAUDE_DIR,
+  isValidSessionId,
+} from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
@@ -568,42 +582,46 @@ ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: stri
   }
 });
 
-ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string) => {
+ipcMain.handle('sessions:getChat', async (_event, _hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const filePath = await findSessionFile(projectPath, filename);
-    if (!filePath) return err(new Error(`File sessione non trovato: ${filename}`));
-    const messages = readChatSession(filePath);
+    // POC: lo storico è letto ESCLUSIVAMENTE via Agent SDK (getSessionMessages).
+    // L'SDK cerca l'id in tutte le project dir di ~/.claude, quindi `hash` non
+    // serve. NB: tronca alla compaction (perde la storia pre-`/compact`).
+    const sessionId = filename.replace(/\.jsonl$/, '');
+    const messages = await readChatSessionViaSdk(sessionId);
     return ok(messages);
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('sessions:getSubagents', async (_event, hash: string, filename: string) => {
+ipcMain.handle('sessions:getSubagents', async (_event, _hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const metas = readSessionSubagents(projectPath, filename);
+    // POC: metadati sub-agenti via SDK (listSubagents + getSubagentMessages).
+    const sessionId = filename.replace(/\.jsonl$/, '');
+    const metas = await readSessionSubagentsViaSdk(sessionId);
     return ok(metas);
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('sessions:getSubagentTranscript', async (_event, hash: string, filename: string, agentId: string) => {
-  try {
-    assertValidFilename(filename);
-    const projectPath = projectDir(hash);
-    const filePath = resolveSubagentPath(projectPath, filename, agentId);
-    if (!filePath) return err(new Error(`Subagent transcript non trovato: ${agentId}`));
-    const messages = readChatSession(filePath, { includeSidechain: true });
-    return ok(messages);
-  } catch (e) {
-    return err(e);
+ipcMain.handle(
+  'sessions:getSubagentTranscript',
+  async (_event, _hash: string, filename: string, agentId: string) => {
+    try {
+      assertValidFilename(filename);
+      // POC: transcript sub-agente via SDK (getSubagentMessages).
+      const sessionId = filename.replace(/\.jsonl$/, '');
+      const messages = await readSubagentTranscriptViaSdk(sessionId, agentId);
+      return ok(messages);
+    } catch (e) {
+      return err(e);
+    }
   }
-});
+);
 
 ipcMain.handle('sessions:getArtifacts', async (_event, hash: string, filename: string) => {
   try {
@@ -917,12 +935,257 @@ ipcMain.handle('ai:stop', async () => {
   return ok(null);
 });
 
+// ─── Chat composer (Agent SDK with in-app approvals) ──────────────────────────
+// Runs chat turns through the official Agent SDK (`modules/chat-runner.ts`) rather
+// than spawning `claude -p`. The SDK persists to the same
+// `~/.claude/projects/<hash>/<id>.jsonl` the terminal reads, so a message sent
+// from ClaudeLens stays interchangeable with one typed via `claude --resume <id>`.
+// Crucially the SDK exposes `canUseTool`: when Claude wants a non-auto-approved
+// tool the callback fires here, we forward it to the renderer
+// (`sessions:permissionRequest`), the user picks Allow / Always / Deny, and the
+// decision (`sessions:permissionResponse`) flows back to the SDK — the interactive
+// terminal experience, inside the app. Assistant text still streams live over
+// `sessions:chatChunk`; on `chatDone` the watcher refetch renders the full turn.
+//
+// Streaming input mode: one long-lived ChatSession per chat view drives a single
+// persistent `query()`. A send pushes into the live session (its context stays
+// warm) instead of opening a new query each turn; Stop interrupts the turn but
+// keeps the session alive; leaving the view (`sessions:endChat`) disposes it.
+// Only one session is alive at a time — starting/opening another supersedes it.
+let currentChatSession: ChatSession | null = null;
+
+// Pending tool-approval requests, keyed by the requestId sent to the renderer.
+// Each resolver settles the Promise that `canUseTool` returned to the SDK.
+const pendingPermissions = new Map<string, (r: PermissionResult) => void>();
+
+// Resume default: the session file records no permission mode, so we pick a
+// faithful default. `default` means "ask every time" — now that the SDK can
+// actually prompt in-app via canUseTool, this matches the live terminal chat
+// rather than silently bypassing or blocking. Callers may override.
+const RESUME_PERMISSION_MODE = 'default';
+
+type PermissionDecision =
+  | { kind: 'allow'; input: Record<string, unknown> }
+  | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionUpdate[] }
+  | { kind: 'deny'; message?: string };
+
+function toPermissionResult(d: PermissionDecision): PermissionResult {
+  if (d.kind === 'deny') return { behavior: 'deny', message: d.message || 'Denied by the user.' };
+  if (d.kind === 'always')
+    return { behavior: 'allow', updatedInput: d.input, updatedPermissions: d.suggestions };
+  return { behavior: 'allow', updatedInput: d.input };
+}
+
+// Resolve every still-pending approval as a denial and clear the map. Used when a
+// turn is stopped or superseded so the SDK never hangs on an unanswered request.
+function denyAllPending(message: string): void {
+  for (const resolve of pendingPermissions.values()) {
+    resolve({ behavior: 'deny', message });
+  }
+  pendingPermissions.clear();
+}
+
+// Builds the `canUseTool` callback: forwards each request to the renderer and
+// returns a Promise the matching `sessions:permissionResponse` settles. Honors
+// the per-call abort signal by resolving as a denial.
+function makeCanUseTool(event: Electron.IpcMainInvokeEvent): CanUseTool {
+  return (toolName, input, options) =>
+    new Promise<PermissionResult>(resolve => {
+      const requestId = randomUUID();
+      // A dedup-guarded resolver: the first of {user response, abort, supersede}
+      // to fire wins, the rest are no-ops.
+      const settle = (r: PermissionResult) => {
+        if (!pendingPermissions.has(requestId)) return;
+        pendingPermissions.delete(requestId);
+        resolve(r);
+      };
+      pendingPermissions.set(requestId, settle);
+
+      options.signal.addEventListener('abort', () =>
+        settle({ behavior: 'deny', message: 'Aborted.' })
+      );
+
+      event.sender.send('sessions:permissionRequest', {
+        requestId,
+        toolName,
+        title: options.title,
+        displayName: options.displayName,
+        description: options.description,
+        input,
+        suggestions: options.suggestions,
+        blockedPath: options.blockedPath,
+        decisionReason: options.decisionReason,
+        toolUseID: options.toolUseID,
+      });
+    });
+}
+
+// Create and start a persistent ChatSession, wiring its stream to the renderer.
+// `onTurnEnd` maps to the existing `chatDone` event (the renderer treats it as
+// "turn finished": re-enable composer + refetch) — the session itself lives on.
+// `onClosed` clears the live reference only when *this* session is still current
+// (identity, not session id, so a freshly-resumed session isn't cleared by the
+// disposed one it replaced). Sends are guarded against a torn-down webContents,
+// which matters now a session outlives a single turn.
+function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionParams): ChatSession {
+  const send = (channel: string, ...args: unknown[]) => {
+    if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
+  };
+  // `onClosed` self-references `session` to clear the live pointer only when it's
+  // still the current one. The arrow is lazy (fired async, long after the ctor
+  // returns), so referencing `session` inside its own initializer is safe.
+  const session: ChatSession = new ChatSession(params, {
+    onStarted: id => send('sessions:chatStarted', id),
+    onChunk: text => send('sessions:chatChunk', text),
+    onToolActivity: activity => send('sessions:chatToolActivity', activity),
+    onMessage: message => send('sessions:chatMessage', message),
+    onError: message => send('sessions:chatError', message),
+    onTurnEnd: () => send('sessions:chatDone'),
+    onClosed: () => {
+      // A deliberate teardown (endChat, supersede) clears or replaces the live
+      // pointer before this fires. Reaching here with the pointer still intact
+      // means the query died on its own (fatal stream error, CLI crash) — emit a
+      // final `chatDone` so the renderer's composer doesn't stay stuck on "Stop"
+      // with no turn ever ending.
+      if (currentChatSession === session) {
+        currentChatSession = null;
+        send('sessions:chatDone');
+      }
+    },
+  });
+  return session;
+}
+
+const PERMISSION_MODES = ['default', 'acceptEdits', 'plan', 'bypassPermissions'] as const;
+type ChatPermissionMode = (typeof PERMISSION_MODES)[number];
+function asPermissionMode(m?: string): ChatPermissionMode {
+  return PERMISSION_MODES.includes(m as ChatPermissionMode)
+    ? (m as ChatPermissionMode)
+    : RESUME_PERMISSION_MODE;
+}
+
+// Continue an existing session: `resume: sessionId` (no fork) appends to the same
+// transcript. Tool calls route through the in-app approval dialog via canUseTool.
+ipcMain.handle(
+  'sessions:sendMessage',
+  async (
+    event,
+    realPath: string,
+    sessionId: string,
+    message: string,
+    model?: string,
+    permissionMode?: string
+  ) => {
+    const { existsSync, statSync } = await import('fs');
+    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+      return err(
+        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+      );
+    }
+    if (!sessionId) return err(new Error('Missing session id.'));
+    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+
+    const mode = asPermissionMode(permissionMode);
+    // Same transcript already live: push into the warm query (applying any
+    // model/permission switch first) so the turn rides the persistent session.
+    if (currentChatSession?.sessionId === sessionId) {
+      await currentChatSession.setModel(model);
+      await currentChatSession.setPermissionMode(mode);
+      currentChatSession.send(message);
+    } else {
+      // No live session for this transcript: supersede whatever's running and
+      // resume this one into a fresh persistent query.
+      currentChatSession?.dispose();
+      denyAllPending('Superseded by a new request.');
+      currentChatSession = launchSession(event, {
+        cwd: realPath,
+        resume: sessionId,
+        model,
+        permissionMode: mode,
+        canUseTool: makeCanUseTool(event),
+        env: claudeEnv(),
+      });
+      currentChatSession.send(message);
+    }
+    return ok(null);
+  }
+);
+
+// Start a brand-new session: we pre-generate the session id (`crypto.randomUUID`)
+// and pass it as `sessionId`, so the new `~/.claude/projects/<hash>/<id>.jsonl` id
+// is known up front. We emit `sessions:chatStarted` immediately (no race in the
+// new-chat view), then run the turn — tool calls still flow through canUseTool.
+ipcMain.handle(
+  'sessions:startMessage',
+  async (event, realPath: string, message: string, model?: string, permissionMode?: string) => {
+    const { existsSync, statSync } = await import('fs');
+    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+      return err(
+        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+      );
+    }
+    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+
+    currentChatSession?.dispose();
+    denyAllPending('Superseded by a new request.');
+
+    const id = randomUUID();
+    event.sender.send('sessions:chatStarted', id);
+
+    currentChatSession = launchSession(event, {
+      cwd: realPath,
+      sessionId: id,
+      model,
+      permissionMode: asPermissionMode(permissionMode),
+      canUseTool: makeCanUseTool(event),
+      env: claudeEnv(),
+    });
+    currentChatSession.send(message);
+    return ok(null);
+  }
+);
+
+// The renderer's verdict on a pending approval. Settling resolves the Promise the
+// SDK's canUseTool is awaiting; an unknown requestId (already aborted) is a no-op.
+ipcMain.handle(
+  'sessions:permissionResponse',
+  async (_event, requestId: string, decision: PermissionDecision) => {
+    const resolve = pendingPermissions.get(requestId);
+    if (resolve) resolve(toPermissionResult(decision));
+    return ok(null);
+  }
+);
+
+// Stop the in-flight turn with the SDK's native interrupt: the turn ends (the SDK
+// emits a `result`, so the composer re-enables) but the session stays alive and
+// warm — the user can keep chatting, unlike the old kill. Pending approvals are
+// denied first so the interrupted turn never hangs on an unanswered one.
+ipcMain.handle('sessions:stopMessage', async () => {
+  denyAllPending('Stopped by the user.');
+  try {
+    await currentChatSession?.interrupt();
+  } catch {
+    // interrupt() can race the turn's natural end (query already closed); the
+    // stop still achieved its goal, so don't reject the invoke over it.
+  }
+  return ok(null);
+});
+
+// Tear the persistent session down when the chat view unmounts (back, or switch
+// session/project). Disposing aborts the query and closes the input generator;
+// the next message in any view resumes from disk into a fresh session.
+ipcMain.handle('sessions:endChat', async () => {
+  currentChatSession?.dispose();
+  currentChatSession = null;
+  denyAllPending('Session closed.');
+  return ok(null);
+});
+
 // ─── Live Monitor IPC ─────────────────────────────────────────────────────────
 
-ipcMain.handle('live:getProcesses', async () => {
+ipcMain.handle('live:getActiveSessions', async () => {
   try {
-    const processes = await findClaudeProcesses();
-    return ok(processes);
+    return ok(await readActiveSessions());
   } catch (e) {
     return err(e);
   }
@@ -936,10 +1199,10 @@ ipcMain.handle('live:getSessions', async () => {
   }
 });
 
-ipcMain.handle('live:startWatch', async (event, hash: string) => {
+ipcMain.handle('live:startWatch', async (event, hash: string, sessionId?: string) => {
   try {
     const projectPath = projectDir(hash);
-    const started = await startLiveMonitor(projectPath, liveEvent => {
+    const started = await startLiveMonitor(projectPath, sessionId ?? null, liveEvent => {
       if (!event.sender.isDestroyed()) {
         event.sender.send('live:event', liveEvent);
       }
@@ -1081,6 +1344,28 @@ async function startWatcher() {
   watcher.on('add', notify);
   watcher.on('change', notify);
   watcher.on('unlink', notify);
+
+  // Registro sessioni vive (~/.claude/sessions/<pid>.json): push dedicato al
+  // renderer invece del polling. Il file heartbeat-a ogni pochi secondi, quindi
+  // l'evento NON passa per data:changed (invaliderebbe tutte le query React
+  // Query di continuo) ma viaggia su un canale suo con il payload già letto.
+  const sessionsWatcher = watch(defaultSessionsDir(), { ignoreInitial: true, depth: 0 });
+  let pushTimer: NodeJS.Timeout | null = null;
+  const pushActiveSessions = () => {
+    if (pushTimer) return; // debounce: una lettura per raffica di eventi
+    pushTimer = setTimeout(async () => {
+      pushTimer = null;
+      try {
+        const sessions = await readActiveSessions();
+        mainWindow?.webContents.send('live:activeSessions', sessions);
+      } catch {
+        /* lettura fallita: il refetch periodico del renderer copre il buco */
+      }
+    }, 400);
+  };
+  sessionsWatcher.on('add', pushActiveSessions);
+  sessionsWatcher.on('change', pushActiveSessions);
+  sessionsWatcher.on('unlink', pushActiveSessions);
 }
 
 app.whenReady().then(() => {
