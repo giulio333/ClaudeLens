@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, statSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
+import { parseFrontmatter, getString } from './frontmatter';
 
 export interface MemoryTopic {
   name: string;
@@ -33,16 +34,20 @@ function typeFromFilename(file: string): TopicType {
 
 // Legge i campi rilevanti dal frontmatter YAML, gestendo sia il formato piatto
 // di ClaudeLens (`type:` top-level) sia quello annidato dell'auto-memory
-// dell'harness (`metadata:` → `type:`/`originSessionId:`). Le chiavi sono
-// cercate ovunque nel blocco frontmatter, così entrambe le forme funzionano.
+// dell'harness (`metadata:` → `type:`/`originSessionId:`). Ogni chiave è cercata
+// prima al top-level e poi sotto `metadata:`, così entrambe le forme funzionano.
+// `node_type` non viene mai scambiato per `type`: si interroga la chiave esatta.
 function parseTopicFrontmatter(content: string): TopicFrontmatter {
-  const m = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!m) return {};
-  const fm = m[1];
-  // `^\s*type:` non matcha `node_type:` perché dopo lo spazio iniziale serve
-  // esattamente `type:`.
-  const get = (k: string) =>
-    fm.match(new RegExp(`^\\s*${k}:\\s*(.+)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '');
+  const { frontmatter } = parseFrontmatter(content);
+  const metadata =
+    frontmatter.metadata && typeof frontmatter.metadata === 'object'
+      ? (frontmatter.metadata as Record<string, unknown>)
+      : {};
+
+  // Top-level prima, poi fallback su metadata (replica la vecchia ricerca
+  // "ovunque nel blocco" senza confondere chiavi tipo `node_type`).
+  const get = (k: string) => getString(frontmatter, k) ?? getString(metadata, k);
+
   const rawType = get('type');
   const type =
     rawType === 'user' || rawType === 'feedback' || rawType === 'project' || rawType === 'reference'
