@@ -4,6 +4,15 @@ export function fmtDate(d: string) {
   return new Date(d).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
+// Compact token count for metric chips: 1_500 → {value:'2',unit:'k'},
+// 2_300_000 → {value:'2.3',unit:'m'}. The caller renders value and unit separately.
+export function formatTokens(n: number): { value: string; unit: string } {
+  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'b' }
+  if (n >= 1_000_000)     return { value: (n / 1_000_000).toFixed(1), unit: 'm' }
+  if (n >= 1_000)         return { value: Math.round(n / 1_000).toString(), unit: 'k' }
+  return { value: String(n), unit: '' }
+}
+
 // Restituisce un titolo umano per la sessione, in ordine di priorità:
 // 1) customTitle (impostato dall'utente)  2) aiTitle (generato da Claude)
 // 3) primo messaggio utente troncato       4) fallback "Untitled session"

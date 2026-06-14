@@ -3,16 +3,10 @@ import { McpServer, useCostSummary, useMemoryProjects } from '../../../hooks/use
 import type { ProjectCost } from '../../../types'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
+import { formatTokens } from '../utils'
 import { mcpServiceColor, mcpServiceMeta } from './McpServerCard'
 
 type Project = { hash: string; realPath: string }
-
-function formatTokens(n: number): { value: string; unit: string } {
-  if (n >= 1_000_000_000) return { value: (n / 1_000_000_000).toFixed(1), unit: 'b' }
-  if (n >= 1_000_000)     return { value: (n / 1_000_000).toFixed(1), unit: 'm' }
-  if (n >= 1_000)         return { value: Math.round(n / 1_000).toString(), unit: 'k' }
-  return { value: String(n), unit: '' }
-}
 
 function ProjectRow({
   path,
