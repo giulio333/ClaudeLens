@@ -1046,7 +1046,14 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
     onChunk: text => send('sessions:chatChunk', text),
     onToolActivity: activity => send('sessions:chatToolActivity', activity),
     onMessage: message => send('sessions:chatMessage', message),
-    onError: message => send('sessions:chatError', message),
+    onError: message => {
+      send('sessions:chatError', message);
+      // A turn that errors out leaves any tool-approval requests it raised
+      // dangling — their canUseTool Promises never settle, leaking the resolvers
+      // and risking a stale dialog next turn. Deny them so the SDK unblocks and
+      // the renderer's queue clears.
+      denyAllPending('The turn ended with an error.');
+    },
     onTurnEnd: () => send('sessions:chatDone'),
     onClosed: () => {
       // A deliberate teardown (endChat, supersede) clears or replaces the live
@@ -1095,25 +1102,36 @@ ipcMain.handle(
     const mode = asPermissionMode(permissionMode);
     // Same transcript already live: push into the warm query (applying any
     // model/permission switch first) so the turn rides the persistent session.
-    if (currentChatSession?.sessionId === sessionId) {
-      await currentChatSession.setModel(model);
-      await currentChatSession.setPermissionMode(mode);
-      currentChatSession.send(message);
-    } else {
-      // No live session for this transcript: supersede whatever's running and
-      // resume this one into a fresh persistent query.
-      currentChatSession?.dispose();
-      denyAllPending('Superseded by a new request.');
-      currentChatSession = launchSession(event, {
-        cwd: realPath,
-        resume: sessionId,
-        model,
-        permissionMode: mode,
-        canUseTool: makeCanUseTool(event),
-        env: claudeEnv(),
-      });
-      currentChatSession.send(message);
+    const live = currentChatSession;
+    if (live && live.sessionId === sessionId) {
+      try {
+        await live.setModel(model);
+        await live.setPermissionMode(mode);
+      } catch {
+        // The live session was disposed mid-switch (a concurrent endChat/stop/
+        // supersede); fall through to resume a fresh one below.
+      }
+      // Re-check identity after the awaits: a concurrent teardown could have
+      // disposed or replaced the session between them, and sending into a
+      // torn-down query would silently drop the message.
+      if (currentChatSession === live) {
+        live.send(message);
+        return ok(null);
+      }
     }
+    // No live session for this transcript (or it was just superseded): supersede
+    // whatever's running and resume this one into a fresh persistent query.
+    currentChatSession?.dispose();
+    denyAllPending('Superseded by a new request.');
+    currentChatSession = launchSession(event, {
+      cwd: realPath,
+      resume: sessionId,
+      model,
+      permissionMode: mode,
+      canUseTool: makeCanUseTool(event),
+      env: claudeEnv(),
+    });
+    currentChatSession.send(message);
     return ok(null);
   }
 );
