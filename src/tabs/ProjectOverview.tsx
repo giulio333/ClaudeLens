@@ -41,6 +41,7 @@ import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView'
 import { NewChatView } from '../components/project/chat/NewChatView'
+import { TerminalMissionControl } from '../components/project/terminal/TerminalMissionControl'
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
 import { PlanDetailView } from '../components/project/plans/PlanDetailView'
@@ -339,6 +340,14 @@ export default function ProjectOverview() {
             }
           />
         )
+      case 'terminal':
+        return (
+          <TerminalMissionControl
+            project={view.project}
+            resumeSessionId={view.resumeSessionId}
+            onBack={() => setView({ type: 'sessions', project: view.project })}
+          />
+        )
       case 'memory-topic':
         return (
           <MemoryTopicView
@@ -507,7 +516,7 @@ export default function ProjectOverview() {
         onSelectSession={(project, session) => {
           setSelected(project)
           setScope('project')
-          setView({ type: 'chat', project, session })
+          setView({ type: 'terminal', project, resumeSessionId: session.filename.replace(/\.jsonl$/, '') })
         }}
         onDeleteCurrent={setProjectToDelete}
         onClose={closeSearch}

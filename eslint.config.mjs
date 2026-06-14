@@ -47,9 +47,9 @@ export default tseslint.config(
     },
   },
 
-  // Root config files (CommonJS / Node tooling configs)
+  // Root config files + repo tooling scripts (CommonJS / Node)
   {
-    files: ['*.{js,cjs,mjs,ts}'],
+    files: ['*.{js,cjs,mjs,ts}', 'scripts/**/*.{js,cjs,mjs}'],
     languageOptions: {
       globals: { ...globals.node },
     },

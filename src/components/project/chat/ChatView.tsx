@@ -35,7 +35,7 @@ import {
 import { useChatAutoScroll } from './useAutoScroll';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
-import { MessageBubble } from './MessageBubble';
+import { MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatComposer } from './ChatComposer';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
@@ -146,10 +146,12 @@ type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan';
 
 type MinimapItem = TurnDescriptor & { n: number; time: string };
 
-/** One row in the transcript stream: either a real message turn, or a run of
- *  consecutive tool-only turns collapsed into a single "tools hidden" badge. */
+/** One row in the transcript stream: either a real message turn (optionally
+ *  carrying a run of tool-only turns folded back into it, since their tool_use
+ *  lines are persisted separately), or — when no assistant turn precedes the run
+ *  — a standalone "tools hidden" badge. */
 type RenderItem =
-  | { kind: 'turn'; idx: number }
+  | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
   | { kind: 'tools'; key: string; count: number; files: TouchedFile[] };
 
 /** Right-edge timeline minimap (Focus layout). A hairline vertical track with
@@ -308,11 +310,14 @@ function SkillDockSheet({
   skills,
   activeKey,
   onOpen,
+  onOpenOutput,
   onLocate,
 }: {
   skills: SessionSkill[];
   activeKey: string | null;
   onOpen: (skill: Skill) => void;
+  /** Agentic skills (a `Skill` tool_use) open the output they produced. */
+  onOpenOutput: (group: ToolGroup) => void;
   onLocate: (turnN: number) => void;
 }) {
   return (
@@ -322,14 +327,28 @@ function SkillDockSheet({
       </div>
       <div className="cl-dock-rows">
         {skills.map(s => {
-          const canOpen = s.skill !== null;
+          // An agentic skill opens its produced output (tool_result); a
+          // slash-command skill deep-links to its definition when one resolves.
+          const canOpenOutput = s.group != null;
+          const canOpenDef = s.skill !== null;
+          const title = canOpenOutput
+            ? 'View skill output'
+            : canOpenDef
+              ? 'View skill'
+              : 'Locate invocation in chat';
           return (
             <div key={s.key} className="cl-dock-row" data-active={activeKey === s.key || undefined}>
               <button
                 type="button"
                 className="cl-dock-row-main"
-                onClick={() => (canOpen ? onOpen(s.skill!) : onLocate(s.turnN))}
-                title={canOpen ? 'View skill' : 'Locate invocation in chat'}
+                onClick={() =>
+                  canOpenOutput
+                    ? onOpenOutput(s.group!)
+                    : canOpenDef
+                      ? onOpen(s.skill!)
+                      : onLocate(s.turnN)
+                }
+                title={title}
               >
                 <span className="orb" aria-hidden style={orbStyle('var(--cl-accent)')}>
                   {skillInitial(s.name)}
@@ -340,7 +359,7 @@ function SkillDockSheet({
                     {s.scope && <span className="status">{s.scope}</span>}
                   </span>
                   {s.description && <span className="desc">{s.description}</span>}
-                  {!canOpen && (
+                  {!canOpenDef && !canOpenOutput && (
                     <span className="meta">
                       <span className="steps">no definition</span>
                     </span>
@@ -478,6 +497,7 @@ function ChatControlPill({
   skills,
   activeSkillKey,
   onOpenSkill,
+  onOpenSkillOutput,
   onLocateSkill,
 }: {
   showTranscriptControls: boolean;
@@ -505,6 +525,7 @@ function ChatControlPill({
   skills: SessionSkill[];
   activeSkillKey: string | null;
   onOpenSkill: (skill: Skill) => void;
+  onOpenSkillOutput: (group: ToolGroup) => void;
   onLocateSkill: (turnN: number) => void;
 }) {
   // Only one sheet is raised above the pill at a time: the agent dock list, the
@@ -569,6 +590,10 @@ function ChatControlPill({
           onOpen={skill => {
             setSheet(null);
             onOpenSkill(skill);
+          }}
+          onOpenOutput={group => {
+            setSheet(null);
+            onOpenSkillOutput(group);
           }}
           onLocate={turnN => {
             setSheet(null);
@@ -793,6 +818,7 @@ export function ChatView({
   onBack,
   onOpenSkill,
   onOpenAgent,
+  embedded = false,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -801,6 +827,13 @@ export function ChatView({
   onOpenSkill?: (skill: Skill) => void;
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Rendered inside the unified Terminal/Lens view: drop the own TopBar (the
+   *  unified frame provides chrome + the Terminal↔Lens switch), the right-edge
+   *  minimap (the Mission Control rail is the companion surface) and the
+   *  composer — this surface is read-only, the live session belongs to the
+   *  terminal's PTY. The floating control pill stays — it anchors to the chat
+   *  column. */
+  embedded?: boolean;
 }) {
   const {
     data: messages,
@@ -1047,15 +1080,25 @@ export function ChatView({
     const items: RenderItem[] = [];
     let run: { count: number; firstIdx: number; files: TouchedFile[] } | null = null;
     const flush = () => {
-      if (run) {
+      if (!run) return;
+      // Fold the run back into the assistant turn that emitted it (the tools were
+      // part of that same response, just persisted on separate lines) so the
+      // "tools hidden" chip rides that turn's header. Only when the immediately
+      // preceding rendered turn is an assistant message — otherwise (run leads the
+      // conversation, or follows a user turn) keep it as a standalone badge.
+      const last = items[items.length - 1];
+      if (last?.kind === 'turn' && processed[last.idx]?.msg.role === 'assistant') {
+        last.hiddenCount = (last.hiddenCount ?? 0) + run.count;
+        last.hiddenFiles = [...(last.hiddenFiles ?? []), ...run.files];
+      } else {
         items.push({
           kind: 'tools',
           key: `tools-${run.firstIdx}`,
           count: run.count,
           files: run.files,
         });
-        run = null;
       }
+      run = null;
     };
     descriptors.forEach((d, idx) => {
       if (d.toolsOnly) {
@@ -1275,56 +1318,59 @@ export function ChatView({
       skills={skills}
       activeSkillKey={activeSkillKey}
       onOpenSkill={skill => onOpenSkill?.(skill)}
+      onOpenSkillOutput={setSelectedTool}
       onLocateSkill={jumpToTurn}
     />
   );
 
   return (
     <div className="cl-chat">
-      <TopBar
-        onBack={onBack}
-        backLabel="Sessions"
-        crumbs={[{ label: title, accent: true }]}
-        right={
-          <>
-            {liveInTerminal && (
-              <span
-                title="This session is running in your terminal right now"
-                className="flex items-center gap-1.5 font-mono uppercase"
-                style={{ fontSize: 10, letterSpacing: '0.14em', color: 'var(--cl-ok)' }}
-              >
+      {!embedded && (
+        <TopBar
+          onBack={onBack}
+          backLabel="Sessions"
+          crumbs={[{ label: title, accent: true }]}
+          right={
+            <>
+              {liveInTerminal && (
                 <span
-                  aria-hidden
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: 'var(--cl-ok)',
-                  }}
-                />
-                Live in terminal
-              </span>
-            )}
-            <div className="cl-view-mode" aria-label="View mode">
-              {(['chat', 'timeline'] as ViewMode[]).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  className={viewMode === v ? 'on' : ''}
-                  onClick={() => setViewMode(v)}
-                  title={
-                    v === 'timeline'
-                      ? 'Session timeline (swimlanes by file/tool)'
-                      : 'Linear transcript'
-                  }
+                  title="This session is running in your terminal right now"
+                  className="flex items-center gap-1.5 font-mono uppercase"
+                  style={{ fontSize: 10, letterSpacing: '0.14em', color: 'var(--cl-ok)' }}
                 >
-                  {v === 'chat' ? 'Chat' : 'Timeline'}
-                </button>
-              ))}
-            </div>
-          </>
-        }
-      />
+                  <span
+                    aria-hidden
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: 'var(--cl-ok)',
+                    }}
+                  />
+                  Live in terminal
+                </span>
+              )}
+              <div className="cl-view-mode" aria-label="View mode">
+                {(['chat', 'timeline'] as ViewMode[]).map(v => (
+                  <button
+                    key={v}
+                    type="button"
+                    className={viewMode === v ? 'on' : ''}
+                    onClick={() => setViewMode(v)}
+                    title={
+                      v === 'timeline'
+                        ? 'Session timeline (swimlanes by file/tool)'
+                        : 'Linear transcript'
+                    }
+                  >
+                    {v === 'chat' ? 'Chat' : 'Timeline'}
+                  </button>
+                ))}
+              </div>
+            </>
+          }
+        />
+      )}
 
       {showDelete && (
         <DeleteSessionDialog
@@ -1374,10 +1420,13 @@ export function ChatView({
 
       <div
         className="cl-chat-workspace cl-chat-workspace--focus"
-        data-composer
+        // No composer is rendered when embedded (read-only Terminal/Lens view),
+        // so skip the reserved bottom padding / lifted pill — otherwise empty
+        // space lingers between the pill and the page bottom.
+        data-composer={!embedded || undefined}
         // The lock notice makes the composer taller; the pill's fixed offset
         // must clear it or it floats on top of the notice text.
-        data-composer-lock={liveInTerminal || undefined}
+        data-composer-lock={(!embedded && liveInTerminal) || undefined}
         style={chatHidden ? { display: 'none' } : undefined}
       >
         <main className="cl-chat-feed" ref={feedRef} onScroll={onFeedScroll} onWheel={onFeedWheel}>
@@ -1391,24 +1440,31 @@ export function ChatView({
               <div className="cl-transcript-inner" ref={transcriptInnerRef}>
                 {(() => {
                   let prevRole: string | null = null;
-                  let pendingHidden = 0;
-                  let pendingFiles: TouchedFile[] = [];
                   return renderItems.map(item => {
+                    // Fallback only: a run of tool-only turns with no assistant
+                    // turn before it (it leads the conversation, or follows a user
+                    // turn) renders as a standalone badge at its stream position.
+                    // The common case is folded into the preceding turn's header
+                    // below — that "tools hidden" chip used to be deferred onto the
+                    // *following* message, pinning it to the wrong turn.
                     if (item.kind !== 'turn') {
                       prevRole = null;
-                      pendingHidden = item.count;
-                      pendingFiles = item.files;
-                      return null;
+                      return (
+                        <ToolsHiddenBadge
+                          key={item.key}
+                          count={item.count}
+                          files={item.files}
+                          dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
+                        />
+                      );
                     }
                     const curRole = processed[item.idx].msg.role;
                     const hasText = processed[item.idx].msg.content.some(b => b.type === 'text');
                     const isContinuation =
                       !hasText && curRole === prevRole && curRole === 'assistant';
-                    prevRole = curRole;
-                    const hiddenToolCount = pendingHidden;
-                    const hiddenFiles = pendingFiles;
-                    pendingHidden = 0;
-                    pendingFiles = [];
+                    // A folded tool run breaks the visual grouping — the next turn
+                    // shows its orb rather than reading as a continuation.
+                    prevRole = item.hiddenCount ? null : curRole;
                     return (
                       <MessageBubble
                         key={`${item.idx}:${processed[item.idx].msg.uuid}`}
@@ -1424,12 +1480,15 @@ export function ChatView({
                         dimmed={
                           activeFilter !== 'all' &&
                           descriptors[item.idx]?.visible &&
-                          !matchesFilter(descriptors[item.idx])
+                          !matchesFilter(descriptors[item.idx]) &&
+                          // A turn carrying a folded "tools hidden" chip counts as
+                          // a tools turn under the Tools filter — keep it lit.
+                          !(activeFilter === 'tools' && !!item.hiddenCount)
                         }
                         isContinuation={isContinuation}
                         innerRef={setTurnRef}
-                        hiddenToolCount={hiddenToolCount}
-                        hiddenFiles={hiddenFiles}
+                        hiddenToolCount={item.hiddenCount}
+                        hiddenFiles={item.hiddenFiles}
                       />
                     );
                   });
@@ -1443,45 +1502,52 @@ export function ChatView({
           )}
         </main>
 
-        <FocusMinimap
-          items={minimapItems}
-          active={activeTurn}
-          matches={matchesFilter}
-          onJump={jumpToTurn}
-        />
+        {!embedded && (
+          <FocusMinimap
+            items={minimapItems}
+            active={activeTurn}
+            matches={matchesFilter}
+            onJump={jumpToTurn}
+          />
+        )}
 
         {controlPill(true)}
 
-        <ChatComposer
-          key={sessionId}
-          realPath={project.realPath}
-          sessionId={sessionId}
-          model={inheritedModel}
-          lockNotice={
-            liveInTerminal
-              ? 'This session is running in your terminal — reply there, or wait for it to end. Replying here would run a parallel turn on Agent SDK credits.'
-              : null
-          }
-          onTurnComplete={refetch}
-          onSend={text => {
-            pendingBaseCount.current = messages?.length ?? 0;
-            setPendingAt(new Date().toISOString());
-            setFrozenMessages(messages ?? []);
-            setLiveMessages([]);
-            setPendingUser(text);
-          }}
-          onSendFailed={() => {
-            // The send never became a turn — roll back the optimistic bubble
-            // and the frozen snapshot so the transcript shows the disk truth.
-            setPendingUser(null);
-            setFrozenMessages(null);
-            setLiveMessages([]);
-          }}
-          onStreamChange={setLiveText}
-          onStreamingChange={setStreaming}
-          onLiveMessagesChange={handleLiveMessages}
-          onLiveToolChange={setLiveTool}
-        />
+        {/* The embedded (Terminal/Lens) surface is read-only: the live session
+            belongs to the terminal's PTY. Drop the composer entirely so neither
+            the input nor the "running in your terminal" lock notice show up. */}
+        {!embedded && (
+          <ChatComposer
+            key={sessionId}
+            realPath={project.realPath}
+            sessionId={sessionId}
+            model={inheritedModel}
+            lockNotice={
+              liveInTerminal
+                ? 'This session is running in your terminal — reply there, or wait for it to end. Replying here would run a parallel turn on Agent SDK credits.'
+                : null
+            }
+            onTurnComplete={refetch}
+            onSend={text => {
+              pendingBaseCount.current = messages?.length ?? 0;
+              setPendingAt(new Date().toISOString());
+              setFrozenMessages(messages ?? []);
+              setLiveMessages([]);
+              setPendingUser(text);
+            }}
+            onSendFailed={() => {
+              // The send never became a turn — roll back the optimistic bubble
+              // and the frozen snapshot so the transcript shows the disk truth.
+              setPendingUser(null);
+              setFrozenMessages(null);
+              setLiveMessages([]);
+            }}
+            onStreamChange={setLiveText}
+            onStreamingChange={setStreaming}
+            onLiveMessagesChange={handleLiveMessages}
+            onLiveToolChange={setLiveTool}
+          />
+        )}
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import Markdown from '../../Markdown'
 import type { ReactNode } from 'react'
-import { ToolGroup, isMemoryFile, resolveToolIcon, stripLineNumbers, fileExt } from './utils'
+import { ToolGroup, isMemoryFile, resolveToolIcon, stripLineNumbers, fileExt, SKILL_TOOL } from './utils'
 import { PathChip, SectionLabel, CodeBlock } from './atoms'
 
 function BackChevron() {
@@ -306,15 +306,15 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
         {content !== undefined && (
           <>
             <SectionLabel label="Written content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content} dark={false} />
+            <CodeBlock code={content} lang={fileExt(fp)} />
           </>
         )}
         {oldStr !== undefined && (
           <>
             <SectionLabel label="Replaced text" />
-            <CodeBlock code={oldStr} dark={false} className="border-[var(--cl-danger)] opacity-75" />
+            <CodeBlock code={oldStr} lang={fileExt(fp)} className="border-[var(--cl-danger)] opacity-75" />
             <SectionLabel label="New text" />
-            <CodeBlock code={newStr ?? ''} dark={false} className="border-[var(--cl-ok)]" />
+            <CodeBlock code={newStr ?? ''} lang={fileExt(fp)} className="border-[var(--cl-ok)]" />
           </>
         )}
       </div>
@@ -413,7 +413,7 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
         {content && (
           <>
             <SectionLabel label="Content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} dark={false} />
+            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} lang="markdown" />
           </>
         )}
       </div>
@@ -431,7 +431,7 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
         {content && (
           <>
             <SectionLabel label="New content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} dark={false} />
+            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} lang="markdown" />
           </>
         )}
       </div>
@@ -447,7 +447,23 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
     )
   }
 
-  return <CodeBlock code={JSON.stringify(input, null, 2)} dark={false} />
+  if (name === SKILL_TOOL) {
+    const skill = input.skill as string | undefined
+    const rest = Object.entries(input).filter(([k]) => k !== 'skill')
+    return (
+      <div className="space-y-3">
+        {skill && (
+          <span className="inline-flex items-center gap-1.5 text-[12px] font-semibold bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded-full px-3 py-1">
+            <span aria-hidden="true">⚡</span>
+            {skill}
+          </span>
+        )}
+        {rest.length > 0 && <CodeBlock code={JSON.stringify(Object.fromEntries(rest), null, 2)} lang="json" />}
+      </div>
+    )
+  }
+
+  return <CodeBlock code={JSON.stringify(input, null, 2)} lang="json" />
 }
 
 export function ToolOutput({ name, input, result }: {
@@ -477,7 +493,7 @@ export function ToolOutput({ name, input, result }: {
         <div className="flex items-center gap-2">
           {ext && <span className="text-[10px] font-mono bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5">.{ext}</span>}
         </div>
-        <CodeBlock code={stripped} dark={false} />
+        <CodeBlock code={stripped} lang={ext} />
       </div>
     )
   }
@@ -498,6 +514,19 @@ export function ToolOutput({ name, input, result }: {
       <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-lg px-5 py-4">
         <div className="prose prose-sm prose-zinc max-w-none">
           <Markdown>{raw}</Markdown>
+        </div>
+      </div>
+    )
+  }
+
+  if (name === SKILL_TOOL) {
+    // Skill output is `Skill "<name>" completed (...).\n\nResult:\n<markdown>`.
+    // Strip the preamble so the analysis renders as the markdown it is.
+    const body = raw.replace(/^Skill\s+"[^"]*"\s+completed[^\n]*\.\s*\n+(?:Result:\s*\n+)?/, '')
+    return (
+      <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-lg px-5 py-4 overflow-x-auto">
+        <div className="prose prose-sm prose-zinc max-w-none">
+          <Markdown>{body || raw}</Markdown>
         </div>
       </div>
     )
@@ -565,7 +594,7 @@ export function ToolOutput({ name, input, result }: {
     }
   }
 
-  return <CodeBlock code={raw} dark={false} />
+  return <CodeBlock code={raw} />
 }
 
 export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: () => void }) {

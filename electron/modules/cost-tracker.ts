@@ -27,6 +27,7 @@ export interface SessionSummary {
   cacheReadTokens: number;
   totalTokens: number;
   estimatedCost: number;
+  cacheSavings: number;    // $ risparmiati dai cache read vs. prezzo input pieno
   messageCount: number;
   model?: string;          // modello dominante (retrocompatibilità)
   models: Record<string, number>; // conteggio messaggi per modello
@@ -119,6 +120,19 @@ function calculateCost(
     (cacheWriteTokens / 1_000_000) * p.cacheWrite  +
     (cacheReadTokens  / 1_000_000) * p.cacheRead
   );
+}
+
+/**
+ * Dollars saved by reading from the prompt cache instead of paying the full input
+ * rate for those tokens. Cache reads bill at ~10% of input, so this is the avoided
+ * delta (`input − cacheRead`) — what the session would have cost extra with no cache.
+ */
+export function calculateCacheSavings(
+  cacheReadTokens: number,
+  model: string | undefined
+): number {
+  const p = getPricing(model);
+  return (cacheReadTokens / 1_000_000) * (p.input - p.cacheRead);
 }
 
 // ─── JSONL parsing ────────────────────────────────────────────────────────────
@@ -390,6 +404,7 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
         cacheReadTokens: s.cacheReadTokens,
         totalTokens,
         estimatedCost,
+        cacheSavings: calculateCacheSavings(s.cacheReadTokens, s.model),
         messageCount: s.messageCount,
         model: s.model,
         models: s.models,

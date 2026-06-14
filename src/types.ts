@@ -66,6 +66,17 @@ export interface ChatMessage {
   timestamp: string
   model?: string
   content: ChatContentBlock[]
+  usage?: MessageUsage
+}
+
+// Token usage di un singolo turno assistant (assente sui turni user). La somma
+// `input + cacheRead + cacheWrite` dell'ultimo turno ≈ l'occupazione corrente
+// del context window, da cui il Mission Control deriva il gauge CONTEXT.
+export interface MessageUsage {
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
 }
 
 // Metadati di un subagent eseguito durante una sessione (transcript interno in
@@ -89,6 +100,7 @@ export interface SessionSummary {
   cacheReadTokens: number
   totalTokens: number
   estimatedCost: number
+  cacheSavings: number
   messageCount: number
   model?: string
   models: Record<string, number>

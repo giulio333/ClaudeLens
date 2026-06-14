@@ -70,6 +70,7 @@ function getSessionList(hash: string) {
       cacheReadTokens: t.cache,
       totalTokens: t.input + t.output,
       estimatedCost: parseFloat(((t.input / 1_000_000) * 3.0 + (t.output / 1_000_000) * 15.0).toFixed(4)),
+      cacheSavings: parseFloat(((t.cache / 1_000_000) * (3.0 - 0.3)).toFixed(4)),
       messageCount: t.msgs,
       model: t.model,
       models: { [t.model]: t.msgs },
@@ -760,7 +761,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'claudeMd:deleteGlobal', 'claudeMd:deleteFile',
     'markdownFile:write', 'markdownFile:delete',
     'export:markdown', 'export:pdf',
-    'sessions:listByProject', 'sessions:getChat', 'sessions:openInTerminal', 'sessions:newInTerminal',
+    'sessions:listByProject', 'sessions:getChat',
     'rules:getByProject',
     'skills:getGlobal', 'skills:getAll', 'skills:create',
     'agents:getGlobal', 'agents:getByProject', 'agents:create',
@@ -799,8 +800,6 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('sessions:listByProject', (_e: unknown, hash: string) => ok(getSessionList(hash)));
   ipcMain.handle('sessions:getChat', () => ok(MOCK_CHAT));
-  ipcMain.handle('sessions:openInTerminal', () => ok(null));
-  ipcMain.handle('sessions:newInTerminal', () => ok(null));
 
   ipcMain.handle('rules:getByProject', () => ok(MOCK_RULES));
 
