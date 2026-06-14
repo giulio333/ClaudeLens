@@ -466,3 +466,80 @@ describe('calculateCacheSavings — avoided input cost from cache reads', () => 
     expect(calculateCacheSavings(1_000_000, undefined)).toBeCloseTo(2.7, 6);
   });
 });
+
+describe('cache-only usage lines are counted (input=output=0)', () => {
+  it('counts a turn served entirely from the cache (cacheRead>0, no input/output)', async () => {
+    writeSession(tmp, 'cache.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 0,
+        output: 0,
+        cacheRead: 20000,
+        id: 'msg_c',
+        requestId: 'req_c',
+      }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    // Before the fix the `input || output` guard dropped this line entirely, so
+    // cache tokens, savings and messageCount were all silently lost.
+    expect(s.cacheReadTokens).toBe(20000);
+    expect(s.messageCount).toBe(1);
+    expect(s.cacheSavings).toBeCloseTo(calculateCacheSavings(20000, 'claude-sonnet-4-5'), 10);
+  });
+
+  it('counts a cache-write-only line (cacheWrite>0, no input/output)', async () => {
+    writeSession(tmp, 'cw.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 0, output: 0, cacheWrite: 5000 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    expect(s.cacheWriteTokens).toBe(5000);
+    expect(s.messageCount).toBe(1);
+  });
+
+  it('still ignores a line with all-zero usage (no tokens of any kind)', async () => {
+    writeSession(tmp, 'zero.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50 }),
+      assistantLine({ model: 'claude-opus-4-5', input: 0, output: 0 }), // all zero → skipped
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    expect(s.messageCount).toBe(1);
+    expect(s.models).toEqual({ 'claude-sonnet-4-5': 1 });
+  });
+});
+
+describe('firstUserMessage skips tool_result turns (not real user input)', () => {
+  it('ignores a user turn carrying a tool_result and uses the real first message', async () => {
+    writeSession(tmp, 'tr.jsonl', [
+      // A user turn that is the system's reply to a tool call — written by Claude
+      // Code, not typed by the user — so it must not become the session title.
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-05-01T09:00:00.000Z',
+        message: {
+          content: [
+            { type: 'tool_result', tool_use_id: 'x', content: 'ok' },
+            { type: 'text', text: 'tool output follows' },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-05-01T09:01:00.000Z',
+        message: { content: 'Fix the bug in the parser' },
+      }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+
+    // Before the fix the tool_result turn's text block ("tool output follows")
+    // was taken as the first user message.
+    expect(s.firstUserMessage).toBe('Fix the bug in the parser');
+  });
+});
