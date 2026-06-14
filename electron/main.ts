@@ -111,9 +111,10 @@ interface SafeWritePathOptions {
   allowedBasenames?: ReadonlySet<string>;
   // I CLAUDE.md di progetto possono stare fuori dalla home (realPath = cwd letto dal .jsonl),
   // quindi il containment nella home si applica solo ai path sotto ~/.claude (markdownFile:*).
+  // Gli agenti/skill di progetto vivono in {projectPath}/.claude/agents|skills/, fuori da CLAUDE_DIR
+  // ma sempre sotto home — quindi markdownFile:* usa requireUnderHome.
   requireUnderHome?: boolean;
-  // Confinamento più stretto a una directory specifica (es. CLAUDE_DIR per
-  // markdownFile:*, che scrive solo sotto ~/.claude/plans e skills). (#91)
+  // Confinamento più stretto a una directory specifica.
   requireUnder?: string;
 }
 
@@ -395,7 +396,7 @@ ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: s
 ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: string) => {
   try {
     const fs = require('fs') as typeof import('fs');
-    const safePath = assertSafeWritePath(filePath, { requireUnder: CLAUDE_DIR });
+    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
     const dir = require('path').dirname(safePath) as string;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(safePath, content, 'utf-8');
@@ -411,7 +412,7 @@ ipcMain.handle(
     try {
       const fs = require('fs') as typeof import('fs');
       const path = require('path') as typeof import('path');
-      const safePath = assertSafeWritePath(filePath, { requireUnder: CLAUDE_DIR });
+      const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
       if (fs.existsSync(safePath)) fs.rmSync(safePath);
       // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
       if (opts?.pruneEmptyDir) {
