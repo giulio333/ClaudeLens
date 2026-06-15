@@ -64,8 +64,12 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
       if (b.text.trim()) blocks.push({ type: 'text', text: b.text });
 
     } else if (b.type === 'thinking') {
-      const text = typeof b.thinking === 'string' ? b.thinking : '';
-      blocks.push({ type: 'thinking', thinking: text });
+      // Mirror the text handling: skip empty/whitespace-only thinking blocks so
+      // they don't survive as zero-content entries that defeat the empty-message
+      // filter downstream.
+      if (typeof b.thinking === 'string' && b.thinking.trim()) {
+        blocks.push({ type: 'thinking', thinking: b.thinking });
+      }
 
     } else if (b.type === 'tool_use') {
       blocks.push({

@@ -1,7 +1,7 @@
 import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
-import { homedir } from 'os';
 import { findClaudeProcesses } from './process-scanner';
+import { CLAUDE_DIR } from '../utils';
 
 // Claude Code 2.x mantiene un registro delle sessioni vive: un file JSON per
 // processo in ~/.claude/sessions/<pid>.json, con sessionId, cwd, status
@@ -29,7 +29,10 @@ export interface ActiveSession {
 }
 
 export function defaultSessionsDir(): string {
-  return join(homedir(), '.claude', 'sessions');
+  // Derive from the same root as the rest of the app so a relocated
+  // CLAUDE_CONFIG_DIR is honored (otherwise the registry watch/read silently
+  // point at ~/.claude/sessions and degrade to the process-scanner fallback).
+  return join(CLAUDE_DIR, 'sessions');
 }
 
 /** True when a process with this pid exists (signal 0 probes without killing). */
@@ -71,10 +74,18 @@ export function parseRegistryEntry(raw: unknown): ActiveSession | null {
   };
 }
 
+// The registry heartbeats every few seconds; treat an entry whose last
+// updatedAt is older than this as stale. This is immune to pid reuse (a crashed
+// session's <pid>.json whose pid the OS later reassigns to an unrelated process
+// would otherwise pass the pid probe and be shown as live, then tailed).
+const HEARTBEAT_STALE_MS = 60_000;
+
 export interface ReadActiveSessionsOptions {
   dir?: string;
   /** Injectable for tests. */
   pidAlive?: (pid: number) => boolean;
+  /** Injectable for tests (defaults to Date.now()). */
+  now?: () => number;
 }
 
 export async function readActiveSessions(
@@ -82,6 +93,7 @@ export async function readActiveSessions(
 ): Promise<ActiveSession[]> {
   const dir = options.dir ?? defaultSessionsDir();
   const pidAlive = options.pidAlive ?? isPidAlive;
+  const now = options.now ?? Date.now;
 
   let files: string[] = [];
   try {
@@ -94,8 +106,14 @@ export async function readActiveSessions(
   for (const file of files) {
     try {
       const parsed = parseRegistryEntry(JSON.parse(await readFile(join(dir, file), 'utf-8')));
-      // A crashed session leaves its file behind: the pid probe filters it out.
-      if (parsed && pidAlive(parsed.pid)) sessions.push(parsed);
+      if (!parsed) continue;
+      // A crashed session leaves its file behind: the pid probe filters most out.
+      if (!pidAlive(parsed.pid)) continue;
+      // The heartbeat is the registry's own liveness signal and survives pid
+      // reuse. Drop entries that haven't heartbeated recently; keep entries with
+      // no updatedAt (older CLI) and rely on the pid probe alone for those.
+      if (parsed.updatedAt !== undefined && now() - parsed.updatedAt > HEARTBEAT_STALE_MS) continue;
+      sessions.push(parsed);
     } catch {
       // Malformed or mid-write file: skip it.
     }

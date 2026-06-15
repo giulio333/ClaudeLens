@@ -252,9 +252,11 @@ describe('model pricing resolution / fuzzy fallback to Sonnet', () => {
   });
 });
 
-describe('dominant-model selection drives project cost', () => {
-  it('prices aggregate tokens using the most frequent model in the file set', async () => {
-    // 2 opus sessions vs 1 haiku session -> dominant = opus
+describe('per-session pricing drives project cost', () => {
+  it('prices each session at its own dominant model and sums the dollar costs', async () => {
+    // 2 tiny opus sessions vs 1 large haiku session: the project rollup must NOT
+    // price the ~1M Haiku tokens at the file-count-dominant Opus rate. Each
+    // session is priced at its own model and the dollar costs are summed.
     writeSession(tmp, 'o1.jsonl', [
       assistantLine({ model: 'claude-opus-4-5', input: 10, output: 0 }),
     ]);
@@ -267,8 +269,11 @@ describe('dominant-model selection drives project cost', () => {
 
     const { usage, cost } = await getProjectUsage(tmp);
     expect(usage.inputTokens).toBe(1_000_020);
-    // all input tokens priced at Opus rate because Opus is dominant
-    expect(cost).toBeCloseTo(expectedCost(PRICE.opus, { input: 1_000_020, output: 0 }), 8);
+    // Opus tokens priced at Opus, Haiku tokens priced at Haiku — summed.
+    const expected =
+      expectedCost(PRICE.opus, { input: 20, output: 0 }) +
+      expectedCost(PRICE.haiku, { input: 1_000_000, output: 0 });
+    expect(cost).toBeCloseTo(expected, 8);
   });
 });
 

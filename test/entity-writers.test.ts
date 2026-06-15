@@ -1,16 +1,18 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mkdtempSync, rmSync, existsSync, readFileSync } from 'fs';
-import { tmpdir } from 'os';
+import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 import { createSkill } from '../electron/modules/skills-writer';
 import { createAgent } from '../electron/modules/agents-writer';
 
 // createSkill/createAgent honor a projectPath by writing under
-// {projectPath}/.claude/(skills|agents), which keeps the test sandboxed.
+// {projectPath}/.claude/(skills|agents). The writers anchor containment on the
+// home dir (project agents/skills are always under $HOME by convention), so the
+// sandbox project must live under home too.
 let proj: string;
 
 beforeEach(() => {
-  proj = mkdtempSync(join(tmpdir(), 'cl-entity-'));
+  proj = mkdtempSync(join(homedir(), '.cl-entity-test-'));
 });
 
 afterEach(() => {
@@ -55,5 +57,16 @@ describe('createAgent (issue #58)', () => {
   it('refuses to overwrite an existing agent', () => {
     createAgent({ name: 'dup', content: 'first' }, proj);
     expect(() => createAgent({ name: 'dup', content: 'second' }, proj)).toThrow(/already exists/);
+  });
+
+  it('refuses a projectPath that escapes the home directory', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'cl-outside-'));
+    try {
+      expect(() => createAgent({ name: 'x', content: 'b' }, outside)).toThrow(/outside/);
+      expect(() => createSkill({ name: 'x', content: 'b' }, outside)).toThrow(/outside/);
+      expect(existsSync(join(outside, '.claude'))).toBe(false);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
   });
 });

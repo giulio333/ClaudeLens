@@ -30,8 +30,13 @@ interface MonitorState {
 }
 
 let state: MonitorState | null = null;
+// Bumped on every start/stop. A start that loses a race against a newer start
+// (across its awaits) uses this to detect it's been superseded and bail instead
+// of leaking its just-created chokidar watcher.
+let startGeneration = 0;
 
 export function stopLiveMonitor(): void {
+  startGeneration++;
   if (state) {
     state.watcher.close().catch(() => {});
     state = null;
@@ -44,6 +49,7 @@ export async function startLiveMonitor(
   onEvent: EventCallback
 ): Promise<boolean> {
   stopLiveMonitor();
+  const myGeneration = startGeneration;
 
   // Cerca file JSONL nella cartella sessions o direttamente nel progetto
   const sessionsDir = join(projectPath, 'sessions');
@@ -72,6 +78,9 @@ export async function startLiveMonitor(
 
   // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
   const { watch } = await import('chokidar');
+  // A concurrent start/stop may have superseded us across the awaits above
+  // (glob + dynamic import). If so, don't create/assign a watcher we'd leak.
+  if (myGeneration !== startGeneration) return false;
   const watcher = watch(filePath, { ignoreInitial: true, usePolling: false });
 
   state = { watcher, filePath, fileOffset: initialSize };

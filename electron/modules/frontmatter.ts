@@ -15,6 +15,11 @@ export function parseFrontmatter(content: string): {
   frontmatter: Record<string, unknown>;
   body: string;
 } {
+  // Normalize CRLF once: a file authored with a CRLF editor (common on Windows,
+  // a supported platform) would otherwise miss the `---\n` fence match and lose
+  // ALL frontmatter — agents/skills show no name/description, memory topics lose
+  // their type, rule files lose their `paths` — with the YAML leaking into body.
+  content = content.replace(/\r\n/g, '\n');
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) return { frontmatter: {}, body: content };
 

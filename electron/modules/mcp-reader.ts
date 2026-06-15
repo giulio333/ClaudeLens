@@ -35,13 +35,16 @@ export function getGlobalMcp(): McpData {
       cloudConnected = data.claudeAiMcpEverConnected ?? [];
 
       // Raccoglie stato MCP per ogni progetto
-      const projects: Record<string, { disabledMcpServers?: string[] }> = data.projects ?? {};
+      const projects: Record<string, unknown> = data.projects ?? {};
       for (const [path, proj] of Object.entries(projects)) {
-        if (proj.disabledMcpServers && proj.disabledMcpServers.length > 0) {
-          projectStates.push({ path, disabled: proj.disabledMcpServers });
-        } else {
-          projectStates.push({ path, disabled: [] });
-        }
+        // ~/.claude.json is an undocumented, frequently-rewritten internal file:
+        // a single null/non-object project entry must not throw and collapse the
+        // whole cloud-MCP read (the catch below would discard every server).
+        const disabled =
+          proj && typeof proj === 'object' && Array.isArray((proj as { disabledMcpServers?: unknown }).disabledMcpServers)
+            ? ((proj as { disabledMcpServers: string[] }).disabledMcpServers)
+            : [];
+        projectStates.push({ path, disabled });
       }
     } catch {
       // file malformato, ignora

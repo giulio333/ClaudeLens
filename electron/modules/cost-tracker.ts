@@ -227,15 +227,19 @@ function extractLineData(json: any): LineData | null {
   const usageKey = usage && (messageId || requestId)
     ? `${messageId ?? ''}:${requestId ?? ''}`
     : undefined;
+  // Coerce each usage field through a numeric guard: a non-numeric value (e.g. a
+  // string) would pass the `?? 0` nullish check and then poison the running
+  // total via string concatenation. Keep a bad field at 0 instead.
+  const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   return {
     date,
     customTitle,
     aiTitle,
     firstUserMessage,
-    inputTokens:      usage?.input_tokens                  ?? 0,
-    outputTokens:     usage?.output_tokens                 ?? 0,
-    cacheWriteTokens: usage?.cache_creation_input_tokens   ?? 0,
-    cacheReadTokens:  usage?.cache_read_input_tokens       ?? 0,
+    inputTokens:      num(usage?.input_tokens),
+    outputTokens:     num(usage?.output_tokens),
+    cacheWriteTokens: num(usage?.cache_creation_input_tokens),
+    cacheReadTokens:  num(usage?.cache_read_input_tokens),
     model:            model && model !== '<synthetic>' ? model : undefined,
     usageKey,
   };
@@ -328,7 +332,7 @@ interface ProjectAggregate {
 async function aggregateProject(projectPath: string): Promise<ProjectAggregate> {
   const files = await findSessionFiles(projectPath);
   let inputTokens = 0, outputTokens = 0, cacheWriteTokens = 0, cacheReadTokens = 0;
-  const modelCounts: Record<string, number> = {};
+  let cost = 0;
 
   for (const f of files) {
     const s = parseJsonlSession(f);
@@ -336,11 +340,14 @@ async function aggregateProject(projectPath: string): Promise<ProjectAggregate> 
     outputTokens     += s.outputTokens;
     cacheWriteTokens += s.cacheWriteTokens;
     cacheReadTokens  += s.cacheReadTokens;
-    if (s.model) modelCounts[s.model] = (modelCounts[s.model] ?? 0) + 1;
+    // Price each session at its OWN dominant model and sum the dollar costs.
+    // Summing tokens across the whole project and applying a single rate (the
+    // file-count-dominant model) mispriced any project mixing Opus/Sonnet/Haiku
+    // — e.g. many small Haiku subagent files would force a huge Opus session to
+    // Haiku rates, or vice versa. Per-session pricing keeps the project rollup
+    // consistent with the per-session list (getSessionList).
+    cost += calculateCost(s.inputTokens, s.outputTokens, s.cacheWriteTokens, s.cacheReadTokens, s.model);
   }
-
-  const dominantModel = Object.entries(modelCounts).sort((a, b) => b[1] - a[1])[0]?.[0];
-  const cost = calculateCost(inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens, dominantModel);
 
   return {
     inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens,
