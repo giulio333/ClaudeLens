@@ -1827,6 +1827,50 @@ body {
   border-radius: 50%;
   background: var(--cl-accent);
 }
+/* quiet pin toggle living in the eyebrow row (project-level control,
+   kept off the hero action row) */
+.cl-eyebrow-pin {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  /* fixed box so activating never changes the footprint */
+  padding: 3px 9px;
+  border-radius: 999px;
+  /* always outlined → reads as an affordance even when off */
+  border: 1px solid color-mix(in oklch, var(--cl-ink-4) 35%, transparent);
+  background: transparent;
+  color: var(--cl-ink-3);
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    background 120ms,
+    border-color 120ms;
+}
+.cl-eyebrow-pin svg {
+  width: 11px;
+  height: 11px;
+  opacity: 0.85;
+}
+.cl-eyebrow-pin:hover {
+  color: var(--cl-ink);
+  border-color: color-mix(in oklch, var(--cl-ink-4) 60%, transparent);
+}
+.cl-eyebrow-pin.is-pinned {
+  /* tint only — same box size, no heavy fill */
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 50%, transparent);
+  background: color-mix(in oklch, var(--cl-accent) 8%, transparent);
+}
+.cl-eyebrow-pin.is-pinned svg {
+  opacity: 1;
+}
+.cl-eyebrow-pin.is-pinned:hover {
+  border-color: color-mix(in oklch, var(--cl-accent) 65%, transparent);
+  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
+}
 
 .cl-h-name {
   font-size: clamp(64px, 9vw, 132px);
@@ -1922,22 +1966,6 @@ body {
   color: var(--cl-ink-4);
   opacity: 0.6;
 }
-.cl-h-meta .tag {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 3px 9px;
-  border: 1px solid var(--cl-line);
-  border-radius: 3px;
-  color: var(--cl-ink-2);
-}
-.cl-h-meta .tag .led {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cl-ok);
-}
-
 /* hero actions (top-right) */
 .cl-hero-actions {
   position: absolute;
@@ -2027,6 +2055,30 @@ body {
   opacity: 0.62;
   padding-left: 7px;
   border-left: 1px solid currentColor;
+}
+
+/* quiet = smaller, low-emphasis action (e.g. "SDK chat" — secondary to the
+   plan-billed terminal). Trimmed padding/size, no specular flourishes. */
+.cl-btn--quiet {
+  padding: 5px 10px;
+  font-size: 10px;
+  gap: 5px;
+  border-radius: 9px;
+  color: var(--cl-ink-3);
+  border-color: oklch(1 0 0 / 0.22);
+  box-shadow:
+    0 2px 6px -5px oklch(0 0 0 / 0.14),
+    inset 0 1px 0 oklch(1 0 0 / 0.45);
+}
+.cl-btn--quiet::before,
+.cl-btn--quiet::after {
+  display: none;
+}
+.cl-btn--quiet svg {
+  opacity: 0.7;
+}
+.cl-btn--quiet:hover {
+  color: var(--cl-ink);
 }
 
 .cl-btn:hover {
@@ -6866,6 +6918,10 @@ button.cl-task-group-head:disabled {
   color: var(--cl-ink-3);
   margin-top: 4px;
   line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 .cl-tile .t-meta {
   font-family: var(--font-mono);
@@ -7906,86 +7962,6 @@ button.cl-task-group-head:disabled {
   z-index: 1;
 }
 
-/* top strip */
-.cl-agent-v2-strip {
-  display: flex;
-  align-items: center;
-  gap: 16px;
-  padding: 14px 64px;
-  background: var(--cl-glass-bg);
-  -webkit-backdrop-filter: blur(18px) saturate(180%);
-  backdrop-filter: blur(18px) saturate(180%);
-  border-bottom: 1px solid var(--cl-glass-border);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--cl-ink-3);
-}
-.cl-agent-v2-strip .scope-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 12px 4px 9px;
-  border-radius: 999px;
-  background: var(--cl-glass-bg-strong);
-  border: 1px solid var(--cl-glass-border);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
-  color: var(--cl-ink);
-}
-.cl-agent-v2-strip .scope-pill .d {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--agent-tint);
-  box-shadow: 0 0 0 3px color-mix(in oklch, var(--agent-tint) 18%, transparent);
-}
-.cl-agent-v2-strip .path {
-  color: var(--cl-ink-2);
-  letter-spacing: 0.04em;
-  text-transform: none;
-  font-size: 11px;
-  font-family: var(--font-mono);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  min-width: 0;
-}
-.cl-agent-v2-strip .id-tag {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 4px 11px 4px 5px;
-  border-radius: 999px;
-  background: var(--cl-glass-bg-strong);
-  border: 1px solid var(--cl-glass-border);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
-  color: var(--cl-ink-2);
-  white-space: nowrap;
-}
-.cl-agent-v2-strip .id-tag .orb-tiny {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background:
-    radial-gradient(circle at 28% 22%, oklch(0.95 0.1 var(--agent-h) / 0.85), transparent 55%),
-    linear-gradient(
-      150deg,
-      oklch(0.72 var(--agent-c) var(--agent-h)),
-      oklch(0.5 var(--agent-c) var(--agent-h))
-    );
-  border: 1px solid oklch(1 0 0 / 0.55);
-  color: var(--cl-on-accent);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-}
-
 /* hero */
 .cl-agent-v2-hero {
   display: grid;
@@ -8038,6 +8014,17 @@ button.cl-task-group-head:disabled {
 }
 [data-theme='dark'] .cl-agent-v2-hero .desc {
   color: var(--cl-ink);
+}
+.cl-agent-v2-hero .filepath {
+  margin-top: 18px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 620px;
 }
 
 .cl-agent-v2-lens {
@@ -8385,7 +8372,6 @@ button.cl-task-group-head:disabled {
 
 /* responsive tweaks for narrow windows */
 @media (max-width: 1100px) {
-  .cl-agent-v2-strip,
   .cl-agent-v2-hero,
   .cl-agent-v2-body {
     padding-left: 40px;
@@ -8449,9 +8435,6 @@ button.cl-task-group-head:disabled {
 [data-theme='dark'] .cl-agent-v2-opts .tile {
   background: oklch(1 0 0 / 0.04);
   border-color: oklch(1 0 0 / 0.08);
-}
-[data-theme='dark'] .cl-agent-v2-strip {
-  background: oklch(1 0 0 / 0.04);
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -9136,8 +9119,7 @@ select.cl-opt-input {
 }
 
 /* ── DARK ── */
-[data-theme='dark'] .cl-agent-edit-v2-strip,
-[data-theme='dark'] .cl-agent-v2-strip {
+[data-theme='dark'] .cl-agent-edit-v2-strip {
   background: oklch(1 0 0 / 0.04);
 }
 [data-theme='dark'] .cl-agent-edit-v2-body .bh,

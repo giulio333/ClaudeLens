@@ -1,12 +1,19 @@
-import { Skill, useWriteMarkdownFile, useDeleteMarkdownFile, useGlobalSkills } from '../../../hooks/useIPC'
+import { Skill, useWriteMarkdownFile, useDeleteMarkdownFile, useGlobalSkills, useAllSkills } from '../../../hooks/useIPC'
 import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView'
 import { SKILL_OPTION_DEFS, readOptions, serializeSkill, initialOf } from '../shared/entityOptions'
 
-export function SkillDetailView({ skill: initialSkill, onBack }: { skill: Skill; onBack: () => void }) {
+export function SkillDetailView({ skill: initialSkill, project, onBack }: { skill: Skill; project?: { hash: string; realPath: string }; onBack: () => void }) {
   const write = useWriteMarkdownFile(['skills:global', 'skills:all'])
   const del = useDeleteMarkdownFile(['skills:global', 'skills:all'])
   const { data: globalSkills } = useGlobalSkills()
-  const skill = globalSkills?.find(s => s.path === initialSkill.path) ?? initialSkill
+  const { data: allSkills } = useAllSkills(project?.realPath ?? null)
+  // Re-derive the fresh skill after a save: project skills live in `skills:all`
+  // (scoped to the project), global skills in `skills:global`. Without the
+  // project-scoped lookup, project skills always fell back to the stale prop.
+  const skill =
+    allSkills?.find(s => s.path === initialSkill.path) ??
+    globalSkills?.find(s => s.path === initialSkill.path) ??
+    initialSkill
 
   const scope = skill.scope === 'global' ? 'Global' : 'Project'
 

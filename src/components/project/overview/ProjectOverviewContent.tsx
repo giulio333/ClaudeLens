@@ -31,6 +31,19 @@ import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
 
+function ChatGlyph() {
+  return (
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+      <path
+        d="M4 5h16v11H8l-4 4V5z"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinejoin="round"
+      />
+    </svg>
+  );
+}
+
 export type ProjectSection =
   | 'overview'
   | 'sessions'
@@ -328,13 +341,26 @@ export function ProjectView({
     [sessions, project.hash, isSessionPinned]
   );
   const hasPinnedSession = pinnedSessions.length > 0;
+  // True 1-based position of each session in the full activity-sorted list, so
+  // the pinned section shows the real rank (e.g. 04, 27) instead of 01, 02.
+  const sessionRank = useMemo(() => {
+    const m = new Map<string, number>();
+    sessions.forEach((s, i) => m.set(s.filename, i + 1));
+    return m;
+  }, [sessions]);
+  // Pinned sessions live exclusively in their own section; the regular list
+  // shows only the unpinned ones so a pinned session never appears twice.
+  const unpinnedSessions = useMemo(
+    () => sessions.filter(s => !isSessionPinned(project.hash, s.filename)),
+    [sessions, project.hash, isSessionPinned]
+  );
   // Effective tag filter: a selection whose tag was deleted is treated as no
   // filter (derived, not an effect, so it can never get stuck on a stale tag).
   const activeTag = tagFilter && projectTags.some(t => t.name === tagFilter) ? tagFilter : null;
   const visibleSessions = useMemo(() => {
-    if (!activeTag) return sessions;
-    return sessions.filter(s => tagsForSession(s.filename).includes(activeTag));
-  }, [sessions, activeTag, tagsForSession]);
+    if (!activeTag) return unpinnedSessions;
+    return unpinnedSessions.filter(s => tagsForSession(s.filename).includes(activeTag));
+  }, [unpinnedSessions, activeTag, tagsForSession]);
 
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
@@ -375,24 +401,13 @@ export function ProjectView({
         <Lens />
         <div className="cl-hero-actions">
           <button
+            className="cl-btn cl-btn--quiet"
             type="button"
-            className={`cl-btn cl-btn--icon${pinnedNow ? ' is-pinned' : ''}`}
-            title={pinnedNow ? 'Unpin project' : 'Pin project'}
-            aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
-            aria-pressed={pinnedNow}
-            onClick={() => togglePin(project.hash)}
-          >
-            <PinIcon filled={pinnedNow} />
-            <span>{pinnedNow ? 'Pinned' : 'Pin'}</span>
-          </button>
-          <button
-            className="cl-btn cl-btn--primary"
-            type="button"
-            title="Runs in-app through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
+            title="In-app chat through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
             onClick={() => onNavigate({ type: 'new-chat', project })}
           >
-            New chat
-            <span className="cl-btn-sub">SDK credits</span>
+            <ChatGlyph />
+            SDK chat
           </button>
           <button
             className="cl-btn"
@@ -401,13 +416,23 @@ export function ProjectView({
             onClick={() => onNavigate({ type: 'terminal', project })}
           >
             Open in Claude Code
-            <span className="cl-btn-sub">Plan</span>
           </button>
         </div>
 
         <div className="cl-eyebrow">
           <span className="pip" />
           <span title={project.realPath}>Project · {project.realPath}</span>
+          <button
+            type="button"
+            className={`cl-eyebrow-pin${pinnedNow ? ' is-pinned' : ''}`}
+            title={pinnedNow ? 'Unpin project' : 'Pin project'}
+            aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
+            aria-pressed={pinnedNow}
+            onClick={() => togglePin(project.hash)}
+          >
+            <PinIcon filled={pinnedNow} />
+            <span>{pinnedNow ? 'Pinned' : 'Pin'}</span>
+          </button>
         </div>
 
         <button
@@ -440,11 +465,6 @@ export function ProjectView({
                 last active <b>{relIso(lastActive)} ago</b>
               </span>
             </>
-          )}
-          {liveProc && (
-            <span className="tag">
-              <span className="led" /> 1 session running
-            </span>
           )}
         </div>
       </section>
@@ -512,13 +532,14 @@ export function ProjectView({
               onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
             }
             onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+            rankOf={s => sessionRank.get(s.filename) ?? 0}
           />
 
           <section className="cl-section">
             <div className="cl-sec-head">
               <h2>Sessions</h2>
               <span className="ct">
-                {Math.min(5, sessions.length)} of {sessions.length}
+                {Math.min(5, unpinnedSessions.length)} of {unpinnedSessions.length}
               </span>
               <button
                 className="all"
@@ -529,7 +550,7 @@ export function ProjectView({
               </button>
             </div>
             <SessionRows
-              sessions={sessions.slice(0, 5)}
+              sessions={unpinnedSessions.slice(0, 5)}
               projectHash={project.hash}
               cleanupDays={cleanupDays}
               onOpen={s =>
@@ -663,6 +684,7 @@ export function ProjectView({
               onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
             }
             onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+            rankOf={s => sessionRank.get(s.filename) ?? 0}
             style={{ paddingTop: 38 }}
           />
           <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
@@ -671,15 +693,15 @@ export function ProjectView({
               <span className="ct">
                 {activeTag
                   ? `${visibleSessions.length} tagged #${activeTag}`
-                  : `${sessions.length} total · sorted by last activity`}
+                  : `${unpinnedSessions.length} total · sorted by last activity`}
               </span>
               <button
                 className="all"
                 type="button"
-                title="Runs in-app through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
+                title="In-app chat through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
                 onClick={() => onNavigate({ type: 'new-chat', project })}
               >
-                New chat
+                SDK chat
               </button>
             </div>
             <TagBar
@@ -1148,6 +1170,7 @@ function PinnedSessionsSection({
   cleanupDays,
   onOpen,
   onOpenChat,
+  rankOf,
   style,
 }: {
   sessions: SessionSummary[];
@@ -1155,6 +1178,7 @@ function PinnedSessionsSection({
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
+  rankOf?: (s: SessionSummary) => number;
   style?: CSSProperties;
 }) {
   if (sessions.length === 0) return null;
@@ -1170,6 +1194,7 @@ function PinnedSessionsSection({
         cleanupDays={cleanupDays}
         onOpen={onOpen}
         onOpenChat={onOpenChat}
+        rankOf={rankOf}
       />
     </section>
   );
@@ -1181,12 +1206,16 @@ function SessionRows({
   cleanupDays,
   onOpen,
   onOpenChat,
+  rankOf,
 }: {
   sessions: SessionSummary[];
   projectHash: string;
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
+  // When provided, overrides the sequential row number with the session's true
+  // position in the full list (used by the pinned section, which gets a subset).
+  rankOf?: (s: SessionSummary) => number;
 }) {
   const { isPinned, togglePin } = usePinnedSessions();
   const { data: activeSessions = [] } = useActiveSessions();
@@ -1237,7 +1266,7 @@ function SessionRows({
             >
               <PinIcon filled={pinnedNow} />
             </button>
-            <span className="idx">{String(i + 1).padStart(2, '0')}</span>
+            <span className="idx">{String(rankOf ? rankOf(s) : i + 1).padStart(2, '0')}</span>
             <div style={{ minWidth: 0 }}>
               <div className="title cl-row-title">
                 <span className="cl-row-title-text">{sessionTitle(s)}</span>

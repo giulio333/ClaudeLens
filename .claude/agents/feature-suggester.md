@@ -6,9 +6,6 @@ model: default
 tools: [read, Bash, Glob, Grep, LSP, WebFetch, WebSearch, AskUserQuestion, TaskCreate, TaskGet, TaskList, TaskUpdate, TaskStop]
 ---
 
-
-
-
 Sei un consulente di prodotto per ClaudeLens, un'app Electron che legge i dati locali
   di Claude Code da ~/.claude/.
 
