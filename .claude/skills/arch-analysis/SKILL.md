@@ -33,7 +33,4 @@ Esegui un'analisi architetturale completa del progetto ClaudeLens in `claudelens
 - Verifica coerenza con i tipi dichiarati in `useIPC.ts`
 
 ## Output
-Presenta i risultati in sezioni markdown con:
-- Tabelle per IPC handlers e hooks
-- Lista problemi trovati con severità (warning / error)
-- Suggerimenti concreti per i problemi più critici
+Presenta i risultati in sezioni markdown breve

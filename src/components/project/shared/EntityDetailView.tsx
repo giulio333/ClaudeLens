@@ -192,19 +192,9 @@ function ViewManifesto({ config }: { config: EntityConfig }) {
   const hasOptions = config.optionDefs.length > 0
   const setProperties = propertyRows.filter(row => row.value)
   const unsetProperties = propertyRows.filter(row => !row.value)
-  const initial = config.initial ?? initialOf(config.name)
 
   return (
     <div className="cl-agent-v2" style={entityTint(config.color, { neutral: config.neutralTint })}>
-      <div className="cl-agent-v2-strip">
-        <span className="scope-pill"><span className="d" /> {config.scopeLabel}</span>
-        {config.path && <span className="path" title={config.path}>{config.path}</span>}
-        <span className="id-tag">
-          <span className="orb-tiny">{initial}</span>
-          {config.name} · {config.kindLabel}
-        </span>
-      </div>
-
       <section className="cl-agent-v2-hero">
         <div>
           <div className="ey">
@@ -218,6 +208,7 @@ function ViewManifesto({ config }: { config: EntityConfig }) {
             {config.name}{config.titleGlyph && <span className="ext">{config.titleGlyph}</span>}
           </h1>
           {config.description && <div className="desc">{config.description}</div>}
+          {config.path && <div className="filepath" title={config.path}>{config.path}</div>}
         </div>
         <div className="cl-agent-v2-lens" aria-hidden="true">
           <span className="orb-big" />

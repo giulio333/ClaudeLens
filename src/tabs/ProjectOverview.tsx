@@ -267,6 +267,7 @@ export default function ProjectOverview() {
         return (
           <SkillDetailView
             skill={view.skill}
+            project={selected ?? undefined}
             onBack={() => selected ? setView({ type: 'project-skills', project: selected }) : setView({ type: 'global-skills' })}
           />
         )
