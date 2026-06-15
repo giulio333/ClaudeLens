@@ -25,7 +25,12 @@ jobs:
           - os: ubuntu-latest
             platform: linux
             pattern: release/*.AppImage
-          - os: windows-latest
+          # Pinned to windows-2022: the windows-latest image rolled to
+          # windows-2025, where node-gyp can't locate the VS toolchain and the
+          # native node-pty rebuild fails ("Could not find any Visual Studio
+          # installation"). windows-2022 ships the VS 2022 Build Tools node-gyp
+          # detects.
+          - os: windows-2022
             platform: win
             pattern: release/*.exe
     steps:
