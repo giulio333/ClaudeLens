@@ -198,7 +198,9 @@ function buildTurnMarkdown(
   if (toolGroups.length > 0 && (options.includeToolInputs || options.includeToolResults)) {
     lines.push('#### Tool Audit', '')
     for (const group of toolGroups) {
-      lines.push(`<details>`, `<summary>${group.use.name} - ${toolStatus(group)}</summary>`, '')
+      // Escape the tool name before embedding it in raw <summary> HTML — a tool
+      // name carrying markup would otherwise inject into the Markdown export.
+      lines.push(`<details>`, `<summary>${escapeHtml(group.use.name)} - ${toolStatus(group)}</summary>`, '')
       if (options.includeToolInputs) {
         lines.push('Input:', '', jsonFence(group.use.input), '')
       }

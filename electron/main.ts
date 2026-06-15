@@ -1,5 +1,5 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
-import { basename, delimiter, isAbsolute, join, resolve, sep } from 'path';
+import { basename, delimiter, isAbsolute, join, sep } from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
@@ -52,9 +52,9 @@ import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
 import {
-  hashToPath,
   resolveRealPath,
   invalidateCwdCache,
+  canonicalize,
   CLAUDE_DIR,
   isValidSessionId,
 } from './utils';
@@ -116,6 +116,11 @@ interface SafeWritePathOptions {
   requireUnderHome?: boolean;
   // Confinamento più stretto a una directory specifica.
   requireUnder?: string;
+  // Per markdownFile:*: accetta solo path sotto ~/.claude (global agents/skills/
+  // plans/CLAUDE.md) oppure dentro un segmento `{progetto}/.claude/agents|skills/`
+  // (entità di progetto). Blocca qualunque altro .md sotto la home (es. un README
+  // di progetto), restringendo il blast radius all'invariante ~/.claude + .claude/.
+  markdownEntityScope?: boolean;
 }
 
 // Valida un path fornito dal renderer prima di scriverci/cancellarlo (vedi #14):
@@ -124,17 +129,32 @@ interface SafeWritePathOptions {
 function assertSafeWritePath(filePath: string, opts: SafeWritePathOptions = {}): string {
   if (!filePath || typeof filePath !== 'string') throw new Error('Missing filePath');
   if (!isAbsolute(filePath)) throw new Error('Path must be absolute');
-  const resolved = resolve(filePath);
+  // Canonicalize (resolve symlinks of the deepest existing ancestor) so a planted
+  // symlink can't make a lexically-in-bounds path write/delete outside the base.
+  const resolved = canonicalize(filePath);
+  // Canonicalize the comparison bases too, so a symlinked home / ~/.claude
+  // (common on macOS) doesn't make a legitimately-in-bounds canonical path fail.
   if (opts.requireUnderHome) {
-    const home = os.homedir();
+    const home = canonicalize(os.homedir());
     if (resolved !== home && !resolved.startsWith(home + sep)) {
       throw new Error('Path must be under home directory');
     }
   }
   if (opts.requireUnder) {
-    const baseDir = resolve(opts.requireUnder);
+    const baseDir = canonicalize(opts.requireUnder);
     if (resolved !== baseDir && !resolved.startsWith(baseDir + sep)) {
       throw new Error(`Path must be under ${baseDir}`);
+    }
+  }
+  if (opts.markdownEntityScope) {
+    const claudeDir = canonicalize(CLAUDE_DIR);
+    const underClaude = resolved === claudeDir || resolved.startsWith(claudeDir + sep);
+    // Project-scoped agents/skills live at {projectRealPath}/.claude/(agents|skills)/…
+    const inProjectEntityDir =
+      resolved.includes(`${sep}.claude${sep}agents${sep}`) ||
+      resolved.includes(`${sep}.claude${sep}skills${sep}`);
+    if (!underClaude && !inProjectEntityDir) {
+      throw new Error('Path must be under ~/.claude or a project .claude/agents|skills directory');
     }
   }
   const base = basename(resolved);
@@ -396,7 +416,7 @@ ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: s
 ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: string) => {
   try {
     const fs = require('fs') as typeof import('fs');
-    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
+    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true, markdownEntityScope: true });
     const dir = require('path').dirname(safePath) as string;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(safePath, content, 'utf-8');
@@ -412,12 +432,16 @@ ipcMain.handle(
     try {
       const fs = require('fs') as typeof import('fs');
       const path = require('path') as typeof import('path');
-      const safePath = assertSafeWritePath(filePath, { requireUnderHome: true });
+      const safePath = assertSafeWritePath(filePath, { requireUnderHome: true, markdownEntityScope: true });
       if (fs.existsSync(safePath)) fs.rmSync(safePath);
       // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
+      // Guard: prune solo una sottocartella di skills/ (basename del parent === 'skills'),
+      // mai una root come la home o CLAUDE_DIR se per qualche motivo il .md vi stesse dentro.
       if (opts?.pruneEmptyDir) {
         const dir = path.dirname(safePath);
-        if (fs.existsSync(dir) && fs.readdirSync(dir).length === 0)
+        const parent = path.dirname(dir);
+        const prunable = path.basename(parent) === 'skills' || path.basename(parent) === 'agents';
+        if (prunable && fs.existsSync(dir) && fs.readdirSync(dir).length === 0)
           fs.rmSync(dir, { recursive: false });
       }
       return ok(null);
@@ -1091,6 +1115,7 @@ ipcMain.handle(
     model?: string,
     permissionMode?: string
   ) => {
+    try {
     const { existsSync, statSync } = await import('fs');
     if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
       return err(
@@ -1098,7 +1123,12 @@ ipcMain.handle(
       );
     }
     if (!sessionId) return err(new Error('Missing session id.'));
-    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+    // Validate the id before handing it to the SDK as `resume` (it resolves the
+    // transcript file path from it), mirroring the terminal:create handler.
+    if (!isValidSessionId(sessionId)) return err(new Error('Invalid session id.'));
+    if (typeof message !== 'string' || !message.trim()) {
+      return err(new Error('Cannot send an empty message.'));
+    }
 
     const mode = asPermissionMode(permissionMode);
     // Same transcript already live: push into the warm query (applying any
@@ -1134,6 +1164,9 @@ ipcMain.handle(
     });
     currentChatSession.send(message);
     return ok(null);
+    } catch (e) {
+      return err(e);
+    }
   }
 );
 
@@ -1144,13 +1177,16 @@ ipcMain.handle(
 ipcMain.handle(
   'sessions:startMessage',
   async (event, realPath: string, message: string, model?: string, permissionMode?: string) => {
+    try {
     const { existsSync, statSync } = await import('fs');
     if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
       return err(
         `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
       );
     }
-    if (!message.trim()) return err(new Error('Cannot send an empty message.'));
+    if (typeof message !== 'string' || !message.trim()) {
+      return err(new Error('Cannot send an empty message.'));
+    }
 
     currentChatSession?.dispose();
     denyAllPending('Superseded by a new request.');
@@ -1168,6 +1204,9 @@ ipcMain.handle(
     });
     currentChatSession.send(message);
     return ok(null);
+    } catch (e) {
+      return err(e);
+    }
   }
 );
 

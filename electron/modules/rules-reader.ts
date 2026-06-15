@@ -1,7 +1,7 @@
 import { readFileSync } from 'fs';
 import { join, basename } from 'path';
 import { glob } from 'glob';
-import yaml from 'js-yaml';
+import { parseFrontmatter, getStringArray } from './frontmatter';
 
 export interface RuleFile {
   filename: string;
@@ -9,20 +9,12 @@ export interface RuleFile {
   paths?: string[];
 }
 
+// Route through the shared parseFrontmatter (single CRLF-tolerant chokepoint) +
+// getStringArray so a CRLF-authored rule file keeps its path scoping instead of
+// silently being treated as always-applied.
 function extractFrontmatterPaths(content: string): string[] | undefined {
-  const match = content.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) return undefined;
-
-  try {
-    const parsed = yaml.load(match[1]) as Record<string, unknown>;
-    if (parsed && Array.isArray(parsed.paths)) {
-      return parsed.paths as string[];
-    }
-  } catch {
-    // Frontmatter non valido
-  }
-
-  return undefined;
+  const { frontmatter } = parseFrontmatter(content);
+  return getStringArray(frontmatter, 'paths');
 }
 
 export async function readProjectRules(realProjectPath: string): Promise<RuleFile[]> {

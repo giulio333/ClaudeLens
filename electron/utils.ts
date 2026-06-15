@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from 'fs';
+import { readdirSync, readFileSync, statSync, realpathSync, existsSync } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import os from 'os';
 
@@ -26,14 +26,42 @@ export function validateEntityName(name: string): string {
 }
 
 /**
+ * Resolve the canonical (symlink-followed) path of `p`. The path itself may not
+ * exist yet (we're about to create it), so we realpath the deepest existing
+ * ancestor and re-append the not-yet-existing tail. This makes containment
+ * checks immune to a planted symlink in the middle of the path.
+ */
+export function canonicalize(p: string): string {
+  let cur = resolve(p);
+  const tail: string[] = [];
+  // Walk up until we hit a path that exists, collecting the trailing segments.
+  while (!existsSync(cur)) {
+    const parent = dirname(cur);
+    if (parent === cur) break; // reached the root
+    tail.unshift(cur.slice(parent.length + 1));
+    cur = parent;
+  }
+  try {
+    const realBase = realpathSync(cur);
+    return tail.length ? join(realBase, ...tail) : realBase;
+  } catch {
+    return resolve(p);
+  }
+}
+
+/**
  * Defense in depth: assert a built target path stays inside `baseDir` after
  * resolution. Throws otherwise. Pair with validateEntityName at write sites.
+ *
+ * Both the base and the target are canonicalized (symlinks resolved) before the
+ * containment check, so a symlink planted inside the supposedly-confined tree
+ * can't redirect the real write/delete target outside it.
  */
 export function assertWithin(baseDir: string, target: string): void {
-  const base = resolve(baseDir);
-  const resolved = resolve(target);
+  const base = canonicalize(baseDir);
+  const resolved = canonicalize(target);
   if (resolved !== base && !resolved.startsWith(base + sep)) {
-    throw new Error(`Refusing to write outside ${base}: ${resolved}`);
+    throw new Error(`Refusing to write outside ${base}: ${resolve(target)}`);
   }
 }
 

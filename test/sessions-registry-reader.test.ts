@@ -71,24 +71,42 @@ describe('parseRegistryEntry', () => {
 });
 
 describe('readActiveSessions', () => {
+  // Pin "now" just after the fixture heartbeat so the staleness gate keeps the
+  // entries fresh; the gate itself is exercised in its own test below.
+  const freshNow = () => ENTRY.updatedAt + 1000;
+
   it('returns live entries sorted by startedAt desc', async () => {
     writeEntry('1.json', { ...ENTRY, pid: 1, startedAt: 100 });
     writeEntry('2.json', { ...ENTRY, pid: 2, startedAt: 200 });
-    const out = await readActiveSessions({ dir, pidAlive: () => true });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, now: freshNow });
     expect(out.map(s => s.pid)).toEqual([2, 1]);
   });
 
   it('drops stale entries whose pid is dead', async () => {
     writeEntry('1.json', { ...ENTRY, pid: 1 });
     writeEntry('2.json', { ...ENTRY, pid: 2 });
-    const out = await readActiveSessions({ dir, pidAlive: pid => pid === 2 });
+    const out = await readActiveSessions({ dir, pidAlive: pid => pid === 2, now: freshNow });
     expect(out.map(s => s.pid)).toEqual([2]);
+  });
+
+  it('drops entries whose heartbeat is stale even if the pid is alive (pid reuse)', async () => {
+    writeEntry('fresh.json', { ...ENTRY, pid: 1, updatedAt: 1_000_000 });
+    writeEntry('stale.json', { ...ENTRY, pid: 2, updatedAt: 100 });
+    // now is 1 minute + a bit past the fresh heartbeat: fresh survives, stale drops.
+    const out = await readActiveSessions({ dir, pidAlive: () => true, now: () => 1_000_500 });
+    expect(out.map(s => s.pid)).toEqual([1]);
+  });
+
+  it('keeps entries with no heartbeat (older CLI), relying on the pid probe alone', async () => {
+    writeEntry('1.json', { pid: 1, sessionId: 'x', cwd: '/a/b' });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, now: () => 9_999_999_999_999 });
+    expect(out.map(s => s.pid)).toEqual([1]);
   });
 
   it('skips malformed files without failing the read', async () => {
     writeEntry('bad.json', '{ not json');
     writeEntry('ok.json', ENTRY);
-    const out = await readActiveSessions({ dir, pidAlive: () => true });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, now: freshNow });
     expect(out).toHaveLength(1);
     expect(out[0].sessionId).toBe(ENTRY.sessionId);
   });

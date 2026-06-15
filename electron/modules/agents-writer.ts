@@ -1,5 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
+import os from 'os';
 import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
 
 export interface AgentInput {
@@ -51,6 +52,11 @@ export function createAgent(input: AgentInput, projectPath?: string): string {
   const name = validateEntityName(input.name);
   const agentsDir = join(projectPath ? join(projectPath, '.claude') : CLAUDE_DIR, 'agents');
   const filePath = join(agentsDir, `${name}.md`);
+  // assertWithin(agentsDir, …) only proves the filename can't escape agentsDir,
+  // but agentsDir itself is derived from the renderer-supplied projectPath. Anchor
+  // the real containment check on a trusted root (home) so an absolute/attacker
+  // projectPath like '/tmp/evil' can't redirect the write outside the user's tree.
+  assertWithin(os.homedir(), filePath);
   assertWithin(agentsDir, filePath);
   if (existsSync(filePath)) {
     throw new Error(`An agent named "${name}" already exists.`);

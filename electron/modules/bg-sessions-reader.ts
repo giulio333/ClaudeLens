@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { isPidAlive } from './sessions-registry-reader';
 const JOBS_DIR = join(CLAUDE_DIR, 'jobs');
 const ROSTER_PATH = join(CLAUDE_DIR, 'daemon', 'roster.json');
 
@@ -122,7 +123,10 @@ export function getBgSessions(): BgSession[] {
         state.inFlight && typeof state.inFlight === 'object'
           ? Number((state.inFlight as { tasks?: number }).tasks ?? 0)
           : 0,
-      alive: Boolean(worker?.pid),
+      // Probe the pid rather than trusting its mere presence in the roster: a
+      // crashed worker leaves a stale pid. Treat the state field as a secondary
+      // signal when the pid is gone.
+      alive: worker?.pid != null && isPidAlive(worker.pid),
       pid: worker?.pid ?? null,
       createdAt: (state.createdAt as string) ?? '',
       updatedAt: (state.updatedAt as string) ?? '',

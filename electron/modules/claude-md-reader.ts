@@ -24,31 +24,6 @@ export function readGlobalClaudeMd(claudeDir: string): string | undefined {
   }
 }
 
-export function readProjectClaudeMd(realProjectPath: string): string | undefined {
-  function searchClaudeMd(dir: string, depth: number = 0): string | undefined {
-    if (depth > 3) return undefined;
-    if (!existsSync(dir)) return undefined;
-
-    const claudeMdPath = join(dir, 'CLAUDE.md');
-    if (existsSync(claudeMdPath)) {
-      try {
-        return readFileSync(claudeMdPath, 'utf-8');
-      } catch (error) {
-        // Continua la ricerca
-      }
-    }
-
-    return undefined;
-  }
-
-  try {
-    return searchClaudeMd(realProjectPath, 0);
-  } catch (error) {
-    console.error(`Errore cercando CLAUDE.md nel progetto: ${error}`);
-    return undefined;
-  }
-}
-
 function tryRead(filePath: string): string | undefined {
   if (!existsSync(filePath)) return undefined;
   try {

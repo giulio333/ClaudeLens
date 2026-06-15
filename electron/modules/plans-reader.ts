@@ -1,6 +1,18 @@
 import { readFileSync } from 'fs';
-import { basename } from 'path';
+import { basename, resolve, sep, join } from 'path';
 import { glob } from 'glob';
+import { CLAUDE_DIR } from '../utils';
+
+// Plans are stored globally under ~/.claude/plans. The planFilePath we read comes
+// verbatim from transcript attachments, so a poisoned/shared .jsonl could point it
+// anywhere on disk. Confine reads to this dir to preserve the ~/.claude invariant.
+const PLANS_DIR = join(CLAUDE_DIR, 'plans');
+
+/** True when an absolute path resolves inside ~/.claude/plans. */
+function isWithinPlansDir(filePath: string): boolean {
+  const resolved = resolve(filePath);
+  return resolved === PLANS_DIR || resolved.startsWith(PLANS_DIR + sep);
+}
 
 export type PlanStatus = 'proposed' | 'approved';
 
@@ -100,11 +112,16 @@ function dedupeRefs(refs: PlanRef[]): PlanRef[] {
 function toPlan(ref: PlanRef): Plan {
   let content: string | null = null;
   let exists = false;
-  try {
-    content = readFileSync(ref.filePath, 'utf-8');
-    exists = true;
-  } catch {
-    // Il file del piano è stato cancellato (planExists:false): lo segnaliamo come "deleted".
+  // Only read the markdown when the path is confined to ~/.claude/plans. A path
+  // escaping that dir (poisoned transcript pointing at e.g. ~/.aws/credentials) is
+  // surfaced as "deleted" rather than disclosed — never readFileSync'd.
+  if (isWithinPlansDir(ref.filePath)) {
+    try {
+      content = readFileSync(ref.filePath, 'utf-8');
+      exists = true;
+    } catch {
+      // Il file del piano è stato cancellato (planExists:false): lo segnaliamo come "deleted".
+    }
   }
   const slug = ref.slug ?? basename(ref.filePath, '.md');
   return {

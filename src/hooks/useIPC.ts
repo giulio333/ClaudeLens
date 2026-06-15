@@ -474,6 +474,10 @@ export function useDeleteSession(hash: string) {
       qc.invalidateQueries({ queryKey: ['sessions:project', hash] })
       qc.invalidateQueries({ queryKey: ['tasks:project', hash] })
       qc.invalidateQueries({ queryKey: ['plans:project', hash] })
+      // The deleted .jsonl is the cost source for this project — refresh the
+      // cost rollups it fed so the figures don't keep counting a gone session.
+      qc.invalidateQueries({ queryKey: ['cost:summary'] })
+      qc.invalidateQueries({ queryKey: ['cost:project', hash] })
     },
   })
 }
@@ -685,13 +689,21 @@ export function useDataChangedRefetch() {
   const qc = useQueryClient()
 
   useEffect(() => {
-    const unsubscribe = window.electronAPI.onDataChanged(() => {
+    // Coalesce bursts: during a live chat turn the transcript .jsonl is appended
+    // continuously, firing many undebounced data:changed events; each would
+    // re-run a full synchronous re-read/parse of the entire file (sessions:chat
+    // is an active query). A trailing timer collapses a burst into one pass.
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const flush = () => {
+      timer = null
       qc.invalidateQueries({ queryKey: ['memory:projects'] })
       qc.invalidateQueries({ queryKey: ['memory:project'] })
       qc.invalidateQueries({ queryKey: ['cost:summary'] })
       qc.invalidateQueries({ queryKey: ['cost:project'] })
       qc.invalidateQueries({ queryKey: ['sessions:project'] })
       qc.invalidateQueries({ queryKey: ['sessions:chat'] })
+      qc.invalidateQueries({ queryKey: ['sessions:subagents'] })
+      qc.invalidateQueries({ queryKey: ['sessions:subagentTranscript'] })
       qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
       qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
       qc.invalidateQueries({ queryKey: ['rules:project'] })
@@ -702,8 +714,15 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries({ queryKey: ['agents:global'] })
       qc.invalidateQueries({ queryKey: ['agents:project'] })
       qc.invalidateQueries({ queryKey: ['mcp:global'] })
+    }
+    const unsubscribe = window.electronAPI.onDataChanged(() => {
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(flush, 200)
     })
-    return unsubscribe
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+    }
   }, [qc])
 }
 

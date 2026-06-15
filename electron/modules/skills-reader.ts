@@ -62,6 +62,13 @@ function parseSkillMarkdown(content: string): { frontmatter: SkillFrontmatter; b
   const agent = getString(raw, 'agent');
   if (agent !== undefined) fm.agent = agent;
 
+  // `hooks` is declared on the Skill type and forwarded below, but was never
+  // actually parsed — so a skill's hooks block was silently dropped.
+  const rawHooks = raw['hooks'];
+  if (rawHooks && typeof rawHooks === 'object' && !Array.isArray(rawHooks)) {
+    fm.hooks = rawHooks as Record<string, unknown>;
+  }
+
   return { frontmatter: fm, body };
 }
 
