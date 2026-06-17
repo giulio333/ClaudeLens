@@ -505,18 +505,38 @@ export function useProjectCost(hash: string | null) {
   })
 }
 
+// The transcript `.jsonl` is read through the Agent SDK on every `data:changed`,
+// but the live terminal is appending/rewriting that same file continuously.
+// Reading mid-write occasionally yields an empty array, which would clobber an
+// already-populated view (chat content vanishes, running agents drop out of the
+// rail) until the next refetch lands on a clean moment. Treat a transient empty
+// result as "no new data" when we already hold a populated value: keep the last
+// good data instead of flashing to the empty state. A genuinely empty session
+// (prev also empty) is unaffected; a remount always re-reads from scratch.
+function keepLastGood<T>(qc: ReturnType<typeof useQueryClient>, key: unknown[], next: T[]): T[] {
+  if (next.length > 0) return next
+  const prev = qc.getQueryData<T[]>(key)
+  return prev && prev.length > 0 ? prev : next
+}
+
 export function useChatSession(hash: string, filename: string | null) {
+  const qc = useQueryClient()
+  const key = ['sessions:chat', hash, filename]
   return useQuery({
-    queryKey: ['sessions:chat', hash, filename],
-    queryFn: () => unwrap(window.electronAPI.sessions.getChat(hash, filename!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGood(qc, key, await unwrap(window.electronAPI.sessions.getChat(hash, filename!))),
     enabled: filename !== null,
   })
 }
 
 export function useSessionSubagents(hash: string, filename: string | null) {
+  const qc = useQueryClient()
+  const key = ['sessions:subagents', hash, filename]
   return useQuery({
-    queryKey: ['sessions:subagents', hash, filename],
-    queryFn: () => unwrap(window.electronAPI.sessions.getSubagents(hash, filename!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGood(qc, key, await unwrap(window.electronAPI.sessions.getSubagents(hash, filename!))),
     enabled: filename !== null,
   })
 }
