@@ -228,7 +228,7 @@ export interface RuleFile {
 export interface Agent {
   name: string
   path: string
-  scope: 'global' | 'project'
+  scope: 'global' | 'project' | 'plugin'
   content: string
   rawContent: string
   /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
@@ -254,7 +254,7 @@ export interface Agent {
 export interface Skill {
   name: string
   path: string
-  scope: 'global' | 'project'
+  scope: 'global' | 'project' | 'plugin'
   content: string
   rawContent: string
   description?: string
@@ -266,6 +266,30 @@ export interface Skill {
   context?: string
   agent?: string
   hooks?: Record<string, unknown>
+}
+
+/** A slash command provided by a plugin (`<installPath>/commands/*.md`). */
+export interface PluginCommand {
+  name: string
+  path: string
+  description?: string
+  content: string
+  rawContent: string
+}
+
+/** A plugin installed at user scope, with the components it provides. */
+export interface InstalledPlugin {
+  name: string
+  marketplace: string
+  scope: 'user'
+  version: string
+  installPath: string
+  description?: string
+  author?: string
+  repo?: string
+  skills: Skill[]
+  agents: Agent[]
+  commands: PluginCommand[]
 }
 
 export interface SkillInput {

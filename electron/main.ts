@@ -26,6 +26,7 @@ import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
+import { getInstalledPlugins } from './modules/plugins-reader';
 import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
@@ -62,6 +63,9 @@ import { registerScreenshotHandlers } from './screenshotFixtures';
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 const PLANS_DIR = join(CLAUDE_DIR, 'plans');
+// installed_plugins.json: rinfresca la sezione Plugins su install/update/remove
+// (la cache dei plugin cambia spesso e non va osservata interamente).
+const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json');
 
 type IpcResult<T> = { data: T | null; error: string | null };
 type ExportSaveResult = { canceled: boolean; filePath: string | null };
@@ -732,6 +736,14 @@ ipcMain.handle('agents:getGlobal', async () => {
 ipcMain.handle('agents:getByProject', async (_event, realPath: string) => {
   try {
     return ok(getProjectAgents(realPath));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('plugins:getAll', async () => {
+  try {
+    return ok(getInstalledPlugins());
   } catch (e) {
     return err(e);
   }
@@ -1431,7 +1443,7 @@ async function startWatcher() {
   // così i subtab Tasks e Plans si aggiornano live.
   // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
   const { watch } = await import('chokidar');
-  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR], {
+  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, INSTALLED_PLUGINS_FILE], {
     ignoreInitial: true,
     depth: 3,
   });

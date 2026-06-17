@@ -109,6 +109,14 @@ Formatter puri (nessuna dipendenza React):
 
 ---
 
+### `plugins/`
+| File | Esporta | Descrizione |
+|---|---|---|
+| `PluginsView.tsx` | `PluginsView` | Vista lista plugin globali (`View` case `plugins`): legge i plugin installati via `usePlugins` (IPC `plugins:getAll`), raggruppati per **marketplace**, tile con descrizione + conteggi (`N skills · N agents · N commands`). Click → `plugin-detail`. Linguaggio editoriale `cl-hero`/`cl-section`/`cl-tile-grid` come `GlobalSkillsView`. Ingresso: tile "Plugins" nella sezione Configuration di `GlobalHomeView` |
+| `PluginDetailView.tsx` | `PluginDetailView` | Dettaglio singolo plugin (`View` case `plugin-detail`): hero (nome, marketplace, repo, versione, author) + sezioni Skills / Agents / Commands come tile grid. Apertura di un item gestita con **stato locale** `open` (non casi della View union) che rende inline la detail **read-only**: skill → `SkillDetailView readOnly`, agent → `AgentDetailView readOnly`, command → `EntityDetailView` config `editable:false`/`deletable:false`. Ri-deriva il plugin fresco da `usePlugins` (back interno al plugin via `setOpen(null)`). I plugin sono read-only perché gestiti dal plugin manager |
+
+---
+
 ### `agents-live/`
 | File | Esporta | Descrizione |
 |---|---|---|

@@ -16,12 +16,14 @@ import {
 } from '../shared/entityOptions'
 import { RunAgentDialog } from './RunAgentDialog'
 
-export function AgentDetailView({ agent: initialAgent, project, onBack, onNavigateLive }: {
+export function AgentDetailView({ agent: initialAgent, project, onBack, onNavigateLive, readOnly = false }: {
   agent: Agent
   project?: { hash: string; realPath: string }
   onBack: () => void
   /** Navigate to Live Agents (project-scoped) after dispatching a run. */
   onNavigateLive?: () => void
+  /** Plugin agents are read-only (managed by the plugin manager). */
+  readOnly?: boolean
 }) {
   const write = useWriteMarkdownFile(['agents:global', 'agents:project'])
   const del = useDeleteMarkdownFile(['agents:global', 'agents:project'])
@@ -34,8 +36,8 @@ export function AgentDetailView({ agent: initialAgent, project, onBack, onNaviga
   const agent = fresh ?? initialAgent
 
   const invalid = agent.missingRequired.length > 0 || agent.filenameHasSpaces
-  const scope = agent.scope === 'global' ? 'Global' : 'Project'
-  const canRun = !!project && !!onNavigateLive
+  const scope = agent.scope === 'global' ? 'Global' : agent.scope === 'plugin' ? 'Plugin' : 'Project'
+  const canRun = !readOnly && !!project && !!onNavigateLive
 
   const config: EntityConfig = {
     kind: 'agent',
@@ -69,8 +71,8 @@ export function AgentDetailView({ agent: initialAgent, project, onBack, onNaviga
     ],
     serialize: ({ body, description, options }) =>
       serializeAgent(agent, body, { description, options }),
-    editable: true,
-    deletable: true,
+    editable: !readOnly,
+    deletable: !readOnly,
     duplicable: false,
     runnable: canRun,
     validation: invalid
@@ -104,8 +106,8 @@ export function AgentDetailView({ agent: initialAgent, project, onBack, onNaviga
     <EntityDetailView
       config={config}
       onBack={onBack}
-      onSave={async raw => { await write.mutateAsync({ filePath: agent.path, content: raw }) }}
-      onDelete={async () => { await del.mutateAsync({ filePath: agent.path }) }}
+      onSave={readOnly ? undefined : async raw => { await write.mutateAsync({ filePath: agent.path, content: raw }) }}
+      onDelete={readOnly ? undefined : async () => { await del.mutateAsync({ filePath: agent.path }) }}
       renderRunOverlay={
         canRun
           ? ({ onClose }) => (
