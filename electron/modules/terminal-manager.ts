@@ -67,8 +67,11 @@ export function createTerminal(
     terminals.delete(id);
     callbacks.onExit(exitCode);
   });
-  // The pid is the CLI process itself (spawned directly, no shell in between):
-  // the renderer uses it to find this session in the active-sessions registry.
+  // On POSIX the pid is the CLI process itself (spawned directly), which the
+  // renderer matches against the active-sessions registry to pin this session.
+  // On Windows it is the cmd.exe shim wrapping `claude` (see terminal:create),
+  // so the registry-by-pid match misses; the renderer falls back to the resumed
+  // session id there.
   return { id, pid: term.pid };
 }
 
