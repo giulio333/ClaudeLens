@@ -34,6 +34,20 @@ export interface CreateTerminalOptions {
   rows?: number;
 }
 
+// Build the executable + args to launch the interactive `claude` CLI in a PTY.
+// Windows installs the CLI as the `claude.cmd` batch shim, and node-pty spawns
+// through CreateProcess, which cannot launch a `.cmd`/`.bat` directly (it is not
+// a PE executable → "File not found"). Route it through cmd.exe — `cmd /c claude
+// …` resolves the shim on PATH and runs it inside the same ConPTY, so the CLI
+// still gets the pseudo-console for its TUI. On POSIX the binary is exec'd
+// directly. Pure + exported so it is unit/integration testable on its own.
+export function resolveClaudeCommand(args: string[] = []): { command: string; args: string[] } {
+  if (process.platform === 'win32') {
+    return { command: process.env.ComSpec || 'cmd.exe', args: ['/c', 'claude', ...args] };
+  }
+  return { command: 'claude', args };
+}
+
 const terminals = new Map<string, IPty>();
 
 // `process.env` values can be undefined; node-pty wants a string-only record.

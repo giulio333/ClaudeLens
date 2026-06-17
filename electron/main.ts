@@ -45,6 +45,7 @@ import {
   resizeTerminal,
   killTerminal,
   disposeAllTerminals,
+  resolveClaudeCommand,
 } from './modules/terminal-manager';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { getBgSessions } from './modules/bg-sessions-reader';
@@ -1293,17 +1294,12 @@ ipcMain.handle(
       const send = (channel: string, ...args: unknown[]) => {
         if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
       };
-      // Windows installs the CLI as the `claude.cmd` batch shim. node-pty spawns
-      // through CreateProcess, which cannot launch a `.cmd`/`.bat` directly (it
-      // is not a PE executable → "File not found"), so route it through cmd.exe:
-      // `cmd /c claude …` resolves the shim on PATH and runs it inside the same
-      // ConPTY, so the CLI still gets the pseudo-console for its TUI. On POSIX the
-      // binary is exec'd directly. (resumeSessionId is validated above, so it is
-      // safe to pass through the shell.)
-      const resumeArgs = opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : [];
-      const isWin = process.platform === 'win32';
-      const command = isWin ? process.env.ComSpec || 'cmd.exe' : 'claude';
-      const args = isWin ? ['/c', 'claude', ...resumeArgs] : resumeArgs;
+      // On Windows this routes through cmd.exe to launch the claude.cmd shim (see
+      // resolveClaudeCommand). resumeSessionId is validated above, so it is safe
+      // to pass through the shell.
+      const { command, args } = resolveClaudeCommand(
+        opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : []
+      );
       const { id, pid } = createTerminal(
         {
           cwd,

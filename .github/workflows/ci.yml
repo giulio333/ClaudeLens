@@ -38,3 +38,47 @@ jobs:
 
       - name: Build
         run: npm run build
+
+  # Cross-platform guard for the embedded terminal (#110): spawn the real `claude`
+  # CLI through node-pty on each OS and assert it launches. `claude --version`
+  # needs no auth, so no API key/secret is required.
+  terminal-integration:
+    name: Terminal spawn · ${{ matrix.platform }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-latest
+            platform: linux
+          - os: macos-latest
+            platform: mac
+          # windows-2022: node-gyp finds the VS 2022 toolchain to rebuild node-pty
+          # (windows-latest/2025 can't — see release.yml).
+          - os: windows-2022
+            platform: win
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      # Build node-pty against this runner's Node ABI (Vitest runs under Node, not
+      # Electron). Build tools are present on all three runner images.
+      - name: Rebuild node-pty
+        run: npm rebuild node-pty
+
+      - name: Install Claude Code CLI
+        run: npm install -g @anthropic-ai/claude-code
+
+      - name: Run terminal spawn test
+        run: npm test -- terminal-spawn.integration
+        env:
+          CLAUDE_E2E: '1'
