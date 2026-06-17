@@ -216,7 +216,24 @@ export function TerminalMissionControl({
   const { data: activeSessions } = useActiveSessions();
   const registrySessionId =
     (ptyPid && activeSessions?.find(s => s.pid === ptyPid && s.sessionId)?.sessionId) || null;
-  const sessionId = registrySessionId ?? resumeSessionId ?? null;
+  // Latch the resolved id. The CLI rewrites `~/.claude/sessions/<pid>.json` on
+  // every heartbeat; a (debounced) registry read landing mid-write transiently
+  // drops our entry, so `registrySessionId` flaps to null — which would null out
+  // `sessionId`, disable `useChatSession`, and blank the whole Lens/rail until
+  // the next read (the "everything vanishes while Claude thinks" bug). The pid is
+  // stable for this pane's lifetime and its session id never changes, so once
+  // resolved we keep it (keyed by pid; cleared when the PTY exits and pid → null).
+  // Converge via a render-phase setState (no blank frame, unlike an effect).
+  const [latched, setLatched] = useState<{ pid: number; sessionId: string } | null>(null);
+  if (
+    ptyPid &&
+    registrySessionId &&
+    (latched?.pid !== ptyPid || latched.sessionId !== registrySessionId)
+  ) {
+    setLatched({ pid: ptyPid, sessionId: registrySessionId });
+  }
+  const latchedSessionId = ptyPid && latched?.pid === ptyPid ? latched.sessionId : null;
+  const sessionId = registrySessionId ?? latchedSessionId ?? resumeSessionId ?? null;
   const filename = sessionId ? `${sessionId}.jsonl` : null;
 
   const { data: sessionList } = useSessionList(project.hash);
