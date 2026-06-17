@@ -1293,14 +1293,22 @@ ipcMain.handle(
       const send = (channel: string, ...args: unknown[]) => {
         if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
       };
-      // Windows installs the CLI as claude.cmd; the explicit extension lets
-      // ConPTY spawn it without a shell wrapper.
-      const command = process.platform === 'win32' ? 'claude.cmd' : 'claude';
+      // Windows installs the CLI as the `claude.cmd` batch shim. node-pty spawns
+      // through CreateProcess, which cannot launch a `.cmd`/`.bat` directly (it
+      // is not a PE executable → "File not found"), so route it through cmd.exe:
+      // `cmd /c claude …` resolves the shim on PATH and runs it inside the same
+      // ConPTY, so the CLI still gets the pseudo-console for its TUI. On POSIX the
+      // binary is exec'd directly. (resumeSessionId is validated above, so it is
+      // safe to pass through the shell.)
+      const resumeArgs = opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : [];
+      const isWin = process.platform === 'win32';
+      const command = isWin ? process.env.ComSpec || 'cmd.exe' : 'claude';
+      const args = isWin ? ['/c', 'claude', ...resumeArgs] : resumeArgs;
       const { id, pid } = createTerminal(
         {
           cwd,
           command,
-          args: opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : [],
+          args,
           env: claudeEnv(),
           cols: opts.cols,
           rows: opts.rows,
