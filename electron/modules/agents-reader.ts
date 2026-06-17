@@ -1,12 +1,12 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { CLAUDE_DIR } from '../utils';
 import { parseFrontmatter, getString, getBoolean, getStringArray, getNumber } from './frontmatter';
 
 export interface Agent {
   name: string;
   path: string;
-  scope: 'global' | 'project';
+  scope: 'global' | 'project' | 'plugin';
   content: string;
   rawContent: string;
   /** Required frontmatter fields that are missing (e.g. ['name', 'description']). Empty = valid. */
@@ -103,7 +103,48 @@ function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; b
   return { frontmatter: fm, body };
 }
 
-function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
+/**
+ * Read a single agent definition from a `.md` file. Returns null if it fails to
+ * read. Shared by `readAgentsFromDir` and the plugin reader (which resolves
+ * explicit, declared agent paths rather than scanning).
+ */
+export function readAgentFile(filePath: string, scope: 'global' | 'project' | 'plugin'): Agent | null {
+  if (!existsSync(filePath)) return null;
+  const fileName = basename(filePath);
+  try {
+    const rawContent = readFileSync(filePath, 'utf-8');
+    const { frontmatter, body } = parseAgentMarkdown(rawContent);
+    const missingRequired = REQUIRED_AGENT_FIELDS.filter(f => !frontmatter[f]);
+    return {
+      name: frontmatter.name ?? fileName.replace(/\.md$/, ''),
+      path: filePath,
+      scope,
+      content: body,
+      rawContent,
+      missingRequired,
+      filenameHasSpaces: fileName.includes(' '),
+      description: frontmatter.description,
+      model: frontmatter.model,
+      allowedTools: frontmatter.allowedTools,
+      disallowedTools: frontmatter.disallowedTools,
+      disableModelInvocation: frontmatter.disableModelInvocation,
+      permissionMode: frontmatter.permissionMode,
+      maxTurns: frontmatter.maxTurns,
+      skills: frontmatter.skills,
+      mcpServers: frontmatter.mcpServers,
+      background: frontmatter.background,
+      isolation: frontmatter.isolation,
+      memory: frontmatter.memory,
+      effort: frontmatter.effort,
+      color: frontmatter.color,
+    };
+  } catch (e) {
+    console.error(`Errore leggendo agent ${fileName}: ${e}`);
+    return null;
+  }
+}
+
+export function readAgentsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Agent[] {
   if (!existsSync(dir)) return [];
   const agents: Agent[] = [];
 
@@ -111,37 +152,8 @@ function readAgentsFromDir(dir: string, scope: 'global' | 'project'): Agent[] {
     const entries = readdirSync(dir, { withFileTypes: true });
     for (const entry of entries) {
       if (entry.isFile() && entry.name.endsWith('.md')) {
-        const filePath = join(dir, entry.name);
-        try {
-          const rawContent = readFileSync(filePath, 'utf-8');
-          const { frontmatter, body } = parseAgentMarkdown(rawContent);
-          const missingRequired = REQUIRED_AGENT_FIELDS.filter(f => !frontmatter[f]);
-          agents.push({
-            name: frontmatter.name ?? entry.name.replace(/\.md$/, ''),
-            path: filePath,
-            scope,
-            content: body,
-            rawContent,
-            missingRequired,
-            filenameHasSpaces: entry.name.includes(' '),
-            description: frontmatter.description,
-            model: frontmatter.model,
-            allowedTools: frontmatter.allowedTools,
-            disallowedTools: frontmatter.disallowedTools,
-            disableModelInvocation: frontmatter.disableModelInvocation,
-            permissionMode: frontmatter.permissionMode,
-            maxTurns: frontmatter.maxTurns,
-            skills: frontmatter.skills,
-            mcpServers: frontmatter.mcpServers,
-            background: frontmatter.background,
-            isolation: frontmatter.isolation,
-            memory: frontmatter.memory,
-            effort: frontmatter.effort,
-            color: frontmatter.color,
-          });
-        } catch (e) {
-          console.error(`Errore leggendo agent ${entry.name}: ${e}`);
-        }
+        const agent = readAgentFile(join(dir, entry.name), scope);
+        if (agent) agents.push(agent);
       }
     }
   } catch (e) {

@@ -499,7 +499,7 @@ export type SessionSkill = {
   /** Display id (the slash-command name, e.g. `build-dmg`). */
   name: string
   description: string
-  scope?: 'global' | 'project'
+  scope?: 'global' | 'project' | 'plugin'
   /** Resolved skill definition, when one matches by name; null otherwise. */
   skill: Skill | null
   /** Set for an agentic skill (a `Skill` tool_use): the tool group, so the dock

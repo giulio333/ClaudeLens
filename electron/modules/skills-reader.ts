@@ -1,12 +1,12 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
-import { join } from 'path';
+import { join, basename } from 'path';
 import { CLAUDE_DIR } from '../utils';
 import { parseFrontmatter, getString, getBoolean, getStringArray } from './frontmatter';
 
 export interface Skill {
   name: string;
   path: string;
-  scope: 'global' | 'project';
+  scope: 'global' | 'project' | 'plugin';
   content: string;
   rawContent: string;
   description?: string;
@@ -32,7 +32,10 @@ interface SkillFrontmatter {
   hooks?: Record<string, unknown>;
 }
 
-function parseSkillMarkdown(content: string): { frontmatter: SkillFrontmatter; body: string } {
+export function parseSkillMarkdown(content: string): {
+  frontmatter: SkillFrontmatter;
+  body: string;
+} {
   const { frontmatter: raw, body } = parseFrontmatter(content);
   const fm: SkillFrontmatter = {};
 
@@ -72,7 +75,41 @@ function parseSkillMarkdown(content: string): { frontmatter: SkillFrontmatter; b
   return { frontmatter: fm, body };
 }
 
-function readSkillsFromDir(dir: string, scope: 'global' | 'project'): Skill[] {
+/**
+ * Read a single skill from its directory (`<skillDir>/SKILL.md`). The skill name
+ * is the directory's basename. Returns null if there is no SKILL.md or it fails
+ * to read. Shared by `readSkillsFromDir` and the plugin reader (which resolves
+ * explicit, declared skill paths rather than scanning).
+ */
+export function readSkillDir(skillDir: string, scope: 'global' | 'project' | 'plugin'): Skill | null {
+  const skillMarkdownPath = join(skillDir, 'SKILL.md');
+  if (!existsSync(skillMarkdownPath)) return null;
+  try {
+    const rawContent = readFileSync(skillMarkdownPath, 'utf-8');
+    const { frontmatter, body } = parseSkillMarkdown(rawContent);
+    return {
+      name: basename(skillDir),
+      path: skillMarkdownPath,
+      scope,
+      content: body,
+      rawContent,
+      description: frontmatter.description,
+      argumentHint: frontmatter.argumentHint,
+      disableModelInvocation: frontmatter.disableModelInvocation,
+      userInvocable: frontmatter.userInvocable,
+      allowedTools: frontmatter.allowedTools,
+      model: frontmatter.model,
+      context: frontmatter.context,
+      agent: frontmatter.agent,
+      hooks: frontmatter.hooks,
+    };
+  } catch (error) {
+    console.error(`Errore leggendo skill ${basename(skillDir)}: ${error}`);
+    return null;
+  }
+}
+
+export function readSkillsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Skill[] {
   if (!existsSync(dir)) return [];
 
   const skills: Skill[] = [];
@@ -82,31 +119,8 @@ function readSkillsFromDir(dir: string, scope: 'global' | 'project'): Skill[] {
 
     for (const entry of entries) {
       if (entry.isDirectory()) {
-        const skillMarkdownPath = join(dir, entry.name, 'SKILL.md');
-        if (existsSync(skillMarkdownPath)) {
-          try {
-            const rawContent = readFileSync(skillMarkdownPath, 'utf-8');
-            const { frontmatter, body } = parseSkillMarkdown(rawContent);
-            skills.push({
-              name: entry.name,
-              path: skillMarkdownPath,
-              scope,
-              content: body,
-              rawContent,
-              description: frontmatter.description,
-              argumentHint: frontmatter.argumentHint,
-              disableModelInvocation: frontmatter.disableModelInvocation,
-              userInvocable: frontmatter.userInvocable,
-              allowedTools: frontmatter.allowedTools,
-              model: frontmatter.model,
-              context: frontmatter.context,
-              agent: frontmatter.agent,
-              hooks: frontmatter.hooks,
-            });
-          } catch (error) {
-            console.error(`Errore leggendo skill ${entry.name}: ${error}`);
-          }
-        }
+        const skill = readSkillDir(join(dir, entry.name), scope);
+        if (skill) skills.push(skill);
       }
     }
   } catch (error) {

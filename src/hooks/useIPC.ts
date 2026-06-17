@@ -21,6 +21,8 @@ import type {
   AgentInput,
   Skill,
   SkillInput,
+  InstalledPlugin,
+  PluginCommand,
   McpServer,
   McpData,
   LiveEvent,
@@ -61,6 +63,8 @@ export type {
   AgentInput,
   Skill,
   SkillInput,
+  InstalledPlugin,
+  PluginCommand,
   McpServer,
   McpData,
   LiveEvent,
@@ -245,6 +249,9 @@ declare global {
       }
       mcp: {
         getGlobal: () => Promise<IpcResult<McpData>>
+      }
+      plugins: {
+        getAll: () => Promise<IpcResult<InstalledPlugin[]>>
       }
       ai: {
         run: (instruction: string, inputContent: string, projectPath: string) => Promise<IpcResult<null>>
@@ -603,6 +610,13 @@ export function useGlobalMcp() {
   })
 }
 
+export function usePlugins() {
+  return useQuery({
+    queryKey: ['plugins:all'],
+    queryFn: () => unwrap(window.electronAPI.plugins.getAll()),
+  })
+}
+
 export function useProjectAgents(realPath: string | null) {
   return useQuery({
     queryKey: ['agents:project', realPath],
@@ -714,6 +728,7 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries({ queryKey: ['agents:global'] })
       qc.invalidateQueries({ queryKey: ['agents:project'] })
       qc.invalidateQueries({ queryKey: ['mcp:global'] })
+      qc.invalidateQueries({ queryKey: ['plugins:all'] })
     }
     const unsubscribe = window.electronAPI.onDataChanged(() => {
       if (timer) clearTimeout(timer)

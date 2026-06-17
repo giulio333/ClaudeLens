@@ -3,6 +3,7 @@ import {
   useGlobalSkills,
   useGlobalAgents,
   useGlobalMcp,
+  usePlugins,
   useMemoryProjects,
   useCostSummary,
   useGlobalClaudeMd,
@@ -52,6 +53,7 @@ export function GlobalHomeView({
   const { data: skills = [] } = useGlobalSkills()
   const { data: agents = [] } = useGlobalAgents()
   const { data: mcpData } = useGlobalMcp()
+  const { data: plugins = [] } = usePlugins()
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
   const { data: globalClaudeMd } = useGlobalClaudeMd()
@@ -345,6 +347,14 @@ export function GlobalHomeView({
               <div className="t-desc">Model Context Protocol integrations, shared across projects.</div>
             </div>
             <span className="t-meta"><b>{mcpServers.length}</b> servers</span>
+          </button>
+          <button type="button" className="cl-tile" onClick={() => onNavigate({ type: 'plugins' })}>
+            <span className="glyph">P</span>
+            <div>
+              <div className="t-name">Plugins</div>
+              <div className="t-desc">Skills, agents & commands installed from marketplaces.</div>
+            </div>
+            <span className="t-meta"><b>{plugins.length}</b> plugins</span>
           </button>
         </div>
       </section>

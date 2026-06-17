@@ -116,6 +116,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   mcp: {
     getGlobal: () => ipcRenderer.invoke('mcp:getGlobal'),
   },
+  plugins: {
+    getAll: () => ipcRenderer.invoke('plugins:getAll'),
+  },
   projects: {
     delete: (hash: string) => ipcRenderer.invoke('projects:delete', hash),
     detectDuplicates: () => ipcRenderer.invoke('projects:detectDuplicates'),
