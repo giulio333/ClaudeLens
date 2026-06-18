@@ -42,6 +42,26 @@ function CopyTurnButton({ text }: { text: string }) {
   )
 }
 
+/** Header companion to CopyTurnButton: exports just this turn (seeds the export
+ *  selection with the turn's uuid and raises the export sheet). Hidden until hover. */
+function ExportTurnButton({ onClick }: { onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      className="cl-turn-export"
+      onClick={onClick}
+      aria-label="Export this message"
+      title="Export this message"
+    >
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+        <path d="M7 10l5 5 5-5" />
+        <path d="M12 15V3" />
+      </svg>
+    </button>
+  )
+}
+
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
 function AskQuestionCard({ group }: { group: ToolGroup }) {
   const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>)
@@ -364,6 +384,10 @@ export const MessageBubble = memo(function MessageBubble({
   innerRef,
   hiddenToolCount = 0,
   hiddenFiles = [],
+  selectionMode = false,
+  selected = false,
+  onToggleSelect,
+  onExportTurn,
 }: {
   processed: ProcessedMessage
   detailsFilter: ChatDetailsFilter
@@ -390,6 +414,14 @@ export const MessageBubble = memo(function MessageBubble({
   hiddenToolCount?: number
   /** Files touched by that collapsed run of hidden tools, shown at the turn foot. */
   hiddenFiles?: TouchedFile[]
+  /** Selective export: show a per-turn checkbox so the turn can be picked. */
+  selectionMode?: boolean
+  /** Whether this turn is currently picked for selective export. */
+  selected?: boolean
+  /** Toggle this turn's selection (by message uuid). */
+  onToggleSelect?: (uuid: string) => void
+  /** Export just this turn — seeds the selection and raises the export sheet. */
+  onExportTurn?: (uuid: string) => void
 }) {
   const { msg, toolGroups, command } = processed
   const isUser = msg.role === 'user'
@@ -513,6 +545,23 @@ export const MessageBubble = memo(function MessageBubble({
 
       <section className="cl-turn-body">
         <header className="cl-turn-head">
+          {selectionMode && (
+            <button
+              type="button"
+              className="cl-turn-select"
+              role="checkbox"
+              aria-checked={selected}
+              data-on={selected || undefined}
+              aria-label={selected ? 'Deselect message' : 'Select message'}
+              onClick={() => onToggleSelect?.(msg.uuid)}
+            >
+              {selected && (
+                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                  <path d="M20 6 9 17l-5-5" />
+                </svg>
+              )}
+            </button>
+          )}
           <span className="cl-turn-who">{roleLabel}</span>
           {timestamp &&
            !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
@@ -554,7 +603,12 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null
           })()}
           {textBlocks.length > 0 && (
-            <CopyTurnButton text={textBlocks.map(b => b.text).join('\n\n')} />
+            <>
+              <CopyTurnButton text={textBlocks.map(b => b.text).join('\n\n')} />
+              {onExportTurn && (
+                <ExportTurnButton onClick={() => onExportTurn(msg.uuid)} />
+              )}
+            </>
           )}
         </header>
 

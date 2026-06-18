@@ -3,13 +3,18 @@ import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
 import { ProcessedMessage, ToolGroup } from './utils'
 
 export type ChatExportFormat = 'markdown' | 'pdf'
-export type ChatExportPreset = 'team' | 'docs' | 'audit'
+export type ChatExportPreset = 'message' | 'team' | 'docs' | 'audit'
 
 export const CHAT_EXPORT_PRESETS: Array<{
   value: ChatExportPreset
   label: string
   description: string
 }> = [
+  {
+    value: 'message',
+    label: 'Message',
+    description: 'Message text only — no tools, thinking, or agents.',
+  },
   {
     value: 'team',
     label: 'Team',
@@ -50,12 +55,24 @@ export type ChatExportDocument = {
 }
 
 const PRESET_LABEL: Record<ChatExportPreset, string> = {
+  message: 'Message only',
   team: 'Team summary',
   docs: 'Documentation',
   audit: 'Full audit',
 }
 
 function optionsForPreset(preset: ChatExportPreset): ExportOptions {
+  // "Message only" strips everything but the visible message text — the export
+  // equivalent of the per-turn copy button.
+  if (preset === 'message') {
+    return {
+      includeThinking: false,
+      includeToolInputs: false,
+      includeToolResults: false,
+      includeToolErrors: false,
+      includeCompactToolNotes: false,
+    }
+  }
   return {
     includeThinking: preset === 'audit',
     includeToolInputs: preset === 'audit',
@@ -127,16 +144,19 @@ function toolLine(group: ToolGroup): string {
   return `- \`${group.use.name}\`${suffix} (${toolStatus(group)})`
 }
 
-function summarizeTools(groups: ToolGroup[]): string {
-  const counts = new Map<string, number>()
-  groups.forEach(g => counts.set(g.use.name, (counts.get(g.use.name) ?? 0) + 1))
-  return [...counts.entries()]
-    .map(([name, count]) => `${name} x${count}`)
-    .join(', ')
-}
-
 function allToolGroups(processed: ProcessedMessage[]): ToolGroup[] {
   return processed.flatMap(p => p.toolGroups)
+}
+
+/** Whether the chosen options surface any tool content at all (false for the
+ *  "Message only" preset) — used to drop the tool summary / strip from headers. */
+function showsTools(options: ExportOptions): boolean {
+  return (
+    options.includeCompactToolNotes ||
+    options.includeToolInputs ||
+    options.includeToolResults ||
+    options.includeToolErrors
+  )
 }
 
 function buildToolSummaryMarkdown(processed: ProcessedMessage[]): string[] {
@@ -231,7 +251,7 @@ function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): str
     '',
   ].filter((line): line is string => line !== null)
 
-  lines.push(...buildToolSummaryMarkdown(processed))
+  if (showsTools(options)) lines.push(...buildToolSummaryMarkdown(processed))
   lines.push('## Conversation', '')
 
   processed.forEach((p, i) => {
@@ -326,7 +346,7 @@ function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
   `
 }
 
-function renderTurnHtml(processed: ProcessedMessage, index: number, options: ExportOptions): string {
+function renderTurnHtml(processed: ProcessedMessage, _index: number, options: ExportOptions): string {
   const { msg, toolGroups } = processed
   const time = turnTime(msg.timestamp)
   const role = roleLabel(msg.role)
@@ -339,31 +359,32 @@ function renderTurnHtml(processed: ProcessedMessage, index: number, options: Exp
       .map(block => `<div class="thinking"><strong>Thinking</strong>${markdownToHtml(block.thinking)}</div>`)
       .join('')
     : ''
-  const toolsHtml = toolGroups.length > 0
+  const toolsHtml = toolGroups.length > 0 && showsTools(options)
     ? `<div class="turn-tools">${toolGroups.map(group => renderToolHtml(group, options)).join('')}</div>`
     : ''
+  const model = msg.role === 'assistant' && msg.model && msg.model !== '<synthetic>'
+    ? `<span class="turn-model">${escapeHtml(fmtModel(msg.model))}</span>`
+    : ''
 
+  // Clean reading column matching the ClaudeLens chat view: a small textual
+  // header (role · time · model) over the message body — no colored rail.
   return `
     <article class="turn ${msg.role === 'user' ? 'is-user' : 'is-assistant'}">
-      <aside>
-        <strong>${String(index + 1).padStart(2, '0')}</strong>
-        <span>${escapeHtml(role)}</span>
-        ${time ? `<small>${escapeHtml(time)}</small>` : ''}
-      </aside>
-      <main>
-        ${thinkingHtml}
-        ${textHtml || '<p class="muted">No visible message text.</p>'}
-        ${toolsHtml}
-      </main>
+      <header class="turn-head">
+        <span class="turn-who">${escapeHtml(role)}</span>
+        ${time ? `<span class="turn-sep">·</span><time>${escapeHtml(time)}</time>` : ''}
+        ${model ? `<span class="turn-sep">·</span>${model}` : ''}
+      </header>
+      ${thinkingHtml}
+      ${textHtml || '<p class="muted">No visible message text.</p>'}
+      ${toolsHtml}
     </article>
   `
 }
 
 function buildHtml(input: BuildChatExportInput, options: ExportOptions): string {
-  const { projectPath, session, processed, preset } = input
+  const { projectPath, session, processed } = input
   const title = sessionTitle(session, 120)
-  const toolGroups = allToolGroups(processed)
-  const toolSummary = summarizeTools(toolGroups)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] : session.model
 
   return `<!doctype html>
@@ -372,154 +393,124 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
   <style>
-    @page { size: A4; margin: 18mm 16mm; }
+    @page { size: A4; margin: 20mm 18mm; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: #2f2b27;
       background: #ffffff;
-      font: 13px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 13.5px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
+    .sheet { max-width: 660px; margin: 0 auto; }
     h1, h2, h3, h4, h5, p { margin: 0; }
-    h1 { font-size: 28px; line-height: 1.08; letter-spacing: -0.02em; margin-bottom: 14px; }
-    h2 { font-size: 18px; margin: 28px 0 12px; border-bottom: 1px solid #d9d5cb; padding-bottom: 8px; }
-    h3 { font-size: 15px; margin: 18px 0 8px; }
-    h4, h5 { font-size: 12px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; color: #756f65; }
-    p { margin: 0 0 9px; }
+    h1 { font-size: 24px; line-height: 1.12; letter-spacing: -0.02em; }
+    h2 { font-size: 17px; margin: 20px 0 9px; }
+    h3 { font-size: 15px; margin: 16px 0 7px; }
+    h4, h5 { font-size: 11px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c7669; }
+    p { margin: 0 0 10px; }
+    a { color: #a9462a; }
     code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
-    code { background: #f4f3ee; padding: 1px 4px; border-radius: 3px; }
+    code { background: #f4f3ee; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
     pre {
       position: relative;
-      margin: 8px 0 12px;
+      margin: 10px 0 14px;
       padding: 13px 14px;
-      border: 1px solid #d9d5cb;
-      background: #f4f3ee;
+      border: 1px solid #e2ded4;
+      border-radius: 8px;
+      background: #f7f6f1;
       white-space: pre-wrap;
       overflow-wrap: anywhere;
       break-inside: auto;
     }
     pre span {
       position: absolute;
-      top: 5px;
-      right: 8px;
-      color: #8e887f;
+      top: 6px;
+      right: 9px;
+      color: #a39d92;
       font-size: 9px;
       text-transform: uppercase;
       letter-spacing: 0.1em;
     }
     pre code { display: block; background: transparent; padding: 0; border-radius: 0; }
-    .cover {
-      border-bottom: 3px solid #2f2b27;
-      padding-bottom: 18px;
-      margin-bottom: 22px;
-    }
+    /* Slim masthead — title + one hairline meta line, no report cover. */
+    .masthead { border-bottom: 1px solid #e2ded4; padding-bottom: 16px; margin-bottom: 8px; }
     .eyebrow {
       color: #c15f3c;
       font: 700 10px/1 "SFMono-Regular", Consolas, monospace;
       letter-spacing: 0.18em;
       text-transform: uppercase;
-      margin-bottom: 11px;
+      margin-bottom: 10px;
     }
-    .meta {
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 6px 22px;
-      color: #5f5a52;
-      font-size: 11px;
-    }
-    .meta b { color: #2f2b27; }
-    .stats {
-      display: grid;
-      grid-template-columns: repeat(3, 1fr);
-      border-top: 1px solid #2f2b27;
-      border-bottom: 1px solid #d9d5cb;
-      margin: 18px 0 16px;
-    }
-    .stat { padding: 10px 12px; border-left: 1px solid #d9d5cb; }
-    .stat:first-child { border-left: 0; }
-    .stat span { display: block; color: #756f65; font: 700 9px/1 "SFMono-Regular", Consolas, monospace; letter-spacing: 0.16em; text-transform: uppercase; }
-    .stat strong { display: block; margin-top: 6px; font-size: 18px; line-height: 1; }
-    .tool-strip {
-      background: #f4f3ee;
-      border: 1px solid #d9d5cb;
-      padding: 9px 11px;
-      color: #5f5a52;
+    .submeta { margin-top: 10px; color: #7c7669; font-size: 10.5px; font-family: "SFMono-Regular", Consolas, monospace; }
+    .submeta span { white-space: nowrap; }
+    .submeta i { color: #c9c3b6; font-style: normal; margin: 0 7px; }
+    /* Reading column: one turn after another, hairline separated, no rail. */
+    .turn { padding: 18px 0; border-top: 1px solid #efece4; }
+    .turn:first-of-type { border-top: 0; }
+    .turn-head {
+      display: flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 9px;
       font-family: "SFMono-Regular", Consolas, monospace;
-      font-size: 10px;
+      font-size: 10.5px;
     }
-    .turn {
-      display: grid;
-      grid-template-columns: 68px minmax(0, 1fr);
-      border-top: 1px solid #d9d5cb;
-    }
-    .turn aside {
-      padding: 14px 8px;
-      border-right: 1px solid #d9d5cb;
-      background: #2f2b27;
-      color: #ffffff;
-      text-align: center;
-    }
-    .turn.is-user aside { background: #c15f3c; }
-    .turn aside strong { display: block; font-size: 20px; line-height: 1; }
-    .turn aside span { display: block; margin-top: 8px; font: 700 9px/1 "SFMono-Regular", Consolas, monospace; letter-spacing: 0.12em; text-transform: uppercase; }
-    .turn aside small { display: block; margin-top: 8px; opacity: 0.72; font-size: 9px; }
-    .turn main { padding: 15px 18px 18px; }
-    .message-text { margin-bottom: 10px; }
-    .md-list { margin: 0 0 4px 12px; }
-    .spacer { height: 7px; }
-    .muted { color: #8e887f; font-style: italic; }
+    .turn-who { font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
+    .turn.is-assistant .turn-who { color: #a9462a; }
+    .turn.is-user .turn-who { color: #2f2b27; }
+    .turn-sep { color: #c9c3b6; }
+    .turn-head time { color: #9a948a; }
+    .turn-model { color: #7c7669; }
+    .message-text { margin-bottom: 8px; }
+    .md-list { margin: 0 0 4px 14px; }
+    .spacer { height: 8px; }
+    .muted { color: #a39d92; font-style: italic; }
     .thinking {
-      border-left: 3px solid #b1ada1;
-      background: #f4f3ee;
+      border-left: 3px solid #d6d1c5;
+      background: #f7f6f1;
       color: #5f5a52;
-      padding: 10px 12px;
+      padding: 10px 13px;
+      border-radius: 0 8px 8px 0;
       margin-bottom: 12px;
     }
-    .thinking strong { display: block; margin-bottom: 6px; color: #756f65; font-size: 11px; text-transform: uppercase; letter-spacing: 0.08em; }
+    .thinking strong { display: block; margin-bottom: 6px; color: #7c7669; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.08em; }
     .turn-tools { margin-top: 12px; display: grid; gap: 7px; }
     .tool-note, .tool-audit {
-      border: 1px solid #d9d5cb;
+      border: 1px solid #e2ded4;
+      border-radius: 8px;
       background: #faf9f6;
-      padding: 9px 10px;
+      padding: 9px 11px;
     }
     .tool-note span, .tool-head strong { font-family: "SFMono-Regular", Consolas, monospace; font-weight: 700; }
-    .tool-note em { color: #756f65; font-style: normal; margin-left: 8px; }
-    .tool-note b, .tool-head span { float: right; color: #756f65; font-size: 10px; text-transform: uppercase; }
+    .tool-note em { color: #7c7669; font-style: normal; margin-left: 8px; }
+    .tool-note b, .tool-head span { float: right; color: #7c7669; font-size: 10px; text-transform: uppercase; }
     .tool-note .is-ok, .tool-head .is-ok { color: #3f7c55; }
     .tool-note .is-error, .tool-head .is-error, .tool-error { color: #a9432a; }
     .tool-error { clear: both; margin-top: 6px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
     .tool-head { overflow: hidden; margin-bottom: 8px; }
     .footer {
-      margin-top: 24px;
-      padding-top: 10px;
-      border-top: 1px solid #d9d5cb;
-      color: #8e887f;
+      margin-top: 26px;
+      padding-top: 11px;
+      border-top: 1px solid #e2ded4;
+      color: #a39d92;
       font-size: 10px;
     }
   </style>
 </head>
 <body>
-  <section class="cover">
-    <div class="eyebrow">ClaudeLens Export</div>
-    <h1>${escapeHtml(title)}</h1>
-    <div class="meta">
-      <div><b>Project</b> ${escapeHtml(projectPath)}</div>
-      <div><b>Session</b> ${escapeHtml(session.filename)}</div>
-      <div><b>Date</b> ${escapeHtml(fmtDate(session.date))}</div>
-      <div><b>Preset</b> ${escapeHtml(PRESET_LABEL[preset])}</div>
-      ${primaryModel ? `<div><b>Model</b> ${escapeHtml(fmtModel(primaryModel))}</div>` : ''}
-      <div><b>Exported</b> ${escapeHtml(fmtDate(new Date().toISOString()))}</div>
-    </div>
-    <div class="stats">
-      <div class="stat"><span>Messages</span><strong>${fmt(processed.length)}</strong></div>
-      <div class="stat"><span>Tokens</span><strong>${fmt(session.totalTokens)}</strong></div>
-      <div class="stat"><span>Cost</span><strong>${fmtCost(session.estimatedCost)}</strong></div>
-    </div>
-    ${toolSummary ? `<div class="tool-strip">Tools: ${escapeHtml(toolSummary)}</div>` : ''}
-  </section>
-  <h2>Conversation</h2>
-  ${processed.map((p, i) => renderTurnHtml(p, i, options)).join('')}
-  <div class="footer">Generated by ClaudeLens. Review exports before sharing outside your organization.</div>
+  <div class="sheet">
+    <section class="masthead">
+      <div class="eyebrow">ClaudeLens</div>
+      <h1>${escapeHtml(title)}</h1>
+      <div class="submeta">
+        <span>${escapeHtml(fmtDate(session.date))}</span>
+        ${primaryModel ? `<i>·</i><span>${escapeHtml(fmtModel(primaryModel))}</span>` : ''}
+        <i>·</i><span>${escapeHtml(projectPath)}</span>
+      </div>
+    </section>
+    ${processed.map((p, i) => renderTurnHtml(p, i, options)).join('')}
+    <div class="footer">Exported from ClaudeLens on ${escapeHtml(fmtDate(new Date().toISOString()))}. Review before sharing outside your organization.</div>
+  </div>
 </body>
 </html>`
 }
