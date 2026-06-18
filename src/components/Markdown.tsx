@@ -1,3 +1,4 @@
+import { isValidElement, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -6,6 +7,49 @@ import rehypeHighlight from 'rehype-highlight'
 import rehypeKatex from 'rehype-katex'
 import type { Components } from 'react-markdown'
 import 'katex/dist/katex.min.css'
+
+// Reads the `language-xxx` class off the <code> child of a fenced block.
+// Fences without a language (plain ```) have no such class — fall back to 'text'.
+function langFromChild(children: React.ReactNode): string {
+  if (isValidElement(children)) {
+    const cn = (children.props as { className?: string }).className ?? ''
+    const lang = cn.replace('language-', '').trim()
+    if (lang && cn.includes('language-')) return lang
+  }
+  return 'text'
+}
+
+// Fenced code block: rendered at the <pre> level so it catches every fence —
+// including plain ``` with no language (which never gets a `language-` class).
+// Dark surface + header bar (language label + copy button).
+function CodeBlock({ children }: { children?: React.ReactNode }) {
+  const lang = langFromChild(children)
+  const preRef = useRef<HTMLPreElement>(null)
+  const [copied, setCopied] = useState(false)
+
+  const handleCopy = () => {
+    const text = preRef.current?.textContent ?? ''
+    if (!text) return
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+
+  return (
+    <div className="cl-md-code">
+      <div className="cl-md-code-head">
+        <span className="cl-md-code-lang">{lang}</span>
+        <button type="button" className="cl-md-code-copy" onClick={handleCopy}>
+          {copied ? 'Copied' : 'Copy'}
+        </button>
+      </div>
+      <pre ref={preRef} className="cl-md-code-body">
+        {children}
+      </pre>
+    </div>
+  )
+}
 
 const components: Components = {
   // Link: apre nel browser di sistema tramite shell, non nel renderer Electron
@@ -38,30 +82,13 @@ const components: Components = {
     return <h3 className="text-base font-semibold text-[var(--cl-ink-2)] mt-3 mb-2">{children}</h3>
   },
 
-  // Blocco codice con label linguaggio
+  // Blocco codice fenced: il <pre> avvolge sempre il blocco (con o senza
+  // linguaggio), quindi gestiamo qui header + copia. Il <code> resta neutro.
   pre({ children }) {
-    return <pre className="relative">{children}</pre>
+    return <CodeBlock>{children}</CodeBlock>
   },
 
   code({ className, children, ...props }) {
-    const isBlock = className?.startsWith('language-')
-    const lang = className?.replace('language-', '') ?? ''
-
-    if (isBlock) {
-      return (
-        <div className="relative group">
-          {lang && (
-            <span className="absolute top-2 right-3 text-xs text-[var(--cl-ink-3)] font-mono select-none z-10">
-              {lang}
-            </span>
-          )}
-          <code className={className} {...props}>
-            {children}
-          </code>
-        </div>
-      )
-    }
-
     return (
       <code className={className} {...props}>
         {children}

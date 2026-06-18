@@ -8,6 +8,40 @@ import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
 import { FileIcon } from './fileIcons'
 
+/** Unobtrusive header button that copies a turn's plain markdown text (text
+ *  blocks only — no tools, thinking, or indicators), so pasting into a .md file
+ *  reproduces exactly what ClaudeLens renders. Hidden until the turn is hovered. */
+function CopyTurnButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  const handleCopy = () => {
+    if (!text) return
+    void navigator.clipboard.writeText(text).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1500)
+    })
+  }
+  return (
+    <button
+      type="button"
+      className="cl-turn-copy"
+      onClick={handleCopy}
+      aria-label={copied ? 'Copied' : 'Copy message as markdown'}
+      title={copied ? 'Copied' : 'Copy message as markdown'}
+    >
+      {copied ? (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      ) : (
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+          <rect x="9" y="9" width="11" height="11" rx="2" />
+          <path d="M5 15V5a2 2 0 0 1 2-2h10" />
+        </svg>
+      )}
+    </button>
+  )
+}
+
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
 function AskQuestionCard({ group }: { group: ToolGroup }) {
   const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>)
@@ -519,6 +553,9 @@ export const MessageBubble = memo(function MessageBubble({
               <span className="cl-turn-tool-count">{stripHidden} tool{stripHidden === 1 ? '' : 's'}</span>
             ) : null
           })()}
+          {textBlocks.length > 0 && (
+            <CopyTurnButton text={textBlocks.map(b => b.text).join('\n\n')} />
+          )}
         </header>
 
         {showThinking && thinkingBlocks.map((b, i) => (

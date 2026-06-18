@@ -3737,6 +3737,29 @@ body {
 .cl-turn-sep {
   color: var(--cl-line);
 }
+/* Copy-turn button: pushed to the far right of the header, invisible until the
+   turn is hovered/focused so it stays out of the way. */
+.cl-turn-copy {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 6px;
+  color: var(--cl-ink-4);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.cl-turn:hover .cl-turn-copy,
+.cl-turn-copy:focus-visible {
+  opacity: 1;
+}
+.cl-turn-copy:hover {
+  color: var(--cl-accent-ink);
+  background: var(--cl-paper-2);
+}
 .cl-turn-head time {
   color: var(--cl-ink-4);
   letter-spacing: 0.02em;
@@ -7501,7 +7524,7 @@ button.cl-task-group-head:disabled {
   --tw-prose-captions: var(--cl-ink-4);
   --tw-prose-code: var(--cl-accent-ink);
   --tw-prose-pre-code: oklch(0.88 0.01 80);
-  --tw-prose-pre-bg: oklch(0.18 0.015 60);
+  --tw-prose-pre-bg: oklch(0.205 0.022 45);
   --tw-prose-th-borders: var(--cl-line);
   --tw-prose-td-borders: var(--cl-line-soft);
 }
@@ -7521,19 +7544,80 @@ button.cl-task-group-head:disabled {
   font-weight: 500;
 }
 
-.prose-lens pre {
-  background: oklch(0.18 0.015 60) !important;
-  border: 1px solid var(--cl-line);
-  border-radius: 8px;
-  padding: 0 !important;
+/* Code block surface lives on the .cl-md-code wrapper (header + body):
+   warm terracotta-tinted dark, fixed in both themes (highlight.js theme is
+   github-dark-dimmed). Rendered at the <pre> level so plain ``` fences with
+   no language are styled too. */
+.prose-lens .cl-md-code {
+  background: oklch(0.205 0.022 45);
+  border: 1px solid oklch(0.4 0.06 45);
+  border-radius: 10px;
   overflow: hidden;
-  box-shadow: 0 2px 8px oklch(0.2 0.02 60 / 0.18);
+  box-shadow: 0 2px 10px oklch(0.2 0.03 45 / 0.22);
+  margin: 1rem 0;
 }
 
+/* Body holds the scrolling code; text stays light even with no highlighting
+   (a no-language fence gets no .hljs class → would otherwise inherit dark ink). */
+.prose-lens pre,
+.prose-lens .cl-md-code-body {
+  background: transparent !important;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
+  margin: 0;
+  padding: 0.9rem 1rem !important;
+  overflow-x: auto;
+  color: oklch(0.88 0.01 80);
+}
+
+/* Header bar: language label (left) + copy button (right) */
+.prose-lens .cl-md-code-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.35rem 0.4rem 0.35rem 0.85rem;
+  background: oklch(0.245 0.025 45);
+  border-bottom: 1px solid oklch(0.32 0.035 45);
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.prose-lens .cl-md-code-lang {
+  color: oklch(0.72 0.045 50);
+  letter-spacing: 0.03em;
+  text-transform: lowercase;
+  user-select: none;
+}
+
+.prose-lens .cl-md-code-copy {
+  color: oklch(0.7 0.045 50);
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  padding: 0.18rem 0.55rem;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color 0.15s ease,
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.prose-lens .cl-md-code-copy:hover {
+  color: oklch(0.85 0.08 50);
+  background: oklch(0.3 0.04 45);
+  border-color: oklch(0.45 0.07 45);
+}
+
+.prose-lens pre code,
 .prose-lens pre code.hljs {
   font-family: var(--font-mono);
   background: transparent !important;
-  padding: 1rem;
+  color: inherit;
+  padding: 0;
   font-size: 0.8rem;
   line-height: 1.6;
 }
@@ -7611,11 +7695,14 @@ button.cl-task-group-head:disabled {
 .cl-code-pre .hljs-deletion {
   color: var(--cl-danger);
 }
-.cl-code-pre .hljs-emphasis {
-  font-style: italic;
-}
+/* Inside a code/diff block the content is source, not rendered markdown:
+   don't apply real bold/italic to markdown's `**`/`*` tokens — keep the
+   literal syntax as flat monospace (tint only, to mark it as syntax). */
+.cl-code-pre .hljs-emphasis,
 .cl-code-pre .hljs-strong {
-  font-weight: 600;
+  font-style: normal;
+  font-weight: inherit;
+  color: var(--cl-ink-3);
 }
 
 .prose-lens table {
