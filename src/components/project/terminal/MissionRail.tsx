@@ -457,19 +457,9 @@ export function MissionRail({
   const [compact, setCompact] = useState<boolean>(
     () => localStorage.getItem('tmc-density') !== 'comfortable'
   );
-  const [diffBars, setDiffBars] = useState<boolean>(
-    () => localStorage.getItem('tmc-diffbars') !== 'off'
-  );
-
   const toggleCompact = useCallback(() => {
     setCompact(v => {
       localStorage.setItem('tmc-density', v ? 'comfortable' : 'compact');
-      return !v;
-    });
-  }, []);
-  const toggleDiffBars = useCallback(() => {
-    setDiffBars(v => {
-      localStorage.setItem('tmc-diffbars', v ? 'off' : 'on');
       return !v;
     });
   }, []);
@@ -604,9 +594,7 @@ export function MissionRail({
                 })
           }
           style={{
-            gridTemplateColumns: diffBars
-              ? 'auto minmax(0,1fr) auto 56px'
-              : 'auto minmax(0,1fr) auto',
+            gridTemplateColumns: 'auto minmax(0,1fr) auto 56px',
             gap: 9,
             padding: `${rowPad}px 4px`,
             margin: '0 -4px',
@@ -649,7 +637,7 @@ export function MissionRail({
             )}
           </span>
           <DiffNum added={fc.added} removed={fc.removed} size={9.5} />
-          {diffBars && <RailBar added={fc.added} removed={fc.removed} />}
+          <RailBar added={fc.added} removed={fc.removed} />
         </button>
         {isOpen &&
           [...fc.items].reverse().map((g2, i) => {
@@ -718,20 +706,6 @@ export function MissionRail({
           </span>
         )}
         <span style={{ flex: 1 }} />
-        <button
-          type="button"
-          className="font-mono transition-colors"
-          onClick={toggleDiffBars}
-          aria-pressed={diffBars}
-          title="Toggle diff bars"
-          style={{
-            fontSize: 9,
-            letterSpacing: '0.12em',
-            color: diffBars ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
-          }}
-        >
-          BARS
-        </button>
         <button
           type="button"
           className="font-mono transition-colors"

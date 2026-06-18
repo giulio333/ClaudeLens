@@ -7,7 +7,7 @@ import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
 import { ChatView } from '../chat/ChatView';
 import type { SessionAgent, ToolGroup } from '../chat/utils';
-import { fmtCost } from '../utils';
+import { fmtCost, sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
 
@@ -264,6 +264,9 @@ export function TerminalMissionControl({
   }, [summary, filename]);
 
   const projectName = project.realPath.split(/[\\/]/).filter(Boolean).pop() || project.realPath;
+  // Session title (custom > AI > first user message) — restored as the accent
+  // crumb so the bar reads project / title / mode instead of a bare "TERMINAL".
+  const title = summary ? sessionTitle(summary) : null;
 
   return (
     // When TERMINAL is active the view paints the terminal's own surface color so
@@ -276,7 +279,10 @@ export function TerminalMissionControl({
     >
       <TopBar
         onBack={onBack}
-        crumbs={[{ label: projectName.toUpperCase() }, { label: 'TERMINAL', accent: true }]}
+        crumbs={[
+          { label: projectName.toUpperCase() },
+          ...(title ? [{ label: title, accent: true }] : []),
+        ]}
         right={
           <div className="flex items-center" style={{ gap: 14 }}>
             {terminalMounted && (
