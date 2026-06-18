@@ -2291,9 +2291,42 @@ body {
   color: var(--cl-ink-3);
   margin-bottom: 8px;
 }
+.cl-export-scope {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  margin-bottom: 9px;
+}
+.cl-export-scope-text {
+  font-size: 11px;
+  color: var(--cl-ink-2);
+}
+.cl-export-scope-action {
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  padding: 3px 9px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.cl-export-scope-action:hover {
+  color: var(--cl-ink);
+  border-color: var(--cl-ink-4);
+}
+.cl-export-scope-action[data-on] {
+  background: var(--cl-accent-soft);
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+}
 .cl-export-presets {
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
+  grid-template-columns: repeat(4, 1fr);
   border: 1px solid var(--cl-line);
   border-radius: 6px;
   overflow: hidden;
@@ -3759,6 +3792,50 @@ body {
 .cl-turn-copy:hover {
   color: var(--cl-accent-ink);
   background: var(--cl-paper-2);
+}
+/* Export-turn button: sits right after the copy button (which carries the
+   margin-left:auto), same hover-reveal treatment. */
+.cl-turn-export {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 3px;
+  border-radius: 6px;
+  color: var(--cl-ink-4);
+  background: transparent;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, color 0.12s ease, background 0.12s ease;
+}
+.cl-turn:hover .cl-turn-export,
+.cl-turn-export:focus-visible {
+  opacity: 1;
+}
+.cl-turn-export:hover {
+  color: var(--cl-accent-ink);
+  background: var(--cl-paper-2);
+}
+/* Per-turn selection checkbox (selective export). Always visible while in
+   selection mode, leads the turn header. */
+.cl-turn-select {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border: 1.5px solid var(--cl-line);
+  border-radius: 5px;
+  color: var(--cl-paper);
+  background: transparent;
+  cursor: pointer;
+  transition: border-color 0.12s ease, background 0.12s ease;
+}
+.cl-turn-select:hover {
+  border-color: var(--cl-accent);
+}
+.cl-turn-select[data-on] {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent);
 }
 .cl-turn-head time {
   color: var(--cl-ink-4);

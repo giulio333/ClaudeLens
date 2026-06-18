@@ -486,6 +486,11 @@ function ChatControlPill({
   exportError,
   selectedExportPreset,
   onOpenSheet,
+  openExportRef,
+  selectionMode,
+  selectedCount,
+  onToggleSelectionMode,
+  onClearSelection,
   onExportPreset,
   onExport,
   onDelete,
@@ -514,6 +519,13 @@ function ChatControlPill({
   exportError: string | null;
   selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number];
   onOpenSheet: () => void;
+  /** ChatControlPill registers an imperative "open export sheet" fn here, so the
+   *  per-turn export button can raise the sheet from the transcript. */
+  openExportRef: { current: (() => void) | null };
+  selectionMode: boolean;
+  selectedCount: number;
+  onToggleSelectionMode: () => void;
+  onClearSelection: () => void;
   onExportPreset: (preset: ChatExportPreset) => void;
   onExport: (format: ChatExportFormat) => void;
   onDelete: () => void;
@@ -542,6 +554,19 @@ function ChatControlPill({
     document.addEventListener('mousedown', onPointerDown);
     return () => document.removeEventListener('mousedown', onPointerDown);
   }, [sheet]);
+
+  // Register the imperative opener so the per-turn export button can raise this
+  // sheet. The setSheet call lives in a deferred closure (an event handler), not
+  // the effect body, so it doesn't violate set-state-in-effect.
+  useEffect(() => {
+    openExportRef.current = () => {
+      onOpenSheet();
+      setSheet('export');
+    };
+    return () => {
+      openExportRef.current = null;
+    };
+  }, [openExportRef, onOpenSheet]);
 
   const toggleExport = () => {
     setSheet(s => {
@@ -614,6 +639,30 @@ function ChatControlPill({
               ✕
             </button>
           </div>
+          <div className="cl-export-scope">
+            <span className="cl-export-scope-text">
+              {selectedCount > 0
+                ? `Exporting ${selectedCount} selected turn${selectedCount === 1 ? '' : 's'}`
+                : 'Exporting full chat'}
+            </span>
+            {selectedCount > 0 ? (
+              <button type="button" className="cl-export-scope-action" onClick={onClearSelection}>
+                Full chat
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="cl-export-scope-action"
+                data-on={selectionMode || undefined}
+                onClick={onToggleSelectionMode}
+              >
+                {selectionMode ? 'Done selecting' : 'Select turns'}
+              </button>
+            )}
+          </div>
+          {selectionMode && selectedCount === 0 && (
+            <p className="cl-export-desc">Pick turns in the transcript, then export.</p>
+          )}
           <div className="cl-export-presets">
             {CHAT_EXPORT_PRESETS.map(preset => (
               <button
@@ -630,14 +679,14 @@ function ChatControlPill({
           <div className="cl-export-actions">
             <button
               type="button"
-              disabled={!canExport || exporting !== null}
+              disabled={!canExport || exporting !== null || (selectionMode && selectedCount === 0)}
               onClick={() => onExport('markdown')}
             >
               {exporting === 'markdown' ? 'Saving...' : 'Markdown'}
             </button>
             <button
               type="button"
-              disabled={!canExport || exporting !== null}
+              disabled={!canExport || exporting !== null || (selectionMode && selectedCount === 0)}
               onClick={() => onExport('pdf')}
             >
               {exporting === 'pdf' ? 'Saving...' : 'PDF'}
@@ -882,6 +931,15 @@ export function ChatView({
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
+  // Selective export: when `selected` is non-empty the export covers only those
+  // turns (by message uuid), else the full chat. `selectionMode` shows per-turn
+  // checkboxes; the per-turn export button seeds `selected` with a single uuid
+  // (without entering selection mode) and calls openExportSheetRef to raise it.
+  const [selectionMode, setSelectionMode] = useState(false);
+  const [selectedTurns, setSelectedTurns] = useState<Set<string>>(() => new Set());
+  // Imperative open of the export sheet, registered by ChatControlPill so the
+  // per-turn export button (in the transcript) can raise it from afar.
+  const openExportSheetRef = useRef<(() => void) | null>(null);
   const [showDelete, setShowDelete] = useState(false);
   // Live streaming, lifted from the composer: the assistant's partial reply is
   // rendered inline as a provisional turn at the foot of the transcript (where the
@@ -1258,8 +1316,34 @@ export function ChatView({
     isError ||
     viewMode !== 'chat';
 
+  // Stable callbacks so MessageBubble's memo holds (only selected/mode change).
+  const handleToggleSelect = useCallback((uuid: string) => {
+    setSelectedTurns(prev => {
+      const next = new Set(prev);
+      if (next.has(uuid)) next.delete(uuid);
+      else next.add(uuid);
+      return next;
+    });
+  }, []);
+
+  const handleExportTurn = useCallback((uuid: string) => {
+    setSelectedTurns(new Set([uuid]));
+    setExportError(null);
+    setExportMessage(null);
+    openExportSheetRef.current?.();
+  }, []);
+
+  const clearSelection = useCallback(() => {
+    setSelectedTurns(new Set());
+    setSelectionMode(false);
+  }, []);
+
+  // The turns actually exported: the selected subset, or the whole chat.
+  const exportProcessed =
+    selectedTurns.size > 0 ? processed.filter(p => selectedTurns.has(p.msg.uuid)) : processed;
+
   async function handleExport(format: ChatExportFormat) {
-    if (!canExport) return;
+    if (!canExport || exportProcessed.length === 0) return;
     setExporting(format);
     setExportError(null);
     setExportMessage(null);
@@ -1268,7 +1352,7 @@ export function ChatView({
       const doc = buildChatExportDocument({
         projectPath: project.realPath,
         session,
-        processed,
+        processed: exportProcessed,
         preset: exportPreset,
       });
       const result =
@@ -1307,6 +1391,16 @@ export function ChatView({
         setExportError(null);
         setExportMessage(null);
       }}
+      openExportRef={openExportSheetRef}
+      selectionMode={selectionMode}
+      selectedCount={selectedTurns.size}
+      onToggleSelectionMode={() => {
+        setSelectionMode(on => {
+          if (on) setSelectedTurns(new Set());
+          return !on;
+        });
+      }}
+      onClearSelection={clearSelection}
       onExportPreset={setExportPreset}
       onExport={handleExport}
       onDelete={() => setShowDelete(true)}
@@ -1489,6 +1583,10 @@ export function ChatView({
                         innerRef={setTurnRef}
                         hiddenToolCount={item.hiddenCount}
                         hiddenFiles={item.hiddenFiles}
+                        selectionMode={selectionMode}
+                        selected={selectedTurns.has(processed[item.idx].msg.uuid)}
+                        onToggleSelect={handleToggleSelect}
+                        onExportTurn={handleExportTurn}
                       />
                     );
                   });
