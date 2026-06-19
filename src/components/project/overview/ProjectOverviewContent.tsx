@@ -251,10 +251,15 @@ export function ProjectView({
     tags: memTags,
     tagCounts: memTagCounts,
     tagsForMemory,
+    toggleTagOnMemory,
     deleteTag: deleteMemTag,
     renameTag: renameMemTag,
   } = useMemoryTags(project.hash);
   const [memTagFilter, setMemTagFilter] = useState<string | null>(null);
+  // Inline tag picker target for a memory tile (mirrors the session row picker).
+  const [memPickerFor, setMemPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(
+    null,
+  );
   const { data: memory } = useMemoryProject(project.hash);
   const { data: sessions = [] } = useSessionList(project.hash);
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath);
@@ -759,19 +764,26 @@ export function ProjectView({
             <div className="cl-tile-grid">
               {visibleMemTopics.map((t, i) => {
                 const tTags = tagsForMemory(t.filename);
+                const open = () =>
+                  onNavigate({
+                    type: 'memory-topic',
+                    topic: t,
+                    content: topicContent(t.filename),
+                    hash: project.hash,
+                  });
                 return (
-                  <button
+                  <div
                     key={t.filename}
-                    type="button"
+                    role="button"
+                    tabIndex={0}
                     className={`cl-tile ${i === 0 && !activeMemTag ? 'accent' : ''}`}
-                    onClick={() =>
-                      onNavigate({
-                        type: 'memory-topic',
-                        topic: t,
-                        content: topicContent(t.filename),
-                        hash: project.hash,
-                      })
-                    }
+                    onClick={open}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ' ') {
+                        e.preventDefault();
+                        open();
+                      }
+                    }}
                   >
                     <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
                     <div style={{ minWidth: 0 }}>
@@ -779,25 +791,59 @@ export function ProjectView({
                       <div className="t-desc">
                         {t.description ? memPreview(t.description) : '—'}
                       </div>
-                      {tTags.length > 0 && (
-                        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 4, marginTop: 5 }}>
-                          {tTags.map(name => (
-                            <TagChip
-                              key={name}
-                              name={name}
-                              tone="soft"
-                              style={{ pointerEvents: 'none', fontSize: 10, height: 18 }}
-                            />
-                          ))}
-                        </div>
-                      )}
+                      <div
+                        className="cl-tile-tags"
+                        onClick={e => e.stopPropagation()}
+                        style={{
+                          display: 'flex',
+                          flexWrap: 'wrap',
+                          gap: 4,
+                          marginTop: 5,
+                          alignItems: 'center',
+                        }}
+                      >
+                        {tTags.map(name => (
+                          <TagChip
+                            key={name}
+                            name={name}
+                            tone="soft"
+                            variant="plain"
+                            removable
+                            onRemove={() => toggleTagOnMemory(t.filename, name)}
+                            style={{ fontSize: 10, height: 18 }}
+                          />
+                        ))}
+                        <button
+                          type="button"
+                          className="cl-row-tag-add"
+                          aria-label="Add tag"
+                          title="Add tag"
+                          data-haspicker={memPickerFor?.filename === t.filename}
+                          onClick={e => {
+                            e.stopPropagation();
+                            const rect = e.currentTarget.getBoundingClientRect();
+                            setMemPickerFor({ filename: t.filename, rect });
+                          }}
+                        >
+                          + tag
+                        </button>
+                      </div>
                     </div>
                     <span className="t-meta">
                       <b>{t.type}</b>
                     </span>
-                  </button>
+                  </div>
                 );
               })}
+              {memPickerFor && (
+                <TagPicker
+                  anchorRect={memPickerFor.rect}
+                  allTags={memTags}
+                  selected={tagsForMemory(memPickerFor.filename)}
+                  onToggle={name => toggleTagOnMemory(memPickerFor.filename, name)}
+                  onClose={() => setMemPickerFor(null)}
+                />
+              )}
             </div>
           )}
         </section>

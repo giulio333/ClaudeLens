@@ -4,7 +4,7 @@ import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/u
 import { MarkdownDocView } from '../shared/MarkdownDocView'
 import { parseMemoryContent, readingTime, formatDate } from './utils'
 import { useMemoryTags } from '../../../hooks/useMemoryTags'
-import { TagChip } from '../sessions/TagChip'
+import { ManagedTagChip } from '../sessions/ManagedTagChip'
 import { TagPicker } from '../sessions/TagPicker'
 
 const TYPE_LABEL: Record<string, string> = {
@@ -237,7 +237,7 @@ export function MemoryTopicView({
   const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
   const [confirmDelete, setConfirmDelete] = useState(false)
-  const { tags, tagsForMemory, toggleTagOnMemory } = useMemoryTags(hash)
+  const { tags, tagsForMemory, toggleTagOnMemory, renameTag, deleteTag } = useMemoryTags(hash)
   // Capture the anchor rect when opening the picker instead of reading the ref
   // during render (which the react-hooks rule flags as unsafe).
   const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
@@ -277,13 +277,24 @@ export function MemoryTopicView({
           </div>
           <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
             {topicTags.map(name => (
-              <TagChip key={name} name={name} tone="muted" removable onRemove={() => toggleTagOnMemory(topic.filename, name)} />
+              <ManagedTagChip
+                key={name}
+                name={name}
+                onRemoveFromItem={() => toggleTagOnMemory(topic.filename, name)}
+                removeLabel="Remove from this topic"
+                onRename={renameTag}
+                onDelete={() => deleteTag(name)}
+              />
             ))}
             <button
               type="button"
-              onClick={e =>
-                setPickerAnchor(prev => (prev ? null : e.currentTarget.getBoundingClientRect()))
-              }
+              onClick={e => {
+                // Capture the rect synchronously: React nulls `currentTarget`
+                // once the handler returns, so reading it inside the updater
+                // (which runs later) would throw.
+                const rect = e.currentTarget.getBoundingClientRect()
+                setPickerAnchor(prev => (prev ? null : rect))
+              }}
               style={{
                 height: 22,
                 padding: '0 8px',

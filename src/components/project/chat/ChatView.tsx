@@ -43,6 +43,9 @@ import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
 import Markdown from '../../Markdown';
+import { useSessionTags } from '../../../hooks/useSessionTags';
+import { ManagedTagChip } from '../sessions/ManagedTagChip';
+import { TagPicker } from '../sessions/TagPicker';
 
 type ViewMode = 'chat' | 'timeline';
 
@@ -941,6 +944,18 @@ export function ChatView({
   // per-turn export button (in the transcript) can raise it from afar.
   const openExportSheetRef = useRef<(() => void) | null>(null);
   const [showDelete, setShowDelete] = useState(false);
+  // Session tags, editable from inside the session (mirrors the topic view):
+  // assign/create via the picker, manage each chip via the shared menu.
+  const {
+    tags: allTags,
+    tagsForSession,
+    toggleTagOnSession,
+    removeTagFromSession,
+    renameTag,
+    deleteTag,
+  } = useSessionTags(project.hash);
+  const sessionTags = tagsForSession(session.filename);
+  const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
   // Live streaming, lifted from the composer: the assistant's partial reply is
   // rendered inline as a provisional turn at the foot of the transcript (where the
   // final message will land), instead of a detached preview strip in the composer.
@@ -972,12 +987,10 @@ export function ChatView({
   // output. Lives only while this view is mounted (the data isn't on disk).
   const [pinnedSlash, setPinnedSlash] = useState<Record<string, ChatMessage[]>>({});
 
-  // Lift live messages from the composer. The synthetic slash-command output they
-  // may carry is pinned later, at reconcile time, when the command-card it belongs
-  // to is on disk and can be addressed by UUID (see the reconcile effect below).
-  const handleLiveMessages = useCallback((msgs: ChatMessage[]) => {
-    setLiveMessages(msgs);
-  }, []);
+  // Live messages are lifted from the composer straight into state (the setter is
+  // stable). The synthetic slash-command output they may carry is pinned later, at
+  // reconcile time, when the command-card it belongs to is on disk and can be
+  // addressed by UUID (see the reconcile effect below).
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all');
   const [activeTurn, setActiveTurn] = useState<number | null>(null);
   const turnRefs = useRef<Record<number, HTMLElement | null>>({});
@@ -1444,6 +1457,40 @@ export function ChatView({
                   Live in terminal
                 </span>
               )}
+              <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
+                {sessionTags.map(name => (
+                  <ManagedTagChip
+                    key={name}
+                    name={name}
+                    onRemoveFromItem={() => removeTagFromSession(session.filename, name)}
+                    removeLabel="Remove from this session"
+                    onRename={renameTag}
+                    onDelete={() => deleteTag(name)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="cl-chat-tag-add"
+                  aria-label="Add tag"
+                  title="Add tag"
+                  data-haspicker={!!tagPickerAnchor}
+                  onClick={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setTagPickerAnchor(prev => (prev ? null : rect));
+                  }}
+                >
+                  + tag
+                </button>
+                {tagPickerAnchor && (
+                  <TagPicker
+                    anchorRect={tagPickerAnchor}
+                    allTags={allTags}
+                    selected={sessionTags}
+                    onToggle={name => toggleTagOnSession(session.filename, name)}
+                    onClose={() => setTagPickerAnchor(null)}
+                  />
+                )}
+              </div>
               <div className="cl-view-mode" aria-label="View mode">
                 {(['chat', 'timeline'] as ViewMode[]).map(v => (
                   <button
@@ -1642,7 +1689,7 @@ export function ChatView({
             }}
             onStreamChange={setLiveText}
             onStreamingChange={setStreaming}
-            onLiveMessagesChange={handleLiveMessages}
+            onLiveMessagesChange={setLiveMessages}
             onLiveToolChange={setLiveTool}
           />
         )}
