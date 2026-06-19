@@ -1,4 +1,4 @@
-import { isValidElement, useRef, useState } from 'react'
+import { isValidElement, memo, useRef, useState } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkFrontmatter from 'remark-frontmatter'
@@ -102,7 +102,14 @@ interface Props {
   className?: string
 }
 
-export default function Markdown({ children, className = '' }: Props) {
+// Memoized: parsing markdown and re-highlighting every fenced block (via
+// rehype-highlight / highlight.js) is one of the costliest things the renderer
+// does per paint, and <Markdown> is mounted in many parents that re-render for
+// unrelated reasons (editing a sibling field, hover, density toggles, live
+// streams). With string-only props and module-level plugins/components, a
+// shallow prop compare lets it skip the whole pipeline whenever `children` is
+// unchanged — keeping those re-renders cheap.
+function Markdown({ children, className = '' }: Props) {
   return (
     <div className={`prose prose-sm prose-lens max-w-none ${className}`}>
       <ReactMarkdown
@@ -115,3 +122,5 @@ export default function Markdown({ children, className = '' }: Props) {
     </div>
   )
 }
+
+export default memo(Markdown)
