@@ -4,6 +4,8 @@ import { tmpdir, homedir } from 'os';
 import { join } from 'path';
 import { createSkill } from '../electron/modules/skills-writer';
 import { createAgent } from '../electron/modules/agents-writer';
+import { readAgentFile } from '../electron/modules/agents-reader';
+import { readSkillDir } from '../electron/modules/skills-reader';
 
 // createSkill/createAgent honor a projectPath by writing under
 // {projectPath}/.claude/(skills|agents). The writers anchor containment on the
@@ -40,6 +42,22 @@ describe('createSkill (issue #58)', () => {
       'first'
     );
   });
+
+  // Regression: a description with a colon (or '#') used to be written into the
+  // YAML frontmatter unquoted, making js-yaml throw on read and silently drop
+  // the WHOLE block — the skill came back with no description/tools/model.
+  it('round-trips a description containing YAML metacharacters', () => {
+    const description = 'Use this skill when: editing, fixing, or building # the deck';
+    createSkill(
+      { name: 'tricky', content: 'Body', description, model: 'sonnet', allowedTools: ['Read', 'Bash'] },
+      proj
+    );
+    const skill = readSkillDir(join(proj, '.claude', 'skills', 'tricky'), 'project');
+    expect(skill).not.toBeNull();
+    expect(skill!.description).toBe(description);
+    expect(skill!.model).toBe('sonnet');
+    expect(skill!.allowedTools).toEqual(['Read', 'Bash']);
+  });
 });
 
 describe('createAgent (issue #58)', () => {
@@ -68,5 +86,31 @@ describe('createAgent (issue #58)', () => {
     } finally {
       rmSync(outside, { recursive: true, force: true });
     }
+  });
+
+  // Regression: agent descriptions almost always contain a colon ("Use this
+  // agent when X: ..."). Written unquoted, the frontmatter failed to parse and
+  // the agent read back with every field missing (flagged invalid in the UI).
+  it('round-trips a description containing YAML metacharacters', () => {
+    const description = 'Use this agent when the user asks: features, hooks # and more';
+    const filePath = createAgent(
+      { name: 'guide', content: 'Body', description, model: 'opus', color: 'blue', allowedTools: ['Read', 'Grep'] },
+      proj
+    );
+    const agent = readAgentFile(filePath, 'project');
+    expect(agent).not.toBeNull();
+    expect(agent!.missingRequired).toEqual([]);
+    expect(agent!.description).toBe(description);
+    expect(agent!.model).toBe('opus');
+    expect(agent!.color).toBe('blue');
+    expect(agent!.allowedTools).toEqual(['Read', 'Grep']);
+  });
+
+  // A model/version-like string must stay a string, not be coerced to a number
+  // on read (js-yaml would parse a bare 4.8 as a float).
+  it('keeps a numeric-looking scalar a string after round-trip', () => {
+    const filePath = createAgent({ name: 'numish', content: 'b', description: 'x', model: '4.8' }, proj);
+    const agent = readAgentFile(filePath, 'project');
+    expect(agent!.model).toBe('4.8');
   });
 });

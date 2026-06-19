@@ -1,6 +1,7 @@
 import { writeFileSync, existsSync, unlinkSync, readFileSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { assertWithin } from '../utils';
+import { yamlScalar } from './frontmatter';
 
 const VALID_TOPIC_TYPES = ['user', 'feedback', 'project', 'reference'] as const;
 
@@ -40,10 +41,14 @@ function buildTopicFileContent(input: TopicInput): string {
   // un re-save dalla UI: senza questa riga l'edit di un topic ne perderebbe
   // l'originSessionId. Annidato sotto `metadata:` per restare compatibile col
   // formato dell'auto-memory dell'harness.
+  // Quote every scalar (yamlScalar) so a value with a colon — extremely common
+  // in a description — doesn't break the YAML block. memory-reader parses this
+  // with js-yaml, which throws on an unquoted `: ` and drops the whole block,
+  // losing the topic's type and originSessionId on read.
   const origin = input.originSessionId
-    ? `metadata:\n  originSessionId: ${sanitizeInline(input.originSessionId)}\n`
+    ? `metadata:\n  originSessionId: ${yamlScalar(sanitizeInline(input.originSessionId))}\n`
     : '';
-  return `---\nname: ${name}\ndescription: ${description}\ntype: ${input.type}\n${origin}---\n\n${input.content.trimEnd()}\n`;
+  return `---\nname: ${yamlScalar(name)}\ndescription: ${yamlScalar(description)}\ntype: ${input.type}\n${origin}---\n\n${input.content.trimEnd()}\n`;
 }
 
 function addLineToMemoryMd(memoryPath: string, filename: string, description: string): void {
