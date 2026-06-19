@@ -447,4 +447,27 @@ describe('round-trip', () => {
       '040655d3-6b0c-4c51-8a5a-29d6fa0d8614'
     );
   });
+
+  // Regression: a description with a colon used to break the YAML frontmatter,
+  // and since memory-reader parses it with js-yaml, the load threw and dropped
+  // the whole block — type fell back to the filename guess and originSessionId
+  // was lost. Quoting the scalars keeps the topic intact.
+  it('round-trips a description with a colon without losing type/origin', async () => {
+    const description = 'UI rule: all copy must be in English, not Italian';
+    const filename = createTopic(memoryDir, {
+      name: 'Colon Desc',
+      description,
+      type: 'feedback',
+      content: 'body',
+      originSessionId: '040655d3-6b0c-4c51-8a5a-29d6fa0d8614',
+    });
+
+    const data = await readMemory(tmp);
+    const topic = data.index.find(t => t.filename === filename)!;
+    expect(topic).toBeDefined();
+    expect(topic.description).toBe(description);
+    // type must come from the (intact) frontmatter, not the filename fallback.
+    expect(topic.type).toBe('feedback');
+    expect(topic.originSessionId).toBe('040655d3-6b0c-4c51-8a5a-29d6fa0d8614');
+  });
 });
