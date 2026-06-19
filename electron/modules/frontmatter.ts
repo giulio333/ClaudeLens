@@ -37,6 +37,22 @@ export function parseFrontmatter(content: string): {
   return { frontmatter: {}, body };
 }
 
+/**
+ * Serialize a scalar value to a YAML-safe inline representation for *writing* a
+ * frontmatter block. A value containing `: ` (a colon-space), a leading `#`, or
+ * one that looks like a number/bool is quoted so it round-trips back through
+ * `parseFrontmatter`. Without this, an unquoted `: ` makes js-yaml throw on
+ * load, which drops the ENTIRE frontmatter block (name, description, model, …) —
+ * the agent/skill/topic then reads back with all metadata lost. The quoting
+ * rules are delegated to js-yaml's own dumper so they stay correct and complete.
+ */
+export function yamlScalar(value: string | number | boolean): string {
+  // `dump` appends a trailing newline; a scalar always fits on one line, so we
+  // strip it. `lineWidth: -1` disables line folding, keeping a long description
+  // on a single line instead of wrapping it into a block scalar.
+  return yaml.dump(value, { lineWidth: -1 }).replace(/\n$/, '');
+}
+
 /** Read a scalar string value. Numbers/booleans are coerced to their string form. */
 export function getString(rec: Record<string, unknown>, key: string): string | undefined {
   const v = rec[key];
