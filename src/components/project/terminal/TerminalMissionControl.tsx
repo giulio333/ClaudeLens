@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useActiveSessions, useSessionList } from '../../../hooks/useIPC';
+import { useSessionTags } from '../../../hooks/useSessionTags';
+import { ManagedTagChip } from '../sessions/ManagedTagChip';
+import { TagPicker } from '../sessions/TagPicker';
 import { useTheme } from '../../../hooks/useTheme';
 import type { SessionSummary } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
@@ -268,6 +271,20 @@ export function TerminalMissionControl({
   // crumb so the bar reads project / title / mode instead of a bare "TERMINAL".
   const title = summary ? sessionTitle(summary) : null;
 
+  // Session tags, editable from inside the session (the embedded ChatView drops
+  // its own TopBar, so the tag affordance lives in this frame's chrome instead).
+  const {
+    tags: allTags,
+    tagsForSession,
+    toggleTagOnSession,
+    removeTagFromSession,
+    renameTag,
+    deleteTag,
+  } = useSessionTags(project.hash);
+  const sessionFilename = sessionForChat?.filename ?? null;
+  const sessionTags = sessionFilename ? tagsForSession(sessionFilename) : [];
+  const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
+
   return (
     // When TERMINAL is active the view paints the terminal's own surface color so
     // the console blends into the frame with no visible seam (no slab edge);
@@ -333,6 +350,42 @@ export function TerminalMissionControl({
               {project.realPath}
             </span>
             <span style={{ flex: 1 }} />
+            {sessionFilename && (
+              <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
+                {sessionTags.map(name => (
+                  <ManagedTagChip
+                    key={name}
+                    name={name}
+                    onRemoveFromItem={() => removeTagFromSession(sessionFilename, name)}
+                    removeLabel="Remove from this session"
+                    onRename={renameTag}
+                    onDelete={() => deleteTag(name)}
+                  />
+                ))}
+                <button
+                  type="button"
+                  className="cl-chat-tag-add"
+                  aria-label="Add tag"
+                  title="Add tag"
+                  data-haspicker={!!tagPickerAnchor}
+                  onClick={e => {
+                    const rect = e.currentTarget.getBoundingClientRect();
+                    setTagPickerAnchor(prev => (prev ? null : rect));
+                  }}
+                >
+                  + tag
+                </button>
+                {tagPickerAnchor && (
+                  <TagPicker
+                    anchorRect={tagPickerAnchor}
+                    allTags={allTags}
+                    selected={sessionTags}
+                    onToggle={name => toggleTagOnSession(sessionFilename, name)}
+                    onClose={() => setTagPickerAnchor(null)}
+                  />
+                )}
+              </div>
+            )}
             <ViewSwitch view={view} setView={setView} />
             <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
           </div>

@@ -1057,6 +1057,44 @@ body {
   color: var(--cl-accent-ink);
   background: color-mix(in srgb, var(--cl-accent) 8%, transparent);
 }
+/* Memory tiles reuse .cl-row-tag-add but aren't .cl-row — reveal on tile hover */
+.cl-tile:hover .cl-row-tag-add,
+.cl-tile:focus-within .cl-row-tag-add {
+  opacity: 1;
+}
+
+/* Session-detail tag cluster (ChatView TopBar) — assign/manage tags from inside */
+.cl-chat-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.cl-chat-tag-add {
+  display: inline-flex;
+  align-items: center;
+  background: transparent;
+  border: 1px dashed var(--cl-line);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  padding: 3px 7px;
+  border-radius: 5px;
+  line-height: 1;
+  transition:
+    color 140ms,
+    background 140ms,
+    border-color 140ms;
+}
+.cl-chat-tag-add:hover,
+.cl-chat-tag-add[data-haspicker='true'] {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in srgb, var(--cl-accent) 42%, transparent);
+  background: color-mix(in srgb, var(--cl-accent) 8%, transparent);
+}
 
 .cl-tagbar {
   display: flex;
@@ -1114,44 +1152,12 @@ body {
   flex-wrap: wrap;
 }
 
-/* ── Manageable tag chip (hover ⋯ menu) ── */
-.cl-tagbar-chip {
-  position: relative;
+/* ── Managed tag chip + shared actions menu ── */
+.cl-tagchip-wrap {
   display: inline-flex;
-  align-items: center;
-  gap: 1px;
 }
-.cl-tag-menu-btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 16px;
-  height: 18px;
-  padding: 0;
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  color: var(--cl-ink-4);
-  font-size: 13px;
-  line-height: 1;
-  border-radius: 4px;
-  opacity: 0;
-  transition:
-    opacity 120ms,
-    color 120ms,
-    background 120ms;
-}
-.cl-tagbar-chip:hover .cl-tag-menu-btn {
-  opacity: 0.6;
-}
-.cl-tag-menu-btn:hover {
-  opacity: 1;
-  color: var(--cl-ink-2);
-  background: color-mix(in srgb, var(--cl-ink-3) 14%, transparent);
-}
-.cl-tagbar-chip.is-open .cl-tag-menu-btn {
-  opacity: 1;
-  color: var(--cl-ink-2);
+.cl-tagchip-wrap.is-open .cl-tag {
+  box-shadow: 0 0 0 2px var(--cl-accent-soft);
 }
 
 /* ── Inline rename editor (pill-shaped) ── */
@@ -1187,9 +1193,9 @@ body {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cl-danger) 14%, transparent);
 }
 
-/* ── Tag context menu (portal) ── */
+/* ── Shared tag actions menu (portal) ── */
 .cl-tag-menu {
-  min-width: 172px;
+  min-width: 184px;
   background: var(--cl-paper);
   border: 1px solid var(--cl-line);
   border-radius: 10px;
@@ -1203,6 +1209,15 @@ body {
   background: var(--cl-paper-2);
   border-color: color-mix(in srgb, var(--cl-ink-2) 30%, transparent);
   box-shadow: 0 8px 28px oklch(0 0 0 / 0.45);
+}
+.cl-tag-menu-head {
+  padding: 5px 10px 6px;
+  margin-bottom: 2px;
+  border-bottom: 1px solid var(--cl-line-soft);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--cl-ink-3);
 }
 .cl-tag-menu-item {
   display: flex;
