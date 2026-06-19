@@ -1,8 +1,8 @@
 # ClaudeLens
 
-A desktop app (macOS, with experimental Linux and Windows support) to visually explore and manage your local [Claude Code](https://claude.ai/code) data.
+A desktop app to explore, manage, and work with your local [Claude Code](https://claude.ai/code) data — macOS, with experimental Linux and Windows support.
 
-If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLens makes it navigable. Browse chat sessions, manage memory topics, inspect tool calls, view your full CLAUDE.md hierarchy, and monitor active Claude processes, all in one place and updated in real time.
+If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens makes it navigable: read your past sessions, manage memory and CLAUDE.md, edit skills and agents — and pick a conversation back up, either in an embedded terminal or in an in-app chat. Everything stays in sync with `~/.claude/` in real time, so changes you make in the terminal show up instantly, and vice versa.
 
 ---
 
@@ -63,98 +63,26 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is — ClaudeLe
 
 ## Features
 
-### Project overview
+### Explore
 
-The sidebar lists all projects detected in `~/.claude/projects/`. Selecting a project opens a unified view with:
+- **Projects & sessions** — every project from `~/.claude/projects/` in one sidebar, with token usage and cost per project and per session. Open any session to replay the full conversation: messages, thinking blocks, and tool calls rendered for what they are (code diffs, terminal output, web results, sub-agent transcripts).
+- **Analytics** — token and cost trends across your history.
+- **Memory** — read and edit memory topics with full CRUD, kept in the exact `MEMORY.md` + topic-file format Claude Code expects, with a warning when the index grows large enough to risk truncation.
+- **CLAUDE.md & rules** — the complete instruction hierarchy active for a project (global → project → local → subdir) plus conditional `.claude/rules/`.
+- **Skills, agents, plugins & MCP** — browse global and per-project skills, agents, installed plugins, and MCP servers; create or edit skills and agents straight from the UI.
+- **Plans & tasks** — plan-mode plans (filterable, searchable, editable) and the tasks Claude creates during sessions, grouped per session.
 
-- **Aggregate stats** — total sessions and token usage
-- **Recent sessions** — last 4 sessions with date and token count
-- **Memory** — all saved topics with type and description
-- **CLAUDE.md** — the full instruction hierarchy active for the project
-- **Conditional rules** — `.claude/rules/` files with path applicability
-- **Tasks** — tasks Claude creates during sessions, grouped per session
-- **Plans** — plan-mode plans linked to the project, filterable by status (approved / proposed / deleted), searchable, with inline preview and full-plan editing
+### Work
 
-Real-time file watcher (chokidar) keeps every view in sync — any change to `~/.claude/` while you work with Claude Code is reflected immediately.
+- **Embedded terminal** — pick up any session in a real terminal inside the app, side by side with its read-only Lens view.
+- **In-app chat** — continue a conversation through the Claude Agent SDK without leaving ClaudeLens: streaming replies, native slash commands, and interactive tool approvals (Allow / Always / Deny). Chats persist to the same transcript files as the terminal, so the two are interchangeable.
 
----
+### Monitor
 
-### Chat sessions
+- **Live Monitor** _(experimental)_ — real-time view of active Claude processes: status (idle / thinking / busy), a sliding activity chart, tool-frequency breakdown, and elapsed timer.
+- **Duplicate projects** — detect project folders that point to the same directory and merge their history and memory.
 
-Browse all conversations of a project, sorted chronologically. Each card shows date, token breakdown, and the dominant model used.
-
-Opening a session reconstructs the conversation from its JSONL file:
-
-- User and assistant messages with timestamps
-- Markdown rendering
-- Collapsible thinking blocks
-- Model distribution across the session
-- Strip of tool calls with invocation counts
-
-Two modes: **Minimal** (messages only) and **Full** (includes thinking and tool calls).
-
----
-
-### Tool call inspector
-
-For each tool call, open a dedicated panel showing input and output with type-specific rendering:
-
-| Tool                     | Rendering                                        |
-| ------------------------ | ------------------------------------------------ |
-| **Read**                 | Filepath + syntax-highlighted code block         |
-| **Write / Edit**         | Filepath + old/new content                       |
-| **Bash**                 | Description + command in terminal style + output |
-| **Grep**                 | Regex pattern + matching lines with line numbers |
-| **Glob**                 | Pattern + numbered filepath list                 |
-| **Agent**                | Agent type + description + markdown response     |
-| **WebFetch / WebSearch** | URL or query + raw text                          |
-
----
-
-### Memory management
-
-Full CRUD interface for Claude Code memory topics (`~/.claude/projects/{hash}/memory/`).
-
-Each topic has a name, description, type (`user`, `feedback`, `project`, `reference`), and markdown body. All edits sync the topic files and `MEMORY.md` index in the exact format Claude Code expects.
-
-The MEMORY.md card shows a line-count progress bar: yellow above 160 lines, red above 200, to warn when the index risks being truncated by Claude Code.
-
----
-
-### CLAUDE.md viewer
-
-Displays the full CLAUDE.md hierarchy active for each project, with each layer in a separate accordion:
-
-1. **Global** — `~/.claude/CLAUDE.md`
-2. **Project** — `{project}/CLAUDE.md`
-3. **Local** — `{project}/CLAUDE.local.md`
-4. **Subdir** — `{project}/.claude/CLAUDE.md`
-
----
-
-### Skills & Agents
-
-View global and per-project skills and agents with their full content and metadata. Create new global skills and agents directly from the UI.
-
----
-
-### MCP servers
-
-View MCP server configuration (cloud and local) with enabled/disabled state per project.
-
----
-
-### Live Monitor _(experimental)_
-
-Real-time view of active Claude processes: status badge (IDLE / THINKING / BUSY), activity chart with a 90-second sliding window, tool frequency breakdown, and elapsed timer.
-
----
-
-### AI Assistant _(experimental)_
-
-Runs `claude -p` in the project context with streaming output. Includes preset actions for memory analysis and CLAUDE.md suggestions.
-
-Requires `claude` CLI in `PATH`.
+Everything updates live: any change under `~/.claude/` while you work in the terminal is reflected immediately, and vice versa.
 
 ---
 
@@ -198,11 +126,11 @@ npm run electron:build   # Generate distributable DMG
 
 ## Known limitations
 
-- AI Assistant requires `claude` CLI installed and in `PATH`
+- The embedded terminal and in-app chat require the `claude` CLI installed and in `PATH`
 - Session list is not paginated — may be slow with very large histories (500+ sessions)
 - No automatic updates
 - App is not code-signed (see installation note above)
-- On Windows, the Live Monitor and the in-app AI Assistant / background agents are not yet supported (they rely on Unix process tooling and direct CLI spawning); browsing sessions, memory, CLAUDE.md, and opening sessions in a terminal all work
+- On Windows, the Live Monitor and background agents are not yet supported (they rely on Unix process tooling); browsing sessions, memory, CLAUDE.md, and opening sessions in a terminal all work
 
 ---
 
