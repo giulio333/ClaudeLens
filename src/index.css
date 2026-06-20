@@ -4352,6 +4352,32 @@ body {
   font-size: 12.5px;
   line-height: 1.65;
 }
+
+/* ─── Spike A (transitions.dev): disclosure reveal ──────────────────────────
+ * Copy/paste-style CSS-only enter animation for the expandable bodies that
+ * mount on toggle (Thinking block + slash-command / skill card output). A short
+ * fade + upward slide so the content "settles in" instead of popping. Honors
+ * prefers-reduced-motion via the global guard below. */
+@keyframes cl-disclosure-in {
+  from {
+    opacity: 0;
+    transform: translateY(-4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.cl-thinking-body,
+.cl-command-expanded {
+  animation: cl-disclosure-in 0.18s ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-thinking-body,
+  .cl-command-expanded {
+    animation: none;
+  }
+}
 .cl-tool-stack,
 .cl-ask-stack,
 .cl-plan-stack {
