@@ -17,20 +17,22 @@ import {
 } from '../chat/utils';
 import { FileIcon } from '../chat/fileIcons';
 import { QueryError } from '../../QueryError';
-import { fmtCost, fmt, fmtModel } from '../utils';
+import { fmtCost, fmt } from '../utils';
 
 /**
  * The scrolling Mission Control rail beside the unified Terminal/Lens view.
  *
  * Not a flat tool feed (the TUI already prints every `⏺ Bash…` line — repeating
- * it would be a mirror), but the session's *meaningful units*: a fixed band that
- * answers the two live questions — "how full is my context?" (a CONTEXT gauge)
- * and "what is this costing?" (cost + cache savings) — then a scrolling flow of
- * sticky-eyebrow sections: ENVIRONMENT (the session's read-only setup from the
- * SDK init — permission mode + capability counts, plus any failed MCP), agents
- * (click → full transcript), skills, file changes **grouped by repo area** with
- * proportional diff bars, and tasks. Empty sections are dropped; if everything
- * is empty the rail says so in one line.
+ * it would be a mirror), but the session's *meaningful units*, laid out as a
+ * "bento" of cards (design: the "Chat display variants exploration", 03 · Bento):
+ * a pinned vitals band of gauge cards — CONTEXT WINDOW ("how full is my
+ * context?"), SPEND (cost + cache-savings ring) and TASKS (done/total ring) —
+ * then a scrolling flow of AGENTS (violet card, rows click → full transcript),
+ * SKILLS (pills, click → output), file CHANGES **grouped by repo area** with
+ * proportional diff bars, the detailed TASKS list, and ENVIRONMENT (the session's
+ * read-only setup from the SDK init — permission mode + capability counts, plus
+ * any failed MCP). Empty sections are dropped; if everything is empty the rail
+ * says so in one line.
  *
  * All of it derives from data the watcher already refreshes
  * (`sessions:chat`, `sessions:subagents`, `tasks:project`, `sessions:project`),
@@ -299,28 +301,6 @@ function RailEyebrow({ label, n, extra }: { label: string; n?: ReactNode; extra?
   );
 }
 
-/** Letter monogram tile (agent "A", skill "/"). */
-function Glyph({ letter, accent, size = 24 }: { letter: string; accent?: boolean; size?: number }) {
-  return (
-    <span
-      aria-hidden
-      className="font-mono shrink-0 inline-flex items-center justify-center"
-      style={{
-        width: size,
-        height: size,
-        borderRadius: 6,
-        fontSize: size * 0.44,
-        fontWeight: 700,
-        color: accent ? 'var(--cl-on-accent)' : 'var(--cl-ink-2)',
-        background: accent ? 'var(--cl-accent)' : 'var(--cl-paper-2)',
-        border: `1px solid ${accent ? 'var(--cl-accent-ink)' : 'var(--cl-line)'}`,
-      }}
-    >
-      {letter}
-    </span>
-  );
-}
-
 const PERM_LABEL: Record<string, string> = {
   default: 'DEFAULT',
   acceptEdits: 'ACCEPT EDITS',
@@ -413,6 +393,362 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
         </div>
       ))}
     </>
+  );
+}
+
+/* ── Bento mosaic (variant 03) ────────────────────────────────────────────
+ * The rail's headline is a bento of cards adapted from the "Chat display
+ * variants exploration" design (03 · Bento): a full-width CONTEXT WINDOW card,
+ * a SPEND + TASKS gauge pair, then full-width AGENTS and SKILLS cards. The
+ * gauges are pinned (vitals stay visible while the detail below scrolls); the
+ * AGENTS/SKILLS cards keep the rail's interactivity (rows open a transcript /
+ * skill output). The file-CHANGES section is kept below the bento, restyled. */
+
+const bentoCard: CSSProperties = {
+  border: '1px solid var(--cl-line)',
+  borderRadius: 14,
+  padding: '15px 16px',
+  background: 'var(--cl-paper)',
+};
+
+/** Ring gauge (the bento's spend/tasks donut). `pct` 0–100 fills the ring;
+ *  `label` is the centred caption. r=19 → circumference ≈ 119.4. */
+function Donut({
+  pct,
+  color,
+  label,
+  labelSize = 11,
+}: {
+  pct: number;
+  color: string;
+  label: string;
+  labelSize?: number;
+}) {
+  const r = 19;
+  const circ = 2 * Math.PI * r;
+  const dash = (Math.max(0, Math.min(100, pct)) / 100) * circ;
+  return (
+    <svg viewBox="0 0 48 48" style={{ width: 46, height: 46, flexShrink: 0 }} aria-hidden>
+      <circle cx="24" cy="24" r={r} style={{ fill: 'none', stroke: 'var(--cl-paper-3)', strokeWidth: 6 }} />
+      {pct > 0 && (
+        <circle
+          cx="24"
+          cy="24"
+          r={r}
+          style={{
+            fill: 'none',
+            stroke: color,
+            strokeWidth: 6,
+            strokeDasharray: `${dash} 999`,
+            strokeLinecap: 'round',
+            transform: 'rotate(-90deg)',
+            transformOrigin: '24px 24px',
+          }}
+        />
+      )}
+      <text
+        x="24"
+        y="27.5"
+        textAnchor="middle"
+        style={{ font: `600 ${labelSize}px var(--font-sans)`, fill: 'var(--cl-ink)' }}
+      >
+        {label}
+      </text>
+    </svg>
+  );
+}
+
+/** Full-width CONTEXT WINDOW card — striped fill, "used · left · total" footer. */
+function ContextCard({ ctx }: { ctx: ContextState | null }) {
+  const pct = ctx?.pct ?? 0;
+  const danger = !!ctx && pct >= 90;
+  return (
+    <div
+      style={{
+        ...bentoCard,
+        gridColumn: '1 / -1',
+        background:
+          'radial-gradient(70% 120% at 100% 0%, var(--cl-accent-soft), transparent 60%), var(--cl-paper)',
+      }}
+    >
+      <div className="flex items-baseline justify-between">
+        <span
+          className="font-mono"
+          style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--cl-ink-4)' }}
+        >
+          CONTEXT WINDOW
+        </span>
+        <span
+          style={{
+            font: '700 24px/1 var(--font-sans)',
+            letterSpacing: '-0.02em',
+            fontVariantNumeric: 'tabular-nums',
+            color: danger ? 'var(--cl-danger)' : 'var(--cl-ink)',
+          }}
+        >
+          {ctx ? pct : '—'}
+          <span style={{ fontSize: 13, color: 'var(--cl-ink-3)' }}>%</span>
+        </span>
+      </div>
+      <div
+        style={{
+          marginTop: 11,
+          height: 14,
+          borderRadius: 4,
+          background: 'var(--cl-paper-3)',
+          border: '1px solid var(--cl-line)',
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            width: `${pct}%`,
+            height: '100%',
+            transition: 'width 0.4s ease',
+            background: danger
+              ? 'var(--cl-danger)'
+              : 'repeating-linear-gradient(90deg, var(--cl-accent) 0 7px, color-mix(in oklch, var(--cl-accent) 55%, var(--cl-paper)) 7px 10px)',
+          }}
+        />
+      </div>
+      <div
+        className="font-mono"
+        style={{
+          marginTop: 8,
+          fontSize: 9.5,
+          fontVariantNumeric: 'tabular-nums',
+          color: 'var(--cl-ink-4)',
+        }}
+      >
+        {ctx ? (
+          <>
+            {kTok(ctx.used)} used · <span style={{ color: 'var(--cl-ok)' }}>{kTok(Math.max(0, ctx.max - ctx.used))} left</span> · {kTok(ctx.max)} total
+          </>
+        ) : (
+          'waiting for the first turn…'
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Compact gauge card (SPEND / TASKS) — donut left, stacked caption right. */
+function GaugeCard({
+  donut,
+  label,
+  value,
+  valueColor,
+  sub,
+  subColor,
+}: {
+  donut: ReactNode;
+  label: string;
+  value: string;
+  valueColor: string;
+  sub: string;
+  subColor: string;
+}) {
+  return (
+    <div style={{ ...bentoCard, display: 'flex', alignItems: 'center', gap: 14 }}>
+      {donut}
+      <div className="min-w-0">
+        <div
+          className="font-mono"
+          style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)' }}
+        >
+          {label}
+        </div>
+        <div
+          style={{
+            font: '700 21px/1 var(--font-sans)',
+            fontVariantNumeric: 'tabular-nums',
+            color: valueColor,
+            marginTop: 4,
+          }}
+        >
+          {value}
+        </div>
+        <div className="font-mono truncate" style={{ fontSize: 8.5, color: subColor, marginTop: 4 }}>
+          {sub}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Overlapping agent avatars for the AGENTS card header (caps at 3). */
+function AgentAvatars({ n }: { n: number }) {
+  const shown = Math.min(n, 3);
+  return (
+    <span className="inline-flex">
+      {Array.from({ length: shown }).map((_, i) => (
+        <span
+          key={i}
+          aria-hidden
+          className="font-mono inline-flex items-center justify-center"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            background: i === 0 ? 'var(--cl-violet)' : 'color-mix(in oklch, var(--cl-violet) 70%, black)',
+            color: '#fff',
+            font: '700 11px/1 var(--font-mono)',
+            border: '1.5px solid var(--cl-paper)',
+            marginLeft: i === 0 ? 0 : -7,
+          }}
+        >
+          A
+        </span>
+      ))}
+    </span>
+  );
+}
+
+/** One agent row inside the AGENTS bento card — opens the full transcript when
+ *  one exists on disk, else is disabled. */
+function AgentRow({ a, onOpen }: { a: SessionAgent; onOpen: () => void }) {
+  const failed = a.isError;
+  return (
+    <button
+      type="button"
+      className="tmc-row w-full text-left disabled:opacity-60"
+      disabled={!a.agentId}
+      title={a.agentId ? 'Open the agent transcript' : 'Transcript not on disk yet'}
+      onClick={onOpen}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 11,
+        padding: '8px 0',
+        borderTop: '1px solid color-mix(in oklch, var(--cl-violet-soft) 60%, transparent)',
+        cursor: a.agentId ? 'pointer' : 'default',
+      }}
+    >
+      <span
+        aria-hidden
+        className="font-mono shrink-0 inline-flex items-center justify-center"
+        style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
+      >
+        A
+      </span>
+      <span className="min-w-0 flex-1">
+        <span style={{ display: 'block', font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}>
+          {a.subagentType}
+        </span>
+        <span
+          className="font-mono truncate"
+          style={{ display: 'block', fontSize: 10, color: failed ? 'var(--cl-danger)' : 'var(--cl-ink-3)' }}
+        >
+          {a.description || a.prompt}
+        </span>
+      </span>
+      {a.messageCount != null && (
+        <span
+          className="font-mono shrink-0"
+          style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+        >
+          <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b> MSGS
+        </span>
+      )}
+      <span
+        className="font-mono shrink-0"
+        style={{ fontSize: 10, fontWeight: 700, color: failed ? 'var(--cl-danger)' : 'var(--cl-accent-ink)' }}
+      >
+        {failed ? 'FAILED' : a.agentId ? '→' : ''}
+      </span>
+    </button>
+  );
+}
+
+/** Full-width AGENTS card — violet-tinted, header cluster + interactive rows. */
+function AgentsCard({
+  agents,
+  onOpenAgent,
+}: {
+  agents: SessionAgent[];
+  onOpenAgent: (agent: SessionAgent) => void;
+}) {
+  return (
+    <div
+      style={{
+        ...bentoCard,
+        marginTop: 14,
+        padding: '14px 16px',
+        borderColor: 'var(--cl-violet-soft)',
+        background: 'color-mix(in oklch, var(--cl-violet-soft) 28%, var(--cl-paper))',
+      }}
+    >
+      <div className="flex items-center" style={{ gap: 10, marginBottom: 4 }}>
+        <span
+          className="font-mono"
+          style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.18em', color: 'var(--cl-violet-ink)' }}
+        >
+          AGENTS
+        </span>
+        <span style={{ font: '700 13px/1 var(--font-sans)', color: 'var(--cl-violet-ink)' }}>
+          {agents.length}
+        </span>
+        <span style={{ flex: 1 }} />
+        <AgentAvatars n={agents.length} />
+      </div>
+      {agents.map(a => (
+        <AgentRow key={a.key} a={a} onOpen={() => onOpenAgent(a)} />
+      ))}
+    </div>
+  );
+}
+
+/** One skill pill inside the SKILLS card — opens the produced output when the
+ *  skill ran agentically (a `Skill` tool_use), else is inert. */
+function SkillPill({ s, onOpen }: { s: SkillRun; onOpen: () => void }) {
+  const clickable = !!s.group;
+  return (
+    <button
+      type="button"
+      disabled={!clickable}
+      title={clickable ? 'View skill output' : s.description || undefined}
+      onClick={onOpen}
+      className="inline-flex items-center"
+      style={{
+        gap: 7,
+        padding: '6px 11px',
+        borderRadius: 999,
+        border: '1px solid color-mix(in oklch, var(--cl-accent) 32%, var(--cl-line))',
+        background: 'var(--cl-paper)',
+        font: '500 12px/1 var(--font-mono)',
+        color: 'var(--cl-ink-2)',
+        cursor: clickable ? 'pointer' : 'default',
+      }}
+    >
+      <span
+        aria-hidden
+        className="inline-flex items-center justify-center"
+        style={{ width: 16, height: 16, borderRadius: 4, background: 'var(--cl-accent)', color: '#fff', font: '700 9px/1 var(--font-mono)' }}
+      >
+        {s.viaTool ? '✦' : '/'}
+      </span>
+      {s.name}
+      {clickable && <span style={{ color: 'var(--cl-accent-ink)', fontSize: 9 }}>→</span>}
+    </button>
+  );
+}
+
+/** Full-width SKILLS card — a wrap of pills. */
+function SkillsCard({ skills, onOpenTool }: { skills: SkillRun[]; onOpenTool: (g: ToolGroup) => void }) {
+  return (
+    <div style={{ ...bentoCard, marginTop: 14, padding: '14px 16px' }}>
+      <div
+        className="font-mono"
+        style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)', marginBottom: 11 }}
+      >
+        SKILLS <span style={{ color: 'var(--cl-accent-ink)', fontWeight: 700 }}>{skills.length}</span>
+      </div>
+      <div className="flex flex-wrap" style={{ gap: 8 }}>
+        {skills.map(s => (
+          <SkillPill key={s.key} s={s} onOpen={() => s.group && onOpenTool(s.group)} />
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -559,6 +895,7 @@ export function MissionRail({
   const rowPad = compact ? 5 : 7;
   const fs = compact ? 11 : 11.5;
   const doneTasks = tasks.filter(t => t.status === 'completed').length;
+  const runningTasks = tasks.filter(t => t.status === 'in_progress').length;
   const empty =
     agents.length === 0 && skillRuns.length === 0 && changes.length === 0 && tasks.length === 0;
 
@@ -703,6 +1040,7 @@ export function MissionRail({
             style={{ fontSize: 10, letterSpacing: '0.08em', color: 'var(--cl-ink-4)' }}
           >
             {sessionId.slice(0, 8)}
+            {turns > 0 && ` · ${turns} turns`}
           </span>
         )}
         <span style={{ flex: 1 }} />
@@ -722,110 +1060,51 @@ export function MissionRail({
         </button>
       </div>
 
-      {/* CONTEXT + COST band — the two live questions in one stack */}
+      {/* Bento vitals — CONTEXT + SPEND + TASKS gauges, pinned above the flow */}
       <div
         className="shrink-0"
         style={{
           borderTop: '1.5px solid var(--cl-ink)',
           borderBottom: '1px solid var(--cl-line)',
+          display: 'grid',
+          gridTemplateColumns: '1fr 1fr',
+          gap: 12,
+          padding: '16px 22px',
         }}
       >
-        {/* CONTEXT gauge */}
-        <div style={{ padding: '13px 22px 14px' }}>
-          <div className="flex items-baseline" style={{ gap: 8 }}>
-            <span
-              className="font-mono"
-              style={{ fontSize: 8.5, letterSpacing: '0.2em', color: 'var(--cl-ink-4)' }}
-            >
-              CONTEXT
-            </span>
-            <span style={{ flex: 1 }} />
-            <span
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                fontVariantNumeric: 'tabular-nums',
-                lineHeight: 1,
-                color: ctx && ctx.pct >= 90 ? 'var(--cl-danger)' : 'var(--cl-ink)',
-              }}
-            >
-              {ctx ? `${ctx.pct}%` : '—'}
-            </span>
-          </div>
-          <div
-            style={{
-              marginTop: 9,
-              height: 6,
-              borderRadius: 3,
-              background: 'var(--cl-paper-2)',
-              border: '1px solid var(--cl-line)',
-              overflow: 'hidden',
-            }}
-          >
-            <div
-              style={{
-                width: `${ctx?.pct ?? 0}%`,
-                height: '100%',
-                background: ctx && ctx.pct >= 90 ? 'var(--cl-danger)' : 'var(--cl-accent)',
-                transition: 'width 0.4s ease',
-              }}
+        <ContextCard ctx={ctx} />
+        <GaugeCard
+          donut={<Donut pct={savingsPct} color="var(--cl-ok)" label={`${savingsPct}%`} />}
+          label="SPEND"
+          value={summary ? fmtCost(summary.estimatedCost) : '—'}
+          valueColor="var(--cl-accent-ink)"
+          sub={savings > 0 ? `cache −${fmtCost(savings)}` : 'cache savings'}
+          subColor="var(--cl-ok)"
+        />
+        <GaugeCard
+          donut={
+            <Donut
+              pct={tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0}
+              color="var(--cl-ink)"
+              label={tasks.length > 0 ? `${doneTasks}/${tasks.length}` : '—'}
             />
-          </div>
-          <div
-            className="font-mono"
-            style={{
-              marginTop: 7,
-              fontSize: 9.5,
-              fontVariantNumeric: 'tabular-nums',
-              color: 'var(--cl-ink-4)',
-            }}
-          >
-            {ctx
-              ? `${kTok(ctx.used)} / ${kTok(ctx.max)} · ${kTok(Math.max(0, ctx.max - ctx.used))} left`
-              : 'waiting for the first turn…'}
-          </div>
-        </div>
-
-        {/* COST + cache savings */}
-        <div style={{ padding: '12px 22px 13px', background: '#262421' }}>
-          <div className="flex items-baseline" style={{ gap: 10 }}>
-            <span
-              style={{
-                fontSize: 22,
-                fontWeight: 700,
-                letterSpacing: '-0.03em',
-                fontVariantNumeric: 'tabular-nums',
-                lineHeight: 1,
-                color: 'var(--cl-accent)',
-              }}
-            >
-              {summary ? fmtCost(summary.estimatedCost) : '—'}
-            </span>
-            {savings > 0 && (
-              <span
-                className="font-mono"
-                style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', color: 'var(--cl-ok)' }}
-              >
-                cache −{fmtCost(savings)} ({savingsPct}%)
-              </span>
-            )}
-          </div>
-          <div
-            className="font-mono"
-            style={{ fontSize: 8.5, letterSpacing: '0.16em', color: '#8d897f', marginTop: 7 }}
-          >
-            {summary?.model ? fmtModel(summary.model).toUpperCase() : 'COST · LIVE'}
-            {turns > 0 && ` · ${turns} TURN${turns === 1 ? '' : 'S'}`}
-          </div>
-        </div>
+          }
+          label="TASKS"
+          value={tasks.length > 0 ? `${Math.round((doneTasks / tasks.length) * 100)}%` : '—'}
+          valueColor="var(--cl-ink)"
+          sub={
+            runningTasks > 0
+              ? `${runningTasks} running`
+              : tasks.length > 0
+                ? `${tasks.length - doneTasks} left`
+                : 'no tasks yet'
+          }
+          subColor="var(--cl-ink-4)"
+        />
       </div>
 
       {/* scrolling flow */}
       <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 22px 22px' }}>
-        {/* ENVIRONMENT — project-scoped, available before the session even registers */}
-        <EnvironmentSection init={init} />
-
         {!sessionId && (
           <p className="cl-transcript-state">Waiting for the CLI session to register…</p>
         )}
@@ -840,143 +1119,11 @@ export function MissionRail({
           </p>
         )}
 
-        {/* AGENTS */}
-        {agents.length > 0 && (
-          <>
-            <RailEyebrow label="AGENTS" n={agents.length} />
-            {agents.map(a => (
-              <button
-                key={a.key}
-                type="button"
-                className="tmc-row block w-full text-left disabled:opacity-60"
-                disabled={!a.agentId}
-                title={a.agentId ? 'Open the agent transcript' : 'Transcript not on disk yet'}
-                onClick={() => onOpenAgent(a)}
-                style={{
-                  border: '1px solid var(--cl-line)',
-                  borderRadius: 12,
-                  padding: '12px 14px',
-                  marginBottom: 8,
-                  cursor: a.agentId ? 'pointer' : 'default',
-                }}
-              >
-                <div className="flex items-center gap-2.5">
-                  <Glyph letter="A" accent size={26} />
-                  <div className="min-w-0 flex-1">
-                    <div style={{ fontSize: 13.5, fontWeight: 600, lineHeight: 1.2 }}>
-                      {a.subagentType}
-                    </div>
-                    <div
-                      className="truncate"
-                      style={{
-                        fontSize: 11.5,
-                        color: a.isError ? 'var(--cl-danger)' : 'var(--cl-ink-3)',
-                      }}
-                    >
-                      {a.description || a.prompt}
-                    </div>
-                  </div>
-                  {a.messageCount != null && (
-                    <span
-                      className="font-mono shrink-0"
-                      style={{
-                        fontSize: 9,
-                        letterSpacing: '0.1em',
-                        color: 'var(--cl-ink-4)',
-                        whiteSpace: 'nowrap',
-                      }}
-                    >
-                      <b style={{ fontWeight: 600, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b>{' '}
-                      MSGS
-                    </span>
-                  )}
-                </div>
-                {a.prompt && (
-                  <div
-                    className="font-mono truncate"
-                    style={{
-                      marginTop: 9,
-                      padding: '8px 11px',
-                      borderRadius: 8,
-                      background: 'var(--cl-paper-2)',
-                      fontSize: 10,
-                      color: 'var(--cl-ink-3)',
-                    }}
-                  >
-                    → {a.prompt}
-                  </div>
-                )}
-                {a.agentId && (
-                  <div
-                    className="font-mono"
-                    style={{
-                      fontSize: 9.5,
-                      letterSpacing: '0.14em',
-                      color: 'var(--cl-accent-ink)',
-                      fontWeight: 600,
-                      marginTop: 9,
-                    }}
-                  >
-                    FULL TRANSCRIPT →
-                  </div>
-                )}
-              </button>
-            ))}
-          </>
-        )}
+        {/* AGENTS — bento card, interactive rows (→ transcript) */}
+        {agents.length > 0 && <AgentsCard agents={agents} onOpenAgent={onOpenAgent} />}
 
-        {/* SKILLS */}
-        {skillRuns.length > 0 && (
-          <>
-            <RailEyebrow label="SKILLS" n={skillRuns.length} />
-            {skillRuns.map(s => {
-              const clickable = !!s.group;
-              return (
-                <button
-                  key={s.key}
-                  type="button"
-                  className="tmc-row flex items-center gap-2.5 w-full text-left"
-                  title={clickable ? 'View skill output' : s.description || undefined}
-                  disabled={!clickable}
-                  onClick={() => s.group && onOpenTool(s.group)}
-                  style={{
-                    padding: `${rowPad + 2}px 4px`,
-                    margin: '0 -4px',
-                    borderRadius: 8,
-                    cursor: clickable ? 'pointer' : 'default',
-                  }}
-                >
-                  <Glyph letter={s.viaTool ? '✦' : '/'} accent size={22} />
-                  <span
-                    className="font-mono shrink-0"
-                    style={{ fontSize: 12.5, color: 'var(--cl-ink)' }}
-                  >
-                    {s.viaTool ? s.name : `/${s.name}`}
-                  </span>
-                  {s.args && (
-                    <span
-                      className="truncate min-w-0"
-                      style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}
-                    >
-                      {s.args}
-                    </span>
-                  )}
-                  <span
-                    className="font-mono ml-auto shrink-0"
-                    style={{
-                      fontSize: 9,
-                      letterSpacing: '0.12em',
-                      color: 'var(--cl-accent-ink)',
-                      fontWeight: 600,
-                    }}
-                  >
-                    {clickable ? 'OUTPUT →' : 'SKILL'}
-                  </span>
-                </button>
-              );
-            })}
-          </>
-        )}
+        {/* SKILLS — bento card, pills (→ output) */}
+        {skillRuns.length > 0 && <SkillsCard skills={skillRuns} onOpenTool={onOpenTool} />}
 
         {/* CHANGES — grouped by repo area (comfortable) or a flat list (compact) */}
         {changes.length > 0 && (
@@ -1159,6 +1306,9 @@ export function MissionRail({
             })}
           </>
         )}
+
+        {/* ENVIRONMENT — read-only session setup, kept below the bento + changes */}
+        <EnvironmentSection init={init} />
       </div>
     </aside>
   );
