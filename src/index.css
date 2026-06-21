@@ -182,6 +182,13 @@ body {
 .tmc-row:hover {
   background: var(--cl-paper-2);
 }
+/* v2 Outline column rows (the session navigator). */
+.cl-otrow {
+  transition: background 140ms ease;
+}
+.cl-otrow:hover {
+  background: color-mix(in oklch, var(--cl-accent-soft) 50%, transparent);
+}
 .cl-live-dot {
   animation: cl-live-pulse 2.2s ease-out infinite;
 }
@@ -2751,6 +2758,92 @@ body {
 .cl-chat-reading .cl-turn[data-dim] {
   opacity: 0.28;
   filter: saturate(0.4);
+}
+
+/* ── V2 "Outline + Focus" chat content alignment ────────────────────────
+   The reading column drops the continuous left rail/spine, pulls the role
+   orb inline into each turn header, and closes the header row with a
+   trailing hairline rule — matching the design's center Focus column. The
+   article measure tightens and timestamps fall away (the model tag stays). */
+.cl-chat-reading .cl-transcript-inner::before {
+  display: none; /* no continuous timeline spine */
+}
+.cl-chat-reading .cl-transcript-inner {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 30px 24px 140px;
+}
+.cl-chat-reading .cl-turn {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 0;
+}
+/* the rail collapses to just the orb, pulled inline at the header's left */
+.cl-chat-reading .cl-turn-rail {
+  position: absolute;
+  left: 0;
+  top: 1px;
+  flex-direction: row;
+  padding-top: 0;
+  align-self: auto;
+}
+.cl-chat-reading .cl-turn-index,
+.cl-chat-reading .cl-turn-spine {
+  display: none;
+}
+.cl-chat-reading .cl-turn-orb {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  font-size: 9.5px;
+}
+.cl-chat-reading .cl-turn-body {
+  padding-top: 0;
+}
+.cl-chat-reading .cl-turn-head {
+  position: relative;
+  padding-left: 28px; /* clear the inline orb */
+  min-height: 20px;
+  margin-bottom: 14px;
+}
+.cl-chat-reading .cl-turn-who {
+  font-size: 10px;
+  letter-spacing: 0.16em;
+}
+/* drop the timestamp + its separator; keep the model tag (no leading dot) */
+.cl-chat-reading .cl-turn-head time,
+.cl-chat-reading .cl-turn-head .cl-turn-sep:not(.cl-turn-sep--model),
+.cl-chat-reading .cl-turn-sep--model {
+  display: none;
+}
+/* trailing hairline rule closes the header row */
+.cl-chat-reading .cl-turn-head::after {
+  content: '';
+  flex: 1;
+  height: 1px;
+  min-width: 24px;
+  margin-left: 10px;
+  background: var(--cl-line);
+}
+.cl-chat-reading .cl-turn--continuation .cl-turn-head::after {
+  display: none;
+}
+/* neutralise the auto-margins that would eat the hairline; the hover actions
+   float over the right end of the rule instead of pushing it out */
+.cl-chat-reading .cl-turn-copy,
+.cl-chat-reading .cl-turn-tool-count {
+  margin-left: 0;
+}
+.cl-chat-reading .cl-turn-copy,
+.cl-chat-reading .cl-turn-export {
+  position: absolute;
+  top: 0;
+  background: var(--cl-paper);
+}
+.cl-chat-reading .cl-turn-export {
+  right: 0;
+}
+.cl-chat-reading .cl-turn-copy {
+  right: 24px;
 }
 
 /* right-edge minimap timeline — a hairline track with proportional dots */

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useActiveSessions, useSessionList } from '../../../hooks/useIPC';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
@@ -15,6 +15,7 @@ import type { SessionAgent, ToolGroup } from '../chat/utils';
 import { fmtCost, sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
+import { SessionOutline } from './SessionOutline';
 
 /**
  * The unified Terminal ↔ Lens view ("Terminal Mission Control").
@@ -38,6 +39,8 @@ import { MissionRail } from './MissionRail';
 const RAIL_DEFAULT = 432;
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
+// v2 Outline column — a fixed-width session navigator on the left.
+const OUTLINE_WIDTH = 266;
 
 type View = 'terminal' | 'lens';
 type Overlay =
@@ -47,29 +50,21 @@ type Overlay =
   | { kind: 'agent-def'; agent: Agent }
   | null;
 
-/** Glass segmented control: TERMINAL (dark-slab active) ↔ LENS (paper active). */
-function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
+/** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
+ *  focus (center) column, replacing the glass segmented pill (design 02 · Outline
+ *  + Focus). The active tab carries an accent bottom border. */
+function ViewTabs({ view, setView }: { view: View; setView: (v: View) => void }) {
   const opts: Array<{ id: View; label: string; glyph: string }> = [
     { id: 'terminal', label: 'TERMINAL', glyph: '❯_' },
     { id: 'lens', label: 'LENS', glyph: '◎' },
   ];
   return (
     <div
-      style={{
-        display: 'inline-flex',
-        padding: 3,
-        borderRadius: 999,
-        background: 'var(--cl-glass-bg-strong)',
-        border: '1px solid var(--cl-glass-border)',
-        WebkitBackdropFilter: 'blur(12px) saturate(1.5)',
-        backdropFilter: 'blur(12px) saturate(1.5)',
-        boxShadow: 'inset 0 1px 0 var(--cl-glass-highlight)',
-        flexShrink: 0,
-      }}
+      className="shrink-0 flex items-center justify-center"
+      style={{ gap: 30, padding: '0 26px', borderBottom: '1px solid var(--cl-line)' }}
     >
       {opts.map(o => {
         const on = view === o.id;
-        const dark = o.id === 'terminal';
         return (
           <button
             key={o.id}
@@ -78,29 +73,23 @@ function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void 
             className="inline-flex items-center transition-colors"
             style={{
               gap: 7,
-              padding: '6px 14px',
-              borderRadius: 999,
-              background: on ? (dark ? '#262421' : 'var(--cl-paper)') : 'transparent',
-              boxShadow: on ? '0 1px 4px oklch(0 0 0/.14)' : 'none',
+              padding: '14px 4px 12px',
+              borderBottom: `2px solid ${on ? 'var(--cl-accent)' : 'transparent'}`,
             }}
           >
             <span
               className="font-mono"
-              style={{
-                fontSize: 9,
-                fontWeight: 700,
-                color: on ? (dark ? '#e0654a' : 'var(--cl-accent-ink)') : 'var(--cl-ink-4)',
-              }}
+              style={{ fontSize: 10, fontWeight: 700, color: on ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)' }}
             >
               {o.glyph}
             </span>
             <span
               className="font-mono"
               style={{
-                fontSize: 9.5,
+                fontSize: 10,
                 letterSpacing: '0.14em',
                 fontWeight: on ? 700 : 500,
-                color: on ? (dark ? '#efece4' : 'var(--cl-ink)') : 'var(--cl-ink-4)',
+                color: on ? 'var(--cl-ink)' : 'var(--cl-ink-4)',
               }}
             >
               {o.label}
@@ -109,6 +98,48 @@ function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void 
         );
       })}
     </div>
+  );
+}
+
+/** Collapse/expand toggle for the v2 Outline column — a panel-left glyph (left
+ *  pane filled when the outline is shown). Mirrors RailToggle. */
+function OutlineToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+  const label = collapsed ? 'Show session outline' : 'Hide session outline';
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      title={label}
+      aria-label={label}
+      aria-pressed={!collapsed}
+      className="inline-flex items-center justify-center transition-colors shrink-0"
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 999,
+        border: '1px solid var(--cl-glass-border)',
+        background: collapsed ? 'transparent' : 'var(--cl-glass-bg-strong)',
+        WebkitBackdropFilter: 'blur(12px) saturate(1.5)',
+        backdropFilter: 'blur(12px) saturate(1.5)',
+        color: collapsed ? 'var(--cl-ink-4)' : 'var(--cl-accent-ink)',
+      }}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden="true"
+      >
+        <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
+        <line x1="6.25" y1="3.25" x2="6.25" y2="12.75" />
+        {!collapsed && (
+          <rect x="2" y="3.25" width="4.25" height="9.5" fill="currentColor" stroke="none" opacity="0.22" />
+        )}
+      </svg>
+    </button>
   );
 }
 
@@ -203,6 +234,36 @@ export function TerminalMissionControl({
       return next;
     });
   }, []);
+
+  // v2 Outline column — collapsible like the rail, defaults to shown for a
+  // resumed session (something to index), hidden for a fresh terminal.
+  const [outlineCollapsed, setOutlineCollapsed] = useState<boolean>(() => {
+    const saved = localStorage.getItem('tmc-outline-collapsed');
+    if (saved != null) return saved === '1';
+    return !resumeSessionId;
+  });
+  const toggleOutline = useCallback(() => {
+    setOutlineCollapsed(c => {
+      const next = !c;
+      localStorage.setItem('tmc-outline-collapsed', next ? '1' : '0');
+      return next;
+    });
+  }, []);
+
+  // Imperative scroll handle into the embedded Lens transcript — an outline row
+  // calls it to jump to a turn (set by ChatView, null in Terminal mode).
+  const jumpToTurnRef = useRef<((n: number) => void) | null>(null);
+  const jumpToTurn = useCallback((turnN: number) => {
+    if (view === 'lens') {
+      jumpToTurnRef.current?.(turnN);
+      return;
+    }
+    // Coming from Terminal: reveal the Lens first, then scroll once the
+    // transcript is on screen (it stays mounted under display:none, so the ref
+    // is already wired — only its visibility flips this frame).
+    setView('lens');
+    requestAnimationFrame(() => jumpToTurnRef.current?.(turnN));
+  }, [view, setView]);
 
   const [ptyPid, setPtyPid] = useState<number | null>(null);
   const [termStatus, setTermStatus] = useState<TerminalStatus>('starting');
@@ -345,17 +406,24 @@ export function TerminalMissionControl({
       />
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
+        {/* v2 Outline column — the session navigator (collapsible) */}
+        {!outlineCollapsed && (
+          <SessionOutline
+            hash={project.hash}
+            sessionId={sessionId}
+            realPath={project.realPath}
+            width={OUTLINE_WIDTH}
+            onJump={jumpToTurn}
+            onOpenTool={group => setOverlay({ kind: 'tool', group })}
+            onOpenAgent={agent => setOverlay({ kind: 'agent', agent })}
+            onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
+          />
+        )}
+
         {/* main column */}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* frame above the console: path + Terminal/Lens switch */}
+          {/* frame above the console: session tags + outline/rail toggles */}
           <div className="shrink-0 flex items-center" style={{ gap: 14, padding: '14px 26px 0' }}>
-            <span
-              className="font-mono truncate"
-              style={{ fontSize: 10, letterSpacing: '0.06em', color: 'var(--cl-ink-3)' }}
-              title={project.realPath}
-            >
-              {project.realPath}
-            </span>
             <span style={{ flex: 1 }} />
             {sessionFilename && (
               <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
@@ -393,9 +461,12 @@ export function TerminalMissionControl({
                 )}
               </div>
             )}
-            <ViewSwitch view={view} setView={setView} />
+            <OutlineToggle collapsed={outlineCollapsed} onToggle={toggleOutline} />
             <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
           </div>
+
+          {/* v2: the Terminal/Lens switch heads the focus column as centered tabs */}
+          <ViewTabs view={view} setView={setView} />
 
           {/* the view: dark TUI slab or the embedded Lens chat (both kept mounted).
               Relative so a rail-opened detail overlay anchors to the content area
@@ -429,6 +500,7 @@ export function TerminalMissionControl({
                   onBack={onBack}
                   onOpenSkill={skill => setOverlay({ kind: 'skill-def', skill })}
                   onOpenAgent={agent => setOverlay({ kind: 'agent-def', agent })}
+                  jumpToTurnRef={jumpToTurnRef}
                 />
               </div>
             )}
