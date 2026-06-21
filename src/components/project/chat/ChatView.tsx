@@ -874,6 +874,7 @@ export function ChatView({
   onOpenSkill,
   onOpenAgent,
   embedded = false,
+  jumpToTurnRef,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -882,6 +883,10 @@ export function ChatView({
   onOpenSkill?: (skill: Skill) => void;
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Imperative handle exposed to an outside navigator (the v2 Outline column):
+   *  set to this view's `jumpToTurn` so a session-outline row can scroll the
+   *  embedded transcript to a turn. Null while unmounted / Terminal mode. */
+  jumpToTurnRef?: React.MutableRefObject<((n: number) => void) | null>;
   /** Rendered inside the unified Terminal/Lens view: drop the own TopBar (the
    *  unified frame provides chrome + the Terminal↔Lens switch), the right-edge
    *  minimap (the Mission Control rail is the companion surface) and the
@@ -1295,6 +1300,17 @@ export function ChatView({
     el.scrollIntoView({ behavior: 'smooth', block: 'start' });
     setActiveTurn(n);
   }, []);
+
+  // Publish `jumpToTurn` to an outside navigator (the v2 session Outline). The
+  // outline lives in the unified Terminal/Lens frame, beside this embedded view;
+  // wiring the handle lets an outline row scroll this transcript to its turn.
+  useEffect(() => {
+    if (!jumpToTurnRef) return;
+    jumpToTurnRef.current = jumpToTurn;
+    return () => {
+      if (jumpToTurnRef.current === jumpToTurn) jumpToTurnRef.current = null;
+    };
+  }, [jumpToTurnRef, jumpToTurn]);
 
   // The rail's "active" agent = the latest dispatch at or above the current
   // scroll position. As you scroll past one agent's card toward the next, the
