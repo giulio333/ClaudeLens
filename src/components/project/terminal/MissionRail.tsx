@@ -1,19 +1,27 @@
 import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 import {
+  useAllSkills,
   useChatSession,
   useEffectiveConfig,
+  useGlobalAgents,
+  useProjectAgents,
   useProjectTasks,
+  usePlugins,
   useSessionList,
   useSessionSubagents,
 } from '../../../hooks/useIPC';
+import type { Agent, Skill } from '../../../hooks/useIPC';
 import type { ChatMessage, InitInfo } from '../../../types';
 import {
   buildProcessedMessages,
   correlateSessionAgents,
+  correlateSessionSkills,
   fileExt,
+  skillHasViewableOutput,
   AGENT_TOOLS,
   ToolGroup,
   SessionAgent,
+  SessionSkill,
 } from '../chat/utils';
 import { FileIcon } from '../chat/fileIcons';
 import { QueryError } from '../../QueryError';
@@ -58,16 +66,6 @@ function kTok(n: number): string {
 }
 
 type ContextState = { used: number; max: number; pct: number };
-type SkillRun = {
-  key: string;
-  name: string;
-  args?: string;
-  description?: string;
-  /** true = invoked agentically as a `Skill` tool_use; false = a custom slash command. */
-  viaTool: boolean;
-  /** For agentic skills: the tool group, so the row can open the produced output. */
-  group?: ToolGroup;
-};
 
 /** CONTEXT occupancy from the latest assistant turn's usage (input + both cache
  *  tiers ≈ the prompt size sent). The transcript records only the bare model id
@@ -604,69 +602,136 @@ function AgentAvatars({ n }: { n: number }) {
   );
 }
 
-/** One agent row inside the AGENTS bento card — opens the full transcript when
- *  one exists on disk, else is disabled. */
-function AgentRow({ a, onOpen }: { a: SessionAgent; onOpen: () => void }) {
-  const failed = a.isError;
+/** Small "open definition" glyph (go-to / open-in-detail) for the secondary
+ *  action that deep-links an agent row to its definition. */
+function OpenDefGlyph() {
   return (
-    <button
-      type="button"
-      className="tmc-row w-full text-left disabled:opacity-60"
-      disabled={!a.agentId}
-      title={a.agentId ? 'Open the agent transcript' : 'Transcript not on disk yet'}
-      onClick={onOpen}
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M6 3.5H4.5A1.5 1.5 0 0 0 3 5v6.5A1.5 1.5 0 0 0 4.5 13H11a1.5 1.5 0 0 0 1.5-1.5V10" />
+      <path d="M9 3.5h3.5V7" />
+      <path d="M12.5 3.5 7.5 8.5" />
+    </svg>
+  );
+}
+
+/** One agent row inside the AGENTS bento card. The row opens the full transcript
+ *  (when one exists on disk); a trailing button deep-links to the agent's
+ *  definition when its `subagent_type` resolves to a known agent. */
+function AgentRow({
+  a,
+  def,
+  onOpenTranscript,
+  onOpenDef,
+}: {
+  a: SessionAgent;
+  def: Agent | undefined;
+  onOpenTranscript: () => void;
+  onOpenDef: (agent: Agent) => void;
+}) {
+  const failed = a.isError;
+  const canTranscript = !!a.agentId;
+  return (
+    <div
+      className="tmc-row flex items-center"
       style={{
-        display: 'flex',
-        alignItems: 'center',
         gap: 11,
         padding: '8px 0',
         borderTop: '1px solid color-mix(in oklch, var(--cl-violet-soft) 60%, transparent)',
-        cursor: a.agentId ? 'pointer' : 'default',
       }}
     >
-      <span
-        aria-hidden
-        className="font-mono shrink-0 inline-flex items-center justify-center"
-        style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
+      <button
+        type="button"
+        className="flex items-center min-w-0 flex-1 text-left disabled:opacity-60"
+        disabled={!canTranscript}
+        title={canTranscript ? 'Open the agent transcript' : 'Transcript not on disk yet'}
+        onClick={onOpenTranscript}
+        style={{
+          gap: 11,
+          background: 'none',
+          border: 0,
+          padding: 0,
+          cursor: canTranscript ? 'pointer' : 'default',
+        }}
       >
-        A
-      </span>
-      <span className="min-w-0 flex-1">
-        <span style={{ display: 'block', font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}>
-          {a.subagentType}
-        </span>
         <span
-          className="font-mono truncate"
-          style={{ display: 'block', fontSize: 10, color: failed ? 'var(--cl-danger)' : 'var(--cl-ink-3)' }}
+          aria-hidden
+          className="font-mono shrink-0 inline-flex items-center justify-center"
+          style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
         >
-          {a.description || a.prompt}
+          A
         </span>
-      </span>
-      {a.messageCount != null && (
-        <span
-          className="font-mono shrink-0"
-          style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+        <span className="min-w-0 flex-1">
+          <span style={{ display: 'block', font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}>
+            {a.subagentType}
+          </span>
+          <span
+            className="font-mono truncate"
+            style={{ display: 'block', fontSize: 10, color: failed ? 'var(--cl-danger)' : 'var(--cl-ink-3)' }}
+          >
+            {a.description || a.prompt}
+          </span>
+        </span>
+        {a.messageCount != null && (
+          <span
+            className="font-mono shrink-0"
+            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap', marginLeft: 8 }}
+          >
+            <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b> MSGS
+          </span>
+        )}
+        {failed && (
+          <span
+            className="font-mono shrink-0"
+            style={{ fontSize: 10, fontWeight: 700, color: 'var(--cl-danger)', marginLeft: 8 }}
+          >
+            FAILED
+          </span>
+        )}
+      </button>
+      {def && (
+        <button
+          type="button"
+          onClick={() => onOpenDef(def)}
+          title={`View ${a.subagentType} definition`}
+          aria-label="View agent definition"
+          className="shrink-0 inline-flex items-center justify-center transition-colors"
+          style={{
+            width: 24,
+            height: 24,
+            borderRadius: 6,
+            border: '1px solid color-mix(in oklch, var(--cl-violet-soft) 70%, var(--cl-line))',
+            background: 'var(--cl-paper)',
+            color: 'var(--cl-violet-ink)',
+          }}
         >
-          <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b> MSGS
-        </span>
+          <OpenDefGlyph />
+        </button>
       )}
-      <span
-        className="font-mono shrink-0"
-        style={{ fontSize: 10, fontWeight: 700, color: failed ? 'var(--cl-danger)' : 'var(--cl-accent-ink)' }}
-      >
-        {failed ? 'FAILED' : a.agentId ? '→' : ''}
-      </span>
-    </button>
+    </div>
   );
 }
 
 /** Full-width AGENTS card — violet-tinted, header cluster + interactive rows. */
 function AgentsCard({
   agents,
+  agentDefOf,
   onOpenAgent,
+  onOpenAgentDef,
 }: {
   agents: SessionAgent[];
+  agentDefOf: (subagentType: string) => Agent | undefined;
   onOpenAgent: (agent: SessionAgent) => void;
+  onOpenAgentDef: (agent: Agent) => void;
 }) {
   return (
     <div
@@ -692,22 +757,60 @@ function AgentsCard({
         <AgentAvatars n={agents.length} />
       </div>
       {agents.map(a => (
-        <AgentRow key={a.key} a={a} onOpen={() => onOpenAgent(a)} />
+        <AgentRow
+          key={a.key}
+          a={a}
+          def={agentDefOf(a.subagentType)}
+          onOpenTranscript={() => onOpenAgent(a)}
+          onOpenDef={onOpenAgentDef}
+        />
       ))}
     </div>
   );
 }
 
-/** One skill pill inside the SKILLS card — opens the produced output when the
- *  skill ran agentically (a `Skill` tool_use), else is inert. */
-function SkillPill({ s, onOpen }: { s: SkillRun; onOpen: () => void }) {
-  const clickable = !!s.group;
+/** One skill pill inside the SKILLS card — smart-routes on click: an agentic
+ *  skill that produced a real result opens that output; otherwise the pill
+ *  deep-links to the skill's definition (project/global/plugin) when it resolves;
+ *  a "launch-only" agentic skill with neither falls back to its bare tool call. */
+function SkillPill({
+  s,
+  onOpenOutput,
+  onOpenDef,
+}: {
+  s: SessionSkill;
+  onOpenOutput: (g: ToolGroup) => void;
+  onOpenDef: (skill: Skill) => void;
+}) {
+  const hasOutput = skillHasViewableOutput(s.group);
+  const canDef = s.skill !== null;
+  // Priority: this run's produced artifact > the static definition > the bare
+  // launch tool call (last resort, only when nothing better resolves).
+  const route: 'output' | 'def' | 'launch' | null = hasOutput
+    ? 'output'
+    : canDef
+      ? 'def'
+      : s.group
+        ? 'launch'
+        : null;
+  const clickable = route !== null;
+  const title =
+    route === 'output'
+      ? 'View skill output'
+      : route === 'def'
+        ? 'View skill'
+        : route === 'launch'
+          ? 'Skill launched — view tool call'
+          : s.description || undefined;
   return (
     <button
       type="button"
       disabled={!clickable}
-      title={clickable ? 'View skill output' : s.description || undefined}
-      onClick={onOpen}
+      title={title}
+      onClick={() => {
+        if (route === 'output' || route === 'launch') onOpenOutput(s.group!);
+        else if (route === 'def') onOpenDef(s.skill!);
+      }}
       className="inline-flex items-center"
       style={{
         gap: 7,
@@ -725,7 +828,7 @@ function SkillPill({ s, onOpen }: { s: SkillRun; onOpen: () => void }) {
         className="inline-flex items-center justify-center"
         style={{ width: 16, height: 16, borderRadius: 4, background: 'var(--cl-accent)', color: '#fff', font: '700 9px/1 var(--font-mono)' }}
       >
-        {s.viaTool ? '✦' : '/'}
+        {s.group ? '✦' : '/'}
       </span>
       {s.name}
       {clickable && <span style={{ color: 'var(--cl-accent-ink)', fontSize: 9 }}>→</span>}
@@ -734,7 +837,15 @@ function SkillPill({ s, onOpen }: { s: SkillRun; onOpen: () => void }) {
 }
 
 /** Full-width SKILLS card — a wrap of pills. */
-function SkillsCard({ skills, onOpenTool }: { skills: SkillRun[]; onOpenTool: (g: ToolGroup) => void }) {
+function SkillsCard({
+  skills,
+  onOpenTool,
+  onOpenSkillDef,
+}: {
+  skills: SessionSkill[];
+  onOpenTool: (g: ToolGroup) => void;
+  onOpenSkillDef: (skill: Skill) => void;
+}) {
   return (
     <div style={{ ...bentoCard, marginTop: 14, padding: '14px 16px' }}>
       <div
@@ -745,7 +856,7 @@ function SkillsCard({ skills, onOpenTool }: { skills: SkillRun[]; onOpenTool: (g
       </div>
       <div className="flex flex-wrap" style={{ gap: 8 }}>
         {skills.map(s => (
-          <SkillPill key={s.key} s={s} onOpen={() => s.group && onOpenTool(s.group)} />
+          <SkillPill key={s.key} s={s} onOpenOutput={onOpenTool} onOpenDef={onOpenSkillDef} />
         ))}
       </div>
     </div>
@@ -762,6 +873,8 @@ export function MissionRail({
   onWidthChange,
   onOpenTool,
   onOpenAgent,
+  onOpenSkillDef,
+  onOpenAgentDef,
 }: {
   hash: string;
   /** Null until the CLI registers itself in `~/.claude/sessions/` (a few seconds). */
@@ -772,6 +885,10 @@ export function MissionRail({
   /** Detail views need width: the parent opens them as a wide overlay. */
   onOpenTool: (group: ToolGroup) => void;
   onOpenAgent: (agent: SessionAgent) => void;
+  /** Deep-link a skill row to its definition (read-only overlay in the parent). */
+  onOpenSkillDef: (skill: Skill) => void;
+  /** Deep-link an agent row to its definition (read-only overlay in the parent). */
+  onOpenAgentDef: (agent: Agent) => void;
 }) {
   const filename = sessionId ? `${sessionId}.jsonl` : null;
   const { data: messages, isError, error, refetch } = useChatSession(hash, filename);
@@ -787,6 +904,22 @@ export function MissionRail({
       : undefined;
   // The SDK init handshake (zero token cost) — surfaced read-only in ENVIRONMENT.
   const init = effectiveConfig?.init ?? null;
+  // The skills registry — lets a typed `/foo` skill be recognised by a name match
+  // even when its post-command expansion marker isn't visible (same source the
+  // Lens footer dock uses, so the rail and the dock stay in agreement).
+  const { data: allSkills } = useAllSkills(realPath);
+  // Plugins resolve namespaced agentic skills (`document-skills:pdf`) to their
+  // definition; the agent registries resolve a sub-agent's `subagent_type` to its
+  // definition so each row can deep-link past the transcript to the agent config.
+  const { data: plugins } = usePlugins();
+  const { data: globalAgents } = useGlobalAgents();
+  const { data: projectAgents } = useProjectAgents(realPath);
+  const agentDefOf = useMemo(() => {
+    const byName = new Map<string, Agent>();
+    for (const a of globalAgents ?? []) byName.set(a.name, a);
+    for (const a of projectAgents ?? []) byName.set(a.name, a);
+    return (subagentType: string) => byName.get(subagentType);
+  }, [globalAgents, projectAgents]);
 
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -825,32 +958,16 @@ export function MissionRail({
     () => correlateSessionAgents(processed, subagentMetas ?? []),
     [processed, subagentMetas]
   );
-  // SKILLS = real skills only. Two sources, both excluding built-in slash commands
-  // (/model, /clear, …): a `Skill` tool_use (skills run agentically — these never
-  // appear as <command-name>, so the old command-only read missed them) and custom
-  // slash commands the user typed that are flagged isSkill.
-  const skillRuns = useMemo<SkillRun[]>(() => {
-    const out: SkillRun[] = [];
-    processed.forEach((p, i) => {
-      for (const g of p.toolGroups) {
-        if (g.use.name === 'Skill') {
-          const input = g.use.input as Record<string, unknown>;
-          out.push({ key: g.use.id || `skill-${i}`, name: String(input.skill ?? 'skill'), viaTool: true, group: g });
-        }
-      }
-      const c = p.command;
-      if (c?.isSkill) {
-        out.push({
-          key: p.msg.uuid || `cmd-${i}`,
-          name: c.command,
-          args: c.args,
-          description: c.description,
-          viaTool: false,
-        });
-      }
-    });
-    return out.reverse();
-  }, [processed]);
+  // SKILLS — the same correlation the Lens footer dock uses, so the rail and the
+  // dock never disagree. Catches agentic `Skill` tool_uses and slash-command
+  // skills; the latter are matched by the post-command skill-expansion marker OR
+  // a name hit against the skills registry (the marker alone missed skills whose
+  // expansion message we don't see — the bug where the rail dropped skills the
+  // dock still listed). Reversed to show the most recent first.
+  const skills = useMemo(
+    () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []).reverse(),
+    [processed, allSkills, plugins]
+  );
   const changes = useMemo(
     () =>
       buildFileChanges(
@@ -897,7 +1014,7 @@ export function MissionRail({
   const doneTasks = tasks.filter(t => t.status === 'completed').length;
   const runningTasks = tasks.filter(t => t.status === 'in_progress').length;
   const empty =
-    agents.length === 0 && skillRuns.length === 0 && changes.length === 0 && tasks.length === 0;
+    agents.length === 0 && skills.length === 0 && changes.length === 0 && tasks.length === 0;
 
   const railWrap: CSSProperties = {
     width,
@@ -1119,11 +1236,20 @@ export function MissionRail({
           </p>
         )}
 
-        {/* AGENTS — bento card, interactive rows (→ transcript) */}
-        {agents.length > 0 && <AgentsCard agents={agents} onOpenAgent={onOpenAgent} />}
+        {/* AGENTS — bento card, rows → transcript, trailing button → definition */}
+        {agents.length > 0 && (
+          <AgentsCard
+            agents={agents}
+            agentDefOf={agentDefOf}
+            onOpenAgent={onOpenAgent}
+            onOpenAgentDef={onOpenAgentDef}
+          />
+        )}
 
-        {/* SKILLS — bento card, pills (→ output) */}
-        {skillRuns.length > 0 && <SkillsCard skills={skillRuns} onOpenTool={onOpenTool} />}
+        {/* SKILLS — bento card, pills → output / definition / tool call */}
+        {skills.length > 0 && (
+          <SkillsCard skills={skills} onOpenTool={onOpenTool} onOpenSkillDef={onOpenSkillDef} />
+        )}
 
         {/* CHANGES — grouped by repo area (comfortable) or a flat list (compact) */}
         {changes.length > 0 && (
