@@ -9,6 +9,7 @@ import {
   useGlobalAgents,
   useProjectAgents,
   useAllSkills,
+  usePlugins,
 } from '../../../hooks/useIPC';
 import { SessionSummary, Skill, Agent, ChatMessage, ToolActivity } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
@@ -18,6 +19,7 @@ import {
   correlateSessionSkills,
   describeTurn,
   touchedFiles,
+  skillHasViewableOutput,
   skillInitial,
   ChatDetailsFilter,
   SessionAgent,
@@ -330,9 +332,10 @@ function SkillDockSheet({
       </div>
       <div className="cl-dock-rows">
         {skills.map(s => {
-          // An agentic skill opens its produced output (tool_result); a
-          // slash-command skill deep-links to its definition when one resolves.
-          const canOpenOutput = s.group != null;
+          // An agentic skill that produced a real result opens it; a "launch-only"
+          // skill (output is just "Launching skill: …") has nothing to show, so it
+          // falls through to its definition or a locate, like a slash-command skill.
+          const canOpenOutput = skillHasViewableOutput(s.group);
           const canOpenDef = s.skill !== null;
           const title = canOpenOutput
             ? 'View skill output'
@@ -898,6 +901,7 @@ export function ChatView({
   const { data: globalAgents } = useGlobalAgents();
   const { data: projectAgents } = useProjectAgents(project.realPath);
   const { data: allSkills } = useAllSkills(project.realPath);
+  const { data: plugins } = usePlugins();
 
   // Resolve a dispatched sub-agent's identity color from its definition
   // (`subagent_type` → agent.color). Project agents win over globals on name
@@ -1111,8 +1115,8 @@ export function ChatView({
   // Skills invoked in this session, linked to their definitions — drives the
   // footer skill dock (sibling of the agent dock).
   const skills = useMemo(
-    () => correlateSessionSkills(processed, allSkills ?? []),
-    [processed, allSkills]
+    () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []),
+    [processed, allSkills, plugins]
   );
 
   // The detail filter (Minimal/Full) drives which turns are visible — Minimal

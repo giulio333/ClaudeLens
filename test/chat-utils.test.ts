@@ -3,6 +3,8 @@ import {
   correlateSessionAgents,
   correlateSessionSkills,
   skillInitial,
+  skillHasViewableOutput,
+  isSkillLaunchOutput,
   stripAnsi,
   parseClaudeSlashCommand,
   parseLocalCommandOutput,
@@ -10,7 +12,7 @@ import {
   parseAnswersFromResultText,
   isQuestionDismissed,
 } from '../src/components/project/chat/utils';
-import { ChatMessage, ChatContentBlock, SubagentMeta, Skill } from '../src/types';
+import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
 
 // ---- fixture helpers ----
 
@@ -437,6 +439,26 @@ const skillDef = (name: string, extra: Partial<Skill> = {}): Skill => ({
   ...extra,
 });
 
+const pluginDef = (name: string, skills: Skill[]): InstalledPlugin => ({
+  name,
+  marketplace: 'mkt',
+  scope: 'user',
+  version: '1.0.0',
+  installPath: `/Users/x/.claude/plugins/${name}`,
+  skills,
+  agents: [],
+  commands: [],
+});
+
+// An agentic skill invocation: the model's `Skill` tool_use + its tool_result.
+const agenticSkillGroup = (skillName: string, output: string | null, isError = false) => {
+  const processed = buildProcessedMessages([
+    msg('assistant', [toolUse('skill-1', 'Skill', { skill: skillName })]),
+    ...(output !== null ? [msg('user', [toolResult('skill-1', output, isError)])] : []),
+  ]);
+  return correlateSessionSkills(processed, [])[0].group;
+};
+
 describe('parseClaudeSlashCommand — namespaced (plugin) skills', () => {
   it('recognizes a namespaced skill command (colon in name)', () => {
     const result = parseClaudeSlashCommand('<command-name>/document-skills:pdf</command-name>');
@@ -519,5 +541,56 @@ describe('correlateSessionSkills', () => {
       msg('user', [text('hello')]),
     ]);
     expect(correlateSessionSkills(processed, [])).toHaveLength(0);
+  });
+
+  it('resolves a namespaced agentic skill against installed plugins', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('skill-1', 'Skill', { skill: 'document-skills:pdf' })]),
+      msg('user', [toolResult('skill-1', 'Launching skill: document-skills:pdf')]),
+    ]);
+    const plugins = [pluginDef('document-skills', [skillDef('pdf', { scope: 'plugin', description: 'PDF tools' })])];
+    const skills = correlateSessionSkills(processed, [], plugins);
+    expect(skills).toHaveLength(1);
+    expect(skills[0].name).toBe('document-skills:pdf');
+    expect(skills[0].skill).not.toBeNull();
+    expect(skills[0].skill?.scope).toBe('plugin');
+    expect(skills[0].scope).toBe('plugin');
+    expect(skills[0].group).toBeDefined();
+  });
+
+  it('keeps skill null for a namespaced skill with no matching plugin', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('skill-1', 'Skill', { skill: 'document-skills:pdf' })]),
+      msg('user', [toolResult('skill-1', 'Launching skill: document-skills:pdf')]),
+    ]);
+    expect(correlateSessionSkills(processed, [])[0].skill).toBeNull();
+  });
+});
+
+describe('isSkillLaunchOutput', () => {
+  it('is true for the bare "Launching skill: …" sentinel', () => {
+    expect(isSkillLaunchOutput('Launching skill: document-skills:pdf')).toBe(true);
+    expect(isSkillLaunchOutput('  Launching skill: x')).toBe(true);
+  });
+  it('is false for a real result, an empty string, or null', () => {
+    expect(isSkillLaunchOutput('Skill "pdf" completed.\n\nResult:\n# Analysis')).toBe(false);
+    expect(isSkillLaunchOutput('')).toBe(false);
+    expect(isSkillLaunchOutput(null)).toBe(false);
+    expect(isSkillLaunchOutput(undefined)).toBe(false);
+  });
+});
+
+describe('skillHasViewableOutput', () => {
+  it('is false for a launch-only output (nothing worth opening)', () => {
+    expect(skillHasViewableOutput(agenticSkillGroup('document-skills:pdf', 'Launching skill: document-skills:pdf'))).toBe(false);
+  });
+  it('is true for a real completed result', () => {
+    expect(skillHasViewableOutput(agenticSkillGroup('a:b', 'Skill "b" completed.\n\nResult:\n# Analysis'))).toBe(true);
+  });
+  it('is true for an error result', () => {
+    expect(skillHasViewableOutput(agenticSkillGroup('a:b', 'boom', true))).toBe(true);
+  });
+  it('is false when the run is still pending (no result)', () => {
+    expect(skillHasViewableOutput(agenticSkillGroup('a:b', null))).toBe(false);
   });
 });

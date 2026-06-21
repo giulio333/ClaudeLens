@@ -1,4 +1,4 @@
-import { ChatMessage, ChatContentBlock, SubagentMeta, Skill } from '../../../hooks/useIPC'
+import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../../../hooks/useIPC'
 
 export type ChatDetailsFilter = 'all' | 'minimal'
 
@@ -486,10 +486,11 @@ export function correlateSessionAgents(
 
 // ──────────────────────────────────────────────────────────────────────────
 // Skill correlation — collects every skill invoked in the session (slash
-// commands flagged `isSkill`) and links each to its definition from the skills
-// registry by name, so the footer dock can list them and the inline card can
-// deep-link to the skill detail. Plugin/namespaced skills won't resolve to a
-// local definition (`skill: null`) — they still appear, just without a link.
+// commands flagged `isSkill`, plus agentic `Skill` tool_uses) and links each to
+// its definition, so the footer dock / Mission Control rail can list them and
+// deep-link to the skill detail. Plain names resolve against the project/global
+// registry; a namespaced `plugin:leaf` name (e.g. `document-skills:pdf`) resolves
+// against the installed plugins. Unresolvable names keep `skill: null`.
 // ──────────────────────────────────────────────────────────────────────────
 export type SessionSkill = {
   /** Stable key (turn index). */
@@ -498,6 +499,8 @@ export type SessionSkill = {
   turnN: number
   /** Display id (the slash-command name, e.g. `build-dmg`). */
   name: string
+  /** Args typed after a `/foo <args>` slash-command skill; absent for agentic ones. */
+  args?: string
   description: string
   scope?: 'global' | 'project' | 'plugin'
   /** Resolved skill definition, when one matches by name; null otherwise. */
@@ -509,31 +512,60 @@ export type SessionSkill = {
   group?: ToolGroup
 }
 
+/** True when a `Skill` tool_result carries no real artifact — the skill merely
+ *  "launched" (its instructions were injected; the actual work is the turns that
+ *  follow, not the tool_result). Observed sentinel: `Launching skill: <name>`. */
+export function isSkillLaunchOutput(content: string | null | undefined): boolean {
+  return !!content && /^\s*Launching skill:/i.test(content)
+}
+
+/** True when an agentic skill's tool_result is worth opening on its own: a real
+ *  completed result (`Skill "…" completed … Result: …`) or an error — but NOT a
+ *  bare "Launching skill: …" (nothing to show) nor a still-pending run. Lets the
+ *  rail/dock route a "launch-only" skill to its definition instead of an empty page. */
+export function skillHasViewableOutput(group: ToolGroup | undefined): boolean {
+  const content = group?.result?.content
+  if (!content) return false
+  if (group?.result?.isError) return true
+  return !isSkillLaunchOutput(content)
+}
+
 export function correlateSessionSkills(
   processed: ProcessedMessage[],
   skills: Skill[],
+  plugins: InstalledPlugin[] = [],
 ): SessionSkill[] {
   const byName = new Map(skills.map(s => [s.name, s]))
+  // Plugin skills are invoked namespaced — `${plugin.name}:${skill.name}` (e.g.
+  // `document-skills:pdf`) — so they never match a plain registry name; resolve
+  // them against the installed plugins instead.
+  const byNamespaced = new Map<string, Skill>()
+  for (const pl of plugins) for (const s of pl.skills) byNamespaced.set(`${pl.name}:${s.name}`, s)
+  const resolve = (name: string): Skill | null => byName.get(name) ?? byNamespaced.get(name) ?? null
+
   const out: SessionSkill[] = []
   processed.forEach((p, idx) => {
     // Slash-command skill (`/foo`): output is the inline turn that follows.
     const c = p.command
-    if (c && (c.isSkill || byName.has(c.command))) {
-      const skill = byName.get(c.command) ?? null
-      out.push({
-        key: `skill-${idx + 1}`,
-        turnN: idx + 1,
-        name: c.command,
-        description: skill?.description ?? (c.description !== 'Claude Code command' ? c.description : ''),
-        scope: skill?.scope,
-        skill,
-      })
+    if (c) {
+      const skill = resolve(c.command)
+      if (c.isSkill || skill) {
+        out.push({
+          key: `skill-${idx + 1}`,
+          turnN: idx + 1,
+          name: c.command,
+          args: c.args || undefined,
+          description: skill?.description ?? (c.description !== 'Claude Code command' ? c.description : ''),
+          scope: skill?.scope,
+          skill,
+        })
+      }
     }
     // Agentic skill (a `Skill` tool_use): its output lives in the tool_result.
     p.toolGroups.forEach((g, gi) => {
       if (g.use.name !== SKILL_TOOL) return
       const name = String((g.use.input as Record<string, unknown>).skill ?? 'skill')
-      const skill = byName.get(name) ?? null
+      const skill = resolve(name)
       out.push({
         key: `skill-${idx + 1}-${gi}`,
         turnN: idx + 1,

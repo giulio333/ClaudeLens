@@ -4,10 +4,12 @@ import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
 import { TagPicker } from '../sessions/TagPicker';
 import { useTheme } from '../../../hooks/useTheme';
-import type { SessionSummary } from '../../../hooks/useIPC';
+import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
 import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
+import { SkillDetailView } from '../skills/SkillDetailView';
+import { AgentDetailView } from '../agents/AgentDetailView';
 import { ChatView } from '../chat/ChatView';
 import type { SessionAgent, ToolGroup } from '../chat/utils';
 import { fmtCost, sessionTitle } from '../utils';
@@ -38,7 +40,12 @@ const RAIL_MIN = 380;
 const RAIL_MAX = 560;
 
 type View = 'terminal' | 'lens';
-type Overlay = { kind: 'tool'; group: ToolGroup } | { kind: 'agent'; agent: SessionAgent } | null;
+type Overlay =
+  | { kind: 'tool'; group: ToolGroup }
+  | { kind: 'agent'; agent: SessionAgent }
+  | { kind: 'skill-def'; skill: Skill }
+  | { kind: 'agent-def'; agent: Agent }
+  | null;
 
 /** Glass segmented control: TERMINAL (dark-slab active) ↔ LENS (paper active). */
 function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
@@ -415,7 +422,14 @@ export function TerminalMissionControl({
                 className="flex-1 min-w-0"
                 style={{ display: view === 'lens' ? 'block' : 'none' }}
               >
-                <ChatView embedded project={project} session={sessionForChat} onBack={onBack} />
+                <ChatView
+                  embedded
+                  project={project}
+                  session={sessionForChat}
+                  onBack={onBack}
+                  onOpenSkill={skill => setOverlay({ kind: 'skill-def', skill })}
+                  onOpenAgent={agent => setOverlay({ kind: 'agent-def', agent })}
+                />
               </div>
             )}
 
@@ -429,7 +443,11 @@ export function TerminalMissionControl({
               >
                 {overlay.kind === 'tool' ? (
                   <ToolDetailPanel group={overlay.group} onBack={closeOverlay} />
-                ) : overlay.agent.agentId && sessionId ? (
+                ) : overlay.kind === 'skill-def' ? (
+                  <SkillDetailView skill={overlay.skill} project={project} onBack={closeOverlay} readOnly />
+                ) : overlay.kind === 'agent-def' ? (
+                  <AgentDetailView agent={overlay.agent} project={project} onBack={closeOverlay} readOnly />
+                ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
                   <SubagentTranscriptPanel
                     hash={project.hash}
                     sessionFilename={`${sessionId}.jsonl`}
@@ -454,6 +472,8 @@ export function TerminalMissionControl({
             onWidthChange={onWidthChange}
             onOpenTool={group => setOverlay({ kind: 'tool', group })}
             onOpenAgent={agent => setOverlay({ kind: 'agent', agent })}
+            onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
+            onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}
           />
         )}
       </div>
