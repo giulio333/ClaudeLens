@@ -1,4 +1,4 @@
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, appendFileSync } from 'fs';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import {
@@ -8,6 +8,8 @@ import {
   getPricingMeta,
   isModelPriced,
   calculateCacheSavings,
+  getParseStats,
+  resetParseCache,
   PRICING_LAST_UPDATED,
 } from '../electron/modules/cost-tracker';
 
@@ -546,5 +548,151 @@ describe('firstUserMessage skips tool_result turns (not real user input)', () =>
     // Before the fix the tool_result turn's text block ("tool output follows")
     // was taken as the first user message.
     expect(s.firstUserMessage).toBe('Fix the bug in the parser');
+  });
+});
+
+// ─── Parse cache: incremental, append-only re-reads ───────────────────────────
+// The watcher invalidates the session list on every append of the *active*
+// session. These cover the mtime/size cache that serves unchanged files with no
+// I/O and folds only the appended tail of a grown transcript.
+describe('parse cache — append-only incremental parsing', () => {
+  it('serves an unchanged transcript from cache on refetch (no re-read)', async () => {
+    resetParseCache();
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
+    ]);
+
+    const first = await getSessionList(tmp);
+    const cold = getParseStats();
+    expect(cold.fullParses).toBe(1);
+    expect(cold.fileReads).toBe(1);
+    expect(cold.cacheHits).toBe(0);
+
+    const second = await getSessionList(tmp);
+    const warm = getParseStats();
+    expect(warm.cacheHits).toBe(1); // served from cache
+    expect(warm.fileReads).toBe(1); // NO additional read
+    expect(warm.fullParses).toBe(1); // not re-parsed
+    expect(second).toEqual(first); // identical result
+  });
+
+  it('reads only the appended tail when the transcript grows', async () => {
+    resetParseCache();
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
+    ]);
+    const [s1] = await getSessionList(tmp);
+    expect(s1.inputTokens).toBe(100);
+    const before = getParseStats();
+
+    appendFileSync(
+      join(tmp, 'a.jsonl'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 200, output: 30, id: 'm2', requestId: 'r2' }) + '\n'
+    );
+    const [s2] = await getSessionList(tmp);
+    const after = getParseStats();
+
+    expect(after.incrementalParses).toBe(before.incrementalParses + 1);
+    expect(after.fullParses).toBe(before.fullParses); // NOT a full re-parse
+    expect(s2.inputTokens).toBe(300);
+    expect(s2.outputTokens).toBe(80);
+    expect(s2.messageCount).toBe(2);
+  });
+
+  it('incremental folding equals a full parse, deduping across the append boundary', async () => {
+    // The duplicate of m1 (same id+requestId) lands in a *later* increment than
+    // the original — it must still be counted once (issue #56 across the boundary).
+    const l1 = assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' });
+    const dup = assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' });
+    const l2 = assistantLine({ model: 'claude-opus-4-5', input: 200, output: 60, id: 'm2', requestId: 'r2' });
+
+    // Incremental: write l1, then append dup, then append l2 — parsing between each.
+    resetParseCache();
+    writeSession(tmp, 'a.jsonl', [l1]);
+    await getSessionList(tmp);
+    appendFileSync(join(tmp, 'a.jsonl'), dup + '\n');
+    await getSessionList(tmp);
+    appendFileSync(join(tmp, 'a.jsonl'), l2 + '\n');
+    const [inc] = await getSessionList(tmp);
+
+    // Full: the same final content parsed from scratch in a fresh dir + clean cache.
+    const tmp2 = mkdtempSync(join(tmpdir(), 'cl-cost-'));
+    resetParseCache();
+    writeSession(tmp2, 'a.jsonl', [l1, dup, l2]);
+    const [full] = await getSessionList(tmp2);
+    rmSync(tmp2, { recursive: true, force: true });
+
+    expect(inc.messageCount).toBe(2); // dup counted once
+    expect(inc).toEqual(full);
+  });
+
+  it('buffers a half-written final line and folds it once when completed', async () => {
+    resetParseCache();
+    const file = join(tmp, 'a.jsonl');
+    const l1 = assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 10, id: 'm1', requestId: 'r1' });
+    const l2 = assistantLine({ model: 'claude-sonnet-4-5', input: 200, output: 20, id: 'm2', requestId: 'r2' });
+
+    // l1 complete + the first 20 bytes of l2, with no terminating newline.
+    writeFileSync(file, l1 + '\n' + l2.slice(0, 20), 'utf-8');
+    const [a] = await getSessionList(tmp);
+    expect(a.messageCount).toBe(1); // the partial l2 is buffered, not yet counted
+    expect(a.inputTokens).toBe(100);
+
+    appendFileSync(file, l2.slice(20) + '\n');
+    const [b] = await getSessionList(tmp);
+    expect(b.messageCount).toBe(2); // l2 completed and counted exactly once
+    expect(b.inputTokens).toBe(300);
+  });
+
+  it('falls back to a full re-parse when the transcript shrinks (replaced/truncated)', async () => {
+    resetParseCache();
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
+      assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm2', requestId: 'r2' }),
+    ]);
+    const [s1] = await getSessionList(tmp);
+    expect(s1.inputTokens).toBe(200);
+    const before = getParseStats();
+
+    // Replace with a shorter, different transcript (smaller byte size).
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-opus-4-5', input: 7, output: 3, id: 'x1', requestId: 'rx' }),
+    ]);
+    const [s2] = await getSessionList(tmp);
+    const after = getParseStats();
+
+    expect(after.fullParses).toBe(before.fullParses + 1); // re-parsed from byte 0
+    expect(after.incrementalParses).toBe(before.incrementalParses); // not treated as a growth
+    expect(s2.inputTokens).toBe(7);
+    expect(s2.messageCount).toBe(1);
+  });
+
+  it('does not re-read a large transcript on an unchanged refetch (perf)', async () => {
+    resetParseCache();
+    const lines: string[] = [];
+    for (let i = 0; i < 5000; i++) {
+      lines.push(assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 5, id: `m${i}`, requestId: `r${i}` }));
+    }
+    writeSession(tmp, 'big.jsonl', lines);
+
+    const t0 = performance.now();
+    const [cold] = await getSessionList(tmp);
+    const coldMs = performance.now() - t0;
+    expect(cold.messageCount).toBe(5000);
+    expect(getParseStats().fileReads).toBe(1);
+
+    const t1 = performance.now();
+    const [warm] = await getSessionList(tmp);
+    const warmMs = performance.now() - t1;
+    const stats = getParseStats();
+
+    expect(stats.fileReads).toBe(1); // hard proof: no second read of 5000 lines
+    expect(stats.cacheHits).toBe(1);
+    expect(warm.messageCount).toBe(5000);
+    expect(warmMs).toBeLessThan(coldMs); // the cache hit is strictly cheaper
+    console.log(
+      `[perf] cold parse ${coldMs.toFixed(2)}ms → warm refetch ${warmMs.toFixed(2)}ms ` +
+        `(${(coldMs / Math.max(warmMs, 0.001)).toFixed(0)}x faster)`
+    );
   });
 });

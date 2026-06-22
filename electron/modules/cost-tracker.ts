@@ -1,4 +1,5 @@
-import { readFileSync, existsSync, statSync } from 'fs';
+import { existsSync } from 'fs';
+import { stat, open } from 'fs/promises';
 import { join, basename } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
@@ -245,68 +246,214 @@ function extractLineData(json: any): LineData | null {
   };
 }
 
-function parseJsonlSession(filePath: string): ParsedSession {
-  const result: ParsedSession = {
+// Running accumulator for one session: the parsed totals plus the bookkeeping
+// (`seenUsage`, `modelCounts`, the trailing incomplete line) needed to keep
+// parsing *incrementally* as the transcript grows, without re-reading from byte 0.
+interface SessionAccumulator {
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  messageCount: number;
+  date: string;
+  modelCounts: Record<string, number>;
+  customTitle?: string;
+  aiTitle?: string;
+  firstUserMessage?: string;
+  dropped: number;
+  // Usage identities already counted, so a repeated content-block line for the
+  // same turn isn't double-counted (issue #56) — carried across increments.
+  seenUsage: Set<string>;
+}
+
+// Cached parse state per transcript file. JSONL transcripts are append-only, so
+// an unchanged file (same mtime+size) is served from `acc` with no I/O, and a
+// grown file is read only from `consumed` onward — the dominant win when the
+// watcher invalidates the session list on every append of the *active* session.
+interface ParseCacheEntry {
+  consumed: number;   // bytes already folded into `acc`
+  mtimeMs: number;
+  // Bytes after the last newline not yet terminated (a half-written final line);
+  // a Buffer, not a string, so a multi-byte UTF-8 char split across a read
+  // boundary is never decoded mid-sequence (newline 0x0A can't occur inside one).
+  partial: Buffer;
+  acc: SessionAccumulator;
+}
+
+const parseCache = new Map<string, ParseCacheEntry>();
+
+// Observability for tests/diagnostics: lets a test prove an unchanged file is a
+// cache hit (no read) and a grown file is read incrementally (not from scratch).
+const parseStats = { cacheHits: 0, fullParses: 0, incrementalParses: 0, fileReads: 0 };
+export function getParseStats() {
+  return { ...parseStats };
+}
+export function resetParseCache() {
+  parseCache.clear();
+  parseStats.cacheHits = 0;
+  parseStats.fullParses = 0;
+  parseStats.incrementalParses = 0;
+  parseStats.fileReads = 0;
+}
+
+function newAccumulator(): SessionAccumulator {
+  return {
     inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0,
-    messageCount: 0, date: '', model: undefined, models: {}, customTitle: undefined,
-    aiTitle: undefined, firstUserMessage: undefined,
+    messageCount: 0, date: '', modelCounts: {}, dropped: 0, seenUsage: new Set(),
   };
+}
 
-  if (!existsSync(filePath)) return result;
-
+// Fold a single complete JSONL line into the accumulator (mutates `acc`). Mirrors
+// the per-line logic of the old synchronous parser, line-for-line.
+function foldLine(line: string, acc: SessionAccumulator): void {
+  const trimmed = line.trim();
+  if (!trimmed) return;
+  let json: any;
   try {
-    const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
-    const modelCounts: Record<string, number> = {};
-    const seenUsage = new Set<string>();
-    let dropped = 0;
+    json = JSON.parse(trimmed);
+  } catch {
+    acc.dropped++;
+    return;
+  }
+  const parsed = extractLineData(json);
+  if (!parsed) return;
 
-    for (const line of lines) {
-      let json: any;
-      try {
-        json = JSON.parse(line);
-      } catch {
-        dropped++;
-        continue;
-      }
-      const parsed = extractLineData(json);
-      if (!parsed) continue;
+  if (parsed.customTitle) acc.customTitle = parsed.customTitle;
+  if (parsed.aiTitle) acc.aiTitle = parsed.aiTitle;
+  if (!acc.firstUserMessage && parsed.firstUserMessage) acc.firstUserMessage = parsed.firstUserMessage;
+  if (parsed.date) acc.date = parsed.date;
 
-      if (parsed.customTitle) result.customTitle = parsed.customTitle;
-      if (parsed.aiTitle) result.aiTitle = parsed.aiTitle;
-      if (!result.firstUserMessage && parsed.firstUserMessage) result.firstUserMessage = parsed.firstUserMessage;
-      if (parsed.date) result.date = parsed.date;
-
-      if (parsed.inputTokens || parsed.outputTokens || parsed.cacheWriteTokens || parsed.cacheReadTokens) {
-        // Skip lines that repeat a usage we've already counted for this turn.
-        if (parsed.usageKey) {
-          if (seenUsage.has(parsed.usageKey)) continue;
-          seenUsage.add(parsed.usageKey);
-        }
-        result.messageCount++;
-        if (parsed.model) modelCounts[parsed.model] = (modelCounts[parsed.model] ?? 0) + 1;
-        result.inputTokens      += parsed.inputTokens;
-        result.outputTokens     += parsed.outputTokens;
-        result.cacheWriteTokens += parsed.cacheWriteTokens;
-        result.cacheReadTokens  += parsed.cacheReadTokens;
-      }
+  if (parsed.inputTokens || parsed.outputTokens || parsed.cacheWriteTokens || parsed.cacheReadTokens) {
+    if (parsed.usageKey) {
+      if (acc.seenUsage.has(parsed.usageKey)) return;
+      acc.seenUsage.add(parsed.usageKey);
     }
+    acc.messageCount++;
+    if (parsed.model) acc.modelCounts[parsed.model] = (acc.modelCounts[parsed.model] ?? 0) + 1;
+    acc.inputTokens      += parsed.inputTokens;
+    acc.outputTokens     += parsed.outputTokens;
+    acc.cacheWriteTokens += parsed.cacheWriteTokens;
+    acc.cacheReadTokens  += parsed.cacheReadTokens;
+  }
+}
 
-    result.models = modelCounts;
-    const entries = Object.entries(modelCounts);
-    if (entries.length > 0) result.model = entries.sort((a, b) => b[1] - a[1])[0][0];
-    if (!result.date) result.date = statSync(filePath).mtime.toISOString();
+// Project the running accumulator into the immutable ParsedSession the callers
+// consume. `models` is copied so a later incremental fold can't mutate a result
+// already handed out.
+function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
+  const entries = Object.entries(acc.modelCounts);
+  return {
+    inputTokens: acc.inputTokens,
+    outputTokens: acc.outputTokens,
+    cacheWriteTokens: acc.cacheWriteTokens,
+    cacheReadTokens: acc.cacheReadTokens,
+    messageCount: acc.messageCount,
+    date: acc.date || new Date(mtimeMs).toISOString(),
+    model: entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : undefined,
+    models: { ...acc.modelCounts },
+    customTitle: acc.customTitle,
+    aiTitle: acc.aiTitle,
+    firstUserMessage: acc.firstUserMessage,
+  };
+}
 
-    if (dropped > 0) {
-      console.warn(`[cost-tracker] skipped ${dropped} malformed JSONL line(s) in ${filePath}`);
-    }
-  } catch (error) {
-    console.error(`Errore leggendo JSONL da ${filePath}: ${error}`);
+// Parse a session transcript, reusing cached work. Three paths:
+//   • unchanged (mtime+size match)  → serve `acc`, zero I/O      (cacheHits)
+//   • grown (append-only)           → read & fold only the tail  (incrementalParses)
+//   • new / truncated / replaced    → read & fold from byte 0     (fullParses)
+// Assumes append-only writes (Claude Code never rewrites a transcript's prefix);
+// any size shrink or same-size-different-mtime falls back to a full re-parse.
+async function parseSession(filePath: string): Promise<ParsedSession> {
+  let st: Awaited<ReturnType<typeof stat>>;
+  try {
+    st = await stat(filePath);
+  } catch {
+    parseCache.delete(filePath);
+    return finalize(newAccumulator(), Date.now());
+  }
+  if (!st.isFile()) {
+    parseCache.delete(filePath);
+    return finalize(newAccumulator(), st.mtimeMs);
   }
 
-  return result;
+  const cached = parseCache.get(filePath);
+  if (cached && cached.mtimeMs === st.mtimeMs && cached.consumed === st.size) {
+    parseStats.cacheHits++;
+    return finalize(cached.acc, st.mtimeMs);
+  }
+
+  const incremental = !!cached && st.size > cached.consumed;
+  const entry: ParseCacheEntry = incremental
+    ? cached!
+    : { consumed: 0, mtimeMs: st.mtimeMs, partial: Buffer.alloc(0), acc: newAccumulator() };
+  if (incremental) parseStats.incrementalParses++;
+  else parseStats.fullParses++;
+
+  const droppedBefore = entry.acc.dropped;
+  const len = st.size - entry.consumed;
+  let chunk = Buffer.alloc(0);
+  if (len > 0) {
+    try {
+      const fh = await open(filePath, 'r');
+      try {
+        const buf = Buffer.allocUnsafe(len);
+        const { bytesRead } = await fh.read(buf, 0, len, entry.consumed);
+        chunk = buf.subarray(0, bytesRead);
+        parseStats.fileReads++;
+      } finally {
+        await fh.close();
+      }
+    } catch (error) {
+      console.error(`Errore leggendo JSONL da ${filePath}: ${error}`);
+      return finalize(entry.acc, st.mtimeMs);
+    }
+  }
+
+  // Fold every newline-terminated line; keep the trailing remainder (a partial
+  // final line) buffered for the next increment. Splitting on the newline *byte*
+  // is UTF-8-safe (0x0A never appears inside a multi-byte sequence).
+  const combined = Buffer.concat([entry.partial, chunk]);
+  let start = 0;
+  for (let i = 0; i < combined.length; i++) {
+    if (combined[i] === 0x0a) {
+      foldLine(combined.toString('utf-8', start, i), entry.acc);
+      start = i + 1;
+    }
+  }
+
+  entry.partial = combined.subarray(start);
+  entry.consumed += chunk.length;
+  entry.mtimeMs = st.mtimeMs;
+  parseCache.set(filePath, entry);
+
+  const newlyDropped = entry.acc.dropped - droppedBefore;
+  if (newlyDropped > 0) {
+    console.warn(`[cost-tracker] skipped ${newlyDropped} malformed JSONL line(s) in ${filePath}`);
+  }
+
+  return finalize(entry.acc, st.mtimeMs);
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
+
+// Map with bounded concurrency: parses sessions in parallel (the I/O win) while
+// capping open file descriptors, so a project with hundreds of transcripts can't
+// hit EMFILE on the cold pass. Order is preserved.
+async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const results: R[] = new Array(items.length);
+  let next = 0;
+  async function worker(): Promise<void> {
+    while (next < items.length) {
+      const idx = next++;
+      results[idx] = await fn(items[idx]);
+    }
+  }
+  const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+  await Promise.all(workers);
+  return results;
+}
+
+const PARSE_CONCURRENCY = 8;
 
 async function findSessionFiles(projectPath: string): Promise<string[]> {
   const sessionsDir = join(projectPath, 'sessions');
@@ -334,8 +481,8 @@ async function aggregateProject(projectPath: string): Promise<ProjectAggregate> 
   let inputTokens = 0, outputTokens = 0, cacheWriteTokens = 0, cacheReadTokens = 0;
   let cost = 0;
 
-  for (const f of files) {
-    const s = parseJsonlSession(f);
+  const parsed = await mapLimit(files, PARSE_CONCURRENCY, f => parseSession(f));
+  for (const s of parsed) {
     inputTokens      += s.inputTokens;
     outputTokens     += s.outputTokens;
     cacheWriteTokens += s.cacheWriteTokens;
@@ -398,17 +545,16 @@ export async function calculateCostSummary(claudeDir: string): Promise<ProjectCo
 
 export async function getSessionList(projectPath: string): Promise<SessionSummary[]> {
   const files = await findSessionFiles(projectPath);
-  const sessions: SessionSummary[] = [];
 
-  for (const filePath of files) {
+  const parsed = await mapLimit(files, PARSE_CONCURRENCY, async (filePath): Promise<SessionSummary | null> => {
     try {
-      const s = parseJsonlSession(filePath);
+      const s = await parseSession(filePath);
       const totalTokens = s.inputTokens + s.outputTokens;
       const estimatedCost = calculateCost(
         s.inputTokens, s.outputTokens, s.cacheWriteTokens, s.cacheReadTokens, s.model
       );
 
-      sessions.push({
+      return {
         filename: basename(filePath),
         date: s.date,
         inputTokens: s.inputTokens,
@@ -425,11 +571,14 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
         aiTitle: s.aiTitle,
         firstUserMessage: s.firstUserMessage,
         template: s.template,
-      });
+      };
     } catch {
       // sessione non leggibile
+      return null;
     }
-  }
+  });
 
-  return sessions.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+  return parsed
+    .filter((s): s is SessionSummary => s !== null)
+    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 }
