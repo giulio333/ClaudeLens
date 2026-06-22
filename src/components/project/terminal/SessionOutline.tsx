@@ -311,7 +311,7 @@ export function SessionOutline({
             );
           }
           if (r.kind === 'skill') {
-            const route = skillHasViewableOutput(r.skill.group) ? 'output reale' : r.skill.skill ? 'def' : 'launch';
+            const route = skillHasViewableOutput(r.skill.group) ? 'output' : r.skill.skill ? 'def' : 'launch';
             return (
               <button key={`s${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onSkillClick(r.skill)}>
                 <SquareGlyph bg="var(--cl-accent)">✦</SquareGlyph>
