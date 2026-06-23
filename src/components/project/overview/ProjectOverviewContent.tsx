@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
 import {
   useMemoryProject,
   useSessionList,
@@ -367,6 +367,19 @@ export function ProjectView({
     return unpinnedSessions.filter(s => tagsForSession(s.filename).includes(activeTag));
   }, [unpinnedSessions, activeTag, tagsForSession]);
 
+  // Stable navigation callbacks shared by every session list: onNavigate is
+  // setView (stable) and `project` is stable for this view's lifetime (ProjectView
+  // is keyed by project hash upstream), so the rows' memo never breaks on them.
+  const openTerminal = useCallback(
+    (s: SessionSummary) =>
+      onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') }),
+    [onNavigate, project]
+  );
+  const openChat = useCallback(
+    (s: SessionSummary) => onNavigate({ type: 'chat', project, session: s }),
+    [onNavigate, project]
+  );
+
   const memTopics = useMemo(
     () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
     [memory]
@@ -533,10 +546,8 @@ export function ProjectView({
             sessions={pinnedSessions}
             projectHash={project.hash}
             cleanupDays={cleanupDays}
-            onOpen={s =>
-              onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
-            }
-            onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+            onOpen={openTerminal}
+            onOpenChat={openChat}
             rankOf={s => sessionRank.get(s.filename) ?? 0}
           />
 
@@ -558,10 +569,8 @@ export function ProjectView({
               sessions={unpinnedSessions.slice(0, 5)}
               projectHash={project.hash}
               cleanupDays={cleanupDays}
-              onOpen={s =>
-                onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
-              }
-              onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+              onOpen={openTerminal}
+              onOpenChat={openChat}
             />
           </section>
 
@@ -685,10 +694,8 @@ export function ProjectView({
             sessions={pinnedSessions}
             projectHash={project.hash}
             cleanupDays={cleanupDays}
-            onOpen={s =>
-              onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
-            }
-            onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+            onOpen={openTerminal}
+            onOpenChat={openChat}
             rankOf={s => sessionRank.get(s.filename) ?? 0}
             style={{ paddingTop: 38 }}
           />
@@ -724,13 +731,13 @@ export function ProjectView({
               </div>
             ) : (
               <SessionRows
+                key={activeTag ?? '__all__'}
                 sessions={visibleSessions}
                 projectHash={project.hash}
                 cleanupDays={cleanupDays}
-                onOpen={s =>
-                  onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
-                }
-                onOpenChat={s => onNavigate({ type: 'chat', project, session: s })}
+                pageSize={60}
+                onOpen={openTerminal}
+                onOpenChat={openChat}
               />
             )}
           </section>
@@ -1246,6 +1253,173 @@ function PinnedSessionsSection({
   );
 }
 
+type SessionRowProps = {
+  session: SessionSummary;
+  rank: number;
+  pinned: boolean;
+  live: boolean;
+  tags: string[];
+  cleanupDays: number;
+  pickerOpen: boolean;
+  onOpen: (s: SessionSummary) => void;
+  onOpenChat: (s: SessionSummary) => void;
+  onTogglePin: (filename: string) => void;
+  onAddTag: (filename: string, rect: DOMRect) => void;
+  onRemoveTag: (filename: string, tag: string) => void;
+  onDelete: (s: SessionSummary) => void;
+};
+
+// The session list re-renders on every active-sessions heartbeat and every
+// `data:changed`; this comparator lets an individual row skip those unless its
+// own data actually changed. `session` is compared by reference — React Query's
+// structural sharing (on by default) keeps an unchanged session referentially
+// stable across a refetch — and `tags` shallowly, because the tags hook returns
+// a fresh `[]` for untagged sessions each render. Callbacks are stable by
+// construction (useCallback / latest-ref in SessionRows) and not compared.
+function sessionRowEqual(a: SessionRowProps, b: SessionRowProps): boolean {
+  if (
+    a.session !== b.session ||
+    a.rank !== b.rank ||
+    a.pinned !== b.pinned ||
+    a.live !== b.live ||
+    a.cleanupDays !== b.cleanupDays ||
+    a.pickerOpen !== b.pickerOpen ||
+    a.tags.length !== b.tags.length
+  ) {
+    return false;
+  }
+  for (let i = 0; i < a.tags.length; i++) {
+    if (a.tags[i] !== b.tags[i]) return false;
+  }
+  return true;
+}
+
+const SessionRow = memo(function SessionRow({
+  session: s,
+  rank,
+  pinned,
+  live,
+  tags,
+  cleanupDays,
+  pickerOpen,
+  onOpen,
+  onOpenChat,
+  onTogglePin,
+  onAddTag,
+  onRemoveTag,
+  onDelete,
+}: SessionRowProps) {
+  const fam = modelFamily(s.model);
+  return (
+    <div
+      role="button"
+      tabIndex={0}
+      className={`cl-row has-pin${pinned ? ' is-pinned' : ''}`}
+      onClick={() => onOpen(s)}
+      onKeyDown={e => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          onOpen(s);
+        }
+      }}
+    >
+      <button
+        type="button"
+        className={`cl-pin-row${pinned ? ' pinned' : ''}`}
+        title={pinned ? 'Unpin session' : 'Pin session'}
+        aria-label={pinned ? 'Unpin session' : 'Pin session'}
+        onClick={e => {
+          e.stopPropagation();
+          onTogglePin(s.filename);
+        }}
+      >
+        <PinIcon filled={pinned} />
+      </button>
+      <span className="idx">{String(rank).padStart(2, '0')}</span>
+      <div style={{ minWidth: 0 }}>
+        <div className="title cl-row-title">
+          <span className="cl-row-title-text">{sessionTitle(s)}</span>
+          {live && <LiveTag />}
+          <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
+        </div>
+        <div className="cl-row-meta">
+          <span className="cl-row-meta-stats">{fmt(s.messageCount)} msg</span>
+          {tags.length > 0 && (
+            <span className="cl-row-meta-sep" aria-hidden>
+              ·
+            </span>
+          )}
+          <span className="cl-row-tags" onClick={e => e.stopPropagation()}>
+            {tags.map((t, ti) => (
+              <span key={t} className="cl-row-tag-item">
+                {ti > 0 && (
+                  <span className="cl-row-meta-sep" aria-hidden>
+                    ·
+                  </span>
+                )}
+                <TagChip
+                  name={t}
+                  variant="plain"
+                  tone="soft"
+                  removable
+                  onRemove={() => onRemoveTag(s.filename, t)}
+                />
+              </span>
+            ))}
+          </span>
+          <button
+            type="button"
+            className="cl-row-tag-add"
+            aria-label="Open in-app chat"
+            title="Open as an in-app chat — runs through the Agent SDK, billed to SDK credits (separate from your subscription)"
+            onClick={e => {
+              e.stopPropagation();
+              onOpenChat(s);
+            }}
+          >
+            Chat
+          </button>
+          <button
+            type="button"
+            className="cl-row-tag-add"
+            data-haspicker={pickerOpen}
+            aria-label="Add tag"
+            title="Add tag"
+            onClick={e => {
+              e.stopPropagation();
+              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
+              onAddTag(s.filename, rect);
+            }}
+          >
+            + tag
+          </button>
+          <button
+            type="button"
+            className="cl-row-tag-add"
+            aria-label="Delete session"
+            title="Delete session"
+            style={{ color: 'var(--cl-danger)' }}
+            onClick={e => {
+              e.stopPropagation();
+              onDelete(s);
+            }}
+          >
+            Delete
+          </button>
+        </div>
+      </div>
+      <span className={`model ${fam}`}>
+        <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
+      </span>
+      <span className="toks">
+        {fmt(s.totalTokens)}
+        <small>tok</small>
+      </span>
+      <span className="when">{shortWhen(s.date)}</span>
+    </div>
+  );
+}, sessionRowEqual);
+
 function SessionRows({
   sessions,
   projectHash,
@@ -1253,6 +1427,7 @@ function SessionRows({
   onOpen,
   onOpenChat,
   rankOf,
+  pageSize,
 }: {
   sessions: SessionSummary[];
   projectHash: string;
@@ -1262,6 +1437,10 @@ function SessionRows({
   // When provided, overrides the sequential row number with the session's true
   // position in the full list (used by the pinned section, which gets a subset).
   rankOf?: (s: SessionSummary) => number;
+  // When set, only the first `pageSize` rows mount, behind a "Show more" button
+  // (the full Sessions view, with hundreds of rows). Omitted for the small
+  // pinned/preview lists, which render in full.
+  pageSize?: number;
 }) {
   const { isPinned, togglePin } = usePinnedSessions();
   const { data: activeSessions = [] } = useActiveSessions();
@@ -1278,124 +1457,74 @@ function SessionRows({
   const [pickerFor, setPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(null);
   const [deleteFor, setDeleteFor] = useState<SessionSummary | null>(null);
 
+  // Progressive rendering: cap mounted rows when a pageSize is given. The list is
+  // remounted (keyed by project + tag filter at the call site) when its identity
+  // changes, so `shown` resets then — a plain watcher refetch never does.
+  const [shown, setShown] = useState(pageSize ?? Infinity);
+
+  // onOpen/onOpenChat are already referentially stable (useCallback in
+  // ProjectView), so they pass straight to the memoized rows; the rest wrap
+  // stable hook fns / setState.
+  const handleTogglePin = useCallback(
+    (filename: string) => togglePin(projectHash, filename),
+    [togglePin, projectHash]
+  );
+  const handleAddTag = useCallback(
+    (filename: string, rect: DOMRect) => setPickerFor({ filename, rect }),
+    []
+  );
+  const handleRemoveTag = useCallback(
+    (filename: string, tag: string) => removeTagFromSession(filename, tag),
+    [removeTagFromSession]
+  );
+  const handleDelete = useCallback((s: SessionSummary) => setDeleteFor(s), []);
+
   if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>;
+
+  const visible = shown >= sessions.length ? sessions : sessions.slice(0, shown);
+  const remaining = sessions.length - visible.length;
+
   return (
     <div>
-      {sessions.map((s, i) => {
-        const fam = modelFamily(s.model);
-        const pinnedNow = isPinned(projectHash, s.filename);
-        const sessionTags = tagsForSession(s.filename);
-        const isPickerOpen = pickerFor?.filename === s.filename;
-        return (
-          <div
-            key={s.filename}
-            role="button"
-            tabIndex={0}
-            className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`}
-            onClick={() => onOpen(s)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen(s);
-              }
-            }}
-          >
-            <button
-              type="button"
-              className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
-              title={pinnedNow ? 'Unpin session' : 'Pin session'}
-              aria-label={pinnedNow ? 'Unpin session' : 'Pin session'}
-              onClick={e => {
-                e.stopPropagation();
-                togglePin(projectHash, s.filename);
-              }}
-            >
-              <PinIcon filled={pinnedNow} />
-            </button>
-            <span className="idx">{String(rankOf ? rankOf(s) : i + 1).padStart(2, '0')}</span>
-            <div style={{ minWidth: 0 }}>
-              <div className="title cl-row-title">
-                <span className="cl-row-title-text">{sessionTitle(s)}</span>
-                {liveIds.has(s.filename.replace(/\.jsonl$/, '')) && <LiveTag />}
-                <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
-              </div>
-              <div className="cl-row-meta">
-                <span className="cl-row-meta-stats">{fmt(s.messageCount)} msg</span>
-                {sessionTags.length > 0 && (
-                  <span className="cl-row-meta-sep" aria-hidden>
-                    ·
-                  </span>
-                )}
-                <span className="cl-row-tags" onClick={e => e.stopPropagation()}>
-                  {sessionTags.map((t, ti) => (
-                    <span key={t} className="cl-row-tag-item">
-                      {ti > 0 && (
-                        <span className="cl-row-meta-sep" aria-hidden>
-                          ·
-                        </span>
-                      )}
-                      <TagChip
-                        name={t}
-                        variant="plain"
-                        tone="soft"
-                        removable
-                        onRemove={() => removeTagFromSession(s.filename, t)}
-                      />
-                    </span>
-                  ))}
-                </span>
-                <button
-                  type="button"
-                  className="cl-row-tag-add"
-                  aria-label="Open in-app chat"
-                  title="Open as an in-app chat — runs through the Agent SDK, billed to SDK credits (separate from your subscription)"
-                  onClick={e => {
-                    e.stopPropagation();
-                    onOpenChat(s);
-                  }}
-                >
-                  Chat
-                </button>
-                <button
-                  type="button"
-                  className="cl-row-tag-add"
-                  data-haspicker={isPickerOpen}
-                  aria-label="Add tag"
-                  title="Add tag"
-                  onClick={e => {
-                    e.stopPropagation();
-                    const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-                    setPickerFor({ filename: s.filename, rect });
-                  }}
-                >
-                  + tag
-                </button>
-                <button
-                  type="button"
-                  className="cl-row-tag-add"
-                  aria-label="Delete session"
-                  title="Delete session"
-                  style={{ color: 'var(--cl-danger)' }}
-                  onClick={e => {
-                    e.stopPropagation();
-                    setDeleteFor(s);
-                  }}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-            <span className={`model ${fam}`}>
-              <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
-            </span>
-            <span className="toks">
-              {fmt(s.totalTokens)}
-              <small>tok</small>
-            </span>
-            <span className="when">{shortWhen(s.date)}</span>
-          </div>
-        );
-      })}
+      {visible.map((s, i) => (
+        <SessionRow
+          key={s.filename}
+          session={s}
+          rank={rankOf ? rankOf(s) : i + 1}
+          pinned={isPinned(projectHash, s.filename)}
+          live={liveIds.has(s.filename.replace(/\.jsonl$/, ''))}
+          tags={tagsForSession(s.filename)}
+          cleanupDays={cleanupDays}
+          pickerOpen={pickerFor?.filename === s.filename}
+          onOpen={onOpen}
+          onOpenChat={onOpenChat}
+          onTogglePin={handleTogglePin}
+          onAddTag={handleAddTag}
+          onRemoveTag={handleRemoveTag}
+          onDelete={handleDelete}
+        />
+      ))}
+      {remaining > 0 && (
+        <button
+          type="button"
+          className="cl-row-show-more"
+          onClick={() => setShown(n => n + (pageSize ?? sessions.length))}
+          style={{
+            width: '100%',
+            padding: '11px 12px',
+            marginTop: 4,
+            background: 'transparent',
+            border: '1px dashed var(--cl-line)',
+            borderRadius: 8,
+            color: 'var(--cl-ink-4)',
+            font: 'inherit',
+            fontSize: 13,
+            cursor: 'pointer',
+          }}
+        >
+          Show more · {remaining} remaining
+        </button>
+      )}
       {pickerFor && (
         <TagPicker
           anchorRect={pickerFor.rect}
