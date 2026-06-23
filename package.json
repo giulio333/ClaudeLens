@@ -102,7 +102,8 @@
       "dist/**/*",
       "dist-electron/**/*",
       "icon4.icns",
-      "icon.png"
+      "icon.png",
+      "icon-win.png"
     ],
     "asarUnpack": [
       "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
@@ -144,7 +145,7 @@
           ]
         }
       ],
-      "icon": "./icon.png"
+      "icon": "./icon-win.png"
     }
   }
 }
