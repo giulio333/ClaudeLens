@@ -48,6 +48,9 @@ import Markdown from '../../Markdown';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
 import { TagPicker } from '../sessions/TagPicker';
+import { useHighlights } from './useHighlights';
+import { useHighlightLayer } from './useHighlightLayer';
+import { HighlightToolbar } from './HighlightToolbar';
 
 type ViewMode = 'chat' | 'timeline';
 
@@ -1014,6 +1017,18 @@ export function ChatView({
     onScroll: onFeedScroll,
     onWheel: onFeedWheel,
   } = useChatAutoScroll(session.filename);
+  // The transcript column drives two consumers: the auto-scroll callback ref and
+  // the highlight layer. The latter needs the element as *state* (not a ref) so
+  // its listener effects re-run when the column mounts — it only appears after
+  // the messages load, so a ref alone would leave selection capture unwired.
+  const [transcriptEl, setTranscriptEl] = useState<HTMLDivElement | null>(null);
+  const mergedInnerRef = useCallback(
+    (el: HTMLDivElement | null) => {
+      setTranscriptEl(el);
+      transcriptInnerRef(el);
+    },
+    [transcriptInnerRef]
+  );
   // Ref mirror of activeTurn so the density-change layout effect can read
   // the current turn without listing activeTurn as a dependency (which would
   // cause it to fire on every scroll-spy update, fighting user scrolling).
@@ -1349,6 +1364,16 @@ export function ChatView({
     isError ||
     viewMode !== 'chat';
 
+  // Persistent text highlights: select text in the reading column to flag it
+  // (survives across app restarts and bakes into exports). Capture + paint are
+  // suspended while an overlay covers the transcript.
+  const highlightsApi = useHighlights(sessionId);
+  const highlightLayer = useHighlightLayer({
+    container: transcriptEl,
+    api: highlightsApi,
+    enabled: !chatHidden,
+  });
+
   // Stable callbacks so MessageBubble's memo holds (only selected/mode change).
   const handleToggleSelect = useCallback((uuid: string) => {
     setSelectedTurns(prev => {
@@ -1383,10 +1408,10 @@ export function ChatView({
 
     try {
       const doc = buildChatExportDocument({
-        projectPath: project.realPath,
         session,
         processed: exportProcessed,
         preset: exportPreset,
+        highlights: highlightsApi.highlights,
       });
       const result =
         format === 'markdown'
@@ -1598,7 +1623,7 @@ export function ChatView({
 
           {processed.length > 0 && (
             <div className="cl-chat-reading">
-              <div className="cl-transcript-inner" ref={transcriptInnerRef}>
+              <div className="cl-transcript-inner" ref={mergedInnerRef}>
                 {(() => {
                   let prevRole: string | null = null;
                   return renderItems.map(item => {
@@ -1666,6 +1691,12 @@ export function ChatView({
             </div>
           )}
         </main>
+
+        <HighlightToolbar
+          toolbar={highlightLayer.toolbar}
+          onPick={highlightLayer.pickColor}
+          onRemove={highlightLayer.removeCurrent}
+        />
 
         {!embedded && (
           <FocusMinimap

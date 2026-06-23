@@ -7,6 +7,7 @@ import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
 import { FileIcon } from './fileIcons'
+import { blockKey, isPersistableMessageUuid } from './highlights'
 
 /** Unobtrusive header button that copies a turn's plain markdown text (text
  *  blocks only — no tools, thinking, or indicators), so pasting into a .md file
@@ -425,6 +426,10 @@ export const MessageBubble = memo(function MessageBubble({
 }) {
   const { msg, toolGroups, command } = processed
   const isUser = msg.role === 'user'
+  // Only durable transcript messages anchor highlights — never the optimistic
+  // mid-stream bubble, whose synthetic uuid is replaced on reconcile (which would
+  // orphan any highlight stored against it). Gate the data-hl-block attribute.
+  const canHighlight = isPersistableMessageUuid(msg.uuid)
 
   const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
   const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
@@ -619,11 +624,18 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="cl-turn-content">
           {textBlocks.map((b, i) => (
             isUser ? (
-              <p key={i} className="cl-message-text cl-message-text--user">{b.text}</p>
+              <p
+                key={i}
+                className="cl-message-text cl-message-text--user"
+                data-hl-block={canHighlight ? blockKey(msg.uuid, i) : undefined}
+              >
+                {b.text}
+              </p>
             ) : (
               <div
                 key={i}
                 className="cl-message-text cl-message-text--assistant"
+                data-hl-block={canHighlight ? blockKey(msg.uuid, i) : undefined}
               >
                 <Markdown>{b.text}</Markdown>
               </div>

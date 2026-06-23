@@ -272,7 +272,15 @@ function setupContentSecurityPolicy() {
 
 function createWindow() {
   const isDev = !app.isPackaged;
-  const iconPath = isDev ? join(__dirname, '../icon4.icns') : join(app.getAppPath(), 'icon4.icns');
+  // macOS legge l'.icns; Windows/Linux la taskbar vuole un PNG. Su Windows usiamo
+  // la variante a sfondo trasparente, altrove quella con sfondo.
+  const iconFile =
+    process.platform === 'darwin'
+      ? 'icon4.icns'
+      : process.platform === 'win32'
+        ? 'icon-win.png'
+        : 'icon.png';
+  const iconPath = isDev ? join(__dirname, '..', iconFile) : join(app.getAppPath(), iconFile);
 
   mainWindow = new BrowserWindow({
     width: 1280,

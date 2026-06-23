@@ -1,6 +1,6 @@
 {
   "name": "claudelens-app",
-  "version": "2.0.7",
+  "version": "2.1.0",
   "description": "ClaudeLens — GUI for Claude Code data",
   "author": "Giulio Di Giamberardino",
   "license": "MIT",
@@ -102,7 +102,8 @@
       "dist/**/*",
       "dist-electron/**/*",
       "icon4.icns",
-      "icon.png"
+      "icon.png",
+      "icon-win.png"
     ],
     "asarUnpack": [
       "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
@@ -144,7 +145,7 @@
           ]
         }
       ],
-      "icon": "./icon.png"
+      "icon": "./icon-win.png"
     }
   }
 }
