@@ -1,6 +1,8 @@
 import { renderToStaticMarkup } from 'react-dom/server'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { ChatContentBlock, SessionSummary } from '../../../types'
 import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
 import { ProcessedMessage, ToolGroup } from './utils'
@@ -221,8 +223,11 @@ function buildTurnMarkdown(
     const hls = blockHighlights(highlights, msg.uuid, blockIndex)
     // Highlights bake in as inline <mark> (renders on GitHub & most viewers); a
     // quote that can't be located literally is dropped, text left intact.
+    // skipFencedCode: a <mark> inside a ``` fence would print as literal text in
+    // Markdown, so a highlight resolving inside a code block is soft-degraded
+    // here (it still renders on screen and in the HTML/PDF export).
     const text = hls.length > 0
-      ? materializeHighlightSentinels(wrapHighlightsWithSentinels(block.text, hls))
+      ? materializeHighlightSentinels(wrapHighlightsWithSentinels(block.text, hls, { skipFencedCode: true }))
       : block.text
     lines.push(text.trim(), '')
   })
@@ -298,13 +303,20 @@ function escapeHtml(value: string): string {
 // Render markdown to a static HTML string using the SAME react-markdown pipeline
 // as the live chat view (GFM: tables, strikethrough, autolinks, task lists), so
 // the export matches what's on screen — no hand-rolled mini-parser to keep in
-// sync. rehype-highlight / katex are intentionally omitted: their output needs
-// external CSS this standalone document doesn't ship, so we keep plain <pre><code>.
+// sync. Math is rendered via remark-math + rehype-katex with `output: 'mathml'`:
+// MathML renders natively in Chromium (the PDF engine) and modern browsers, so
+// the standalone document needs no KaTeX CSS or web fonts. rehype-highlight is
+// still omitted (its colors need external CSS), so code stays plain <pre><code>.
 // Highlight sentinels (PUA chars) injected into `value` pass through untouched and
 // are materialized into <mark> by the caller.
 function markdownToHtml(value: string): string {
   return renderToStaticMarkup(
-    <ReactMarkdown remarkPlugins={[remarkGfm]}>{value}</ReactMarkdown>,
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[[rehypeKatex, { output: 'mathml' }]]}
+    >
+      {value}
+    </ReactMarkdown>,
   )
 }
 
@@ -354,9 +366,15 @@ function renderTurnHtml(
       const hls = blockHighlights(highlights, msg.uuid, blockIndex)
       // Sentinels are injected into the raw text, pass through react-markdown as
       // plain text (PUA chars), then become real <mark> tags.
-      const html = hls.length > 0
-        ? materializeHighlightSentinels(markdownToHtml(wrapHighlightsWithSentinels(block.text, hls)))
-        : markdownToHtml(block.text)
+      const wrapped = hls.length > 0 ? wrapHighlightsWithSentinels(block.text, hls) : block.text
+      // User prompts render verbatim in the live view (a plain <p>, not markdown),
+      // so the export mirrors that: escape + <br>, no markdown interpretation —
+      // a literal "*x*" or "# y" typed in a prompt stays literal. Assistant text
+      // is markdown, matching <Markdown> on screen.
+      const html =
+        msg.role === 'user'
+          ? materializeHighlightSentinels(escapeHtml(wrapped).replace(/\n/g, '<br>'))
+          : materializeHighlightSentinels(markdownToHtml(wrapped))
       return `<div class="message-text">${html}</div>`
     })
     .join('')
