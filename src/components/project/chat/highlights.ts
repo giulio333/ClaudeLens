@@ -28,8 +28,14 @@ export interface Highlight {
   start: number
   /** End offset (exclusive) into the block's rendered textContent. */
   end: number
-  /** The rendered text that was selected — used to export + validate (stale-skip). */
+  /** The rendered text that was selected — used to validate (stale-skip) + as the
+   *  default export relocation key. */
   quote: string
+  /** Export-only relocation key: like `quote` but with each KaTeX formula replaced
+   *  by its raw TeX source, so it can be found in the raw markdown ($…$/$$…$$)
+   *  where the rendered text can't. Set only when the selection spans a formula;
+   *  the export falls back to `quote` otherwise. */
+  exportQuote?: string
   color: HighlightColor
   createdAt: string
 }
@@ -55,23 +61,58 @@ export function blockKey(messageUuid: string, blockIndex: number): string {
   return `${messageUuid}:${blockIndex}`
 }
 
+/** Whether a message uuid is durable enough to anchor a highlight. Synthetic
+ *  uuids (the optimistic `__pending_user__` bubble shown mid-stream) use a
+ *  `__sentinel__` form and never persist: the real message lands later with its
+ *  transcript uuid, so a highlight anchored to the synthetic one would orphan
+ *  forever in the store (never repainted, never exported). Gate the
+ *  `data-hl-block` attribute on this so such blocks aren't highlightable. */
+export function isPersistableMessageUuid(uuid: string): boolean {
+  return !!uuid && !(uuid.startsWith('__') && uuid.endsWith('__'))
+}
+
 // ---------------------------------------------------------------------------
 // DOM range utilities (rendered-textContent offset space)
 // ---------------------------------------------------------------------------
 
-/** Character offset of (node, nodeOffset) within `container`'s textContent,
- *  walking text nodes in document order. Returns container length if not found. */
+/** Character offset of (node, nodeOffset) within `container`'s textContent.
+ *  Measured with a Range so an endpoint landing on an *element* node — a
+ *  triple-click, or a mouse release on a block boundary, where `node` is an
+ *  element and `nodeOffset` is a child index, not a text node — is handled
+ *  correctly: the text up to that point is exactly what a range from the
+ *  container start to (node, nodeOffset) contains. (A text-node tree-walk would
+ *  miss the element endpoint and overshoot to the container's full length.) */
 export function textOffsetWithin(container: Node, node: Node, nodeOffset: number): number {
-  const walker = document.createTreeWalker(container, NodeFilter.SHOW_TEXT)
-  let len = 0
-  let n: Node | null
-  while ((n = walker.nextNode())) {
-    if (n === node) return len + nodeOffset
-    len += n.textContent?.length ?? 0
+  const range = document.createRange()
+  range.selectNodeContents(container)
+  try {
+    range.setEnd(node, nodeOffset)
+  } catch {
+    // node not under container, or offset out of range — fall back to full length.
+    return container.textContent?.length ?? 0
   }
-  // The selection endpoint may land on an element node (e.g. node === container
-  // with an element offset). Fall back to the accumulated length.
-  return len
+  return range.toString().length
+}
+
+/** Split [start, end) into the sub-segments that fall OUTSIDE the given intervals
+ *  (each `{start, end}`, e.g. a KaTeX formula's offset span), in order. Used so the
+ *  per-glyph Custom Highlight API paints only the plain text between formulas — the
+ *  formulas themselves get a solid box fill instead, since per-glyph painting
+ *  leaves gaps across KaTeX's math layout. Intervals must be sorted by `start`. */
+export function textSegmentsExcluding(
+  start: number,
+  end: number,
+  intervals: Array<{ start: number; end: number }>,
+): Array<[number, number]> {
+  const segments: Array<[number, number]> = []
+  let pos = start
+  for (const iv of intervals) {
+    if (iv.start > pos) segments.push([pos, Math.min(iv.start, end)])
+    pos = Math.max(pos, iv.end)
+    if (pos >= end) break
+  }
+  if (pos < end) segments.push([pos, end])
+  return segments
 }
 
 /** Build a Range spanning [start, end) of `container`'s rendered textContent. */
@@ -119,15 +160,21 @@ const SENT_CLOSE_RE = new RegExp(SENT_CLOSE, 'g')
 
 // Inline markdown markers that render to nothing — skipped when matching a
 // rendered quote against the raw source (so `code`, **bold**, _em_, ~strike~
-// inside a highlight still locate).
-const INLINE_MARKERS = new Set(['`', '*', '_', '~'])
+// inside a highlight still locate). `$` is the math delimiter: it isn't in the
+// rendered text nor in a formula's TeX source (exportQuote), so skipping it lets a
+// highlight spanning `$…$`/`$$…$$` relocate against the raw.
+const INLINE_MARKERS = new Set(['`', '*', '_', '~', '$'])
 
 /** Locate `quote` (rendered text, marker-free) inside `raw` (markdown source),
- *  starting at `fromCursor`. Matches char-for-char but skips inline markers in
- *  `raw` that don't line up with the quote — so the located span keeps the raw
- *  markup (e.g. backticks) and re-renders as <code>/<strong> inside the <mark>.
- *  Trailing markers are absorbed so a closing ` / ** isn't orphaned outside the
- *  span. Returns the raw [from, to) span, or null if not found. */
+ *  starting at `fromCursor`. Matches char-for-char but skips, in `raw`, the inline
+ *  markers and whitespace that have no counterpart in the rendered quote — so the
+ *  located span keeps the raw markup (e.g. backticks) and re-renders as
+ *  <code>/<strong> inside the <mark>, and a quote spanning a paragraph break
+ *  (the rendered text concatenates the paragraphs with no separator, the raw has a
+ *  blank line) still locates. Trailing markers are absorbed so a closing ` / ** isn't
+ *  orphaned outside the span. Returns the raw [from, to) span, or null if not found.
+ *  Note: a quote crossing a math formula won't locate (the raw is TeX, the quote is
+ *  the rendered text) — that highlight soft-degrades in export, by design. */
 export function locateQuoteInRaw(
   raw: string,
   quote: string,
@@ -141,8 +188,12 @@ export function locateQuoteInRaw(
       if (raw[i] === quote[q]) {
         i++
         q++
-      } else if (INLINE_MARKERS.has(raw[i])) {
-        i++ // skip a markup char that has no counterpart in the rendered quote
+      } else if (INLINE_MARKERS.has(raw[i]) || (q > 0 && /\s/.test(raw[i]))) {
+        // Skip a markup char, or — only once the match is under way (q > 0, so we
+        // never absorb leading whitespace into the span) — whitespace in the raw
+        // with no counterpart in the rendered quote (e.g. the blank line between
+        // two paragraphs).
+        i++
       } else {
         break
       }
@@ -156,39 +207,139 @@ export function locateQuoteInRaw(
   return null
 }
 
+/** Character ranges [from, to) in `raw` that lie inside a fenced code block
+ *  (``` or ~~~). Inline code (single backticks) is intentionally NOT included —
+ *  it must keep rendering as <code> inside a <mark>. Used to soft-degrade
+ *  highlights in the Markdown export, where a <mark> tag injected inside a fence
+ *  would print as literal text instead of rendering. */
+export function fencedCodeRanges(raw: string): Array<{ from: number; to: number }> {
+  const ranges: Array<{ from: number; to: number }> = []
+  let pos = 0
+  let open: { from: number; marker: string } | null = null
+  for (const line of raw.split('\n')) {
+    const lineStart = pos
+    const lineEnd = pos + line.length
+    if (!open) {
+      const m = line.match(/^\s*(`{3,}|~{3,})/)
+      if (m) open = { from: lineStart, marker: m[1][0] }
+    } else {
+      // Closing fence: same fence char, alone on its line (CommonMark allows
+      // surrounding whitespace but no info string on the closer).
+      const close = line.match(/^\s*(`{3,}|~{3,})\s*$/)
+      if (close && close[1][0] === open.marker) {
+        ranges.push({ from: open.from, to: lineEnd })
+        open = null
+      }
+    }
+    pos = lineEnd + 1 // +1 for the '\n' that split consumed
+  }
+  // An unterminated fence runs to the end of the block.
+  if (open) ranges.push({ from: open.from, to: raw.length })
+  return ranges
+}
+
+/** Split a located raw span [from, to) into the inline runs that can safely carry
+ *  a <mark>: one per markdown block. A single <mark> can't straddle a paragraph
+ *  break (`<p><mark>a</p><p>b</mark></p>` is invalid HTML), so the span is cut on
+ *  blank lines. Block-level segments that can't be inline-wrapped are dropped:
+ *  display math (`$$…$$`, soft-degrades — it still renders, just unhighlighted)
+ *  and fenced code. Leading/trailing whitespace is trimmed off each run. */
+export function inlineRuns(
+  rawText: string,
+  from: number,
+  to: number,
+  fences: Array<{ from: number; to: number }> = [],
+): Array<[number, number]> {
+  const runs: Array<[number, number]> = []
+  const push = (s: number, e: number) => {
+    while (s < e && /\s/.test(rawText[s])) s++
+    while (e > s && /\s/.test(rawText[e - 1])) e--
+    if (s >= e) return
+    if (rawText.startsWith('$$', s)) return // display math block — can't inline-wrap
+    if (fences.some(f => s < f.to && e > f.from)) return
+    runs.push([s, e])
+  }
+  const re = /\n[ \t]*\n+/g // blank line(s) = paragraph/block boundary
+  re.lastIndex = from
+  let last = from
+  let m: RegExpExecArray | null
+  while ((m = re.exec(rawText)) !== null && m.index < to) {
+    push(last, m.index)
+    last = m.index + m[0].length
+  }
+  push(last, to)
+  return runs
+}
+
 /** Wrap each highlight's quote (located in the raw block text, tolerant to inline
  *  markdown markers) with color sentinels. Highlights are processed in document
- *  order; the search cursor advances so repeated quotes map to successive
- *  occurrences. A quote that can't be located at all (the text genuinely changed)
- *  is skipped, leaving the surrounding text intact — the documented soft-degrade. */
-export function wrapHighlightsWithSentinels(rawText: string, highlights: Highlight[]): string {
+ *  order; the search cursor advances just past each match's start so repeated
+ *  quotes map to successive occurrences AND a highlight overlapping a prior one
+ *  can still be located. Overlaps are then clamped so the emitted spans never
+ *  nest — the earlier highlight's color wins the shared region, the later one
+ *  keeps the remainder (matches the live view, which never drops a highlight; it
+ *  only differs in how the overlap is tinted). Each located span is then split
+ *  into per-block inline runs (see inlineRuns) so a <mark> never straddles a
+ *  paragraph break. A quote that can't be located at all (the text genuinely
+ *  changed) is skipped, leaving the surrounding text intact — the documented
+ *  soft-degrade.
+ *  With `skipFencedCode`, a quote that resolves inside a fenced code block is also
+ *  skipped: the Markdown export can't carry a <mark> there (it would print
+ *  literally). The HTML/PDF export omits the flag — a <mark> inside <pre><code>
+ *  renders fine there, so highlighted code still shows on screen and in PDF. */
+export function wrapHighlightsWithSentinels(
+  rawText: string,
+  highlights: Highlight[],
+  opts: { skipFencedCode?: boolean } = {},
+): string {
   if (highlights.length === 0) return rawText
+  const fences = opts.skipFencedCode ? fencedCodeRanges(rawText) : []
+  const insideFence = (from: number, to: number) =>
+    fences.some(f => from < f.to && to > f.from)
   const ordered = [...highlights].sort((a, b) => a.start - b.start)
   type Span = { from: number; to: number; color: HighlightColor }
   const spans: Span[] = []
-  let cursor = 0
+  let searchFrom = 0
   let lastTo = 0
   for (const h of ordered) {
-    if (!h.quote) continue
-    const located = locateQuoteInRaw(rawText, h.quote, cursor)
+    // Prefer the TeX-aware export key so a highlight spanning a formula relocates.
+    const q = h.exportQuote ?? h.quote
+    if (!q) continue
+    const located = locateQuoteInRaw(rawText, q, searchFrom)
     if (!located) continue
     const { from, to } = located
-    // Skip overlapping spans (a quote that re-matches inside a prior one).
-    if (from < lastTo) continue
-    spans.push({ from, to, color: h.color })
-    cursor = to
+    // Advance past this match's start (not its end), so a later highlight that
+    // overlaps this one can still resolve.
+    searchFrom = from + 1
+    // Soft-degrade a highlight that landed inside a fenced code block (Markdown
+    // export only); the cursor already advanced so later quotes search past it.
+    if (insideFence(from, to)) continue
+    // Clamp the start past the last emitted span: overlapping highlights become
+    // adjacent (non-nested) marks instead of one being dropped. A highlight fully
+    // covered by an earlier one collapses to nothing here.
+    const start = Math.max(from, lastTo)
+    if (start >= to) continue
+    spans.push({ from: start, to, color: h.color })
     lastTo = to
   }
-  if (spans.length === 0) return rawText
+  // Expand each span into per-block inline runs so a <mark> never straddles a
+  // block boundary (which would emit invalid HTML); drop display-math/fenced runs.
+  const runs: Span[] = []
+  for (const s of spans) {
+    for (const [rf, rt] of inlineRuns(rawText, s.from, s.to, fences)) {
+      runs.push({ from: rf, to: rt, color: s.color })
+    }
+  }
+  if (runs.length === 0) return rawText
   let out = ''
   let pos = 0
-  for (const s of spans) {
+  for (const r of runs) {
     out +=
-      rawText.slice(pos, s.from) +
-      SENT_OPEN + s.color + SENT_MID +
-      rawText.slice(s.from, s.to) +
+      rawText.slice(pos, r.from) +
+      SENT_OPEN + r.color + SENT_MID +
+      rawText.slice(r.from, r.to) +
       SENT_CLOSE
-    pos = s.to
+    pos = r.to
   }
   out += rawText.slice(pos)
   return out
