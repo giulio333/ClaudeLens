@@ -7,6 +7,7 @@ import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
 import { FileIcon } from './fileIcons'
+import { blockKey } from './highlights'
 
 /** Unobtrusive header button that copies a turn's plain markdown text (text
  *  blocks only — no tools, thinking, or indicators), so pasting into a .md file
@@ -619,11 +620,18 @@ export const MessageBubble = memo(function MessageBubble({
         <div className="cl-turn-content">
           {textBlocks.map((b, i) => (
             isUser ? (
-              <p key={i} className="cl-message-text cl-message-text--user">{b.text}</p>
+              <p
+                key={i}
+                className="cl-message-text cl-message-text--user"
+                data-hl-block={blockKey(msg.uuid, i)}
+              >
+                {b.text}
+              </p>
             ) : (
               <div
                 key={i}
                 className="cl-message-text cl-message-text--assistant"
+                data-hl-block={blockKey(msg.uuid, i)}
               >
                 <Markdown>{b.text}</Markdown>
               </div>

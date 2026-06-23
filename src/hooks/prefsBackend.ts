@@ -15,6 +15,7 @@ const KEY_EVENTS: Record<string, string> = {
   'cl-session-tags': 'cl-session-tags-changed',
   'cl-memory-tags': 'cl-memory-tags-changed',
   'cl-theme': 'cl-theme-changed',
+  'cl-highlights': 'cl-highlights-changed',
 }
 
 function hasBackend(): boolean {

@@ -4158,6 +4158,87 @@ body {
   :where(p, li, h1, h2, h3, h4, h5, h6, blockquote, dd, dt, td, th, a, code) {
   overflow-wrap: anywhere;
 }
+
+/* ── Persistent text highlights ──────────────────────────────────────────
+   Painted via the CSS Custom Highlight API (Range-backed, no DOM mutation, so
+   they never fight react-markdown). Registry names + colors mirror
+   HIGHLIGHT_COLORS in highlights.ts. Semi-transparent so the theme-aware text
+   color reads through on both light and dark. */
+::highlight(cl-hl-amber) { background-color: rgba(224, 168, 64, 0.38); }
+::highlight(cl-hl-green) { background-color: rgba(96, 160, 110, 0.36); }
+::highlight(cl-hl-blue) { background-color: rgba(96, 142, 198, 0.34); }
+::highlight(cl-hl-pink) { background-color: rgba(208, 112, 152, 0.34); }
+[data-theme='dark'] ::highlight(cl-hl-amber) { background-color: rgba(224, 168, 64, 0.32); }
+[data-theme='dark'] ::highlight(cl-hl-green) { background-color: rgba(110, 178, 124, 0.30); }
+[data-theme='dark'] ::highlight(cl-hl-blue) { background-color: rgba(120, 162, 214, 0.30); }
+[data-theme='dark'] ::highlight(cl-hl-pink) { background-color: rgba(216, 128, 166, 0.30); }
+
+/* A highlightable block hints text-selection affordance without nagging. */
+[data-hl-block] { cursor: text; }
+
+/* Inline code chip sitting inside a highlight: drop its opaque background +
+   padding box so the highlight overlay painted behind it shows through (incl.
+   the spaces around the chip). Keeps the mono font + accent ink so it still
+   reads as code. Toggled by useHighlightLayer's repaint. */
+.prose-lens code.cl-hl-through:not(pre code) {
+  background: transparent;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+/* Floating swatch toolbar shown on selection (create) or on clicking an existing
+   highlight (edit + remove). Portaled to <body>, positioned in JS. */
+.cl-hl-toolbar {
+  position: fixed;
+  z-index: 1000;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 7px;
+  border-radius: 999px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.16), 0 1px 0 rgba(255, 255, 255, 0.4) inset;
+}
+[data-theme='dark'] .cl-hl-toolbar {
+  background: var(--cl-paper-2);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+}
+.cl-hl-swatches { display: flex; align-items: center; gap: 5px; }
+.cl-hl-swatch {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cl-line);
+  background: var(--hl);
+  cursor: pointer;
+  padding: 0;
+  transition: transform 0.1s ease, box-shadow 0.1s ease;
+}
+.cl-hl-swatch:hover { transform: scale(1.12); }
+.cl-hl-swatch.is-active {
+  box-shadow: 0 0 0 2px var(--cl-paper), 0 0 0 3.5px var(--cl-accent);
+}
+.cl-hl-divider {
+  width: 1px;
+  height: 18px;
+  background: var(--cl-line);
+}
+.cl-hl-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  padding: 0;
+}
+.cl-hl-remove:hover { background: rgba(193, 95, 60, 0.12); color: var(--cl-accent-ink); }
 /* Command turn — niente shell glass extra, card command è già stand-alone */
 .cl-turn--command .cl-turn-body {
   background: transparent;
