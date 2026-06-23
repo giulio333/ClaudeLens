@@ -1,6 +1,17 @@
+import { renderToStaticMarkup } from 'react-dom/server'
+import ReactMarkdown from 'react-markdown'
+import remarkGfm from 'remark-gfm'
+import remarkMath from 'remark-math'
+import rehypeKatex from 'rehype-katex'
 import { ChatContentBlock, SessionSummary } from '../../../types'
 import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
 import { ProcessedMessage, ToolGroup } from './utils'
+import {
+  Highlight,
+  exportHighlightCss,
+  materializeHighlightSentinels,
+  wrapHighlightsWithSentinels,
+} from './highlights'
 
 export type ChatExportFormat = 'markdown' | 'pdf'
 export type ChatExportPreset = 'message' | 'team' | 'docs' | 'audit'
@@ -41,10 +52,11 @@ type ExportOptions = {
 }
 
 type BuildChatExportInput = {
-  projectPath: string
   session: SessionSummary
   processed: ProcessedMessage[]
   preset: ChatExportPreset
+  /** Persistent text highlights to bake into the export as <mark>. */
+  highlights?: Highlight[]
 }
 
 export type ChatExportDocument = {
@@ -184,10 +196,17 @@ function thinkingBlocks(blocks: ChatContentBlock[]) {
   return blocks.filter((b): b is Extract<ChatContentBlock, { type: 'thinking' }> => b.type === 'thinking')
 }
 
+/** Highlights belonging to one text block of a message (same indexing as the
+ *  rendered MessageBubble: position within the message's text blocks). */
+function blockHighlights(highlights: Highlight[], uuid: string, blockIndex: number): Highlight[] {
+  return highlights.filter(h => h.messageUuid === uuid && h.blockIndex === blockIndex)
+}
+
 function buildTurnMarkdown(
   processed: ProcessedMessage,
   index: number,
   options: ExportOptions,
+  highlights: Highlight[],
 ): string[] {
   const { msg, toolGroups } = processed
   const heading = `### ${String(index + 1).padStart(2, '0')} ${roleLabel(msg.role)}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`
@@ -200,9 +219,18 @@ function buildTurnMarkdown(
     }
   }
 
-  for (const block of textBlocks(msg.content)) {
-    lines.push(block.text.trim(), '')
-  }
+  textBlocks(msg.content).forEach((block, blockIndex) => {
+    const hls = blockHighlights(highlights, msg.uuid, blockIndex)
+    // Highlights bake in as inline <mark> (renders on GitHub & most viewers); a
+    // quote that can't be located literally is dropped, text left intact.
+    // skipFencedCode: a <mark> inside a ``` fence would print as literal text in
+    // Markdown, so a highlight resolving inside a code block is soft-degraded
+    // here (it still renders on screen and in the HTML/PDF export).
+    const text = hls.length > 0
+      ? materializeHighlightSentinels(wrapHighlightsWithSentinels(block.text, hls, { skipFencedCode: true }))
+      : block.text
+    lines.push(text.trim(), '')
+  })
 
   if (toolGroups.length > 0 && options.includeCompactToolNotes) {
     lines.push('#### Tool Activity', '')
@@ -235,14 +263,15 @@ function buildTurnMarkdown(
 }
 
 function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): string {
-  const { projectPath, session, processed, preset } = input
+  const { session, processed, preset } = input
   const title = sessionTitle(session, 120)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] : session.model
+  // The absolute project path is deliberately omitted — it can leak the username
+  // and internal directory structure into a shared export.
   const lines = [
     `# ${title}`,
     '',
     `> Exported from ClaudeLens on ${fmtDate(new Date().toISOString())}`,
-    `> Project: \`${projectPath}\``,
     `> Session: \`${session.filename}\``,
     `> Date: ${fmtDate(session.date)}`,
     `> Preset: ${PRESET_LABEL[preset]}`,
@@ -254,8 +283,9 @@ function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): str
   if (showsTools(options)) lines.push(...buildToolSummaryMarkdown(processed))
   lines.push('## Conversation', '')
 
+  const highlights = input.highlights ?? []
   processed.forEach((p, i) => {
-    lines.push(...buildTurnMarkdown(p, i, options))
+    lines.push(...buildTurnMarkdown(p, i, options, highlights))
   })
 
   return lines.join('\n').replace(/\n{4,}/g, '\n\n\n').trimEnd() + '\n'
@@ -270,48 +300,24 @@ function escapeHtml(value: string): string {
     .replace(/'/g, '&#39;')
 }
 
-function inlineMarkdownToHtml(line: string): string {
-  return escapeHtml(line)
-    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-}
-
-function markdownSegmentToHtml(value: string): string {
-  return value.split('\n').map(line => {
-    const trimmed = line.trim()
-    if (!trimmed) return '<div class="spacer"></div>'
-
-    const heading = trimmed.match(/^(#{1,4})\s+(.+)$/)
-    if (heading) {
-      const level = Math.min(heading[1].length + 1, 5)
-      return `<h${level}>${inlineMarkdownToHtml(heading[2])}</h${level}>`
-    }
-
-    const unordered = trimmed.match(/^[-*]\s+(.+)$/)
-    if (unordered) return `<div class="md-list">- ${inlineMarkdownToHtml(unordered[1])}</div>`
-
-    const ordered = trimmed.match(/^(\d+)\.\s+(.+)$/)
-    if (ordered) return `<div class="md-list">${ordered[1]}. ${inlineMarkdownToHtml(ordered[2])}</div>`
-
-    return `<p>${inlineMarkdownToHtml(line)}</p>`
-  }).join('')
-}
-
+// Render markdown to a static HTML string using the SAME react-markdown pipeline
+// as the live chat view (GFM: tables, strikethrough, autolinks, task lists), so
+// the export matches what's on screen — no hand-rolled mini-parser to keep in
+// sync. Math is rendered via remark-math + rehype-katex with `output: 'mathml'`:
+// MathML renders natively in Chromium (the PDF engine) and modern browsers, so
+// the standalone document needs no KaTeX CSS or web fonts. rehype-highlight is
+// still omitted (its colors need external CSS), so code stays plain <pre><code>.
+// Highlight sentinels (PUA chars) injected into `value` pass through untouched and
+// are materialized into <mark> by the caller.
 function markdownToHtml(value: string): string {
-  const fenceRe = /```([^\n`]*)\n([\s\S]*?)```/g
-  let html = ''
-  let cursor = 0
-  let match: RegExpExecArray | null
-
-  while ((match = fenceRe.exec(value)) !== null) {
-    html += markdownSegmentToHtml(value.slice(cursor, match.index))
-    const lang = match[1].trim()
-    html += `<pre><span>${escapeHtml(lang || 'text')}</span><code>${escapeHtml(match[2].trimEnd())}</code></pre>`
-    cursor = fenceRe.lastIndex
-  }
-
-  html += markdownSegmentToHtml(value.slice(cursor))
-  return html
+  return renderToStaticMarkup(
+    <ReactMarkdown
+      remarkPlugins={[remarkGfm, remarkMath]}
+      rehypePlugins={[[rehypeKatex, { output: 'mathml' }]]}
+    >
+      {value}
+    </ReactMarkdown>,
+  )
 }
 
 function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
@@ -346,12 +352,31 @@ function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
   `
 }
 
-function renderTurnHtml(processed: ProcessedMessage, _index: number, options: ExportOptions): string {
+function renderTurnHtml(
+  processed: ProcessedMessage,
+  _index: number,
+  options: ExportOptions,
+  highlights: Highlight[],
+): string {
   const { msg, toolGroups } = processed
   const time = turnTime(msg.timestamp)
   const role = roleLabel(msg.role)
   const textHtml = textBlocks(msg.content)
-    .map(block => `<div class="message-text">${markdownToHtml(block.text)}</div>`)
+    .map((block, blockIndex) => {
+      const hls = blockHighlights(highlights, msg.uuid, blockIndex)
+      // Sentinels are injected into the raw text, pass through react-markdown as
+      // plain text (PUA chars), then become real <mark> tags.
+      const wrapped = hls.length > 0 ? wrapHighlightsWithSentinels(block.text, hls) : block.text
+      // User prompts render verbatim in the live view (a plain <p>, not markdown),
+      // so the export mirrors that: escape + <br>, no markdown interpretation —
+      // a literal "*x*" or "# y" typed in a prompt stays literal. Assistant text
+      // is markdown, matching <Markdown> on screen.
+      const html =
+        msg.role === 'user'
+          ? materializeHighlightSentinels(escapeHtml(wrapped).replace(/\n/g, '<br>'))
+          : materializeHighlightSentinels(markdownToHtml(wrapped))
+      return `<div class="message-text">${html}</div>`
+    })
     .join('')
   const thinkingHtml = options.includeThinking
     ? thinkingBlocks(msg.content)
@@ -383,7 +408,7 @@ function renderTurnHtml(processed: ProcessedMessage, _index: number, options: Ex
 }
 
 function buildHtml(input: BuildChatExportInput, options: ExportOptions): string {
-  const { projectPath, session, processed } = input
+  const { session, processed } = input
   const title = sessionTitle(session, 120)
   const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] : session.model
 
@@ -422,15 +447,6 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       overflow-wrap: anywhere;
       break-inside: auto;
     }
-    pre span {
-      position: absolute;
-      top: 6px;
-      right: 9px;
-      color: #a39d92;
-      font-size: 9px;
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-    }
     pre code { display: block; background: transparent; padding: 0; border-radius: 0; }
     /* Slim masthead — title + one hairline meta line, no report cover. */
     .masthead { border-bottom: 1px solid #e2ded4; padding-bottom: 16px; margin-bottom: 8px; }
@@ -462,8 +478,35 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
     .turn-head time { color: #9a948a; }
     .turn-model { color: #7c7669; }
     .message-text { margin-bottom: 8px; }
-    .md-list { margin: 0 0 4px 14px; }
-    .spacer { height: 8px; }
+    .message-text > :first-child { margin-top: 0; }
+    .message-text > :last-child { margin-bottom: 0; }
+    ${exportHighlightCss()}
+    /* Markdown body elements (react-markdown + GFM output). */
+    em { font-style: italic; }
+    strong { font-weight: 700; }
+    ul, ol { margin: 0 0 10px; padding-left: 22px; }
+    li { margin: 0 0 3px; }
+    li > p { margin: 0; }
+    blockquote {
+      margin: 10px 0;
+      padding: 2px 14px;
+      border-left: 3px solid #d6d1c5;
+      color: #5f5a52;
+    }
+    hr { border: 0; border-top: 1px solid #e2ded4; margin: 16px 0; }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 10px 0 14px;
+      font-size: 12.5px;
+    }
+    th, td {
+      border: 1px solid #e2ded4;
+      padding: 6px 9px;
+      text-align: left;
+      vertical-align: top;
+    }
+    th { background: #f4f3ee; font-weight: 700; }
     .muted { color: #a39d92; font-style: italic; }
     .thinking {
       border-left: 3px solid #d6d1c5;
@@ -505,10 +548,9 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       <div class="submeta">
         <span>${escapeHtml(fmtDate(session.date))}</span>
         ${primaryModel ? `<i>·</i><span>${escapeHtml(fmtModel(primaryModel))}</span>` : ''}
-        <i>·</i><span>${escapeHtml(projectPath)}</span>
       </div>
     </section>
-    ${processed.map((p, i) => renderTurnHtml(p, i, options)).join('')}
+    ${processed.map((p, i) => renderTurnHtml(p, i, options, input.highlights ?? [])).join('')}
     <div class="footer">Exported from ClaudeLens on ${escapeHtml(fmtDate(new Date().toISOString()))}. Review before sharing outside your organization.</div>
   </div>
 </body>
