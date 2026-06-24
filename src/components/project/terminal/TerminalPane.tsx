@@ -3,6 +3,7 @@ import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../../../hooks/useTheme';
+import { trackEvent } from '../../../lib/telemetry';
 
 /**
  * The terminal "dumb pipe": an xterm.js emulator wired to the interactive
@@ -150,6 +151,7 @@ export function TerminalPane({
         return;
       }
       idRef.current = res.data.id;
+      trackEvent('terminal_opened');
       onPidRef.current(res.data.pid);
       for (const chunk of earlyRef.current) {
         if (chunk.id === res.data.id) term.write(chunk.data);

@@ -39,6 +39,7 @@ import {
   PermissionUpdate,
 } from './modules/chat-runner';
 import { readPrefs, setPref } from './modules/prefs-store';
+import { initTelemetry, track, trackExit, isTelemetryEnabled, setTelemetryEnabled } from './modules/telemetry';
 import {
   createTerminal,
   writeTerminal,
@@ -61,6 +62,17 @@ import {
   isValidSessionId,
 } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
+
+// Use an in-memory "mock" keychain for Chromium's encrypted storage (os_crypt)
+// instead of the OS keychain. Must be set before the app is ready. ClaudeLens
+// stores nothing sensitive in Chromium (no web logins/cookies, no safeStorage;
+// all its state lives in ~/.claudelens and ~/.claude), so this is safe — and it
+// stops macOS from popping a "<app> Safe Storage" Keychain permission dialog at
+// launch, which Chromium would otherwise raise the first time its network/cookie
+// store initializes (notably on unsigned builds, which is how ClaudeLens ships).
+// If a future feature needs safeStorage-backed secrets, revisit this.
+app.commandLine.appendSwitch('use-mock-keychain');
+
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 const PLANS_DIR = join(CLAUDE_DIR, 'plans');
@@ -565,6 +577,49 @@ ipcMain.handle('prefs:getAll', async () => {
 ipcMain.handle('prefs:set', async (_event, key: string, value: unknown) => {
   try {
     setPref(key, value);
+    return ok(true);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Anonymous usage telemetry (Aptabase) opt-out toggle — see modules/telemetry.ts.
+ipcMain.handle('telemetry:isEnabled', async () => {
+  try {
+    return ok(isTelemetryEnabled());
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('telemetry:setEnabled', async (_event, value: boolean) => {
+  try {
+    setTelemetryEnabled(value === true);
+    return ok(true);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Anonymous feature-usage events fired from the renderer (view opened, chat
+// started, export done, …). Defense-in-depth sanitizer: only a well-formed
+// event name and flat string/number props survive, and strings are capped — so
+// even a buggy/compromised renderer can't smuggle session content, paths, or
+// other sensitive data into telemetry. `track()` itself is still opt-out gated.
+ipcMain.handle('telemetry:track', async (_event, name: unknown, props: unknown) => {
+  try {
+    if (typeof name !== 'string' || !/^[a-z0-9_]{1,40}$/i.test(name)) return ok(false);
+    let safe: Record<string, string | number> | undefined;
+    if (props && typeof props === 'object' && !Array.isArray(props)) {
+      safe = {};
+      for (const [k, v] of Object.entries(props as Record<string, unknown>)) {
+        if (Object.keys(safe).length >= 10) break;
+        if (!/^[a-z0-9_]{1,40}$/i.test(k)) continue;
+        if (typeof v === 'number' && Number.isFinite(v)) safe[k] = v;
+        else if (typeof v === 'string') safe[k] = v.slice(0, 80);
+      }
+    }
+    void track(name, safe);
     return ok(true);
   } catch (e) {
     return err(e);
@@ -1496,6 +1551,12 @@ app.whenReady().then(() => {
   if (process.env.SCREENSHOT_MODE) {
     registerScreenshotHandlers(ipcMain);
   }
+  // Anonymous telemetry: set the opt-out gate, then send one launch event
+  // (no-op when opted out / in screenshot mode). Sent via Node https, not
+  // electron.net, so it never triggers the macOS Keychain prompt. See
+  // modules/telemetry.ts.
+  initTelemetry();
+  void track('app_started');
   // Rimuove del tutto la menu bar nativa su Windows/Linux (incl. il toggle con Alt).
   // Su macOS la lasciamo: ospita l'app menu di sistema (Cmd+Q, copia/incolla, ecc.).
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);
@@ -1514,6 +1575,18 @@ app.on('window-all-closed', () => {
   // the terminals here too — they should die with the window on every platform.
   disposeAllTerminals();
   if (process.platform !== 'darwin') app.quit();
+});
+
+// Send one `app_exited` event (with how long the app was open) before quitting,
+// so we can gauge usage time. The first `before-quit` is deferred just long
+// enough to let the event reach the network (capped at ~2s inside trackExit);
+// re-quitting after that proceeds normally. No-op/instant when opted out.
+let exitTracked = false;
+app.on('before-quit', event => {
+  if (exitTracked) return;
+  exitTracked = true;
+  event.preventDefault();
+  void trackExit().finally(() => app.quit());
 });
 
 // Embedded-terminal PTYs are real `claude` processes: kill them on shutdown so

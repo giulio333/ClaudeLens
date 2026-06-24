@@ -6,6 +6,7 @@ import { ChatComposer } from './ChatComposer'
 import { MessageBubble } from './MessageBubble'
 import { LiveTurn } from './ChatView'
 import { useChatAutoScroll } from './useAutoScroll'
+import { trackEvent } from '../../../lib/telemetry'
 
 /** Start a new Claude Code session from inside ClaudeLens. Renders the empty
  *  Focus layout with a composer in new-chat mode: the first message starts a new
@@ -136,6 +137,7 @@ export function NewChatView({
             // would navigate to a transcript that may not exist on disk,
             // hiding the composer's error. Stay put instead.
             if (!id || liveMessagesRef.current.length === 0) return
+            trackEvent('chat_started')
             onCreated({
               filename: `${id}.jsonl`,
               date: new Date().toISOString(),

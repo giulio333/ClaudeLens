@@ -270,6 +270,11 @@ declare global {
         getAll: () => Promise<IpcResult<Record<string, unknown>>>
         set: (key: string, value: unknown) => Promise<IpcResult<boolean>>
       }
+      telemetry: {
+        isEnabled: () => Promise<IpcResult<boolean>>
+        setEnabled: (enabled: boolean) => Promise<IpcResult<boolean>>
+        track: (name: string, props?: Record<string, string | number>) => Promise<IpcResult<boolean>>
+      }
       onDataChanged: (callback: () => void) => () => void
       live: {
         getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
@@ -494,6 +499,26 @@ export function useCleanupPeriodDays() {
     queryKey: ['settings:cleanupPeriodDays'],
     queryFn: () => unwrap(window.electronAPI.settings.getCleanupPeriodDays()),
     staleTime: 60_000,
+  })
+}
+
+// Anonymous usage telemetry (Aptabase) opt-out toggle. Default ON; the toggle
+// takes effect immediately in the main process (no restart). See PRIVACY.md.
+export function useTelemetryEnabled() {
+  return useQuery({
+    queryKey: ['telemetry:enabled'],
+    queryFn: () => unwrap(window.electronAPI.telemetry.isEnabled()),
+    staleTime: Infinity,
+  })
+}
+
+export function useSetTelemetryEnabled() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (enabled: boolean) => unwrap(window.electronAPI.telemetry.setEnabled(enabled)),
+    onSuccess: (_data, enabled) => {
+      qc.setQueryData(['telemetry:enabled'], enabled)
+    },
   })
 }
 

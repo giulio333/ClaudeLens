@@ -1,8 +1,15 @@
 import { useState, type ReactNode } from 'react'
 import { TopBar } from '../shared/TopBar'
-import { useEffectiveConfig, type EffectiveConfig } from '../../../hooks/useIPC'
+import {
+  useEffectiveConfig,
+  useTelemetryEnabled,
+  useSetTelemetryEnabled,
+  type EffectiveConfig,
+} from '../../../hooks/useIPC'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
 import { version as appVersion } from '../../../../package.json'
+
+const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md'
 
 // ─── Settings page ────────────────────────────────────────────────────────────
 // Reads the *effective* Claude Code configuration through the official Agent SDK
@@ -10,10 +17,11 @@ import { version as appVersion } from '../../../../package.json'
 // left-rail of tabs, mirroring the native Claude settings dialog. Read-only:
 // ClaudeLens inspects configuration, it does not mutate ~/.claude settings here.
 
-type TabId = 'appearance' | 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'sources'
+type TabId = 'appearance' | 'privacy' | 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'sources'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: 'appearance', label: 'Appearance', icon: <PaletteIcon /> },
+  { id: 'privacy', label: 'Privacy', icon: <LockIcon /> },
   { id: 'general', label: 'General', icon: <GearIcon /> },
   { id: 'permissions', label: 'Permissions', icon: <ShieldIcon /> },
   { id: 'tools', label: 'Tools', icon: <WrenchIcon /> },
@@ -89,6 +97,8 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
         <main className="flex-1 min-w-0 overflow-y-auto" style={{ padding: '28px 40px 60px' }}>
           {tab === 'appearance' ? (
             <AppearanceTab />
+          ) : tab === 'privacy' ? (
+            <PrivacyTab />
           ) : isLoading ? (
             <Centered>Reading configuration via the Agent SDK…</Centered>
           ) : error ? (
@@ -110,6 +120,7 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 function TabContent({ tab, cfg, q }: { tab: TabId; cfg: EffectiveConfig; q: string }) {
   switch (tab) {
     case 'appearance': return null // handled before TabContent (editable, config-independent)
+    case 'privacy': return null // handled before TabContent (editable, config-independent)
     case 'general': return <GeneralTab cfg={cfg} q={q} />
     case 'permissions': return <PermissionsTab cfg={cfg} q={q} />
     case 'tools': return <ToolsTab cfg={cfg} q={q} />
@@ -197,6 +208,145 @@ export function AppearanceTab() {
         </p>
       )}
     </Section>
+  )
+}
+
+// ─── Privacy (editable, ClaudeLens-own preference) ────────────────────────────
+// Anonymous usage telemetry via Aptabase (EU). Opt-out: on by default, off with
+// one click here — the change applies immediately in the main process. This is
+// the in-app surface the GDPR transparency principle expects (alongside
+// PRIVACY.md and the README). See electron/modules/telemetry.ts.
+
+const COLLECTED = [
+  'App launch and exit, including how long the app was open',
+  'Which sections you open, and a few feature actions (new chat, export, terminal, delete)',
+  'App version, operating system, and language',
+  'A rotating session id (not tied to your identity)',
+]
+const NOT_COLLECTED = [
+  'Your Claude Code sessions, prompts, or responses',
+  'Any file from ~/.claude (transcripts, memory, plans)',
+  'File paths, usernames, project names, or API keys',
+]
+
+function PrivacyTab() {
+  const { data: enabled, isLoading } = useTelemetryEnabled()
+  const setEnabled = useSetTelemetryEnabled()
+  const on = enabled ?? true
+
+  return (
+    <>
+      <Section
+        title="Anonymous usage analytics"
+        hint="Helps us understand how many people use ClaudeLens and on which platforms. Data is anonymous, aggregate, and never identifies you."
+      >
+        <div
+          className="flex items-center justify-between gap-6 rounded-xl px-4 py-3.5"
+          style={{ background: 'var(--cl-paper-2)', border: '1px solid var(--cl-line)' }}
+        >
+          <div className="min-w-0">
+            <div style={{ fontSize: 13.5, color: 'var(--cl-ink)', fontWeight: 600 }}>
+              Share anonymous usage data
+            </div>
+            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
+              {on ? 'On — anonymous usage events are sent via Aptabase (EU).' : 'Off — nothing is sent.'}
+            </div>
+          </div>
+          <ToggleSwitch
+            checked={on}
+            disabled={isLoading || setEnabled.isPending}
+            onChange={v => setEnabled.mutate(v)}
+          />
+        </div>
+      </Section>
+
+      <Section title="What is collected">
+        <ul className="flex flex-col gap-1.5 pt-0.5">
+          {COLLECTED.map((x, i) => <LedgerItem key={i} tone="neutral">{x}</LedgerItem>)}
+        </ul>
+      </Section>
+
+      <Section title="What is never collected">
+        <ul className="flex flex-col gap-1.5 pt-0.5">
+          {NOT_COLLECTED.map((x, i) => <LedgerItem key={i} tone="block">{x}</LedgerItem>)}
+        </ul>
+      </Section>
+
+      <Section title="Details">
+        <Row label="Processor" hint="Privacy-first analytics for desktop apps">
+          <a
+            href="https://aptabase.com"
+            target="_blank"
+            rel="noreferrer"
+            className="font-mono hover:underline"
+            style={{ fontSize: 13, color: 'var(--cl-accent)' }}
+          >
+            Aptabase (EU)
+          </a>
+        </Row>
+        <Row label="Legal basis" hint="GDPR Art. 6(1)(f) — lawful because the data is anonymous">
+          <Mono>Legitimate interest</Mono>
+        </Row>
+        <Row label="Privacy policy" hint="Full disclosure, hosted on GitHub">
+          <a
+            href={PRIVACY_POLICY_URL}
+            target="_blank"
+            rel="noreferrer"
+            className="hover:underline"
+            style={{ fontSize: 13, color: 'var(--cl-accent)' }}
+          >
+            Read PRIVACY.md →
+          </a>
+        </Row>
+      </Section>
+    </>
+  )
+}
+
+function LedgerItem({ tone, children }: { tone: 'neutral' | 'block'; children: ReactNode }) {
+  const color = tone === 'block' ? 'var(--cl-danger)' : 'var(--cl-ok)'
+  return (
+    <li className="flex items-start gap-2.5" style={{ fontSize: 13, color: 'var(--cl-ink-2)' }}>
+      <span style={{ color, marginTop: 1, flexShrink: 0, display: 'flex' }}>
+        {tone === 'block' ? (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M18 6 6 18M6 6l12 12" /></svg>
+        ) : (
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 6 9 17l-5-5" /></svg>
+        )}
+      </span>
+      <span>{children}</span>
+    </li>
+  )
+}
+
+function ToggleSwitch({ checked, disabled, onChange }: { checked: boolean; disabled?: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative shrink-0 rounded-full transition-colors"
+      style={{
+        width: 44,
+        height: 26,
+        background: checked ? 'var(--cl-accent)' : 'var(--cl-ink-4)',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'default' : 'pointer',
+      }}
+    >
+      <span
+        className="absolute rounded-full transition-all"
+        style={{
+          top: 3,
+          left: checked ? 21 : 3,
+          width: 20,
+          height: 20,
+          background: 'var(--cl-paper)',
+          boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
+        }}
+      />
+    </button>
   )
 }
 
@@ -470,6 +620,7 @@ function PlugIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fil
 function BlocksIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="8" height="8" rx="1" /><rect x="13" y="13" width="8" height="8" rx="1" /><path d="M13 7h8M17 3v8M3 17h8M7 13v8" /></svg> }
 function LayersIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="m12 2 9 5-9 5-9-5 9-5zM3 12l9 5 9-5M3 17l9 5 9-5" /></svg> }
 function PaletteIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="13.5" cy="6.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="17.5" cy="10.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="8.5" cy="7.5" r="1.2" fill="currentColor" stroke="none" /><circle cx="6.5" cy="12.5" r="1.2" fill="currentColor" stroke="none" /><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.3-.3-.4-.5-.8-.5-1.2 0-1 .9-1.5 2-1.5h1.5A3.5 3.5 0 0 0 22 12 10 10 0 0 0 12 2z" /></svg> }
+function LockIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="4.5" y="11" width="15" height="10" rx="2" /><path d="M8 11V8a4 4 0 0 1 8 0v3" /><circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none" /></svg> }
 function SunIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="4.2" /><path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" /></svg> }
 function MoonIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" /></svg> }
 function DisplayIcon() { return <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="2.5" y="3.5" width="19" height="13" rx="1.6" /><path d="M8 21h8M12 16.5V21" /></svg> }

@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 
 import { useSessionArtifacts, useDeleteSession } from '../../../hooks/useIPC'
 import type { SessionArtifact } from '../../../types'
+import { trackEvent } from '../../../lib/telemetry'
 
 interface DeleteSessionDialogProps {
   hash: string
@@ -62,6 +63,7 @@ export function DeleteSessionDialog({
   const onConfirm = async () => {
     try {
       await del.mutateAsync(selectedPaths)
+      trackEvent('session_deleted')
       onDeleted()
     } catch {
       // l'errore è esposto via del.error: il dialog resta aperto

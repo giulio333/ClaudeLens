@@ -13,6 +13,7 @@ import {
 import { usePinnedProjects } from '../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../hooks/usePinnedSessions'
 import { View } from '../components/project/types'
+import { reportViewOpened } from '../lib/telemetry'
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog'
 import {
   SearchPopover,
@@ -98,6 +99,12 @@ export default function ProjectOverview() {
   const [scope, setScope] = useState<'global' | 'project'>('global')
   const [view, setView] = useState<View>({ type: 'global-home' })
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null)
+
+  // Anonymous: report which section is opened (view type only — no project,
+  // session, or path data). Deduped per app run inside reportViewOpened.
+  useEffect(() => {
+    reportViewOpened(view.type)
+  }, [view.type])
 
   const { data: projects } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
