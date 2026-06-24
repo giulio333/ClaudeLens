@@ -13,6 +13,7 @@ import {
 } from '../../../hooks/useIPC';
 import { SessionSummary, Skill, Agent, ChatMessage, ToolActivity } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
+import { trackEvent } from '../../../lib/telemetry';
 import {
   buildProcessedMessages,
   correlateSessionAgents,
@@ -1419,6 +1420,7 @@ export function ChatView({
           : await savePdfExport(`${doc.defaultBaseName}.pdf`, doc.html);
 
       if (!result.canceled) {
+        trackEvent('export_done', { format });
         setExportMessage(
           `Saved ${format === 'markdown' ? 'Markdown' : 'PDF'}${result.filePath ? ` to ${result.filePath}` : ''}`
         );

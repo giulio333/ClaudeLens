@@ -4,6 +4,8 @@ A desktop app to explore, manage, and work with your local [Claude Code](https:/
 
 If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens makes it navigable: read your past sessions, manage memory and CLAUDE.md, edit skills and agents — and pick a conversation back up, either in an embedded terminal or in an in-app chat. Everything stays in sync with `~/.claude/` in real time, so changes you make in the terminal show up instantly, and vice versa.
 
+> 🔒 **Privacy:** your `~/.claude/` data never leaves your device. ClaudeLens sends only anonymous launch telemetry (off in one click) — see [Privacy & Telemetry](#privacy--telemetry).
+
 ---
 
 ## Screenshots
@@ -131,6 +133,23 @@ npm run electron:build   # Generate distributable DMG
 - No automatic updates
 - App is not code-signed (see installation note above)
 - On Windows, the Live Monitor and background agents are not yet supported (they rely on Unix process tooling); browsing sessions, memory, CLAUDE.md, and opening sessions in a terminal all work
+
+---
+
+## Privacy & Telemetry
+
+ClaudeLens is local-first: the Claude Code data it reads (under `~/.claude/`)
+**never leaves your device**.
+
+The app sends a small amount of **anonymous** usage telemetry via
+[Aptabase](https://aptabase.com) (EU) — app launch/exit (with time spent), which
+sections you open, and a few feature actions (new chat, export, terminal,
+delete), plus your app version, OS, and language. It **never** collects your
+sessions, prompts, files, paths, or identity. This helps us understand how
+ClaudeLens is used and on which platforms.
+
+Telemetry is on by default and can be turned off anytime in
+**Settings → Privacy**. Full details: **[PRIVACY.md](PRIVACY.md)**.
 
 ---
 

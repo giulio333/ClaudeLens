@@ -145,6 +145,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAll: () => ipcRenderer.invoke('prefs:getAll'),
     set: (key: string, value: unknown) => ipcRenderer.invoke('prefs:set', key, value),
   },
+  telemetry: {
+    isEnabled: () => ipcRenderer.invoke('telemetry:isEnabled'),
+    setEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:setEnabled', enabled),
+    track: (name: string, props?: Record<string, string | number>) =>
+      ipcRenderer.invoke('telemetry:track', name, props),
+  },
   onDataChanged: (callback: () => void) => {
     const handler = () => callback();
     ipcRenderer.on('data:changed', handler);
