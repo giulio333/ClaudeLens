@@ -413,7 +413,18 @@ export function ProjectView({
   const memoryCount = memTopics.length;
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div
+      style={{
+        position: 'relative',
+        // The Agent View embeds its dispatch bar at the bottom; let this wrapper
+        // fill the scroll viewport (flex column) so the bar pins to the bottom
+        // instead of trailing a short session list mid-page. Other sections keep
+        // their natural content height.
+        ...(section === 'live-agents'
+          ? { display: 'flex', flexDirection: 'column', flexGrow: 1 }
+          : {}),
+      }}
+    >
       {/* ─── HERO ─────────────────────────────────────── */}
       <section className={`cl-hero${liveProc ? ' is-live' : ''}`}>
         <Lens />
@@ -1118,8 +1129,14 @@ export function ProjectView({
           hideHero
           project={project}
           onBack={() => onNavigate({ type: 'overview' })}
-          onOpenSession={(p, s) =>
-            onNavigate({ type: 'chat', project: p, session: s, from: 'agents-live' })
+          onOpenSession={(p, s, bg) =>
+            onNavigate({
+              type: 'terminal',
+              project: p,
+              resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+              attachJobId: bg?.alive ? bg.jobId : undefined,
+              from: 'agents-live',
+            })
           }
         />
       )}

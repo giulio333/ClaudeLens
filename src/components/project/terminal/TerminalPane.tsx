@@ -72,11 +72,14 @@ const TERMINAL_SURFACE: Record<'light' | 'dark', string> = {
 export function TerminalPane({
   cwd,
   resumeSessionId,
+  attachJobId,
   onPid,
   onStatus,
 }: {
   cwd: string;
   resumeSessionId?: string;
+  /** Live background-agent job id: `claude attach` it instead of `--resume`. */
+  attachJobId?: string;
   /** Report the PTY pid so the parent can match it to the active-sessions registry. */
   onPid: (pid: number | null) => void;
   /** Surface lifecycle so the parent's chrome (RUNNING indicator) can react. */
@@ -134,7 +137,10 @@ export function TerminalPane({
       setExitCode(null);
       const res = await window.electronAPI.terminal.create({
         cwd,
-        resumeSessionId: resume,
+        // A live bg agent attaches by job id; --resume would be rejected while it
+        // runs in the background. Never send both.
+        resumeSessionId: attachJobId ? undefined : resume,
+        attachJobId: attachJobId || undefined,
         cols: term.cols,
         rows: term.rows,
       });
@@ -160,7 +166,7 @@ export function TerminalPane({
       setStatus('running');
       term.focus();
     },
-    [cwd]
+    [cwd, attachJobId]
   );
 
   useEffect(() => {

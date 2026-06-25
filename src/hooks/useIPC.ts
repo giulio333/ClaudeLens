@@ -214,6 +214,7 @@ declare global {
         create: (opts: {
           cwd: string
           resumeSessionId?: string
+          attachJobId?: string
           cols?: number
           rows?: number
         }) => Promise<IpcResult<{ id: string; pid: number }>>
@@ -280,6 +281,7 @@ declare global {
         getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
         onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void
         getSessions: () => Promise<IpcResult<BgSession[]>>
+        onBgSessionsChanged: (cb: (sessions: BgSession[]) => void) => () => void
         startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>
         stopWatch: () => Promise<IpcResult<null>>
         onEvent: (cb: (event: unknown) => void) => () => void
@@ -574,11 +576,22 @@ export function useSubagentTranscript(hash: string, filename: string | null, age
   })
 }
 
+// Background-agent sessions (~/.claude/jobs + daemon/roster): the main pushes
+// the fresh list via watcher; the slow refetch is just a safety net for a lost
+// push or a dead pid whose state.json never changed.
 export function useLiveSessions() {
+  const qc = useQueryClient()
+  useEffect(
+    () =>
+      window.electronAPI.live.onBgSessionsChanged(sessions =>
+        qc.setQueryData(['live:sessions'], sessions)
+      ),
+    [qc]
+  )
   return useQuery({
     queryKey: ['live:sessions'],
     queryFn: () => unwrap(window.electronAPI.live.getSessions()),
-    refetchInterval: 4000,
+    refetchInterval: 15000,
   })
 }
 

@@ -41,7 +41,8 @@ type OutlineRow =
   | { kind: 'claude'; turnN: number; title: string; current: boolean }
   | { kind: 'skill'; turnN: number; skill: SessionSkill }
   | { kind: 'agent'; turnN: number; agent: SessionAgent }
-  | { kind: 'edit'; turnN: number; name: string; count: number; added: number; removed: number };
+  | { kind: 'edit'; turnN: number; name: string; count: number; added: number; removed: number }
+  | { kind: 'notification'; turnN: number; summary: string; status: string };
 
 /** First non-empty text line of a message — the outline row's title. */
 function firstLine(m: ChatMessage): string {
@@ -113,8 +114,12 @@ function buildOutline(
 ): OutlineRow[] {
   const rows: OutlineRow[] = [];
 
-  // User prompts (real turns; command cards are surfaced as skills instead).
+  // User prompts (real turns; command cards are surfaced as skills; notifications separately).
   processed.forEach((p, idx) => {
+    if (p.notification) {
+      rows.push({ kind: 'notification', turnN: idx + 1, summary: p.notification.summary, status: p.notification.status });
+      return;
+    }
     if (p.msg.role !== 'user' || p.command) return;
     const title = firstLine(p.msg);
     if (!title) return;
@@ -197,6 +202,19 @@ function DiamondGlyph() {
     <span
       aria-hidden
       style={{ width: 11, height: 11, background: 'var(--cl-cyan)', transform: 'rotate(45deg)', margin: '2px 0 0 2px' }}
+    />
+  );
+}
+
+function NotifGlyph({ status }: { status: string }) {
+  const color =
+    status === 'completed' ? 'var(--cl-ok)' :
+    status === 'failed' || status === 'error' ? 'var(--cl-danger)' :
+    'var(--cl-ink-3)';
+  return (
+    <span
+      aria-hidden
+      style={{ width: 10, height: 10, borderRadius: '50%', background: color, margin: '3px 0 0 3px', display: 'block', flexShrink: 0 }}
     />
   );
 }
@@ -345,6 +363,21 @@ export function SessionOutline({
                     EDIT ×{r.count} · <span style={{ color: 'var(--cl-ok)' }}>+{r.added}</span>{' '}
                     <span style={{ color: 'var(--cl-danger)' }}>−{r.removed}</span>
                   </span>
+                </span>
+              </button>
+            );
+          }
+          if (r.kind === 'notification') {
+            const metaColor =
+              r.status === 'completed' ? 'var(--cl-ok)' :
+              r.status === 'failed' || r.status === 'error' ? 'var(--cl-danger)' :
+              'var(--cl-ink-4)';
+            return (
+              <button key={`n${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onJump(r.turnN)}>
+                <NotifGlyph status={r.status} />
+                <span className="min-w-0">
+                  <span style={{ ...titleStyle, color: 'var(--cl-ink-2)' }}>{r.summary}</span>
+                  <span style={metaStyle(metaColor)}>NOTIFY · t{r.turnN}</span>
                 </span>
               </button>
             );
