@@ -49,6 +49,7 @@
     "highlight.js": "^11.11.1",
     "js-yaml": "^4.1.0",
     "katex": "^0.17.0",
+    "motion": "^12.40.0",
     "node-pty": "^1.1.0",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
