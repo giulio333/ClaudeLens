@@ -251,6 +251,16 @@ function serializeMemoryData(md: Awaited<ReturnType<typeof readMemory>>) {
 
 let mainWindow: BrowserWindow | null = null;
 
+// Push to the renderer only when the window and its webContents are still alive.
+// A bare `mainWindow?.webContents.send(...)` guards a null window but not a
+// destroyed one: a file-watcher event firing while the window is closing or
+// reloading throws "Object has been destroyed" from the main process.
+function safeSend(channel: string, ...args: unknown[]): void {
+  if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
+    mainWindow.webContents.send(channel, ...args);
+  }
+}
+
 // Set a Content Security Policy on every response so the renderer (which renders
 // untrusted local Markdown/highlight content) has a second line of defense.
 // Applied via onHeadersReceived so it covers both the file:// build and the dev server.
@@ -954,7 +964,7 @@ ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destH
     invalidateCwdCache(sourceHash);
     invalidateCwdCache(destHash);
     resumeWatcher();
-    mainWindow?.webContents.send('data:changed');
+    safeSend('data:changed');
   }
 });
 
@@ -1517,7 +1527,7 @@ async function startWatcher() {
 
   const notify = () => {
     if (watcherPauseDepth > 0) return;
-    mainWindow?.webContents.send('data:changed');
+    safeSend('data:changed');
   };
 
   watcher.on('add', notify);
@@ -1536,7 +1546,7 @@ async function startWatcher() {
       pushTimer = null;
       try {
         const sessions = await readActiveSessions();
-        mainWindow?.webContents.send('live:activeSessions', sessions);
+        safeSend('live:activeSessions', sessions);
       } catch {
         /* lettura fallita: il refetch periodico del renderer copre il buco */
       }
