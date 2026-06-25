@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from 'react'
+import { AnimatePresence, motion } from 'motion/react'
 import LiveMonitor from './LiveMonitor'
 import {
   useAllSkills,
@@ -260,6 +261,20 @@ export default function ProjectOverview() {
   const isGlobalLiveAgents = view.type === 'agents-live' && !view.project
   const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents
 
+  // Spike B (motion.dev): identity of the currently-visible editorial-core
+  // surface — drives the AnimatePresence crossfade keying below. Changes only on
+  // scope switches (global-home / live-agents / project), so navigating between
+  // those scopes fades. Deliberately NOT keyed by the project subtab: switching
+  // sections within a project keeps the same key, so ProjectView is not remounted
+  // (scroll/internal state survive) and the subtab swap is instant, not a fade.
+  const mainKey = isGlobalHome
+    ? 'global-home'
+    : isGlobalLiveAgents
+      ? 'global-live-agents'
+      : selected
+        ? `project:${selected.hash}`
+        : 'empty'
+
   // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
   function renderDeepView() {
     switch (view.type) {
@@ -481,26 +496,42 @@ export default function ProjectOverview() {
       )}
 
       {/* ─── Main ────────────────────────────────────────── */}
+      {/* Spike B (motion.dev): crossfade between editorial-core views. The
+       * motion.div is keyed by the visible content (scope + project + section)
+       * so navigating Global ↔ Project ↔ Agent View, and switching project
+       * subtabs, fades the old surface out and the new one in. mode="wait"
+       * sequences exit→enter for a clean full-surface swap. */}
       <div className="cl-main">
-        <ErrorBoundary key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}>
-          {isGlobalHome ? (
-            <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
-          ) : isGlobalLiveAgents ? (
-            <AgentsLiveView
-              embedded
-              onBack={goGlobal}
-              onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
-            />
-          ) : selected ? (
-            <ProjectView
-              key={selected.hash}
-              project={selected}
-              section={sectionFromView(view)}
-              onNavigate={setView}
-              onOpenProjectSearch={openProjectSearch}
-            />
-          ) : null}
-        </ErrorBoundary>
+        <AnimatePresence mode="wait" initial={false}>
+          <motion.div
+            key={mainKey}
+            initial={{ opacity: 0, y: 8 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -8 }}
+            transition={{ duration: 0.16, ease: 'easeOut' }}
+            style={{ minHeight: '100%' }}
+          >
+            <ErrorBoundary key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}>
+              {isGlobalHome ? (
+                <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
+              ) : isGlobalLiveAgents ? (
+                <AgentsLiveView
+                  embedded
+                  onBack={goGlobal}
+                  onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
+                />
+              ) : selected ? (
+                <ProjectView
+                  key={selected.hash}
+                  project={selected}
+                  section={sectionFromView(view)}
+                  onNavigate={setView}
+                  onOpenProjectSearch={openProjectSearch}
+                />
+              ) : null}
+            </ErrorBoundary>
+          </motion.div>
+        </AnimatePresence>
       </div>
 
       {projectToDelete && (
