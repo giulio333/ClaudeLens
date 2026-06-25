@@ -255,15 +255,17 @@ export default function ProjectOverview() {
   const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents
 
   // Spike B (motion.dev): identity of the currently-visible editorial-core
-  // surface — drives the AnimatePresence crossfade keying below. Changes on
-  // scope switches (global-home / live-agents / project) and on project subtab
-  // navigation, so each of those transitions fades.
+  // surface — drives the AnimatePresence crossfade keying below. Changes only on
+  // scope switches (global-home / live-agents / project), so navigating between
+  // those scopes fades. Deliberately NOT keyed by the project subtab: switching
+  // sections within a project keeps the same key, so ProjectView is not remounted
+  // (scroll/internal state survive) and the subtab swap is instant, not a fade.
   const mainKey = isGlobalHome
     ? 'global-home'
     : isGlobalLiveAgents
       ? 'global-live-agents'
       : selected
-        ? `project:${selected.hash}:${sectionFromView(view)}`
+        ? `project:${selected.hash}`
         : 'empty'
 
   // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
