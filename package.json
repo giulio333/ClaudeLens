@@ -1,6 +1,6 @@
 {
   "name": "claudelens-app",
-  "version": "2.1.1",
+  "version": "2.1.2",
   "claudeCodeVersion": "2.1.191",
   "description": "ClaudeLens — GUI for Claude Code data",
   "author": "Giulio Di Giamberardino",
