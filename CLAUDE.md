@@ -20,6 +20,15 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 data via `npm run dev`. CI (`.github/workflows/ci.yml`) runs typecheck + lint +
 test + build on every push/PR.
 
+## Release
+
+Before creating a GitHub Release, always run these steps **in order**:
+
+1. `node scripts/prepare-release.js` — detects the locally installed Claude Code version and writes it into `claudeCodeVersion` in `package.json` (displayed in Settings → General → "Claude Code required")
+2. Bump the app `version` field in `package.json` (semver, e.g. `2.1.1` → `2.1.2`)
+3. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
+4. Create the GitHub Release with a `## Highlights` section at the top
+
 ## Architecture
 
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.

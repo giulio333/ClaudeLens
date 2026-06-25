@@ -7,7 +7,7 @@ import {
   type EffectiveConfig,
 } from '../../../hooks/useIPC'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
-import { version as appVersion } from '../../../../package.json'
+import { version as appVersion, claudeCodeVersion } from '../../../../package.json'
 
 const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md'
 
@@ -145,7 +145,8 @@ export function GeneralTab({ cfg, q }: { cfg: EffectiveConfig; q: string }) {
         </Row>
         <Row label="Output style">{init ? <Mono>{init.outputStyle || 'default'}</Mono> : <Dim>—</Dim>}</Row>
         <Row label="API key source">{init ? <Mono>{init.apiKeySource}</Mono> : <Dim>—</Dim>}</Row>
-        <Row label="Claude Code version">{init ? <Mono>{init.claudeCodeVersion}</Mono> : <Dim>—</Dim>}</Row>
+        <Row label="Claude Code version" hint="Installed">{init ? <Mono>{init.claudeCodeVersion}</Mono> : <Dim>—</Dim>}</Row>
+        <Row label="Claude Code required" hint="Minimum version for this ClaudeLens"><Mono>{claudeCodeVersion}</Mono></Row>
         <Row label="Working directory">{init ? <Mono small>{init.cwd}</Mono> : <Dim>—</Dim>}</Row>
       </Section>
 
