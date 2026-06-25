@@ -1,7 +1,8 @@
 import { useState } from 'react'
 import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC'
 import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC'
-import { MarkdownDocView } from '../shared/MarkdownDocView'
+import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView'
+import { MEMORY_OPTION_DEFS, readOptions, serializeMemory, initialOf } from '../shared/entityOptions'
 import { parseMemoryContent, readingTime, formatDate } from './utils'
 import { useMemoryTags } from '../../../hooks/useMemoryTags'
 import { ManagedTagChip } from '../sessions/ManagedTagChip'
@@ -12,187 +13,6 @@ const TYPE_LABEL: Record<string, string> = {
   feedback: 'Feedback',
   project: 'Project',
   reference: 'Reference',
-}
-
-function TrashIcon() {
-  return (
-    <svg width="13" height="13" viewBox="0 0 14 14" fill="none" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M2.5 3.5h9M5.5 3.5V2.3h3v1.2M3.4 3.5l.5 8h6.2l.5-8M6 6v3.4M8 6v3.4" />
-    </svg>
-  )
-}
-
-/**
- * Controllo delete a due fasi: bottone ghost con icona → si espande in-place
- * in una pill di pericolo con messaggio e azioni Keep / Delete distinte.
- */
-function DeleteControl({
-  open,
-  busy,
-  onArm,
-  onCancel,
-  onConfirm,
-}: {
-  open: boolean
-  busy: boolean
-  onArm: () => void
-  onCancel: () => void
-  onConfirm: () => void
-}) {
-  if (!open) {
-    return (
-      <button
-        type="button"
-        onClick={onArm}
-        className="cl-del-trigger"
-        style={{
-          display: 'inline-flex',
-          alignItems: 'center',
-          gap: 6,
-          height: 32,
-          padding: '0 12px',
-          borderRadius: 4,
-          border: '1px solid transparent',
-          background: 'transparent',
-          color: 'var(--cl-ink-4)',
-          fontSize: 12.5,
-          cursor: 'pointer',
-          transition: 'color 120ms ease, background 120ms ease, border-color 120ms ease',
-        }}
-        onMouseEnter={e => {
-          e.currentTarget.style.color = 'var(--cl-danger)'
-          e.currentTarget.style.background = 'var(--cl-danger-soft)'
-          e.currentTarget.style.borderColor = 'var(--cl-danger)'
-        }}
-        onMouseLeave={e => {
-          e.currentTarget.style.color = 'var(--cl-ink-4)'
-          e.currentTarget.style.background = 'transparent'
-          e.currentTarget.style.borderColor = 'transparent'
-        }}
-      >
-        <TrashIcon />
-        Delete
-      </button>
-    )
-  }
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        alignItems: 'center',
-        gap: 12,
-        height: 32,
-        padding: '0 6px 0 12px',
-        borderRadius: 4,
-        border: '1px solid var(--cl-danger)',
-        background: 'var(--cl-danger-soft)',
-      }}
-    >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 7, color: 'var(--cl-danger)' }}>
-        <TrashIcon />
-        <span style={{ fontSize: 12.5, fontWeight: 500 }}>Delete permanently?</span>
-      </span>
-      <span style={{ display: 'inline-flex', gap: 4 }}>
-        <button
-          type="button"
-          onClick={onCancel}
-          disabled={busy}
-          style={{
-            height: 24,
-            padding: '0 10px',
-            borderRadius: 3,
-            border: 'none',
-            background: 'transparent',
-            color: 'var(--cl-ink-3)',
-            fontSize: 11.5,
-            cursor: busy ? 'default' : 'pointer',
-          }}
-        >
-          Keep
-        </button>
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={busy}
-          style={{
-            height: 24,
-            padding: '0 12px',
-            borderRadius: 3,
-            border: 'none',
-            background: 'var(--cl-danger)',
-            color: 'var(--cl-on-accent)',
-            fontSize: 11.5,
-            fontWeight: 600,
-            cursor: busy ? 'default' : 'pointer',
-            opacity: busy ? 0.6 : 1,
-          }}
-        >
-          {busy ? 'Deleting…' : 'Delete'}
-        </button>
-      </span>
-    </span>
-  )
-}
-
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="py-2.5">
-      <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
-        {label}
-      </div>
-      <div className="mt-1 text-[13px]" style={{ color: 'var(--cl-ink-2)' }}>{value}</div>
-    </div>
-  )
-}
-
-/**
- * Riga "Origin session": mostra la sessione che ha generato la memoria. Se la
- * sessione esiste ancora nel progetto, è un link cliccabile verso la chat;
- * altrimenti degrada a un id mono-spaziato (sessione cancellata o di un altro
- * progetto).
- */
-function OriginRow({
-  sessionId,
-  session,
-  onOpen,
-}: {
-  sessionId: string
-  session?: SessionSummary
-  onOpen?: (session: SessionSummary) => void
-}) {
-  const label = (
-    <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
-      Origin session
-    </div>
-  )
-
-  if (session && onOpen) {
-    const title = session.customTitle ?? session.aiTitle ?? sessionId.slice(0, 8)
-    return (
-      <div className="py-2.5">
-        {label}
-        <button
-          type="button"
-          onClick={() => onOpen(session)}
-          className="mt-1 text-left text-[13px] hover:underline"
-          style={{ color: 'var(--cl-accent)', cursor: 'pointer', background: 'none', border: 'none', padding: 0 }}
-          title={`Open chat · ${sessionId}`}
-        >
-          {title}
-        </button>
-      </div>
-    )
-  }
-
-  return (
-    <div className="py-2.5">
-      {label}
-      <div className="mt-1 text-[10px] font-mono break-all" style={{ color: 'var(--cl-ink-3)' }} title="Session not found in this project">
-        {sessionId}
-      </div>
-    </div>
-  )
 }
 
 /** Estrae name/description/type/body dal markdown grezzo con frontmatter YAML. */
@@ -220,6 +40,149 @@ function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
   return { name, description, type, content: body, originSessionId }
 }
 
+/**
+ * Tag *gestiti* di una memoria: NON sono frontmatter, vivono nel managed-tag
+ * store (`useMemoryTags`, localStorage namespaced per filename, con
+ * rename/delete cross-topic). Resi sia in view che in edit dentro la superficie
+ * unificata. Componente self-contained (istanziato indipendentemente nei due
+ * slot): lo store è event-synced, quindi le istanze restano coerenti.
+ */
+function MemoryTags({ hash, filename }: { hash: string; filename: string }) {
+  const { tags, tagsForMemory, toggleTagOnMemory, renameTag, deleteTag } = useMemoryTags(hash)
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
+  const topicTags = tagsForMemory(filename)
+
+  return (
+    <div className="cl-mem-tags">
+      {topicTags.map(name => (
+        <ManagedTagChip
+          key={name}
+          name={name}
+          onRemoveFromItem={() => toggleTagOnMemory(filename, name)}
+          removeLabel="Remove from this topic"
+          onRename={renameTag}
+          onDelete={() => deleteTag(name)}
+        />
+      ))}
+      <button
+        type="button"
+        className="cl-mem-tag-add"
+        onClick={e => {
+          // Cattura il rect in modo sincrono: React azzera `currentTarget`
+          // quando l'handler ritorna, leggerlo nell'updater (più tardi) lancia.
+          const rect = e.currentTarget.getBoundingClientRect()
+          setPickerAnchor(prev => (prev ? null : rect))
+        }}
+      >
+        + Add
+      </button>
+      {pickerAnchor && (
+        <TagPicker
+          anchorRect={pickerAnchor}
+          allTags={tags}
+          selected={topicTags}
+          onToggle={name => toggleTagOnMemory(filename, name)}
+          onClose={() => setPickerAnchor(null)}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * Riga "Origin session": la sessione che ha generato la memoria. Se esiste
+ * ancora nel progetto è un link alla chat; altrimenti degrada a id mono.
+ */
+function OriginValue({
+  sessionId,
+  session,
+  onOpen,
+}: {
+  sessionId: string
+  session?: SessionSummary
+  onOpen?: (session: SessionSummary) => void
+}) {
+  if (session && onOpen) {
+    const title = session.customTitle ?? session.aiTitle ?? sessionId.slice(0, 8)
+    return (
+      <button
+        type="button"
+        onClick={() => onOpen(session)}
+        className="cl-mem-origin-link"
+        title={`Open chat · ${sessionId}`}
+      >
+        {title}
+      </button>
+    )
+  }
+  return (
+    <span className="cl-mem-meta-mono" title="Session not found in this project">
+      {sessionId}
+    </span>
+  )
+}
+
+/** Blocco "Metadata" in view mode: tag gestiti, sessione origine, date, file. */
+function MemoryMetaPanel({
+  topic,
+  hash,
+  originSession,
+  onOpenSession,
+  readOnly,
+}: {
+  topic: MemoryTopic
+  hash: string
+  originSession?: SessionSummary
+  onOpenSession?: (session: SessionSummary) => void
+  readOnly: boolean
+}) {
+  const createdAt = topic.createdAt ?? null
+  const updatedAt = topic.updatedAt ?? null
+  const sameDate = createdAt && updatedAt ? createdAt.slice(0, 10) === updatedAt.slice(0, 10) : true
+
+  return (
+    <div className="cl-entity-v2-opts">
+      <h3><span>Metadata</span><b>tags · origin · dates</b></h3>
+      <div className="cl-mem-meta">
+        <div className="cl-mem-meta-row">
+          <div className="k">Tags</div>
+          <div className="v"><MemoryTags hash={hash} filename={topic.filename} /></div>
+        </div>
+        {topic.originSessionId && (
+          <div className="cl-mem-meta-row">
+            <div className="k">Origin session</div>
+            <div className="v">
+              <OriginValue sessionId={topic.originSessionId} session={originSession} onOpen={onOpenSession} />
+            </div>
+          </div>
+        )}
+        {createdAt && (
+          <div className="cl-mem-meta-row">
+            <div className="k">Created</div>
+            <div className="v">{formatDate(createdAt)}</div>
+          </div>
+        )}
+        {updatedAt && !sameDate && (
+          <div className="cl-mem-meta-row">
+            <div className="k">Updated</div>
+            <div className="v">{formatDate(updatedAt)}</div>
+          </div>
+        )}
+        <div className="cl-mem-meta-row">
+          <div className="k">File</div>
+          <div className="v"><span className="cl-mem-meta-mono">{topic.filename}</span></div>
+        </div>
+        {readOnly && (
+          <div className="cl-mem-meta-row">
+            <div className="k">Source</div>
+            <div className="v">Committed to repo · read-only</div>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export function MemoryTopicView({
   topic,
   content,
@@ -233,146 +196,85 @@ export function MemoryTopicView({
   onBack: () => void
   onOpenSession?: (session: SessionSummary) => void
 }) {
-  const { wordCount, charCount, linkCount } = parseMemoryContent(content)
+  const { body, wordCount, linkCount } = parseMemoryContent(content)
   const updateMut = useUpdateTopic(hash)
   const deleteMut = useDeleteTopic(hash)
-  const [confirmDelete, setConfirmDelete] = useState(false)
-  const { tags, tagsForMemory, toggleTagOnMemory, renameTag, deleteTag } = useMemoryTags(hash)
-  // Capture the anchor rect when opening the picker instead of reading the ref
-  // during render (which the react-hooks rule flags as unsafe).
-  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const topicTags = tagsForMemory(topic.filename)
 
-  // Risolve la sessione che ha generato la memoria: l'originSessionId è l'UUID
-  // del file .jsonl di sessione nello stesso progetto. La lista è già in cache
-  // (stessa queryKey della vista Sessions), quindi nessuna fetch extra.
+  // Risolve la sessione che ha generato la memoria (originSessionId = UUID del
+  // file .jsonl nello stesso progetto). La lista è già in cache (stessa
+  // queryKey della vista Sessions), quindi nessuna fetch extra.
   const { data: sessions } = useSessionList(topic.originSessionId ? hash : null)
   const originSession = topic.originSessionId
     ? sessions?.find(s => s.filename === `${topic.originSessionId}.jsonl`)
     : undefined
 
-  const createdAt = topic.createdAt ?? null
-  const updatedAt = topic.updatedAt ?? null
-  const sameDate = createdAt && updatedAt ? createdAt.slice(0, 10) === updatedAt.slice(0, 10) : true
+  const readOnly = !!topic.isProjectLevel
 
-  const readOnly = topic.isProjectLevel
-
-  const handleDelete = () => {
-    deleteMut.mutate(topic.filename, { onSuccess: onBack })
+  const config: EntityConfig = {
+    kind: 'memory',
+    name: topic.name,
+    titleGlyph: '.md',
+    scopeLabel: 'Project',
+    path: `memory/${topic.filename}`,
+    description: topic.description || undefined,
+    eyebrow: `${topic.type} · memory/${topic.filename}`,
+    kindLabel: 'memory',
+    backLabel: 'Memory',
+    crumbs: [{ label: TYPE_LABEL[topic.type] ?? topic.type }, { label: topic.name, accent: true }],
+    neutralTint: true,
+    initial: initialOf(topic.name),
+    tape: [
+      { label: 'Type', value: TYPE_LABEL[topic.type] ?? topic.type },
+      { label: 'Reading', value: readingTime(wordCount) },
+      { label: 'Words', value: String(wordCount), mono: true },
+      { label: 'Links', value: String(linkCount), mono: true },
+    ],
+    bodyLabel: 'Topic body · markdown',
+    optionDefs: MEMORY_OPTION_DEFS,
+    initialOptions: readOptions(topic as unknown as Record<string, unknown>, MEMORY_OPTION_DEFS),
+    body,
+    hasDescriptionField: true,
+    descriptionValue: topic.description ?? '',
+    coreRows: [{ label: 'name', value: topic.name }],
+    // `type` è già nella tape + editabile in edit mode; in view i metadata
+    // (tags/origin/dates) sono nel blocco `viewExtras`, quindi niente tile.
+    hideViewProperties: true,
+    serialize: ({ body: b, description, options }) => serializeMemory(topic, b, { description, options }),
+    editable: !readOnly,
+    deletable: !readOnly,
+    duplicable: false,
+    runnable: false,
+    emptyMessage: 'No content yet.',
+    // Managed tags: editabili anche su memorie read-only (sono metadata d'app,
+    // non contenuto del file committato).
+    editExtras: (
+      <>
+        <h2 style={{ marginTop: 22 }}><span>Tags</span><b>managed · not frontmatter</b></h2>
+        <div className="cl-entity-edit-v2-card" style={{ padding: '14px 16px' }}>
+          <MemoryTags hash={hash} filename={topic.filename} />
+        </div>
+      </>
+    ),
+    viewExtras: (
+      <MemoryMetaPanel
+        topic={topic}
+        hash={hash}
+        originSession={originSession}
+        onOpenSession={onOpenSession}
+        readOnly={readOnly}
+      />
+    ),
   }
 
-  const sidebar = (
-    <div className="flex flex-col" style={{ minHeight: '100%' }}>
-      <div className="pb-3" style={{ borderBottom: '1px solid var(--cl-line)' }}>
-        <span className="text-[10px] font-mono font-bold tracking-[0.18em] uppercase" style={{ color: 'var(--cl-ink-3)' }}>
-          Topic
-        </span>
-      </div>
-
-      <div className="flex-1">
-        <StatRow label="Type" value={TYPE_LABEL[topic.type] ?? topic.type} />
-        <div className="py-2.5">
-          <div className="text-[9px] font-semibold uppercase tracking-[0.12em]" style={{ color: 'var(--cl-ink-3)' }}>
-            Tags
-          </div>
-          <div className="mt-1.5 flex flex-wrap gap-1.5 items-center">
-            {topicTags.map(name => (
-              <ManagedTagChip
-                key={name}
-                name={name}
-                onRemoveFromItem={() => toggleTagOnMemory(topic.filename, name)}
-                removeLabel="Remove from this topic"
-                onRename={renameTag}
-                onDelete={() => deleteTag(name)}
-              />
-            ))}
-            <button
-              type="button"
-              onClick={e => {
-                // Capture the rect synchronously: React nulls `currentTarget`
-                // once the handler returns, so reading it inside the updater
-                // (which runs later) would throw.
-                const rect = e.currentTarget.getBoundingClientRect()
-                setPickerAnchor(prev => (prev ? null : rect))
-              }}
-              style={{
-                height: 22,
-                padding: '0 8px',
-                borderRadius: 4,
-                border: '1px dashed var(--cl-line)',
-                background: 'transparent',
-                color: 'var(--cl-ink-3)',
-                fontSize: 11,
-                cursor: 'pointer',
-              }}
-            >
-              + Add
-            </button>
-            {pickerAnchor && (
-              <TagPicker
-                anchorRect={pickerAnchor}
-                allTags={tags}
-                selected={topicTags}
-                onToggle={name => toggleTagOnMemory(topic.filename, name)}
-                onClose={() => setPickerAnchor(null)}
-              />
-            )}
-          </div>
-        </div>
-        <div style={{ borderTop: '1px solid var(--cl-line)' }} />
-        {createdAt && <StatRow label="Created" value={formatDate(createdAt)} />}
-        {updatedAt && !sameDate && <StatRow label="Updated" value={formatDate(updatedAt)} />}
-        {topic.originSessionId && (
-          <OriginRow
-            sessionId={topic.originSessionId}
-            session={originSession}
-            onOpen={onOpenSession}
-          />
-        )}
-        <div style={{ borderTop: '1px solid var(--cl-line)' }} />
-        <StatRow label="Reading" value={readingTime(wordCount)} />
-        <StatRow label="Words" value={String(wordCount)} />
-        <StatRow label="Characters" value={String(charCount)} />
-        <StatRow label="Links" value={String(linkCount)} />
-      </div>
-
-      <div className="pt-3" style={{ borderTop: '1px solid var(--cl-line)' }}>
-        <p className="text-[10px] font-mono leading-snug break-all" style={{ color: 'var(--cl-ink-3)' }}>
-          {topic.filename}
-        </p>
-        {readOnly && (
-          <p className="mt-2 text-[10px] leading-snug" style={{ color: 'var(--cl-ink-3)' }}>
-            Committed to repo · read-only
-          </p>
-        )}
-      </div>
-    </div>
-  )
-
-  const extraActions = !readOnly && (
-    <DeleteControl
-      open={confirmDelete}
-      busy={deleteMut.isPending}
-      onArm={() => setConfirmDelete(true)}
-      onCancel={() => setConfirmDelete(false)}
-      onConfirm={handleDelete}
-    />
-  )
-
   return (
-    <MarkdownDocView
+    <EntityDetailView
+      config={config}
       onBack={onBack}
-      backLabel="Memory"
-      crumb={`${topic.type} · ${topic.name}`}
-      eyebrow={<>{topic.type} · memory/{topic.filename}</>}
-      titleLabel={topic.name}
-      titleGlyph=".md"
-      lead={topic.description || undefined}
-      content={content}
-      sidebar={sidebar}
-      extraActions={extraActions}
-      onSave={readOnly ? undefined : async next => {
-        await updateMut.mutateAsync({ filename: topic.filename, input: parseTopicInput(next, topic) })
+      onSave={readOnly ? undefined : async raw => {
+        await updateMut.mutateAsync({ filename: topic.filename, input: parseTopicInput(raw, topic) })
+      }}
+      onDelete={readOnly ? undefined : async () => {
+        await deleteMut.mutateAsync(topic.filename)
       }}
     />
   )

@@ -22,25 +22,24 @@ export function TopBar({
   right?: ReactNode
 }) {
   const crumbStyle = (accent?: boolean): React.CSSProperties => ({
-    fontSize: 11,
-    letterSpacing: '0.18em',
+    fontSize: 12,
+    letterSpacing: '0.01em',
     color: accent ? 'var(--cl-ink)' : 'var(--cl-ink-3)',
     lineHeight: 1,
   })
 
   return (
     <div
-      className="shrink-0 flex items-center gap-3 border-b border-[var(--cl-line)]"
+      className="cl-topbar shrink-0 flex items-center gap-3"
       style={{
         WebkitAppRegion: 'drag',
-        background: 'var(--cl-paper)',
         height: 52,
         padding: '0 28px 0 88px',
       } as React.CSSProperties}
     >
       <button
         onClick={onBack}
-        className="flex items-center gap-1.5 font-mono uppercase transition-colors hover:text-[var(--cl-accent)] shrink-0"
+        className="flex items-center gap-2 font-mono transition-colors hover:text-[var(--cl-accent)] shrink-0"
         style={{ WebkitAppRegion: 'no-drag', ...crumbStyle() } as React.CSSProperties}
       >
         <span>←</span>
@@ -49,8 +48,8 @@ export function TopBar({
 
       {crumbs.map((c, i) => (
         <Fragment key={i}>
-          <span className="shrink-0" style={{ color: 'var(--cl-ink-4)', fontSize: 11, lineHeight: 1 }}>/</span>
-          <span className="font-mono uppercase truncate min-w-0" style={crumbStyle(c.accent)}>{c.label}</span>
+          <span className="shrink-0" style={{ color: 'var(--cl-ink-4)', fontSize: 12, lineHeight: 1, opacity: 0.5 }}>/</span>
+          <span className="font-mono truncate min-w-0" style={crumbStyle(c.accent)}>{c.label}</span>
         </Fragment>
       ))}
 

@@ -1,5 +1,5 @@
 import { CSSProperties } from 'react'
-import type { Agent, Skill } from '../../../hooks/useIPC'
+import type { Agent, Skill, MemoryTopic } from '../../../hooks/useIPC'
 
 /* ════════════════════════════════════════════════════════════════════
    entityOptions — logica condivisa per le viste detail config-driven
@@ -20,16 +20,18 @@ const COLOR_MAP: Record<string, { h: number; c: number }> = {
 }
 
 /**
- * Restituisce le CSS vars per il tint dell'identità (orb/pip/accent).
- * Senza un colore valido: tint neutro (chroma 0) per le entità che non
- * hanno il concetto di colore (skill, CLAUDE.md, plan). L'agent passa
- * `green` come fallback per preservare il look attuale.
+ * Restituisce le CSS vars per il tint dell'identità (orb/glyph/swatch).
+ * `--agent-h`/`--agent-c` codificano hue+chroma del colore agent (usati dal
+ * swatch `Color` della tape). `--ident-tint` è il colore d'identità risolto
+ * dell'orb/glyph: il colore dell'agent quando presente, altrimenti l'accent
+ * terracotta per le entità senza concetto di colore (skill, CLAUDE.md, memory,
+ * plan). L'agent senza colore esplicito ricade sul green per preservare il look.
  */
 export function entityTint(color?: string, opts?: { neutral?: boolean }): CSSProperties {
   const m = color ? COLOR_MAP[color.toLowerCase()] : undefined
-  if (m) return { '--agent-h': String(m.h), '--agent-c': String(m.c) } as CSSProperties
-  if (opts?.neutral) return { '--agent-h': '40', '--agent-c': '0' } as CSSProperties
-  return { '--agent-h': String(COLOR_MAP.green.h), '--agent-c': String(COLOR_MAP.green.c) } as CSSProperties
+  if (m) return { '--agent-h': String(m.h), '--agent-c': String(m.c), '--ident-tint': `oklch(0.62 ${m.c} ${m.h})` } as CSSProperties
+  if (opts?.neutral) return { '--agent-h': '40', '--agent-c': '0', '--ident-tint': 'var(--cl-accent)' } as CSSProperties
+  return { '--agent-h': String(COLOR_MAP.green.h), '--agent-c': String(COLOR_MAP.green.c), '--ident-tint': `oklch(0.62 ${COLOR_MAP.green.c} ${COLOR_MAP.green.h})` } as CSSProperties
 }
 
 /**
@@ -66,6 +68,12 @@ export type OptionDef = {
   /** Array di tool name: l'editor mostra l'autocomplete dei tool noti (input libero comunque consentito). */
   isTools?: boolean
   enum?: string[]
+  /**
+   * Campo obbligatorio: è sempre "set" (mai nelle "available options") e non
+   * mostra il bottone di rimozione (✕) nell'editor. Usato per i campi
+   * frontmatter richiesti, es. `type` di una memoria.
+   */
+  required?: boolean
 }
 
 export const AGENT_OPTION_DEFS: OptionDef[] = [
@@ -92,6 +100,15 @@ export const SKILL_OPTION_DEFS: OptionDef[] = [
   { key: 'agent',                  label: 'agent',                    frontmatterKey: 'agent',                    blurb: 'Type of subagent to use when context: fork is set.' },
   { key: 'disableModelInvocation', label: 'disable-model-invocation', frontmatterKey: 'disable-model-invocation', blurb: 'If true, Claude does not load the skill automatically — must be invoked with /name.', isBool: true },
   { key: 'userInvocable',          label: 'user-invocable',           frontmatterKey: 'user-invocable',           blurb: 'If false, the skill is hidden from the / menu — used only as background knowledge.', isBool: true },
+]
+
+/**
+ * Memory topic: l'unica opzione frontmatter strutturata è `type` (obbligatoria).
+ * I *tag* di una memoria NON sono frontmatter — vivono nel managed-tag store
+ * (`useMemoryTags`, vedi MemoryTopicView), quindi non compaiono qui.
+ */
+export const MEMORY_OPTION_DEFS: OptionDef[] = [
+  { key: 'type', label: 'type', frontmatterKey: 'type', blurb: 'Memory type: user · feedback · project · reference.', enum: ['user', 'feedback', 'project', 'reference'], required: true },
 ]
 
 /** Valore read-only per la griglia "Properties" del manifesto. */
@@ -241,6 +258,27 @@ export function serializeSkill(
   }
   const managed = ['description', ...SKILL_OPTION_DEFS.map(d => d.frontmatterKey)]
   return serializeWithPreserved(skill.rawContent, managed, emitted, body)
+}
+
+/**
+ * Serializza una memoria in markdown grezzo (frontmatter + body). Il wrapper la
+ * ri-passa a `parseTopicInput` → `updateTopic`, che la riscrive in forma
+ * canonica via `memory-writer`; quindi qui basta emettere i campi che
+ * `parseTopicInput` rilegge (name, description, type, originSessionId). `type`
+ * è obbligatorio: se l'opzione è vuota si ricade sul valore corrente del topic.
+ */
+export function serializeMemory(
+  topic: MemoryTopic,
+  body: string,
+  opts: { description: string; options: Record<string, OptionValue> }
+): string {
+  const type = typeof opts.options.type === 'string' && opts.options.type ? opts.options.type : topic.type
+  const lines = ['---', `name: ${topic.name}`]
+  if (opts.description) lines.push(`description: ${opts.description}`)
+  lines.push(`type: ${type}`)
+  if (topic.originSessionId) lines.push(`originSessionId: ${topic.originSessionId}`)
+  lines.push('---', '', body)
+  return lines.join('\n')
 }
 
 /* ════════════════════════════════════════════════════════════════════
