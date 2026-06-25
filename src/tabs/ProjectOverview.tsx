@@ -381,7 +381,11 @@ export default function ProjectOverview() {
           <TerminalMissionControl
             project={view.project}
             resumeSessionId={view.resumeSessionId}
-            onBack={() => setView({ type: 'sessions', project: view.project })}
+            attachJobId={view.attachJobId}
+            onBack={() => view.from === 'agents-live'
+              ? setView({ type: 'agents-live', project: view.project })
+              : setView({ type: 'sessions', project: view.project })
+            }
           />
         )
       case 'memory-topic':
@@ -509,7 +513,10 @@ export default function ProjectOverview() {
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: -8 }}
             transition={{ duration: 0.16, ease: 'easeOut' }}
-            style={{ minHeight: '100%' }}
+            /* flex column so a child view can fill the scroll viewport via
+               flex-grow (e.g. the Agent View, whose dispatch bar pins to the
+               bottom); non-growing views stay content-height as before. */
+            style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}
           >
             <ErrorBoundary key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}>
               {isGlobalHome ? (
@@ -518,7 +525,13 @@ export default function ProjectOverview() {
                 <AgentsLiveView
                   embedded
                   onBack={goGlobal}
-                  onOpenSession={(project, session) => setView({ type: 'chat', project, session, from: 'agents-live' })}
+                  onOpenSession={(project, session, bg) => setView({
+                    type: 'terminal',
+                    project,
+                    resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
+                    attachJobId: bg?.alive ? bg.jobId : undefined,
+                    from: 'agents-live',
+                  })}
                 />
               ) : selected ? (
                 <ProjectView

@@ -1342,7 +1342,7 @@ ipcMain.handle('sessions:endChat', async () => {
 
 ipcMain.handle(
   'terminal:create',
-  async (event, opts: { cwd: string; resumeSessionId?: string; cols?: number; rows?: number }) => {
+  async (event, opts: { cwd: string; resumeSessionId?: string; attachJobId?: string; cols?: number; rows?: number }) => {
     try {
       const { existsSync, statSync } = await import('fs');
       const cwd = opts?.cwd;
@@ -1353,6 +1353,11 @@ ipcMain.handle(
       }
       if (opts.resumeSessionId && !isValidSessionId(opts.resumeSessionId)) {
         return err(new Error('Invalid session id.'));
+      }
+      // Background-agent job id (short hex from ~/.claude/jobs/<id>). Validated
+      // before it reaches the shell since attach passes it as a CLI arg.
+      if (opts.attachJobId && !/^[a-zA-Z0-9_-]{1,64}$/.test(opts.attachJobId)) {
+        return err(new Error('Invalid agent id.'));
       }
 
       // Mutual exclusion: a terminal `claude --resume` and the SDK chat must not
@@ -1368,11 +1373,19 @@ ipcMain.handle(
         if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
       };
       // On Windows this routes through cmd.exe to launch the claude.cmd shim (see
-      // resolveClaudeCommand). resumeSessionId is validated above, so it is safe
-      // to pass through the shell.
-      const { command, args } = resolveClaudeCommand(
-        opts.resumeSessionId ? ['--resume', opts.resumeSessionId] : []
-      );
+      // resolveClaudeCommand). Both ids are validated above, so they are safe to
+      // pass through the shell.
+      //
+      // `attachJobId` means the row is a *live* background agent: `claude --resume`
+      // is rejected by the CLI while a session runs as a bg agent, so we `claude
+      // attach <id>` into the live worker instead. A stopped/done agent (or a plain
+      // session) carries only `resumeSessionId` and reopens with `--resume`.
+      const cliArgs = opts.attachJobId
+        ? ['attach', opts.attachJobId]
+        : opts.resumeSessionId
+          ? ['--resume', opts.resumeSessionId]
+          : [];
+      const { command, args } = resolveClaudeCommand(cliArgs);
       const { id, pid } = createTerminal(
         {
           cwd,
@@ -1555,6 +1568,31 @@ async function startWatcher() {
   sessionsWatcher.on('add', pushActiveSessions);
   sessionsWatcher.on('change', pushActiveSessions);
   sessionsWatcher.on('unlink', pushActiveSessions);
+
+  // Background agents (~/.claude/jobs/<id>/state.json + daemon/roster.json):
+  // push the fresh BgSession[] on its own channel so the Agent View updates
+  // live instead of polling. state.json rewrites frequently while an agent
+  // works, so debounce like the sessions registry above. Dedicated channel
+  // (not data:changed) so these heartbeats don't invalidate every query.
+  const bgWatcher = watch([join(CLAUDE_DIR, 'jobs'), join(CLAUDE_DIR, 'daemon')], {
+    ignoreInitial: true,
+    depth: 2,
+  });
+  let bgPushTimer: NodeJS.Timeout | null = null;
+  const pushBgSessions = () => {
+    if (bgPushTimer) return; // debounce: one read per burst of events
+    bgPushTimer = setTimeout(() => {
+      bgPushTimer = null;
+      try {
+        safeSend('live:bgSessions', getBgSessions());
+      } catch {
+        /* read failed: the renderer's slow refetch covers the gap */
+      }
+    }, 400);
+  };
+  bgWatcher.on('add', pushBgSessions);
+  bgWatcher.on('change', pushBgSessions);
+  bgWatcher.on('unlink', pushBgSessions);
 }
 
 app.whenReady().then(() => {

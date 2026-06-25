@@ -80,7 +80,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatError: (cb: (error: string) => void) => subscribe('sessions:chatError', cb),
   },
   terminal: {
-    create: (opts: { cwd: string; resumeSessionId?: string; cols?: number; rows?: number }) =>
+    create: (opts: { cwd: string; resumeSessionId?: string; attachJobId?: string; cols?: number; rows?: number }) =>
       ipcRenderer.invoke('terminal:create', opts),
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
@@ -164,6 +164,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('live:activeSessions', handler);
     },
     getSessions: () => ipcRenderer.invoke('live:getSessions'),
+    onBgSessionsChanged: (callback: (sessions: unknown) => void) => {
+      const handler = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('live:bgSessions', handler);
+      return () => ipcRenderer.removeListener('live:bgSessions', handler);
+    },
     startWatch: (hash: string, sessionId?: string) =>
       ipcRenderer.invoke('live:startWatch', hash, sessionId),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),

@@ -189,10 +189,15 @@ function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () 
 export function TerminalMissionControl({
   project,
   resumeSessionId,
+  attachJobId,
   onBack,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
+  // Set when the row is a *live* background agent: the TERMINAL tab then `claude
+  // attach`es the live worker instead of `--resume` (which the CLI rejects while
+  // a session runs in the background). The LENS pane still reads by sessionId.
+  attachJobId?: string;
   onBack: () => void;
 }) {
   const { resolved } = useTheme();
@@ -483,6 +488,7 @@ export function TerminalMissionControl({
                 <TerminalPane
                   cwd={project.realPath}
                   resumeSessionId={resumeSessionId}
+                  attachJobId={attachJobId}
                   onPid={setPtyPid}
                   onStatus={setTermStatus}
                 />

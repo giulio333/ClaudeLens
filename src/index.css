@@ -1551,6 +1551,10 @@ body {
   overflow-y: auto;
   background: var(--cl-paper);
   position: relative;
+  /* Flex column so a view can opt into filling the scroll viewport (its root
+     gets flex-grow). Views that don't grow stay content-height as before. */
+  display: flex;
+  flex-direction: column;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -3295,6 +3299,266 @@ body {
   color: var(--cl-danger);
   border-color: color-mix(in oklch, var(--cl-danger) 60%, var(--cl-line));
 }
+/* Dispatch bar (Agent View) — a floating, centered composer that reads as the
+   same component as the chat composer: no hard divider (the list fades under a
+   gradient), a narrower centered glass row lifted off the bottom edge. It stays
+   in normal flow at the bottom of the list rather than absolutely positioned. */
+.cl-dispatch {
+  flex-shrink: 0;
+  padding: 22px 0 18px;
+  background: linear-gradient(to top, var(--cl-paper) 52%, transparent);
+  /* When embedded (project Agent View), the surrounding scroller is `.cl-main`
+     rather than this view's own flex column — pin the dispatch to the bottom of
+     the visible area so it stays at hand instead of trailing the (possibly
+     short) session list. Harmless in standalone mode, where it sits outside the
+     scroller. */
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+}
+/* narrower + centered than the full-width chat reading column, so it floats */
+.cl-dispatch-inner {
+  width: 100%;
+  max-width: 680px;
+  margin: 0 auto;
+  padding: 0 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+/* Unified dispatch card: a single glass surface holding the prompt on top and a
+   hairline-separated footer toolbar (config controls left · Dispatch right).
+   Stronger lift than the in-flow chat composer so it visibly hovers. */
+.cl-dispatch-card {
+  border-radius: 18px;
+  background: var(--cl-glass-bg-strong);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift),
+    0 12px 32px -10px color-mix(in oklch, var(--cl-ink) 26%, transparent);
+  -webkit-backdrop-filter: blur(26px) saturate(1.8);
+  backdrop-filter: blur(26px) saturate(1.8);
+  transition:
+    border-color 0.18s,
+    box-shadow 0.18s;
+}
+.cl-dispatch-card:focus-within {
+  border-color: color-mix(in oklch, var(--cl-accent) 42%, var(--cl-glass-border));
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift),
+    0 12px 32px -10px color-mix(in oklch, var(--cl-ink) 26%, transparent),
+    0 0 0 3px color-mix(in oklch, var(--cl-accent) 14%, transparent);
+}
+/* Prompt row — a leading spark glyph + the growing textarea. */
+.cl-dispatch-prompt {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 13px 15px 11px;
+}
+.cl-dispatch-glyph {
+  flex: none;
+  margin-top: 2px;
+  font-size: 15px;
+  line-height: 1.4;
+  color: var(--cl-accent);
+  opacity: 0.85;
+}
+.cl-dispatch-input {
+  flex: 1;
+  min-width: 0;
+  resize: none;
+  max-height: 168px;
+  border: 0;
+  background: transparent;
+  font: 400 14px/1.5 var(--font-sans);
+  color: var(--cl-ink);
+}
+.cl-dispatch-input::placeholder {
+  color: var(--cl-ink-4);
+}
+.cl-dispatch-input:focus {
+  outline: none;
+}
+.cl-dispatch-input:disabled {
+  opacity: 0.55;
+}
+/* Footer toolbar — hairline above, faint paper wash to read as a base shelf. */
+.cl-dispatch-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px 9px 8px 13px;
+  border-top: 1px solid var(--cl-glass-border);
+  border-radius: 0 0 17px 17px;
+  background: color-mix(in oklch, var(--cl-paper-2) 38%, transparent);
+}
+.cl-dispatch-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  flex-wrap: wrap;
+}
+/* leading glyph inside a select chip / the name field — quiet, marks the role */
+.cl-composer-chip-icon {
+  font-size: 11px;
+  line-height: 1;
+  opacity: 0.7;
+}
+/* Free-text "Name" field — minimal, mono, sits flush among the chips with a
+   leading pencil and only firms up on hover/focus. */
+.cl-dispatch-name-wrap {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.cl-dispatch-name-wrap:hover {
+  border-color: var(--cl-ink-4);
+}
+.cl-dispatch-name-wrap:focus-within {
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, var(--cl-line));
+  background: var(--cl-paper-2);
+}
+.cl-dispatch-name-icon {
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--cl-ink-4);
+}
+.cl-dispatch-name {
+  width: 104px;
+  border: 0;
+  background: transparent;
+  font: 400 10.5px/1.4 var(--font-mono);
+  color: var(--cl-ink-2);
+}
+.cl-dispatch-name::placeholder {
+  color: var(--cl-ink-4);
+}
+.cl-dispatch-name:focus {
+  outline: none;
+}
+.cl-dispatch-name:disabled {
+  opacity: 0.5;
+}
+/* Dispatch action — accent pill anchored to the footer's right edge. */
+.cl-dispatch-send {
+  flex: none;
+  padding: 7px 18px;
+  border: 0;
+  border-radius: 11px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font: 600 12.5px/1 var(--font-sans);
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    background 0.15s;
+}
+.cl-dispatch-send:hover:not(:disabled) {
+  opacity: 0.9;
+}
+.cl-dispatch-send:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+/* Dispatch select chips — softer, sans, reading as quiet inline controls that
+   only firm up on hover/active (scoped here so the chat composer keeps its own
+   look). */
+.cl-dispatch-controls .cl-composer-chip {
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 9px;
+  border-color: transparent;
+  background: transparent;
+  font: 450 11.5px/1 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-dispatch-controls .cl-composer-chip:hover:not(:disabled) {
+  background: var(--cl-paper-2);
+  border-color: var(--cl-line);
+  color: var(--cl-ink);
+}
+.cl-dispatch-controls .cl-composer-chip[data-on],
+.cl-dispatch-controls .cl-composer-chip[data-on]:hover:not(:disabled) {
+  background: color-mix(in oklch, var(--cl-accent) 10%, var(--cl-paper-2));
+  border-color: color-mix(in oklch, var(--cl-accent) 40%, var(--cl-line));
+  color: var(--cl-accent);
+}
+.cl-dispatch-controls .cl-composer-chip-caret {
+  margin-left: 1px;
+  opacity: 0.5;
+}
+/* Dispatch select menu — slightly roomier, rows with a leading accent check on
+   the active option instead of the trailing dot. */
+.cl-dispatch-controls .cl-composer-menu {
+  min-width: 172px;
+  padding: 6px;
+  border-radius: 13px;
+}
+.cl-dispatch-controls .cl-composer-menu-label {
+  padding: 4px 10px 6px 28px;
+}
+.cl-dispatch-controls .cl-composer-menu button {
+  padding: 7px 12px 7px 28px;
+  border-radius: 9px;
+}
+.cl-dispatch-controls .cl-composer-menu-item-label {
+  font-size: 12.5px;
+}
+.cl-dispatch-controls .cl-composer-menu button.is-active::after {
+  content: '✓';
+  top: 50%;
+  left: 10px;
+  right: auto;
+  width: auto;
+  height: auto;
+  border-radius: 0;
+  background: none;
+  transform: translateY(-50%);
+  color: var(--cl-accent);
+  font: 700 11px/1 var(--font-sans);
+}
+/* Row-action failure (stop/restart/remove) — docked above the dispatch bar,
+   reuses the danger tokens like the composer error rather than hardcoded reds. */
+.cl-dispatch-action-error {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 16px;
+  border-top: 1px solid color-mix(in oklch, var(--cl-danger) 34%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-danger) 12%, var(--cl-paper));
+  font: 400 12px/1.45 var(--font-mono);
+  color: var(--cl-danger);
+}
+.cl-dispatch-action-error .msg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-dispatch-action-error button {
+  flex-shrink: 0;
+  background: transparent;
+  border: 0;
+  color: var(--cl-danger);
+  cursor: pointer;
+  font: inherit;
+}
+.cl-dispatch-action-error button:hover {
+  text-decoration: underline;
+}
+
 /* Slash-command autocomplete — anchored above the composer input, left-aligned. */
 .cl-slash-menu {
   position: absolute;

@@ -72,6 +72,11 @@ function statusOf(s: BgSession): StatusInfo {
   return { bucket: 'stopped', label: 'Asleep', color: '#94a3b8', pulse: false }
 }
 
+// Buckets that represent finished work. A worker process can stay alive (warm,
+// idle) after its task is done — `claude agents` keeps it around for attach /
+// resume — so pid-liveness alone overcounts "running now".
+const TERMINAL_BUCKETS = new Set<Bucket>(['completed', 'failed', 'stopped'])
+
 const BUCKET_ORDER: { key: Bucket; title: string; hint: string }[] = [
   { key: 'needs-input', title: 'Needs input', hint: 'waiting on you' },
   { key: 'working', title: 'Working', hint: 'actively running' },
@@ -267,6 +272,71 @@ function SessionRow({
 }
 
 
+// ─── Dispatch selector ──────────────────────────────────────────────────────────
+
+/** Chip + upward popover anchored in the dispatch meta-row — mirrors the chat
+ *  composer's `ComposerSelect` so the two surfaces read the same. */
+function DispatchSelect({
+  label, value, options, onChange, disabled, icon,
+}: {
+  label: string
+  value: string
+  options: { value: string; label: string; hint?: string }[]
+  onChange: (value: string) => void
+  disabled?: boolean
+  icon?: string
+}) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLSpanElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const onDown = (e: MouseEvent) => {
+      if (!rootRef.current?.contains(e.target as Node)) setOpen(false)
+    }
+    document.addEventListener('mousedown', onDown)
+    return () => document.removeEventListener('mousedown', onDown)
+  }, [open])
+
+  const current = options.find(o => o.value === value)
+
+  return (
+    <span className="cl-composer-select" ref={rootRef}>
+      {open && (
+        <div className="cl-composer-menu" role="menu">
+          <span className="cl-composer-menu-label">{label}</span>
+          {options.map(o => (
+            <button
+              key={o.value}
+              type="button"
+              role="menuitemradio"
+              aria-checked={o.value === value}
+              className={o.value === value ? 'is-active' : ''}
+              onClick={() => { onChange(o.value); setOpen(false) }}
+            >
+              <span className="cl-composer-menu-item-label">{o.label}</span>
+              {o.hint && <span className="cl-composer-menu-item-hint">{o.hint}</span>}
+            </button>
+          ))}
+        </div>
+      )}
+      <button
+        type="button"
+        className="cl-composer-chip"
+        data-on={open || undefined}
+        disabled={disabled}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        onClick={() => setOpen(v => !v)}
+      >
+        {icon && <span className="cl-composer-chip-icon" aria-hidden>{icon}</span>}
+        {current?.label ?? value}
+        <span className="cl-composer-chip-caret" aria-hidden />
+      </button>
+    </span>
+  )
+}
+
 // ─── View ──────────────────────────────────────────────────────────────────────
 
 export function AgentsLiveView({
@@ -278,7 +348,7 @@ export function AgentsLiveView({
 }: {
   onBack: () => void
   project?: Project
-  onOpenSession: (project: Project, session: SessionSummary) => void
+  onOpenSession: (project: Project, session: SessionSummary, bg?: { jobId: string; alive: boolean }) => void
   embedded?: boolean
   hideHero?: boolean
 }) {
@@ -308,21 +378,32 @@ export function AgentsLiveView({
     ? all.filter(s => s.cwd === project.realPath || s.cwd.startsWith(project.realPath + '/'))
     : all
 
-  const liveCount = sessions.filter(s => s.alive).length
+  // "Live / running now" = alive workers still doing or ready to do work, not
+  // finished ones sitting idle with a warm process (those land in TERMINAL_BUCKETS).
+  const liveCount = sessions.filter(s => s.alive && !TERMINAL_BUCKETS.has(statusOf(s).bucket)).length
+  const counts = sessions.reduce((acc, s) => {
+    const b = statusOf(s).bucket
+    acc[b] = (acc[b] ?? 0) + 1
+    return acc
+  }, {} as Record<Bucket, number>)
   const groups = BUCKET_ORDER
     .map(b => ({ ...b, items: sessions.filter(s => statusOf(s).bucket === b.key) }))
     .filter(g => g.items.length > 0)
 
   return (
-    <div className={embedded ? '' : 'h-full flex flex-col'} style={embedded ? undefined : { background: 'var(--cl-paper)' }}>
+    <div
+      className={embedded ? 'flex flex-col' : 'h-full flex flex-col'}
+      style={embedded ? { flexGrow: 1 } : { background: 'var(--cl-paper)' }}
+    >
       <style>{`@keyframes alPulse { 0%,100%{opacity:1} 50%{opacity:.35} }`}</style>
       {!embedded && (
         <TopBar onBack={onBack} crumbs={[{ label: project ? `Project · Agent View · ${projectName}` : 'Global · Agent View' }]} />
       )}
 
-      <div className={embedded ? '' : 'flex-1 overflow-y-auto'}>
+      <div className={embedded ? 'flex-1' : 'flex-1 overflow-y-auto'}>
         {!hideHero && (
-          <section className="cl-hero">
+          <section className={`cl-hero${liveCount > 0 ? ' is-live' : ''}`}>
+            {liveCount > 0 && <span className="cl-live-bar" aria-hidden />}
             <Lens />
             <div className="cl-eyebrow">
               <span className="pip" />
@@ -353,7 +434,32 @@ export function AgentsLiveView({
             </div>
           </section>
         ) : (
-          groups.map(g => (
+          <>
+            <section className="cl-stats cl-stats--agents">
+              <div className="cl-stat">
+                <span className="lbl">Needs input</span>
+                <div className="num">{counts['needs-input'] ?? 0}</div>
+                <div className="delta">waiting on you</div>
+              </div>
+              <div className="cl-stat">
+                <span className="lbl">Working</span>
+                <div className="num">{counts['working'] ?? 0}</div>
+                <div className="delta">actively running</div>
+              </div>
+              <div className="cl-stat">
+                <span className="lbl">Ready</span>
+                <div className="num">{counts['ready'] ?? 0}</div>
+                <div className="delta">idle, awaiting</div>
+              </div>
+              <div className="cl-stat live">
+                <span className="lbl">
+                  <span className="pulse" /> Live
+                </span>
+                <div className="num">{liveCount}</div>
+                <div className="uptime">running now</div>
+              </div>
+            </section>
+            {groups.map(g => (
             <section className="cl-section" key={g.key}>
               <div className="cl-sec-head">
                 <h2>{g.title}</h2>
@@ -377,6 +483,7 @@ export function AgentsLiveView({
                       onOpen={() => onOpenSession(
                         project ?? { hash: hashFromCwd(s.cwd), realPath: s.cwd },
                         summaryFor(s),
+                        { jobId: s.id, alive: s.alive },
                       )}
                       actions={{
                         onAttach: () => handle('attach', () => attachBg.mutateAsync({ cwd: s.cwd, id: s.id })),
@@ -392,29 +499,25 @@ export function AgentsLiveView({
                 })}
               </div>
             </section>
-          ))
+            ))}
+          </>
         )}
       </div>
-      
+
       {actionError && (
-        <div style={{ padding: '8px 16px', borderTop: '1px solid var(--cl-line)', background: '#fef2f2', color: '#ef4444', fontSize: 12, fontFamily: 'var(--font-mono)', display: 'flex', justifyContent: 'space-between', gap: 12 }}>
-          <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>✕ {actionError}</span>
-          <button type="button" onClick={() => setActionError(null)} style={{ background: 'transparent', border: 'none', color: '#ef4444', cursor: 'pointer' }}>dismiss</button>
+        <div className="cl-dispatch-action-error">
+          <span className="msg">✕ {actionError}</span>
+          <button type="button" onClick={() => setActionError(null)}>dismiss</button>
         </div>
       )}
 
       {project && (
-        <div style={{ padding: '16px', borderTop: '1px solid var(--cl-line)', background: 'var(--cl-panel)', zIndex: 10 }}>
-          {dispatchBg.isError && (
-            <div style={{ color: '#ef4444', fontSize: '13px', marginBottom: '8px', padding: '8px', background: '#fef2f2', borderRadius: '6px', border: '1px solid #f87171' }}>
-              <b>Error dispatching:</b> {String(dispatchBg.error)}
-            </div>
-          )}
-          <form 
-            style={{ display: 'flex', gap: '8px', alignItems: 'center', width: '100%', maxWidth: '800px', margin: '0 auto' }}
+        <div className="cl-dispatch">
+          <form
+            className="cl-dispatch-inner"
             onSubmit={(e) => {
               e.preventDefault()
-              if (!prompt.trim()) return
+              if (!prompt.trim() || dispatchBg.isPending) return
               dispatchBg.mutate({ cwd: project.realPath, prompt: prompt.trim(), name: sessionName.trim() || undefined, agent: agentName || undefined, model: model || undefined }, {
                 onSuccess: () => {
                   setPrompt('')
@@ -425,52 +528,75 @@ export function AgentsLiveView({
               })
             }}
           >
-            <input 
-              type="text" 
-              placeholder="Prompt for background task..." 
-              value={prompt} 
-              onChange={e => setPrompt(e.target.value)}
-              style={{ flex: 1, padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
-            />
-            <input 
-              type="text" 
-              placeholder="Name (optional)" 
-              value={sessionName} 
-              onChange={e => setSessionName(e.target.value)}
-              style={{ width: '150px', padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
-            />
-            <select
-              value={agentName}
-              onChange={e => setAgentName(e.target.value)}
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
-            >
-              <option value="">No subagent</option>
-              {allAgents.map(a => (
-                <option key={a.name} value={a.name}>{a.name}</option>
-              ))}
-            </select>
-            <select
-              value={model}
-              onChange={e => setModel(e.target.value)}
-              title="Override model for this session (passed as --model)"
-              style={{ padding: '8px 12px', borderRadius: '6px', border: '1px solid var(--cl-line)', background: 'var(--cl-paper)', color: 'var(--cl-ink-1)' }}
-            >
-              <option value="">Default model</option>
-              <option value="opus">Opus 4.7</option>
-              <option value="sonnet">Sonnet 4.6</option>
-              <option value="haiku">Haiku 4.5</option>
-            </select>
-            <button 
-              type="submit" 
-              disabled={!prompt.trim() || dispatchBg.isPending}
-              style={{ 
-                padding: '8px 16px', borderRadius: '6px', background: 'var(--cl-ink-1)', color: 'var(--cl-paper)', 
-                fontWeight: 600, cursor: prompt.trim() && !dispatchBg.isPending ? 'pointer' : 'not-allowed', 
-                opacity: prompt.trim() && !dispatchBg.isPending ? 1 : 0.5 
-              }}
-            >
-              {dispatchBg.isPending ? 'Dispatching...' : 'Dispatch'}
-            </button>
+            {dispatchBg.isError && (
+              <div className="cl-composer-error">{String(dispatchBg.error)}</div>
+            )}
+            <div className="cl-dispatch-card">
+              <div className="cl-dispatch-prompt">
+                <span className="cl-dispatch-glyph" aria-hidden>⌁</span>
+                <textarea
+                  className="cl-dispatch-input"
+                  placeholder="Dispatch a background task in this project…"
+                  rows={1}
+                  value={prompt}
+                  disabled={dispatchBg.isPending}
+                  onChange={e => setPrompt(e.target.value)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' && !e.shiftKey) {
+                      e.preventDefault()
+                      if (prompt.trim() && !dispatchBg.isPending) e.currentTarget.form?.requestSubmit()
+                    }
+                  }}
+                />
+              </div>
+              <div className="cl-dispatch-foot">
+                <div className="cl-dispatch-controls">
+                  <DispatchSelect
+                    label="Subagent"
+                    icon="◇"
+                    value={agentName}
+                    disabled={dispatchBg.isPending}
+                    onChange={setAgentName}
+                    options={[
+                      { value: '', label: 'No subagent' },
+                      ...allAgents.map(a => ({ value: a.name, label: a.name })),
+                    ]}
+                  />
+                  <DispatchSelect
+                    label="Model"
+                    icon="◆"
+                    value={model}
+                    disabled={dispatchBg.isPending}
+                    onChange={setModel}
+                    options={[
+                      { value: '', label: 'Default model' },
+                      { value: 'opus', label: 'Opus' },
+                      { value: 'sonnet', label: 'Sonnet' },
+                      { value: 'haiku', label: 'Haiku' },
+                    ]}
+                  />
+                  <label className="cl-dispatch-name-wrap">
+                    <span className="cl-dispatch-name-icon" aria-hidden>✎</span>
+                    <input
+                      type="text"
+                      className="cl-dispatch-name"
+                      placeholder="Name"
+                      value={sessionName}
+                      disabled={dispatchBg.isPending}
+                      onChange={e => setSessionName(e.target.value)}
+                    />
+                  </label>
+                </div>
+                <button
+                  type="submit"
+                  className="cl-dispatch-send"
+                  title="Enter to send · Shift+Enter for newline"
+                  disabled={!prompt.trim() || dispatchBg.isPending}
+                >
+                  {dispatchBg.isPending ? 'Dispatching…' : 'Dispatch'}
+                </button>
+              </div>
+            </div>
           </form>
         </div>
       )}
