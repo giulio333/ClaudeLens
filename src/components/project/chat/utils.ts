@@ -737,7 +737,13 @@ export function stripLineNumbers(text: string): string {
 
 // Estrae l'estensione per il chip lingua
 export function fileExt(path: string): string {
-  return path.split('.').pop()?.toLowerCase() ?? ''
+  // Only the basename can carry an extension. `split('.').pop()` on a path with
+  // no dot returns the whole string, so a file like `LICENSE` would surface its
+  // entire path as a bogus "extension" (rendered in the file chip). Guard on a
+  // real dot inside the basename; `dot > 0` also drops dotfiles (`.gitignore`).
+  const name = path.split(/[/\\]/).pop() ?? path
+  const dot = name.lastIndexOf('.')
+  return dot > 0 ? name.slice(dot + 1).toLowerCase() : ''
 }
 
 // Tool che operano su un singolo file su disco: ne estraiamo il path per i chip
