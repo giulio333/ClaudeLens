@@ -8,11 +8,30 @@ export type ToolGroup = {
   result: Extract<ChatContentBlock, { type: 'tool_result' }> | null
 }
 
+// Automatic harness notification emitted when a background task/agent completes.
+export type TaskNotification = {
+  taskId: string
+  toolUseId?: string
+  /** 'completed' | 'failed' | 'error' | other raw status */
+  status: string
+  summary: string
+  result?: string
+  /** Subagent metrics — present only for Task/Agent notifications. */
+  usage?: TaskNotificationUsage
+}
+
+export type TaskNotificationUsage = {
+  tokens?: number
+  toolUses?: number
+  durationMs?: number
+}
+
 // Messaggio processato: i tool_result del messaggio utente successivo vengono abbinati qui
 export type ProcessedMessage = {
   msg: ChatMessage
   toolGroups: ToolGroup[]   // solo per messaggi assistant con tool_use
   command?: ClaudeSlashCommand  // se il messaggio è un Claude Code command (XML tag flow)
+  notification?: TaskNotification  // set when the message is a harness task-notification
 }
 
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference'
@@ -97,6 +116,20 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
       msg.content.length > 0 &&
       msg.content.every(b => b.type === 'tool_result')
     if (isToolOnlyUserMsg) continue
+
+    // task-notification: harness event for a completed background task/agent
+    if (msg.role === 'user') {
+      const onlyText = msg.content.length === 1 && msg.content[0].type === 'text'
+        ? (msg.content[0] as Extract<ChatContentBlock, { type: 'text' }>).text
+        : null
+      if (onlyText) {
+        const notification = parseTaskNotification(onlyText)
+        if (notification) {
+          result.push({ msg, toolGroups: [], notification })
+          continue
+        }
+      }
+    }
 
     // local-command-stdout: assorbi nel command precedente, se presente
     if (msg.role === 'user') {
@@ -192,6 +225,45 @@ export function parseClaudeSlashCommand(text: string): ClaudeSlashCommand | null
   }
 }
 
+// Extract the fields of a harness <task-notification>. Handles both the bare
+// form and the variant prefixed with [SYSTEM NOTIFICATION...].
+export function parseTaskNotification(text: string): TaskNotification | null {
+  if (!/<task-notification[\s>]/i.test(text)) return null
+  const inner = text.match(/<task-notification>([\s\S]*?)<\/task-notification>/i)?.[1]
+  if (!inner) return null
+  const get = (tag: string) =>
+    inner.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]?.trim() ?? ''
+  const summary = get('summary')
+  const taskId = get('task-id')
+  if (!summary && !taskId) return null
+
+  // <usage><subagent_tokens>…</subagent_tokens><tool_uses>…</tool_uses><duration_ms>…</duration_ms></usage>
+  let usage: TaskNotificationUsage | undefined
+  const usageRaw = inner.match(/<usage>([\s\S]*?)<\/usage>/i)?.[1]
+  if (usageRaw) {
+    const num = (tag: string) => {
+      const v = usageRaw.match(new RegExp(`<${tag}>([\\s\\S]*?)<\\/${tag}>`, 'i'))?.[1]?.trim()
+      const n = v != null ? Number(v) : NaN
+      return Number.isFinite(n) ? n : undefined
+    }
+    const tokens = num('subagent_tokens')
+    const toolUses = num('tool_uses')
+    const durationMs = num('duration_ms')
+    if (tokens != null || toolUses != null || durationMs != null) {
+      usage = { tokens, toolUses, durationMs }
+    }
+  }
+
+  return {
+    taskId,
+    toolUseId: get('tool-use-id') || undefined,
+    status: get('status') || 'completed',
+    summary,
+    result: get('result') || undefined,
+    usage,
+  }
+}
+
 // Estrae il contenuto del tag <local-command-stdout>...</local-command-stdout>
 // e rimuove gli escape ANSI. Ritorna null se non è puro stdout.
 export function parseLocalCommandOutput(text: string): string | null {
@@ -270,7 +342,7 @@ export const QUESTION_TOOL = 'AskUserQuestion'
 // `/foo` slash-command skill, which arrives as a `command` flagged `isSkill`).
 export const SKILL_TOOL = 'Skill'
 
-export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'skill' | 'question' | 'plan'
+export type TurnVariant = 'user' | 'claude' | 'agent' | 'command' | 'skill' | 'question' | 'plan' | 'notification'
 
 /** First-letter monogram for a skill, mirroring the agent orb rule (no icons,
  *  just the initial). Strips a `plugin:` namespace so `document-skills:pdf` → "P". */
@@ -301,18 +373,19 @@ export type TurnDescriptor = {
 }
 
 const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: string }> = {
-  user:     { label: 'You',      initial: 'U', color: 'var(--cl-ink)' },
-  claude:   { label: 'Claude',   initial: 'C', color: 'var(--cl-accent)' },
+  user:         { label: 'You',        initial: 'U', color: 'var(--cl-ink)' },
+  claude:       { label: 'Claude',     initial: 'C', color: 'var(--cl-accent)' },
   // An agent dispatch is still a Claude turn — the "A" identity lives inside the
   // dispatch card, so the rail orb shows "C". The color is the dispatched agent's
   // own identity tint (resolved in MessageBubble); accent is the unconfigured default.
-  agent:    { label: 'Agent',    initial: 'C', color: 'var(--cl-accent)' },
-  command:  { label: 'Command',  initial: '/', color: 'var(--cl-accent)' },
+  agent:        { label: 'Agent',      initial: 'C', color: 'var(--cl-accent)' },
+  command:      { label: 'Command',    initial: '/', color: 'var(--cl-accent)' },
   // A skill turn wears the brand accent and a first-letter orb (resolved below
   // from the skill name); the static initial here is just a fallback.
-  skill:    { label: 'Skill',    initial: 'S', color: 'var(--cl-accent)' },
-  question: { label: 'Question', initial: '?', color: 'var(--cl-warn)' },
-  plan:     { label: 'Plan',     initial: 'P', color: 'var(--cl-accent)' },
+  skill:        { label: 'Skill',      initial: 'S', color: 'var(--cl-accent)' },
+  question:     { label: 'Question',   initial: '?', color: 'var(--cl-warn)' },
+  plan:         { label: 'Plan',       initial: 'P', color: 'var(--cl-accent)' },
+  notification: { label: 'Task event', initial: 'T', color: 'var(--cl-ink-3)' },
 }
 
 /** Resolves a dispatched sub-agent's identity tint (final color string) from its
@@ -324,6 +397,20 @@ export function describeTurn(
   detailsFilter: ChatDetailsFilter,
   agentColor?: AgentColorResolver
 ): TurnDescriptor {
+  // Task-notification: always visible as a compact variant, regardless of the filter.
+  if (p.notification) {
+    return {
+      variant: 'notification',
+      label: ROLE_META.notification.label,
+      initial: ROLE_META.notification.initial,
+      color: ROLE_META.notification.color,
+      hasText: false, hasThinking: false, hasTools: false,
+      hasQuestion: false, hasAgent: false, hasPlan: false, hasSkill: false,
+      visible: true,
+      toolsOnly: false,
+    }
+  }
+
   const { msg, toolGroups, command } = p
   const isUser = msg.role === 'user'
 
