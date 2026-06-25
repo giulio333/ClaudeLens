@@ -4255,7 +4255,10 @@ body {
 }
 /* Compact indicator for tool-only turns in minimal mode. */
 .cl-turn-tools-hidden {
-  padding: 0 0 4px 54px;
+  /* Align with the turn body (which sits at x=0 in the reading column); the
+     orb only offsets the header, not the text. A leftover 54px indent here
+     pushed the badge right of the surrounding messages. */
+  padding: 0 0 4px;
   transition:
     opacity 0.2s,
     filter 0.2s;
@@ -4558,6 +4561,74 @@ body {
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.45),
     0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 50%, transparent);
+}
+
+/* Notification turn — harness task/agent event card */
+.cl-turn--notification .cl-turn-body {
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  padding: 0;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.cl-turn--notification:hover .cl-turn-body {
+  background: transparent;
+}
+/* Orb keeps the standard rail box (so the body stays aligned) but renders as a
+   subtle status disc instead of a filled letter tile. */
+.cl-turn-orb--notif {
+  background: color-mix(in oklch, var(--notif-orb, var(--cl-ink-3)) 12%, var(--cl-paper));
+  box-shadow: none;
+  font-size: 0;
+}
+.cl-turn-orb--notif::before {
+  content: '';
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--notif-orb, var(--cl-ink-3));
+}
+/* Lens (reading) mode: the orb is positioned absolute at left:0, so the card
+   must clear it — push the body right like the header padding does for prose. */
+.cl-chat-reading .cl-turn--notification .cl-turn-body {
+  padding-left: 28px;
+}
+
+.cl-notif-card {
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  background: var(--cl-paper);
+  width: 100%;
+}
+.cl-notif-card-main {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 12px;
+}
+.cl-notif-summary {
+  color: var(--cl-ink-2);
+  font-size: 0.8rem;
+  font-family: var(--font-sans);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-notif-right {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--cl-ink-4);
+  font-family: var(--font-mono);
+  font-size: 0.72rem;
+  flex-shrink: 0;
+}
+.cl-notif-usage {
+  color: var(--cl-ink-3);
+  letter-spacing: 0.01em;
+  white-space: nowrap;
 }
 
 /* Command card — editorial (prototype's cx-cmd): paper + accent spine. */

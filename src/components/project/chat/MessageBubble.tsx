@@ -2,7 +2,7 @@ import { memo, useState } from 'react'
 import type { CSSProperties, Ref } from 'react'
 import Markdown from '../../Markdown'
 import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL, SKILL_TOOL } from './utils'
+import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, TaskNotification, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL, SKILL_TOOL } from './utils'
 import { fmtModel, modelColor } from '../utils'
 import { agentTintColor } from '../shared/entityOptions'
 import { ToolGroupCard } from './ToolGroupCard'
@@ -60,6 +60,44 @@ function ExportTurnButton({ onClick }: { onClick: () => void }) {
         <path d="M12 15V3" />
       </svg>
     </button>
+  )
+}
+
+/** Compact token count for the notification chips: 55059 → "55.1k". */
+function fmtTokens(n: number): string {
+  if (n < 1000) return String(n)
+  return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`
+}
+
+/** Duration in ms → "1m23s" / "8.3s" for the notification chips. */
+function fmtDuration(ms: number): string {
+  const s = ms / 1000
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`
+  const m = Math.floor(s / 60)
+  return `${m}m${Math.round(s - m * 60)}s`
+}
+
+/** Compact, non-interactive marker for a harness task-notification (background
+ *  agent/task completed). The agent's output is surfaced in Mission Control, so
+ *  the card is a quiet event marker — no expand, no click. Subagent metrics
+ *  (tokens / tool calls / duration), when present, render as inline chips. */
+function TaskNotificationCard({ notification, timestamp }: { notification: TaskNotification; timestamp?: string }) {
+  const { summary, usage } = notification
+  const chips: string[] = []
+  if (usage?.tokens != null) chips.push(`${fmtTokens(usage.tokens)} tok`)
+  if (usage?.toolUses != null) chips.push(`${usage.toolUses} ${usage.toolUses === 1 ? 'tool' : 'tools'}`)
+  if (usage?.durationMs != null) chips.push(fmtDuration(usage.durationMs))
+
+  return (
+    <div className="cl-notif-card">
+      <div className="cl-notif-card-main">
+        <span className="cl-notif-summary">{summary}</span>
+        <span className="cl-notif-right">
+          {chips.length > 0 && <span className="cl-notif-usage">{chips.join(' · ')}</span>}
+          {timestamp && <time>{timestamp}</time>}
+        </span>
+      </div>
+    </div>
   )
 }
 
@@ -424,7 +462,7 @@ export const MessageBubble = memo(function MessageBubble({
   /** Export just this turn — seeds the selection and raises the export sheet. */
   onExportTurn?: (uuid: string) => void
 }) {
-  const { msg, toolGroups, command } = processed
+  const { msg, toolGroups, command, notification } = processed
   const isUser = msg.role === 'user'
   // Only durable transcript messages anchor highlights — never the optimistic
   // mid-stream bubble, whose synthetic uuid is replaced on reconcile (which would
@@ -501,6 +539,38 @@ export const MessageBubble = memo(function MessageBubble({
         hour12: false,
       })
   const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
+
+  // Notification turn: compact system-event card. The orb carries the status
+  // color (green/red/gray) — no duplicate dot inside the card.
+  if (notification) {
+    const parsedTs = new Date(msg.timestamp)
+    const ts = Number.isNaN(parsedTs.getTime())
+      ? ''
+      : parsedTs.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
+    const st = notification.status
+    const orbColor =
+      st === 'completed' ? 'var(--cl-ok)' :
+      st === 'failed' || st === 'error' ? 'var(--cl-danger)' :
+      'var(--cl-ink-3)'
+    return (
+      <article
+        className={`cl-turn cl-turn--notification${isContinuation ? ' cl-turn--continuation' : ''}`}
+        style={{ '--turn-role-color': orbColor, '--notif-orb': orbColor } as CSSProperties}
+        ref={innerRef}
+        data-n={turnIndex}
+        data-dim={dimmed || undefined}
+      >
+        <aside className="cl-turn-rail">
+          <span className="cl-turn-orb cl-turn-orb--notif" aria-label="Task event" />
+          <span className="cl-turn-index">{turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : 'T'}</span>
+          <span className="cl-turn-spine" aria-hidden />
+        </aside>
+        <section className="cl-turn-body">
+          <TaskNotificationCard notification={notification} timestamp={ts} />
+        </section>
+      </article>
+    )
+  }
 
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
   // Una skill (slash command con `isSkill` o che risolve a una skill nota) usa
