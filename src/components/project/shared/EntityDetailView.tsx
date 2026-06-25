@@ -33,7 +33,7 @@ export type TapeCell = {
 }
 
 export type EntityConfig = {
-  kind: 'agent' | 'skill' | 'claudemd' | 'plan'
+  kind: 'agent' | 'skill' | 'claudemd' | 'plan' | 'memory'
   /** Titolo (agent.name, skill.name, "CLAUDE", plan.title). */
   name: string
   titleGlyph?: string
@@ -62,8 +62,6 @@ export type EntityConfig = {
   neutralTint?: boolean
 
   tape: TapeCell[]
-  /** Se true l'ultima cella della tape è la "feature" scura (solo agent). Default false → tape flat. */
-  tapeFeature?: boolean
   /** Etichetta del body (es. "System prompt · markdown body"). */
   bodyLabel: string
 
@@ -76,6 +74,13 @@ export type EntityConfig = {
   descriptionValue?: string
   /** Righe core read-only nell'editor frontmatter (es. name, scope). */
   coreRows?: { label: string; value: string }[]
+  /**
+   * Nasconde la griglia "Properties" nella **view** (le opzioni restano
+   * editabili in edit mode). Utile quando le option sono già rappresentate
+   * altrove in view — es. la memoria mostra `type` nella tape e i suoi metadata
+   * (tags/origin) via `viewExtras`, quindi non serve il tile "type".
+   */
+  hideViewProperties?: boolean
 
   /** Serializza lo stato editato in markdown grezzo da salvare. */
   serialize?: (args: { body: string; description: string; options: Record<string, OptionValue> }) => string
@@ -89,6 +94,19 @@ export type EntityConfig = {
   emptyMessage?: string
   /** Nota opzionale in fondo al body (es. plan: stored globally · read-only). */
   footerNote?: ReactNode
+
+  /**
+   * Slot extra in **view mode**, reso in fondo alla sezione body (dopo le
+   * Properties). Per la memoria: blocco "Metadata" con tag gestiti, sessione
+   * di origine e date — concetti che non sono frontmatter modellabile.
+   */
+  viewExtras?: ReactNode
+  /**
+   * Slot extra in **edit mode**, reso nella colonna frontmatter (sotto le
+   * opzioni). Per la memoria: editor dei tag gestiti. Forza la colonna
+   * sinistra anche se non ci sono description/optionDefs.
+   */
+  editExtras?: ReactNode
 }
 
 /* ════════════════════════════════ ICONS ════════════════════════════════ */
@@ -189,37 +207,38 @@ function ViewManifesto({ config }: { config: EntityConfig }) {
     def,
     value: optionValueOf(config.initialOptions as unknown as Record<string, unknown>, def),
   }))
-  const hasOptions = config.optionDefs.length > 0
+  const hasOptions = config.optionDefs.length > 0 && !config.hideViewProperties
   const setProperties = propertyRows.filter(row => row.value)
-  const unsetProperties = propertyRows.filter(row => !row.value)
+  // Properties + metadata vivono in un rail a destra del body (in view sono
+  // secondarie e, in fondo a un body lungo, sparivano). Senza nulla da mettere
+  // nel rail il body resta a colonna singola (es. CLAUDE.md, plan).
+  const hasAside = hasOptions || !!config.viewExtras
 
   return (
-    <div className="cl-agent-v2" style={entityTint(config.color, { neutral: config.neutralTint })}>
-      <section className="cl-agent-v2-hero">
-        <div>
-          <div className="ey">
-            <span className="pip" />
-            <span>{config.eyebrow}</span>
-          </div>
-          <h1
-            className={config.titleFluid ? 'fluid' : undefined}
-            style={config.titleFluid ? { fontSize: fluidTitleSize(config.name) } : undefined}
-          >
-            {config.name}{config.titleGlyph && <span className="ext">{config.titleGlyph}</span>}
-          </h1>
-          {config.description && <div className="desc">{config.description}</div>}
-          {config.path && <div className="filepath" title={config.path}>{config.path}</div>}
+    <div className="cl-entity-v2" style={entityTint(config.color, { neutral: config.neutralTint })}>
+      <section className="cl-entity-v2-hero">
+        <div className="cl-entity-v2-orb" aria-hidden="true">
+          <span className="ring" />
+          <span className="fill" />
+          <span className="dot" />
         </div>
-        <div className="cl-agent-v2-lens" aria-hidden="true">
-          <span className="orb-big" />
-          <span className="orb-sm" />
-          <span className="orb-mid" />
+        <div className="ey">
+          <span className="pip" />
+          <span>{config.eyebrow}</span>
         </div>
+        <h1
+          className={config.titleFluid ? 'fluid' : undefined}
+          style={config.titleFluid ? { fontSize: fluidTitleSize(config.name) } : undefined}
+        >
+          {config.name}{config.titleGlyph && <span className="ext">{config.titleGlyph}</span>}
+        </h1>
+        {config.description && <div className="desc">{config.description}</div>}
+        {config.path && <div className="filepath" title={config.path}>{config.path}</div>}
       </section>
 
       {config.tape.length > 0 && (
         <section
-          className={'cl-agent-v2-tape' + (config.tapeFeature ? '' : ' cl-agent-v2-tape--flat')}
+          className="cl-entity-v2-tape"
           style={{ gridTemplateColumns: `repeat(${config.tape.length}, minmax(0, 1fr))` }}
         >
           {config.tape.map(cell => (
@@ -229,66 +248,61 @@ function ViewManifesto({ config }: { config: EntityConfig }) {
                 className={
                   'v' +
                   (cell.mono ? ' mono' : '') +
-                  (cell.colorName ? ' agent-color' : '') +
                   (cell.status ? ' status' : '') +
                   (cell.warn ? ' is-warn' : '')
                 }
               >
-                {cell.status && <span className="d" />}{cell.value}
+                {cell.status && <span className="d" />}
+                {cell.colorName && <span className="sw" />}
+                {cell.value}
               </div>
             </div>
           ))}
         </section>
       )}
 
-      <section className="cl-agent-v2-body">
-        <div className="lab">{config.bodyLabel} · {charCount} chars · {wordCount} words</div>
-        <div className="prose">
-          {body ? <Markdown>{body}</Markdown> : (
-            <p style={{ color: 'var(--cl-ink-3)', fontStyle: 'italic' }}>{config.emptyMessage ?? 'No content.'}</p>
+      <section className={'cl-entity-v2-body' + (hasAside ? ' has-aside' : '')}>
+        <div className="cl-entity-v2-main">
+          <div className="lab">{config.bodyLabel} · {charCount} chars · {wordCount} words</div>
+          <div className="prose">
+            {body ? <Markdown>{body}</Markdown> : (
+              <p style={{ color: 'var(--cl-ink-3)', fontStyle: 'italic' }}>{config.emptyMessage ?? 'No content.'}</p>
+            )}
+          </div>
+
+          {config.footerNote && (
+            <p style={{ marginTop: 24, fontSize: 11, lineHeight: 1.5, color: 'var(--cl-ink-3)' }}>
+              {config.footerNote}
+            </p>
           )}
         </div>
 
-        {hasOptions && (
-          <div className="cl-agent-v2-opts">
-            <h3><span>Properties</span><b>{setProperties.length} / {config.optionDefs.length} set</b></h3>
+        {hasAside && (
+          <aside className="cl-entity-v2-aside">
+            {hasOptions && (
+              <div className="cl-entity-v2-opts">
+                <h3><span>Properties</span><b>{setProperties.length} / {config.optionDefs.length} set</b></h3>
 
-            <div className="cl-agent-v2-prop-group is-set">
-              <div className="group-head"><span>Set properties</span><b>{setProperties.length}</b></div>
-              {setProperties.length > 0 ? (
-                <div className="grid">
-                  {setProperties.map(({ def, value }) => (
-                    <div key={def.label} className="tile set">
-                      <span className="nm"><span className="dot" />{def.label}<span className="state">set</span></span>
-                      <div className="vl">{value}</div>
+                <div className="cl-entity-v2-prop-group is-set">
+                  <div className="group-head"><span>Set properties</span><b>{setProperties.length}</b></div>
+                  {setProperties.length > 0 ? (
+                    <div className="grid">
+                      {setProperties.map(({ def, value }) => (
+                        <div key={def.label} className="tile set">
+                          <span className="nm"><span className="dot" />{def.label}<span className="state">set</span></span>
+                          <div className="vl">{value}</div>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <div className="empty">No optional properties set.</div>
-              )}
-            </div>
-
-            {unsetProperties.length > 0 && (
-              <div className="cl-agent-v2-prop-group is-unset">
-                <div className="group-head"><span>Unset properties</span><b>{unsetProperties.length}</b></div>
-                <div className="grid compact">
-                  {unsetProperties.map(({ def }) => (
-                    <div key={def.label} className="tile unset">
-                      <span className="nm"><span className="dot" />{def.label}<span className="state">default</span></span>
-                      <div className="vl">{def.blurb}</div>
-                    </div>
-                  ))}
+                  ) : (
+                    <div className="empty">No optional properties set.</div>
+                  )}
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {config.footerNote && (
-          <p style={{ marginTop: 24, fontSize: 11, lineHeight: 1.5, color: 'var(--cl-ink-3)' }}>
-            {config.footerNote}
-          </p>
+            {config.viewExtras}
+          </aside>
         )}
       </section>
     </div>
@@ -329,18 +343,19 @@ function EditWorkbench({
   const charCount = body.length
   const wordCount = body.trim() ? body.trim().split(/\s+/).length : 0
   const paragraphs = body.split(/\n{2,}/).filter(Boolean).length
-  const setDefs = config.optionDefs.filter(d => isOptionSet(state.options[d.key]))
-  const unsetDefs = config.optionDefs.filter(d => !isOptionSet(state.options[d.key]))
-  const hasLeftCol = !!config.hasDescriptionField || config.optionDefs.length > 0
+  // I campi `required` sono sempre "set" (mai tra le available options).
+  const setDefs = config.optionDefs.filter(d => d.required || isOptionSet(state.options[d.key]))
+  const unsetDefs = config.optionDefs.filter(d => !d.required && !isOptionSet(state.options[d.key]))
+  const hasLeftCol = !!config.hasDescriptionField || config.optionDefs.length > 0 || !!config.editExtras
   const colorForTint = config.color ?? (typeof state.options.color === 'string' ? state.options.color : undefined)
   const initial = config.initial ?? initialOf(config.name)
 
   return (
     <div
-      className={'cl-agent-edit-v2' + (hasLeftCol ? '' : ' is-single-col')}
+      className={'cl-entity-edit-v2' + (hasLeftCol ? '' : ' is-single-col')}
       style={entityTint(colorForTint, { neutral: config.neutralTint })}
     >
-      <div className="cl-agent-edit-v2-strip">
+      <div className="cl-entity-edit-v2-strip">
         <div className="crumbs">
           <span className="pip" />
           <span>{config.scopeLabel}</span>
@@ -353,8 +368,8 @@ function EditWorkbench({
         </div>
       </div>
 
-      <section className="cl-agent-edit-v2-head">
-        <span className="cl-agent-edit-v2-orb">{initial}</span>
+      <section className="cl-entity-edit-v2-head">
+        <span className={'cl-entity-edit-v2-orb' + (config.neutralTint ? ' outline' : '')}>{initial}</span>
         <div style={{ minWidth: 0 }}>
           <h1>{config.name}{config.titleGlyph && <span className="ext">{config.titleGlyph}</span>}</h1>
           <div className="label-row">
@@ -369,19 +384,19 @@ function EditWorkbench({
         </div>
       </section>
 
-      <div className="cl-agent-edit-v2-work">
+      <div className="cl-entity-edit-v2-work">
         {hasLeftCol && (
-          <div className="cl-agent-edit-v2-col">
-            <h2><span>Frontmatter</span><b>yaml header</b></h2>
+          <div className="cl-entity-edit-v2-col">
+            <h2 className="title"><span>Frontmatter</span></h2>
 
             {config.hasDescriptionField && (
-              <div className="cl-agent-edit-v2-desc">
+              <div className="cl-entity-edit-v2-desc">
                 <div className="l">Description</div>
                 <textarea
                   className="ed"
                   value={state.description}
                   onChange={e => onChange({ ...state, description: e.target.value })}
-                  rows={2}
+                  rows={4}
                   placeholder="What this is for…"
                 />
               </div>
@@ -393,22 +408,26 @@ function EditWorkbench({
                   <span>Properties</span>
                   <b>{setDefs.length} / {config.optionDefs.length} optional set</b>
                 </h2>
-                <div className="cl-agent-edit-v2-card" style={{ padding: '6px 18px 8px' }}>
-                  <div className="cl-agent-edit-v2-rows">
+                <div className="cl-entity-edit-v2-card rows-card">
+                  <div className="cl-entity-edit-v2-rows">
                     {(config.coreRows ?? []).map(row => (
-                      <div key={row.label} className="opt set core">
+                      <div key={row.label} className="opt core">
                         <span className="nm"><span className="dot" />{row.label}</span>
-                        <span className="vl muted">{row.value}</span>
-                        <span className="cl-opt-ro">read-only</span>
+                        <span className="vl">{row.value}</span>
+                        <span className="ro">read-only</span>
                       </div>
                     ))}
                     {setDefs.map(def => (
                       <div key={def.label} className="opt set">
-                        <span className="nm"><span className="dot" />{def.label}</span>
-                        <span className="vl as-editor">
+                        <div className="opt-head">
+                          <span className="nm"><span className="dot" />{def.label}</span>
+                          {def.required
+                            ? <span className="ro">required</span>
+                            : <button type="button" className="rm" title="Remove property" onClick={() => setOption(def, null)}>✕</button>}
+                        </div>
+                        <div className="opt-ed">
                           <OptionEditor def={def} value={state.options[def.key]} onChange={v => setOption(def, v)} />
-                        </span>
-                        <button type="button" className="plus minus" title="Remove property" onClick={() => setOption(def, null)}>✕</button>
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -420,13 +439,15 @@ function EditWorkbench({
                       <span>Available options</span>
                       <b>{unsetDefs.length} unset</b>
                     </h2>
-                    <div className="cl-agent-edit-v2-card" style={{ padding: '6px 18px 8px' }}>
-                      <div className="cl-agent-edit-v2-rows">
+                    <div className="cl-entity-edit-v2-card rows-card">
+                      <div className="cl-entity-edit-v2-rows">
                         {unsetDefs.map(def => (
-                          <div key={def.label} className="opt">
-                            <span className="nm"><span className="dot" />{def.label}</span>
-                            <span className="vl" title={def.blurb}>{def.blurb}</span>
-                            <button type="button" className="plus" title="Add property" onClick={() => setOption(def, defaultFor(def))}>＋</button>
+                          <div key={def.label} className="opt avail">
+                            <div className="opt-meta">
+                              <span className="nm"><span className="dot" />{def.label}</span>
+                              <span className="blurb">{def.blurb}</span>
+                            </div>
+                            <button type="button" className="add" title="Add property" onClick={() => setOption(def, defaultFor(def))}>＋</button>
                           </div>
                         ))}
                       </div>
@@ -435,13 +456,15 @@ function EditWorkbench({
                 )}
               </>
             )}
+
+            {config.editExtras}
           </div>
         )}
 
-        <div className="cl-agent-edit-v2-col">
-          <h2><span>{config.kind === 'agent' ? 'System prompt' : 'Body'}</span><b>markdown body</b></h2>
+        <div className="cl-entity-edit-v2-col">
+          <h2 className="title"><span>{config.kind === 'agent' ? 'System prompt' : 'Body'}</span><b>markdown body</b></h2>
 
-          <div className="cl-agent-edit-v2-body">
+          <div className="cl-entity-edit-v2-body">
             <div className="bh">
               <span className="dot" />
               <b>Body</b>
@@ -533,7 +556,7 @@ function ConfirmDeleteDialog({
           <button
             type="button"
             className="cl-btn-solid"
-            style={{ background: 'var(--cl-warn)', borderColor: 'var(--cl-warn)' }}
+            style={{ background: 'var(--cl-warn)', borderColor: 'var(--cl-warn)', color: 'var(--cl-on-accent)' }}
             onClick={onConfirm}
             disabled={busy}
           >
@@ -660,21 +683,6 @@ export function EntityDetailView({
 
   const topbarRight = (
     <>
-      {editable && (
-        <span className="cl-vseg">
-          <button
-            type="button"
-            className={mode === 'view' ? 'on' : ''}
-            onClick={() => (mode === 'edit' && dirty ? handleDiscard() : setMode('view'))}
-          >
-            View
-          </button>
-          <button type="button" className={mode === 'edit' ? 'on warm' : ''} onClick={() => setMode('edit')}>
-            Edit
-          </button>
-        </span>
-      )}
-
       {mode === 'view' ? (
         <>
           {config.duplicable && onDuplicate && (
@@ -732,6 +740,24 @@ export function EntityDetailView({
             {saving ? 'Saving…' : 'Save'}
           </button>
         </>
+      )}
+
+      {/* View/Edit toggle pinned last → its right edge stays anchored to the
+          bar margin, so switching modes never shifts it under the cursor.
+          The mode-specific actions above reflow to its left instead. */}
+      {editable && (
+        <span className="cl-vseg">
+          <button
+            type="button"
+            className={mode === 'view' ? 'on' : ''}
+            onClick={() => (mode === 'edit' && dirty ? handleDiscard() : setMode('view'))}
+          >
+            View
+          </button>
+          <button type="button" className={mode === 'edit' ? 'on warm' : ''} onClick={() => setMode('edit')}>
+            Edit
+          </button>
+        </span>
       )}
     </>
   )

@@ -52,7 +52,6 @@ export function AgentDetailView({ agent: initialAgent, project, onBack, onNaviga
     crumbs: [{ label: scope }, { label: agent.name, accent: true }],
     color: agent.color,
     initial: initialOf(agent.name),
-    tapeFeature: true,
     tape: [
       { label: 'Scope', value: scope },
       { label: 'Model', value: agent.model || 'inherit', mono: true },
