@@ -33,12 +33,12 @@ export function ProjectConfigView({ project }: { project: Project }) {
       ) : error ? (
         <div className="cl-empty">Failed to read configuration: {(error as Error).message}</div>
       ) : data ? (
-        <div style={{ maxWidth: 760, marginTop: 22 }}>
-          <GeneralTab cfg={data} q="" />
-          <PermissionsTab cfg={data} q="" />
-          <ToolsTab cfg={data} q="" />
-          <McpTab cfg={data} q="" />
-          <ExtensionsTab cfg={data} q="" />
+        <div style={{ maxWidth: 660, marginTop: 22 }}>
+          <GeneralTab cfg={data} q="" heading />
+          <PermissionsTab cfg={data} q="" heading />
+          <ToolsTab cfg={data} q="" heading />
+          <McpTab cfg={data} q="" heading />
+          <ExtensionsTab cfg={data} q="" heading />
           {/* Sources tab (raw merged tiers + JSON dumps) is intentionally omitted
               here — it's a low-level detail; per-field provenance badges already
               show which file each value comes from. The full Sources view lives

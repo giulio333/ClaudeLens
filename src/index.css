@@ -10270,3 +10270,385 @@ select.cl-opt-input {
   color: var(--cl-ink);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
 }
+
+/* ─────────────────────────────────────────────────────
+   Settings — content panel (right of the tab rail)
+   "Instrument readout / spec sheet": the resolved config
+   read as a precise datasheet. Signature = dotted leaders
+   between each setting and its value + source stamps.
+   Shared building blocks reused by ProjectConfigView.
+   ───────────────────────────────────────────────────── */
+.set-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+.set-panel {
+  max-width: 1040px;
+  padding: 30px 48px 72px;
+}
+
+/* panel header */
+.set-head {
+  padding-bottom: 22px;
+  border-bottom: 1.5px solid var(--cl-ink);
+}
+.set-head-top {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 18px;
+}
+.set-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+}
+.set-eyebrow .pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+}
+.set-head-count {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+}
+.set-title {
+  margin-top: 12px;
+  font-family: var(--font-sans);
+  font-size: 28px;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  color: var(--cl-ink);
+  line-height: 1.05;
+}
+.set-caption {
+  margin-top: 10px;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  max-width: 56ch;
+}
+
+/* sub-block — boxed card so each group of options reads as its own panel */
+.set-block {
+  margin-top: 16px;
+  padding: 16px 22px 18px;
+  border: 1px solid var(--cl-line);
+  border-radius: 16px;
+  background: var(--cl-paper-2);
+}
+.set-block:first-child {
+  margin-top: 24px;
+}
+.set-block-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 14px;
+  margin-bottom: 4px;
+}
+.set-block-head .lbl {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  white-space: nowrap;
+}
+.set-block-head .ct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+}
+.set-block-hint {
+  margin: 2px 0 6px;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+  max-width: 60ch;
+}
+
+/* readout row with dotted leader (the signature) */
+/* two-column datasheet grid for readout rows (uses horizontal space) */
+.set-rows {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  column-gap: 56px;
+}
+.set-row {
+  padding: 13px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+/* inside the 2-col grid the dotted leaders already separate rows — drop borders
+   so the two columns don't show mismatched divider lines */
+.set-rows .set-row {
+  border-bottom: none;
+  padding: 11px 0;
+}
+.set-row.full {
+  grid-column: 1 / -1;
+}
+.set-row-line {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+}
+.set-row .k {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: var(--cl-ink);
+  white-space: nowrap;
+}
+.set-row .leader {
+  flex: 1;
+  min-width: 20px;
+  align-self: stretch;
+  border-bottom: 1.5px dotted var(--cl-line);
+  transform: translateY(-4px);
+}
+.set-row .v {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.set-row .hint {
+  margin-top: 5px;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--cl-ink-4);
+}
+/* stacked variant for long values (paths) */
+.set-row.stack .set-row-line {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+.set-row.stack .leader {
+  display: none;
+}
+.set-row.stack .v {
+  text-align: left;
+  word-break: break-all;
+}
+
+/* source stamp (provenance citation) */
+.set-src {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-violet-ink);
+  background: var(--cl-violet-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
+}
+
+/* value typography */
+.set-val {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--cl-ink);
+}
+.set-val.sm {
+  font-size: 11.5px;
+  color: var(--cl-ink-2);
+}
+.set-pill {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+  border-radius: 999px;
+  padding: 3px 11px;
+}
+.set-dim {
+  font-size: 13px;
+  font-style: italic;
+  color: var(--cl-ink-4);
+}
+
+/* inventory list — tidy aligned columns instead of a ragged chip cloud
+   (tools / skills / subagents / slash commands) */
+.set-inv {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 0 36px;
+  margin-top: 2px;
+}
+.set-inv-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cl-ink-2);
+  border-bottom: 1px solid var(--cl-line-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.set-inv-item::before {
+  content: '';
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+
+/* chip cloud (permission rules — colored, meaningful tones) */
+.set-cloud {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  padding-top: 4px;
+}
+.set-chip {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--cl-ink-2);
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  padding: 5px 9px;
+}
+.set-chip.ok {
+  color: var(--cl-ok);
+  background: var(--cl-task-green-soft);
+}
+.set-chip.warn {
+  color: var(--cl-warn);
+  background: var(--cl-warn-soft);
+}
+.set-chip.danger {
+  color: var(--cl-danger);
+  background: var(--cl-danger-soft);
+}
+
+/* status lines (mcp servers / plugins) */
+.set-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 12px 0;
+}
+.set-line + .set-line {
+  border-top: 1px solid var(--cl-line-soft);
+}
+.set-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--cl-ink-3);
+}
+.set-status .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+
+/* editable cards (appearance + privacy) */
+.set-card {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper);
+}
+/* segmented control (theme picker) — compact, in scale with the datasheet rows */
+.set-seg {
+  display: inline-flex;
+  margin-top: 6px;
+  border: 1px solid var(--cl-line);
+  border-radius: 10px;
+  background: var(--cl-paper);
+  overflow: hidden;
+}
+.set-seg button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 7px 14px;
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--cl-ink-2);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+.set-seg button + button {
+  border-left: 1px solid var(--cl-line);
+}
+.set-seg button svg {
+  width: 14px;
+  height: 14px;
+}
+.set-seg button:hover {
+  color: var(--cl-ink);
+}
+.set-seg button.on {
+  background: var(--cl-accent-soft);
+  color: var(--cl-accent-ink);
+  font-weight: 600;
+}
+
+/* ledger (privacy) */
+.set-ledger {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.set-ledger li {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--cl-ink-2);
+}
+
+.set-banner {
+  border-radius: 10px;
+  padding: 10px 14px;
+  margin-bottom: 8px;
+  background: var(--cl-warn-soft);
+  border: 1px solid var(--cl-line);
+  color: var(--cl-ink-2);
+  font-size: 12.5px;
+}
+
+.set-foot {
+  margin-top: 40px;
+  padding-top: 18px;
+  border-top: 1px solid var(--cl-line-soft);
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+}
