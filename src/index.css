@@ -7599,6 +7599,50 @@ button.cl-task-group-head:disabled {
   font-weight: 500;
 }
 
+/* Dense, single-line "file row" variant (skill supporting files): smaller
+   glyph, name left, size right — reads like a file manager instead of a card. */
+.cl-tile--file {
+  padding-top: 13px;
+  padding-bottom: 13px;
+  gap: 14px;
+  align-items: center;
+  grid-template-columns: 28px 1fr auto;
+}
+.cl-tile-grid--list .cl-tile--file {
+  padding-top: 13px;
+  padding-bottom: 13px;
+}
+.cl-tile--file .glyph {
+  width: 26px;
+  height: 26px;
+  border-width: 1px;
+  font-size: 11px;
+  color: var(--cl-ink-3);
+}
+.cl-tile--file .t-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  font-family: var(--font-mono);
+  letter-spacing: -0.01em;
+}
+.cl-tile--file .t-meta {
+  align-self: center;
+}
+
+/* Below this width the 2-col tile grid is too cramped to read; collapse to a
+   single column and drop the inter-column divider/padding. */
+@media (max-width: 720px) {
+  .cl-tile-grid {
+    grid-template-columns: 1fr;
+  }
+  .cl-tile:nth-child(odd),
+  .cl-tile:nth-child(even) {
+    padding-left: 0;
+    padding-right: 0;
+    border-right: none;
+  }
+}
+
 /* MCP big cards */
 .cl-mcp-row {
   display: grid;
@@ -8144,6 +8188,35 @@ button.cl-task-group-head:disabled {
   color: var(--cl-ink-4);
   font-size: 13px;
   font-family: var(--font-mono);
+}
+
+/* ── Skill explorer: supporting files grouped by role ── */
+.cl-skill-ref-tag {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--cl-accent);
+  border: 1px solid color-mix(in srgb, var(--cl-accent) 40%, transparent);
+  border-radius: 4px;
+  padding: 1px 5px;
+  flex-shrink: 0;
+}
+.cl-skill-file-editor {
+  width: 100%;
+  min-height: 60vh;
+  resize: vertical;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  color: var(--cl-ink-1);
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  padding: 16px;
+  white-space: pre;
+  overflow: auto;
+  tab-size: 2;
 }
 
 /* ════════════════════════════════════════════════════════════════════════

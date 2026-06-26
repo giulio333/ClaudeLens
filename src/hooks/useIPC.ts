@@ -20,6 +20,8 @@ import type {
   Agent,
   AgentInput,
   Skill,
+  SkillFile,
+  SkillFileRole,
   SkillInput,
   InstalledPlugin,
   PluginCommand,
@@ -62,6 +64,8 @@ export type {
   Agent,
   AgentInput,
   Skill,
+  SkillFile,
+  SkillFileRole,
   SkillInput,
   InstalledPlugin,
   PluginCommand,
@@ -237,6 +241,9 @@ declare global {
         getGlobal: () => Promise<IpcResult<Skill[]>>
         getAll: (realPath: string) => Promise<IpcResult<Skill[]>>
         create: (input: SkillInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
+        readFile: (skillPath: string, relPath: string) => Promise<IpcResult<string>>
+        writeFile: (skillPath: string, relPath: string, content: string) => Promise<IpcResult<null>>
+        openFile: (skillPath: string, relPath: string) => Promise<IpcResult<null>>
       }
       agents: {
         getGlobal: () => Promise<IpcResult<Agent[]>>
@@ -692,6 +699,36 @@ export function useCreateSkill() {
       qc.invalidateQueries({ queryKey: ['skills:global'] })
       qc.invalidateQueries({ queryKey: ['skills:all'] })
     },
+  })
+}
+
+// Lazily read a supporting file's content (only when a bundle file is opened).
+export function useSkillFile(skillPath: string | null, file: SkillFile | null) {
+  return useQuery({
+    queryKey: ['skills:file', skillPath, file?.relPath],
+    queryFn: () => unwrap(window.electronAPI.skills.readFile(skillPath!, file!.relPath)),
+    enabled: skillPath !== null && file !== null && file.isText,
+  })
+}
+
+export function useWriteSkillFile() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ skillPath, relPath, content }: { skillPath: string; relPath: string; content: string }) =>
+      unwrap(window.electronAPI.skills.writeFile(skillPath, relPath, content)),
+    onSuccess: (_data, { skillPath, relPath }) => {
+      qc.invalidateQueries({ queryKey: ['skills:file', skillPath, relPath] })
+      qc.invalidateQueries({ queryKey: ['skills:global'] })
+      qc.invalidateQueries({ queryKey: ['skills:all'] })
+    },
+  })
+}
+
+// Open a non-text supporting file (image/binary) in the OS default app.
+export function useOpenSkillFile() {
+  return useMutation({
+    mutationFn: ({ skillPath, relPath }: { skillPath: string; relPath: string }) =>
+      unwrap(window.electronAPI.skills.openFile(skillPath, relPath)),
   })
 }
 

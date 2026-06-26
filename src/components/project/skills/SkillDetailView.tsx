@@ -1,12 +1,18 @@
-import { Skill, useWriteMarkdownFile, useDeleteMarkdownFile, useGlobalSkills, useAllSkills } from '../../../hooks/useIPC'
+import { useState } from 'react'
+import { Skill, SkillFile, useWriteMarkdownFile, useDeleteMarkdownFile, useGlobalSkills, useAllSkills } from '../../../hooks/useIPC'
 import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView'
 import { SKILL_OPTION_DEFS, readOptions, serializeSkill, initialOf } from '../shared/entityOptions'
+import { SkillExplorer, SkillFileDetail } from './SkillBundle'
+
+type Open = { kind: 'manifest' } | { kind: 'file'; file: SkillFile } | null
 
 export function SkillDetailView({ skill: initialSkill, project, onBack, readOnly = false }: { skill: Skill; project?: { hash: string; realPath: string }; onBack: () => void; readOnly?: boolean }) {
   const write = useWriteMarkdownFile(['skills:global', 'skills:all'])
   const del = useDeleteMarkdownFile(['skills:global', 'skills:all'])
   const { data: globalSkills } = useGlobalSkills()
   const { data: allSkills } = useAllSkills(project?.realPath ?? null)
+  // Landing on the explorer; SKILL.md and supporting files are drills from it.
+  const [open, setOpen] = useState<Open>(null)
   // Re-derive the fresh skill after a save: project skills live in `skills:all`
   // (scoped to the project), global skills in `skills:global`. Without the
   // project-scoped lookup, project skills always fell back to the stale prop.
@@ -15,6 +21,26 @@ export function SkillDetailView({ skill: initialSkill, project, onBack, readOnly
     allSkills?.find(s => s.path === initialSkill.path) ??
     globalSkills?.find(s => s.path === initialSkill.path) ??
     initialSkill
+
+  const back = () => setOpen(null)
+
+  // Supporting-file drill: re-resolve against the fresh skill (sizes/list change
+  // after a save); if it vanished from the bundle, fall back to the explorer.
+  if (open?.kind === 'file') {
+    const liveFile = skill.files?.find(f => f.relPath === open.file.relPath) ?? null
+    if (liveFile) return <SkillFileDetail skill={skill} file={liveFile} onBack={back} readOnly={readOnly} />
+  }
+
+  if (open?.kind !== 'manifest') {
+    return (
+      <SkillExplorer
+        skill={skill}
+        onBack={onBack}
+        onOpenManifest={() => setOpen({ kind: 'manifest' })}
+        onOpenFile={file => setOpen({ kind: 'file', file })}
+      />
+    )
+  }
 
   const scope = skill.scope === 'global' ? 'Global' : skill.scope === 'plugin' ? 'Plugin' : 'Project'
 
@@ -27,8 +53,8 @@ export function SkillDetailView({ skill: initialSkill, project, onBack, readOnly
     description: skill.description,
     eyebrow: 'Skill · markdown manifest',
     kindLabel: 'skill',
-    backLabel: 'Skills',
-    crumbs: [{ label: scope }, { label: skill.name, accent: true }],
+    backLabel: skill.name,
+    crumbs: [{ label: skill.name }, { label: 'SKILL.md', accent: true }],
     neutralTint: true,
     initial: initialOf(skill.name),
     tape: [
@@ -55,9 +81,9 @@ export function SkillDetailView({ skill: initialSkill, project, onBack, readOnly
   return (
     <EntityDetailView
       config={config}
-      onBack={onBack}
+      onBack={back}
       onSave={readOnly ? undefined : async raw => { await write.mutateAsync({ filePath: skill.path, content: raw }) }}
-      onDelete={readOnly ? undefined : async () => { await del.mutateAsync({ filePath: skill.path, pruneEmptyDir: true }) }}
+      onDelete={readOnly ? undefined : async () => { await del.mutateAsync({ filePath: skill.path, pruneEmptyDir: true }); back() }}
     />
   )
 }
