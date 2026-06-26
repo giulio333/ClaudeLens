@@ -138,6 +138,9 @@ interface SafeWritePathOptions {
   // (entità di progetto). Blocca qualunque altro .md sotto la home (es. un README
   // di progetto), restringendo il blast radius all'invariante ~/.claude + .claude/.
   markdownEntityScope?: boolean;
+  // Skip the `.md`-only basename check. Used by skills:* file IPC, which edits
+  // arbitrary supporting files (scripts, json, …) confined via `requireUnder`.
+  allowAnyExtension?: boolean;
 }
 
 // Valida un path fornito dal renderer prima di scriverci/cancellarlo (vedi #14):
@@ -177,7 +180,7 @@ function assertSafeWritePath(filePath: string, opts: SafeWritePathOptions = {}):
   const base = basename(resolved);
   if (opts.allowedBasenames) {
     if (!opts.allowedBasenames.has(base)) throw new Error(`Refusing to write file: ${base}`);
-  } else if (!base.toLowerCase().endsWith('.md')) {
+  } else if (!opts.allowAnyExtension && !base.toLowerCase().endsWith('.md')) {
     throw new Error('Only .md files are allowed');
   }
   return resolved;
@@ -485,6 +488,56 @@ ipcMain.handle(
     }
   }
 );
+
+// Resolve `<dirname(skillPath)>/<relPath>` and confine it to the skill directory.
+// `skillPath` is the skill's SKILL.md absolute path (from the Skill object).
+function resolveSkillFile(skillPath: string, relPath: string): string {
+  const path = require('path') as typeof import('path');
+  if (!relPath || typeof relPath !== 'string' || path.isAbsolute(relPath))
+    throw new Error('Invalid relative path');
+  const skillDir = path.dirname(skillPath);
+  const target = path.resolve(skillDir, relPath);
+  return assertSafeWritePath(target, {
+    requireUnderHome: true,
+    requireUnder: skillDir,
+    allowAnyExtension: true,
+  });
+}
+
+ipcMain.handle('skills:readFile', async (_event, skillPath: string, relPath: string) => {
+  try {
+    const fs = require('fs') as typeof import('fs');
+    const safePath = resolveSkillFile(skillPath, relPath);
+    return ok(fs.readFileSync(safePath, 'utf-8'));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle(
+  'skills:writeFile',
+  async (_event, skillPath: string, relPath: string, content: string) => {
+    try {
+      const fs = require('fs') as typeof import('fs');
+      const safePath = resolveSkillFile(skillPath, relPath);
+      fs.writeFileSync(safePath, content, 'utf-8');
+      return ok(null);
+    } catch (e) {
+      return err(e);
+    }
+  },
+);
+
+ipcMain.handle('skills:openFile', async (_event, skillPath: string, relPath: string) => {
+  try {
+    const safePath = resolveSkillFile(skillPath, relPath);
+    const error = await shell.openPath(safePath);
+    if (error) throw new Error(error);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
 
 ipcMain.handle('claudeMd:deleteGlobal', async () => {
   try {

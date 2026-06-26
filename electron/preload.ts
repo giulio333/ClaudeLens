@@ -102,6 +102,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGlobal: () => ipcRenderer.invoke('skills:getGlobal'),
     getAll: (realPath: string) => ipcRenderer.invoke('skills:getAll', realPath),
     create: (input: object, projectPath?: string) => ipcRenderer.invoke('skills:create', input, projectPath),
+    readFile: (skillPath: string, relPath: string) => ipcRenderer.invoke('skills:readFile', skillPath, relPath),
+    writeFile: (skillPath: string, relPath: string, content: string) => ipcRenderer.invoke('skills:writeFile', skillPath, relPath, content),
+    openFile: (skillPath: string, relPath: string) => ipcRenderer.invoke('skills:openFile', skillPath, relPath),
   },
   agents: {
     getGlobal: () => ipcRenderer.invoke('agents:getGlobal'),

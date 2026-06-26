@@ -251,6 +251,22 @@ export interface Agent {
   color?: string
 }
 
+/** Role buckets used to group a skill's supporting files in the UI. */
+export type SkillFileRole = 'doc' | 'script' | 'template' | 'asset' | 'extension' | 'eval' | 'meta'
+
+/** A supporting file bundled alongside SKILL.md (content loaded lazily). */
+export interface SkillFile {
+  /** Path relative to the skill directory (POSIX-style, e.g. `references/api.md`). */
+  relPath: string
+  role: SkillFileRole
+  /** True when the file is linked from SKILL.md (first-class, intentional). */
+  referenced: boolean
+  /** Size in bytes. */
+  size: number
+  /** Editable as text in-app; false for images/binaries (preview only). */
+  isText: boolean
+}
+
 export interface Skill {
   name: string
   path: string
@@ -266,6 +282,8 @@ export interface Skill {
   context?: string
   agent?: string
   hooks?: Record<string, unknown>
+  /** Supporting files bundled alongside SKILL.md (empty for bare skills). */
+  files?: SkillFile[]
 }
 
 /** A slash command provided by a plugin (`<installPath>/commands/*.md`). */
