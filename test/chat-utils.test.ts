@@ -427,6 +427,66 @@ describe('correlateSessionAgents', () => {
     ]);
     expect(correlateSessionAgents(processed, [])).toHaveLength(0);
   });
+
+  // ── runState: backgrounded vs synchronous lifecycle ──
+  // The harness writes "Async agent launched…" as a backgrounded dispatch's
+  // tool_result (just an ack), then reports completion later via a separate
+  // <task-notification> carrying the dispatch's tool-use-id.
+  const taskNotification = (toolUseId: string, status: string) =>
+    text(
+      `<task-notification>\n<task-id>job-${toolUseId}</task-id>\n<tool-use-id>${toolUseId}</tool-use-id>\n<status>${status}</status>\n<summary>Agent "x" finished</summary>\n</task-notification>`
+    );
+
+  it('marks a synchronous agent done from its result', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'sync' })]),
+      msg('user', [toolResult('t1', 'here is the answer')]),
+    ]);
+    expect(correlateSessionAgents(processed, [])[0].runState).toBe('done');
+  });
+
+  it('keeps a backgrounded agent running until its completion notification arrives', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'bg' })]),
+      msg('user', [toolResult('t1', 'Async agent launched successfully.\nagentId: job-t1')]),
+    ]);
+    expect(correlateSessionAgents(processed, [])[0].runState).toBe('running');
+  });
+
+  it('flips a backgrounded agent to done when its task-notification lands', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'bg' })]),
+      msg('user', [toolResult('t1', 'Async agent launched successfully.')]),
+      msg('user', [taskNotification('t1', 'completed')]),
+    ]);
+    const a = correlateSessionAgents(processed, [])[0];
+    expect(a.runState).toBe('done');
+    expect(a.isError).toBe(false);
+  });
+
+  it('flips a backgrounded agent to failed on a failed task-notification', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'bg' })]),
+      msg('user', [toolResult('t1', 'Async agent launched successfully.')]),
+      msg('user', [taskNotification('t1', 'failed')]),
+    ]);
+    const a = correlateSessionAgents(processed, [])[0];
+    expect(a.runState).toBe('failed');
+    expect(a.isError).toBe(true);
+  });
+
+  it('matches the completion to the right dispatch by tool-use-id', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'first' })]),
+      msg('user', [toolResult('t1', 'Async agent launched successfully.')]),
+      msg('assistant', [toolUse('t2', 'Task', { subagent_type: 'Explore', prompt: 'second' })]),
+      msg('user', [toolResult('t2', 'Async agent launched successfully.')]),
+      // only the first one has finished
+      msg('user', [taskNotification('t1', 'completed')]),
+    ]);
+    const agents = correlateSessionAgents(processed, []);
+    expect(agents.map(a => a.runState)).toEqual(['done', 'running']);
+  });
 });
 
 // Skill expansion message Claude Code injects right after a skill slash command.

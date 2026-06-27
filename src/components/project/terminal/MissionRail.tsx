@@ -1,5 +1,6 @@
 import { CSSProperties, ReactNode, useCallback, useMemo, useState } from 'react';
 import {
+  useActiveSessions,
   useAllSkills,
   useChatSession,
   useEffectiveConfig,
@@ -626,7 +627,14 @@ function OpenDefGlyph() {
 
 /** One agent row inside the AGENTS bento card. The row opens the full transcript
  *  (when one exists on disk); a trailing button deep-links to the agent's
- *  definition when its `subagent_type` resolves to a known agent. */
+ *  definition when its `subagent_type` resolves to a known agent.
+ *
+ *  State (a.runState): a *backgrounded* agent shows `running` (violet pulse) from
+ *  dispatch until its harness completion notification arrives, then flips to
+ *  `done`/`failed`. A synchronous agent is done/failed from its result. (Detail:
+ *  the foreground dispatch tool_use + its tool_result are persisted in one flush,
+ *  so for an async agent the result is only the "launched" ack — the real
+ *  completion is the matched <task-notification>.) */
 function AgentRow({
   a,
   def,
@@ -638,8 +646,14 @@ function AgentRow({
   onOpenTranscript: () => void;
   onOpenDef: (agent: Agent) => void;
 }) {
-  const failed = a.isError;
+  const running = a.runState === 'running';
+  const failed = a.runState === 'failed';
   const canTranscript = !!a.agentId;
+  const statusColor = running
+    ? 'var(--cl-violet)'
+    : failed
+      ? 'var(--cl-danger)'
+      : 'var(--cl-ok)';
   return (
     <div
       className="tmc-row flex items-center"
@@ -653,7 +667,7 @@ function AgentRow({
         type="button"
         className="flex items-center min-w-0 flex-1 text-left disabled:opacity-60"
         disabled={!canTranscript}
-        title={canTranscript ? 'Open the agent transcript' : 'Transcript not on disk yet'}
+        title={canTranscript ? 'Open the agent transcript' : running ? 'Agent is running…' : 'Transcript not on disk yet'}
         onClick={onOpenTranscript}
         style={{
           gap: 11,
@@ -663,12 +677,29 @@ function AgentRow({
           cursor: canTranscript ? 'pointer' : 'default',
         }}
       >
-        <span
-          aria-hidden
-          className="font-mono shrink-0 inline-flex items-center justify-center"
-          style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
-        >
-          A
+        {/* avatar + status pip: pip pulses while running, solid when done/failed */}
+        <span className="shrink-0 relative inline-flex" style={{ width: 26, height: 26 }}>
+          <span
+            aria-hidden
+            className="font-mono inline-flex items-center justify-center"
+            style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
+          >
+            A
+          </span>
+          <span
+            aria-hidden
+            className={running ? 'cl-run-dot' : undefined}
+            style={{
+              position: 'absolute',
+              right: -3,
+              bottom: -3,
+              width: 10,
+              height: 10,
+              borderRadius: '50%',
+              background: statusColor,
+              border: '2px solid var(--cl-paper)',
+            }}
+          />
         </span>
         <span className="min-w-0 flex-1">
           <span style={{ display: 'block', font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}>
@@ -681,20 +712,32 @@ function AgentRow({
             {a.description || a.prompt}
           </span>
         </span>
-        {a.messageCount != null && (
+        {running ? (
           <span
-            className="font-mono shrink-0"
-            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap', marginLeft: 8 }}
+            className="font-mono shrink-0 inline-flex items-center"
+            style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--cl-violet-ink)', whiteSpace: 'nowrap', marginLeft: 8 }}
           >
-            <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b> MSGS
+            <span className="cl-run-dot" aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }} />
+            WORKING
           </span>
-        )}
-        {failed && (
+        ) : failed ? (
           <span
             className="font-mono shrink-0"
             style={{ fontSize: 10, fontWeight: 700, color: 'var(--cl-danger)', marginLeft: 8 }}
           >
             FAILED
+          </span>
+        ) : (
+          <span
+            className="font-mono shrink-0 inline-flex items-center"
+            style={{ gap: 6, fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap', marginLeft: 8 }}
+          >
+            <span style={{ color: 'var(--cl-ok)', fontWeight: 700 }}>✓ DONE</span>
+            {a.messageCount != null && (
+              <span>
+                <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{a.messageCount}</b> MSGS
+              </span>
+            )}
           </span>
         )}
       </button>
@@ -733,6 +776,7 @@ function AgentsCard({
   onOpenAgent: (agent: SessionAgent) => void;
   onOpenAgentDef: (agent: Agent) => void;
 }) {
+  const runningCount = agents.filter(a => a.runState === 'running').length;
   return (
     <div
       style={{
@@ -753,6 +797,15 @@ function AgentsCard({
         <span style={{ font: '700 13px/1 var(--font-sans)', color: 'var(--cl-violet-ink)' }}>
           {agents.length}
         </span>
+        {runningCount > 0 && (
+          <span
+            className="font-mono inline-flex items-center"
+            style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--cl-violet-ink)' }}
+          >
+            <span className="cl-run-dot" aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }} />
+            {runningCount} WORKING
+          </span>
+        )}
         <span style={{ flex: 1 }} />
         <AgentAvatars n={agents.length} />
       </div>
@@ -920,6 +973,17 @@ export function MissionRail({
     for (const a of projectAgents ?? []) byName.set(a.name, a);
     return (subagentType: string) => byName.get(subagentType);
   }, [globalAgents, projectAgents]);
+
+  // Live activity of *this* CLI session, from the registry (busy/idle/waiting) —
+  // the one signal that updates in real time. The persisted transcript records a
+  // sub-agent only once it has finished (dispatch + result share one flush), so
+  // it can't say "working now"; the parent session's status can. Shown in the
+  // header so the user sees "a session is working / waiting / idle" live.
+  const { data: activeSessions } = useActiveSessions();
+  const liveStatus = useMemo(
+    () => activeSessions?.find(s => s.sessionId === sessionId)?.status,
+    [activeSessions, sessionId]
+  );
 
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [expandedTasks, setExpandedTasks] = useState<Set<string>>(new Set());
@@ -1138,12 +1202,26 @@ export function MissionRail({
         style={{ left: -3, width: 7, cursor: 'col-resize', zIndex: 10 }}
       />
 
-      {/* fixed header */}
+      {/* fixed header — the live-status dot + label reflect THIS session's
+          registry status (the only real-time "is it working now" signal): busy →
+          violet working pulse, waiting → terracotta, idle → green, offline → grey. */}
       <div className="shrink-0 flex items-center gap-2" style={{ padding: '16px 22px 12px' }}>
         <span
           aria-hidden
-          className="cl-live-dot"
-          style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-ok)' }}
+          className={liveStatus === 'busy' ? 'cl-run-dot' : liveStatus ? 'cl-live-dot' : undefined}
+          style={{
+            width: 7,
+            height: 7,
+            borderRadius: '50%',
+            background:
+              liveStatus === 'busy'
+                ? 'var(--cl-violet)'
+                : liveStatus === 'waiting'
+                  ? 'var(--cl-accent)'
+                  : liveStatus
+                    ? 'var(--cl-ok)'
+                    : 'var(--cl-ink-4)',
+          }}
         />
         <span
           className="font-mono"
@@ -1151,6 +1229,24 @@ export function MissionRail({
         >
           MISSION CONTROL
         </span>
+        {liveStatus && (
+          <span
+            className="font-mono"
+            style={{
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.14em',
+              color:
+                liveStatus === 'busy'
+                  ? 'var(--cl-violet-ink)'
+                  : liveStatus === 'waiting'
+                    ? 'var(--cl-accent-ink)'
+                    : 'var(--cl-ink-4)',
+            }}
+          >
+            {liveStatus === 'busy' ? 'WORKING' : liveStatus === 'waiting' ? 'WAITING' : 'IDLE'}
+          </span>
+        )}
         {sessionId && (
           <span
             className="font-mono"

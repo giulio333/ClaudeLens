@@ -204,6 +204,23 @@ body {
   }
 }
 
+/* "Working" pulse for a running sub-agent in the Mission Control rail — violet
+   (the rail's agent hue) so it reads as activity, not the green "live/ok". */
+.cl-run-dot {
+  animation: cl-run-pulse 1.5s ease-out infinite;
+}
+@keyframes cl-run-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--cl-violet) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px color-mix(in oklch, var(--cl-violet) 0%, transparent);
+  }
+  100% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--cl-violet) 0%, transparent);
+  }
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    APP SHELL
    ════════════════════════════════════════════════════════════════════════ */
