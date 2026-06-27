@@ -6387,6 +6387,90 @@ body {
   font-family: var(--font-sans);
   font-size: 14px;
 }
+.cl-sec-head .cl-sort-toggle {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  background: none;
+  border: none;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 3px 6px;
+  border-radius: 6px;
+  transition:
+    color 120ms,
+    background 120ms;
+}
+.cl-sec-head .cl-sort-toggle:hover {
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+}
+/* One filter on the left (managed tags), the view control on the right (group by),
+   sharing a single hairline instead of stacking. */
+.cl-mem-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px 28px;
+  flex-wrap: wrap;
+  padding: 10px 0 16px;
+  border-bottom: 1px solid var(--cl-line-soft);
+  margin-bottom: 4px;
+}
+.cl-mem-toolbar > .cl-tagbar {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border-bottom: none;
+}
+.cl-mem-toolbar .cl-mem-groupby {
+  margin: 0 0 0 auto;
+  flex: 0 0 auto;
+}
+.cl-mem-groupby {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 2px 0 18px;
+}
+.cl-mem-groupby .lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  margin-right: 4px;
+}
+.cl-mem-group {
+  margin-bottom: 30px;
+}
+.cl-mem-group-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  margin: 0 0 14px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-mem-group-head .lbl {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-ink-2);
+}
+.cl-mem-group-head .ct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-4);
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    TASKS — grouped task list (rail + status pills)
@@ -7597,6 +7681,21 @@ button.cl-task-group-head:disabled {
 .cl-tile .t-meta b {
   color: var(--cl-ink-2);
   font-weight: 500;
+}
+/* Memory tiles stack the type badge over the creation date, so the date-sorted
+   grid reads in order despite the two-column zig-zag. */
+.cl-tile .t-meta.cl-tile-meta--mem {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  text-align: right;
+}
+.cl-tile .cl-tile-meta--mem .when {
+  color: var(--cl-ink-4);
+  font-weight: 400;
+  font-size: 10px;
+  letter-spacing: 0.02em;
 }
 
 /* Dense, single-line "file row" variant (skill supporting files): smaller
