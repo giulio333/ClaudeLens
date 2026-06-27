@@ -1,7 +1,10 @@
 import {
   buildProcessedMessages,
+  buildRenderItems,
+  computeFilterCounts,
   correlateSessionAgents,
   correlateSessionSkills,
+  describeTurn,
   skillInitial,
   skillHasViewableOutput,
   isSkillLaunchOutput,
@@ -564,6 +567,62 @@ describe('correlateSessionSkills', () => {
       msg('user', [toolResult('skill-1', 'Launching skill: document-skills:pdf')]),
     ]);
     expect(correlateSessionSkills(processed, [])[0].skill).toBeNull();
+  });
+});
+
+describe('buildRenderItems', () => {
+  it('folds a minimal-mode tool-only run into the preceding assistant turn', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [text('Working on it')]),
+      msg('assistant', [toolUse('t1', 'Bash', { command: 'ls' })]),
+      msg('user', [toolResult('t1', 'out')]),
+    ]);
+    const descriptors = processed.map(p => describeTurn(p, 'minimal'));
+    const items = buildRenderItems(processed, descriptors);
+    // The tool-only turn collapses into the assistant turn's "tools hidden" chip.
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'turn', idx: 0, hiddenCount: 1 });
+  });
+
+  it('keeps a leading tool-only run as a standalone badge', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Read', { file_path: '/a.ts' })]),
+      msg('user', [toolResult('t1', 'data')]),
+    ]);
+    const descriptors = processed.map(p => describeTurn(p, 'minimal'));
+    const items = buildRenderItems(processed, descriptors);
+    expect(items).toHaveLength(1);
+    expect(items[0]).toMatchObject({ kind: 'tools', count: 1 });
+    // The touched file is carried on the badge for the file chips.
+    expect(items[0].kind === 'tools' && items[0].files.map(f => f.path)).toEqual(['/a.ts']);
+  });
+
+  it('renders tool turns as their own rows in full mode (no folding)', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [text('Working on it')]),
+      msg('assistant', [toolUse('t1', 'Bash', { command: 'ls' })]),
+      msg('user', [toolResult('t1', 'out')]),
+    ]);
+    const descriptors = processed.map(p => describeTurn(p, 'all'));
+    const items = buildRenderItems(processed, descriptors);
+    expect(items.map(i => i.kind)).toEqual(['turn', 'turn']);
+  });
+});
+
+describe('computeFilterCounts', () => {
+  it('counts visible turns by type', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('hello')]),
+      msg('assistant', [text('hi'), toolUse('t1', 'Bash', { command: 'ls' })]),
+      msg('user', [toolResult('t1', 'out')]),
+    ]);
+    const visible = processed.map(p => describeTurn(p, 'all')).filter(d => d.visible);
+    const counts = computeFilterCounts(visible);
+    expect(counts.all).toBe(2);
+    expect(counts.tools).toBe(1);
+    expect(counts.thinking).toBe(0);
+    expect(counts.questions).toBe(0);
+    expect(counts.plan).toBe(0);
   });
 });
 
