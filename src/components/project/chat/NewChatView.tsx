@@ -4,7 +4,7 @@ import { TopBar } from '../shared/TopBar'
 import { buildProcessedMessages } from './utils'
 import { ChatComposer } from './ChatComposer'
 import { MessageBubble } from './MessageBubble'
-import { LiveTurn } from './ChatView'
+import { LiveTurn } from './LiveTurn'
 import { useChatAutoScroll } from './useAutoScroll'
 import { trackEvent } from '../../../lib/telemetry'
 

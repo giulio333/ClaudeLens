@@ -351,6 +351,34 @@ export function skillInitial(command: string): string {
   return (seg.match(/[A-Za-z]/)?.[0] ?? 'S').toUpperCase()
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Transcript-view model types — shared between ChatView and its presentational
+// children (the control pill, the minimap). Pure types, no React.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** The transcript type filter exposed in the control pill. */
+export type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan'
+
+/** A navigable turn enriched for the minimap rail (1-based index + clock time). */
+export type MinimapItem = TurnDescriptor & { n: number; time: string }
+
+/** One row in the transcript stream: either a real message turn (optionally
+ *  carrying a run of tool-only turns folded back into it, since their tool_use
+ *  lines are persisted separately), or — when no assistant turn precedes the run
+ *  — a standalone "tools hidden" badge. */
+export type RenderItem =
+  | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
+
+/** The per-type counts that drive the filter chips in the control pill. */
+export type TurnFilterCounts = {
+  all: number
+  tools: number
+  thinking: number
+  questions: number
+  plan: number
+}
+
 export type TurnDescriptor = {
   variant: TurnVariant
   label: string
@@ -793,5 +821,64 @@ export function fileCategoryTint(ext: string): string {
     case 'web': return 'var(--cl-haiku)'
     case 'doc': return 'var(--cl-accent)'
     default: return 'var(--cl-ink-3)'
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Transcript-view derivation — pure helpers that turn the processed messages +
+// their per-turn descriptors into the structures the Focus layout renders (the
+// stream rows, the type-filter counts). No React; unit-tested.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Collapse runs of consecutive tool-only turns into one "tools hidden" entry.
+ *  A run is folded back into the immediately-preceding assistant turn (the tools
+ *  were part of that same response, just persisted on separate lines) so its chip
+ *  rides that turn's header; when no assistant turn precedes it (the run leads the
+ *  conversation, or follows a user turn) it's kept as a standalone badge.
+ *  Non-rendering turns are skipped without breaking a run. */
+export function buildRenderItems(
+  processed: ProcessedMessage[],
+  descriptors: TurnDescriptor[],
+): RenderItem[] {
+  const items: RenderItem[] = []
+  let run: { count: number; firstIdx: number; files: TouchedFile[] } | null = null
+  const flush = () => {
+    if (!run) return
+    const last = items[items.length - 1]
+    if (last?.kind === 'turn' && processed[last.idx]?.msg.role === 'assistant') {
+      last.hiddenCount = (last.hiddenCount ?? 0) + run.count
+      last.hiddenFiles = [...(last.hiddenFiles ?? []), ...run.files]
+    } else {
+      items.push({ kind: 'tools', key: `tools-${run.firstIdx}`, count: run.count, files: run.files })
+    }
+    run = null
+  }
+  descriptors.forEach((d, idx) => {
+    if (d.toolsOnly) {
+      // toolsOnly guarantees the turn holds only standard tools (no question/agent).
+      const groups = processed[idx].toolGroups
+      const files = touchedFiles(groups)
+      if (run) {
+        run.count += groups.length
+        run.files.push(...files)
+      } else run = { count: groups.length, firstIdx: idx, files }
+    } else if (d.visible) {
+      flush()
+      items.push({ kind: 'turn', idx })
+    }
+  })
+  flush()
+  return items
+}
+
+/** Per-type counts for the filter chips — computed over the visible turns so
+ *  "Tools" still reflects collapsed tool-only turns. */
+export function computeFilterCounts(visible: TurnDescriptor[]): TurnFilterCounts {
+  return {
+    all: visible.length,
+    tools: visible.filter(d => d.hasTools).length,
+    thinking: visible.filter(d => d.hasThinking).length,
+    questions: visible.filter(d => d.hasQuestion).length,
+    plan: visible.filter(d => d.hasPlan).length,
   }
 }
