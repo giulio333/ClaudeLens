@@ -4,6 +4,8 @@ import {
   useEffectiveConfig,
   useTelemetryEnabled,
   useSetTelemetryEnabled,
+  useNotifyPrefs,
+  useSetNotifyPref,
   type EffectiveConfig,
 } from '../../../hooks/useIPC'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
@@ -19,7 +21,7 @@ const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PR
 // settings file it came from. Read-only except Appearance + Privacy (ClaudeLens
 // preferences). The tab content renderers are also reused by ProjectConfigView.
 
-type TabId = 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'privacy'
+type TabId = 'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'notifications' | 'privacy'
 
 const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: 'general', label: 'General', icon: <GearIcon /> },
@@ -27,6 +29,7 @@ const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
   { id: 'tools', label: 'Tools', icon: <WrenchIcon /> },
   { id: 'mcp', label: 'MCP Servers', icon: <PlugIcon /> },
   { id: 'extensions', label: 'Extensions', icon: <BlocksIcon /> },
+  { id: 'notifications', label: 'Notifications', icon: <BellIcon /> },
   { id: 'privacy', label: 'Privacy', icon: <LockIcon /> },
 ]
 
@@ -35,6 +38,7 @@ const SDK = 'Resolved via Agent SDK'
 const PREF = 'ClaudeLens preference'
 const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string; ro: boolean }> = {
   privacy: { eyebrow: PREF, title: 'Privacy', caption: 'Anonymous, opt-out usage analytics. Editable here.', ro: false },
+  notifications: { eyebrow: PREF, title: 'Notifications', caption: 'How ClaudeLens alerts you when a session needs you or fails. Editable here.', ro: false },
   general: { eyebrow: 'Appearance & runtime', title: 'General', caption: 'How ClaudeLens looks, and the configuration Claude Code resolves for this scope.', ro: true },
   permissions: { eyebrow: SDK, title: 'Permissions', caption: 'Which tools Claude may run, must ask about, or can never touch.', ro: true },
   tools: { eyebrow: SDK, title: 'Tools', caption: 'Every tool the model can call in this scope.', ro: true },
@@ -114,6 +118,8 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 
             {tab === 'privacy' ? (
               <PrivacyTab />
+            ) : tab === 'notifications' ? (
+              <NotificationsTab />
             ) : (
               <>
                 {/* Appearance lives at the top of General (ClaudeLens preference,
@@ -365,6 +371,42 @@ function PrivacyTab() {
     </>
   )
 }
+
+function NotificationsTab() {
+  const { data, isLoading } = useNotifyPrefs()
+  const setPref = useSetNotifyPref()
+  const enabled = data?.enabled ?? true
+  const os = data?.os ?? true
+  return (
+    <>
+      <Block label="Alerts">
+        <p className="set-block-hint">
+          A transient toast appears when a session is waiting for you (e.g. a permission prompt) or a chat turn fails. When the app is in the background these can also raise a native OS notification and a dock badge.
+        </p>
+        <div className="set-card">
+          <div className="min-w-0">
+            <div style={{ fontSize: 13.5, color: 'var(--cl-ink)', fontWeight: 600 }}>Show notifications</div>
+            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
+              {enabled ? 'On — you’ll be alerted when a session needs attention.' : 'Off — nothing is surfaced.'}
+            </div>
+          </div>
+          <ToggleSwitch checked={enabled} disabled={isLoading || setPref.isPending} onChange={v => setPref.mutate({ key: 'enabled', value: v })} />
+        </div>
+        <div className="set-card">
+          <div className="min-w-0">
+            <div style={{ fontSize: 13.5, color: enabled ? 'var(--cl-ink)' : 'var(--cl-ink-4)', fontWeight: 600 }}>Native OS notifications</div>
+            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
+              {os ? 'On — sent only while ClaudeLens is in the background.' : 'Off — in-app toasts only.'}
+            </div>
+          </div>
+          <ToggleSwitch checked={os} disabled={isLoading || setPref.isPending || !enabled} onChange={v => setPref.mutate({ key: 'os', value: v })} />
+        </div>
+      </Block>
+    </>
+  )
+}
+
+function BellIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.7 21a2 2 0 0 1-3.4 0" /></svg> }
 
 function LedgerItem({ tone, children }: { tone: 'neutral' | 'block'; children: ReactNode }) {
   const color = tone === 'block' ? 'var(--cl-danger)' : 'var(--cl-ok)'

@@ -59,6 +59,7 @@ import { GlobalHomeView } from '../components/project/overview/GlobalHomeView'
 import { DuplicateProjectsView } from '../components/project/overview/DuplicateProjectsNotice'
 import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs'
 import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView'
+import { NotificationToaster } from '../components/NotificationToaster'
 
 type Project = { hash: string; realPath: string }
 
@@ -242,6 +243,20 @@ export default function ProjectOverview() {
   function goLiveAgents() {
     setScope('global')
     setView({ type: 'agents-live' })
+  }
+
+  // "Open session" from a notification toast: deep-link straight into the exact
+  // session (the unified Terminal↔Lens view, defaulting to read-only Lens — the
+  // same teleport as Mission Control), mirroring SearchPopover's onSelectSession.
+  // Resolve the project by its working dir; fall back to deriving the hash from
+  // the cwd (the `/`→`-` convention) when it isn't in the cache yet. Without a
+  // session id, fall back to the project's sessions list.
+  function openSessionFromNotification(cwd: string, sessionId: string) {
+    const project =
+      projects?.find(p => p.realPath === cwd) ?? { hash: cwd.replace(/\//g, '-'), realPath: cwd }
+    setSelected(project)
+    setScope('project')
+    setView(sessionId ? { type: 'terminal', project, resumeSessionId: sessionId } : { type: 'sessions', project })
   }
 
   async function handleConfirmDelete(p: Project) {
@@ -586,6 +601,8 @@ export default function ProjectOverview() {
         onDeleteCurrent={setProjectToDelete}
         onClose={closeSearch}
       />
+
+      <NotificationToaster onOpenSession={(cwd, sessionId) => openSessionFromNotification(cwd, sessionId)} />
     </div>
   )
 }

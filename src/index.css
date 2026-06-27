@@ -10751,3 +10751,93 @@ select.cl-opt-input {
   line-height: 1.5;
   color: var(--cl-ink-4);
 }
+
+/* ─── Notification toaster ────────────────────────────────────────────────
+   Transient session-lifecycle toasts (NotificationToaster.tsx). Bottom-right
+   stack, newest on top. Passive + suggested: a left accent stripe keyed to the
+   kind, an optional "Open session" action, and a dismiss button. */
+.cl-toaster {
+  position: fixed;
+  right: 18px;
+  bottom: 18px;
+  z-index: 1200;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: min(340px, calc(100vw - 36px));
+  pointer-events: none;
+}
+.cl-toast {
+  pointer-events: auto;
+  position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px 12px 12px 16px;
+  border-radius: 12px;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 8px 28px -10px rgba(0, 0, 0, 0.32);
+  overflow: hidden;
+}
+.cl-toast-stripe {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  background: var(--cl-ink-4);
+}
+.cl-toast--needs-attention .cl-toast-stripe { background: var(--cl-accent); }
+.cl-toast--completed .cl-toast-stripe { background: var(--cl-ok); }
+.cl-toast--error .cl-toast-stripe { background: var(--cl-danger); }
+.cl-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+.cl-toast-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--cl-ink);
+  line-height: 1.35;
+}
+.cl-toast-sub {
+  margin-top: 3px;
+  font-size: 12px;
+  color: var(--cl-ink-4);
+  line-height: 1.4;
+  word-break: break-word;
+}
+.cl-toast-action {
+  margin-top: 9px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+  border: 1px solid color-mix(in oklch, var(--cl-accent) 30%, transparent);
+  border-radius: 7px;
+  padding: 4px 10px;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.cl-toast-action:hover {
+  background: color-mix(in oklch, var(--cl-accent-soft) 70%, var(--cl-accent) 18%);
+}
+.cl-toast-close {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  color: var(--cl-ink-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.cl-toast-close:hover {
+  background: var(--cl-line-soft);
+  color: var(--cl-ink);
+}

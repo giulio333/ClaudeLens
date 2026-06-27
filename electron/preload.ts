@@ -148,6 +148,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getAll: () => ipcRenderer.invoke('prefs:getAll'),
     set: (key: string, value: unknown) => ipcRenderer.invoke('prefs:set', key, value),
   },
+  notifications: {
+    onEvent: (cb: (event: unknown) => void) => subscribe('notifications:event', cb),
+    clearBadge: () => ipcRenderer.invoke('notifications:clearBadge'),
+  },
   telemetry: {
     isEnabled: () => ipcRenderer.invoke('telemetry:isEnabled'),
     setEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:setEnabled', enabled),
