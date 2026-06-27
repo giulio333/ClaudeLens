@@ -543,6 +543,12 @@ export type SessionAgent = {
   description: string
   prompt: string
   isError: boolean
+  /** Live lifecycle state. A *backgrounded* agent's dispatch tool_result is just
+   *  an "Async agent launched" ack written at once, so it would otherwise look
+   *  done immediately. We treat an async dispatch as `running` until a harness
+   *  <task-notification> with the matching tool-use-id reports it finished. A
+   *  synchronous (foreground) agent is `done`/`failed` from its real result. */
+  runState: AgentRunState
   /** Correlated transcript metadata, when the subagent file exists. */
   agentId: string | null
   startedAt?: string
@@ -555,12 +561,29 @@ function promptKey(s: string): string {
   return s.replace(/\s+/g, ' ').trim().slice(0, AGENT_PROMPT_PREFIX)
 }
 
+export type AgentRunState = 'running' | 'done' | 'failed'
+
+/** The harness writes this as the dispatch tool_result when an agent is launched
+ *  in the background — the agent then keeps working and reports completion later
+ *  via a separate <task-notification>. */
+const ASYNC_LAUNCH_RE = /^\s*Async agent launched/i
+
 export function correlateSessionAgents(
   processed: ProcessedMessage[],
   metas: SubagentMeta[],
 ): SessionAgent[] {
   const pool = metas.map(m => ({ m, used: false }))
   const agents: SessionAgent[] = []
+
+  // Background-agent completions: a <task-notification> carries the dispatch's
+  // tool-use-id and a final status. Collect them so an async dispatch can flip
+  // from running → done/failed when its completion lands. (A backgrounded agent
+  // may notify more than once on resume; the latest status wins.)
+  const notifByToolUseId = new Map<string, TaskNotification>()
+  for (const p of processed) {
+    const n = p.notification
+    if (n?.toolUseId) notifByToolUseId.set(n.toolUseId, n)
+  }
 
   processed.forEach((p, idx) => {
     p.toolGroups.forEach((g, gi) => {
@@ -581,13 +604,30 @@ export function correlateSessionAgents(
         }
       }
 
+      // Lifecycle:
+      //  - a completion notification for this dispatch wins → done/failed by status;
+      //  - else an async-launch ack with no completion yet → running;
+      //  - else a plain synchronous dispatch → done/failed by its result.
+      const notif = notifByToolUseId.get(g.use.id)
+      const isAsyncLaunch = ASYNC_LAUNCH_RE.test(g.result?.content ?? '')
+      const resultError = g.result?.isError ?? false
+      let runState: AgentRunState
+      if (notif) {
+        runState = /fail|error/i.test(notif.status) ? 'failed' : 'done'
+      } else if (isAsyncLaunch) {
+        runState = 'running'
+      } else {
+        runState = resultError ? 'failed' : 'done'
+      }
+
       agents.push({
         key: `${idx + 1}-${gi}`,
         turnN: idx + 1,
         subagentType,
         description,
         prompt,
-        isError: g.result?.isError ?? false,
+        isError: runState === 'failed',
+        runState,
         agentId: match?.agentId ?? null,
         startedAt: match?.startedAt,
         endedAt: match?.endedAt,
