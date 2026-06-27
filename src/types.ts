@@ -79,6 +79,22 @@ export interface MessageUsage {
   cacheWriteTokens: number
 }
 
+// A normalized session-lifecycle notification pushed from the main process over
+// `notifications:event`. Mirrors electron/modules/notifications/types.ts (the two
+// tsconfigs don't share imports). The renderer renders it as a transient toast.
+export type NotificationKind = 'needs-attention' | 'completed' | 'error'
+
+export interface NotificationEvent {
+  id: string
+  kind: NotificationKind
+  sessionId: string
+  cwd: string
+  title: string
+  body?: string
+  createdAt: number
+  source: 'registry' | 'chat'
+}
+
 // Metadati di un subagent eseguito durante una sessione (transcript interno in
 // `{sessionId}/subagents/agent-*.jsonl`). `firstPrompt` è la chiave con cui il
 // renderer correla il subagente al suo `Task`/`Agent` tool_use nella chat.

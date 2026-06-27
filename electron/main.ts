@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from 'electron';
+import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell } from 'electron';
 import { basename, delimiter, isAbsolute, join, sep } from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
@@ -49,6 +49,18 @@ import {
   resolveClaudeCommand,
 } from './modules/terminal-manager';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
+import {
+  createRegistryDiffState,
+  diffRegistry,
+} from './modules/notifications/registry-diff';
+import {
+  NOTIFY_ENABLED_KEY,
+  NOTIFY_OS_KEY,
+  DEFAULT_NOTIFY_PREFS,
+  type NotificationEvent,
+  type NotificationKind,
+  type NotificationPrefs,
+} from './modules/notifications/types';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
@@ -264,6 +276,76 @@ function safeSend(channel: string, ...args: unknown[]): void {
   }
 }
 
+// ─── Notifications ───────────────────────────────────────────────────────────
+// A small engine that turns session lifecycle into user-facing notifications.
+// The registry source is diffed for transitions (registry-diff.ts); the in-app
+// chat feeds events directly off its existing callbacks. Each event is gated by
+// the user's preferences, always pushed to the renderer (transient toast), and —
+// only when the window is unfocused — mirrored to a native OS notification + a
+// dock badge. See modules/notifications/.
+const registryDiffState = createRegistryDiffState();
+let badgeCount = 0;
+
+function readNotifyPrefs(): NotificationPrefs {
+  const p = readPrefs();
+  return {
+    enabled: typeof p[NOTIFY_ENABLED_KEY] === 'boolean' ? (p[NOTIFY_ENABLED_KEY] as boolean) : DEFAULT_NOTIFY_PREFS.enabled,
+    os: typeof p[NOTIFY_OS_KEY] === 'boolean' ? (p[NOTIFY_OS_KEY] as boolean) : DEFAULT_NOTIFY_PREFS.os,
+  };
+}
+
+function windowFocused(): boolean {
+  return !!mainWindow && !mainWindow.isDestroyed() && mainWindow.isFocused();
+}
+
+// Bring the app to the foreground (clicking an OS notification) and clear the badge.
+function focusMainWindow(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  if (mainWindow.isMinimized()) mainWindow.restore();
+  mainWindow.show();
+  mainWindow.focus();
+}
+
+function clearBadge(): void {
+  badgeCount = 0;
+  if (process.platform === 'darwin' && app.dock) app.dock.setBadge('');
+}
+
+// Gate, push, and (when unfocused) mirror a single notification.
+function emitNotification(event: NotificationEvent): void {
+  const prefs = readNotifyPrefs();
+  if (!prefs.enabled || process.env.SCREENSHOT_MODE) return;
+
+  // The renderer always gets it (transient toast / future inbox).
+  safeSend('notifications:event', event);
+
+  // Native OS notification + dock badge only when the user isn't looking, so a
+  // focused window doesn't double up with the in-app toast (and the chat's own
+  // permission dialog). Honors the OS toggle and platform support.
+  if (prefs.os && !windowFocused() && Notification.isSupported()) {
+    const n = new Notification({ title: event.title, body: event.body ?? '' });
+    n.on('click', focusMainWindow);
+    n.show();
+    if (process.platform === 'darwin' && app.dock) app.dock.setBadge(String(++badgeCount));
+  }
+}
+
+// Feed a fresh registry snapshot through the diff and emit any transitions.
+function notifyFromRegistry(sessions: Awaited<ReturnType<typeof readActiveSessions>>): void {
+  const events = diffRegistry(sessions, registryDiffState, { now: Date.now, mkId: randomUUID });
+  for (const e of events) emitNotification(e);
+}
+
+// Build a chat-source notification. cwd is supplied by the caller (the live
+// session's working dir) so the renderer can offer "Open session". Suppressed
+// when the window is focused: the in-app chat already shows the permission dialog
+// / inline error, so a toast there would just duplicate it. Notifications earn
+// their keep when the user has tabbed away.
+function emitChatNotification(kind: NotificationKind, cwd: string, sessionId: string, title: string, body?: string): void {
+  if (windowFocused()) return;
+  emitNotification({ id: randomUUID(), kind, sessionId, cwd, title, body, createdAt: Date.now(), source: 'chat' });
+}
+
 // Set a Content Security Policy on every response so the renderer (which renders
 // untrusted local Markdown/highlight content) has a second line of defense.
 // Applied via onHeadersReceived so it covers both the file:// build and the dev server.
@@ -325,6 +407,9 @@ function createWindow() {
       sandbox: true,
     },
   });
+
+  // Focusing the window means the user is back: clear any notification dock badge.
+  mainWindow.on('focus', clearBadge);
 
   // Open external links (window.open from Markdown) in the system browser, deny in-app windows
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -640,6 +725,17 @@ ipcMain.handle('prefs:getAll', async () => {
 ipcMain.handle('prefs:set', async (_event, key: string, value: unknown) => {
   try {
     setPref(key, value);
+    return ok(true);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Clear the notification dock badge (renderer calls this when the user dismisses
+// a toast / acts on a notification while the window is already up).
+ipcMain.handle('notifications:clearBadge', async () => {
+  try {
+    clearBadge();
     return ok(true);
   } catch (e) {
     return err(e);
@@ -1159,10 +1255,19 @@ function denyAllPending(message: string): void {
 // Builds the `canUseTool` callback: forwards each request to the renderer and
 // returns a Promise the matching `sessions:permissionResponse` settles. Honors
 // the per-call abort signal by resolving as a denial.
-function makeCanUseTool(event: Electron.IpcMainInvokeEvent): CanUseTool {
+function makeCanUseTool(event: Electron.IpcMainInvokeEvent, cwd: string): CanUseTool {
   return (toolName, input, options) =>
     new Promise<PermissionResult>(resolve => {
       const requestId = randomUUID();
+      // The turn is now blocked on the user. Surface a notification when the app
+      // is in the background (no-op when focused — the dialog below is enough).
+      emitChatNotification(
+        'needs-attention',
+        cwd,
+        currentChatSession?.sessionId ?? '',
+        'Claude is waiting for your approval',
+        options.title || options.displayName || toolName
+      );
       // A dedup-guarded resolver: the first of {user response, abort, supersede}
       // to fire wins, the rest are no-ops.
       const settle = (r: PermissionResult) => {
@@ -1212,6 +1317,9 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
     onMessage: message => send('sessions:chatMessage', message),
     onError: message => {
       send('sessions:chatError', message);
+      // Surface the failure as a notification when the app is backgrounded (the
+      // composer shows it inline when focused, so emitChatNotification no-ops there).
+      emitChatNotification('error', params.cwd, session.sessionId, 'A chat turn failed', message);
       // A turn that errors out leaves any tool-approval requests it raised
       // dangling — their canUseTool Promises never settle, leaking the resolvers
       // and risking a stale dialog next turn. Deny them so the SDK unblocks and
@@ -1298,7 +1406,7 @@ ipcMain.handle(
       resume: sessionId,
       model,
       permissionMode: mode,
-      canUseTool: makeCanUseTool(event),
+      canUseTool: makeCanUseTool(event, realPath),
       env: claudeEnv(),
     });
     currentChatSession.send(message);
@@ -1338,7 +1446,7 @@ ipcMain.handle(
       sessionId: id,
       model,
       permissionMode: asPermissionMode(permissionMode),
-      canUseTool: makeCanUseTool(event),
+      canUseTool: makeCanUseTool(event, realPath),
       env: claudeEnv(),
     });
     currentChatSession.send(message);
@@ -1613,6 +1721,8 @@ async function startWatcher() {
       try {
         const sessions = await readActiveSessions();
         safeSend('live:activeSessions', sessions);
+        // Same fresh snapshot also feeds the notification diff (transitions only).
+        notifyFromRegistry(sessions);
       } catch {
         /* lettura fallita: il refetch periodico del renderer copre il buco */
       }

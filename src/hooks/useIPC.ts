@@ -42,6 +42,7 @@ import type {
   PermissionRequest,
   PermissionDecision,
   ToolActivity,
+  NotificationEvent,
 } from '../types'
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -277,6 +278,10 @@ declare global {
       prefs: {
         getAll: () => Promise<IpcResult<Record<string, unknown>>>
         set: (key: string, value: unknown) => Promise<IpcResult<boolean>>
+      }
+      notifications: {
+        onEvent: (cb: (event: NotificationEvent) => void) => () => void
+        clearBadge: () => Promise<IpcResult<boolean>>
       }
       telemetry: {
         isEnabled: () => Promise<IpcResult<boolean>>
@@ -527,6 +532,46 @@ export function useSetTelemetryEnabled() {
     mutationFn: (enabled: boolean) => unwrap(window.electronAPI.telemetry.setEnabled(enabled)),
     onSuccess: (_data, enabled) => {
       qc.setQueryData(['telemetry:enabled'], enabled)
+    },
+  })
+}
+
+// Notification preferences (master switch + OS-mirror toggle). Persisted in
+// ~/.claudelens/preferences.json via the generic prefs store; the main process
+// reads them live when gating each notification (instant, no restart).
+export interface NotifyPrefs {
+  enabled: boolean
+  os: boolean
+}
+const NOTIFY_ENABLED_KEY = 'cl-notify-enabled'
+const NOTIFY_OS_KEY = 'cl-notify-os'
+
+export function useNotifyPrefs() {
+  return useQuery({
+    queryKey: ['prefs:notify'],
+    queryFn: async (): Promise<NotifyPrefs> => {
+      const all = await unwrap(window.electronAPI.prefs.getAll())
+      return {
+        enabled: typeof all[NOTIFY_ENABLED_KEY] === 'boolean' ? (all[NOTIFY_ENABLED_KEY] as boolean) : true,
+        os: typeof all[NOTIFY_OS_KEY] === 'boolean' ? (all[NOTIFY_OS_KEY] as boolean) : true,
+      }
+    },
+    staleTime: Infinity,
+  })
+}
+
+export function useSetNotifyPref() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ key, value }: { key: 'enabled' | 'os'; value: boolean }) =>
+      unwrap(window.electronAPI.prefs.set(key === 'enabled' ? NOTIFY_ENABLED_KEY : NOTIFY_OS_KEY, value)),
+    onSuccess: (_data, { key, value }) => {
+      qc.setQueryData(['prefs:notify'], (prev: NotifyPrefs | undefined) => ({
+        enabled: true,
+        os: true,
+        ...prev,
+        [key]: value,
+      }))
     },
   })
 }
