@@ -11,13 +11,10 @@ export function trackEvent(name: string, props?: Record<string, string | number>
   window.electronAPI?.telemetry?.track(name, props).catch(() => {})
 }
 
-// `view_opened` fires once per distinct view per app run (not on every
-// navigation), so it maps which sections people use without flooding the event
-// budget. The Set lives for the lifetime of the renderer (resets on restart).
-const reportedViews = new Set<string>()
-
+// `view_opened` fires on EVERY navigation to a view (no per-run dedup) while the
+// user base is small, so we can see real navigation patterns — which sections
+// people open and how often, not just which they touched once. Re-introduce
+// once-per-run dedup later if volume grows.
 export function reportViewOpened(view: string): void {
-  if (reportedViews.has(view)) return
-  reportedViews.add(view)
   trackEvent('view_opened', { view })
 }
