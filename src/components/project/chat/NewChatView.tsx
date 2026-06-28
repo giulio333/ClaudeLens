@@ -20,10 +20,12 @@ import { trackEvent } from '../../../lib/telemetry'
  *  (`liveMessages`), run through the same processing pipeline as a real session,
  *  with a trailing `LiveTurn` for the assistant text still streaming in.
  *
- *  The summary is intentionally minimal (zeroed token/cost fields): `ChatView`
- *  loads the actual transcript from disk via `useChatSession`, and the file
+ *  The summary is intentionally minimal (zeroed token/cost fields): the file
  *  watcher refetches the sessions list so the real metadata fills in. We seed
- *  `firstUserMessage` from the sent text purely so the title isn't "Untitled". */
+ *  `firstUserMessage` from the sent text purely so the title isn't "Untitled".
+ *  We also hand `ChatView` the turn we just streamed (`initialMessages`) so it
+ *  paints the finished turn immediately — stream as the source of truth, no disk
+ *  read on mount and so no mid-write flash. */
 export function NewChatView({
   project,
   onBack,
@@ -31,7 +33,7 @@ export function NewChatView({
 }: {
   project: { hash: string; realPath: string }
   onBack: () => void
-  onCreated: (session: SessionSummary) => void
+  onCreated: (session: SessionSummary, initialMessages: ChatMessage[]) => void
 }) {
   // Captured during the turn, read on completion (closures over state would be
   // stale inside the composer's done handler).
@@ -137,21 +139,40 @@ export function NewChatView({
             // would navigate to a transcript that may not exist on disk,
             // hiding the composer's error. Stay put instead.
             if (!id || liveMessagesRef.current.length === 0) return
+            const filename = `${id}.jsonl`
+
+            // Hand ChatView the turn we just streamed so it paints immediately —
+            // stream as the source of truth, no disk read on mount and so no
+            // mid-write flash. The SDK doesn't echo the prompt, so materialize the
+            // user bubble (fresh uuid) ahead of the streamed messages.
+            const initialMessages: ChatMessage[] = [
+              {
+                uuid: crypto.randomUUID(),
+                role: 'user',
+                timestamp: pendingAt,
+                content: [{ type: 'text', text: firstMessageRef.current }],
+              },
+              ...liveMessagesRef.current,
+            ]
+
             trackEvent('chat_started')
-            onCreated({
-              filename: `${id}.jsonl`,
-              date: new Date().toISOString(),
-              inputTokens: 0,
-              outputTokens: 0,
-              cacheWriteTokens: 0,
-              cacheReadTokens: 0,
-              totalTokens: 0,
-              estimatedCost: 0,
-              cacheSavings: 0,
-              messageCount: 0,
-              models: {},
-              firstUserMessage: firstMessageRef.current,
-            })
+            onCreated(
+              {
+                filename,
+                date: new Date().toISOString(),
+                inputTokens: 0,
+                outputTokens: 0,
+                cacheWriteTokens: 0,
+                cacheReadTokens: 0,
+                totalTokens: 0,
+                estimatedCost: 0,
+                cacheSavings: 0,
+                messageCount: 0,
+                models: {},
+                firstUserMessage: firstMessageRef.current,
+              },
+              initialMessages
+            )
           }}
         />
       </div>

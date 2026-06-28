@@ -1,4 +1,4 @@
-import { ClaudeMdLayer, SessionSummary, MemoryTopic, Skill, Agent, McpServer, Plan, InstalledPlugin } from '../../hooks/useIPC'
+import { ClaudeMdLayer, SessionSummary, MemoryTopic, Skill, Agent, McpServer, Plan, InstalledPlugin, ChatMessage } from '../../hooks/useIPC'
 
 export type View =
   | { type: 'global-home' }
@@ -25,7 +25,7 @@ export type View =
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }
   | { type: 'analytics'; project: { hash: string; realPath: string } }
-  | { type: 'chat'; project: { hash: string; realPath: string }; session: SessionSummary; from?: 'agents-live' | 'sessions' }
+  | { type: 'chat'; project: { hash: string; realPath: string }; session: SessionSummary; from?: 'agents-live' | 'sessions'; initialMessages?: ChatMessage[] }
   | { type: 'new-chat'; project: { hash: string; realPath: string } }
   | { type: 'terminal'; project: { hash: string; realPath: string }; resumeSessionId?: string; attachJobId?: string; from?: 'agents-live' }
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }

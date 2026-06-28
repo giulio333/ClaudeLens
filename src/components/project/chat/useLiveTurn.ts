@@ -1,26 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ChatMessage, ToolActivity } from '../../../hooks/useIPC';
 
-// The bare command name from a slash prompt the user sent (e.g. "/context …" →
-// "context"); null when the prompt isn't a slash command.
-function slashCommandOf(prompt: string): string | null {
-  const m = /^\/([\w:-]+)/.exec(prompt.trim());
-  return m ? m[1] : null;
-}
-
-// The bare command name from a persisted command-card user message (the message
-// Claude Code writes as `<command-name>/context</command-name> …`); null otherwise.
-function cardCommandOf(msg: ChatMessage): string | null {
-  if (msg.role !== 'user') return null;
-  const text = msg.content.find(b => b.type === 'text');
-  if (!text || text.type !== 'text') return null;
-  const m = /<command-name>\s*\/?\s*([\w:-]+)\s*<\/command-name>/.exec(text.text);
-  return m ? m[1] : null;
-}
-
 /** Handlers the chat composer pushes its live SDK stream into. */
 export type LiveTurnComposerHandlers = {
-  /** A new turn was sent — snapshot history and show the optimistic prompt bubble. */
+  /** A new turn was sent — show the optimistic prompt bubble. */
   onSend: (text: string) => void;
   /** The send never became a turn — roll back the optimistic state. */
   onSendFailed: () => void;
@@ -35,9 +18,9 @@ export type LiveTurnComposerHandlers = {
 };
 
 export type LiveTurnState = {
-  /** The messages actually rendered — disk transcript when idle, or the
-   *  pre-turn snapshot + optimistic prompt + streamed messages while in-flight,
-   *  with any pinned slash-command output woven back in. */
+  /** The messages actually rendered. Disk transcript in Terminal/Lens
+   *  (read-only); the in-memory stream transcript + the in-flight turn in the
+   *  in-app SDK chat. */
   displayMessages: ChatMessage[];
   /** Partial assistant text for the provisional `LiveTurn`. */
   liveText: string;
@@ -53,117 +36,131 @@ export type LiveTurnState = {
 };
 
 /**
- * The in-flight turn state machine, lifted out of ChatView. Drives the live
- * transcript entirely from the SDK stream (not a mid-stream disk re-read):
+ * The in-flight turn state machine, lifted out of ChatView.
  *
- * - While a turn is active (`pendingUser !== null`) `displayMessages` is the
- *   pre-turn history snapshot (`frozenMessages`) + an optimistic prompt bubble +
- *   the fully-formed messages the SDK emits (`liveMessages`). The file watcher
- *   still refetches `messages` in the background, but it's ignored for display
- *   until the turn closes, so the persisted reply can't double the live one.
- * - On completion (`!streaming` AND the refetch grew past the count captured at
- *   send time) it reconciles to the canonical disk read.
- * - Built-in slash commands (/context, /usage, /compact, …) stream their real
- *   output as `<synthetic>`-model messages that Claude Code never persists. They
- *   are pinned (`pinnedSlash`) keyed by the UUID of the on-disk command-card that
- *   produced them and woven back in right after that card, so they survive the
- *   reconcile for as long as the view is mounted.
+ * Two modes, by `streamAsTruth`:
+ *
+ * - **`false` (Terminal/Lens, read-only embedded):** there is no composer; the
+ *   live session belongs to the terminal's PTY. `displayMessages` is just the
+ *   disk transcript (`messages`), so the watcher keeps the view fresh as the
+ *   terminal writes. Nothing here runs.
+ *
+ * - **`true` (in-app SDK chat):** the SDK stream is the source of truth. The disk
+ *   is read **once** (seeded into `sessionMessages` from the handed-off new-chat
+ *   transcript or the first loaded disk read) and then **ignored for display** —
+ *   no mid-write reconcile, so the reply the user watched stream in can never
+ *   blink out and back. Each finished turn is **appended** to `sessionMessages`
+ *   straight from the stream: the optimistic user bubble (the SDK doesn't echo
+ *   the prompt) plus the fully-formed messages the SDK emitted — including the
+ *   `<synthetic>` slash-command output (`/context`, `/usage`, `/compact`) that
+ *   Claude Code never persists, which therefore survives naturally with no
+ *   special pinning.
  */
-export function useLiveTurn(messages: ChatMessage[] | undefined): LiveTurnState {
+export function useLiveTurn(
+  messages: ChatMessage[] | undefined,
+  opts: { streamAsTruth: boolean; initialMessages?: ChatMessage[] }
+): LiveTurnState {
+  const { streamAsTruth, initialMessages } = opts;
   const [liveText, setLiveText] = useState('');
   const [streaming, setStreaming] = useState(false);
   const [liveTool, setLiveTool] = useState<ToolActivity | null>(null);
   const [pendingUser, setPendingUser] = useState<string | null>(null);
   const [pendingAt, setPendingAt] = useState('');
-  const pendingBaseCount = useRef(0);
-  const [frozenMessages, setFrozenMessages] = useState<ChatMessage[] | null>(null);
+  // Stable uuid for the optimistic prompt bubble — reused when the bubble is
+  // materialized into `sessionMessages` at turn end, so it keeps its identity
+  // across the turn boundary (no remount/flash of the user message).
+  const [pendingUuid, setPendingUuid] = useState('');
   const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
-  const [pinnedSlash, setPinnedSlash] = useState<Record<string, ChatMessage[]>>({});
-
-  // Reconcile to the canonical disk read once the turn has ended AND the refetch
-  // contains it (length grew past the count captured at send time). We gate on
-  // `!streaming` so background mid-stream refetches never tear down the live turn.
-  // When both hold, the persisted transcript already has the full turn, so
-  // dropping the optimistic state is seamless.
+  // Stream-as-truth in-memory transcript (in-app SDK chat only). Seeded once,
+  // then grown ONLY from the stream — never re-read from disk, so a mid-write
+  // watcher refetch can't tear the live reply out from under us.
+  const [sessionMessages, setSessionMessages] = useState<ChatMessage[] | null>(null);
+  // Did the in-flight turn actually start streaming yet? Guards the turn-end
+  // append against firing in the gap between `onSend` and `streaming` flipping
+  // true: the composer flips `sending`/streaming one commit AFTER our optimistic
+  // `onSend` (cross-component), so right after a send there's a render with
+  // `pendingUser` set but `streaming` still false. Without this guard that render
+  // looks like "turn ended", committing just the user bubble and dropping the
+  // reply that streams in next.
+  const sawStreamingRef = useRef(false);
   useEffect(() => {
+    if (streaming) sawStreamingRef.current = true;
+  }, [streaming]);
+
+  // Seed the in-memory transcript once: prefer the messages handed off from the
+  // new-chat view (turn 1, so ChatView paints immediately without waiting on a
+  // disk read), else the first loaded disk transcript (a resumed/existing
+  // session). Disk (`messages`) is ignored for display from here on.
+  useEffect(() => {
+    if (!streamAsTruth) return;
+    if (sessionMessages !== null) return;
+    if (initialMessages && initialMessages.length > 0) {
+      // One-time seed (not a render loop), guarded by the `null` check above.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setSessionMessages(initialMessages);
+    } else if (messages !== undefined) {
+      setSessionMessages(messages);
+    }
+  }, [streamAsTruth, sessionMessages, initialMessages, messages]);
+
+  // Turn end (`!streaming` after a send): append the streamed turn to the
+  // in-memory transcript. The SDK doesn't echo the user's prompt, so materialize
+  // it from the optimistic bubble (same uuid), then the fully-formed stream
+  // messages (deduped by uuid for safety). No disk round-trip.
+  useEffect(() => {
+    if (!streamAsTruth) return;
     if (streaming) return;
     if (pendingUser === null) return;
-    if ((messages?.length ?? 0) > pendingBaseCount.current) {
-      // If the just-finished turn was a built-in slash command, its real output
-      // streamed as `<synthetic>` messages that Claude Code never persists. Bind
-      // them to the command-card now on disk so they survive the reconcile,
-      // anchored under the exact card that produced them. The card we just created
-      // is the last command-card matching this command name.
-      const cmd = slashCommandOf(pendingUser);
-      const synth = cmd ? liveMessages.filter(m => m.model === '<synthetic>') : [];
-      if (cmd && synth.length) {
-        const base = messages ?? [];
-        let cardUuid: string | null = null;
-        for (let i = base.length - 1; i >= 0; i--) {
-          if (cardCommandOf(base[i]) === cmd) {
-            cardUuid = base[i].uuid;
-            break;
-          }
-        }
-        if (cardUuid) {
-          const key = cardUuid;
-          // Reconcile-time state sync (the turn just landed on disk), not a render
-          // loop: pin once, guarded by the existing key.
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setPinnedSlash(prev => (prev[key] ? prev : { ...prev, [key]: synth }));
-        }
-      }
-      setPendingUser(null);
-      setFrozenMessages(null);
-      setLiveMessages([]);
-    }
-  }, [streaming, messages, pendingUser, liveMessages]);
-
-  // The messages actually rendered. Idle: the live disk transcript. In-flight: the
-  // pre-turn snapshot + an optimistic prompt bubble + the streamed messages.
-  // Both branches weave the pinned slash-command output back in right after the
-  // command-card that produced it (addressed by that card's UUID, set at reconcile
-  // time), so a pinned `/context` doesn't vanish for the duration of the next turn.
-  const displayMessages = useMemo<ChatMessage[]>(() => {
-    const weave = (base: ChatMessage[]): ChatMessage[] => {
-      if (Object.keys(pinnedSlash).length === 0) return base;
-      const woven: ChatMessage[] = [];
-      for (const m of base) {
-        woven.push(m);
-        const pinned = pinnedSlash[m.uuid];
-        if (pinned) woven.push(...pinned);
-      }
-      return woven;
-    };
-    if (pendingUser === null) return weave(messages ?? []);
-    const synthetic: ChatMessage = {
-      uuid: '__pending_user__',
+    // The turn hasn't actually started streaming — this is the post-send gap, not
+    // the end. Wait for the real true→false transition.
+    if (!sawStreamingRef.current) return;
+    sawStreamingRef.current = false;
+    const userMsg: ChatMessage = {
+      uuid: pendingUuid,
       role: 'user',
       timestamp: pendingAt,
       content: [{ type: 'text', text: pendingUser }],
     };
-    return [...weave(frozenMessages ?? messages ?? []), synthetic, ...liveMessages];
-  }, [pendingUser, pendingAt, frozenMessages, messages, liveMessages, pinnedSlash]);
+    // Turn-end state sync (the stream just closed), not a render loop: guarded by
+    // `pendingUser`, which this effect immediately clears.
+    setSessionMessages(prev => {
+      const base = prev ?? [];
+      const seen = new Set(base.map(m => m.uuid));
+      const turn = [userMsg, ...liveMessages].filter(m => !seen.has(m.uuid));
+      return [...base, ...turn];
+    });
+    setPendingUser(null);
+    setLiveMessages([]);
+  }, [streamAsTruth, streaming, pendingUser, pendingAt, pendingUuid, liveMessages]);
 
-  // Reads the freshest `messages` at call time — re-binds when the transcript
-  // refetches, matching the optimistic snapshot to what's actually on disk.
-  const onSend = useCallback(
-    (text: string) => {
-      const base = messages ?? [];
-      pendingBaseCount.current = base.length;
-      setPendingAt(new Date().toISOString());
-      setFrozenMessages(base);
-      setLiveMessages([]);
-      setPendingUser(text);
-    },
-    [messages]
-  );
+  // The messages actually rendered. Terminal/Lens: the live disk transcript.
+  // In-app SDK chat: the in-memory transcript, plus — while a turn is in flight —
+  // the optimistic prompt bubble and the streamed messages.
+  const displayMessages = useMemo<ChatMessage[]>(() => {
+    if (!streamAsTruth) return messages ?? [];
+    const base = sessionMessages ?? [];
+    if (pendingUser === null) return base;
+    const optimisticUser: ChatMessage = {
+      uuid: pendingUuid,
+      role: 'user',
+      timestamp: pendingAt,
+      content: [{ type: 'text', text: pendingUser }],
+    };
+    return [...base, optimisticUser, ...liveMessages];
+  }, [streamAsTruth, messages, sessionMessages, pendingUser, pendingUuid, pendingAt, liveMessages]);
+
+  const onSend = useCallback((text: string) => {
+    sawStreamingRef.current = false;
+    setPendingAt(new Date().toISOString());
+    setPendingUuid(crypto.randomUUID());
+    setLiveMessages([]);
+    setPendingUser(text);
+  }, []);
 
   const onSendFailed = useCallback(() => {
-    // The send never became a turn — roll back the optimistic bubble and the
-    // frozen snapshot so the transcript shows the disk truth.
+    // The send never became a turn — drop the optimistic bubble; `sessionMessages`
+    // (the committed transcript) is untouched.
     setPendingUser(null);
-    setFrozenMessages(null);
     setLiveMessages([]);
   }, []);
 
