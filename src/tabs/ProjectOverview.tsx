@@ -371,8 +371,10 @@ export default function ProjectOverview() {
       case 'chat':
         return (
           <ChatView
+            key={view.session.filename}
             project={view.project}
             session={view.session}
+            initialMessages={view.initialMessages}
             onBack={() => view.from === 'agents-live'
               ? setView({ type: 'agents-live', project: view.project })
               : setView({ type: 'sessions', project: view.project })
@@ -386,8 +388,8 @@ export default function ProjectOverview() {
           <NewChatView
             project={view.project}
             onBack={() => setView({ type: 'sessions', project: view.project })}
-            onCreated={session =>
-              setView({ type: 'chat', project: view.project, session, from: 'sessions' })
+            onCreated={(session, initialMessages) =>
+              setView({ type: 'chat', project: view.project, session, from: 'sessions', initialMessages })
             }
           />
         )

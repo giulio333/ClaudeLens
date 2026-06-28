@@ -10,7 +10,7 @@ import {
   useAllSkills,
   usePlugins,
 } from '../../../hooks/useIPC';
-import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC';
+import { SessionSummary, Skill, Agent, ChatMessage } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
 import { trackEvent } from '../../../lib/telemetry';
 import {
@@ -61,6 +61,7 @@ export function ChatView({
   onOpenAgent,
   embedded = false,
   jumpToTurnRef,
+  initialMessages,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -80,6 +81,11 @@ export function ChatView({
    *  terminal's PTY. The floating control pill stays — it anchors to the chat
    *  column. */
   embedded?: boolean;
+  /** Transcript handed off from the new-chat view (turn 1): the optimistic user
+   *  prompt + the messages the SDK streamed. Seeds the stream-as-truth in-memory
+   *  transcript so the view paints the finished turn immediately on mount, with
+   *  no disk read (and so no mid-write flash). Ignored when `embedded`. */
+  initialMessages?: ChatMessage[];
 }) {
   const {
     data: messages,
@@ -151,12 +157,15 @@ export function ChatView({
   } = useSessionTags(project.hash);
   const sessionTags = tagsForSession(session.filename);
   const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
-  // The in-flight turn state machine (streaming text/tool, optimistic prompt,
-  // reconcile to disk, pinned slash-command output). The assistant's partial reply
-  // renders inline as a provisional turn at the foot of the transcript — see
-  // useLiveTurn.ts. `displayMessages` is what we actually render.
+  // The in-flight turn state machine. In the in-app SDK chat the SDK stream is
+  // the source of truth: disk is read once (seeded from `initialMessages` or the
+  // first load) then ignored, and each turn is appended straight from the stream
+  // — no mid-write disk reconcile, so the reply can't flash. Terminal/Lens
+  // (`embedded`) stays disk-backed instead. The assistant's partial reply renders
+  // inline as a provisional turn at the foot — see useLiveTurn.ts.
+  // `displayMessages` is what we actually render.
   const { displayMessages, liveText, liveTool, streaming, liveMessageCount, composer } =
-    useLiveTurn(messages);
+    useLiveTurn(messages, { streamAsTruth: !embedded, initialMessages });
 
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all');
   const [activeTurn, setActiveTurn] = useState<number | null>(null);
