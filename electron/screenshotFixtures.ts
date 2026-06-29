@@ -8,6 +8,11 @@ const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 // chiamate IPC diverse (necessario per agganciare tasks/plans alle sessioni reali).
 const NOW = new Date();
 
+// Helper per date relative a NOW, così chat/memory/agent non "invecchiano":
+// restano sempre coerenti con le sessioni (anch'esse ancorate a NOW).
+const minsAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
+const daysAgo = (d: number) => minsAgo(d * 24 * 60);
+
 // ─── Progetti finti ───────────────────────────────────────────────────────────
 
 const MOCK_PROJECTS = [
@@ -37,12 +42,12 @@ const sessionCountFor = (hash: string) => SESSION_COUNTS[hash] ?? SESSION_COUNTS
 const SESSION_TEMPLATES = [
   { days: 0,  input: 48_000,  output: 21_000, cache: 95_000,  msgs: 34, model: 'claude-sonnet-4-6', title: 'Refactor authentication module' },
   { days: 1,  input: 31_000,  output: 14_500, cache: 62_000,  msgs: 22, model: 'claude-sonnet-4-6', title: 'Fix TypeScript strict mode errors' },
-  { days: 3,  input: 72_000,  output: 28_000, cache: 140_000, msgs: 51, model: 'claude-opus-4-6',   title: 'Design new API architecture' },
+  { days: 3,  input: 72_000,  output: 28_000, cache: 140_000, msgs: 51, model: 'claude-opus-4-8',   title: 'Design new API architecture' },
   { days: 5,  input: 19_000,  output: 8_200,  cache: 38_000,  msgs: 15, model: 'claude-haiku-4-5',  title: 'Write unit tests for utils' },
   { days: 8,  input: 55_000,  output: 24_000, cache: 110_000, msgs: 40, model: 'claude-sonnet-4-6', title: 'Add dark mode support' },
   { days: 12, input: 38_000,  output: 16_000, cache: 76_000,  msgs: 28, model: 'claude-sonnet-4-6', title: 'Optimize database queries' },
   { days: 18, input: 26_000,  output: 11_000, cache: 50_000,  msgs: 19, model: 'claude-haiku-4-5',  title: 'Update dependencies' },
-  { days: 25, input: 61_000,  output: 27_000, cache: 122_000, msgs: 44, model: 'claude-opus-4-6',   title: 'Implement real-time sync' },
+  { days: 25, input: 61_000,  output: 27_000, cache: 122_000, msgs: 44, model: 'claude-opus-4-8',   title: 'Implement real-time sync' },
 ];
 
 function getSessionList(hash: string) {
@@ -106,13 +111,13 @@ const MOCK_CHAT = [
   {
     uuid: 'msg-001',
     role: 'user' as const,
-    timestamp: '2026-03-29T09:05:00Z',
+    timestamp: minsAgo(125),
     content: [{ type: 'text' as const, text: 'Can you refactor the authentication module to use JWT tokens instead of sessions?' }],
   },
   {
     uuid: 'msg-002',
     role: 'assistant' as const,
-    timestamp: '2026-03-29T09:05:04Z',
+    timestamp: minsAgo(124),
     model: 'claude-sonnet-4-6',
     content: [
       { type: 'text' as const, text: "I'll start by reading the current authentication implementation to understand what needs to change." },
@@ -122,13 +127,13 @@ const MOCK_CHAT = [
   {
     uuid: 'msg-003',
     role: 'user' as const,
-    timestamp: '2026-03-29T09:05:05Z',
+    timestamp: minsAgo(124),
     content: [{ type: 'tool_result' as const, toolUseId: 'tu-001', content: 'import session from "express-session";\n\nexport function configureSession(app) {\n  app.use(session({ secret: process.env.SESSION_SECRET, resave: false }));\n}\n', isError: false }],
   },
   {
     uuid: 'msg-004',
     role: 'assistant' as const,
-    timestamp: '2026-03-29T09:05:10Z',
+    timestamp: minsAgo(123),
     model: 'claude-sonnet-4-6',
     content: [
       { type: 'text' as const, text: "Now let me check the route handlers to understand how sessions are used." },
@@ -138,13 +143,13 @@ const MOCK_CHAT = [
   {
     uuid: 'msg-005',
     role: 'user' as const,
-    timestamp: '2026-03-29T09:05:11Z',
+    timestamp: minsAgo(123),
     content: [{ type: 'tool_result' as const, toolUseId: 'tu-002', content: 'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n', isError: false }],
   },
   {
     uuid: 'msg-006',
     role: 'assistant' as const,
-    timestamp: '2026-03-29T09:05:18Z',
+    timestamp: minsAgo(122),
     model: 'claude-sonnet-4-6',
     content: [
       {
@@ -156,13 +161,13 @@ const MOCK_CHAT = [
   {
     uuid: 'msg-007',
     role: 'user' as const,
-    timestamp: '2026-03-29T09:06:01Z',
+    timestamp: minsAgo(121),
     content: [{ type: 'text' as const, text: 'Yes, go ahead.' }],
   },
   {
     uuid: 'msg-008',
     role: 'assistant' as const,
-    timestamp: '2026-03-29T09:06:05Z',
+    timestamp: minsAgo(120),
     model: 'claude-sonnet-4-6',
     content: [
       { type: 'text' as const, text: "Creating the JWT helper module." },
@@ -184,9 +189,9 @@ const MOCK_CHAT = [
 function getMemoryData(_hash: string) {
   return {
     index: [
-      { name: 'User profile', description: 'Senior full-stack engineer, 8yr TypeScript experience', type: 'user', filename: 'user_profile.md', createdAt: '2026-01-15T10:00:00Z', updatedAt: '2026-03-20T14:30:00Z' },
-      { name: 'Code style feedback', description: 'Prefers functional patterns, no class components, terse PR descriptions', type: 'feedback', filename: 'feedback_code_style.md', createdAt: '2026-02-01T09:00:00Z', updatedAt: '2026-03-18T11:00:00Z' },
-      { name: 'Testing approach', description: 'Integration tests over unit mocks — past incident with divergent mock/prod', type: 'feedback', filename: 'feedback_testing.md', createdAt: '2026-02-10T08:00:00Z', updatedAt: '2026-03-10T16:00:00Z' },
+      { name: 'User profile', description: 'Senior full-stack engineer, 8yr TypeScript experience', type: 'user', filename: 'user_profile.md', createdAt: daysAgo(90), updatedAt: daysAgo(4) },
+      { name: 'Code style feedback', description: 'Prefers functional patterns, no class components, terse PR descriptions', type: 'feedback', filename: 'feedback_code_style.md', createdAt: daysAgo(72), updatedAt: daysAgo(6) },
+      { name: 'Testing approach', description: 'Integration tests over unit mocks — past incident with divergent mock/prod', type: 'feedback', filename: 'feedback_testing.md', createdAt: daysAgo(63), updatedAt: daysAgo(11) },
     ],
     topics: {
       'user_profile.md': '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.',
@@ -198,7 +203,7 @@ function getMemoryData(_hash: string) {
       lineCount: 6,
     },
     projectLevelIndex: [
-      { name: 'Project goals', description: 'Q1 targets: launch beta, gather 50 signups', type: 'project', filename: 'project_goals.md', createdAt: '2026-01-10T10:00:00Z', updatedAt: '2026-02-28T15:00:00Z' },
+      { name: 'Project goals', description: 'Q1 targets: launch beta, gather 50 signups', type: 'project', filename: 'project_goals.md', createdAt: daysAgo(95), updatedAt: daysAgo(20) },
     ],
     projectLevelTopics: {
       'project_goals.md': '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.',
@@ -312,9 +317,11 @@ const GLOBAL_AGENTS = [
     path: '/Users/alice/.claude/agents/code-reviewer.md',
     scope: 'global' as const,
     content: 'Reviews code for quality, security, and best practices.',
-    rawContent: '---\ndescription: Review code quality\nmodel: claude-opus-4-6\n---\n\nReview code for quality and security.',
+    rawContent: '---\ndescription: Review code quality\nmodel: claude-opus-4-8\n---\n\nReview code for quality and security.',
     description: 'Review code quality',
-    model: 'claude-opus-4-6',
+    model: 'claude-opus-4-8',
+    missingRequired: [],
+    filenameHasSpaces: false,
   },
   {
     name: 'docs-writer',
@@ -323,6 +330,8 @@ const GLOBAL_AGENTS = [
     content: 'Generates clear, concise technical documentation.',
     rawContent: '---\ndescription: Write technical docs\n---\n\nGenerate clear technical documentation.',
     description: 'Write technical docs',
+    missingRequired: [],
+    filenameHasSpaces: false,
   },
 ];
 
@@ -334,6 +343,8 @@ const PROJECT_AGENT = {
   rawContent: '---\ndescription: Generate DB migrations\nmodel: claude-sonnet-4-6\n---\n\nGenerate and validate database migration scripts.',
   description: 'Generate DB migrations',
   model: 'claude-sonnet-4-6',
+  missingRequired: [],
+  filenameHasSpaces: false,
 };
 
 // ─── MCP ─────────────────────────────────────────────────────────────────────
@@ -397,7 +408,7 @@ const MOCK_ACTIVE_SESSIONS = [
     cwd: '/Users/alice/projects/webapp',
     startedAt: Date.now() - 25 * 60_000,
     status: 'busy',
-    version: '2.1.173',
+    version: '2.1.191',
     source: 'registry' as const,
   },
   {
@@ -407,7 +418,7 @@ const MOCK_ACTIVE_SESSIONS = [
     startedAt: Date.now() - 4 * 60_000,
     status: 'waiting',
     waitingFor: 'permission prompt',
-    version: '2.1.173',
+    version: '2.1.191',
     source: 'registry' as const,
   },
 ];
@@ -539,7 +550,7 @@ const MOCK_PLANS = [
         status: 'approved' as const,
         exists: true,
         content: PLAN_AUTH,
-        timestamp: '2026-03-29T09:05:18Z',
+        timestamp: minsAgo(122),
         gitBranch: 'feat/jwt-auth',
       },
     ],
@@ -555,7 +566,7 @@ const MOCK_PLANS = [
         status: 'proposed' as const,
         exists: true,
         content: PLAN_DARKMODE,
-        timestamp: '2026-03-21T10:12:00Z',
+        timestamp: daysAgo(8),
         gitBranch: 'feat/dark-mode',
       },
     ],
@@ -563,10 +574,8 @@ const MOCK_PLANS = [
 ];
 
 // ─── Sessioni agent live / background ──────────────────────────────────────────
-// Timestamp ancorati a NOW (minuti fa) così la Agent View mostra tempi relativi
-// realistici ("just now", "5m ago") invece di date statiche vecchie di mesi.
-const minsAgo = (m: number) => new Date(NOW.getTime() - m * 60_000).toISOString();
-
+// Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
+// mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
 const MOCK_BG_SESSIONS = [
   // ── Progetto webapp: spettro completo di stati per popolare ogni bucket della
   // Agent View (Needs input · Working · Ready · Completed · Failed · Stopped) ──
@@ -751,6 +760,280 @@ const MOCK_AI_RESPONSE = `Here's a summary of the **webapp** project's authentic
 Introduce \`src/auth/jwt.ts\` with \`signToken\`/\`verifyToken\`, then swap the middleware. The change is well-contained and low-risk.
 `;
 
+// ─── Subagents per sessione ────────────────────────────────────────────────────
+// Transcript interni che Claude Code salva in {sessionId}/subagents/agent-*.jsonl.
+// Il renderer li correla al tool_use Task/Agent nella chat tramite firstPrompt.
+
+const MOCK_SUBAGENTS = [
+  {
+    agentId: 'agent-001',
+    filePath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-001.jsonl',
+    firstPrompt: 'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.',
+    startedAt: minsAgo(123),
+    endedAt: minsAgo(121),
+    messageCount: 14,
+  },
+  {
+    agentId: 'agent-002',
+    filePath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-002.jsonl',
+    firstPrompt: 'Write integration tests for signToken and verifyToken in src/auth/jwt.ts.',
+    startedAt: minsAgo(120),
+    endedAt: minsAgo(118),
+    messageCount: 9,
+  },
+];
+
+// ─── Plugins installati (user scope) ───────────────────────────────────────────
+
+const MOCK_PLUGINS = [
+  {
+    name: 'git-flow',
+    marketplace: 'anthropic-community',
+    scope: 'user' as const,
+    version: '1.4.0',
+    installPath: '/Users/alice/.claude/plugins/git-flow',
+    description: 'Conventional commits, branch helpers and PR review commands.',
+    author: 'Anthropic Community',
+    repo: 'https://github.com/anthropic-community/git-flow',
+    skills: [
+      {
+        name: 'changelog',
+        path: '/Users/alice/.claude/plugins/git-flow/skills/changelog/SKILL.md',
+        scope: 'plugin' as const,
+        content: 'Generate a changelog entry from the staged diff.',
+        rawContent: '---\nname: changelog\ndescription: Generate a changelog entry from the staged diff\n---\n\nGenerate a changelog entry from the staged diff.',
+        description: 'Generate a changelog entry from the staged diff',
+        userInvocable: true,
+      },
+    ],
+    agents: [
+      {
+        name: 'pr-reviewer',
+        path: '/Users/alice/.claude/plugins/git-flow/agents/pr-reviewer.md',
+        scope: 'plugin' as const,
+        content: 'Reviews a pull request and flags risky changes.',
+        rawContent: '---\ndescription: Review a pull request\n---\n\nReviews a pull request and flags risky changes.',
+        description: 'Review a pull request',
+        missingRequired: [],
+        filenameHasSpaces: false,
+      },
+    ],
+    commands: [
+      {
+        name: 'commit',
+        path: '/Users/alice/.claude/plugins/git-flow/commands/commit.md',
+        description: 'Stage and write a conventional commit',
+        content: 'Stage changes and write a conventional commit message.',
+        rawContent: '---\ndescription: Stage and write a conventional commit\n---\n\nStage changes and write a conventional commit message.',
+      },
+    ],
+  },
+  {
+    name: 'test-runner',
+    marketplace: 'anthropic-community',
+    scope: 'user' as const,
+    version: '0.9.2',
+    installPath: '/Users/alice/.claude/plugins/test-runner',
+    description: 'Run, watch and triage test suites without leaving the session.',
+    author: 'Anthropic Community',
+    repo: 'https://github.com/anthropic-community/test-runner',
+    skills: [],
+    agents: [],
+    commands: [
+      {
+        name: 'test',
+        path: '/Users/alice/.claude/plugins/test-runner/commands/test.md',
+        description: 'Run the project test suite',
+        content: 'Run the project test suite and summarize failures.',
+        rawContent: '---\ndescription: Run the project test suite\n---\n\nRun the project test suite and summarize failures.',
+      },
+    ],
+  },
+];
+
+// ─── Config effettiva (vista Settings → System / Project config) ───────────────
+
+const MOCK_EFFECTIVE_CONFIG = {
+  cwd: '/Users/alice/projects/webapp',
+  init: {
+    permissionMode: 'default',
+    model: 'claude-opus-4-8',
+    cwd: '/Users/alice/projects/webapp',
+    apiKeySource: 'subscription',
+    claudeCodeVersion: '2.1.191',
+    tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob', 'Task', 'WebFetch', 'WebSearch'],
+    mcpServers: [
+      { name: 'github', status: 'connected' },
+      { name: 'linear', status: 'connected' },
+      { name: 'filesystem', status: 'connected' },
+    ],
+    slashCommands: ['commit', 'review-pr', 'frontend-design', 'claude-api', 'deploy'],
+    outputStyle: 'default',
+    skills: ['changelog', 'deploy'],
+    agents: ['code-reviewer', 'docs-writer', 'db-migrator'],
+    plugins: [
+      { name: 'git-flow', path: '/Users/alice/.claude/plugins/git-flow' },
+      { name: 'test-runner', path: '/Users/alice/.claude/plugins/test-runner' },
+    ],
+  },
+  initError: null,
+  effective: {
+    model: 'claude-opus-4-8',
+    cleanupPeriodDays: 30,
+    includeCoAuthoredBy: false,
+    permissions: { defaultMode: 'default' },
+  },
+  provenance: {
+    model: { source: 'projectSettings', path: '/Users/alice/projects/webapp/.claude/settings.json' },
+    cleanupPeriodDays: { source: 'userSettings', path: '/Users/alice/.claude/settings.json' },
+    includeCoAuthoredBy: { source: 'userSettings', path: '/Users/alice/.claude/settings.json' },
+  },
+  sources: [
+    {
+      source: 'userSettings',
+      path: '/Users/alice/.claude/settings.json',
+      settings: { cleanupPeriodDays: 30, includeCoAuthoredBy: false },
+    },
+    {
+      source: 'projectSettings',
+      path: '/Users/alice/projects/webapp/.claude/settings.json',
+      settings: { model: 'claude-opus-4-8' },
+    },
+  ],
+  settingsError: null,
+};
+
+// ─── Pricing metadata (Analytics) ──────────────────────────────────────────────
+
+const MOCK_PRICING_META = {
+  lastUpdated: '2026-06-01',
+  knownModels: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+};
+
+// ─── Progetti duplicati (vista Duplicates) ─────────────────────────────────────
+// Due cartelle history che puntano allo stesso path autoritativo (differiscono
+// solo per il case di "Projects"), così la vista Duplicates mostra un gruppo.
+
+const DUP_SOURCE_HASH = '-Users-alice-Projects-webapp';
+const DUP_DEST_HASH = '-Users-alice-projects-webapp';
+
+const MOCK_DUPLICATES = [
+  {
+    key: '/users/alice/projects/webapp',
+    name: 'webapp',
+    folders: [
+      {
+        hash: DUP_DEST_HASH,
+        realPath: '/Users/alice/projects/webapp',
+        realPathAuthoritative: true,
+        sessionCount: 42,
+        lastActivity: minsAgo(0),
+        memoryTopicCount: 3,
+        hasMemoryIndex: true,
+      },
+      {
+        hash: DUP_SOURCE_HASH,
+        realPath: '/Users/alice/Projects/webapp',
+        realPathAuthoritative: false,
+        sessionCount: 5,
+        lastActivity: daysAgo(14),
+        memoryTopicCount: 1,
+        hasMemoryIndex: false,
+      },
+    ],
+  },
+];
+
+const MOCK_MERGE_PLAN = {
+  source: { hash: DUP_SOURCE_HASH, realPath: '/Users/alice/Projects/webapp', authoritative: false },
+  dest: { hash: DUP_DEST_HASH, realPath: '/Users/alice/projects/webapp', authoritative: true },
+  cwdRewrite: { from: '/Users/alice/Projects/webapp', to: '/Users/alice/projects/webapp' },
+  sessions: [
+    { filename: '20260615T101500_000300.jsonl', collides: false, targetName: '20260615T101500_000300.jsonl' },
+    { filename: '20260612T084500_000301.jsonl', collides: false, targetName: '20260612T084500_000301.jsonl' },
+  ],
+  sidecars: [{ name: 'subagents', collides: false }],
+  memory: [{ filename: 'feedback_naming.md', kind: 'copy' as const }],
+  regenerateIndex: true,
+  sourceEmptyAfter: true,
+  blockers: [],
+  warnings: [],
+};
+
+const MOCK_MERGE_RESULT = {
+  movedSessions: 5,
+  renamedSessions: 0,
+  movedSidecars: 1,
+  cwdRewrittenFiles: 5,
+  memoryCopied: 1,
+  memoryRenamed: 0,
+  memorySkipped: 0,
+  sourceDeleted: true,
+  backupPath: '/Users/alice/.claude/.claudelens-backups/webapp-merge.zip',
+  warnings: [],
+};
+
+// ─── Artifacts di una sessione (dialog di cancellazione) ───────────────────────
+
+function getSessionArtifacts(filename: string) {
+  const sessionId = filename.replace(/\.jsonl$/, '');
+  return {
+    sessionId,
+    artifacts: [
+      { kind: 'session' as const, label: 'Transcript', path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${filename}`, isDir: false, locked: true, defaultSelected: true },
+      { kind: 'subagents' as const, label: 'Sub-agent transcripts', path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${sessionId}/subagents`, isDir: true, count: 2, defaultSelected: true },
+      { kind: 'tasks' as const, label: 'Tasks', path: `/Users/alice/.claude/tasks/${sessionId}`, isDir: true, count: 4, defaultSelected: true },
+      { kind: 'plan' as const, label: 'Plan: migrate-auth-to-jwt.md', path: '/Users/alice/.claude/plans/migrate-auth-to-jwt.md', isDir: false, shared: true, referencedBy: 1, defaultSelected: false },
+    ],
+  };
+}
+
+// ─── Prefs UI persistite (tag gestiti, pin, tema) ──────────────────────────────
+// I tag/pin vivono in localStorage lato renderer e vengono idratati da disco via
+// `prefs:getAll` all'avvio. In screenshot mode il disco non esiste, quindi qui
+// seminiamo direttamente lo store così Memory/Session view mostrano i tag (e i
+// progetti/sessioni pinnati) invece di superfici vuote.
+
+const WEBAPP_HASH = '-Users-alice-projects-webapp';
+
+function getPrefs() {
+  // Tag di sessione agganciati ai filename reali delle prime sessioni webapp
+  // (generati da NOW), così combaciano con la lista mostrata nel tab Sessions.
+  const sessions = getSessionList(WEBAPP_HASH);
+  const sessionTags: Record<string, string[]> = {};
+  if (sessions[0]) sessionTags[sessions[0].filename] = ['auth', 'in-progress'];
+  if (sessions[2]) sessionTags[sessions[2].filename] = ['architecture'];
+  if (sessions[4]) sessionTags[sessions[4].filename] = ['ui'];
+
+  return {
+    'cl-pinned-projects': [WEBAPP_HASH],
+    'cl-pinned-sessions': sessions[0] ? [sessions[0].filename] : [],
+    'cl-memory-tags': {
+      [WEBAPP_HASH]: {
+        tags: [
+          { name: 'important', createdAt: daysAgo(30) },
+          { name: 'convention', createdAt: daysAgo(20) },
+        ],
+        memoryTags: {
+          'feedback_testing.md': ['important', 'convention'],
+          'feedback_code_style.md': ['convention'],
+        },
+      },
+    },
+    'cl-session-tags': {
+      [WEBAPP_HASH]: {
+        tags: [
+          { name: 'auth', createdAt: daysAgo(2) },
+          { name: 'in-progress', createdAt: daysAgo(2) },
+          { name: 'architecture', createdAt: daysAgo(5) },
+          { name: 'ui', createdAt: daysAgo(8) },
+        ],
+        sessionTags,
+      },
+    },
+  };
+}
+
 // ─── Registrazione handler mock ───────────────────────────────────────────────
 
 export function registerScreenshotHandlers(ipcMain: IpcMain) {
@@ -771,6 +1054,15 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'live:getActiveSessions', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
     'tasks:getByProject', 'plans:getByProject',
     'settings:getCleanupPeriodDays',
+    'sessions:getSubagents', 'sessions:getArtifacts', 'sessions:deleteSession',
+    'plugins:getAll',
+    'config:getEffective',
+    'cost:getPricingMeta',
+    'projects:detectDuplicates', 'projects:planMerge', 'projects:executeMerge',
+    'telemetry:isEnabled', 'telemetry:setEnabled', 'telemetry:track',
+    'agents:attachBg', 'agents:stopBg', 'agents:respawnBg', 'agents:deleteBg',
+    'notifications:clearBadge',
+    'prefs:getAll', 'prefs:set',
   ];
 
   // Rimuovi handler reali prima di registrare i mock
@@ -856,4 +1148,42 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   // Finestra di retention fissa così i conteggi demo sono deterministici
   // a prescindere dalle settings reali della macchina.
   ipcMain.handle('settings:getCleanupPeriodDays', () => ok(30));
+
+  // Sub-agent transcripts + artifacts/cancellazione sessione
+  ipcMain.handle('sessions:getSubagents', () => ok(MOCK_SUBAGENTS));
+  ipcMain.handle('sessions:getArtifacts', (_e: unknown, _hash: string, filename: string) => ok(getSessionArtifacts(filename)));
+  ipcMain.handle('sessions:deleteSession', (_e: unknown, paths: string[]) => ok({ deleted: paths, warnings: [] }));
+
+  // Plugins installati (user scope)
+  ipcMain.handle('plugins:getAll', () => ok(MOCK_PLUGINS));
+
+  // Config effettiva (Settings → System / Project config)
+  ipcMain.handle('config:getEffective', () => ok(MOCK_EFFECTIVE_CONFIG));
+
+  // Pricing metadata (Analytics)
+  ipcMain.handle('cost:getPricingMeta', () => ok(MOCK_PRICING_META));
+
+  // Progetti duplicati + merge
+  ipcMain.handle('projects:detectDuplicates', () => ok(MOCK_DUPLICATES));
+  ipcMain.handle('projects:planMerge', () => ok(MOCK_MERGE_PLAN));
+  ipcMain.handle('projects:executeMerge', () => ok(MOCK_MERGE_RESULT));
+
+  // Telemetria: in screenshot mode sempre OFF, toggle no-op, track scartato
+  ipcMain.handle('telemetry:isEnabled', () => ok(false));
+  ipcMain.handle('telemetry:setEnabled', (_e: unknown, enabled: boolean) => ok(enabled));
+  ipcMain.handle('telemetry:track', () => ok(null));
+
+  // Azioni background agent: no-op (la lista resta MOCK_BG_SESSIONS)
+  ipcMain.handle('agents:attachBg', () => ok(null));
+  ipcMain.handle('agents:stopBg', () => ok(null));
+  ipcMain.handle('agents:respawnBg', () => ok(null));
+  ipcMain.handle('agents:deleteBg', () => ok(null));
+
+  // Badge notifiche
+  ipcMain.handle('notifications:clearBadge', () => ok(true));
+
+  // Stato UI persistito (tag gestiti, pin, tema): seminato così le viste
+  // Memory/Session mostrano i tag invece di superfici vuote.
+  ipcMain.handle('prefs:getAll', () => ok(getPrefs()));
+  ipcMain.handle('prefs:set', () => ok(true));
 }
