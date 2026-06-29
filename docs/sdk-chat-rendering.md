@@ -1,10 +1,10 @@
 # SDK Chat rendering — end-of-turn flash / "written twice"
 
-Status: **fixed — stream as the source of truth** (the clean fix from §7 is now
-implemented). The in-app SDK chat no longer reads disk for display after the
-initial seed, so the end-of-turn reconcile blink is gone. The history below is
-kept for context; §6 (band-aids) and the "not yet done" framing of §7 are
-superseded by §9 (what shipped).
+Status: **superseded by the per-view split (§10)** — the in-app SDK chat and the
+disk-backed viewer are now two separate views, so the live chat never touches the
+`.jsonl` at all (display *and* session context). The history below is kept for
+context; §6 (band-aids), the §7 framing, and §9 ("stream-as-truth inside the one
+hybrid `ChatView`") are all superseded by §10 (what shipped).
 
 This document captures everything learned while chasing the "the message flashes /
 gets written twice when a turn finishes" bug in the in-app SDK chat.
@@ -308,3 +308,51 @@ keeps `messages` fresh only for metadata derivations like `inheritedModel`).
 in-app chat anchors to the generated uuid (≠ the disk uuid), so it won't survive a
 full remount. Assistant content uses stream uuids that equal the disk ones, so it
 survives. Acceptable; revisit only if user-prompt highlighting becomes important.
+
+---
+
+## 10. What shipped next: the per-view split (current design)
+
+§9 still kept **one hybrid `ChatView`** that was both the live SDK chat and the
+disk viewer, switching on a `streamAsTruth` flag. It still read disk for the seed
+and metadata, and the `NewChatView → ChatView` hand-off disposed the SDK session
+between turn 1 and turn 2 — so the **backend re-read the `.jsonl` (resume)** to
+re-warm the context. The chat was stream-truth for *display* but not truly
+independent of the file.
+
+The current design **separates the two concerns into two views**, so the live
+chat never touches the `.jsonl` for either display or context:
+
+- **`LiveChatView`** (`src/components/project/chat/LiveChatView.tsx`, the
+  `new-chat` view; renamed from `NewChatView`) — the in-app SDK chat. **Always a
+  new conversation.** An in-memory `sessionMessages` array starts empty and grows
+  **only from the stream** (optimistic user bubble + the SDK's fully-formed
+  messages, appended at each turn end). **One live SDK session for the whole
+  conversation:** the composer is mounted once (no `key`) and handed the session
+  id on `onStarted`; the first send is `startMessage`, every later send is
+  `sendMessage(sessionId)` which — the session still alive in the main — **pushes
+  into the warm query** (no disk resume). The view never navigates away
+  mid-conversation, so nothing remounts/disposes. Running cost/tokens/model come
+  from the SDK `result` summary (`onTurnComplete`), not disk.
+- **`ChatView`** — now a **pure read-only, disk-backed viewer** of an existing
+  session: `displayMessages = messages` (the `useChatSession` read), watcher-
+  driven. No composer, no `useLiveTurn`, no stream. Keeps every reading
+  affordance (export, highlights, timeline, minimap, tags, delete, sub-agent
+  transcripts). `embedded` (Terminal/Lens) is just a chrome sub-case of this.
+
+**Backend:** the SDK still persists (`persistSession` default `true`) so the chat
+stays interchangeable with the terminal and re-openable as a read-only session —
+but the renderer **never reads it back** for the live chat. `onTurnEnd` now
+carries a `ChatTurnSummary` (`{ totalCostUsd, usage tokens, numTurns, models }`,
+read defensively from the `result` message in `chat-runner.ts:summarizeResult`),
+forwarded on `sessions:chatDone`.
+
+**Removed:** `useLiveTurn.ts` (its accumulate-from-stream logic now lives in
+`LiveChatView`, always stream — no `streamAsTruth` branch, no disk seed), the
+`initialMessages` hand-off on the `chat` view, and the composer from `ChatView`.
+
+**Trade-offs (accepted — "leaner but cleaner"):** you can no longer **continue an
+existing session** from the in-app SDK chat (use the terminal, which resumes the
+`.jsonl` the live chat wrote); export/highlights/timeline/tags are **not**
+available during a live chat (leave and reopen the session read-only to get them);
+reopening a just-created chat shows it read-only (it's on disk now).

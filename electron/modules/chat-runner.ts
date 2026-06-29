@@ -51,6 +51,27 @@ function noteMessage(text: string): ChatMessage {
   };
 }
 
+// Pull the turn's cost/token/model summary out of an SDK `result` message. Read
+// defensively (typed `unknown`): the result is undocumented-internal enough that
+// a field could be absent at runtime, and a missing one should degrade to 0/[]
+// rather than throw. The SDK reports session cumulatives here (`usage` is
+// snake_case BetaUsage; `modelUsage` is keyed by model id).
+function summarizeResult(msg: unknown): ChatTurnSummary {
+  const r = (msg ?? {}) as Record<string, unknown>;
+  const usage = (r.usage ?? {}) as Record<string, unknown>;
+  const modelUsage = (r.modelUsage ?? {}) as Record<string, unknown>;
+  const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
+  return {
+    totalCostUsd: num(r.total_cost_usd),
+    inputTokens: num(usage.input_tokens),
+    outputTokens: num(usage.output_tokens),
+    cacheReadTokens: num(usage.cache_read_input_tokens),
+    cacheWriteTokens: num(usage.cache_creation_input_tokens),
+    numTurns: num(r.num_turns),
+    models: Object.keys(modelUsage),
+  };
+}
+
 // The SDK is ESM-only; deriving its types from the dynamic `import()` (rather than
 // a top-level `import type`) avoids the CommonJS→ESM resolution-mode requirement.
 // Re-exported so the main process can type its canUseTool plumbing off the same
@@ -87,6 +108,21 @@ export interface ToolActivity {
   elapsedSeconds: number | null;
 }
 
+/** End-of-turn metadata, read straight from the SDK's `result` message so the
+ *  live in-app chat can show running cost/tokens/model without touching disk.
+ *  Mirrored in `src/types.ts` for the renderer. Cost and tokens are session
+ *  cumulatives (the SDK reports session totals on every result). */
+export interface ChatTurnSummary {
+  totalCostUsd: number;
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadTokens: number;
+  cacheWriteTokens: number;
+  numTurns: number;
+  /** Models used so far (the keys of the SDK's `modelUsage`). */
+  models: string[];
+}
+
 export interface ChatCallbacks {
   /** Fired with the session id as soon as the SDK reports it (init message). */
   onStarted: (sessionId: string) => void;
@@ -104,10 +140,11 @@ export interface ChatCallbacks {
   onMessage: (message: ChatMessage) => void;
   /** Fired with an error message (result.is_error, or a thrown failure). */
   onError: (message: string) => void;
-  /** Fired at the end of each turn (the SDK's `result` message). Unlike the old
-   *  one-shot `onDone`, the session stays alive — this just means the in-flight
-   *  turn finished and the composer can re-enable. */
-  onTurnEnd: () => void;
+  /** Fired at the end of each turn (the SDK's `result` message), carrying the
+   *  turn's cost/token/model summary read straight from that message. Unlike the
+   *  old one-shot `onDone`, the session stays alive — this just means the
+   *  in-flight turn finished and the composer can re-enable. */
+  onTurnEnd: (summary: ChatTurnSummary) => void;
   /** Fired once when the whole session ends (generator closed, aborted, or a
    *  fatal stream error) — the persistent `query()` is gone. */
   onClosed: () => void;
@@ -318,7 +355,7 @@ export class ChatSession {
           // per-turn flag so the next turn starts clean; the query stays alive
           // waiting on the generator for the next send.
           this.sawAssistant = false;
-          cb.onTurnEnd();
+          cb.onTurnEnd(summarizeResult(msg));
         }
       }
     } catch (e) {

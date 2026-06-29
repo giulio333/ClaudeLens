@@ -42,6 +42,7 @@ import type {
   PermissionRequest,
   PermissionDecision,
   ToolActivity,
+  ChatTurnSummary,
   NotificationEvent,
 } from '../types'
 
@@ -87,6 +88,7 @@ export type {
   PermissionRequest,
   PermissionDecision,
   ToolActivity,
+  ChatTurnSummary,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -212,7 +214,7 @@ declare global {
         onChatChunk: (cb: (chunk: string) => void) => () => void
         onChatToolActivity: (cb: (activity: ToolActivity) => void) => () => void
         onChatMessage: (cb: (message: ChatMessage) => void) => () => void
-        onChatDone: (cb: () => void) => () => void
+        onChatDone: (cb: (summary?: ChatTurnSummary) => void) => () => void
         onChatError: (cb: (error: string) => void) => () => void
       }
       terminal: {

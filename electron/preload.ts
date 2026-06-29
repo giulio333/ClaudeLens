@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatToolActivity: (cb: (activity: unknown) => void) =>
       subscribe('sessions:chatToolActivity', cb),
     onChatMessage: (cb: (message: unknown) => void) => subscribe('sessions:chatMessage', cb),
-    onChatDone: (cb: () => void) => subscribe('sessions:chatDone', cb),
+    onChatDone: (cb: (summary?: unknown) => void) => subscribe('sessions:chatDone', cb),
     onChatError: (cb: (error: string) => void) => subscribe('sessions:chatError', cb),
   },
   terminal: {

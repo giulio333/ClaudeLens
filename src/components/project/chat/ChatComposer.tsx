@@ -8,6 +8,7 @@ import type {
   PermissionDecision,
   ChatMessage,
   ToolActivity,
+  ChatTurnSummary,
 } from '../../../hooks/useIPC';
 
 /** The four permission modes Claude Code accepts, labelled for what they now do
@@ -168,8 +169,10 @@ export function ChatComposer({
    *  while the session is live in a terminal, where replying here would both
    *  race the CLI on the same transcript and silently spend SDK credits. */
   lockNotice?: string | null;
-  /** Fired when a turn finishes so the parent can refetch the transcript. */
-  onTurnComplete: () => void;
+  /** Fired when a turn finishes. Carries the SDK's end-of-turn summary
+   *  (cost/tokens/model, read from the `result` message — no disk) so a live
+   *  chat can show running metadata; absent when the turn died without a result. */
+  onTurnComplete: (summary?: ChatTurnSummary) => void;
   /** New-chat mode: the freshly-minted session id, as soon as Claude reports it. */
   onStarted?: (sessionId: string) => void;
   /** Fired with the message text at send time (used by the new-chat view to
@@ -312,16 +315,17 @@ export function ChatComposer({
         setErrorText(prev => (prev ? prev + '\n' : '') + message)
       ),
       window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req])),
-      window.electronAPI.sessions.onChatDone(() => {
+      window.electronAPI.sessions.onChatDone(summary => {
         setSending(false);
         setStream('');
         setLiveTool(null);
         // A turn can't end with requests still on screen (the SDK denied any
         // pending ones on teardown); clear the stale queue.
         setPermQueue([]);
-        // The watcher has likely refetched mid-stream already; refetch again so the
-        // final turn is on screen the instant the run closes.
-        onTurnCompleteRef.current();
+        // Hand the parent the SDK's end-of-turn summary (cost/tokens/model). The
+        // live chat uses it for running metadata; the disk-backed viewer ignores
+        // the arg and just refetches.
+        onTurnCompleteRef.current(summary);
       }),
     ];
     return () => disposers.forEach(dispose => dispose());

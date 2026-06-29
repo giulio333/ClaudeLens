@@ -1326,7 +1326,7 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
       // the renderer's queue clears.
       denyAllPending('The turn ended with an error.');
     },
-    onTurnEnd: () => send('sessions:chatDone'),
+    onTurnEnd: summary => send('sessions:chatDone', summary),
     onClosed: () => {
       // A deliberate teardown (endChat, supersede) clears or replaces the live
       // pointer before this fires. Reaching here with the pointer still intact

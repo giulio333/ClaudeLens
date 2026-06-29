@@ -10,7 +10,7 @@ import {
   useAllSkills,
   usePlugins,
 } from '../../../hooks/useIPC';
-import { SessionSummary, Skill, Agent, ChatMessage } from '../../../hooks/useIPC';
+import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
 import { trackEvent } from '../../../lib/telemetry';
 import {
@@ -30,15 +30,12 @@ import {
   ChatExportPreset,
 } from './export';
 import { useChatAutoScroll } from './useAutoScroll';
-import { useLiveTurn } from './useLiveTurn';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
 import { MessageBubble, ToolsHiddenBadge } from './MessageBubble';
-import { ChatComposer } from './ChatComposer';
 import { ChatControlPill } from './ChatControlPill';
 import { FocusMinimap } from './FocusMinimap';
-import { LiveTurn } from './LiveTurn';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
@@ -61,7 +58,6 @@ export function ChatView({
   onOpenAgent,
   embedded = false,
   jumpToTurnRef,
-  initialMessages,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -81,11 +77,6 @@ export function ChatView({
    *  terminal's PTY. The floating control pill stays — it anchors to the chat
    *  column. */
   embedded?: boolean;
-  /** Transcript handed off from the new-chat view (turn 1): the optimistic user
-   *  prompt + the messages the SDK streamed. Seeds the stream-as-truth in-memory
-   *  transcript so the view paints the finished turn immediately on mount, with
-   *  no disk read (and so no mid-write flash). Ignored when `embedded`. */
-  initialMessages?: ChatMessage[];
 }) {
   const {
     data: messages,
@@ -157,15 +148,12 @@ export function ChatView({
   } = useSessionTags(project.hash);
   const sessionTags = tagsForSession(session.filename);
   const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
-  // The in-flight turn state machine. In the in-app SDK chat the SDK stream is
-  // the source of truth: disk is read once (seeded from `initialMessages` or the
-  // first load) then ignored, and each turn is appended straight from the stream
-  // — no mid-write disk reconcile, so the reply can't flash. Terminal/Lens
-  // (`embedded`) stays disk-backed instead. The assistant's partial reply renders
-  // inline as a provisional turn at the foot — see useLiveTurn.ts.
-  // `displayMessages` is what we actually render.
-  const { displayMessages, liveText, liveTool, streaming, liveMessageCount, composer } =
-    useLiveTurn(messages, { streamAsTruth: !embedded, initialMessages });
+  // Read-only, disk-backed viewer: `displayMessages` is whatever the session
+  // transcript holds, kept fresh by the file watcher. The live in-app SDK chat is
+  // a separate view (`LiveChatView`) that streams without ever reading disk.
+  // Memoized so the empty-fallback array stays referentially stable (a fresh `[]`
+  // each render would re-run the `processed` memo below).
+  const displayMessages = useMemo(() => messages ?? [], [messages]);
 
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all');
   const [activeTurn, setActiveTurn] = useState<number | null>(null);
@@ -201,19 +189,6 @@ export function ChatView({
   // Heavy: rebuild the processed transcript only when the displayed messages change.
   const processed = useMemo(() => buildProcessedMessages(displayMessages), [displayMessages]);
   const canExport = processed.length > 0 && !isLoading;
-
-  // Model the session is already on — its last assistant turn that recorded one.
-  // The composer reuses it so a reply from ClaudeLens stays on the same model the
-  // chat was using; undefined falls back to the configured default. `<synthetic>`
-  // turns (persisted local-command output) aren't a real model — sending that
-  // string as a model id would error, so skip past them.
-  const inheritedModel = useMemo(() => {
-    for (let i = (messages?.length ?? 0) - 1; i >= 0; i--) {
-      const m = messages![i];
-      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model;
-    }
-    return undefined;
-  }, [messages]);
 
   const sessionId = useMemo(() => session.filename.replace(/\.jsonl$/, ''), [session.filename]);
 
@@ -598,12 +573,9 @@ export function ChatView({
       )}
 
       {/* Overlays and alternate modes visually replace the chat workspace, but
-          the workspace below stays MOUNTED (hidden via display:none): the
-          composer inside it owns the persistent SDK session and the stream
-          listeners, so unmounting it mid-turn would dispose the session and
-          silently abort whatever Claude is doing. The composer's dialogs
-          (permission requests) render through a portal, so they stay visible
-          and answerable even while the workspace is hidden. */}
+          the workspace below stays MOUNTED (hidden via display:none) so its
+          scroll position, highlight layer and scroll-spy state survive being
+          covered and don't reset when the overlay closes. */}
       {selectedTool ? (
         <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
       ) : transcriptAgent && transcriptAgent.agentId ? (
@@ -632,13 +604,6 @@ export function ChatView({
 
       <div
         className="cl-chat-workspace cl-chat-workspace--focus"
-        // No composer is rendered when embedded (read-only Terminal/Lens view),
-        // so skip the reserved bottom padding / lifted pill — otherwise empty
-        // space lingers between the pill and the page bottom.
-        data-composer={!embedded || undefined}
-        // The lock notice makes the composer taller; the pill's fixed offset
-        // must clear it or it floats on top of the notice text.
-        data-composer-lock={(!embedded && liveInTerminal) || undefined}
         style={chatHidden ? { display: 'none' } : undefined}
       >
         <main className="cl-chat-feed" ref={feedRef} onScroll={onFeedScroll} onWheel={onFeedWheel}>
@@ -709,10 +674,6 @@ export function ChatView({
                     );
                   });
                 })()}
-                {streaming &&
-                  (liveText !== '' || liveTool !== null || liveMessageCount === 0) && (
-                    <LiveTurn text={liveText} tool={liveTool} turnNumber={processed.length + 1} />
-                  )}
               </div>
             </div>
           )}
@@ -734,30 +695,6 @@ export function ChatView({
         )}
 
         {controlPill(true)}
-
-        {/* The embedded (Terminal/Lens) surface is read-only: the live session
-            belongs to the terminal's PTY. Drop the composer entirely so neither
-            the input nor the "running in your terminal" lock notice show up. */}
-        {!embedded && (
-          <ChatComposer
-            key={sessionId}
-            realPath={project.realPath}
-            sessionId={sessionId}
-            model={inheritedModel}
-            lockNotice={
-              liveInTerminal
-                ? 'This session is running in your terminal — reply there, or wait for it to end. Replying here would run a parallel turn on Agent SDK credits.'
-                : null
-            }
-            onTurnComplete={refetch}
-            onSend={composer.onSend}
-            onSendFailed={composer.onSendFailed}
-            onStreamChange={composer.onStreamChange}
-            onStreamingChange={composer.onStreamingChange}
-            onLiveMessagesChange={composer.onLiveMessagesChange}
-            onLiveToolChange={composer.onLiveToolChange}
-          />
-        )}
       </div>
     </div>
   );
