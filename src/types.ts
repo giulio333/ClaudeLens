@@ -174,6 +174,22 @@ export interface ToolActivity {
   elapsedSeconds: number | null
 }
 
+/** End-of-turn metadata for the in-app SDK chat, derived from the SDK's `result`
+ *  message (NOT from disk) and carried on `sessions:chatDone`. Lets the live chat
+ *  show running cost/tokens/model without ever reading the transcript file.
+ *  Mirrors `ChatTurnSummary` in `chat-runner.ts`. Cost and token counts are
+ *  cumulative for the session (the SDK reports session totals on each result). */
+export interface ChatTurnSummary {
+  totalCostUsd: number
+  inputTokens: number
+  outputTokens: number
+  cacheReadTokens: number
+  cacheWriteTokens: number
+  numTurns: number
+  /** Models used so far (the keys of the SDK's `modelUsage`). */
+  models: string[]
+}
+
 export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan'
 
 export interface SessionArtifact {

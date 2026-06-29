@@ -45,7 +45,7 @@ import { PluginDetailView } from '../components/project/plugins/PluginDetailView
 import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView'
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView'
-import { NewChatView } from '../components/project/chat/NewChatView'
+import { LiveChatView } from '../components/project/chat/LiveChatView'
 import { TerminalMissionControl } from '../components/project/terminal/TerminalMissionControl'
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
@@ -374,7 +374,6 @@ export default function ProjectOverview() {
             key={view.session.filename}
             project={view.project}
             session={view.session}
-            initialMessages={view.initialMessages}
             onBack={() => view.from === 'agents-live'
               ? setView({ type: 'agents-live', project: view.project })
               : setView({ type: 'sessions', project: view.project })
@@ -385,12 +384,9 @@ export default function ProjectOverview() {
         )
       case 'new-chat':
         return (
-          <NewChatView
+          <LiveChatView
             project={view.project}
             onBack={() => setView({ type: 'sessions', project: view.project })}
-            onCreated={(session, initialMessages) =>
-              setView({ type: 'chat', project: view.project, session, from: 'sessions', initialMessages })
-            }
           />
         )
       case 'terminal':
