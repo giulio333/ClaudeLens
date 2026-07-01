@@ -1,7 +1,8 @@
 import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
 import { join, basename, relative, extname, sep } from 'path';
 import { CLAUDE_DIR } from '../utils';
-import { parseFrontmatter, getString, getBoolean, getStringArray } from './frontmatter';
+import { parseFrontmatter } from './frontmatter';
+import { SKILL_FIELDS, parseFields } from './entity-fields';
 
 /** Role buckets used to group a skill's supporting files in the UI. */
 export type SkillFileRole = 'doc' | 'script' | 'template' | 'asset' | 'extension' | 'eval' | 'meta';
@@ -158,36 +159,10 @@ export function parseSkillMarkdown(content: string): {
   body: string;
 } {
   const { frontmatter: raw, body } = parseFrontmatter(content);
-  const fm: SkillFrontmatter = {};
+  // Scalar/list fields come from the shared SKILL_FIELDS registry; `hooks` is a
+  // nested map (not a scalar), so it is read separately below.
+  const fm = parseFields(raw, SKILL_FIELDS) as SkillFrontmatter;
 
-  // Ogni campo valutato una sola volta, assegnato solo se definito (preserva
-  // i campi opzionali come `undefined` invece di forzarli a un valore vuoto).
-  const description = getString(raw, 'description');
-  if (description !== undefined) fm.description = description;
-
-  const argumentHint = getString(raw, 'argument-hint');
-  if (argumentHint !== undefined) fm.argumentHint = argumentHint;
-
-  const disableModelInvocation = getBoolean(raw, 'disable-model-invocation');
-  if (disableModelInvocation !== undefined) fm.disableModelInvocation = disableModelInvocation;
-
-  const userInvocable = getBoolean(raw, 'user-invocable');
-  if (userInvocable !== undefined) fm.userInvocable = userInvocable;
-
-  const allowedTools = getStringArray(raw, 'allowed-tools');
-  if (allowedTools !== undefined) fm.allowedTools = allowedTools;
-
-  const model = getString(raw, 'model');
-  if (model !== undefined) fm.model = model;
-
-  const context = getString(raw, 'context');
-  if (context !== undefined) fm.context = context;
-
-  const agent = getString(raw, 'agent');
-  if (agent !== undefined) fm.agent = agent;
-
-  // `hooks` is declared on the Skill type and forwarded below, but was never
-  // actually parsed — so a skill's hooks block was silently dropped.
   const rawHooks = raw['hooks'];
   if (rawHooks && typeof rawHooks === 'object' && !Array.isArray(rawHooks)) {
     fm.hooks = rawHooks as Record<string, unknown>;

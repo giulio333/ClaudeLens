@@ -199,15 +199,33 @@ function parseFmEntries(fm: string): { key: string; lines: string[] }[] {
   return out
 }
 
+/**
+ * YAML-safe inline scalar for *writing* a frontmatter value. A simple plain
+ * scalar is emitted verbatim; anything that could break the block — a colon,
+ * `#`, quotes, brackets, a leading/trailing space, or a number/bool/null-looking
+ * word — is emitted as a JSON double-quoted string (a valid YAML flow scalar
+ * that round-trips back through js-yaml). Without this a description like
+ * "Use this skill when: editing" written unquoted makes the reader throw on load
+ * and drop the ENTIRE frontmatter (description, tools, model, …).
+ */
+export function yamlInline(v: string): string {
+  const plain =
+    /^[A-Za-z0-9][A-Za-z0-9_ ./-]*$/.test(v) &&
+    v === v.trim() &&
+    !/^(true|false|null|yes|no|on|off)$/i.test(v) &&
+    !/^-?\d/.test(v)
+  return plain ? v : JSON.stringify(v)
+}
+
 function emitOption(def: OptionDef, v: OptionValue): string | null {
   if (v == null) return null
   if (def.isBool) return `${def.frontmatterKey}: ${v ? 'true' : 'false'}`
   if (def.isArray) {
     const arr = v as string[]
-    return arr.length ? `${def.frontmatterKey}: [${arr.join(', ')}]` : null
+    return arr.length ? `${def.frontmatterKey}: [${arr.map(yamlInline).join(', ')}]` : null
   }
   if (def.isNumber) return `${def.frontmatterKey}: ${v}`
-  return v === '' ? null : `${def.frontmatterKey}: ${v}`
+  return v === '' ? null : `${def.frontmatterKey}: ${yamlInline(String(v))}`
 }
 
 /**
@@ -230,19 +248,38 @@ function serializeWithPreserved(
   return ['---', ...emitted, ...preserved, '---', '', body].join('\n')
 }
 
+/**
+ * Serialize an agent/skill back to markdown: emit `name`/`description` + the
+ * managed option lines (all YAML-quoted), then re-append any unmodeled
+ * frontmatter keys (e.g. a skill's `hooks`) untouched. `emitName` is true for
+ * agents (name is a frontmatter field) and false for skills (name is the dir).
+ */
+function serializeEntity(
+  entity: { name: string; rawContent: string },
+  body: string,
+  opts: { description: string; options: Record<string, OptionValue>; defs: OptionDef[]; emitName: boolean }
+): string {
+  const emitted: string[] = []
+  if (opts.emitName) emitted.push(`name: ${yamlInline(entity.name)}`)
+  if (opts.description) emitted.push(`description: ${yamlInline(opts.description)}`)
+  for (const def of opts.defs) {
+    const line = emitOption(def, opts.options[def.key])
+    if (line) emitted.push(line)
+  }
+  const managed = [
+    ...(opts.emitName ? ['name'] : []),
+    'description',
+    ...opts.defs.map(d => d.frontmatterKey),
+  ]
+  return serializeWithPreserved(entity.rawContent, managed, emitted, body)
+}
+
 export function serializeAgent(
   agent: Agent,
   body: string,
   opts: { description: string; options: Record<string, OptionValue> }
 ): string {
-  const emitted: string[] = [`name: ${agent.name}`]
-  if (opts.description) emitted.push(`description: ${opts.description}`)
-  for (const def of AGENT_OPTION_DEFS) {
-    const line = emitOption(def, opts.options[def.key])
-    if (line) emitted.push(line)
-  }
-  const managed = ['name', 'description', ...AGENT_OPTION_DEFS.map(d => d.frontmatterKey)]
-  return serializeWithPreserved(agent.rawContent, managed, emitted, body)
+  return serializeEntity(agent, body, { ...opts, defs: AGENT_OPTION_DEFS, emitName: true })
 }
 
 export function serializeSkill(
@@ -250,14 +287,7 @@ export function serializeSkill(
   body: string,
   opts: { description: string; options: Record<string, OptionValue> }
 ): string {
-  const emitted: string[] = []
-  if (opts.description) emitted.push(`description: ${opts.description}`)
-  for (const def of SKILL_OPTION_DEFS) {
-    const line = emitOption(def, opts.options[def.key])
-    if (line) emitted.push(line)
-  }
-  const managed = ['description', ...SKILL_OPTION_DEFS.map(d => d.frontmatterKey)]
-  return serializeWithPreserved(skill.rawContent, managed, emitted, body)
+  return serializeEntity(skill, body, { ...opts, defs: SKILL_OPTION_DEFS, emitName: false })
 }
 
 /**

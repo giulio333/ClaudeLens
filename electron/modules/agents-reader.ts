@@ -1,7 +1,8 @@
 import { readFileSync, existsSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { CLAUDE_DIR } from '../utils';
-import { parseFrontmatter, getString, getBoolean, getStringArray, getNumber } from './frontmatter';
+import { parseFrontmatter, getString } from './frontmatter';
+import { AGENT_FIELDS, parseFields } from './entity-fields';
 
 export interface Agent {
   name: string;
@@ -52,54 +53,11 @@ interface AgentFrontmatter {
 
 function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; body: string } {
   const { frontmatter: raw, body } = parseFrontmatter(content);
-  const fm: AgentFrontmatter = {};
-
+  // All scalar/list fields come from the shared AGENT_FIELDS registry; `name`
+  // is read separately (required, with a filename fallback in readAgentFile).
+  const fm = parseFields(raw, AGENT_FIELDS) as AgentFrontmatter;
   const name = getString(raw, 'name');
   if (name !== undefined) fm.name = name;
-
-  const description = getString(raw, 'description');
-  if (description !== undefined) fm.description = description;
-
-  const model = getString(raw, 'model');
-  if (model !== undefined) fm.model = model;
-
-  // Il frontmatter usa `tools:` ma il modello dati lo espone come allowedTools.
-  const allowedTools = getStringArray(raw, 'tools');
-  if (allowedTools !== undefined) fm.allowedTools = allowedTools;
-
-  const disallowedTools = getStringArray(raw, 'disallowedTools');
-  if (disallowedTools !== undefined) fm.disallowedTools = disallowedTools;
-
-  const permissionMode = getString(raw, 'permissionMode');
-  if (permissionMode !== undefined) fm.permissionMode = permissionMode;
-
-  const isolation = getString(raw, 'isolation');
-  if (isolation !== undefined) fm.isolation = isolation;
-
-  const memory = getString(raw, 'memory');
-  if (memory !== undefined) fm.memory = memory;
-
-  const effort = getString(raw, 'effort');
-  if (effort !== undefined) fm.effort = effort;
-
-  const color = getString(raw, 'color');
-  if (color !== undefined) fm.color = color;
-
-  const skills = getStringArray(raw, 'skills');
-  if (skills !== undefined) fm.skills = skills;
-
-  const mcpServers = getStringArray(raw, 'mcpServers');
-  if (mcpServers !== undefined) fm.mcpServers = mcpServers;
-
-  const maxTurns = getNumber(raw, 'maxTurns');
-  if (maxTurns !== undefined) fm.maxTurns = maxTurns;
-
-  const background = getBoolean(raw, 'background');
-  if (background !== undefined) fm.background = background;
-
-  const disableModelInvocation = getBoolean(raw, 'disable_model_invocation');
-  if (disableModelInvocation !== undefined) fm.disableModelInvocation = disableModelInvocation;
-
   return { frontmatter: fm, body };
 }
 
