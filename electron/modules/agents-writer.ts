@@ -3,6 +3,7 @@ import { join } from 'path';
 import os from 'os';
 import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
 import { yamlScalar } from './frontmatter';
+import { AGENT_FIELDS, emitFields } from './entity-fields';
 
 export interface AgentInput {
   name: string;
@@ -24,31 +25,16 @@ export interface AgentInput {
 }
 
 function buildAgentMarkdown(input: AgentInput): string {
-  const lines: string[] = ['---'];
-  // Quote each scalar/list entry so a value with a colon, '#', etc. can't break
-  // the YAML block (which would make the reader drop ALL frontmatter on load).
-  const list = (arr: string[]) => `[${arr.map(yamlScalar).join(', ')}]`;
-
-  lines.push(`name: ${yamlScalar(input.name)}`);
-  if (input.description) lines.push(`description: ${yamlScalar(input.description)}`);
-  if (input.model) lines.push(`model: ${yamlScalar(input.model)}`);
-  if (input.allowedTools && input.allowedTools.length > 0) lines.push(`tools: ${list(input.allowedTools)}`);
-  if (input.disallowedTools && input.disallowedTools.length > 0) lines.push(`disallowedTools: ${list(input.disallowedTools)}`);
-  if (input.permissionMode) lines.push(`permissionMode: ${yamlScalar(input.permissionMode)}`);
-  if (input.maxTurns !== undefined) lines.push(`maxTurns: ${input.maxTurns}`);
-  if (input.background !== undefined) lines.push(`background: ${input.background}`);
-  if (input.isolation) lines.push(`isolation: ${yamlScalar(input.isolation)}`);
-  if (input.memory) lines.push(`memory: ${yamlScalar(input.memory)}`);
-  if (input.effort) lines.push(`effort: ${yamlScalar(input.effort)}`);
-  if (input.color) lines.push(`color: ${yamlScalar(input.color)}`);
-  if (input.skills && input.skills.length > 0) lines.push(`skills: ${list(input.skills)}`);
-  if (input.mcpServers && input.mcpServers.length > 0) lines.push(`mcpServers: ${list(input.mcpServers)}`);
-  if (input.disableModelInvocation !== undefined) lines.push(`disable_model_invocation: ${input.disableModelInvocation}`);
-
-  lines.push('---');
-  lines.push('');
-  lines.push(input.content);
-
+  // `name` is required and always first; the rest are emitted (and quoted) from
+  // the shared AGENT_FIELDS registry, so the writer can't drift from the reader.
+  const lines = [
+    '---',
+    `name: ${yamlScalar(input.name)}`,
+    ...emitFields(input as unknown as Record<string, unknown>, AGENT_FIELDS),
+    '---',
+    '',
+    input.content,
+  ];
   return lines.join('\n');
 }
 
