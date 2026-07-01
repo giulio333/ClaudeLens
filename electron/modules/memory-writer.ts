@@ -123,12 +123,16 @@ export function createTopic(memoryDir: string, input: TopicInput): string {
 }
 
 export function updateTopic(memoryDir: string, filename: string, input: TopicInput): void {
-  writeFileSync(join(memoryDir, filename), buildTopicFileContent(input), 'utf-8');
+  validateTopicInput(input);
+  const target = join(memoryDir, filename);
+  assertWithin(memoryDir, target);
+  writeFileSync(target, buildTopicFileContent(input), 'utf-8');
   updateLineInMemoryMd(join(memoryDir, 'MEMORY.md'), filename, input.description);
 }
 
 export function deleteTopic(memoryDir: string, filename: string): void {
   const filePath = join(memoryDir, filename);
+  assertWithin(memoryDir, filePath);
   if (existsSync(filePath)) unlinkSync(filePath);
   removeLineFromMemoryMd(join(memoryDir, 'MEMORY.md'), filename);
 }

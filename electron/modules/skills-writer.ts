@@ -2,7 +2,7 @@ import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import os from 'os';
 import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
-import { yamlScalar } from './frontmatter';
+import { SKILL_FIELDS, emitFields } from './entity-fields';
 
 export interface SkillInput {
   name: string;
@@ -18,24 +18,15 @@ export interface SkillInput {
 }
 
 function buildSkillMarkdown(input: SkillInput): string {
-  const lines: string[] = ['---'];
-  // Quote each scalar/list entry so a value with a colon, '#', etc. can't break
-  // the YAML block (which would make the reader drop ALL frontmatter on load).
-  const list = (arr: string[]) => `[${arr.map(yamlScalar).join(', ')}]`;
-
-  if (input.description) lines.push(`description: ${yamlScalar(input.description)}`);
-  if (input.argumentHint) lines.push(`argument-hint: ${yamlScalar(input.argumentHint)}`);
-  if (input.disableModelInvocation !== undefined) lines.push(`disable-model-invocation: ${input.disableModelInvocation}`);
-  if (input.userInvocable !== undefined) lines.push(`user-invocable: ${input.userInvocable}`);
-  if (input.allowedTools && input.allowedTools.length > 0) lines.push(`allowed-tools: ${list(input.allowedTools)}`);
-  if (input.model) lines.push(`model: ${yamlScalar(input.model)}`);
-  if (input.context) lines.push(`context: ${yamlScalar(input.context)}`);
-  if (input.agent) lines.push(`agent: ${yamlScalar(input.agent)}`);
-
-  lines.push('---');
-  lines.push('');
-  lines.push(input.content);
-
+  // A skill's name is its directory, not a frontmatter field, so the block is
+  // emitted (and quoted) entirely from the shared SKILL_FIELDS registry.
+  const lines = [
+    '---',
+    ...emitFields(input as unknown as Record<string, unknown>, SKILL_FIELDS),
+    '---',
+    '',
+    input.content,
+  ];
   return lines.join('\n');
 }
 

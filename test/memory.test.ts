@@ -358,6 +358,35 @@ describe('updateTopic', () => {
     expect(index.filter(l => l.includes(`(${filename})`))).toHaveLength(1);
     expect(index).toContain(`- [${filename}](${filename}) — updated over lines`);
   });
+
+  it('rejects an invalid topic type on update (parity with create)', () => {
+    const filename = createTopic(memoryDir, {
+      name: 'Topic',
+      description: 'd',
+      type: 'user',
+      content: 'body',
+    });
+    expect(() =>
+      updateTopic(memoryDir, filename, {
+        name: 'Topic',
+        description: 'd',
+        type: 'bogus' as never,
+        content: 'body',
+      })
+    ).toThrow(/Invalid topic type/);
+  });
+
+  it('refuses a filename that escapes the memory dir', () => {
+    expect(() =>
+      updateTopic(memoryDir, '../escape.md', {
+        name: 'Topic',
+        description: 'd',
+        type: 'user',
+        content: 'body',
+      })
+    ).toThrow(/outside/);
+    expect(existsSync(join(memoryDir, '..', 'escape.md'))).toBe(false);
+  });
 });
 
 describe('deleteTopic', () => {
@@ -376,6 +405,14 @@ describe('deleteTopic', () => {
     const index = readFileSync(join(memoryDir, 'MEMORY.md'), 'utf-8');
     expect(index).not.toContain(filename);
     expect(index).not.toContain('gone soon');
+  });
+
+  it('refuses a filename that escapes the memory dir', () => {
+    // A sibling file outside memoryDir must be safe from a traversal filename.
+    const outside = join(tmp, 'keep.md');
+    writeFileSync(outside, 'keep me', 'utf-8');
+    expect(() => deleteTopic(memoryDir, '../keep.md')).toThrow(/outside/);
+    expect(existsSync(outside)).toBe(true);
   });
 
   it('leaves sibling index lines intact when deleting one topic', () => {
