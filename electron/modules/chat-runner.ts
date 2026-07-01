@@ -25,6 +25,7 @@
 import { randomUUID } from 'crypto';
 import { mapSdkMessageToChat, type ChatMessage } from './session-reader';
 import { resolveClaudeExecutablePath } from '../utils';
+import type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
 
 async function loadSdk() {
   return import('@anthropic-ai/claude-agent-sdk');
@@ -99,29 +100,10 @@ export interface ChatSessionParams {
   env: Record<string, string | undefined>;
 }
 
-/** Live tool indicator for the in-flight turn. Mirrored in `src/types.ts` for
- *  the renderer (the two tsconfigs don't share imports). */
-export interface ToolActivity {
-  toolName: string;
-  /** Set while the tool executes (from `tool_progress`); null while the model
-   *  is still generating the tool call's input. */
-  elapsedSeconds: number | null;
-}
-
-/** End-of-turn metadata, read straight from the SDK's `result` message so the
- *  live in-app chat can show running cost/tokens/model without touching disk.
- *  Mirrored in `src/types.ts` for the renderer. Cost and tokens are session
- *  cumulatives (the SDK reports session totals on every result). */
-export interface ChatTurnSummary {
-  totalCostUsd: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  numTurns: number;
-  /** Models used so far (the keys of the SDK's `modelUsage`). */
-  models: string[];
-}
+// `ToolActivity` and `ChatTurnSummary` live in the shared module (single
+// definition for main and renderer); re-exported so existing importers keep
+// working unchanged.
+export type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
 
 export interface ChatCallbacks {
   /** Fired with the session id as soon as the SDK reports it (init message). */

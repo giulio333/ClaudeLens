@@ -38,6 +38,7 @@ import {
   PermissionResult,
   PermissionUpdate,
 } from './modules/chat-runner';
+import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { initTelemetry, track, trackExit, isTelemetryEnabled, setTelemetryEnabled } from './modules/telemetry';
 import {
@@ -1231,15 +1232,16 @@ const pendingPermissions = new Map<string, (r: PermissionResult) => void>();
 // rather than silently bypassing or blocking. Callers may override.
 const RESUME_PERMISSION_MODE = 'default';
 
-type PermissionDecision =
-  | { kind: 'allow'; input: Record<string, unknown> }
-  | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionUpdate[] }
-  | { kind: 'deny'; message?: string };
-
 function toPermissionResult(d: PermissionDecision): PermissionResult {
   if (d.kind === 'deny') return { behavior: 'deny', message: d.message || 'Denied by the user.' };
   if (d.kind === 'always')
-    return { behavior: 'allow', updatedInput: d.input, updatedPermissions: d.suggestions };
+    return {
+      behavior: 'allow',
+      updatedInput: d.input,
+      // The renderer round-trips the SDK's suggestions verbatim (opaque to it),
+      // so the loose shared type narrows back to the SDK's here.
+      updatedPermissions: d.suggestions as PermissionUpdate[] | undefined,
+    };
   return { behavior: 'allow', updatedInput: d.input };
 }
 
