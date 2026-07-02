@@ -56,6 +56,7 @@ export function ChatView({
   onBack,
   onOpenSkill,
   onOpenAgent,
+  onContinueChat,
   embedded = false,
   jumpToTurnRef,
 }: {
@@ -66,6 +67,10 @@ export function ChatView({
   onOpenSkill?: (skill: Skill) => void;
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Opens this session in the live SDK chat (`LiveChatView` in resume mode) so
+   *  the conversation continues in-app. Hidden while the session is live in a
+   *  terminal — replying there would race the CLI on the same transcript. */
+  onContinueChat?: () => void;
   /** Imperative handle exposed to an outside navigator (the v2 Outline column):
    *  set to this view's `jumpToTurn` so a session-outline row can scroll the
    *  embedded transcript to a turn. Null while unmounted / Terminal mode. */
@@ -485,6 +490,16 @@ export function ChatView({
           crumbs={[{ label: title, accent: true }]}
           right={
             <>
+              {onContinueChat && !liveInTerminal && !isLoading && (
+                <button
+                  type="button"
+                  className="cl-chat-tag-add"
+                  title="Continue this conversation in-app through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
+                  onClick={onContinueChat}
+                >
+                  Continue chat
+                </button>
+              )}
               {liveInTerminal && (
                 <span
                   title="This session is running in your terminal right now"

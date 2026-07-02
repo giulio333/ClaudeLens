@@ -3,15 +3,9 @@ import { createPortal } from 'react-dom';
 import { fmtModel } from '../utils';
 import { PermissionRequestDialog } from './PermissionRequestDialog';
 import { useEffectiveConfig } from '../../../hooks/useIPC';
-import type {
-  PermissionRequest,
-  PermissionDecision,
-  ChatMessage,
-  ToolActivity,
-  ChatTurnSummary,
-} from '../../../hooks/useIPC';
+import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC';
 
-/** The four permission modes Claude Code accepts, labelled for what they now do
+/** The four permission modes Claude Code accepts, labelled for what they do
  *  with *interactive* approvals: the chat runs through the Agent SDK's
  *  `canUseTool`, so a tool that isn't auto-approved pops an in-app Allow / Always
  *  / Deny dialog instead of being silently denied. The labels reflect that.
@@ -126,84 +120,55 @@ function ComposerSelect<T extends string>({
   );
 }
 
-/** Bottom composer for the Focus chat layout — lets the user continue an existing
- *  session straight from ClaudeLens. Each turn runs through the Agent SDK in
- *  streaming input mode (`modules/chat-runner.ts`): the first send opens a
- *  persistent session for this transcript (resuming the same `.jsonl` the terminal
- *  reads — the two stay interchangeable), and every later send rides that same warm
- *  session. The assistant's text streams live; once a turn closes the file watcher
- *  refetches the transcript and the full turn renders through the normal pipeline.
- *  On unmount (leaving the chat, or switching session) the composer disposes the
- *  session via `sessions:endChat`; the next send resumes it from disk.
+/** Bottom composer for the Focus chat layout — a purely presentational input
+ *  bar. All chat state (the IPC subscriptions, the in-flight turn, the
+ *  permission queue, the transcript) lives in `useLiveChat`; this component
+ *  owns only what belongs to the input itself: the draft, the slash-command
+ *  autocomplete, the Model / Permission pickers and the pre-send confirmation
+ *  for risky permission modes. Send hands the text plus the picked options to
+ *  the owner (`onSend`); Stop is `onStop`; the pending tool-approval request
+ *  arrives as a prop and is answered through `onRespondPermission`.
  *
- *  `model` is the model inherited from the session (its last assistant turn); it
- *  seeds the model picker so a reply defaults to the same model the chat was on.
- *  The picker lets the user switch model and permission mode per turn; on a live
- *  session the change applies mid-stream via the SDK's `setModel`/
- *  `setPermissionMode`. Stop is a native `interrupt()` — it ends the in-flight turn
- *  but keeps the session, so the user can keep chatting.
- *
- *  Two modes, keyed by `sessionId`: present → resume that session
- *  (`sessions:sendMessage`); absent → start a brand-new session
- *  (`sessions:startMessage`), in which the new id arrives on `onChatStarted` and
- *  is surfaced to the parent via `onStarted`. */
+ *  `model` is the model inherited from the session (its last assistant turn);
+ *  it seeds the model picker so a reply defaults to the same model the chat
+ *  was on. */
 export function ChatComposer({
   realPath,
   sessionId,
   model,
-  onTurnComplete,
-  onStarted,
+  sending,
+  errorText,
+  permRequest,
+  permPendingCount = 0,
+  onRespondPermission,
   onSend,
-  onStreamChange,
-  onStreamingChange,
-  onLiveMessagesChange,
-  onLiveToolChange,
-  onSendFailed,
+  onStop,
   lockNotice,
 }: {
   realPath: string;
-  /** Resume mode when set; new-chat mode when omitted. */
+  /** Resume mode when set; new-chat mode when omitted. Drives copy only. */
   sessionId?: string;
   model?: string;
+  /** True while a turn is in flight — disables input, shows Stop. */
+  sending: boolean;
+  /** Error from the current/last turn, shown above the input. */
+  errorText?: string | null;
+  /** The tool-approval request at the head of the owner's queue, if any. */
+  permRequest?: PermissionRequest | null;
+  /** How many more requests are queued behind the visible one. */
+  permPendingCount?: number;
+  /** Answers the visible request; the owner advances its queue. */
+  onRespondPermission?: (decision: PermissionDecision) => void;
+  /** Fired with the drafted text and the picked options when the user sends. */
+  onSend: (text: string, opts: { model?: string; permissionMode: string }) => void;
+  /** Stops the in-flight turn (the session stays alive). */
+  onStop: () => void;
   /** When set, sending is disabled and this message is shown instead — used
    *  while the session is live in a terminal, where replying here would both
    *  race the CLI on the same transcript and silently spend SDK credits. */
   lockNotice?: string | null;
-  /** Fired when a turn finishes. Carries the SDK's end-of-turn summary
-   *  (cost/tokens/model, read from the `result` message — no disk) so a live
-   *  chat can show running metadata; absent when the turn died without a result. */
-  onTurnComplete: (summary?: ChatTurnSummary) => void;
-  /** New-chat mode: the freshly-minted session id, as soon as Claude reports it. */
-  onStarted?: (sessionId: string) => void;
-  /** Fired with the message text at send time (used by the new-chat view to
-   *  title the session before its transcript exists). */
-  onSend?: (text: string) => void;
-  /** Fired when a send fails before a turn ever starts (invoke error, or the
-   *  handler returned an error) — lets the parent roll back the optimistic
-   *  state it set in `onSend`, so the prompt bubble doesn't linger as if sent. */
-  onSendFailed?: () => void;
-  /** Lifts the live assistant text up so the parent can render it inline in the
-   *  transcript (instead of the composer's own preview strip). */
-  onStreamChange?: (text: string) => void;
-  /** Lifts the streaming on/off state up for the same inline rendering. */
-  onStreamingChange?: (active: boolean) => void;
-  /** Lifts up the fully-formed messages the SDK emits during the turn (assistant
-   *  turns + tool results), so the parent can render the live turn — tools and
-   *  all — without re-reading the half-written transcript from disk. */
-  onLiveMessagesChange?: (messages: ChatMessage[]) => void;
-  /** Lifts up the tool currently being prepared or executed (null = none), so
-   *  the parent's live turn can show a "Using X…" indicator while no text
-   *  streams. */
-  onLiveToolChange?: (activity: ToolActivity | null) => void;
 }) {
   const [draft, setDraft] = useState('');
-  const [sending, setSending] = useState(false);
-  const [stream, setStream] = useState('');
-  // Fully-formed messages received from the SDK during the in-flight turn.
-  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([]);
-  // The tool currently being prepared (input streaming in) or executed, if any.
-  const [liveTool, setLiveTool] = useState<ToolActivity | null>(null);
-  const [errorText, setErrorText] = useState<string | null>(null);
   // The user's explicit model pick; null = follow the session's inherited model
   // (the `model` prop). Derived rather than seeded once because the prop resolves
   // asynchronously — the transcript may still be loading when the composer
@@ -212,13 +177,6 @@ export function ChatComposer({
   const [chosenModel, setChosenModel] = useState<string | null>(null);
   const selectedModel = chosenModel !== null ? chosenModel : (model ?? '');
   const [permission, setPermission] = useState<PermissionMode>('default');
-  // Tool-approval requests forwarded from the SDK's canUseTool, oldest first.
-  // A queue, not a single slot: parallel read-only tools (or a Task subagent's
-  // tools alongside the main agent's) can fire several canUseTool calls at once,
-  // and overwriting the visible one would leave the hidden request pending
-  // forever — deadlocking the turn. The dialog always shows the head.
-  const [permQueue, setPermQueue] = useState<PermissionRequest[]>([]);
-  const permReq = permQueue[0] ?? null;
   // The risky permission mode the user has already confirmed for this composer;
   // re-asked whenever they switch to a *different* risky mode. null = none yet.
   const [confirmedMode, setConfirmedMode] = useState<PermissionMode | null>(null);
@@ -227,15 +185,6 @@ export function ChatComposer({
   const textareaRef = useRef<HTMLTextAreaElement | null>(null);
   // The scrollable slash popover — keyboard nav scrolls its active row into view.
   const slashMenuRef = useRef<HTMLDivElement | null>(null);
-  // Latest prop-derived callbacks, read inside the mount-only subscribe effect so
-  // it never re-subscribes when these props change identity (and so never drops a
-  // chunk/message in the gap between an unsubscribe and a re-subscribe mid-stream).
-  const onStartedRef = useRef(onStarted);
-  const onTurnCompleteRef = useRef(onTurnComplete);
-  useEffect(() => {
-    onStartedRef.current = onStarted;
-    onTurnCompleteRef.current = onTurnComplete;
-  });
 
   // Slash-command autocomplete. The available commands come from the project's
   // resolved Claude Code config (`init.slashCommands`, cached); sending one is
@@ -290,81 +239,6 @@ export function ChatComposer({
     { value: '', label: 'Default' },
   ];
 
-  // Subscribe to the streaming channels once, on mount. Prop-derived callbacks are
-  // read through refs (above), so this effect never re-runs mid-stream: a chunk,
-  // message or permission request can't be dropped in the window between an
-  // unsubscribe and a re-subscribe. Each subscribe returns a disposer that removes
-  // only its own listener (so a parallel terminal/AI view can't steal it); we run
-  // them all on unmount.
-  useEffect(() => {
-    const disposers = [
-      window.electronAPI.sessions.onChatStarted(id => onStartedRef.current?.(id)),
-      window.electronAPI.sessions.onChatChunk(chunk => setStream(prev => prev + chunk)),
-      window.electronAPI.sessions.onChatToolActivity(activity => setLiveTool(activity)),
-      window.electronAPI.sessions.onChatMessage(message => {
-        setLiveMessages(prev => [...prev, message]);
-        // A completed assistant message absorbs the partial text we were streaming
-        // into the preview; clear it so the next message's deltas start fresh and
-        // the trailing LiveTurn doesn't echo text now shown as a real bubble.
-        if (message.role === 'assistant') setStream('');
-        // A tool_result-bearing user message means the running tool finished;
-        // drop the indicator (the next tool's stream events re-arm it).
-        if (message.role === 'user') setLiveTool(null);
-      }),
-      window.electronAPI.sessions.onChatError(message =>
-        setErrorText(prev => (prev ? prev + '\n' : '') + message)
-      ),
-      window.electronAPI.sessions.onPermissionRequest(req => setPermQueue(prev => [...prev, req])),
-      window.electronAPI.sessions.onChatDone(summary => {
-        setSending(false);
-        setStream('');
-        setLiveTool(null);
-        // A turn can't end with requests still on screen (the SDK denied any
-        // pending ones on teardown); clear the stale queue.
-        setPermQueue([]);
-        // Hand the parent the SDK's end-of-turn summary (cost/tokens/model). The
-        // live chat uses it for running metadata; the disk-backed viewer ignores
-        // the arg and just refetches.
-        onTurnCompleteRef.current(summary);
-      }),
-    ];
-    return () => disposers.forEach(dispose => dispose());
-  }, []);
-
-  // Tear down the persistent SDK session when the composer unmounts (leaving the
-  // chat, or switching session — ChatView keys the composer by sessionId). The
-  // session is recreated (resumed from disk) on the next send. Mount-only deps so
-  // this fires solely on unmount, not on every listener re-subscribe.
-  useEffect(() => {
-    return () => {
-      void window.electronAPI.sessions.endChat();
-    };
-  }, []);
-
-  // Answer the tool-approval request at the head of the queue; the next pending
-  // one (if any) takes its place in the dialog.
-  function respondPermission(decision: PermissionDecision) {
-    if (!permReq) return;
-    void window.electronAPI.sessions.respondPermission(permReq.requestId, decision);
-    setPermQueue(prev => prev.slice(1));
-  }
-
-  // Lift the live text + streaming state up so the parent renders the assistant's
-  // partial reply inline in the transcript, where the final message will land —
-  // no detached preview window that closes and re-appears.
-  useEffect(() => {
-    onStreamChange?.(stream);
-  }, [stream, onStreamChange]);
-  useEffect(() => {
-    onStreamingChange?.(sending);
-  }, [sending, onStreamingChange]);
-  useEffect(() => {
-    onLiveMessagesChange?.(liveMessages);
-  }, [liveMessages, onLiveMessagesChange]);
-  useEffect(() => {
-    onLiveToolChange?.(liveTool);
-  }, [liveTool, onLiveToolChange]);
-
   // Gate: a risky permission mode (auto-approves edits/bash) needs an explicit
   // confirmation before the first send, and again if the user switches to a
   // different risky mode. Safe modes send straight through.
@@ -375,7 +249,7 @@ export function ChatComposer({
       setPendingText(text);
       return;
     }
-    void doSend(text);
+    doSend(text);
   }
 
   function confirmAndSend() {
@@ -383,51 +257,12 @@ export function ChatComposer({
     if (text == null) return;
     setConfirmedMode(permission);
     setPendingText(null);
-    void doSend(text);
+    doSend(text);
   }
 
-  async function doSend(text: string) {
-    setStream('');
-    setLiveMessages([]);
-    setLiveTool(null);
-    setErrorText(null);
-    setSending(true);
+  function doSend(text: string) {
     setDraft('');
-    setPermQueue([]);
-    onSend?.(text);
-    try {
-      const res = sessionId
-        ? await window.electronAPI.sessions.sendMessage(
-            realPath,
-            sessionId,
-            text,
-            selectedModel || undefined,
-            permission
-          )
-        : await window.electronAPI.sessions.startMessage(
-            realPath,
-            text,
-            selectedModel || undefined,
-            permission
-          );
-      if (res.error) {
-        setErrorText(res.error);
-        setSending(false);
-        onSendFailed?.();
-      }
-    } catch (e) {
-      setErrorText(e instanceof Error ? e.message : String(e));
-      setSending(false);
-      onSendFailed?.();
-    }
-  }
-
-  function handleStop() {
-    window.electronAPI.sessions.stopMessage();
-    setSending(false);
-    setStream('');
-    setLiveTool(null);
-    setPermQueue([]);
+    onSend(text, { model: selectedModel || undefined, permissionMode: permission });
   }
 
   return (
@@ -518,7 +353,7 @@ export function ChatComposer({
             rows={1}
           />
           {sending ? (
-            <button type="button" className="cl-composer-btn is-stop" onClick={handleStop}>
+            <button type="button" className="cl-composer-btn is-stop" onClick={onStop}>
               Stop
             </button>
           ) : (
@@ -584,13 +419,14 @@ export function ChatComposer({
           document.body
         )}
 
-      {permReq &&
+      {permRequest &&
+        onRespondPermission &&
         createPortal(
           <PermissionRequestDialog
-            key={permReq.requestId}
-            request={permReq}
-            pendingCount={permQueue.length - 1}
-            onRespond={respondPermission}
+            key={permRequest.requestId}
+            request={permRequest}
+            pendingCount={permPendingCount}
+            onRespond={onRespondPermission}
           />,
           document.body
         )}

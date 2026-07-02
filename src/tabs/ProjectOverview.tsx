@@ -380,12 +380,19 @@ export default function ProjectOverview() {
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
+            onContinueChat={() =>
+              setView({ type: 'new-chat', project: view.project, resumeSession: view.session })
+            }
           />
         )
       case 'new-chat':
         return (
           <LiveChatView
+            // Keyed so switching between "new chat" and a resumed session (or
+            // between two resumed sessions) resets the live state.
+            key={view.resumeSession?.filename ?? 'new'}
             project={view.project}
+            resumeSession={view.resumeSession}
             onBack={() => setView({ type: 'sessions', project: view.project })}
           />
         )
