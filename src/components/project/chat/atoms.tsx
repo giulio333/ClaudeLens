@@ -29,6 +29,24 @@ function resolveLang(hint?: string): string | null {
   return hljs.getLanguage(lang) ? lang : null
 }
 
+/** TopBar badge shown when the session is currently live in a terminal
+ *  (per the sessions registry). Shared by ChatView and LiveChatView. */
+export function LiveInTerminalBadge() {
+  return (
+    <span
+      title="This session is running in your terminal right now"
+      className="flex items-center gap-1.5 font-mono uppercase"
+      style={{ fontSize: 10, letterSpacing: '0.14em', color: 'var(--cl-ok)' }}
+    >
+      <span
+        aria-hidden
+        style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-ok)' }}
+      />
+      Live in terminal
+    </span>
+  )
+}
+
 export function PathChip({ path }: { path: string }) {
   const parts = path.split('/')
   const file = parts.pop() ?? path

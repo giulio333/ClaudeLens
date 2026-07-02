@@ -380,9 +380,6 @@ export default function ProjectOverview() {
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
-            onContinueChat={() =>
-              setView({ type: 'new-chat', project: view.project, resumeSession: view.session })
-            }
           />
         )
       case 'new-chat':

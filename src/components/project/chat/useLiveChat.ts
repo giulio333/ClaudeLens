@@ -25,15 +25,22 @@ import { trackEvent } from '../../../lib/telemetry'
  *  The transcript is stream-only (the deliberate LiveChatView design): it
  *  starts empty and grows only from what the SDK emits — the `.jsonl` the SDK
  *  writes is never read back here. The one exception is `resume`: continuing
- *  an existing session seeds the transcript with a single imperative disk read
- *  at mount (NOT a watched query — a watcher-driven refetch mid-turn is
- *  exactly the reconcile bug this design removed), after which the
- *  conversation grows from the stream like a new chat. */
+ *  an existing session seeds the transcript with an imperative disk read at
+ *  mount (NOT a watched query — a watcher-driven refetch mid-turn is exactly
+ *  the reconcile bug this design removed), after which the conversation grows
+ *  from the stream like a new chat. With `followDisk` (session live in a
+ *  terminal, composer locked) the seed is re-run on watcher events between
+ *  turns, so the terminal's conversation stays visible until it ends. */
 export function useLiveChat(
   realPath: string,
   /** Continue an existing session: its transcript seeds the view once, and the
    *  first send resumes it (`sendMessage`) instead of starting a new one. */
-  resume?: { hash: string; sessionId: string }
+  resume?: { hash: string; sessionId: string },
+  /** While true (resume mode only), the transcript keeps following the `.jsonl`
+   *  on disk between turns — used when the session is live in a terminal, where
+   *  the composer is locked and the CLI is the one writing the transcript. Safe
+   *  with the stream-only rule: re-seeds are skipped while a turn is in flight. */
+  followDisk = false
 ) {
   // The SDK session id. Known up front when resuming; for a new chat it stays
   // null until the first turn starts. Turns 2+ push into the live session.
@@ -164,37 +171,59 @@ export function useLiveChat(
     return () => disposers.forEach(dispose => dispose())
   }, [commitTurn])
 
-  // Resume seed: one imperative read of the existing transcript at mount —
-  // deliberately not a React Query (the data:changed watcher would refetch it
-  // mid-turn and fight the stream). Prepended so a turn sent before the read
-  // resolves keeps its place; dedup by uuid in case the stream already
-  // re-delivered a seeded message.
+  // Resume seed: an imperative read of the existing transcript — deliberately
+  // not a React Query (the data:changed watcher would refetch it mid-turn and
+  // fight the stream). Prepended so a turn sent before the read resolves keeps
+  // its place; dedup by uuid in case the stream already re-delivered a seeded
+  // message. `surfaceError` is true only for the mount seed: a failed follow-up
+  // re-read (see the followDisk effect) must not spam the error banner.
   const resumeRef = useRef(resume)
-  useEffect(() => {
+  const seedFromDisk = useCallback((surfaceError: boolean) => {
     const r = resumeRef.current
-    if (!r) return
-    let cancelled = false
-    window.electronAPI.sessions
+    if (!r) return Promise.resolve()
+    return window.electronAPI.sessions
       .getChat(r.hash, `${r.sessionId}.jsonl`)
       .then(res => {
-        if (cancelled) return
-        if (res.error) setErrorText(prev => (prev ? prev + '\n' : '') + res.error)
+        if (res.error && surfaceError) setErrorText(prev => (prev ? prev + '\n' : '') + res.error)
         const seed = res.data ?? []
+        if (seed.length === 0) return
         setMessages(prev => {
           const seeded = new Set(seed.map(m => m.uuid))
           return [...seed, ...prev.filter(m => !seeded.has(m.uuid))]
         })
       })
       .catch((e: unknown) => {
-        if (!cancelled) setErrorText(e instanceof Error ? e.message : String(e))
+        if (surfaceError) setErrorText(e instanceof Error ? e.message : String(e))
       })
-      .finally(() => {
-        if (!cancelled) setSeedLoading(false)
-      })
-    return () => {
-      cancelled = true
-    }
   }, [])
+  useEffect(() => {
+    if (!resumeRef.current) return
+    void seedFromDisk(true).finally(() => setSeedLoading(false))
+  }, [seedFromDisk])
+
+  // Follow mode: while the session is live in a terminal (composer locked), the
+  // CLI keeps appending to the `.jsonl` — re-seed on watcher events so the user
+  // watches the terminal conversation flow here. Subscribed only while
+  // followDisk holds (it flips rarely: when the terminal session ends).
+  // Guarded by pendingRef: never re-read disk while an SDK turn is in flight
+  // (the stream owns the view then).
+  useEffect(() => {
+    if (!followDisk || !resumeRef.current) return
+    let timer: ReturnType<typeof setTimeout> | null = null
+    const unsubscribe = window.electronAPI.onDataChanged(() => {
+      if (pendingRef.current !== null) return
+      // Trailing debounce: a turn in the terminal appends the .jsonl in bursts.
+      if (timer) clearTimeout(timer)
+      timer = setTimeout(() => {
+        timer = null
+        if (pendingRef.current === null) void seedFromDisk(false)
+      }, 300)
+    })
+    return () => {
+      if (timer) clearTimeout(timer)
+      unsubscribe()
+    }
+  }, [followDisk, seedFromDisk])
 
   // Tear the persistent SDK session down when the owning view unmounts; the
   // next send in any view resumes from disk into a fresh session.
