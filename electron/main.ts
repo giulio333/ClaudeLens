@@ -1263,13 +1263,18 @@ function makeCanUseTool(event: Electron.IpcMainInvokeEvent, cwd: string): CanUse
       const requestId = randomUUID();
       // The turn is now blocked on the user. Surface a notification when the app
       // is in the background (no-op when focused — the dialog below is enough).
-      emitChatNotification(
-        'needs-attention',
-        cwd,
-        currentChatSession?.sessionId ?? '',
-        'Claude is waiting for your approval',
-        options.title || options.displayName || toolName
-      );
+      // Only the first request of a burst notifies: parallel tool calls fire
+      // several canUseTool at once, and the renderer queues them behind a single
+      // dialog anyway — one OS notification per pending request would just spam.
+      if (pendingPermissions.size === 0) {
+        emitChatNotification(
+          'needs-attention',
+          cwd,
+          currentChatSession?.sessionId ?? '',
+          'Claude is waiting for your approval',
+          options.title || options.displayName || toolName
+        );
+      }
       // A dedup-guarded resolver: the first of {user response, abort, supersede}
       // to fire wins, the rest are no-ops.
       const settle = (r: PermissionResult) => {

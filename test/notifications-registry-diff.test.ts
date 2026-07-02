@@ -89,6 +89,37 @@ describe('diffRegistry', () => {
     expect(events).toHaveLength(1);
   });
 
+  it('does not re-emit when a waiting session misses one snapshot and comes back', () => {
+    // A registry file can fail a single read (rewritten mid-read): the session
+    // drops out of one snapshot and reappears on the next, still waiting.
+    const state = createRegistryDiffState();
+    diffRegistry([session({ status: 'busy' })], state, deps); // warm-up
+    diffRegistry([session({ status: 'waiting' })], state, deps); // 1 event
+    diffRegistry([], state, deps); // transient read hiccup
+    const again = diffRegistry([session({ status: 'waiting' })], state, deps);
+    expect(again).toEqual([]);
+  });
+
+  it('does not fire for a session that was already waiting at warm-up, drops out, and returns', () => {
+    const state = createRegistryDiffState();
+    diffRegistry([session({ status: 'waiting' })], state, deps); // warm-up (waiting)
+    diffRegistry([], state, deps); // transient read hiccup
+    const events = diffRegistry([session({ status: 'waiting' })], state, deps);
+    expect(events).toEqual([]);
+  });
+
+  it('re-emits for a session gone for two consecutive snapshots (really ended)', () => {
+    // A new session reusing the id after the old one is truly gone is a new
+    // wait; the notified set is pruned after two consecutive missing reads.
+    const state = createRegistryDiffState();
+    diffRegistry([session({ status: 'busy' })], state, deps); // warm-up
+    diffRegistry([session({ status: 'waiting' })], state, deps); // 1 event
+    diffRegistry([], state, deps);
+    diffRegistry([], state, deps); // gone for good -> pruned
+    const events = diffRegistry([session({ status: 'waiting' })], state, deps);
+    expect(events).toHaveLength(1);
+  });
+
   it('ignores fallback (process-scan) entries with no session id', () => {
     const state = createRegistryDiffState();
     diffRegistry([], state, deps); // warm-up
