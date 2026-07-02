@@ -6,11 +6,18 @@ import { MessageBubble } from './MessageBubble'
 import { LiveTurn } from './LiveTurn'
 import { useChatAutoScroll } from './useAutoScroll'
 import { useLiveChat } from './useLiveChat'
-import { fmt, fmtCost, fmtModel } from '../utils'
+import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils'
+import { SessionSummary } from '../../../hooks/useIPC'
 
-/** The in-app SDK chat — a brand-new Claude Code conversation driven entirely by
- *  the Agent SDK stream, with **no disk reads**. This is the deliberate split from
- *  `ChatView` (which is a read-only, disk-backed viewer of existing sessions).
+/** The in-app SDK chat — a Claude Code conversation driven entirely by the
+ *  Agent SDK stream. This is the deliberate split from `ChatView` (which is a
+ *  read-only, disk-backed viewer of existing sessions).
+ *
+ *  Two entry points: a brand-new conversation (no `resumeSession`), or
+ *  **continuing an existing session** from `ChatView`'s "Continue chat" — the
+ *  transcript is then seeded once from disk and the first send resumes the
+ *  same `.jsonl`, so the conversation picks up where the terminal (or a
+ *  previous in-app chat) left off.
  *
  *  All conversation state lives in `useLiveChat` — the single owner of the IPC
  *  subscriptions, the in-flight turn and the committed transcript. This view is
@@ -23,12 +30,22 @@ import { fmt, fmtCost, fmtModel } from '../utils'
  *  read-only from disk. */
 export function LiveChatView({
   project,
+  resumeSession,
   onBack,
 }: {
   project: { hash: string; realPath: string }
+  /** When set, continue this existing session instead of starting a new one. */
+  resumeSession?: SessionSummary
   onBack: () => void
 }) {
-  const chat = useLiveChat(project.realPath)
+  const resume = useMemo(
+    () =>
+      resumeSession
+        ? { hash: project.hash, sessionId: resumeSession.filename.replace(/\.jsonl$/, '') }
+        : undefined,
+    [project.hash, resumeSession]
+  )
+  const chat = useLiveChat(project.realPath, resume)
 
   const processed = useMemo(
     () => buildProcessedMessages(chat.displayMessages),
@@ -50,11 +67,24 @@ export function LiveChatView({
     return ''
   }, [chat.displayMessages])
 
-  const title = firstPrompt
-    ? firstPrompt.length > 48
-      ? `${firstPrompt.slice(0, 48)}…`
-      : firstPrompt
-    : 'New chat'
+  const title = resumeSession
+    ? sessionTitle(resumeSession)
+    : firstPrompt
+      ? firstPrompt.length > 48
+        ? `${firstPrompt.slice(0, 48)}…`
+        : firstPrompt
+      : 'New chat'
+
+  // The model the conversation is currently on (its last assistant turn,
+  // synthetic notes excluded) — seeds the composer's model picker so a reply
+  // defaults to the same model, exactly as a resumed terminal session would.
+  const inheritedModel = useMemo(() => {
+    for (let i = chat.displayMessages.length - 1; i >= 0; i--) {
+      const m = chat.displayMessages[i]
+      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model
+    }
+    return undefined
+  }, [chat.displayMessages])
 
   const summary = chat.summary
 
@@ -83,7 +113,9 @@ export function LiveChatView({
         <main className="cl-chat-feed" ref={feedRef} onScroll={onScroll} onWheel={onWheel}>
           <div className="cl-chat-reading">
             <div className="cl-transcript-inner" ref={innerRef}>
-              {chat.hasConversation ? (
+              {chat.seedLoading && !chat.hasConversation ? (
+                <p className="cl-transcript-state">Loading session…</p>
+              ) : chat.hasConversation ? (
                 <>
                   {processed.map((p, i) => (
                     <MessageBubble
@@ -121,9 +153,11 @@ export function LiveChatView({
 
         <ChatComposer
           realPath={project.realPath}
-          // Undefined on the first send (→ startMessage); once the SDK reports
-          // the id, later sends push into the same live session.
+          // Undefined on the first send of a new chat (→ startMessage); set up
+          // front when resuming, and once the SDK reports the id later sends
+          // push into the same live session.
           sessionId={chat.sessionId ?? undefined}
+          model={inheritedModel}
           sending={chat.streaming}
           errorText={chat.errorText}
           permRequest={chat.permRequest}

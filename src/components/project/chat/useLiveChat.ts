@@ -24,13 +24,24 @@ import { trackEvent } from '../../../lib/telemetry'
  *
  *  The transcript is stream-only (the deliberate LiveChatView design): it
  *  starts empty and grows only from what the SDK emits — the `.jsonl` the SDK
- *  writes is never read back here. */
-export function useLiveChat(realPath: string) {
-  // The SDK session id, known once the first turn starts (null until then).
-  // Turns 2+ push into the live session instead of resuming from disk.
-  const [sessionId, setSessionId] = useState<string | null>(null)
-  // The committed transcript — grown ONLY from the stream.
+ *  writes is never read back here. The one exception is `resume`: continuing
+ *  an existing session seeds the transcript with a single imperative disk read
+ *  at mount (NOT a watched query — a watcher-driven refetch mid-turn is
+ *  exactly the reconcile bug this design removed), after which the
+ *  conversation grows from the stream like a new chat. */
+export function useLiveChat(
+  realPath: string,
+  /** Continue an existing session: its transcript seeds the view once, and the
+   *  first send resumes it (`sendMessage`) instead of starting a new one. */
+  resume?: { hash: string; sessionId: string }
+) {
+  // The SDK session id. Known up front when resuming; for a new chat it stays
+  // null until the first turn starts. Turns 2+ push into the live session.
+  const [sessionId, setSessionId] = useState<string | null>(resume?.sessionId ?? null)
+  // The committed transcript — seeded once when resuming, grown from the stream.
   const [messages, setMessages] = useState<ChatMessage[]>([])
+  // True while the one-time resume seed is still loading from disk.
+  const [seedLoading, setSeedLoading] = useState(Boolean(resume))
   // The just-sent prompt, shown optimistically (the SDK doesn't echo it back).
   const [pendingUser, setPendingUser] = useState<{
     text: string
@@ -53,7 +64,7 @@ export function useLiveChat(realPath: string) {
 
   // Refs mirror the pieces the mount-only subscriptions and the turn commit
   // must read synchronously (state would be one render stale there).
-  const sessionIdRef = useRef<string | null>(null)
+  const sessionIdRef = useRef<string | null>(resume?.sessionId ?? null)
   const pendingRef = useRef<{ text: string; at: string; uuid: string } | null>(null)
   const liveMessagesRef = useRef<ChatMessage[]>([])
   const realPathRef = useRef(realPath)
@@ -153,6 +164,38 @@ export function useLiveChat(realPath: string) {
     return () => disposers.forEach(dispose => dispose())
   }, [commitTurn])
 
+  // Resume seed: one imperative read of the existing transcript at mount —
+  // deliberately not a React Query (the data:changed watcher would refetch it
+  // mid-turn and fight the stream). Prepended so a turn sent before the read
+  // resolves keeps its place; dedup by uuid in case the stream already
+  // re-delivered a seeded message.
+  const resumeRef = useRef(resume)
+  useEffect(() => {
+    const r = resumeRef.current
+    if (!r) return
+    let cancelled = false
+    window.electronAPI.sessions
+      .getChat(r.hash, `${r.sessionId}.jsonl`)
+      .then(res => {
+        if (cancelled) return
+        if (res.error) setErrorText(prev => (prev ? prev + '\n' : '') + res.error)
+        const seed = res.data ?? []
+        setMessages(prev => {
+          const seeded = new Set(seed.map(m => m.uuid))
+          return [...seed, ...prev.filter(m => !seeded.has(m.uuid))]
+        })
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setErrorText(e instanceof Error ? e.message : String(e))
+      })
+      .finally(() => {
+        if (!cancelled) setSeedLoading(false)
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [])
+
   // Tear the persistent SDK session down when the owning view unmounts; the
   // next send in any view resumes from disk into a fresh session.
   useEffect(() => {
@@ -242,6 +285,8 @@ export function useLiveChat(realPath: string) {
   return {
     sessionId,
     displayMessages,
+    /** True while the resume seed is still loading (always false for a new chat). */
+    seedLoading,
     /** True once the conversation has anything to show (optimistic included). */
     hasConversation: pendingUser !== null || messages.length > 0,
     liveMessages,
