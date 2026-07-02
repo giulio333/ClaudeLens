@@ -685,6 +685,10 @@ ipcMain.handle('export:pdf', async (_event, defaultFilename: string, html: strin
       },
     });
     await printWindow.loadFile(htmlPath);
+    // The export document loads the app's reading fonts (Inter / JetBrains
+    // Mono) from the network; print only once they've resolved (or failed —
+    // fonts.ready settles either way, and the stacks have system fallbacks).
+    await printWindow.webContents.executeJavaScript('document.fonts.ready.then(() => true)', true);
     const pdf = await printWindow.webContents.printToPDF({
       printBackground: true,
       pageSize: 'A4',

@@ -3,6 +3,11 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import remarkMath from 'remark-math'
 import rehypeKatex from 'rehype-katex'
+import rehypeHighlight from 'rehype-highlight'
+// Inlined at build time (Vite ?raw) so the standalone export document needs no
+// external stylesheet. Light theme: the export sheet is always light, unlike
+// the UI which ships github-dark-dimmed.
+import hljsLightCss from 'highlight.js/styles/github.css?raw'
 import { ChatContentBlock, SessionSummary } from '../../../types'
 import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
 import { ProcessedMessage, ToolGroup } from './utils'
@@ -171,6 +176,16 @@ function showsTools(options: ExportOptions): boolean {
   )
 }
 
+/** Whether a turn contributes anything under the chosen options. A tool-only
+ *  assistant turn exported with the "message" preset would otherwise render as
+ *  an empty shell ("No visible message text.") — skip it entirely instead. */
+function turnHasVisibleContent(processed: ProcessedMessage, options: ExportOptions): boolean {
+  const { msg, toolGroups } = processed
+  if (textBlocks(msg.content).some(b => b.text.trim())) return true
+  if (options.includeThinking && thinkingBlocks(msg.content).some(b => b.thinking.trim())) return true
+  return toolGroups.length > 0 && showsTools(options)
+}
+
 function buildToolSummaryMarkdown(processed: ProcessedMessage[]): string[] {
   const groups = allToolGroups(processed)
   if (groups.length === 0) return []
@@ -284,9 +299,11 @@ function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): str
   lines.push('## Conversation', '')
 
   const highlights = input.highlights ?? []
-  processed.forEach((p, i) => {
-    lines.push(...buildTurnMarkdown(p, i, options, highlights))
-  })
+  processed
+    .filter(p => turnHasVisibleContent(p, options))
+    .forEach((p, i) => {
+      lines.push(...buildTurnMarkdown(p, i, options, highlights))
+    })
 
   return lines.join('\n').replace(/\n{4,}/g, '\n\n\n').trimEnd() + '\n'
 }
@@ -305,15 +322,16 @@ function escapeHtml(value: string): string {
 // the export matches what's on screen — no hand-rolled mini-parser to keep in
 // sync. Math is rendered via remark-math + rehype-katex with `output: 'mathml'`:
 // MathML renders natively in Chromium (the PDF engine) and modern browsers, so
-// the standalone document needs no KaTeX CSS or web fonts. rehype-highlight is
-// still omitted (its colors need external CSS), so code stays plain <pre><code>.
+// the standalone document needs no KaTeX CSS or web fonts. Code fences get the
+// same rehype-highlight pass as the live view; its theme CSS is inlined into
+// the document <style> (hljsLightCss), so colors survive in the PDF.
 // Highlight sentinels (PUA chars) injected into `value` pass through untouched and
 // are materialized into <mark> by the caller.
 function markdownToHtml(value: string): string {
   return renderToStaticMarkup(
     <ReactMarkdown
       remarkPlugins={[remarkGfm, remarkMath]}
-      rehypePlugins={[[rehypeKatex, { output: 'mathml' }]]}
+      rehypePlugins={[[rehypeKatex, { output: 'mathml' }], rehypeHighlight]}
     >
       {value}
     </ReactMarkdown>,
@@ -418,23 +436,31 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
   <meta charset="utf-8" />
   <title>${escapeHtml(title)}</title>
   <style>
-    @page { size: A4; margin: 20mm 18mm; }
+    /* Same reading faces as the on-screen chat (Inter prose, JetBrains Mono
+       code). Loaded from Google Fonts like the app does; the PDF handler waits
+       on document.fonts.ready before printing, and the stacks fall back to
+       system faces offline. */
+    @import url('https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+    /* highlight.js light theme, inlined; our pre/code rules below override its
+       background so the fence keeps the export's warm paper card. */
+    ${hljsLightCss}
+    @page { size: A4; margin: 15mm 13mm; }
     * { box-sizing: border-box; }
     body {
       margin: 0;
       color: #2f2b27;
       background: #ffffff;
-      font: 13.5px/1.62 -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font: 12px/1.6 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
     }
-    .sheet { max-width: 660px; margin: 0 auto; }
+    .sheet { margin: 0 auto; }
     h1, h2, h3, h4, h5, p { margin: 0; }
-    h1 { font-size: 24px; line-height: 1.12; letter-spacing: -0.02em; }
-    h2 { font-size: 17px; margin: 20px 0 9px; }
-    h3 { font-size: 15px; margin: 16px 0 7px; }
-    h4, h5 { font-size: 11px; margin: 12px 0 6px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c7669; }
-    p { margin: 0 0 10px; }
+    h1 { font-size: 21px; line-height: 1.15; letter-spacing: -0.02em; }
+    h2 { font-size: 15.5px; margin: 18px 0 8px; }
+    h3 { font-size: 13.5px; margin: 15px 0 6px; }
+    h4, h5 { font-size: 10.5px; margin: 11px 0 5px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c7669; }
+    p { margin: 0 0 9px; }
     a { color: #a9462a; }
-    code, pre { font-family: "SFMono-Regular", Consolas, monospace; }
+    code, pre { font-family: 'JetBrains Mono', "SFMono-Regular", Consolas, monospace; }
     code { background: #f4f3ee; padding: 1px 5px; border-radius: 4px; font-size: 0.92em; }
     pre {
       position: relative;
@@ -447,17 +473,17 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       overflow-wrap: anywhere;
       break-inside: auto;
     }
-    pre code { display: block; background: transparent; padding: 0; border-radius: 0; }
+    pre code, pre code.hljs { display: block; background: transparent; padding: 0; border-radius: 0; }
     /* Slim masthead — title + one hairline meta line, no report cover. */
     .masthead { border-bottom: 1px solid #e2ded4; padding-bottom: 16px; margin-bottom: 8px; }
     .eyebrow {
       color: #c15f3c;
-      font: 700 10px/1 "SFMono-Regular", Consolas, monospace;
+      font: 700 10px/1 'JetBrains Mono', "SFMono-Regular", Consolas, monospace;
       letter-spacing: 0.18em;
       text-transform: uppercase;
       margin-bottom: 10px;
     }
-    .submeta { margin-top: 10px; color: #7c7669; font-size: 10.5px; font-family: "SFMono-Regular", Consolas, monospace; }
+    .submeta { margin-top: 10px; color: #7c7669; font-size: 10.5px; font-family: 'JetBrains Mono', "SFMono-Regular", Consolas, monospace; }
     .submeta span { white-space: nowrap; }
     .submeta i { color: #c9c3b6; font-style: normal; margin: 0 7px; }
     /* Reading column: one turn after another, hairline separated, no rail. */
@@ -468,7 +494,7 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       align-items: center;
       gap: 7px;
       margin-bottom: 9px;
-      font-family: "SFMono-Regular", Consolas, monospace;
+      font-family: 'JetBrains Mono', "SFMono-Regular", Consolas, monospace;
       font-size: 10.5px;
     }
     .turn-who { font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
@@ -498,7 +524,7 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       width: 100%;
       border-collapse: collapse;
       margin: 10px 0 14px;
-      font-size: 12.5px;
+      font-size: 11px;
     }
     th, td {
       border: 1px solid #e2ded4;
@@ -524,12 +550,12 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
       background: #faf9f6;
       padding: 9px 11px;
     }
-    .tool-note span, .tool-head strong { font-family: "SFMono-Regular", Consolas, monospace; font-weight: 700; }
+    .tool-note span, .tool-head strong { font-family: 'JetBrains Mono', "SFMono-Regular", Consolas, monospace; font-weight: 700; }
     .tool-note em { color: #7c7669; font-style: normal; margin-left: 8px; }
     .tool-note b, .tool-head span { float: right; color: #7c7669; font-size: 10px; text-transform: uppercase; }
     .tool-note .is-ok, .tool-head .is-ok { color: #3f7c55; }
     .tool-note .is-error, .tool-head .is-error, .tool-error { color: #a9432a; }
-    .tool-error { clear: both; margin-top: 6px; font-family: "SFMono-Regular", Consolas, monospace; font-size: 11px; }
+    .tool-error { clear: both; margin-top: 6px; font-family: 'JetBrains Mono', "SFMono-Regular", Consolas, monospace; font-size: 11px; }
     .tool-head { overflow: hidden; margin-bottom: 8px; }
     .footer {
       margin-top: 26px;
@@ -550,7 +576,10 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
         ${primaryModel ? `<i>·</i><span>${escapeHtml(fmtModel(primaryModel))}</span>` : ''}
       </div>
     </section>
-    ${processed.map((p, i) => renderTurnHtml(p, i, options, input.highlights ?? [])).join('')}
+    ${processed
+      .filter(p => turnHasVisibleContent(p, options))
+      .map((p, i) => renderTurnHtml(p, i, options, input.highlights ?? []))
+      .join('')}
     <div class="footer">Exported from ClaudeLens on ${escapeHtml(fmtDate(new Date().toISOString()))}. Review before sharing outside your organization.</div>
   </div>
 </body>

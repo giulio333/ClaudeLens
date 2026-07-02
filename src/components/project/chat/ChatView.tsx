@@ -26,7 +26,6 @@ import {
 import { LiveInTerminalBadge } from './atoms';
 import {
   buildChatExportDocument,
-  CHAT_EXPORT_PRESETS,
   ChatExportFormat,
   ChatExportPreset,
 } from './export';
@@ -123,7 +122,7 @@ export function ChatView({
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);
   const [transcriptAgent, setTranscriptAgent] = useState<SessionAgent | null>(null);
-  const [exportPreset, setExportPreset] = useState<ChatExportPreset>('team');
+  const [exportPreset, setExportPreset] = useState<ChatExportPreset>('message');
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
@@ -354,8 +353,6 @@ export function ChatView({
   }, [skills, activeTurn]);
 
   const title = sessionTitle(session);
-  const selectedExportPreset =
-    CHAT_EXPORT_PRESETS.find(p => p.value === exportPreset) ?? CHAT_EXPORT_PRESETS[0];
   // Whether an overlay / alternate mode is covering the chat workspace. The
   // workspace is then hidden (display:none) but never unmounted — see the
   // comment at the render site.
@@ -446,7 +443,6 @@ export function ChatView({
       exportPreset={exportPreset}
       exportMessage={exportMessage}
       exportError={exportError}
-      selectedExportPreset={selectedExportPreset}
       onOpenSheet={() => {
         setExportError(null);
         setExportMessage(null);

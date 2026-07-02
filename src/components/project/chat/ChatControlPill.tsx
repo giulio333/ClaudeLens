@@ -284,7 +284,6 @@ export function ChatControlPill({
   exportPreset,
   exportMessage,
   exportError,
-  selectedExportPreset,
   onOpenSheet,
   openExportRef,
   selectionMode,
@@ -317,7 +316,6 @@ export function ChatControlPill({
   exportPreset: ChatExportPreset;
   exportMessage: string | null;
   exportError: string | null;
-  selectedExportPreset: (typeof CHAT_EXPORT_PRESETS)[number];
   onOpenSheet: () => void;
   /** ChatControlPill registers an imperative "open export sheet" fn here, so the
    *  per-turn export button can raise the sheet from the transcript. */
@@ -427,7 +425,7 @@ export function ChatControlPill({
         />
       )}
       {sheet === 'export' && (
-        <div className="cl-sheet" role="menu">
+        <div className="cl-sheet cl-sheet--export" role="menu">
           <div className="cl-sheet-head">
             <span className="cl-export-label">Export</span>
             <button
@@ -463,19 +461,24 @@ export function ChatControlPill({
           {selectionMode && selectedCount === 0 && (
             <p className="cl-export-desc">Pick turns in the transcript, then export.</p>
           )}
-          <div className="cl-export-presets">
+          <div className="cl-export-list" role="radiogroup" aria-label="Export preset">
             {CHAT_EXPORT_PRESETS.map(preset => (
               <button
                 key={preset.value}
                 type="button"
-                className={exportPreset === preset.value ? 'is-active' : ''}
+                role="radio"
+                aria-checked={exportPreset === preset.value}
+                className={`cl-export-option${exportPreset === preset.value ? ' is-active' : ''}`}
                 onClick={() => onExportPreset(preset.value)}
               >
-                {preset.label}
+                <span className="cl-export-option-dot" aria-hidden="true" />
+                <span className="cl-export-option-body">
+                  <span className="cl-export-option-name">{preset.label}</span>
+                  <span className="cl-export-option-desc">{preset.description}</span>
+                </span>
               </button>
             ))}
           </div>
-          <p className="cl-export-desc">{selectedExportPreset.description}</p>
           <div className="cl-export-actions">
             <button
               type="button"
