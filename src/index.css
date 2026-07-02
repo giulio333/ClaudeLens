@@ -1,5 +1,5 @@
 @import 'highlight.js/styles/github-dark-dimmed.css';
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&family=Inter:ital,opsz,wght@0,14..32,400..700;1,14..32,400..700&display=swap');
 
 @tailwind base;
 @tailwind components;
@@ -15,6 +15,10 @@
 :root {
   --font-sans: 'Space Grotesk', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
   --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, 'SF Mono', monospace;
+  /* Reading face for long-form transcript prose (assistant turns in the chat
+     views): Inter, a screen-reading humanist sans. The UI keeps Space Grotesk,
+     data keeps JetBrains Mono. */
+  --font-reading: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
   /* ── Editorial tokens — LIGHT (paper / ink) ──
      Brand palette (Claude Code official):
@@ -2790,7 +2794,7 @@ body {
   display: none; /* no continuous timeline spine */
 }
 .cl-chat-reading .cl-transcript-inner {
-  max-width: 720px;
+  max-width: 880px;
   margin: 0 auto;
   padding: 30px 24px 140px;
 }
@@ -3010,8 +3014,11 @@ body {
   background: linear-gradient(to top, var(--cl-paper) 62%, transparent);
 }
 .cl-composer-inner {
-  width: 78%;
-  max-width: 1180px;
+  /* Aligned with the reading column (.cl-transcript-inner: 880px − 24px
+     side padding) so input and transcript share one text edge. */
+  width: 100%;
+  max-width: 880px;
+  padding: 0 24px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
@@ -3023,7 +3030,7 @@ body {
 .cl-live-caret {
   display: inline-block;
   width: 7px;
-  height: 14px;
+  height: 15px;
   vertical-align: text-bottom;
   margin-left: 2px;
   background: var(--cl-accent);
@@ -4403,7 +4410,8 @@ body {
 }
 .cl-message-text--user {
   width: 100%;
-  max-width: 100%;
+  /* Reading measure — prompts cap at ~75ch like the assistant prose below. */
+  max-width: 75ch;
   margin: 0;
   padding: 0;
   border: 0;
@@ -4411,7 +4419,7 @@ body {
   background: transparent;
   color: var(--cl-ink);
   font-weight: 500;
-  font-size: 14.5px;
+  font-size: 15px;
   line-height: 1.62;
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -4419,11 +4427,34 @@ body {
 .cl-message-text--assistant {
   padding: 1px 0;
   overflow-wrap: anywhere;
+  /* The reading face lives on the wrapper so the `ch` measure below is
+     computed in Inter, not the inherited UI sans. */
+  font-family: var(--font-reading);
+  font-size: 15px;
 }
 .cl-message-text--assistant > .prose-lens {
   color: var(--cl-ink-2);
-  font-size: 14.5px;
+  font-family: inherit;
+  font-size: inherit;
   line-height: 1.7;
+  letter-spacing: -0.006em;
+  text-rendering: optimizeLegibility;
+}
+/* Reading measure: running text caps at ~75ch; code fences, tables and other
+   block furniture keep the full column width. */
+.cl-message-text--assistant .prose-lens
+  > :where(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6) {
+  max-width: 75ch;
+}
+/* Structure stays in the UI voice: headings inside the transcript prose keep
+   Space Grotesk so Inter is reserved for running text. */
+.cl-message-text--assistant .prose-lens :where(h1, h2, h3, h4, h5, h6) {
+  font-family: var(--font-sans);
+  letter-spacing: -0.01em;
+}
+.cl-message-text--assistant .prose-lens :where(table) {
+  font-size: 13.5px;
+  font-variant-numeric: tabular-nums;
 }
 .cl-message-text--assistant > .prose-lens > :first-child {
   margin-top: 0;
