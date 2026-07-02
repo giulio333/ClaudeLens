@@ -1285,6 +1285,9 @@ function makeCanUseTool(event: Electron.IpcMainInvokeEvent, cwd: string): CanUse
 
       event.sender.send('sessions:permissionRequest', {
         requestId,
+        // canUseTool can only fire while its session is the live one (a
+        // supersede denies its pending requests), so the current pointer is it.
+        sessionId: currentChatSession?.sessionId ?? '',
         toolName,
         title: options.title,
         displayName: options.displayName,
@@ -1312,13 +1315,17 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
   // `onClosed` self-references `session` to clear the live pointer only when it's
   // still the current one. The arrow is lazy (fired async, long after the ctor
   // returns), so referencing `session` inside its own initializer is safe.
+  // Every stream event is enveloped with the session id (see the envelope
+  // types in shared/chat-types.ts), so the renderer can drop stale events from
+  // a superseded session instead of trusting arrival order.
   const session: ChatSession = new ChatSession(params, {
     onStarted: id => send('sessions:chatStarted', id),
-    onChunk: text => send('sessions:chatChunk', text),
-    onToolActivity: activity => send('sessions:chatToolActivity', activity),
-    onMessage: message => send('sessions:chatMessage', message),
+    onChunk: text => send('sessions:chatChunk', { sessionId: session.sessionId, text }),
+    onToolActivity: activity =>
+      send('sessions:chatToolActivity', { sessionId: session.sessionId, activity }),
+    onMessage: message => send('sessions:chatMessage', { sessionId: session.sessionId, message }),
     onError: message => {
-      send('sessions:chatError', message);
+      send('sessions:chatError', { sessionId: session.sessionId, error: message });
       // Surface the failure as a notification when the app is backgrounded (the
       // composer shows it inline when focused, so emitChatNotification no-ops there).
       emitChatNotification('error', params.cwd, session.sessionId, 'A chat turn failed', message);
@@ -1328,7 +1335,7 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
       // the renderer's queue clears.
       denyAllPending('The turn ended with an error.');
     },
-    onTurnEnd: summary => send('sessions:chatDone', summary),
+    onTurnEnd: summary => send('sessions:chatDone', { sessionId: session.sessionId, summary }),
     onClosed: () => {
       // A deliberate teardown (endChat, supersede) clears or replaces the live
       // pointer before this fires. Reaching here with the pointer still intact
@@ -1337,7 +1344,7 @@ function launchSession(event: Electron.IpcMainInvokeEvent, params: ChatSessionPa
       // with no turn ever ending.
       if (currentChatSession === session) {
         currentChatSession = null;
-        send('sessions:chatDone');
+        send('sessions:chatDone', { sessionId: session.sessionId });
       }
     },
   });

@@ -94,27 +94,53 @@ export function useLiveChat(realPath: string) {
   // refs and functional setState, so nothing here can go one-render stale and
   // no re-subscribe gap can drop a chunk mid-stream.
   useEffect(() => {
+    // Every stream event is enveloped with the id of the session that produced
+    // it (see shared/chat-types.ts). Events from a session this hook doesn't
+    // own — e.g. the final chatDone of a superseded session arriving after a
+    // fresh view mounted — are dropped instead of trusted by arrival order.
+    // The id is adopted from chatStarted, which the main process emits before
+    // any stream event of the first turn, so `null` here only ever coincides
+    // with foreign traffic.
+    const isMine = (eventSessionId: string) => sessionIdRef.current === eventSessionId
     const api = window.electronAPI.sessions
     const disposers = [
       api.onChatStarted(id => {
-        sessionIdRef.current = id
-        setSessionId(id)
+        // Adopt the id only while unset (the first turn of a new chat); a
+        // resumed session re-reports the same id, and anything else is stale.
+        if (sessionIdRef.current === null) {
+          sessionIdRef.current = id
+          setSessionId(id)
+        }
       }),
-      api.onChatChunk(chunk => setStreamText(prev => prev + chunk)),
-      api.onChatToolActivity(activity => setLiveTool(activity)),
-      api.onChatMessage(message => {
-        liveMessagesRef.current = [...liveMessagesRef.current, message]
+      api.onChatChunk(ev => {
+        if (isMine(ev.sessionId)) setStreamText(prev => prev + ev.text)
+      }),
+      api.onChatToolActivity(ev => {
+        if (isMine(ev.sessionId)) setLiveTool(ev.activity)
+      }),
+      api.onChatMessage(ev => {
+        if (!isMine(ev.sessionId)) return
+        liveMessagesRef.current = [...liveMessagesRef.current, ev.message]
         setLiveMessages(liveMessagesRef.current)
         // A completed assistant message absorbs the partial text streamed so
         // far; clear it so the trailing live turn doesn't echo it twice.
-        if (message.role === 'assistant') setStreamText('')
+        if (ev.message.role === 'assistant') setStreamText('')
         // A tool_result-bearing user message means the running tool finished.
-        if (message.role === 'user') setLiveTool(null)
+        if (ev.message.role === 'user') setLiveTool(null)
       }),
-      api.onChatError(message => setErrorText(prev => (prev ? prev + '\n' : '') + message)),
-      api.onPermissionRequest(req => setPermQueue(prev => [...prev, req])),
-      api.onChatDone(s => {
-        if (s) setSummary(s)
+      api.onChatError(ev => {
+        if (isMine(ev.sessionId)) setErrorText(prev => (prev ? prev + '\n' : '') + ev.error)
+      }),
+      // Approval requests are modal for the one live session; only a definite
+      // mismatch is dropped ('' means the request raced a teardown — show it,
+      // an unanswered dialog would deadlock the turn either way).
+      api.onPermissionRequest(req => {
+        if (req.sessionId && !isMine(req.sessionId)) return
+        setPermQueue(prev => [...prev, req])
+      }),
+      api.onChatDone(ev => {
+        if (!isMine(ev.sessionId)) return
+        if (ev.summary) setSummary(ev.summary)
         commitTurn()
         setStreaming(false)
         setStreamText('')

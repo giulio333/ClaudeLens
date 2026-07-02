@@ -60,6 +60,44 @@ export interface ChatTurnSummary {
   models: string[];
 }
 
+// ─── Stream event envelopes (`sessions:chat*` channels) ──────────────────────
+// Every stream event carries the id of the session that produced it. The main
+// process runs one ChatSession at a time today, but that is a convention, not
+// a guarantee the channels encode — tagging the envelopes lets the renderer
+// drop stale events from a superseded session (and keeps the door open for
+// multiple concurrent chats) instead of trusting arrival order.
+
+/** `sessions:chatChunk` — a live assistant text delta. */
+export interface ChatChunkEvent {
+  sessionId: string;
+  text: string;
+}
+
+/** `sessions:chatToolActivity` — the tool being prepared or executed. */
+export interface ChatToolActivityEvent {
+  sessionId: string;
+  activity: ToolActivity;
+}
+
+/** `sessions:chatMessage` — a fully-formed message emitted during the turn. */
+export interface ChatMessageEvent {
+  sessionId: string;
+  message: ChatMessage;
+}
+
+/** `sessions:chatDone` — the turn ended. `summary` is absent when the query
+ *  died without a result (fatal stream error). */
+export interface ChatDoneEvent {
+  sessionId: string;
+  summary?: ChatTurnSummary;
+}
+
+/** `sessions:chatError` — a turn-level failure. */
+export interface ChatErrorEvent {
+  sessionId: string;
+  error: string;
+}
+
 /** A `PermissionUpdate` suggestion from the SDK — the rule(s) to persist when
  *  the user picks "Always allow". Shape is opaque to the renderer; it
  *  round-trips back to the SDK verbatim, so it stays loosely typed here. */
@@ -70,6 +108,8 @@ export type PermissionSuggestion = Record<string, unknown>;
  *  `respondPermission(requestId, decision)`. */
 export interface PermissionRequest {
   requestId: string;
+  /** The chat session the approval belongs to ('' if it raced a teardown). */
+  sessionId: string;
   toolName: string;
   /** Full prompt sentence from the bridge (e.g. "Claude wants to read foo.txt"). */
   title?: string;
