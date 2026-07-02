@@ -1,23 +1,26 @@
 import { useMemo } from 'react'
 import { TopBar } from '../shared/TopBar'
 import { buildProcessedMessages } from './utils'
+import { LiveInTerminalBadge } from './atoms'
 import { ChatComposer } from './ChatComposer'
 import { MessageBubble } from './MessageBubble'
 import { LiveTurn } from './LiveTurn'
 import { useChatAutoScroll } from './useAutoScroll'
 import { useLiveChat } from './useLiveChat'
 import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils'
-import { SessionSummary } from '../../../hooks/useIPC'
+import { SessionSummary, useActiveSessions } from '../../../hooks/useIPC'
 
 /** The in-app SDK chat — a Claude Code conversation driven entirely by the
  *  Agent SDK stream. This is the deliberate split from `ChatView` (which is a
  *  read-only, disk-backed viewer of existing sessions).
  *
  *  Two entry points: a brand-new conversation (no `resumeSession`), or
- *  **continuing an existing session** from `ChatView`'s "Continue chat" — the
- *  transcript is then seeded once from disk and the first send resumes the
- *  same `.jsonl`, so the conversation picks up where the terminal (or a
- *  previous in-app chat) left off.
+ *  **continuing an existing session** from the session row's "Chat" action —
+ *  the transcript is then seeded from disk and the first send resumes the same
+ *  `.jsonl`, so the conversation picks up where the terminal (or a previous
+ *  in-app chat) left off. If the session is live in a terminal right now the
+ *  composer is locked (replying would race the CLI on the same transcript) and
+ *  the transcript follows the disk until the terminal session ends.
  *
  *  All conversation state lives in `useLiveChat` — the single owner of the IPC
  *  subscriptions, the in-flight turn and the committed transcript. This view is
@@ -45,7 +48,18 @@ export function LiveChatView({
         : undefined,
     [project.hash, resumeSession]
   )
-  const chat = useLiveChat(project.realPath, resume)
+
+  // A resumed session may be running in a terminal right now (the registry
+  // tracks CLI sessions only, so our own SDK session can never self-lock).
+  // While it is: the composer locks — replying here would race the CLI on the
+  // same transcript — and the transcript follows the disk so the terminal's
+  // conversation flows through this view. The CLI updates its registry file on
+  // exit, so the watcher push unlocks the composer by itself.
+  const { data: activeSessions = [] } = useActiveSessions()
+  const liveInTerminal =
+    resume !== undefined && activeSessions.some(a => a.sessionId === resume.sessionId)
+
+  const chat = useLiveChat(project.realPath, resume, liveInTerminal)
 
   const processed = useMemo(
     () => buildProcessedMessages(chat.displayMessages),
@@ -95,17 +109,20 @@ export function LiveChatView({
         backLabel="Sessions"
         crumbs={[{ label: title, accent: true }]}
         right={
-          summary ? (
-            <span
-              className="font-mono"
-              title="Cost and tokens for this conversation (from the SDK, not the transcript file)"
-              style={{ fontSize: 11, color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
-            >
-              {fmtCost(summary.totalCostUsd)} · {fmt(summary.inputTokens)} in ·{' '}
-              {fmt(summary.outputTokens)} out
-              {summary.models.length > 0 && ` · ${summary.models.map(fmtModel).join(', ')}`}
-            </span>
-          ) : undefined
+          <>
+            {liveInTerminal && <LiveInTerminalBadge />}
+            {summary && (
+              <span
+                className="font-mono"
+                title="Cost and tokens for this conversation (from the SDK, not the transcript file)"
+                style={{ fontSize: 11, color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+              >
+                {fmtCost(summary.totalCostUsd)} · {fmt(summary.inputTokens)} in ·{' '}
+                {fmt(summary.outputTokens)} out
+                {summary.models.length > 0 && ` · ${summary.models.map(fmtModel).join(', ')}`}
+              </span>
+            )}
+          </>
         }
       />
 
@@ -165,6 +182,11 @@ export function LiveChatView({
           onRespondPermission={chat.respondPermission}
           onSend={(text, opts) => void chat.send(text, opts)}
           onStop={chat.stop}
+          lockNotice={
+            liveInTerminal
+              ? 'This session is live in your terminal — replying here would race it on the same transcript. The composer unlocks when the terminal session ends.'
+              : null
+          }
         />
       </div>
     </div>

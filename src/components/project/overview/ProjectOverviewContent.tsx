@@ -390,7 +390,10 @@ export function ProjectView({
     [onNavigate, project]
   );
   const openChat = useCallback(
-    (s: SessionSummary) => onNavigate({ type: 'chat', project, session: s }),
+    // The row's "Chat" action goes straight to the live SDK chat (resume mode,
+    // composer at the bottom) — LiveChatView locks the composer itself when the
+    // session is currently live in a terminal.
+    (s: SessionSummary) => onNavigate({ type: 'new-chat', project, resumeSession: s }),
     [onNavigate, project]
   );
 
