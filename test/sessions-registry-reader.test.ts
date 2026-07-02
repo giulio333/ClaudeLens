@@ -71,42 +71,87 @@ describe('parseRegistryEntry', () => {
 });
 
 describe('readActiveSessions', () => {
-  // Pin "now" just after the fixture heartbeat so the staleness gate keeps the
-  // entries fresh; the gate itself is exercised in its own test below.
-  const freshNow = () => ENTRY.updatedAt + 1000;
+  // Identity check that accepts every candidate pid as a claude CLI; the
+  // pid-reuse guard is exercised in its own tests below.
+  const allClaude = (pids: number[]) => Promise.resolve(new Map(pids.map(p => [p, 'claude'])));
 
   it('returns live entries sorted by startedAt desc', async () => {
     writeEntry('1.json', { ...ENTRY, pid: 1, startedAt: 100 });
     writeEntry('2.json', { ...ENTRY, pid: 2, startedAt: 200 });
-    const out = await readActiveSessions({ dir, pidAlive: () => true, now: freshNow });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, pidCommands: allClaude });
     expect(out.map(s => s.pid)).toEqual([2, 1]);
   });
 
   it('drops stale entries whose pid is dead', async () => {
     writeEntry('1.json', { ...ENTRY, pid: 1 });
     writeEntry('2.json', { ...ENTRY, pid: 2 });
-    const out = await readActiveSessions({ dir, pidAlive: pid => pid === 2, now: freshNow });
+    const out = await readActiveSessions({
+      dir,
+      pidAlive: pid => pid === 2,
+      pidCommands: allClaude,
+    });
     expect(out.map(s => s.pid)).toEqual([2]);
   });
 
-  it('drops entries whose heartbeat is stale even if the pid is alive (pid reuse)', async () => {
-    writeEntry('fresh.json', { ...ENTRY, pid: 1, updatedAt: 1_000_000 });
-    writeEntry('stale.json', { ...ENTRY, pid: 2, updatedAt: 100 });
-    // now is 1 minute + a bit past the fresh heartbeat: fresh survives, stale drops.
-    const out = await readActiveSessions({ dir, pidAlive: () => true, now: () => 1_000_500 });
+  it('keeps entries with an old updatedAt (long busy turn writes no heartbeat)', async () => {
+    // Verified live on 2.1.198: the CLI rewrites the file only on status
+    // transitions, so a session mid-turn can be minutes past its updatedAt.
+    writeEntry('1.json', { ...ENTRY, pid: 1, updatedAt: 100 });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, pidCommands: allClaude });
     expect(out.map(s => s.pid)).toEqual([1]);
   });
 
-  it('keeps entries with no heartbeat (older CLI), relying on the pid probe alone', async () => {
-    writeEntry('1.json', { pid: 1, sessionId: 'x', cwd: '/a/b' });
-    const out = await readActiveSessions({ dir, pidAlive: () => true, now: () => 9_999_999_999_999 });
+  it('drops entries whose live pid no longer runs a claude CLI (pid reuse)', async () => {
+    writeEntry('claude.json', { ...ENTRY, pid: 1 });
+    writeEntry('reused.json', { ...ENTRY, pid: 2 });
+    writeEntry('gone-from-ps.json', { ...ENTRY, pid: 3 });
+    const out = await readActiveSessions({
+      dir,
+      pidAlive: () => true,
+      pidCommands: () =>
+        Promise.resolve(
+          new Map([
+            [1, 'claude --resume abc'],
+            [2, '/usr/bin/vim notes.txt'],
+          ])
+        ),
+    });
     expect(out.map(s => s.pid)).toEqual([1]);
+  });
+
+  it('excludes the Claude desktop app from the CLI identity match', async () => {
+    writeEntry('1.json', { ...ENTRY, pid: 1 });
+    const out = await readActiveSessions({
+      dir,
+      pidAlive: () => true,
+      pidCommands: () =>
+        Promise.resolve(new Map([[1, '/Applications/Claude.app/Contents/MacOS/Claude']])),
+    });
+    expect(out).toEqual([]);
+  });
+
+  it('falls back to the pid probe alone when the identity check cannot run', async () => {
+    writeEntry('1.json', { ...ENTRY, pid: 1 });
+    const out = await readActiveSessions({
+      dir,
+      pidAlive: () => true,
+      pidCommands: () => Promise.resolve(null),
+    });
+    expect(out.map(s => s.pid)).toEqual([1]);
+  });
+
+  it('does not fall back to the scanner when a populated registry filters to empty', async () => {
+    // A dead session's leftover file means a 2.x CLI owns liveness: report
+    // nothing live instead of guessing sessionId-less entries from ps.
+    writeEntry('1.json', { ...ENTRY, pid: 1 });
+    const out = await readActiveSessions({ dir, pidAlive: () => false, pidCommands: allClaude });
+    expect(out).toEqual([]);
   });
 
   it('skips malformed files without failing the read', async () => {
     writeEntry('bad.json', '{ not json');
     writeEntry('ok.json', ENTRY);
-    const out = await readActiveSessions({ dir, pidAlive: () => true, now: freshNow });
+    const out = await readActiveSessions({ dir, pidAlive: () => true, pidCommands: allClaude });
     expect(out).toHaveLength(1);
     expect(out[0].sessionId).toBe(ENTRY.sessionId);
   });
