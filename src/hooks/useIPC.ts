@@ -43,6 +43,11 @@ import type {
   PermissionDecision,
   ToolActivity,
   ChatTurnSummary,
+  ChatChunkEvent,
+  ChatToolActivityEvent,
+  ChatMessageEvent,
+  ChatDoneEvent,
+  ChatErrorEvent,
   NotificationEvent,
 } from '../types'
 
@@ -89,6 +94,11 @@ export type {
   PermissionDecision,
   ToolActivity,
   ChatTurnSummary,
+  ChatChunkEvent,
+  ChatToolActivityEvent,
+  ChatMessageEvent,
+  ChatDoneEvent,
+  ChatErrorEvent,
 }
 
 type IpcResult<T> = { data: T | null; error: string | null }
@@ -211,11 +221,11 @@ declare global {
         respondPermission: (requestId: string, decision: PermissionDecision) => Promise<IpcResult<null>>
         onPermissionRequest: (cb: (request: PermissionRequest) => void) => () => void
         onChatStarted: (cb: (sessionId: string) => void) => () => void
-        onChatChunk: (cb: (chunk: string) => void) => () => void
-        onChatToolActivity: (cb: (activity: ToolActivity) => void) => () => void
-        onChatMessage: (cb: (message: ChatMessage) => void) => () => void
-        onChatDone: (cb: (summary?: ChatTurnSummary) => void) => () => void
-        onChatError: (cb: (error: string) => void) => () => void
+        onChatChunk: (cb: (event: ChatChunkEvent) => void) => () => void
+        onChatToolActivity: (cb: (event: ChatToolActivityEvent) => void) => () => void
+        onChatMessage: (cb: (event: ChatMessageEvent) => void) => () => void
+        onChatDone: (cb: (event: ChatDoneEvent) => void) => () => void
+        onChatError: (cb: (event: ChatErrorEvent) => void) => () => void
       }
       terminal: {
         create: (opts: {

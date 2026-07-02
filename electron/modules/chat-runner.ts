@@ -25,6 +25,14 @@
 import { randomUUID } from 'crypto';
 import { mapSdkMessageToChat, type ChatMessage } from './session-reader';
 import { resolveClaudeExecutablePath } from '../utils';
+import type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
+import {
+  noteMessage,
+  compactBoundaryNote,
+  summarizeResult,
+  isPromptEcho,
+  isSubagentTraffic,
+} from './chat-stream';
 
 async function loadSdk() {
   return import('@anthropic-ai/claude-agent-sdk');
@@ -33,44 +41,6 @@ async function loadSdk() {
 // Packaged app only: the SDK's CLI binary lives outside app.asar (asarUnpack)
 // and the SDK can't find it on its own. Undefined in dev.
 const claudeExecutable = resolveClaudeExecutablePath();
-
-// A synthetic assistant message carrying a plain note — used to surface output
-// from slash commands that finish without a model turn (e.g. /context, /usage)
-// or a system event (e.g. /compact's boundary), so the command isn't silently
-// muted in the transcript. It renders through the same pipeline as a real turn.
-function noteMessage(text: string): ChatMessage {
-  return {
-    uuid: randomUUID(),
-    role: 'assistant',
-    // Marked `<synthetic>` (the same model tag Claude Code uses for local-command
-    // turns) so the renderer can recognise it as slash-command output that never
-    // lands on disk, and pin it across the reconcile to the canonical transcript.
-    model: '<synthetic>',
-    timestamp: new Date().toISOString(),
-    content: [{ type: 'text', text }],
-  };
-}
-
-// Pull the turn's cost/token/model summary out of an SDK `result` message. Read
-// defensively (typed `unknown`): the result is undocumented-internal enough that
-// a field could be absent at runtime, and a missing one should degrade to 0/[]
-// rather than throw. The SDK reports session cumulatives here (`usage` is
-// snake_case BetaUsage; `modelUsage` is keyed by model id).
-function summarizeResult(msg: unknown): ChatTurnSummary {
-  const r = (msg ?? {}) as Record<string, unknown>;
-  const usage = (r.usage ?? {}) as Record<string, unknown>;
-  const modelUsage = (r.modelUsage ?? {}) as Record<string, unknown>;
-  const num = (v: unknown): number => (typeof v === 'number' ? v : 0);
-  return {
-    totalCostUsd: num(r.total_cost_usd),
-    inputTokens: num(usage.input_tokens),
-    outputTokens: num(usage.output_tokens),
-    cacheReadTokens: num(usage.cache_read_input_tokens),
-    cacheWriteTokens: num(usage.cache_creation_input_tokens),
-    numTurns: num(r.num_turns),
-    models: Object.keys(modelUsage),
-  };
-}
 
 // The SDK is ESM-only; deriving its types from the dynamic `import()` (rather than
 // a top-level `import type`) avoids the CommonJS→ESM resolution-mode requirement.
@@ -99,29 +69,10 @@ export interface ChatSessionParams {
   env: Record<string, string | undefined>;
 }
 
-/** Live tool indicator for the in-flight turn. Mirrored in `src/types.ts` for
- *  the renderer (the two tsconfigs don't share imports). */
-export interface ToolActivity {
-  toolName: string;
-  /** Set while the tool executes (from `tool_progress`); null while the model
-   *  is still generating the tool call's input. */
-  elapsedSeconds: number | null;
-}
-
-/** End-of-turn metadata, read straight from the SDK's `result` message so the
- *  live in-app chat can show running cost/tokens/model without touching disk.
- *  Mirrored in `src/types.ts` for the renderer. Cost and tokens are session
- *  cumulatives (the SDK reports session totals on every result). */
-export interface ChatTurnSummary {
-  totalCostUsd: number;
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-  numTurns: number;
-  /** Models used so far (the keys of the SDK's `modelUsage`). */
-  models: string[];
-}
+// `ToolActivity` and `ChatTurnSummary` live in the shared module (single
+// definition for main and renderer); re-exported so existing importers keep
+// working unchanged.
+export type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
 
 export interface ChatCallbacks {
   /** Fired with the session id as soon as the SDK reports it (init message). */
@@ -273,13 +224,10 @@ export class ChatSession {
           cb.onStarted(msg.session_id);
           continue;
         }
-        // Sub-agent traffic: during a Task dispatch the SDK forwards the
-        // subagent's tool_use/tool_result blocks (and stream events) into the
-        // main stream, marked with `parent_tool_use_id`. The live turn renders
-        // the main conversation only — the persisted transcript skips sidechain
-        // lines too, so forwarding these would paint tool cards that vanish at
-        // the reconcile to disk.
-        if ('parent_tool_use_id' in msg && msg.parent_tool_use_id !== null) continue;
+        // Sub-agent traffic (Task dispatch forwarded into the main stream): the
+        // live turn renders the main conversation only, matching the persisted
+        // transcript that skips sidechain lines.
+        if (isSubagentTraffic(msg)) continue;
         // Live text deltas (only present with includePartialMessages).
         if (msg.type === 'stream_event') {
           const event = msg.event;
@@ -314,26 +262,18 @@ export class ChatSession {
         // shows that optimistically, and forwarding it would double the bubble.
         if (msg.type === 'assistant' || msg.type === 'user') {
           const mapped = mapSdkMessageToChat(msg as Parameters<typeof mapSdkMessageToChat>[0]);
-          if (mapped) {
-            const isPromptEcho =
-              mapped.role === 'user' && !mapped.content.some(b => b.type === 'tool_result');
-            if (!isPromptEcho) {
-              if (mapped.role === 'assistant') this.sawAssistant = true;
-              cb.onMessage(mapped);
-            }
+          if (mapped && !isPromptEcho(mapped)) {
+            if (mapped.role === 'assistant') this.sawAssistant = true;
+            cb.onMessage(mapped);
           }
           continue;
         }
         // `/compact` emits no assistant turn — just a boundary event. Surface a
         // short note so the command visibly did something.
         if (msg.type === 'system' && msg.subtype === 'compact_boundary') {
-          const pre = msg.compact_metadata?.pre_tokens;
-          const trigger = msg.compact_metadata?.trigger;
           cb.onMessage(
             noteMessage(
-              `Context compacted${pre ? ` — was ~${pre.toLocaleString()} tokens` : ''}${
-                trigger ? ` (${trigger})` : ''
-              }.`
+              compactBoundaryNote(msg.compact_metadata?.pre_tokens, msg.compact_metadata?.trigger)
             )
           );
           continue;

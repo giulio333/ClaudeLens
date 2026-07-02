@@ -2,31 +2,12 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
+import type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
 
-export type ChatContentBlock =
-  | { type: 'text'; text: string }
-  | { type: 'thinking'; thinking: string }
-  | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean };
-
-// Message-level token usage (assistant turns only). `input + cacheRead +
-// cacheWrite` of the latest turn ≈ the current context-window occupancy — the
-// rail derives its CONTEXT gauge from it. Absent on user turns.
-export interface MessageUsage {
-  inputTokens: number;
-  outputTokens: number;
-  cacheReadTokens: number;
-  cacheWriteTokens: number;
-}
-
-export interface ChatMessage {
-  uuid: string;
-  role: 'user' | 'assistant';
-  timestamp: string;
-  model?: string;
-  content: ChatContentBlock[];
-  usage?: MessageUsage;
-}
+// The message shapes live in the shared module (single definition for main and
+// renderer); re-exported here so existing `./session-reader` importers keep
+// working unchanged.
+export type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
 
 /** Parse the message-level `usage` block (Anthropic field names) if present. */
 function parseUsage(msg: Record<string, unknown>): MessageUsage | undefined {

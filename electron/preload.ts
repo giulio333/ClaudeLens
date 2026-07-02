@@ -71,13 +71,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sessions:permissionResponse', requestId, decision),
     onPermissionRequest: (cb: (request: unknown) => void) =>
       subscribe('sessions:permissionRequest', cb),
+    // Stream events arrive enveloped with the producing session's id — see the
+    // `Chat*Event` types in shared/chat-types.ts (typed renderer-side in useIPC).
     onChatStarted: (cb: (sessionId: string) => void) => subscribe('sessions:chatStarted', cb),
-    onChatChunk: (cb: (chunk: string) => void) => subscribe('sessions:chatChunk', cb),
-    onChatToolActivity: (cb: (activity: unknown) => void) =>
+    onChatChunk: (cb: (event: unknown) => void) => subscribe('sessions:chatChunk', cb),
+    onChatToolActivity: (cb: (event: unknown) => void) =>
       subscribe('sessions:chatToolActivity', cb),
-    onChatMessage: (cb: (message: unknown) => void) => subscribe('sessions:chatMessage', cb),
-    onChatDone: (cb: (summary?: unknown) => void) => subscribe('sessions:chatDone', cb),
-    onChatError: (cb: (error: string) => void) => subscribe('sessions:chatError', cb),
+    onChatMessage: (cb: (event: unknown) => void) => subscribe('sessions:chatMessage', cb),
+    onChatDone: (cb: (event: unknown) => void) => subscribe('sessions:chatDone', cb),
+    onChatError: (cb: (event: unknown) => void) => subscribe('sessions:chatError', cb),
   },
   terminal: {
     create: (opts: { cwd: string; resumeSessionId?: string; attachJobId?: string; cols?: number; rows?: number }) =>
