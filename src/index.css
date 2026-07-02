@@ -2371,38 +2371,75 @@ body {
   color: var(--cl-accent-ink);
   border-color: var(--cl-accent);
 }
-.cl-export-presets {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
+/* Preset picker: a vertical radio list — each option carries its own one-line
+   description, so the choice is legible without a detached caption paragraph. */
+.cl-export-list {
+  display: flex;
+  flex-direction: column;
   border: 1px solid var(--cl-line);
-  border-radius: 6px;
+  border-radius: 9px;
   overflow: hidden;
+  margin-bottom: 11px;
 }
-.cl-export-presets button {
+.cl-export-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
   border: 0;
-  border-left: 1px solid var(--cl-line);
+  border-top: 1px solid var(--cl-line-soft);
   background: transparent;
-  color: var(--cl-ink-3);
-  padding: 7px 8px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
+  text-align: left;
   cursor: pointer;
+  transition: background-color 0.12s;
 }
-.cl-export-presets button:first-child {
-  border-left: 0;
+.cl-export-option:first-child {
+  border-top: 0;
 }
-.cl-export-presets button:hover {
-  color: var(--cl-ink);
+.cl-export-option:hover {
+  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
 }
-.cl-export-presets button.is-active {
+.cl-export-option.is-active {
   background: var(--cl-accent-soft);
+}
+.cl-export-option-dot {
+  flex: 0 0 auto;
+  width: 12px;
+  height: 12px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 1.5px solid var(--cl-ink-4);
+  transition:
+    border-color 0.12s,
+    box-shadow 0.12s;
+}
+.cl-export-option.is-active .cl-export-option-dot {
+  border-color: var(--cl-accent);
+  box-shadow: inset 0 0 0 3px var(--cl-paper), inset 0 0 0 8px var(--cl-accent);
+}
+.cl-export-option-body {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.cl-export-option-name {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--cl-ink-2);
+  line-height: 1.3;
+}
+.cl-export-option.is-active .cl-export-option-name {
   color: var(--cl-accent-ink);
 }
+.cl-export-option-desc {
+  font-size: 10.5px;
+  line-height: 1.4;
+  color: var(--cl-ink-3);
+}
 .cl-export-desc {
-  min-height: 34px;
-  margin: 9px 0 11px;
+  margin: 0 0 11px;
   color: var(--cl-ink-3);
   font-size: 11px;
   line-height: 1.45;
@@ -3845,6 +3882,11 @@ body {
 
 /* agents sheet — same glass as the export sheet, denser row list. Centred over
    the pill (the wrap defaults its children to the left edge via align-items). */
+/* export sheet — a touch wider than the base sheet so each preset's inline
+   description fits on one line. */
+.cl-sheet--export {
+  width: 332px;
+}
 .cl-sheet--agents {
   width: 348px;
   padding: 8px;
