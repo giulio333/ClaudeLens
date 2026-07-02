@@ -1,0 +1,233 @@
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import {
+  ChatMessage,
+  ChatTurnSummary,
+  PermissionDecision,
+  PermissionRequest,
+  ToolActivity,
+} from '../../../hooks/useIPC'
+import { trackEvent } from '../../../lib/telemetry'
+
+/** Hook: the single owner of an in-app SDK chat's state.
+ *
+ *  Everything about the live conversation lives here — the IPC subscriptions,
+ *  the in-flight turn (text deltas, fully-formed messages, tool indicator,
+ *  permission queue), the committed transcript and the optimistic user bubble.
+ *  `LiveChatView` renders what the hook exposes and `ChatComposer` is a purely
+ *  presentational input bar: neither holds stream state anymore.
+ *
+ *  This replaces the old shape where `ChatComposer` subscribed to the IPC
+ *  channels and lifted five callbacks up to the view, which then mirrored the
+ *  values into refs to dodge one-render-stale closures at turn commit — the
+ *  exact seam where a just-streamed reply could be dropped. With one owner
+ *  there is no cross-component hop: the commit reads this hook's own refs.
+ *
+ *  The transcript is stream-only (the deliberate LiveChatView design): it
+ *  starts empty and grows only from what the SDK emits — the `.jsonl` the SDK
+ *  writes is never read back here. */
+export function useLiveChat(realPath: string) {
+  // The SDK session id, known once the first turn starts (null until then).
+  // Turns 2+ push into the live session instead of resuming from disk.
+  const [sessionId, setSessionId] = useState<string | null>(null)
+  // The committed transcript — grown ONLY from the stream.
+  const [messages, setMessages] = useState<ChatMessage[]>([])
+  // The just-sent prompt, shown optimistically (the SDK doesn't echo it back).
+  const [pendingUser, setPendingUser] = useState<{
+    text: string
+    at: string
+    uuid: string
+  } | null>(null)
+  // The in-flight turn, straight from the stream.
+  const [liveMessages, setLiveMessages] = useState<ChatMessage[]>([])
+  const [streamText, setStreamText] = useState('')
+  const [liveTool, setLiveTool] = useState<ToolActivity | null>(null)
+  const [streaming, setStreaming] = useState(false)
+  const [errorText, setErrorText] = useState<string | null>(null)
+  // Running cost/token/model summary from the SDK's `result` (session cumulative).
+  const [summary, setSummary] = useState<ChatTurnSummary | null>(null)
+  // Tool-approval requests forwarded from the SDK's canUseTool, oldest first.
+  // A queue, not a single slot: parallel tools can fire several canUseTool
+  // calls at once, and overwriting the visible one would leave the hidden
+  // request pending forever — deadlocking the turn.
+  const [permQueue, setPermQueue] = useState<PermissionRequest[]>([])
+
+  // Refs mirror the pieces the mount-only subscriptions and the turn commit
+  // must read synchronously (state would be one render stale there).
+  const sessionIdRef = useRef<string | null>(null)
+  const pendingRef = useRef<{ text: string; at: string; uuid: string } | null>(null)
+  const liveMessagesRef = useRef<ChatMessage[]>([])
+  const realPathRef = useRef(realPath)
+  useEffect(() => {
+    realPathRef.current = realPath
+  })
+
+  const clearInFlight = useCallback(() => {
+    pendingRef.current = null
+    liveMessagesRef.current = []
+    setPendingUser(null)
+    setLiveMessages([])
+  }, [])
+
+  // Commit the finished turn to the transcript, straight from the refs: the
+  // optimistic user bubble (same uuid) + the streamed messages, deduped by uuid.
+  // `chatDone` is the authoritative turn-end signal; a chatDone without a
+  // pending send (e.g. the final one after a fatal close) commits nothing.
+  const commitTurn = useCallback(() => {
+    const pending = pendingRef.current
+    if (!pending) return
+    const userMsg: ChatMessage = {
+      uuid: pending.uuid,
+      role: 'user',
+      timestamp: pending.at,
+      content: [{ type: 'text', text: pending.text }],
+    }
+    const streamed = liveMessagesRef.current
+    setMessages(prev => {
+      const seen = new Set(prev.map(m => m.uuid))
+      const turn = [userMsg, ...streamed].filter(m => !seen.has(m.uuid))
+      return [...prev, ...turn]
+    })
+    clearInFlight()
+  }, [clearInFlight])
+
+  // Subscribe to the streaming channels once, on mount. The handlers read only
+  // refs and functional setState, so nothing here can go one-render stale and
+  // no re-subscribe gap can drop a chunk mid-stream.
+  useEffect(() => {
+    const api = window.electronAPI.sessions
+    const disposers = [
+      api.onChatStarted(id => {
+        sessionIdRef.current = id
+        setSessionId(id)
+      }),
+      api.onChatChunk(chunk => setStreamText(prev => prev + chunk)),
+      api.onChatToolActivity(activity => setLiveTool(activity)),
+      api.onChatMessage(message => {
+        liveMessagesRef.current = [...liveMessagesRef.current, message]
+        setLiveMessages(liveMessagesRef.current)
+        // A completed assistant message absorbs the partial text streamed so
+        // far; clear it so the trailing live turn doesn't echo it twice.
+        if (message.role === 'assistant') setStreamText('')
+        // A tool_result-bearing user message means the running tool finished.
+        if (message.role === 'user') setLiveTool(null)
+      }),
+      api.onChatError(message => setErrorText(prev => (prev ? prev + '\n' : '') + message)),
+      api.onPermissionRequest(req => setPermQueue(prev => [...prev, req])),
+      api.onChatDone(s => {
+        if (s) setSummary(s)
+        commitTurn()
+        setStreaming(false)
+        setStreamText('')
+        setLiveTool(null)
+        // A turn can't end with requests still on screen (the SDK denied any
+        // pending ones on teardown); clear the stale queue.
+        setPermQueue([])
+      }),
+    ]
+    return () => disposers.forEach(dispose => dispose())
+  }, [commitTurn])
+
+  // Tear the persistent SDK session down when the owning view unmounts; the
+  // next send in any view resumes from disk into a fresh session.
+  useEffect(() => {
+    return () => {
+      void window.electronAPI.sessions.endChat()
+    }
+  }, [])
+
+  /** Send a turn: first send starts a new session (`startMessage`), later ones
+   *  push into the warm live session (`sendMessage`). Resolves false when the
+   *  send failed before a turn ever started (the optimistic bubble is rolled
+   *  back and the error surfaced in `errorText`). */
+  const send = useCallback(
+    async (text: string, opts: { model?: string; permissionMode: string }): Promise<boolean> => {
+      const startingNew = sessionIdRef.current === null
+      pendingRef.current = { text, at: new Date().toISOString(), uuid: crypto.randomUUID() }
+      liveMessagesRef.current = []
+      setPendingUser(pendingRef.current)
+      setLiveMessages([])
+      setStreamText('')
+      setLiveTool(null)
+      setErrorText(null)
+      setPermQueue([])
+      setStreaming(true)
+      try {
+        const api = window.electronAPI.sessions
+        const res = startingNew
+          ? await api.startMessage(realPathRef.current, text, opts.model, opts.permissionMode)
+          : await api.sendMessage(
+              realPathRef.current,
+              sessionIdRef.current as string,
+              text,
+              opts.model,
+              opts.permissionMode
+            )
+        if (res.error) throw new Error(res.error)
+        if (startingNew) trackEvent('chat_started')
+        return true
+      } catch (e) {
+        // The send never became a turn — drop the optimistic bubble; the
+        // committed transcript is untouched.
+        clearInFlight()
+        setStreaming(false)
+        setErrorText(e instanceof Error ? e.message : String(e))
+        return false
+      }
+    },
+    [clearInFlight]
+  )
+
+  /** Stop the in-flight turn (native SDK interrupt — the session stays warm).
+   *  The interrupted turn still ends with a `result`, whose chatDone commits
+   *  whatever streamed before the stop. */
+  const stop = useCallback(() => {
+    void window.electronAPI.sessions.stopMessage()
+    setStreaming(false)
+    setStreamText('')
+    setLiveTool(null)
+    setPermQueue([])
+  }, [])
+
+  /** Answer the tool-approval request at the head of the queue; the next
+   *  pending one (if any) takes its place. */
+  const respondPermission = useCallback(
+    (decision: PermissionDecision) => {
+      const head = permQueue[0]
+      if (!head) return
+      void window.electronAPI.sessions.respondPermission(head.requestId, decision)
+      setPermQueue(prev => prev.slice(1))
+    },
+    [permQueue]
+  )
+
+  // What the view renders: the committed transcript, plus — while a turn is in
+  // flight — the optimistic prompt and the streamed messages.
+  const displayMessages = useMemo<ChatMessage[]>(() => {
+    if (pendingUser === null) return messages
+    const optimisticUser: ChatMessage = {
+      uuid: pendingUser.uuid,
+      role: 'user',
+      timestamp: pendingUser.at,
+      content: [{ type: 'text', text: pendingUser.text }],
+    }
+    return [...messages, optimisticUser, ...liveMessages]
+  }, [messages, pendingUser, liveMessages])
+
+  return {
+    sessionId,
+    displayMessages,
+    /** True once the conversation has anything to show (optimistic included). */
+    hasConversation: pendingUser !== null || messages.length > 0,
+    liveMessages,
+    streamText,
+    liveTool,
+    streaming,
+    errorText,
+    summary,
+    permRequest: permQueue[0] ?? null,
+    permPendingCount: Math.max(0, permQueue.length - 1),
+    send,
+    stop,
+    respondPermission,
+  }
+}
