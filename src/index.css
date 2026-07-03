@@ -10931,3 +10931,43 @@ select.cl-opt-input {
   background: var(--cl-line-soft);
   color: var(--cl-ink);
 }
+
+/* ─── Update notice (UpdateBanner.tsx) ────────────────────────────────────
+   Single passive toast anchored bottom-LEFT (the session toaster owns the
+   bottom-right corner), reusing the .cl-toast anatomy with an accent stripe
+   and a two-action row (View release / Skip this version). */
+.cl-update-anchor {
+  position: fixed;
+  left: 18px;
+  bottom: 18px;
+  z-index: 1190;
+  width: min(360px, calc(100vw - 36px));
+}
+.cl-toast--update .cl-toast-stripe {
+  background: var(--cl-accent);
+}
+.cl-toast-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cl-toast-actions .cl-toast-action {
+  margin-top: 0;
+  text-decoration: none;
+  display: inline-block;
+}
+.cl-toast-action--quiet {
+  color: var(--cl-ink-3);
+  background: transparent;
+  border-color: var(--cl-line);
+}
+.cl-toast-action--quiet:hover {
+  background: var(--cl-line-soft);
+}
+.cl-toast-note {
+  margin-top: 9px;
+  font-size: 11px;
+  line-height: 1.45;
+  color: var(--cl-ink-4);
+}
