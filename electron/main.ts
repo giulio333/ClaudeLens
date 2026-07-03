@@ -30,6 +30,7 @@ import { getInstalledPlugins } from './modules/plugins-reader';
 import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
+import { buildDispatchBgArgs, buildAiRunArgs } from './modules/claude-cli-args';
 import { readEffectiveConfig } from './modules/config-reader';
 import {
   ChatSession,
@@ -1030,17 +1031,9 @@ ipcMain.handle(
         );
       }
 
-      const args = ['--bg'];
-      if (name) {
-        args.push('--name', name);
-      }
-      if (agent) {
-        args.push('--agent', agent);
-      }
-      if (model) {
-        args.push('--model', model);
-      }
-      args.push(prompt);
+      // Argv validato + prompt dietro `--`, così un valore che inizia con `-`
+      // non può iniettare flag nella CLI (issue #90).
+      const args = buildDispatchBgArgs({ prompt, name, agent, model });
 
       const { execFile } = await import('child_process');
       const { promisify } = await import('util');
@@ -1172,17 +1165,10 @@ ipcMain.handle(
     }
 
     return new Promise<IpcResult<null>>(resolve => {
-      // execFile-style: nessuna shell, l'istruzione passa come argomento separato
-      // (niente string-building né escaping fragile — cfr. agents:dispatchBg).
-      const args = [
-        '-p',
-        instruction,
-        '--model',
-        'Haiku',
-        '--allowedTools',
-        'Read,Glob,Grep,WebSearch,WebFetch',
-        '--no-session-persistence',
-      ];
+      // execFile-style: nessuna shell, l'istruzione passa come positional
+      // isolato dietro `--` — un'istruzione che inizia con `-` non può
+      // iniettare flag (issue #90; cfr. agents:dispatchBg).
+      const args = buildAiRunArgs(instruction);
       const proc = spawn('claude', args, {
         cwd: projectPath,
         env: claudeEnv(),
