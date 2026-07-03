@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import { buildChatExportDocument } from '../src/components/project/chat/export'
 import type { SessionSummary, ChatMessage } from '../src/types'
-import type { ProcessedMessage } from '../src/components/project/chat/utils'
+import { buildProcessedMessages, type ProcessedMessage } from '../src/components/project/chat/utils'
 import type { Highlight } from '../src/components/project/chat/highlights'
 
 // Integration coverage for the react-markdown-backed HTML export: confirms
@@ -187,5 +187,137 @@ describe('buildChatExportDocument (react-markdown HTML)', () => {
     })
     expect(doc.html).toContain('<math')
     expect(doc.html).not.toContain('$$i_{\\text{entra}}')
+  })
+})
+
+describe('buildChatExportDocument (command / notification turns)', () => {
+  const commandMessages: ChatMessage[] = [
+    {
+      uuid: 'c1',
+      role: 'user',
+      timestamp: '2026-06-23T10:30:00Z',
+      content: [
+        {
+          type: 'text',
+          text: '<command-name>/compact</command-name>\n<command-message>compact</command-message>\n<command-args>focus on tests</command-args>',
+        },
+      ],
+    },
+    {
+      uuid: 'c2',
+      role: 'user',
+      timestamp: '2026-06-23T10:30:05Z',
+      content: [{ type: 'text', text: '<local-command-stdout>Compacted successfully</local-command-stdout>' }],
+    },
+  ]
+
+  it('renders a slash-command turn as the command chip, never the raw XML framing', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: buildProcessedMessages(commandMessages),
+      preset: 'message',
+    })
+    expect(doc.markdown).toContain('`/compact` focus on tests')
+    expect(doc.markdown).not.toContain('<command-name>')
+    expect(doc.html).toContain('/compact')
+    expect(doc.html).not.toContain('&lt;command-name&gt;')
+    // The "message" preset strips the command's stdout along with tool detail.
+    expect(doc.markdown).not.toContain('Compacted successfully')
+  })
+
+  it('includes the command output in presets that show tool activity', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: buildProcessedMessages(commandMessages),
+      preset: 'docs',
+    })
+    expect(doc.markdown).toContain('Compacted successfully')
+    expect(doc.html).toContain('Compacted successfully')
+  })
+
+  const notificationMessages: ChatMessage[] = [
+    {
+      uuid: 'n1',
+      role: 'user',
+      timestamp: '2026-06-23T10:31:00Z',
+      content: [
+        {
+          type: 'text',
+          text: '<task-notification><task-id>t1</task-id><status>completed</status><summary>Background agent finished</summary></task-notification>',
+        },
+      ],
+    },
+  ]
+
+  it('skips task notifications in the "message" preset', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: buildProcessedMessages(notificationMessages),
+      preset: 'message',
+    })
+    expect(doc.markdown).not.toContain('task-notification')
+    expect(doc.markdown).not.toContain('Background agent finished')
+    expect(doc.html).not.toContain('task-notification')
+  })
+
+  it('renders task notifications compactly (no raw XML) in tool-showing presets', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: buildProcessedMessages(notificationMessages),
+      preset: 'docs',
+    })
+    expect(doc.markdown).toContain('Task event (completed): Background agent finished')
+    expect(doc.markdown).not.toContain('<task-notification>')
+    expect(doc.html).toContain('Background agent finished')
+    expect(doc.html).not.toContain('&lt;task-notification&gt;')
+  })
+})
+
+describe('buildChatExportDocument (fidelity)', () => {
+  it('preserves blank-line runs inside a fenced code block in the Markdown export', () => {
+    const code = ['```python', 'a = 1', '', '', '', 'b = 2', '```'].join('\n')
+    const doc = buildChatExportDocument({
+      session,
+      processed: [assistantTurn('a1', `Ecco il codice:\n\n${code}`)],
+      preset: 'message',
+    })
+    expect(doc.markdown).toContain('a = 1\n\n\n\nb = 2')
+  })
+
+  it('wraps tool results containing both ``` and ~~~ in a longer backtick fence', () => {
+    const content = 'uses ```js fences\nand ~~~ too'
+    const msg: ChatMessage = {
+      uuid: 'a2',
+      role: 'assistant',
+      timestamp: '2026-06-23T10:32:00Z',
+      model: 'claude-opus-4-8',
+      content: [
+        { type: 'text', text: 'ran a tool' },
+        { type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'cat file' } },
+      ],
+    }
+    const resultMsg: ChatMessage = {
+      uuid: 'u9',
+      role: 'user',
+      timestamp: '2026-06-23T10:32:05Z',
+      content: [{ type: 'tool_result', toolUseId: 't1', content, isError: false }],
+    }
+    const doc = buildChatExportDocument({
+      session,
+      processed: buildProcessedMessages([msg, resultMsg]),
+      preset: 'audit',
+    })
+    // The fence must be longer than any backtick run inside the content, so the
+    // embedded ``` can't close it early.
+    expect(doc.markdown).toContain('````text\nuses ```js fences\nand ~~~ too\n````')
+  })
+
+  it('falls back to session.model for the Model line when the models map is empty', () => {
+    const doc = buildChatExportDocument({
+      session: { ...session, models: {}, model: 'claude-opus-4-8' },
+      processed: [assistantTurn('a1', 'ciao')],
+      preset: 'message',
+    })
+    expect(doc.markdown).toContain('> Model:')
   })
 })

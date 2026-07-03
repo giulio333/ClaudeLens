@@ -10,10 +10,11 @@ import rehypeHighlight from 'rehype-highlight'
 import hljsLightCss from 'highlight.js/styles/github.css?raw'
 import { ChatContentBlock, SessionSummary } from '../../../types'
 import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
-import { ProcessedMessage, ToolGroup } from './utils'
+import { ClaudeSlashCommand, ProcessedMessage, TaskNotification, ToolGroup } from './utils'
 import {
   Highlight,
   exportHighlightCss,
+  fencedCodeRanges,
   materializeHighlightSentinels,
   wrapHighlightsWithSentinels,
 } from './highlights'
@@ -125,14 +126,15 @@ function previewValue(value: unknown, max = 96): string {
   return text.replace(/\s+/g, ' ').trim().slice(0, max)
 }
 
-function toolPreview(input: Record<string, unknown>): string {
+function toolPreview(input: Record<string, unknown> | null | undefined): string {
+  const i = input ?? {}
   return (
-    previewValue(input.file_path) ||
-    previewValue(input.command) ||
-    previewValue(input.pattern) ||
-    previewValue(input.description) ||
-    previewValue(input.url) ||
-    previewValue(input.prompt)
+    previewValue(i.file_path) ||
+    previewValue(i.command) ||
+    previewValue(i.pattern) ||
+    previewValue(i.description) ||
+    previewValue(i.url) ||
+    previewValue(i.prompt)
   )
 }
 
@@ -142,7 +144,12 @@ function jsonFence(value: unknown): string {
 
 function fence(value: string, lang = 'text'): string {
   const cleaned = value.trimEnd()
-  const marker = cleaned.includes('```') ? '~~~' : '```'
+  // A fence must be longer than any backtick run inside it, or the content
+  // would close it early (the old ```/~~~ toggle still broke on content
+  // carrying both markers).
+  const runs = cleaned.match(/`{3,}/g)
+  const longest = runs ? Math.max(...runs.map(r => r.length)) : 0
+  const marker = '`'.repeat(Math.max(3, longest + 1))
   return `${marker}${lang}\n${cleaned}\n${marker}`
 }
 
@@ -181,6 +188,11 @@ function showsTools(options: ExportOptions): boolean {
  *  an empty shell ("No visible message text.") — skip it entirely instead. */
 function turnHasVisibleContent(processed: ProcessedMessage, options: ExportOptions): boolean {
   const { msg, toolGroups } = processed
+  // A slash-command turn always shows (the command IS the user's message); a
+  // task-notification is a background-agent system event, surfaced only when
+  // the preset shows tool activity (the "message" preset strips it).
+  if (processed.command) return true
+  if (processed.notification) return showsTools(options)
   if (textBlocks(msg.content).some(b => b.text.trim())) return true
   if (options.includeThinking && thinkingBlocks(msg.content).some(b => b.thinking.trim())) return true
   return toolGroups.length > 0 && showsTools(options)
@@ -217,6 +229,20 @@ function blockHighlights(highlights: Highlight[], uuid: string, blockIndex: numb
   return highlights.filter(h => h.messageUuid === uuid && h.blockIndex === blockIndex)
 }
 
+/** Markdown one-liner for a slash-command turn — mirrors the live view's
+ *  command card instead of leaking the raw <command-name> XML framing that
+ *  Claude Code persists in the user message. */
+function commandMarkdown(command: ClaudeSlashCommand, options: ExportOptions): string[] {
+  const args = command.args && command.args !== command.command ? ` ${command.args}` : ''
+  const lines = [`\`/${command.command}\`${args}`, '']
+  if (command.output && showsTools(options)) lines.push(fence(command.output), '')
+  return lines
+}
+
+function notificationMarkdown(notification: TaskNotification): string[] {
+  return [`*Task event (${notification.status}): ${notification.summary}*`, '']
+}
+
 function buildTurnMarkdown(
   processed: ProcessedMessage,
   index: number,
@@ -224,8 +250,15 @@ function buildTurnMarkdown(
   highlights: Highlight[],
 ): string[] {
   const { msg, toolGroups } = processed
-  const heading = `### ${String(index + 1).padStart(2, '0')} ${roleLabel(msg.role)}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`
+  const who = processed.notification ? 'Task event' : roleLabel(msg.role)
+  const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`
   const lines = [heading, '']
+
+  // Command / notification turns replace their raw text blocks (which carry
+  // Claude Code's internal XML framing) with the same compact representation
+  // the live view renders.
+  if (processed.command) return [...lines, ...commandMarkdown(processed.command, options)]
+  if (processed.notification) return [...lines, ...notificationMarkdown(processed.notification)]
 
   if (options.includeThinking) {
     for (const block of thinkingBlocks(msg.content)) {
@@ -277,10 +310,30 @@ function buildTurnMarkdown(
   return lines
 }
 
+/** The session's primary model id: first real model from the per-model usage
+ *  map, falling back to the flat `model` field (an empty `models` map used to
+ *  short-circuit the fallback away). */
+function primaryModelOf(session: SessionSummary): string | undefined {
+  const fromMap = session.models
+    ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0]
+    : undefined
+  return fromMap ?? session.model
+}
+
+/** Collapse runs of 4+ newlines (generation artifacts) — but never inside a
+ *  fenced code block, where blank lines are content (a tool result or a code
+ *  sample would come out altered). */
+function collapseBlankRuns(text: string): string {
+  const fences = fencedCodeRanges(text)
+  return text.replace(/\n{4,}/g, (m, offset: number) =>
+    fences.some(f => offset >= f.from && offset < f.to) ? m : '\n\n\n',
+  )
+}
+
 function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): string {
   const { session, processed, preset } = input
   const title = sessionTitle(session, 120)
-  const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] : session.model
+  const primaryModel = primaryModelOf(session)
   // The absolute project path is deliberately omitted — it can leak the username
   // and internal directory structure into a shared export.
   const lines = [
@@ -305,7 +358,7 @@ function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): str
       lines.push(...buildTurnMarkdown(p, i, options, highlights))
     })
 
-  return lines.join('\n').replace(/\n{4,}/g, '\n\n\n').trimEnd() + '\n'
+  return collapseBlankRuns(lines.join('\n')).trimEnd() + '\n'
 }
 
 function escapeHtml(value: string): string {
@@ -370,6 +423,32 @@ function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
   `
 }
 
+/** HTML for a slash-command turn — the compact command chip the live view
+ *  shows, never the raw <command-name> XML persisted in the transcript. */
+function renderCommandHtml(command: ClaudeSlashCommand, options: ExportOptions): string {
+  const args = command.args && command.args !== command.command ? command.args : ''
+  const output = command.output && showsTools(options)
+    ? `<pre><code>${escapeHtml(command.output)}</code></pre>`
+    : ''
+  return `
+    <div class="command-line">
+      <code>/${escapeHtml(command.command)}</code>
+      ${args ? `<span class="command-args">${escapeHtml(args)}</span>` : ''}
+    </div>
+    ${output}
+  `
+}
+
+function renderNotificationHtml(notification: TaskNotification): string {
+  return `
+    <div class="tool-note">
+      <span>Task event</span>
+      <em>${escapeHtml(notification.summary)}</em>
+      <b class="${notification.status === 'completed' ? 'is-ok' : 'is-error'}">${escapeHtml(notification.status)}</b>
+    </div>
+  `
+}
+
 function renderTurnHtml(
   processed: ProcessedMessage,
   _index: number,
@@ -378,8 +457,15 @@ function renderTurnHtml(
 ): string {
   const { msg, toolGroups } = processed
   const time = turnTime(msg.timestamp)
-  const role = roleLabel(msg.role)
-  const textHtml = textBlocks(msg.content)
+  const role = processed.notification ? 'Task event' : roleLabel(msg.role)
+  // Command / notification turns replace their raw text blocks (Claude Code's
+  // internal XML framing) with the live view's compact representation.
+  const specialHtml = processed.command
+    ? renderCommandHtml(processed.command, options)
+    : processed.notification
+      ? renderNotificationHtml(processed.notification)
+      : null
+  const textHtml = specialHtml !== null ? '' : textBlocks(msg.content)
     .map((block, blockIndex) => {
       const hls = blockHighlights(highlights, msg.uuid, blockIndex)
       // Sentinels are injected into the raw text, pass through react-markdown as
@@ -419,7 +505,7 @@ function renderTurnHtml(
         ${model ? `<span class="turn-sep">·</span>${model}` : ''}
       </header>
       ${thinkingHtml}
-      ${textHtml || '<p class="muted">No visible message text.</p>'}
+      ${specialHtml ?? (textHtml || '<p class="muted">No visible message text.</p>')}
       ${toolsHtml}
     </article>
   `
@@ -428,7 +514,7 @@ function renderTurnHtml(
 function buildHtml(input: BuildChatExportInput, options: ExportOptions): string {
   const { session, processed } = input
   const title = sessionTitle(session, 120)
-  const primaryModel = session.models ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0] : session.model
+  const primaryModel = primaryModelOf(session)
 
   return `<!doctype html>
 <html>
@@ -506,6 +592,10 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
     .message-text { margin-bottom: 8px; }
     .message-text > :first-child { margin-top: 0; }
     .message-text > :last-child { margin-bottom: 0; }
+    /* Slash-command turn: the compact command chip (mirrors the live view). */
+    .command-line { margin-bottom: 8px; }
+    .command-line code { font-weight: 700; }
+    .command-args { margin-left: 8px; color: #5f5a52; }
     ${exportHighlightCss()}
     /* Markdown body elements (react-markdown + GFM output). */
     em { font-style: italic; }
