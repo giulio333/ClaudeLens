@@ -78,7 +78,9 @@ jobs:
       - name: Install Claude Code CLI
         run: npm install -g @anthropic-ai/claude-code
 
-      - name: Run terminal spawn test
-        run: npm test -- terminal-spawn.integration
+      # claude-cli covers the cross-spawn launcher (#60): on Windows it proves
+      # the `claude.cmd` shim resolves without a shell.
+      - name: Run CLI spawn tests
+        run: npm test -- terminal-spawn.integration claude-cli
         env:
           CLAUDE_E2E: '1'
