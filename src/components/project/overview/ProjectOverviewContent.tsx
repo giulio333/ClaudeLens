@@ -30,6 +30,7 @@ import { TagChip } from '../sessions/TagChip';
 import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
+import { LivePulseBorder } from '../shared/LivePulseBorder';
 
 function ChatGlyph() {
   return (
@@ -1464,6 +1465,7 @@ const SessionRow = memo(function SessionRow({
         }
       }}
     >
+      {live && <LivePulseBorder />}
       <button
         type="button"
         className={`cl-pin-row${pinned ? ' pinned' : ''}`}

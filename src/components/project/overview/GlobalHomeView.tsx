@@ -18,6 +18,7 @@ import { McpServerGrid } from '../mcp/McpServerGrid'
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects'
 import { PinIcon } from '../shared/SearchPopover'
 import { projectDisplayName } from '../shared/projectName'
+import { LivePulseBorder } from '../shared/LivePulseBorder'
 
 type Project = { hash: string; realPath: string }
 
@@ -155,7 +156,9 @@ export function GlobalHomeView({
               const proj = projectByPath.get(p.cwd)
               return (
                 <button key={p.pid} type="button" className="cl-proc"
+                  style={{ position: 'relative' }}
                   onClick={() => proj && onSelectProject(proj)}>
+                  <LivePulseBorder />
                   <span className="led" />
                   <span className="pid">PID {p.pid}</span>
                   <div style={{ minWidth: 0 }}>

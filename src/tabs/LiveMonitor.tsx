@@ -4,6 +4,7 @@ import { UsedItem, VISIBLE_TYPES, MAX_EVENTS, CHART_H } from './live/types'
 import { ActivityChart } from './live/ActivityChart'
 import { ProjectContextPanel } from './live/ProjectContextPanel'
 import { projectDisplayName } from '../components/project/shared/projectName'
+import { LivePulseBorder } from '../components/project/shared/LivePulseBorder'
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -422,6 +423,22 @@ export default function LiveMonitor({
           <ActivityChart events={events} />
         </div>
       </div>
+
+      {/* ── Shader frame: breathing border around the whole dashboard, tied to
+             Claude's status (cyan = busy, purple = thinking, off when idle) ── */}
+      {claudeStatus !== 'idle' && (
+        <LivePulseBorder
+          colors={claudeStatus === 'busy' ? ['#00e5ff'] : ['#a855f7']}
+          speed={claudeStatus === 'busy' ? 1.1 : 0.6}
+          roundness={0.05}
+          thickness={0.015}
+          intensity={0.25}
+          spots={4}
+          spotSize={0.5}
+          smoke={0.25}
+          zIndex={30}
+        />
+      )}
     </div>
   )
 }
