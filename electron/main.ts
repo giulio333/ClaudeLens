@@ -1722,9 +1722,12 @@ async function startWatcher() {
   // così i subtab Tasks e Plans si aggiornano live.
   // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
   const { watch } = await import('chokidar');
+  // depth 5: copre anche i transcript dei sub-agenti annidati nei workflow
+  // ({hash}/{sessionId}/subagents/workflows/wf_*/agent-*.jsonl), non solo
+  // quelli diretti ({hash}/{sessionId}/subagents/agent-*.jsonl, depth 3).
   const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, INSTALLED_PLUGINS_FILE], {
     ignoreInitial: true,
-    depth: 3,
+    depth: 5,
   });
 
   const notify = () => {
