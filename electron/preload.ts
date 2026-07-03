@@ -143,6 +143,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   settings: {
     getCleanupPeriodDays: () => ipcRenderer.invoke('settings:getCleanupPeriodDays'),
   },
+  updates: {
+    check: () => ipcRenderer.invoke('updates:check'),
+  },
   config: {
     getEffective: (cwd?: string) => ipcRenderer.invoke('config:getEffective', cwd),
   },

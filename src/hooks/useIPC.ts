@@ -284,6 +284,9 @@ declare global {
       settings: {
         getCleanupPeriodDays: () => Promise<IpcResult<number>>
       }
+      updates: {
+        check: () => Promise<IpcResult<UpdateInfo>>
+      }
       config: {
         getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>
       }
@@ -544,6 +547,56 @@ export function useSetTelemetryEnabled() {
     mutationFn: (enabled: boolean) => unwrap(window.electronAPI.telemetry.setEnabled(enabled)),
     onSuccess: (_data, enabled) => {
       qc.setQueryData(['telemetry:enabled'], enabled)
+    },
+  })
+}
+
+// ─── Update check (GitHub releases) ──────────────────────────────────────────
+// One check per app run (staleTime Infinity); Settings → General re-checks via
+// refetch(). Mirrors electron/modules/update-checker.ts. A failed check throws
+// — the banner stays silent on error, Settings shows "couldn't check".
+export interface UpdateInfo {
+  currentVersion: string
+  latestVersion: string
+  updateAvailable: boolean
+  releaseName: string | null
+  releaseUrl: string
+  publishedAt: string | null
+}
+
+export function useUpdateCheck() {
+  return useQuery({
+    queryKey: ['updates:check'],
+    queryFn: () => unwrap(window.electronAPI.updates.check()),
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+  })
+}
+
+// Per-version "skip" for the update notice, persisted in
+// ~/.claudelens/preferences.json so a skipped release stays quiet across
+// launches (the next release shows the notice again).
+const UPDATE_SKIPPED_KEY = 'cl-update-skipped-version'
+
+export function useSkippedUpdateVersion() {
+  return useQuery({
+    queryKey: ['prefs:update-skipped'],
+    queryFn: async (): Promise<string | null> => {
+      const all = await unwrap(window.electronAPI.prefs.getAll())
+      const v = all[UPDATE_SKIPPED_KEY]
+      return typeof v === 'string' ? v : null
+    },
+    staleTime: Infinity,
+  })
+}
+
+export function useSkipUpdateVersion() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (version: string) => unwrap(window.electronAPI.prefs.set(UPDATE_SKIPPED_KEY, version)),
+    onSuccess: (_data, version) => {
+      qc.setQueryData(['prefs:update-skipped'], version)
     },
   })
 }

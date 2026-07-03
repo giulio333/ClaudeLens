@@ -1,13 +1,14 @@
 # Privacy Policy
 
-_Last updated: 2026-06-24_
+_Last updated: 2026-07-03_
 
 ClaudeLens is a local-first desktop application. It reads and manages the Claude
 Code data already on your computer (under `~/.claude/`). **That data never leaves
 your device** — it is not uploaded, synced, or sent to us or anyone else.
 
 The only information that leaves your computer is a small amount of **anonymous
-usage telemetry**, described in full below. You can turn it off at any time.
+usage telemetry**, described in full below (you can turn it off at any time),
+plus a lightweight **update check**, described right after it.
 
 ---
 
@@ -73,6 +74,17 @@ ClaudeLens **never** sends, and Aptabase never receives, any of the following:
 
 In short: nothing that could identify you, and nothing about *what* you do in
 Claude Code — only the fact that the app launched, and on what platform.
+
+## Update check
+
+At launch (and when you press **Check now** in Settings → General), ClaudeLens
+asks the public GitHub API for the latest release of this repository
+(`api.github.com/repos/giulio333/ClaudeLens/releases/latest`) to tell you when
+a newer version is available. The request carries **no data about you or your
+usage** — it is a plain anonymous read of a public endpoint, like opening the
+releases page in a browser (GitHub sees your IP address, as with any web
+request; see [GitHub's privacy statement](https://docs.github.com/en/site-policy/privacy-policies/github-general-privacy-statement)).
+Nothing is downloaded or installed automatically.
 
 ## Legal basis (GDPR)
 

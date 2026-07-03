@@ -6,6 +6,7 @@ import {
   useSetTelemetryEnabled,
   useNotifyPrefs,
   useSetNotifyPref,
+  useUpdateCheck,
   type EffectiveConfig,
 } from '../../../hooks/useIPC'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
@@ -122,9 +123,11 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
               <NotificationsTab />
             ) : (
               <>
-                {/* Appearance lives at the top of General (ClaudeLens preference,
-                    shown immediately — it doesn't depend on the SDK config). */}
+                {/* Appearance + Updates live at the top of General (ClaudeLens
+                    preferences, shown immediately — they don't depend on the
+                    SDK config). */}
                 {tab === 'general' && <AppearanceTab />}
+                {tab === 'general' && <UpdatesBlock />}
                 {isLoading ? (
                   <p className="set-dim" style={{ marginTop: 32 }}>Reading configuration via the Agent SDK…</p>
                 ) : error ? (
@@ -312,6 +315,90 @@ export function AppearanceTab() {
         <p style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 10 }}>
           Following your system: <strong style={{ color: 'var(--cl-ink-3)' }}>{resolved}</strong>.
         </p>
+      )}
+    </Block>
+  )
+}
+
+// ─── Updates (GitHub releases check) ──────────────────────────────────────────
+// No auto-install — ClaudeLens ships unsigned, so updates are a manual download
+// from the GitHub release page. The check runs once at launch (useUpdateCheck);
+// "Check now" re-asks the API. On macOS the freshly installed app carries the
+// quarantine flag, so the one-off clearing command from the README is offered
+// here with a copy button.
+
+const QUARANTINE_CMD = 'xattr -d com.apple.quarantine /Applications/ClaudeLens.app'
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+
+function UpdatesBlock() {
+  const { data: update, error, isFetching, refetch } = useUpdateCheck()
+  const [copied, setCopied] = useState(false)
+
+  const copyCmd = () => {
+    navigator.clipboard.writeText(QUARANTINE_CMD).then(() => {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1600)
+    }).catch(() => {})
+  }
+
+  return (
+    <Block label="Updates">
+      <div className="set-rows">
+        <Row k="Installed"><Val>v{appVersion}</Val></Row>
+        <Row k="Latest release" hint="Checked against GitHub releases at launch">
+          {isFetching ? (
+            <Dim>checking…</Dim>
+          ) : error ? (
+            <Dim>couldn’t reach GitHub</Dim>
+          ) : update ? (
+            <>
+              <Val>v{update.latestVersion}</Val>
+              <Pill>{update.updateAvailable ? 'update available' : 'up to date'}</Pill>
+            </>
+          ) : (
+            <Dim />
+          )}
+        </Row>
+        {update?.updateAvailable && (
+          <Row k="Download" hint="Opens the GitHub release page in your browser">
+            <a href={update.releaseUrl} target="_blank" rel="noreferrer" className="set-val" style={{ color: 'var(--cl-accent)' }}>
+              {update.releaseName ?? `ClaudeLens ${update.latestVersion}`} →
+            </a>
+          </Row>
+        )}
+      </div>
+
+      <button
+        onClick={() => refetch()}
+        disabled={isFetching}
+        className="font-mono uppercase rounded-md px-2.5 py-1 transition-colors hover:text-[var(--cl-accent)]"
+        style={{ fontSize: 11, letterSpacing: '0.16em', color: 'var(--cl-ink-3)', border: '1px solid var(--cl-line)', marginTop: 16, opacity: isFetching ? 0.6 : 1 }}
+      >
+        {isFetching ? 'Checking…' : 'Check now'}
+      </button>
+
+      {IS_MAC && (
+        <>
+          <p className="set-block-hint" style={{ marginTop: 18 }}>
+            ClaudeLens isn’t code-signed, so after installing an update macOS quarantines the new
+            app (“can’t be opened”). Clear it once from Terminal:
+          </p>
+          <div
+            className="flex items-center gap-2 rounded-lg px-3 py-2"
+            style={{ background: 'var(--cl-paper-2)', border: '1px solid var(--cl-line)' }}
+          >
+            <code className="font-mono flex-1 min-w-0" style={{ fontSize: 12, color: 'var(--cl-ink-2)', overflowX: 'auto', whiteSpace: 'nowrap' }}>
+              {QUARANTINE_CMD}
+            </code>
+            <button
+              onClick={copyCmd}
+              className="font-mono uppercase rounded-md px-2 py-0.5 shrink-0 transition-colors hover:text-[var(--cl-accent)]"
+              style={{ fontSize: 10.5, letterSpacing: '0.14em', color: copied ? 'var(--cl-ok)' : 'var(--cl-ink-3)', border: '1px solid var(--cl-line)' }}
+            >
+              {copied ? 'Copied' : 'Copy'}
+            </button>
+          </div>
+        </>
       )}
     </Block>
   )

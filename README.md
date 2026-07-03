@@ -114,6 +114,10 @@ Everything updates live: any change under `~/.claude/` while you work in the ter
 > xattr -d com.apple.quarantine /Applications/ClaudeLens.app
 > ```
 
+### Updates
+
+ClaudeLens checks the [Releases](https://github.com/giulio333/ClaudeLens/releases) page at launch and shows a small notice when a newer version is available (you can skip a version, and re-check anytime from **Settings → General**). There is no auto-install — the app isn't code-signed, so updating means downloading the new build from the release page and repeating the quarantine step above on macOS.
+
 ---
 
 ## Build from source
@@ -130,7 +134,7 @@ npm run electron:build   # Generate distributable DMG
 
 - The embedded terminal and in-app chat require the `claude` CLI installed and in `PATH`
 - Session list is not paginated — may be slow with very large histories (500+ sessions)
-- No automatic updates
+- No automatic install of updates — the app notifies you of new releases, but the download is manual (see Updates above)
 - App is not code-signed (see installation note above)
 - On Windows, the Live Monitor and background agents are not yet supported (they rely on Unix process tooling); browsing sessions, memory, CLAUDE.md, and opening sessions in a terminal all work
 
