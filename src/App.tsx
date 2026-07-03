@@ -4,6 +4,7 @@ import { hydratePrefs } from './hooks/prefsBackend'
 import { ThemeProvider } from './hooks/useTheme'
 import ProjectOverview from './tabs/ProjectOverview'
 import { ErrorBoundary } from './components/ErrorBoundary'
+import { UpdateBanner } from './components/UpdateBanner'
 
 export default function App() {
   useDataChangedRefetch()
@@ -45,6 +46,9 @@ export default function App() {
           <ProjectOverview />
         </ErrorBoundary>
       </main>
+
+      {/* Passive "new release on GitHub" notice — bottom-left, per-version skip. */}
+      <UpdateBanner />
     </div>
     </ThemeProvider>
   )

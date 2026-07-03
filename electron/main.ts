@@ -40,6 +40,7 @@ import {
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
+import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
 import { initTelemetry, track, trackExit, isTelemetryEnabled, setTelemetryEnabled } from './modules/telemetry';
 import {
   createTerminal,
@@ -785,6 +786,29 @@ ipcMain.handle('telemetry:track', async (_event, name: unknown, props: unknown) 
     }
     void track(name, safe);
     return ok(true);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Update check against the GitHub releases API — see modules/update-checker.ts.
+// No auto-download/install (the app ships unsigned, macOS would quarantine a
+// silently swapped bundle); the renderer shows a notice linking to the release.
+// Screenshot mode stays offline and banner-free, like telemetry.
+ipcMain.handle('updates:check', async () => {
+  try {
+    if (process.env.SCREENSHOT_MODE) {
+      const v = app.getVersion();
+      return ok({
+        currentVersion: v,
+        latestVersion: v,
+        updateAvailable: false,
+        releaseName: null,
+        releaseUrl: RELEASES_PAGE_URL,
+        publishedAt: null,
+      });
+    }
+    return ok(await checkForUpdates(app.getVersion()));
   } catch (e) {
     return err(e);
   }
