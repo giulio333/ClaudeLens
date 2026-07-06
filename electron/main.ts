@@ -3,7 +3,7 @@ import { basename, delimiter, isAbsolute, join, sep } from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
-import { execFile, spawn, ChildProcess } from 'child_process';
+import { execFile, ChildProcess } from 'child_process';
 
 import { listProjectsWithMemory, readMemory } from './modules/memory-reader';
 import { createTopic, updateTopic, deleteTopic, TopicInput } from './modules/memory-writer';
@@ -31,6 +31,7 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { buildDispatchBgArgs, buildAiRunArgs } from './modules/claude-cli-args';
+import { spawnClaude, execClaude } from './modules/claude-cli';
 import { readEffectiveConfig } from './modules/config-reader';
 import {
   ChatSession,
@@ -1035,11 +1036,7 @@ ipcMain.handle(
       // non può iniettare flag nella CLI (issue #90).
       const args = buildDispatchBgArgs({ prompt, name, agent, model });
 
-      const { execFile } = await import('child_process');
-      const { promisify } = await import('util');
-      const execFileAsync = promisify(execFile);
-
-      await execFileAsync('claude', args, { cwd, env: claudeEnv() });
+      await execClaude(args, { cwd, env: claudeEnv() });
 
       return ok(null);
     } catch (e: any) {
@@ -1074,15 +1071,13 @@ ipcMain.handle('agents:attachBg', async (_event, cwd: string, id: string) => {
 
 async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
   try {
-    const { execFile } = await import('child_process');
-    const { promisify } = await import('util');
-    const execFileAsync = promisify(execFile);
-    const { stdout } = await execFileAsync('claude', args, {
+    const { stdout } = await execClaude(args, {
       env: claudeEnv(),
       maxBuffer: 4 * 1024 * 1024,
     });
     return ok(stdout);
   } catch (e: any) {
+    if (e?.code === 'ENOENT') return err(`'claude' CLI not found in PATH.`);
     return err(e.stderr || e.message || String(e));
   }
 }
@@ -1169,7 +1164,7 @@ ipcMain.handle(
       // isolato dietro `--` — un'istruzione che inizia con `-` non può
       // iniettare flag (issue #90; cfr. agents:dispatchBg).
       const args = buildAiRunArgs(instruction);
-      const proc = spawn('claude', args, {
+      const proc = spawnClaude(args, {
         cwd: projectPath,
         env: claudeEnv(),
       });
@@ -1201,9 +1196,13 @@ ipcMain.handle(
 
       proc.on('error', e => {
         currentAiProcess = null;
-        event.sender.send('ai:error', e.message);
+        const msg =
+          (e as NodeJS.ErrnoException).code === 'ENOENT'
+            ? `'claude' CLI not found in PATH.`
+            : e.message;
+        event.sender.send('ai:error', msg);
         event.sender.send('ai:done');
-        resolve(err(e));
+        resolve(err(new Error(msg)));
       });
     });
   }
@@ -1722,9 +1721,12 @@ async function startWatcher() {
   // così i subtab Tasks e Plans si aggiornano live.
   // chokidar 5 è ESM-only: import dinamico per usarlo dal bundle CommonJS.
   const { watch } = await import('chokidar');
+  // depth 5: copre anche i transcript dei sub-agenti annidati nei workflow
+  // ({hash}/{sessionId}/subagents/workflows/wf_*/agent-*.jsonl), non solo
+  // quelli diretti ({hash}/{sessionId}/subagents/agent-*.jsonl, depth 3).
   const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, INSTALLED_PLUGINS_FILE], {
     ignoreInitial: true,
-    depth: 3,
+    depth: 5,
   });
 
   const notify = () => {

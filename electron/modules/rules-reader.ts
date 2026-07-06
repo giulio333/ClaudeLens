@@ -19,8 +19,11 @@ function extractFrontmatterPaths(content: string): string[] | undefined {
 
 export async function readProjectRules(realProjectPath: string): Promise<RuleFile[]> {
   try {
-    const rulesPattern = join(realProjectPath, '.claude', 'rules', '**', '*.md');
-    const files = await glob(rulesPattern, { absolute: true });
+    // La dir passa da `cwd` e il pattern resta relativo con soli `/`: glob
+    // tratta `\` nel pattern come escape anche su Windows, quindi un pattern
+    // costruito con path.join lì non matcherebbe mai nulla (#59).
+    const rulesDir = join(realProjectPath, '.claude', 'rules');
+    const files = await glob('**/*.md', { cwd: rulesDir, absolute: true });
 
     const rules: RuleFile[] = [];
 

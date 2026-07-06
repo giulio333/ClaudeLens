@@ -65,7 +65,9 @@ export async function startLiveMonitor(
   }
 
   if (!filePath) {
-    const files = await glob(join(searchDir, '*.jsonl'));
+    // Dir via `cwd`, pattern relativo: un pattern costruito con path.join
+    // conterrebbe `\` su Windows, che glob interpreta come escape (#59).
+    const files = await glob('*.jsonl', { cwd: searchDir, absolute: true });
     const sorted = files
       .filter(f => existsSync(f))
       .map(f => ({ f, mtime: statSync(f).mtimeMs }))
