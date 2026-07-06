@@ -1,7 +1,9 @@
 export function fmt(n: number) { return n.toLocaleString('en-US') }
 export function fmtCost(n: number) { return '$' + n.toFixed(4) }
 export function fmtDate(d: string) {
-  return new Date(d).toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })
+  const date = new Date(d)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleString('it-IT', { dateStyle: 'medium', timeStyle: 'short' })
 }
 
 // Compact token count for metric chips: 1_500 → {value:'2',unit:'k'},
