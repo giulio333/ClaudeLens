@@ -40,7 +40,9 @@ export function readingTime(wordCount: number): string {
 }
 
 export function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('it-IT', {
+  const date = new Date(iso)
+  if (Number.isNaN(date.getTime())) return ''
+  return date.toLocaleDateString('it-IT', {
     day: '2-digit', month: 'short', year: 'numeric',
   })
 }
