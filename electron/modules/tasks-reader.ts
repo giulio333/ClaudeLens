@@ -69,7 +69,14 @@ export async function getProjectTasks(projectPath: string, tasksDir: string): Pr
       const tasks = taskFiles
         .map(parseTaskFile)
         .filter((t): t is Task => t !== null)
-        .sort((a, b) => Number(a.id) - Number(b.id));
+        // NaN-safe: a non-numeric id would make `Number(id)` NaN and the whole
+        // comparator NaN → arbitrary order. Fall back to a stable string compare.
+        .sort((a, b) => {
+          const na = Number(a.id);
+          const nb = Number(b.id);
+          if (Number.isNaN(na) || Number.isNaN(nb)) return String(a.id).localeCompare(String(b.id));
+          return na - nb;
+        });
 
       if (tasks.length === 0) continue;
 
