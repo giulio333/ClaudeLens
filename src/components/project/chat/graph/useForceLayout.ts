@@ -9,7 +9,9 @@ export function createTimeScale(
   range: { from: number; to: number },
 ): { scale: TimeScale; invert: InverseTimeScale } {
   const span = domain.end - domain.start || 1
-  const px = range.to - range.from
+  // Guard a zero-width pixel range (e.g. an unmeasured/collapsed container):
+  // without it `invert` divides by zero and returns NaN. Mirrors `span || 1`.
+  const px = range.to - range.from || 1
   const scale: TimeScale = (t) => range.from + ((t - domain.start) / span) * px
   const invert: InverseTimeScale = (p) => domain.start + ((p - range.from) / px) * span
   return { scale, invert }
@@ -67,5 +69,6 @@ export function fmtDuration(ms: number): string {
 
 export function fmtClockTime(t: number): string {
   const d = new Date(t)
+  if (Number.isNaN(d.getTime())) return ''
   return d.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false })
 }
