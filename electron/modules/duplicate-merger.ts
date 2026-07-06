@@ -138,14 +138,15 @@ export function computeMergePlan(
   }
 
   // ── Sessioni ───────────────────────────────────────────────────────────────
-  const destSessionSet = new Set(destSessions);
+  // `takenSessionNames` viene aggiornato ad ogni iterazione (sia con targetName
+  // rinominati sia con filename lasciati invariati) per evitare che due file
+  // source finiscano per essere assegnati allo stesso nome di destinazione.
+  const takenSessionNames = new Set(destSessions);
   const sessions: SessionMove[] = sourceSessions.map(filename => {
-    const collides = destSessionSet.has(filename);
-    return {
-      filename,
-      collides,
-      targetName: collides ? uniqueRenameTarget(filename, destSessionSet) : filename,
-    };
+    const collides = takenSessionNames.has(filename);
+    const targetName = collides ? uniqueRenameTarget(filename, takenSessionNames) : filename;
+    takenSessionNames.add(targetName);
+    return { filename, collides, targetName };
   });
 
   // ── Riscrittura cwd ──────────────────────────────────────────────────────────
