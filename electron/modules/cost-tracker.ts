@@ -580,5 +580,11 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
 
   return parsed
     .filter((s): s is SessionSummary => s !== null)
-    .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+    // NaN-safe: an empty/invalid `date` makes `new Date(x).getTime()` NaN and the
+    // comparator NaN → arbitrary order. Treat an unparseable date as oldest.
+    .sort((a, b) => {
+      const tb = new Date(b.date).getTime();
+      const ta = new Date(a.date).getTime();
+      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+    });
 }

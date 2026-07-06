@@ -121,7 +121,8 @@ export function getBgSessions(): BgSession[] {
       template: (state.template as string) ?? '',
       inFlightTasks:
         state.inFlight && typeof state.inFlight === 'object'
-          ? Number((state.inFlight as { tasks?: number }).tasks ?? 0)
+          ? // `|| 0` coerces a non-numeric tasks value (NaN) back to 0.
+            Number((state.inFlight as { tasks?: number }).tasks ?? 0) || 0
           : 0,
       // Probe the pid rather than trusting its mere presence in the roster: a
       // crashed worker leaves a stale pid. Treat the state field as a secondary
