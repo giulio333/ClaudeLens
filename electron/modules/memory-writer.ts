@@ -126,6 +126,13 @@ export function updateTopic(memoryDir: string, filename: string, input: TopicInp
   validateTopicInput(input);
   const target = join(memoryDir, filename);
   assertWithin(memoryDir, target);
+  // Update must target an existing topic. Without this guard writeFileSync would
+  // silently CREATE the file, and updateLineInMemoryMd — which only rewrites an
+  // already-present index line — would leave it out of MEMORY.md: an orphaned,
+  // unindexed topic. Creation is createTopic's job (it indexes + dedupes names).
+  if (!existsSync(target)) {
+    throw new Error(`Cannot update topic "${filename}": it does not exist.`);
+  }
   writeFileSync(target, buildTopicFileContent(input), 'utf-8');
   updateLineInMemoryMd(join(memoryDir, 'MEMORY.md'), filename, input.description);
 }
