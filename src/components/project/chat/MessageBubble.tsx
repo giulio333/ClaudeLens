@@ -724,19 +724,19 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showQuestions && (
           <div className="cl-ask-stack">
-            {questionGroups.map((group, i) => (
-              <AskQuestionCard key={i} group={group} />
+            {questionGroups.map(group => (
+              <AskQuestionCard key={group.use.id} group={group} />
             ))}
           </div>
         )}
 
         {showAgentStrip && (
           <div className="cl-tool-stack">
-            {agentGroups.map((group, i) => {
+            {agentGroups.map(group => {
               const link = agentLink(group)
               return (
                 <ToolGroupCard
-                  key={i}
+                  key={group.use.id}
                   group={group}
                   showDetails
                   tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
@@ -750,17 +750,17 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showPlanStrip && (
           <div className="cl-plan-stack">
-            {planGroups.map((group, i) => (
-              <PlanCard key={i} group={group} onOpen={() => onOpenToolDetail(group)} />
+            {planGroups.map(group => (
+              <PlanCard key={group.use.id} group={group} onOpen={() => onOpenToolDetail(group)} />
             ))}
           </div>
         )}
 
         {showSkillStrip && (
           <div className="cl-tool-stack">
-            {skillGroups.map((group, i) => (
+            {skillGroups.map(group => (
               <ToolGroupCard
-                key={i}
+                key={group.use.id}
                 group={group}
                 showDetails
                 detailLabel="View output"
@@ -772,11 +772,11 @@ export const MessageBubble = memo(function MessageBubble({
 
         {showTools && standardToolGroups.length > 0 && (
           <div className="cl-tool-stack">
-            {standardToolGroups.map((group, i) => {
+            {standardToolGroups.map(group => {
               const link = agentLink(group)
               return (
                 <ToolGroupCard
-                  key={i}
+                  key={group.use.id}
                   group={group}
                   showDetails={showToolDetails}
                   tint={AGENT_TOOLS.has(group.use.name)
