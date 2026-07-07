@@ -556,9 +556,25 @@ export type SessionAgent = {
   messageCount?: number
 }
 
-const AGENT_PROMPT_PREFIX = 100
+// The reader stores `firstPrompt` as the exact dispatch prompt (SDK path) — or,
+// on the legacy fallback, the sub-agent's first user message — sliced to 400
+// chars, so match on that same bound. A 100-char key attributed a transcript to
+// the WRONG sub-agent whenever two long prompts only diverged past char 100
+// (a shared preamble is common), since both collapsed to the same key.
+const AGENT_PROMPT_PREFIX = 400
 function promptKey(s: string): string {
   return s.replace(/\s+/g, ' ').trim().slice(0, AGENT_PROMPT_PREFIX)
+}
+
+// Two normalized prompt keys correlate when one is a prefix of the other. Exact
+// equality is the common case (the stored key is the dispatch prompt verbatim);
+// the prefix tolerance keeps the legacy fallback matching, where the stored key
+// can be a truncated/diverging tail of the dispatch prompt yet still shares its
+// lead. Genuine collisions between distinct dispatches are then resolved by the
+// chronological pool order below, not by which meta happens to come first.
+function promptKeysMatch(a: string, b: string): boolean {
+  if (!a || !b) return false
+  return a === b || a.startsWith(b) || b.startsWith(a)
 }
 
 export type AgentRunState = 'running' | 'done' | 'failed'
@@ -572,7 +588,14 @@ export function correlateSessionAgents(
   processed: ProcessedMessage[],
   metas: SubagentMeta[],
 ): SessionAgent[] {
-  const pool = metas.map(m => ({ m, used: false }))
+  // Consume transcripts in chronological order so identical (or prefix-colliding)
+  // prompts are matched to their sub-agent in dispatch order — not in the metas'
+  // arrival order, which is an implementation detail of the reader. `startedAt`
+  // is an ISO timestamp → a lexical sort is chronological; the sort is stable, so
+  // metas that share a timestamp keep their input order.
+  const pool = metas
+    .map(m => ({ m, used: false }))
+    .sort((a, b) => a.m.startedAt.localeCompare(b.m.startedAt))
   const agents: SessionAgent[] = []
 
   // Background-agent completions: a <task-notification> carries the dispatch's
@@ -597,7 +620,7 @@ export function correlateSessionAgents(
 
       let match: SubagentMeta | null = null
       if (pk) {
-        const entry = pool.find(e => !e.used && promptKey(e.m.firstPrompt) === pk)
+        const entry = pool.find(e => !e.used && promptKeysMatch(promptKey(e.m.firstPrompt), pk))
         if (entry) {
           entry.used = true
           match = entry.m
