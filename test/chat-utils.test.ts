@@ -401,6 +401,40 @@ describe('correlateSessionAgents', () => {
     expect(agents.map(a => a.agentId)).toEqual(['first', 'second']);
   });
 
+  it('does not mis-attribute a transcript that only shares a long common preamble', () => {
+    // A shared preamble longer than the retired 100-char key, then a divergent
+    // tail. The old key collapsed both to the same 100 chars and would attach
+    // this unrelated transcript to the dispatch; the 400-char key keeps them apart.
+    const shared = 'Investigate the checkout regression. '.repeat(4).trim(); // ~147 chars
+    const promptA = `${shared} Look at the PAYMENT service logs.`;
+    const promptB = `${shared} Look at the SHIPPING service logs.`;
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: promptA })]),
+      msg('user', [toolResult('t1', 'ok')]),
+    ]);
+    // Only B's transcript exists — it must NOT be claimed by A's dispatch.
+    const agents = correlateSessionAgents(processed, [meta({ agentId: 'bravo', firstPrompt: promptB })]);
+    expect(agents[0].agentId).toBeNull();
+  });
+
+  it('disambiguates identical prompts by startedAt even when metas arrive out of order', () => {
+    const p = 'Run the shared task';
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: p })]),
+      msg('user', [toolResult('t1', 'a')]),
+      msg('assistant', [toolUse('t2', 'Task', { subagent_type: 'Explore', prompt: p })]),
+      msg('user', [toolResult('t2', 'b')]),
+    ]);
+    // Metas handed in REVERSE chronological order: the later transcript first.
+    const metas = [
+      meta({ agentId: 'later', firstPrompt: p, startedAt: '2026-05-30T00:05:00.000Z' }),
+      meta({ agentId: 'earlier', firstPrompt: p, startedAt: '2026-05-30T00:01:00.000Z' }),
+    ];
+    // First dispatch → earliest-started transcript, regardless of arrival order.
+    const agents = correlateSessionAgents(processed, metas);
+    expect(agents.map(a => a.agentId)).toEqual(['earlier', 'later']);
+  });
+
   it('leaves agentId null when no transcript file matches', () => {
     const processed = buildProcessedMessages([
       msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'orphan dispatch' })]),

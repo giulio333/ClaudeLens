@@ -1160,6 +1160,13 @@ ipcMain.handle(
     }
 
     return new Promise<IpcResult<null>>(resolve => {
+      // Guard every stream send: closing the window mid-run tears down the
+      // webContents, and an unguarded `event.sender.send` then throws in main
+      // (the process keeps streaming after the renderer is gone). Mirrors the
+      // `send` guard in `launchSession` and the live-monitor watch.
+      const send = (channel: string, ...args: unknown[]) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
+      };
       // execFile-style: nessuna shell, l'istruzione passa come positional
       // isolato dietro `--` — un'istruzione che inizia con `-` non può
       // iniettare flag (issue #90; cfr. agents:dispatchBg).
@@ -1176,20 +1183,20 @@ ipcMain.handle(
       proc.stdin?.end();
 
       proc.stdout?.on('data', (chunk: Buffer) => {
-        event.sender.send('ai:chunk', chunk.toString());
+        send('ai:chunk', chunk.toString());
       });
 
       proc.stderr?.on('data', (chunk: Buffer) => {
-        event.sender.send('ai:error', chunk.toString());
+        send('ai:error', chunk.toString());
       });
 
       proc.on('close', code => {
         currentAiProcess = null;
         if (code === 0 || code === null) {
-          event.sender.send('ai:done');
+          send('ai:done');
           resolve(ok(null));
         } else {
-          event.sender.send('ai:done');
+          send('ai:done');
           resolve(err(new Error(`Processo terminato con codice ${code}`)));
         }
       });
@@ -1200,8 +1207,8 @@ ipcMain.handle(
           (e as NodeJS.ErrnoException).code === 'ENOENT'
             ? `'claude' CLI not found in PATH.`
             : e.message;
-        event.sender.send('ai:error', msg);
-        event.sender.send('ai:done');
+        send('ai:error', msg);
+        send('ai:done');
         resolve(err(new Error(msg)));
       });
     });
@@ -1815,6 +1822,12 @@ app.on('window-all-closed', () => {
   // app stays alive in the dock (no quit → `will-quit` never fires), so dispose
   // the terminals here too — they should die with the window on every platform.
   disposeAllTerminals();
+  // Same rationale for an in-flight `ai:run` child: its stream target is gone, so
+  // kill it rather than let it keep running (and streaming into a dead sender).
+  if (currentAiProcess) {
+    currentAiProcess.kill();
+    currentAiProcess = null;
+  }
   if (process.platform !== 'darwin') app.quit();
 });
 
