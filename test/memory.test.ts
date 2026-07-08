@@ -387,6 +387,21 @@ describe('updateTopic', () => {
     ).toThrow(/outside/);
     expect(existsSync(join(memoryDir, '..', 'escape.md'))).toBe(false);
   });
+
+  it('refuses to update a missing topic instead of creating a stray file', () => {
+    expect(() =>
+      updateTopic(memoryDir, 'user_ghost.md', {
+        name: 'Ghost',
+        description: 'd',
+        type: 'user',
+        content: 'body',
+      })
+    ).toThrow(/does not exist/);
+    // No file written, and nothing added to the (still-absent) index — update is
+    // strictly an update; creation goes through createTopic (which indexes it).
+    expect(existsSync(join(memoryDir, 'user_ghost.md'))).toBe(false);
+    expect(existsSync(join(memoryDir, 'MEMORY.md'))).toBe(false);
+  });
 });
 
 describe('deleteTopic', () => {
