@@ -71,11 +71,10 @@ export function ChatView({
    *  embedded transcript to a turn. Null while unmounted / Terminal mode. */
   jumpToTurnRef?: React.MutableRefObject<((n: number) => void) | null>;
   /** Rendered inside the unified Terminal/Lens view: drop the own TopBar (the
-   *  unified frame provides chrome + the Terminal↔Lens switch), the right-edge
-   *  minimap (the Mission Control rail is the companion surface) and the
-   *  composer — this surface is read-only, the live session belongs to the
-   *  terminal's PTY. The floating control pill stays — it anchors to the chat
-   *  column. */
+   *  unified frame provides chrome + the Terminal↔Lens switch) and the composer
+   *  — this surface is read-only, the live session belongs to the terminal's
+   *  PTY. The floating control pill and the left TURNS capsule stay — they
+   *  anchor to the chat column. */
   embedded?: boolean;
 }) {
   const {
@@ -665,14 +664,13 @@ export function ChatView({
           onRemove={highlightLayer.removeCurrent}
         />
 
-        {!embedded && (
-          <FocusMinimap
-            items={minimapItems}
-            active={activeTurn}
-            matches={matchesFilter}
-            onJump={jumpToTurn}
-          />
-        )}
+        <FocusMinimap
+          items={minimapItems}
+          active={activeTurn}
+          matches={matchesFilter}
+          onJump={jumpToTurn}
+        />
+
 
         {controlPill(true)}
       </div>

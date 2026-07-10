@@ -1,17 +1,32 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { MinimapItem, TurnDescriptor } from './utils';
+import { MinimapItem, TurnDescriptor, TurnVariant } from './utils';
 
-/** Right-edge timeline minimap (Focus layout). A hairline vertical track with
- *  one proportionally-placed dot per message turn — accent-coloured & larger for
- *  Claude/agent turns, muted & small for user turns. Labels surface on hover only
- *  so the chrome stays out of the way; click jumps, active dot is emphasised.
+/** Turn navigator capsule (design "2a · Isole di vetro") — a vertical glass pill
+ *  floating at the LEFT edge of the reading column. Top-to-bottom: a rotated
+ *  "TURNS" label, one tick bar per message turn (width/colour encode the turn
+ *  kind: wide ink for prompts, slim for Claude, tinted for agents/skills/…),
+ *  the active turn as a numbered accent circle (the scroll-spy cursor), and the
+ *  total turn count at the foot. Labels surface on hover only; click jumps.
  *
- *  Adaptive ruler: the track height is measured live, so when a session has many
- *  turns the per-dot spacing shrinks. Dot diameters and accent/active rings scale
- *  with that spacing (one dot per turn is always kept) — at high density the rail
- *  reads as a fine, evenly-gapped ruler instead of a crowded blob; at low density
- *  the dots stay full-size. */
+ *  Adaptive ruler: ticks are positioned proportionally inside a track whose
+ *  height grows with the turn count but is capped by the available viewport
+ *  height — a long session compresses into a fine ruler instead of overflowing. */
+
+/** Tick width per turn kind — prompts are landmarks, Claude turns are the grain. */
+function tickWidth(variant: TurnVariant): number {
+  if (variant === 'user') return 14;
+  if (variant === 'claude') return 9;
+  if (variant === 'notification') return 10;
+  return 12; // agent / skill / command / question / plan
+}
+
+/** Tick colour: regular conversation turns stay muted (the design's grey grain);
+ *  special turns (agent, skill, plan, …) keep their identity tint. */
+function tickColor(it: MinimapItem): string {
+  return it.variant === 'user' || it.variant === 'claude' ? 'var(--cl-ink-4)' : it.color;
+}
+
 export function FocusMinimap({
   items,
   active,
@@ -23,64 +38,65 @@ export function FocusMinimap({
   matches: (d: TurnDescriptor) => boolean;
   onJump: (n: number) => void;
 }) {
-  const trackRef = useRef<HTMLDivElement | null>(null);
-  const [trackH, setTrackH] = useState(0);
+  const railRef = useRef<HTMLElement | null>(null);
+  const [railH, setRailH] = useState(0);
 
   useEffect(() => {
-    const el = trackRef.current;
+    const el = railRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(entries => setTrackH(entries[0].contentRect.height));
+    const ro = new ResizeObserver(entries => setRailH(entries[0].contentRect.height));
     ro.observe(el);
-    setTrackH(el.getBoundingClientRect().height);
+    setRailH(el.getBoundingClientRect().height);
     return () => ro.disconnect();
   }, []);
 
   if (items.length === 0) return null;
 
-  // Density factor t: 0 = cramped, 1 = roomy. The threshold is the *effective*
-  // dot width including its ring — a full accent dot is 9px + 3px ring/side = 15px,
-  // so we only reach full size once the gap clears ~18px; below that, dots and
-  // rings shrink so a visible gap always remains. Until the track is measured we
-  // assume roomy so dots never flash tiny on first paint.
-  const clamp01 = (x: number) => Math.max(0, Math.min(1, x));
-  const spacing = trackH > 0 && items.length > 1 ? trackH / (items.length - 1) : Infinity;
-  const t = clamp01((spacing - 3) / (18 - 3));
-  const lerp = (a: number, b: number, f = t) => +(a + (b - a) * f).toFixed(2);
-  // Rings are the main source of the "solid blob": only fade them in once the
-  // track is genuinely roomy (t > 0.5), so dense views stay ring-free dots.
-  const tr = clamp01((t - 0.5) * 2);
-  const railVars = {
-    '--dot': `${lerp(2, 7)}px`,
-    '--dot-accent': `${lerp(2.5, 9)}px`,
-    '--dot-active': `${lerp(7, 11)}px`, // floored at 7px so the cursor stays legible
-    '--ring': `${lerp(0, 3, tr)}px`,
-    '--ring-active': `${lerp(1, 3, tr)}px`,
-  } as CSSProperties;
+  // Capsule chrome (label + count + paddings/gaps) ≈ 96px; the track takes the
+  // rest. Preferred spacing is 12px per turn (the design's airy few-turn look),
+  // compressed down to whatever fits when the session is long.
+  const availableTrack = Math.max(60, railH - 96);
+  const trackH = Math.min(availableTrack, Math.max(48, (items.length - 1) * 12));
 
   return (
-    <nav className="cl-focus-rail" aria-label="Turn index">
-      <div ref={trackRef} className="cl-focus-rail-track" style={railVars}>
-        {items.map((it, i) => {
-          const top = items.length <= 1 ? 50 : (i / (items.length - 1)) * 100;
-          return (
-            <button
-              key={it.n}
-              type="button"
-              className="cl-focus-dot"
-              style={{ top: `${top}%`, '--c': it.color } as CSSProperties}
-              data-accent={it.variant !== 'user' || undefined}
-              data-active={active === it.n || undefined}
-              data-dim={!matches(it) || undefined}
-              onClick={() => onJump(it.n)}
-              title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
-              aria-label={`Jump to turn ${it.n}, ${it.label}`}
-            >
-              <span className="lbl">
-                {String(it.n).padStart(2, '0')} {it.label}
-              </span>
-            </button>
-          );
-        })}
+    <nav className="cl-focus-rail" aria-label="Turn index" ref={railRef}>
+      <div className="cl-turns-capsule">
+        <span className="cl-turns-cap-label" aria-hidden>
+          TURNS
+        </span>
+        <div className="cl-focus-rail-track" style={{ height: trackH }}>
+          {items.map((it, i) => {
+            const top = items.length <= 1 ? 50 : (i / (items.length - 1)) * 100;
+            const isActive = active === it.n;
+            const style = {
+              top: `${top}%`,
+              '--c': isActive ? undefined : tickColor(it),
+              '--w': isActive ? undefined : `${tickWidth(it.variant)}px`,
+            } as CSSProperties;
+            return (
+              <button
+                key={it.n}
+                type="button"
+                className={isActive ? 'cl-focus-current' : 'cl-focus-tick'}
+                style={style}
+                data-accent={(!isActive && it.variant !== 'user' && it.variant !== 'claude') || undefined}
+                data-dim={!matches(it) || undefined}
+                onClick={() => onJump(it.n)}
+                title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
+                aria-label={`Jump to turn ${it.n}, ${it.label}`}
+                aria-current={isActive ? 'true' : undefined}
+              >
+                {isActive && it.n}
+                <span className="lbl">
+                  {String(it.n).padStart(2, '0')} {it.label}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+        <span className="cl-turns-total" aria-label={`${items.length} turns`}>
+          {items.length}
+        </span>
       </div>
     </nav>
   );
