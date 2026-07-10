@@ -527,36 +527,52 @@ export function useProjectPlans(hash: string | null) {
   })
 }
 
+// The workflows/teams readers deliberately skip mid-write JSON (state files and
+// sidecars are rewritten continuously during a live run), so a refetch fired by
+// data:changed can transiently resolve empty/null and flash an already-populated
+// view to "empty"/"not found" — same failure mode keepLastGood guards for chat.
 export function useProjectWorkflows(hash: string | null) {
+  const qc = useQueryClient()
+  const key = ['workflows:project', hash]
   return useQuery({
-    queryKey: ['workflows:project', hash],
-    queryFn: () => unwrap(window.electronAPI.workflows.getByProject(hash!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGood(qc, key, await unwrap(window.electronAPI.workflows.getByProject(hash!))),
     enabled: hash !== null,
   })
 }
 
 // Full run detail, re-read on demand (watcher-live via useDataChangedRefetch).
 export function useWorkflowRun(hash: string | null, sessionId: string | null, runId: string | null) {
+  const qc = useQueryClient()
+  const key = ['workflows:run', hash, sessionId, runId]
   return useQuery({
-    queryKey: ['workflows:run', hash, sessionId, runId],
-    queryFn: () => unwrap(window.electronAPI.workflows.getRun(hash!, sessionId!, runId!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGoodValue(qc, key, await unwrap(window.electronAPI.workflows.getRun(hash!, sessionId!, runId!))),
     enabled: hash !== null && sessionId !== null && runId !== null,
   })
 }
 
 export function useProjectTeams(hash: string | null) {
+  const qc = useQueryClient()
+  const key = ['teams:project', hash]
   return useQuery({
-    queryKey: ['teams:project', hash],
-    queryFn: () => unwrap(window.electronAPI.teams.getByProject(hash!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGood(qc, key, await unwrap(window.electronAPI.teams.getByProject(hash!))),
     enabled: hash !== null,
   })
 }
 
 // Full team detail, re-read on demand (watcher-live via useDataChangedRefetch).
 export function useTeamDetail(hash: string | null, teamName: string | null) {
+  const qc = useQueryClient()
+  const key = ['teams:detail', hash, teamName]
   return useQuery({
-    queryKey: ['teams:detail', hash, teamName],
-    queryFn: () => unwrap(window.electronAPI.teams.getDetail(hash!, teamName!)),
+    queryKey: key,
+    queryFn: async () =>
+      keepLastGoodValue(qc, key, await unwrap(window.electronAPI.teams.getDetail(hash!, teamName!))),
     enabled: hash !== null && teamName !== null,
   })
 }
@@ -727,6 +743,17 @@ function keepLastGood<T>(qc: ReturnType<typeof useQueryClient>, key: unknown[], 
   if (next.length > 0) return next
   const prev = qc.getQueryData<T[]>(key)
   return prev && prev.length > 0 ? prev : next
+}
+
+// Single-object variant: a transient null (state file mid-write) must not
+// replace an already-loaded detail with "not found".
+function keepLastGoodValue<T>(
+  qc: ReturnType<typeof useQueryClient>,
+  key: unknown[],
+  next: T | null,
+): T | null {
+  if (next !== null) return next
+  return qc.getQueryData<T>(key) ?? null
 }
 
 export function useChatSession(hash: string, filename: string | null) {

@@ -942,6 +942,42 @@ const MOCK_SUBAGENTS = [
   },
 ];
 
+// Transcript interno mostrato dai link "view transcript →" (subagent, workflow
+// e team detail) — senza questo mock il click colpirebbe l'handler reale.
+const MOCK_SUBAGENT_TRANSCRIPT = [
+  {
+    uuid: 'sa-msg-001',
+    role: 'user' as const,
+    timestamp: minsAgo(123),
+    content: [{ type: 'text' as const, text: 'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.' }],
+  },
+  {
+    uuid: 'sa-msg-002',
+    role: 'assistant' as const,
+    timestamp: minsAgo(122),
+    model: 'claude-sonnet-4-6',
+    content: [
+      { type: 'text' as const, text: 'Scanning the codebase for session usage.' },
+      { type: 'tool_use' as const, id: 'sa-tu-001', name: 'Grep', input: { pattern: 'req\\.session', path: '/Users/alice/projects/webapp/src' } },
+    ],
+  },
+  {
+    uuid: 'sa-msg-003',
+    role: 'user' as const,
+    timestamp: minsAgo(122),
+    content: [{ type: 'tool_result' as const, toolUseId: 'sa-tu-001', content: 'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n', isError: false }],
+  },
+  {
+    uuid: 'sa-msg-004',
+    role: 'assistant' as const,
+    timestamp: minsAgo(121),
+    model: 'claude-sonnet-4-6',
+    content: [
+      { type: 'text' as const, text: 'Three call sites need migrating:\n\n1. `src/routes/auth.ts:24` — login writes `req.session.userId`\n2. `src/routes/auth.ts:51` — logout deletes it\n3. `src/middleware/protect.ts:8` — guard reads it\n\nAll three should move to the new JWT helpers.' },
+    ],
+  },
+];
+
 // ─── Plugins installati (user scope) ───────────────────────────────────────────
 
 const MOCK_PLUGINS = [
@@ -1215,7 +1251,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'workflows:getByProject', 'workflows:getRun',
     'teams:getByProject', 'teams:getDetail',
     'settings:getCleanupPeriodDays',
-    'sessions:getSubagents', 'sessions:getArtifacts', 'sessions:deleteSession',
+    'sessions:getSubagents', 'sessions:getSubagentTranscript', 'sessions:getArtifacts', 'sessions:deleteSession',
     'plugins:getAll',
     'config:getEffective',
     'cost:getPricingMeta',
@@ -1321,6 +1357,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   // Sub-agent transcripts + artifacts/cancellazione sessione
   ipcMain.handle('sessions:getSubagents', () => ok(MOCK_SUBAGENTS));
+  ipcMain.handle('sessions:getSubagentTranscript', () => ok(MOCK_SUBAGENT_TRANSCRIPT));
   ipcMain.handle('sessions:getArtifacts', (_e: unknown, _hash: string, filename: string) => ok(getSessionArtifacts(filename)));
   ipcMain.handle('sessions:deleteSession', (_e: unknown, paths: string[]) => ok({ deleted: paths, warnings: [] }));
 
