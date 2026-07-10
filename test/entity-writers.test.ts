@@ -63,13 +63,13 @@ describe('createSkill (issue #58)', () => {
   // Regression: a description with a colon (or '#') used to be written into the
   // YAML frontmatter unquoted, making js-yaml throw on read and silently drop
   // the WHOLE block — the skill came back with no description/tools/model.
-  it('round-trips a description containing YAML metacharacters', () => {
+  it('round-trips a description containing YAML metacharacters', async () => {
     const description = 'Use this skill when: editing, fixing, or building # the deck';
     createSkill(
       { name: 'tricky', content: 'Body', description, model: 'sonnet', allowedTools: ['Read', 'Bash'] },
       proj
     );
-    const skill = readSkillDir(join(proj, '.claude', 'skills', 'tricky'), 'project');
+    const skill = await readSkillDir(join(proj, '.claude', 'skills', 'tricky'), 'project');
     expect(skill).not.toBeNull();
     expect(skill!.description).toBe(description);
     expect(skill!.model).toBe('sonnet');
@@ -108,13 +108,13 @@ describe('createAgent (issue #58)', () => {
   // Regression: agent descriptions almost always contain a colon ("Use this
   // agent when X: ..."). Written unquoted, the frontmatter failed to parse and
   // the agent read back with every field missing (flagged invalid in the UI).
-  it('round-trips a description containing YAML metacharacters', () => {
+  it('round-trips a description containing YAML metacharacters', async () => {
     const description = 'Use this agent when the user asks: features, hooks # and more';
     const filePath = createAgent(
       { name: 'guide', content: 'Body', description, model: 'opus', color: 'blue', allowedTools: ['Read', 'Grep'] },
       proj
     );
-    const agent = readAgentFile(filePath, 'project');
+    const agent = await readAgentFile(filePath, 'project');
     expect(agent).not.toBeNull();
     expect(agent!.missingRequired).toEqual([]);
     expect(agent!.description).toBe(description);
@@ -125,9 +125,9 @@ describe('createAgent (issue #58)', () => {
 
   // A model/version-like string must stay a string, not be coerced to a number
   // on read (js-yaml would parse a bare 4.8 as a float).
-  it('keeps a numeric-looking scalar a string after round-trip', () => {
+  it('keeps a numeric-looking scalar a string after round-trip', async () => {
     const filePath = createAgent({ name: 'numish', content: 'b', description: 'x', model: '4.8' }, proj);
-    const agent = readAgentFile(filePath, 'project');
+    const agent = await readAgentFile(filePath, 'project');
     expect(agent!.model).toBe('4.8');
   });
 });
@@ -137,41 +137,41 @@ describe('createAgent (issue #58)', () => {
 // re-canonicalization. An unquoted description containing ': ' or '#' used to
 // break the YAML on read and drop the whole frontmatter.
 describe('edit round-trip via renderer serializer', () => {
-  it('skill: preserves a description with a colon and #', () => {
+  it('skill: preserves a description with a colon and #', async () => {
     createSkill({ name: 'edit-skill', content: 'Body', description: 'old', model: 'sonnet' }, proj);
     const dir = join(proj, '.claude', 'skills', 'edit-skill');
-    const skill = readSkillDir(dir, 'project')!;
+    const skill = (await readSkillDir(dir, 'project'))!;
     const description = 'Use this skill when: editing, fixing # or building the deck';
     const raw = serializeSkill(asSkill(skill), skill.content, {
       description,
       options: readOptions(asRecord(skill), SKILL_OPTION_DEFS),
     });
     writeFileSync(join(dir, 'SKILL.md'), raw, 'utf-8');
-    const reread = readSkillDir(dir, 'project')!;
+    const reread = (await readSkillDir(dir, 'project'))!;
     expect(reread.description).toBe(description);
     expect(reread.model).toBe('sonnet');
   });
 
-  it('agent: preserves a description with a colon and keeps a numeric-looking model a string', () => {
+  it('agent: preserves a description with a colon and keeps a numeric-looking model a string', async () => {
     const filePath = createAgent(
       { name: 'edit-agent', content: 'Body', description: 'old', model: '4.8', color: 'blue' },
       proj
     );
-    const agent = readAgentFile(filePath, 'project')!;
+    const agent = (await readAgentFile(filePath, 'project'))!;
     const description = 'Use this agent when the user asks: X # and Y';
     const raw = serializeAgent(asAgent(agent), agent.content, {
       description,
       options: readOptions(asRecord(agent), AGENT_OPTION_DEFS),
     });
     writeFileSync(filePath, raw, 'utf-8');
-    const reread = readAgentFile(filePath, 'project')!;
+    const reread = (await readAgentFile(filePath, 'project'))!;
     expect(reread.missingRequired).toEqual([]);
     expect(reread.description).toBe(description);
     expect(reread.model).toBe('4.8');
     expect(reread.color).toBe('blue');
   });
 
-  it('skill: an edit preserves an unmodeled hooks block', () => {
+  it('skill: an edit preserves an unmodeled hooks block', async () => {
     const dir = join(proj, '.claude', 'skills', 'hooked');
     mkdirSync(dir, { recursive: true });
     const original = [
@@ -185,7 +185,7 @@ describe('edit round-trip via renderer serializer', () => {
       'Body',
     ].join('\n');
     writeFileSync(join(dir, 'SKILL.md'), original, 'utf-8');
-    const skill = readSkillDir(dir, 'project')!;
+    const skill = (await readSkillDir(dir, 'project'))!;
     expect(skill.hooks).toBeDefined();
 
     const raw = serializeSkill(asSkill(skill), skill.content, {
@@ -193,7 +193,7 @@ describe('edit round-trip via renderer serializer', () => {
       options: readOptions(asRecord(skill), SKILL_OPTION_DEFS),
     });
     writeFileSync(join(dir, 'SKILL.md'), raw, 'utf-8');
-    const reread = readSkillDir(dir, 'project')!;
+    const reread = (await readSkillDir(dir, 'project'))!;
     expect(reread.description).toBe('new desc');
     expect(reread.hooks).toBeDefined();
     expect(JSON.stringify(reread.hooks)).toContain('PreToolUse');

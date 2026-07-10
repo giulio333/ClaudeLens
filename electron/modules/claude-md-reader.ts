@@ -1,6 +1,7 @@
-import { readFileSync, existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
+import { existsSync, readdirSync, writeFileSync, mkdirSync } from 'fs';
 import { basename, dirname, join } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { readTextFile } from './safe-fs';
 
 export interface ClaudeMdLayer {
   scope: 'global' | 'project' | 'local' | 'subdir';
@@ -12,23 +13,24 @@ export interface ClaudeMdHierarchy {
   layers: ClaudeMdLayer[];
 }
 
-export function readGlobalClaudeMd(claudeDir: string): string | undefined {
+export async function readGlobalClaudeMd(claudeDir: string): Promise<string | undefined> {
   const globalPath = join(claudeDir, 'CLAUDE.md');
   if (!existsSync(globalPath)) return undefined;
 
   try {
-    return readFileSync(globalPath, 'utf-8');
+    return await readTextFile(globalPath);
   } catch (error) {
     console.error(`Errore leggendo CLAUDE.md globale: ${error}`);
     return undefined;
   }
 }
 
-function tryRead(filePath: string): string | undefined {
+async function tryRead(filePath: string): Promise<string | undefined> {
   if (!existsSync(filePath)) return undefined;
   try {
-    return readFileSync(filePath, 'utf-8');
-  } catch {
+    return await readTextFile(filePath);
+  } catch (error) {
+    console.error(`Errore leggendo ${filePath}: ${error}`);
     return undefined;
   }
 }
@@ -72,30 +74,30 @@ export function writeClaudeMdFile(filePath: string, content: string): void {
   writeFileSync(filePath, content, 'utf-8');
 }
 
-export function getClaudeMdHierarchy(realPath: string): ClaudeMdHierarchy {
+export async function getClaudeMdHierarchy(realPath: string): Promise<ClaudeMdHierarchy> {
   const claudeDir = CLAUDE_DIR;
   const layers: ClaudeMdLayer[] = [];
 
   // 1. Global
-  const globalContent = tryRead(join(claudeDir, 'CLAUDE.md'));
+  const globalContent = await tryRead(join(claudeDir, 'CLAUDE.md'));
   if (globalContent !== undefined) {
     layers.push({ scope: 'global', filePath: join(claudeDir, 'CLAUDE.md'), content: globalContent });
   }
 
   // 2. Project root
-  const projectContent = tryRead(join(realPath, 'CLAUDE.md'));
+  const projectContent = await tryRead(join(realPath, 'CLAUDE.md'));
   if (projectContent !== undefined) {
     layers.push({ scope: 'project', filePath: join(realPath, 'CLAUDE.md'), content: projectContent });
   }
 
   // 3. Local override
-  const localContent = tryRead(join(realPath, 'CLAUDE.local.md'));
+  const localContent = await tryRead(join(realPath, 'CLAUDE.local.md'));
   if (localContent !== undefined) {
     layers.push({ scope: 'local', filePath: join(realPath, 'CLAUDE.local.md'), content: localContent });
   }
 
   // 4. .claude/CLAUDE.md nel progetto
-  const subdirContent = tryRead(join(realPath, '.claude', 'CLAUDE.md'));
+  const subdirContent = await tryRead(join(realPath, '.claude', 'CLAUDE.md'));
   if (subdirContent !== undefined) {
     layers.push({ scope: 'subdir', filePath: join(realPath, '.claude', 'CLAUDE.md'), content: subdirContent });
   }
@@ -105,7 +107,7 @@ export function getClaudeMdHierarchy(realPath: string): ClaudeMdHierarchy {
   for (const filePath of allClaudeMdFiles) {
     // Salta i file già aggiunti
     if (!layers.some(l => l.filePath === filePath)) {
-      const content = tryRead(filePath);
+      const content = await tryRead(filePath);
       if (content !== undefined) {
         layers.push({ scope: 'subdir', filePath, content });
       }

@@ -124,16 +124,14 @@ function readMarketplaceEntry(installPath: string, pluginName: string): Marketpl
 }
 
 /** Resolve declared skill dirs (each containing SKILL.md) relative to installPath. */
-function readDeclaredSkills(installPath: string, rels: string[]): Skill[] {
-  return rels
-    .map(rel => readSkillDir(join(installPath, rel), 'plugin'))
-    .filter((s): s is Skill => s !== null);
+async function readDeclaredSkills(installPath: string, rels: string[]): Promise<Skill[]> {
+  const skills = await Promise.all(rels.map(rel => readSkillDir(join(installPath, rel), 'plugin')));
+  return skills.filter((s): s is Skill => s !== null);
 }
 
-function readDeclaredAgents(installPath: string, rels: string[]): Agent[] {
-  return rels
-    .map(rel => readAgentFile(join(installPath, rel), 'plugin'))
-    .filter((a): a is Agent => a !== null);
+async function readDeclaredAgents(installPath: string, rels: string[]): Promise<Agent[]> {
+  const agents = await Promise.all(rels.map(rel => readAgentFile(join(installPath, rel), 'plugin')));
+  return agents.filter((a): a is Agent => a !== null);
 }
 
 function readDeclaredCommands(installPath: string, rels: string[]): PluginCommand[] {
@@ -156,7 +154,7 @@ function readDeclaredCommands(installPath: string, rels: string[]): PluginComman
  * Agents nested inside a skill (`skills/<skill>/agents/*.md`) are NOT surfaced — they
  * are internal helpers of that skill, not independently invocable plugin agents.
  */
-export function getInstalledPlugins(): InstalledPlugin[] {
+export async function getInstalledPlugins(): Promise<InstalledPlugin[]> {
   const installed = readJson<{
     plugins?: Record<string, InstalledEntry[]>;
   }>(join(PLUGINS_DIR, 'installed_plugins.json'));
@@ -192,11 +190,11 @@ export function getInstalledPlugins(): InstalledPlugin[] {
       author: manifest.author,
       repo,
       skills: declared?.skills
-        ? readDeclaredSkills(installPath, declared.skills)
-        : readSkillsFromDir(join(installPath, 'skills'), 'plugin'),
+        ? await readDeclaredSkills(installPath, declared.skills)
+        : await readSkillsFromDir(join(installPath, 'skills'), 'plugin'),
       agents: declared?.agents
-        ? readDeclaredAgents(installPath, declared.agents)
-        : readAgentsFromDir(join(installPath, 'agents'), 'plugin'),
+        ? await readDeclaredAgents(installPath, declared.agents)
+        : await readAgentsFromDir(join(installPath, 'agents'), 'plugin'),
       commands: declared?.commands
         ? readDeclaredCommands(installPath, declared.commands)
         : readPluginCommands(installPath),

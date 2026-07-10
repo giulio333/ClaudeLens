@@ -1,6 +1,7 @@
-import { readFileSync, existsSync, readdirSync } from 'fs';
+import { existsSync, readdirSync } from 'fs';
 import { join, basename } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { readTextFile } from './safe-fs';
 import { parseFrontmatter, getString } from './frontmatter';
 import { AGENT_FIELDS, parseFields } from './entity-fields';
 
@@ -66,11 +67,11 @@ function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; b
  * read. Shared by `readAgentsFromDir` and the plugin reader (which resolves
  * explicit, declared agent paths rather than scanning).
  */
-export function readAgentFile(filePath: string, scope: 'global' | 'project' | 'plugin'): Agent | null {
+export async function readAgentFile(filePath: string, scope: 'global' | 'project' | 'plugin'): Promise<Agent | null> {
   if (!existsSync(filePath)) return null;
   const fileName = basename(filePath);
   try {
-    const rawContent = readFileSync(filePath, 'utf-8');
+    const rawContent = await readTextFile(filePath);
     const { frontmatter, body } = parseAgentMarkdown(rawContent);
     const missingRequired = REQUIRED_AGENT_FIELDS.filter(f => !frontmatter[f]);
     return {
@@ -102,31 +103,29 @@ export function readAgentFile(filePath: string, scope: 'global' | 'project' | 'p
   }
 }
 
-export function readAgentsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Agent[] {
+export async function readAgentsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Promise<Agent[]> {
   if (!existsSync(dir)) return [];
-  const agents: Agent[] = [];
 
   try {
     const entries = readdirSync(dir, { withFileTypes: true });
-    for (const entry of entries) {
-      if (entry.isFile() && entry.name.endsWith('.md')) {
-        const agent = readAgentFile(join(dir, entry.name), scope);
-        if (agent) agents.push(agent);
-      }
-    }
+    const agents = await Promise.all(
+      entries
+        .filter(entry => entry.isFile() && entry.name.endsWith('.md'))
+        .map(entry => readAgentFile(join(dir, entry.name), scope)),
+    );
+    return agents.filter((a): a is Agent => a !== null);
   } catch (e) {
     console.error(`Errore leggendo agents da ${dir}: ${e}`);
+    return [];
   }
-
-  return agents;
 }
 
-export function getGlobalAgents(): Agent[] {
+export function getGlobalAgents(): Promise<Agent[]> {
   const agentsDir = join(CLAUDE_DIR, 'agents');
   return readAgentsFromDir(agentsDir, 'global');
 }
 
-export function getProjectAgents(realProjectPath: string): Agent[] {
+export function getProjectAgents(realProjectPath: string): Promise<Agent[]> {
   const agentsDir = join(realProjectPath, '.claude', 'agents');
   return readAgentsFromDir(agentsDir, 'project');
 }
