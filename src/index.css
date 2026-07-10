@@ -8932,7 +8932,7 @@ button.cl-tc-session-chip:focus-visible {
   margin: 3px 0 0;
   font-size: 13.5px;
   font-weight: 600;
-  color: var(--cl-ink-1);
+  color: var(--cl-ink);
   line-height: 1.4;
 }
 .cl-team-event-text {
@@ -10380,7 +10380,7 @@ button.cl-sw-member:focus-visible,
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.6;
-  color: var(--cl-ink-1);
+  color: var(--cl-ink);
   background: var(--cl-paper-2);
   border: 1px solid var(--cl-line);
   border-radius: 8px;

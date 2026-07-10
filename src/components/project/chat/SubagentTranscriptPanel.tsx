@@ -57,8 +57,6 @@ export function SubagentTranscriptPanel({
           <QueryError title="Failed to load agent transcript" error={error} onRetry={() => refetch()} />
         ) : isLoading ? (
           <p className="cl-transcript-state">Loading agent transcript…</p>
-        ) : processed.length === 0 ? (
-          <p className="cl-transcript-state">No internal messages recorded for this agent.</p>
         ) : (
           <div className="cl-transcript-inner">
             {prompt && (
@@ -77,15 +75,19 @@ export function SubagentTranscriptPanel({
                 </div>
               </div>
             )}
-            {processed.map((p, i) => (
-              <MessageBubble
-                key={p.msg.uuid || i}
-                processed={p}
-                detailsFilter="all"
-                onOpenToolDetail={setSelectedTool}
-                turnIndex={i + 1}
-              />
-            ))}
+            {processed.length === 0 ? (
+              <p className="cl-transcript-state">No internal messages recorded for this agent.</p>
+            ) : (
+              processed.map((p, i) => (
+                <MessageBubble
+                  key={p.msg.uuid || i}
+                  processed={p}
+                  detailsFilter="all"
+                  onOpenToolDetail={setSelectedTool}
+                  turnIndex={i + 1}
+                />
+              ))
+            )}
           </div>
         )}
       </main>
