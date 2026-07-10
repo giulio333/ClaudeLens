@@ -8,6 +8,41 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens 
 
 ---
 
+## Installation
+
+### macOS
+
+1. Download the `.dmg` for your Mac (`arm64` for Apple silicon or `x64` for Intel) from the [latest release](https://github.com/giulio333/ClaudeLens/releases/latest).
+2. Open the `.dmg` and drag **ClaudeLens** to **Applications**.
+3. Because ClaudeLens is not code-signed, macOS may block the first launch. Open Terminal and run:
+
+   ```bash
+   xattr -d com.apple.quarantine /Applications/ClaudeLens.app
+   ```
+
+4. Open ClaudeLens from Applications. The command is only needed once per installation or update.
+
+You can also try right-clicking ClaudeLens in Finder, choosing **Open**, and confirming the Gatekeeper prompt instead of using Terminal.
+
+### Linux (experimental)
+
+Download the `.AppImage` from the [latest release](https://github.com/giulio333/ClaudeLens/releases/latest) and make it executable with `chmod +x`. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
+
+### Windows (experimental)
+
+Download and run the `.exe` installer from the [latest release](https://github.com/giulio333/ClaudeLens/releases/latest). Opening a session launches it in a new `cmd` window.
+
+### Requirements
+
+- macOS 12 Monterey or later, or Linux / Windows (experimental)
+- [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
+
+### Updates
+
+ClaudeLens checks the [Releases](https://github.com/giulio333/ClaudeLens/releases) page at launch and shows a small notice when a newer version is available (you can skip a version, and re-check anytime from **Settings → General**). There is no auto-install — the app isn't code-signed, so updating means downloading the new build from the release page and repeating the quarantine step above on macOS.
+
+---
+
 ## Screenshots
 
 <table>
@@ -85,38 +120,6 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens 
 - **Duplicate projects** — detect project folders that point to the same directory and merge their history and memory.
 
 Everything updates live: any change under `~/.claude/` while you work in the terminal is reflected immediately, and vice versa.
-
----
-
-## Requirements
-
-- macOS 12 Monterey or later, or Linux / Windows (experimental)
-- [Claude Code](https://claude.ai/code) installed and used at least once (so `~/.claude/` exists)
-
----
-
-## Installation
-
-**macOS** — download the `.dmg` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page, open it, and drag ClaudeLens to Applications.
-
-**Linux (experimental)** — download the `.AppImage` from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page and make it executable with `chmod +x`. Opening a session in a terminal relies on a common terminal emulator being installed (`gnome-terminal`, `konsole`, `xfce4-terminal`, or `xterm`).
-
-**Windows (experimental)** — download and run the `.exe` installer from the [Releases](https://github.com/giulio333/ClaudeLens/releases) page. Opening a session launches it in a new `cmd` window.
-
-> **First launch — Gatekeeper warning**
->
-> The app is not code-signed. macOS will block it on first open.
-> Right-click the app in Finder and choose **Open**, then confirm in the dialog.
->
-> Alternatively, run this command once in Terminal:
->
-> ```bash
-> xattr -d com.apple.quarantine /Applications/ClaudeLens.app
-> ```
-
-### Updates
-
-ClaudeLens checks the [Releases](https://github.com/giulio333/ClaudeLens/releases) page at launch and shows a small notice when a newer version is available (you can skip a version, and re-check anytime from **Settings → General**). There is no auto-install — the app isn't code-signed, so updating means downloading the new build from the release page and repeating the quarantine step above on macOS.
 
 ---
 
