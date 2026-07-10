@@ -14,6 +14,7 @@ export function SubagentTranscriptPanel({
   agentId,
   subagentType,
   description,
+  prompt,
   onBack,
 }: {
   hash: string
@@ -21,6 +22,8 @@ export function SubagentTranscriptPanel({
   agentId: string
   subagentType: string
   description: string
+  /** The dispatch prompt shown above the transcript for context (may be truncated). */
+  prompt?: string
   onBack: () => void
 }) {
   const { data: messages, isLoading, isError, error, refetch } = useSubagentTranscript(
@@ -58,6 +61,22 @@ export function SubagentTranscriptPanel({
           <p className="cl-transcript-state">No internal messages recorded for this agent.</p>
         ) : (
           <div className="cl-transcript-inner">
+            {prompt && (
+              <div
+                className="cl-turn cl-subagent-prompt"
+                style={{ '--turn-role-color': 'var(--cl-ink)' } as React.CSSProperties}
+              >
+                <div className="cl-turn-rail">
+                  <span className="cl-turn-orb" aria-hidden>P</span>
+                </div>
+                <div className="cl-turn-body">
+                  <div className="cl-turn-head">
+                    <span className="cl-turn-who cl-mono">Prompt</span>
+                  </div>
+                  <p>{prompt}</p>
+                </div>
+              </div>
+            )}
             {processed.map((p, i) => (
               <MessageBubble
                 key={p.msg.uuid || i}

@@ -100,6 +100,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
   plans: {
     getByProject: (hash: string) => ipcRenderer.invoke('plans:getByProject', hash),
   },
+  workflows: {
+    getByProject: (hash: string) => ipcRenderer.invoke('workflows:getByProject', hash),
+    getRun: (hash: string, sessionId: string, runId: string) =>
+      ipcRenderer.invoke('workflows:getRun', hash, sessionId, runId),
+  },
+  teams: {
+    getByProject: (hash: string) => ipcRenderer.invoke('teams:getByProject', hash),
+    getDetail: (hash: string, teamName: string) =>
+      ipcRenderer.invoke('teams:getDetail', hash, teamName),
+  },
   skills: {
     getGlobal: () => ipcRenderer.invoke('skills:getGlobal'),
     getAll: (realPath: string) => ipcRenderer.invoke('skills:getAll', realPath),

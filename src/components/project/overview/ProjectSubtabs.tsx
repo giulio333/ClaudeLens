@@ -9,6 +9,8 @@ import {
   useLiveSessions,
   useProjectTasks,
   useProjectPlans,
+  useProjectWorkflows,
+  useProjectTeams,
 } from '../../../hooks/useIPC'
 import { View } from '../types'
 import type { ProjectSection } from './ProjectOverviewContent'
@@ -33,6 +35,8 @@ export function ProjectSubtabs({
   const { data: liveSessions = [] } = useLiveSessions()
   const { data: taskGroups = [] } = useProjectTasks(project.hash)
   const { data: planGroups = [] } = useProjectPlans(project.hash)
+  const { data: workflowGroups = [] } = useProjectWorkflows(project.hash)
+  const { data: teams = [] } = useProjectTeams(project.hash)
 
   const memoryCount = (memory?.index.length ?? 0) + (memory?.projectLevelIndex.length ?? 0)
   const agentCount = useMemo(
@@ -57,6 +61,10 @@ export function ProjectSubtabs({
     () => planGroups.reduce((n, g) => n + g.plans.length, 0),
     [planGroups],
   )
+  const workflowCount = useMemo(
+    () => workflowGroups.reduce((n, g) => n + g.runs.length, 0),
+    [workflowGroups],
+  )
 
   const tabs: { key: ProjectSection; label: string; count?: number; view: View }[] = [
     { key: 'overview', label: 'Overview', view: { type: 'overview' } },
@@ -68,6 +76,8 @@ export function ProjectSubtabs({
     { key: 'live-agents', label: 'Agent View', count: liveCount, view: { type: 'agents-live', project } },
     { key: 'tasks', label: 'Tasks', count: taskCount, view: { type: 'project-tasks', project } },
     { key: 'plans', label: 'Plans', count: planCount, view: { type: 'project-plans', project } },
+    { key: 'workflows', label: 'Workflows', count: workflowCount, view: { type: 'project-workflows', project } },
+    { key: 'teams', label: 'Teams', count: teams.length, view: { type: 'project-teams', project } },
     { key: 'config', label: 'Config', view: { type: 'project-config', project } },
   ]
 

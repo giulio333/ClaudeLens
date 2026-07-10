@@ -10,6 +10,7 @@ import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
 import { SkillDetailView } from '../skills/SkillDetailView';
 import { AgentDetailView } from '../agents/AgentDetailView';
+import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
 import type { SessionAgent, ToolGroup } from '../chat/utils';
 import { fmtCost, sessionTitle } from '../utils';
@@ -48,6 +49,7 @@ type Overlay =
   | { kind: 'agent'; agent: SessionAgent }
   | { kind: 'skill-def'; skill: Skill }
   | { kind: 'agent-def'; agent: Agent }
+  | { kind: 'team'; teamName: string }
   | null;
 
 /** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
@@ -191,6 +193,7 @@ export function TerminalMissionControl({
   resumeSessionId,
   attachJobId,
   onBack,
+  onOpenSession,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
@@ -199,6 +202,10 @@ export function TerminalMissionControl({
   // a session runs in the background). The LENS pane still reads by sessionId.
   attachJobId?: string;
   onBack: () => void;
+  /** Navigate to another session's Mission Control (used by the team detail
+   *  overlay's "open chat"). Remounts this view — the caller keys it by
+   *  resumeSessionId — so a live PTY dies: gate behind a confirm here. */
+  onOpenSession?: (resumeSessionId: string) => void;
 }) {
   const { resolved } = useTheme();
   // Opening an existing session defaults to LENS (read-only, nothing spawned); a
@@ -311,6 +318,30 @@ export function TerminalMissionControl({
   const latchedSessionId = ptyPid && latched?.pid === ptyPid ? latched.sessionId : null;
   const sessionId = registrySessionId ?? latchedSessionId ?? resumeSessionId ?? null;
   const filename = sessionId ? `${sessionId}.jsonl` : null;
+
+  // "Open chat" from the team detail overlay: jump to that session's Mission
+  // Control. Same session → just close the overlay. Different session →
+  // real navigation, which remounts this view and kills a live PTY — confirm
+  // first when one is actually running (LENS-only viewing has nothing to lose).
+  const openSessionFromOverlay = useCallback(
+    (session: SessionSummary) => {
+      const targetId = session.filename.replace(/\.jsonl$/, '');
+      if (targetId === sessionId) {
+        setOverlay(null);
+        return;
+      }
+      if (!onOpenSession) return;
+      if (
+        terminalMounted &&
+        termStatus === 'running' &&
+        !window.confirm('Opening another session will close the current terminal session. Continue?')
+      ) {
+        return;
+      }
+      onOpenSession(targetId);
+    },
+    [sessionId, onOpenSession, terminalMounted, termStatus]
+  );
 
   const { data: sessionList } = useSessionList(project.hash);
   const summary = useMemo(
@@ -525,6 +556,14 @@ export function TerminalMissionControl({
                   <SkillDetailView skill={overlay.skill} project={project} onBack={closeOverlay} readOnly />
                 ) : overlay.kind === 'agent-def' ? (
                   <AgentDetailView agent={overlay.agent} project={project} onBack={closeOverlay} readOnly />
+                ) : overlay.kind === 'team' ? (
+                  <TeamDetailView
+                    project={project}
+                    teamName={overlay.teamName}
+                    onBack={closeOverlay}
+                    backLabel="Close"
+                    onOpenChat={openSessionFromOverlay}
+                  />
                 ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
                   <SubagentTranscriptPanel
                     hash={project.hash}
@@ -552,6 +591,7 @@ export function TerminalMissionControl({
             onOpenAgent={agent => setOverlay({ kind: 'agent', agent })}
             onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
             onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}
+            onOpenTeam={teamName => setOverlay({ kind: 'team', teamName })}
           />
         )}
       </div>

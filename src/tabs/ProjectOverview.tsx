@@ -50,6 +50,8 @@ import { TerminalMissionControl } from '../components/project/terminal/TerminalM
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView'
 import { PlanDetailView } from '../components/project/plans/PlanDetailView'
+import { WorkflowRunDetailView } from '../components/project/workflows/WorkflowRunDetailView'
+import { TeamDetailView } from '../components/project/teams/TeamDetailView'
 // ─── Analytics / AI
 import { AnalyticsView } from '../components/project/analytics/AnalyticsView'
 import { AiAssistantView } from '../components/project/ai-assistant/AiAssistantView'
@@ -64,7 +66,7 @@ import { NotificationToaster } from '../components/NotificationToaster'
 type Project = { hash: string; realPath: string }
 
 // View types that render inside the editorial chrome (top bar + subtabs)
-const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks', 'project-plans', 'project-config']
+const CORE_PROJECT_VIEWS = ['overview', 'sessions', 'project-memory', 'project-skills', 'project-agents', 'project-mcp', 'agents-live', 'project-tasks', 'project-plans', 'project-workflows', 'project-teams', 'project-config']
 
 function sectionFromView(v: View): ProjectSection {
   switch (v.type) {
@@ -76,6 +78,8 @@ function sectionFromView(v: View): ProjectSection {
     case 'agents-live':     return 'live-agents'
     case 'project-tasks':   return 'tasks'
     case 'project-plans':   return 'plans'
+    case 'project-workflows': return 'workflows'
+    case 'project-teams':   return 'teams'
     case 'project-config':  return 'config'
     default:                return 'overview'
   }
@@ -91,6 +95,8 @@ function viewForSection(section: ProjectSection, project: Project): View {
     case 'live-agents':  return { type: 'agents-live', project }
     case 'tasks':        return { type: 'project-tasks', project }
     case 'plans':        return { type: 'project-plans', project }
+    case 'workflows':    return { type: 'project-workflows', project }
+    case 'teams':        return { type: 'project-teams', project }
     case 'config':       return { type: 'project-config', project }
     default:             return { type: 'overview' }
   }
@@ -396,12 +402,18 @@ export default function ProjectOverview() {
       case 'terminal':
         return (
           <TerminalMissionControl
+            // Keyed so terminal→terminal navigation (team overlay → lead session)
+            // remounts the view instead of retargeting a mounted PTY.
+            key={view.resumeSessionId ?? 'new'}
             project={view.project}
             resumeSessionId={view.resumeSessionId}
             attachJobId={view.attachJobId}
             onBack={() => view.from === 'agents-live'
               ? setView({ type: 'agents-live', project: view.project })
               : setView({ type: 'sessions', project: view.project })
+            }
+            onOpenSession={id =>
+              setView({ type: 'terminal', project: view.project, resumeSessionId: id, from: view.from })
             }
           />
         )
@@ -423,6 +435,30 @@ export default function ProjectOverview() {
             plan={view.plan}
             project={view.project}
             onBack={() => setView({ type: 'project-plans', project: view.project })}
+          />
+        )
+      case 'workflow-detail':
+        return (
+          <WorkflowRunDetailView
+            project={view.project}
+            sessionId={view.sessionId}
+            runId={view.runId}
+            onBack={() => setView({ type: 'project-workflows', project: view.project })}
+          />
+        )
+      case 'team-detail':
+        return (
+          <TeamDetailView
+            project={view.project}
+            teamName={view.teamName}
+            onBack={() => setView({ type: 'project-teams', project: view.project })}
+            onOpenChat={s =>
+              setView({
+                type: 'terminal',
+                project: view.project,
+                resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+              })
+            }
           />
         )
       case 'analytics':
