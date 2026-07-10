@@ -1,6 +1,7 @@
 import { useMemo } from 'react'
 import { useProjectWorkflows, useSessionList } from '../../../hooks/useIPC'
 import type { SessionSummary, WorkflowRunSummary } from '../../../types'
+import { QueryError } from '../../QueryError'
 import { fmt, fmtDate, fmtModel, sessionTitle } from '../utils'
 import { fmtDuration, statusTone } from './utils'
 
@@ -26,7 +27,7 @@ export function WorkflowsSection({
   onOpenChat: (session: SessionSummary) => void
   onOpenRun: (sessionId: string, runId: string) => void
 }) {
-  const { data: groups = [], isLoading } = useProjectWorkflows(project.hash)
+  const { data: groups = [], isLoading, isError, error, refetch } = useProjectWorkflows(project.hash)
   const { data: sessions = [] } = useSessionList(project.hash)
 
   const sessionByFilename = useMemo(() => {
@@ -50,7 +51,9 @@ export function WorkflowsSection({
       </div>
 
       <div className="cl-wf-body">
-        {isLoading ? (
+        {isError ? (
+          <QueryError title="Failed to load workflow runs" error={error} onRetry={() => refetch()} />
+        ) : isLoading ? (
           <div className="cl-empty">Loading workflow runs…</div>
         ) : groups.length === 0 ? (
           <div className="cl-empty">

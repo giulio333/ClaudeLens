@@ -215,6 +215,26 @@ describe('parseRunFile', () => {
     expect(parseRunFile(null, ctx)).toBeNull();
     expect(parseRunFile('nope', ctx)).toBeNull();
   });
+
+  it('rejects unsafe runIds the detail handler would refuse', () => {
+    // Listing them would create rows getWorkflowRun then rejects (unopenable).
+    expect(parseRunFile(runState('no-prefix', SESS_A), ctx)).toBeNull();
+    expect(parseRunFile(runState('wf_../etc', SESS_A), ctx)).toBeNull();
+  });
+
+  it("counts 'failed' agents as errored alongside 'error'", () => {
+    const d = parseRunFile(
+      runState('wf_1', SESS_A, {
+        workflowProgress: [
+          { type: 'workflow_agent', index: 1, agentId: 'a1', state: 'error' },
+          { type: 'workflow_agent', index: 2, agentId: 'a2', state: 'failed' },
+          { type: 'workflow_agent', index: 3, agentId: 'a3', state: 'done' },
+        ],
+      }),
+      ctx
+    );
+    expect(d!.errorAgentCount).toBe(2);
+  });
 });
 
 describe('getProjectWorkflows', () => {
@@ -265,6 +285,15 @@ describe('getProjectWorkflows', () => {
 
   it('returns [] for a project with no session dirs', async () => {
     expect(await getProjectWorkflows(join(dir, 'nope'))).toEqual([]);
+  });
+
+  it('lists a runId once even when its state file exists under two session dirs', async () => {
+    writeRun(SESS_A, SESS_A, 'wf_dup1', { startTime: 1000 });
+    writeRun(SESS_B, SESS_A, 'wf_dup1', { startTime: 1000 });
+
+    const groups = await getProjectWorkflows(dir);
+    const ids = groups.flatMap(g => g.runs.map(r => r.runId));
+    expect(ids.filter(id => id === 'wf_dup1')).toHaveLength(1);
   });
 });
 
