@@ -329,6 +329,28 @@ describe('scanMemberTranscript', () => {
     expect(scan.events[0].summary).toBe("Chiedo il testo dell'haiku");
   });
 
+  it('trims outbound SendMessage text like the inbound teammate-message body', () => {
+    // The peer dedup key matches sender and receiver copies by text — an
+    // untrimmed outbound copy would never collide with the trimmed inbound one.
+    const line = JSON.stringify({
+      type: 'assistant',
+      timestamp: '2026-07-09T19:25:30.000Z',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            name: 'SendMessage',
+            id: 't9',
+            input: { to: 'check-readme', summary: 's', message: '  Full report here. \n' },
+          },
+        ],
+      },
+    });
+    const scan = scanMemberTranscript(line, 'check-changelog');
+    expect(scan.events[0].text).toBe('Full report here.');
+  });
+
   it('returns an empty scan for empty or garbage content', () => {
     expect(scanMemberTranscript('', 'x')).toEqual({
       events: [],
@@ -450,6 +472,72 @@ describe('getTeamDetail', () => {
     expect(d!.memberTokens).toEqual([1430]);
     expect(d!.totalTokens).toBe(1430);
     expect(d!.messageCount).toBe(2);
+  });
+
+  it('dedupes the two records of a peer message, keeping the earliest, without collapsing distinct repeats', async () => {
+    // Sender: same text to check-readme twice — once at T (duplicated by the
+    // receiver's inbound copy 5s later) and once 10 minutes later (distinct).
+    const senderJsonl = [
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-07-09T19:25:30.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              name: 'SendMessage',
+              id: 't1',
+              input: { to: 'check-readme', summary: 'report', message: 'Full report here.' },
+            },
+          ],
+        },
+      }),
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-07-09T19:35:30.000Z',
+        message: {
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              name: 'SendMessage',
+              id: 't2',
+              input: { to: 'check-readme', summary: 'report', message: 'Full report here.' },
+            },
+          ],
+        },
+      }),
+    ].join('\n');
+    // Receiver: the inbound copy of the first message, whitespace-padded.
+    const receiverJsonl = JSON.stringify({
+      type: 'user',
+      timestamp: '2026-07-09T19:25:35.000Z',
+      message: {
+        role: 'user',
+        content:
+          '<teammate-message teammate_id="check-changelog" color="blue" summary="report">\nFull report here.\n</teammate-message>',
+      },
+    });
+    writeMeta(SESS_A, 'check-changelog', 'aaaa000011112222', {}, { content: senderJsonl });
+    writeMeta(SESS_A, 'check-readme', 'bbbb000011112222', {}, { content: receiverJsonl });
+
+    const d = await getTeamDetail(projectDir, TEAM, opts());
+    const peer = d!.events.filter(e => e.from === 'check-changelog' && e.to === 'check-readme');
+    expect(peer).toHaveLength(2); // duplicate pair collapsed, distinct repeat kept
+    // The survivor of the pair is the earliest record (the sender's).
+    expect(peer[0].timestamp).toBe(Date.parse('2026-07-09T19:25:30.000Z'));
+    expect(peer[1].timestamp).toBe(Date.parse('2026-07-09T19:35:30.000Z'));
+  });
+
+  it('takes member meta fields from the newest sidecar after a respawn', async () => {
+    writeMeta(SESS_A, 'check-readme', 'aaaa000011112222', { color: 'blue', model: 'haiku' }, { mtime: 1_700_000_000_000 });
+    writeMeta(SESS_B, 'check-readme', 'bbbb000011112222', { color: 'red', model: 'sonnet' }, { mtime: 1_700_000_100_000 });
+
+    const d = await getTeamDetail(projectDir, TEAM, opts());
+    const m = d!.members.find(mm => mm.name === 'check-readme')!;
+    expect(m.color).toBe('red');
+    expect(m.model).toBe('sonnet');
   });
 
   it('degrades gracefully when the registry entry is gone', async () => {

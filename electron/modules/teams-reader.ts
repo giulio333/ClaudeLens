@@ -183,6 +183,9 @@ interface ScannedMember {
   description: string;
   planModeRequired: boolean;
   permissionMode: string;
+  /** mtime of the transcript whose sidecar supplied the meta fields above —
+   *  a respawned member's newest sidecar must win over readdir order. */
+  metaMtimeMs: number;
   transcripts: TeamMemberTranscript[];
 }
 
@@ -228,14 +231,23 @@ async function scanTranscripts(projectPath: string): Promise<ScanResult> {
       teams.set(teamName, members);
       const member = members.get(name) ?? {
         name,
-        color: asString(meta.color),
-        model: asString(meta.model),
-        description: asString(meta.description),
-        planModeRequired: asBool(meta.planModeRequired),
-        permissionMode: asString(meta.permissionMode),
+        color: '',
+        model: '',
+        description: '',
+        planModeRequired: false,
+        permissionMode: '',
+        metaMtimeMs: -1,
         transcripts: [],
       };
       members.set(name, member);
+      if (mtimeMs > member.metaMtimeMs) {
+        member.color = asString(meta.color);
+        member.model = asString(meta.model);
+        member.description = asString(meta.description);
+        member.planModeRequired = asBool(meta.planModeRequired);
+        member.permissionMode = asString(meta.permissionMode);
+        member.metaMtimeMs = mtimeMs;
+      }
       member.transcripts.push({
         sessionId: dirName,
         filename: `${dirName}.jsonl`,
@@ -364,7 +376,9 @@ export function scanMemberTranscript(raw: string, memberName: string): Transcrip
               ? (b.input as Record<string, unknown>)
               : null;
           if (!input) continue;
-          const text = asString(input.message);
+          // Trimmed like the inbound <teammate-message> body, so the peer
+          // dedup key below matches the receiver's copy of the same message.
+          const text = asString(input.message).trim();
           if (!text || isIdleNotification(text)) continue;
           // 'main' is an accepted alias for the lead in SendMessage routing —
           // normalize so the timeline shows one consistent name.
@@ -685,16 +699,21 @@ export async function getTeamDetail(
     // A member→member message is recorded twice — as the sender's SendMessage
     // tool call and as the receiver's inbound <teammate-message> — with
     // slightly different timestamps. Same peer route + same text = the same
-    // message: keep the first record. Lead routes are recorded once only.
-    const seenPeer = new Set<string>();
+    // message: sort first so the earliest record (the sender's) survives, and
+    // bound the match in time so two genuinely distinct identical messages
+    // (e.g. two "done" A→B minutes apart) don't collapse. Lead routes are
+    // recorded once only.
+    detail.events.sort((a, b) => a.timestamp - b.timestamp);
+    const DEDUP_WINDOW_MS = 60_000;
+    const lastKeptAt = new Map<string, number>();
     detail.events = detail.events.filter(e => {
       if (e.from === 'team-lead' || e.to === 'team-lead') return true;
       const key = `${e.from}\u0000${e.to}\u0000${e.text}`;
-      if (seenPeer.has(key)) return false;
-      seenPeer.add(key);
+      const prev = lastKeptAt.get(key);
+      if (prev !== undefined && e.timestamp - prev <= DEDUP_WINDOW_MS) return false;
+      lastKeptAt.set(key, e.timestamp);
       return true;
     });
-    detail.events.sort((a, b) => a.timestamp - b.timestamp);
     rollupMetrics(detail);
     return detail;
   } catch (error) {
