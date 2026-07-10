@@ -27,6 +27,9 @@ npm-debug.log*
 .claude/settings.local.json
 .claude/worktrees/
 
+# Local working documents
+docs/ClaudeLens_Architecture_Guide_IT.docx
+
 # Editor
 .idea/
 *.swp
