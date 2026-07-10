@@ -460,9 +460,11 @@ export async function getWorkflowRun(
         fallbackMtimeMs: safeMtimeMs(candidate),
       });
       if (!detail) continue;
-      // Script fallback: if not inlined, read the .js from scripts/.
+      // Script fallback: if not inlined, read the .js from the LAUNCHING
+      // session's scripts/ (detail.sessionId, from scriptPath) — on a
+      // resumed/forked run the state JSON dir (dirName) is a different session.
       if (detail.script === null && detail.scriptPath) {
-        const scriptFile = join(projectPath, dirName, 'workflows', 'scripts', basename(detail.scriptPath));
+        const scriptFile = join(projectPath, detail.sessionId, 'workflows', 'scripts', basename(detail.scriptPath));
         try {
           assertWithin(projectPath, scriptFile);
           detail.script = await readFile(scriptFile, 'utf-8');
