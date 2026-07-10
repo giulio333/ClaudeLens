@@ -29,6 +29,14 @@ Before creating a GitHub Release, always run these steps **in order**:
 3. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
 4. Create the GitHub Release with a `## Highlights` section at the top
 
+**Binaries are built and attached by CI, not locally**: pushing the `v*` tag
+(which `gh release create` does) triggers `.github/workflows/release.yml` — it
+packages macOS DMG (x64 + arm64), Windows exe (windows-2022 runner) and Linux
+AppImage on native runners (~9 min) and uploads all of them to the existing
+Release without overwriting its notes. Don't run `npm run electron:build` or
+attach assets by hand; just wait for the workflow and verify the assets landed
+(`gh release view vX.Y.Z --json assets`).
+
 ## Architecture
 
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.
