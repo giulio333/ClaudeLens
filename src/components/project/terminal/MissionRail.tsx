@@ -32,16 +32,17 @@ import { fmtCost, fmt } from '../utils';
  * The scrolling Mission Control rail beside the unified Terminal/Lens view.
  *
  * Not a flat tool feed (the TUI already prints every `⏺ Bash…` line — repeating
- * it would be a mirror), but the session's *meaningful units*, laid out as a
- * "bento" of cards (design: the "Chat display variants exploration", 03 · Bento):
- * a pinned vitals band of gauge cards — CONTEXT WINDOW ("how full is my
- * context?"), SPEND (cost + cache-savings ring) and TASKS (done/total ring) —
- * then a scrolling flow of AGENTS (violet card, rows click → full transcript),
- * SKILLS (pills, click → output), file CHANGES **grouped by repo area** with
- * proportional diff bars, the detailed TASKS list, and ENVIRONMENT (the session's
- * read-only setup from the SDK init — permission mode + capability counts, plus
- * any failed MCP). Empty sections are dropped; if everything is empty the rail
- * says so in one line.
+ * it would be a mirror), but the session's *meaningful units*, laid out as
+ * floating **glass islands** (design: "Chat UI variants", 2a · Isole di vetro):
+ * a borderless rail over a soft accent aura, with a pinned vitals band — the
+ * CONTEXT WINDOW island ("how full is my context?", conic aura + big %) and one
+ * vitals island pairing SPEND (cost + cache-savings ring) and TASKS (done/total
+ * ring) — then a scrolling flow of AGENTS (violet island, rows click → full
+ * transcript), SKILLS (pills, click → output), file CHANGES **grouped by repo
+ * area** with proportional diff bars, the detailed TASKS list, and ENVIRONMENT
+ * (a slim glass pill with the session's read-only setup from the SDK init —
+ * permission mode + capability counts — plus any failed MCP). Empty sections
+ * are dropped; if everything is empty the rail says so in one line.
  *
  * All of it derives from data the watcher already refreshes
  * (`sessions:chat`, `sessions:subagents`, `tasks:project`, `sessions:project`),
@@ -187,6 +188,18 @@ function groupByArea(changes: FileChange[], realPath: string): AreaGroup[] {
 
 /* ── presentational atoms ─────────────────────────────────────────────── */
 
+/** One floating glass island (design 2a) — the rail's card primitive. */
+const islandCard: CSSProperties = {
+  position: 'relative',
+  border: '1px solid var(--cl-glass-edge-top)',
+  borderRadius: 20,
+  padding: '15px 19px',
+  background: 'var(--cl-glass-bg)',
+  boxShadow: 'inset 0 1px 0 var(--cl-glass-highlight), var(--cl-glass-lift)',
+  WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
+  backdropFilter: 'blur(20px) saturate(1.8)',
+};
+
 /** +N −N, tabular. */
 function DiffNum({
   added,
@@ -253,20 +266,16 @@ function RailBar({ added, removed, max = 56 }: { added: number; removed: number;
   );
 }
 
-/** Sticky section eyebrow: LABEL  n ───────── extra. */
+/** Island section eyebrow: LABEL  n ───────── extra. */
 function RailEyebrow({ label, n, extra }: { label: string; n?: ReactNode; extra?: ReactNode }) {
   return (
     <div
       className="font-mono"
       style={{
-        position: 'sticky',
-        top: 0,
-        zIndex: 3,
-        background: 'var(--cl-paper)',
         display: 'flex',
         alignItems: 'baseline',
         gap: 8,
-        padding: '14px 0 8px',
+        padding: '0 0 8px',
       }}
     >
       <span
@@ -334,9 +343,19 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
   ].filter(c => c.n > 0);
   return (
     <>
-      <RailEyebrow label="ENVIRONMENT" />
-      {/* permission mode + capability counts */}
-      <div className="flex items-center" style={{ gap: 10, flexWrap: 'wrap', paddingBottom: 6 }}>
+      {/* slim env pill — permission mode + capability counts */}
+      <div
+        className="flex items-center"
+        style={{
+          gap: 10,
+          borderRadius: 999,
+          padding: '10px 16px',
+          background: 'var(--cl-glass-bg)',
+          border: '1px solid var(--cl-glass-edge-top)',
+          WebkitBackdropFilter: 'blur(18px) saturate(1.7)',
+          backdropFilter: 'blur(18px) saturate(1.7)',
+        }}
+      >
         <span
           className="font-mono"
           style={{
@@ -344,10 +363,10 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
             fontWeight: 700,
             letterSpacing: '0.12em',
             padding: '3px 8px',
-            borderRadius: 6,
+            borderRadius: 999,
             color: danger ? 'var(--cl-on-accent)' : 'var(--cl-ink-2)',
-            background: danger ? 'var(--cl-danger)' : 'var(--cl-paper-2)',
-            border: `1px solid ${danger ? 'var(--cl-danger)' : 'var(--cl-line)'}`,
+            background: danger ? 'var(--cl-danger)' : 'var(--cl-glass-bg-strong)',
+            border: `1px solid ${danger ? 'var(--cl-danger)' : 'var(--cl-glass-edge-top)'}`,
           }}
           title="Resolved permission mode for this session"
         >
@@ -365,52 +384,50 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
         ))}
       </div>
       {/* Only broken MCP connections earn a row — the one actionable MCP signal. */}
-      {failedMcp.map(s => (
-        <div
-          key={s.name}
-          className="flex items-center gap-2.5"
-          style={{ padding: '5px 0', borderBottom: '1px solid var(--cl-line-soft)' }}
-          title={`MCP server "${s.name}" failed to connect`}
-        >
-          <span
-            aria-hidden
-            className="shrink-0"
-            style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-danger)' }}
-          />
-          <span
-            className="font-mono truncate min-w-0"
-            style={{ fontSize: 11.5, color: 'var(--cl-ink-2)' }}
-          >
-            {s.name}
-          </span>
-          <span
-            className="font-mono ml-auto shrink-0"
-            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-danger)' }}
-          >
-            MCP FAILED
-          </span>
+      {failedMcp.length > 0 && (
+        <div style={{ ...islandCard, padding: '8px 16px' }}>
+          {failedMcp.map(s => (
+            <div
+              key={s.name}
+              className="flex items-center gap-2.5"
+              style={{ padding: '5px 0' }}
+              title={`MCP server "${s.name}" failed to connect`}
+            >
+              <span
+                aria-hidden
+                className="shrink-0"
+                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-danger)' }}
+              />
+              <span
+                className="font-mono truncate min-w-0"
+                style={{ fontSize: 11.5, color: 'var(--cl-ink-2)' }}
+              >
+                {s.name}
+              </span>
+              <span
+                className="font-mono ml-auto shrink-0"
+                style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-danger)' }}
+              >
+                MCP FAILED
+              </span>
+            </div>
+          ))}
         </div>
-      ))}
+      )}
     </>
   );
 }
 
-/* ── Bento mosaic (variant 03) ────────────────────────────────────────────
- * The rail's headline is a bento of cards adapted from the "Chat display
- * variants exploration" design (03 · Bento): a full-width CONTEXT WINDOW card,
- * a SPEND + TASKS gauge pair, then full-width AGENTS and SKILLS cards. The
- * gauges are pinned (vitals stay visible while the detail below scrolls); the
- * AGENTS/SKILLS cards keep the rail's interactivity (rows open a transcript /
- * skill output). The file-CHANGES section is kept below the bento, restyled. */
+/* ── Glass islands (variant 2a) ───────────────────────────────────────────
+ * The rail's headline is a stack of floating glass islands from the "Chat UI
+ * variants" design (2a · Isole di vetro): a full-width CONTEXT WINDOW island
+ * with a conic aura, one vitals island pairing the SPEND and TASKS gauges,
+ * then full-width AGENTS and SKILLS islands. The vitals are pinned (they stay
+ * visible while the detail below scrolls); the AGENTS/SKILLS islands keep the
+ * rail's interactivity (rows open a transcript / skill output). The
+ * file-CHANGES and TASKS sections live in their own islands below. */
 
-const bentoCard: CSSProperties = {
-  border: '1px solid var(--cl-line)',
-  borderRadius: 14,
-  padding: '15px 16px',
-  background: 'var(--cl-paper)',
-};
-
-/** Ring gauge (the bento's spend/tasks donut). `pct` 0–100 fills the ring;
+/** Ring gauge (the vitals island's spend/tasks donut). `pct` 0–100 fills the ring;
  *  `label` is the centred caption. r=19 → circumference ≈ 119.4. */
 function Donut({
   pct,
@@ -457,20 +474,32 @@ function Donut({
   );
 }
 
-/** Full-width CONTEXT WINDOW card — striped fill, "used · left · total" footer. */
+/** Full-width CONTEXT WINDOW island — conic aura, big %, glowing fill, and a
+ *  "used · left · total" footer. */
 function ContextCard({ ctx }: { ctx: ContextState | null }) {
   const pct = ctx?.pct ?? 0;
   const danger = !!ctx && pct >= 90;
+  const barColor = danger ? 'var(--cl-danger)' : 'var(--cl-accent)';
   return (
-    <div
-      style={{
-        ...bentoCard,
-        gridColumn: '1 / -1',
-        background:
-          'radial-gradient(70% 120% at 100% 0%, var(--cl-accent-soft), transparent 60%), var(--cl-paper)',
-      }}
-    >
-      <div className="flex items-baseline justify-between">
+    <div style={{ ...islandCard, padding: '18px 19px', overflow: 'hidden' }}>
+      {/* conic aura bleeding in from the top-right corner */}
+      <div
+        aria-hidden
+        style={{
+          position: 'absolute',
+          top: -70,
+          right: -60,
+          width: 190,
+          height: 190,
+          borderRadius: '50%',
+          background:
+            'conic-gradient(from 0deg, transparent, color-mix(in oklch, var(--cl-accent) 30%, transparent), transparent 60%)',
+          filter: 'blur(18px)',
+          opacity: 0.8,
+          pointerEvents: 'none',
+        }}
+      />
+      <div className="flex items-baseline justify-between" style={{ position: 'relative' }}>
         <span
           className="font-mono"
           style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--cl-ink-4)' }}
@@ -479,41 +508,46 @@ function ContextCard({ ctx }: { ctx: ContextState | null }) {
         </span>
         <span
           style={{
-            font: '700 24px/1 var(--font-sans)',
-            letterSpacing: '-0.02em',
+            font: '700 40px/1 var(--font-sans)',
+            letterSpacing: '-0.035em',
             fontVariantNumeric: 'tabular-nums',
             color: danger ? 'var(--cl-danger)' : 'var(--cl-ink)',
           }}
         >
           {ctx ? pct : '—'}
-          <span style={{ fontSize: 13, color: 'var(--cl-ink-3)' }}>%</span>
+          <span style={{ fontSize: 16, color: 'var(--cl-ink-3)' }}>%</span>
         </span>
       </div>
       <div
         style={{
-          marginTop: 11,
-          height: 14,
-          borderRadius: 4,
-          background: 'var(--cl-paper-3)',
-          border: '1px solid var(--cl-line)',
+          position: 'relative',
+          marginTop: 12,
+          height: 12,
+          borderRadius: 999,
+          background: 'var(--cl-glass-bg-strong)',
+          border: '1px solid var(--cl-glass-edge-top)',
           overflow: 'hidden',
+          boxShadow: 'inset 0 1px 2px var(--cl-glass-shadow)',
         }}
       >
         <div
           style={{
             width: `${pct}%`,
             height: '100%',
+            borderRadius: 999,
             transition: 'width 0.4s ease',
             background: danger
               ? 'var(--cl-danger)'
-              : 'repeating-linear-gradient(90deg, var(--cl-accent) 0 7px, color-mix(in oklch, var(--cl-accent) 55%, var(--cl-paper)) 7px 10px)',
+              : 'linear-gradient(90deg, color-mix(in oklch, var(--cl-accent) 70%, white), var(--cl-accent))',
+            boxShadow: `0 0 10px color-mix(in oklch, ${barColor} 60%, transparent)`,
           }}
         />
       </div>
       <div
         className="font-mono"
         style={{
-          marginTop: 8,
+          position: 'relative',
+          marginTop: 9,
           fontSize: 9.5,
           fontVariantNumeric: 'tabular-nums',
           color: 'var(--cl-ink-4)',
@@ -531,7 +565,8 @@ function ContextCard({ ctx }: { ctx: ContextState | null }) {
   );
 }
 
-/** Compact gauge card (SPEND / TASKS) — donut left, stacked caption right. */
+/** One half of the vitals island (SPEND / TASKS) — donut left, stacked caption
+ *  right. `divided` adds the hairline that splits the island in two. */
 function GaugeCard({
   donut,
   label,
@@ -539,6 +574,7 @@ function GaugeCard({
   valueColor,
   sub,
   subColor,
+  divided = false,
 }: {
   donut: ReactNode;
   label: string;
@@ -546,9 +582,18 @@ function GaugeCard({
   valueColor: string;
   sub: string;
   subColor: string;
+  divided?: boolean;
 }) {
   return (
-    <div style={{ ...bentoCard, display: 'flex', alignItems: 'center', gap: 14 }}>
+    <div
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        minWidth: 0,
+        ...(divided ? { borderLeft: '1px solid var(--cl-line-soft)', paddingLeft: 16 } : {}),
+      }}
+    >
       {donut}
       <div className="min-w-0">
         <div
@@ -559,7 +604,7 @@ function GaugeCard({
         </div>
         <div
           style={{
-            font: '700 21px/1 var(--font-sans)',
+            font: '700 19px/1 var(--font-sans)',
             fontVariantNumeric: 'tabular-nums',
             color: valueColor,
             marginTop: 4,
@@ -625,7 +670,7 @@ function OpenDefGlyph() {
   );
 }
 
-/** One agent row inside the AGENTS bento card. The row opens the full transcript
+/** One agent row inside the AGENTS island. The row opens the full transcript
  *  (when one exists on disk); a trailing button deep-links to the agent's
  *  definition when its `subagent_type` resolves to a known agent.
  *
@@ -764,7 +809,7 @@ function AgentRow({
   );
 }
 
-/** Full-width AGENTS card — violet-tinted, header cluster + interactive rows. */
+/** Full-width AGENTS island — violet-tinted glass, header cluster + interactive rows. */
 function AgentsCard({
   agents,
   agentDefOf,
@@ -780,11 +825,10 @@ function AgentsCard({
   return (
     <div
       style={{
-        ...bentoCard,
-        marginTop: 14,
+        ...islandCard,
         padding: '14px 16px',
-        borderColor: 'var(--cl-violet-soft)',
-        background: 'color-mix(in oklch, var(--cl-violet-soft) 28%, var(--cl-paper))',
+        borderColor: 'color-mix(in oklch, var(--cl-violet-soft) 55%, var(--cl-glass-edge-top))',
+        background: 'color-mix(in oklch, var(--cl-violet-soft) 26%, var(--cl-glass-bg))',
       }}
     >
       <div className="flex items-center" style={{ gap: 10, marginBottom: 4 }}>
@@ -889,7 +933,7 @@ function SkillPill({
   );
 }
 
-/** Full-width SKILLS card — a wrap of pills. */
+/** Full-width SKILLS island — a wrap of pills. */
 function SkillsCard({
   skills,
   onOpenTool,
@@ -900,7 +944,7 @@ function SkillsCard({
   onOpenSkillDef: (skill: Skill) => void;
 }) {
   return (
-    <div style={{ ...bentoCard, marginTop: 14, padding: '14px 16px' }}>
+    <div style={{ ...islandCard, padding: '14px 16px' }}>
       <div
         className="font-mono"
         style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)', marginBottom: 11 }}
@@ -1080,12 +1124,14 @@ export function MissionRail({
   const empty =
     agents.length === 0 && skills.length === 0 && changes.length === 0 && tasks.length === 0;
 
+  // Borderless rail (design 2a): the islands float over a paper-2 canvas with a
+  // soft accent aura bleeding in from the top-right corner.
   const railWrap: CSSProperties = {
     width,
     flexShrink: 0,
     position: 'relative',
-    borderLeft: '1px solid var(--cl-line)',
-    background: 'var(--cl-paper)',
+    background:
+      'radial-gradient(60% 34% at 85% 0%, color-mix(in oklch, var(--cl-accent-soft) 55%, transparent), transparent 70%), var(--cl-paper-2)',
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
@@ -1209,19 +1255,24 @@ export function MissionRail({
         <span
           aria-hidden
           className={liveStatus === 'busy' ? 'cl-run-dot' : liveStatus ? 'cl-live-dot' : undefined}
-          style={{
-            width: 7,
-            height: 7,
-            borderRadius: '50%',
-            background:
+          style={(() => {
+            const c =
               liveStatus === 'busy'
                 ? 'var(--cl-violet)'
                 : liveStatus === 'waiting'
                   ? 'var(--cl-accent)'
                   : liveStatus
                     ? 'var(--cl-ok)'
-                    : 'var(--cl-ink-4)',
-          }}
+                    : 'var(--cl-ink-4)';
+            return {
+              width: 7,
+              height: 7,
+              borderRadius: '50%',
+              background: c,
+              // the design's glowing status LED — unlit when the session is offline
+              boxShadow: liveStatus ? `0 0 8px ${c}` : undefined,
+            };
+          })()}
         />
         <span
           className="font-mono"
@@ -1273,51 +1324,68 @@ export function MissionRail({
         </button>
       </div>
 
-      {/* Bento vitals — CONTEXT + SPEND + TASKS gauges, pinned above the flow */}
+      {/* pinned vitals — the CONTEXT island + one SPEND/TASKS island above the flow */}
       <div
         className="shrink-0"
         style={{
-          borderTop: '1.5px solid var(--cl-ink)',
-          borderBottom: '1px solid var(--cl-line)',
           display: 'grid',
-          gridTemplateColumns: '1fr 1fr',
           gap: 12,
-          padding: '16px 22px',
+          padding: '2px 20px 14px',
         }}
       >
         <ContextCard ctx={ctx} />
-        <GaugeCard
-          donut={<Donut pct={savingsPct} color="var(--cl-ok)" label={`${savingsPct}%`} />}
-          label="SPEND"
-          value={summary ? fmtCost(summary.estimatedCost) : '—'}
-          valueColor="var(--cl-accent-ink)"
-          sub={savings > 0 ? `cache −${fmtCost(savings)}` : 'cache savings'}
-          subColor="var(--cl-ok)"
-        />
-        <GaugeCard
-          donut={
-            <Donut
-              pct={tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0}
-              color="var(--cl-ink)"
-              label={tasks.length > 0 ? `${doneTasks}/${tasks.length}` : '—'}
-            />
-          }
-          label="TASKS"
-          value={tasks.length > 0 ? `${Math.round((doneTasks / tasks.length) * 100)}%` : '—'}
-          valueColor="var(--cl-ink)"
-          sub={
-            runningTasks > 0
-              ? `${runningTasks} running`
-              : tasks.length > 0
-                ? `${tasks.length - doneTasks} left`
-                : 'no tasks yet'
-          }
-          subColor="var(--cl-ink-4)"
-        />
+        <div
+          style={{
+            ...islandCard,
+            display: 'grid',
+            gridTemplateColumns: '1fr 1fr',
+            gap: 16,
+          }}
+        >
+          <GaugeCard
+            donut={<Donut pct={savingsPct} color="var(--cl-ok)" label={`${savingsPct}%`} />}
+            label="SPEND"
+            value={summary ? fmtCost(summary.estimatedCost) : '—'}
+            valueColor="var(--cl-accent-ink)"
+            sub={savings > 0 ? `cache −${fmtCost(savings)}` : 'cache savings'}
+            subColor="var(--cl-ok)"
+          />
+          <GaugeCard
+            donut={
+              <Donut
+                pct={tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0}
+                color="var(--cl-ink)"
+                label={tasks.length > 0 ? `${doneTasks}/${tasks.length}` : '—'}
+              />
+            }
+            label="TASKS"
+            value={tasks.length > 0 ? `${Math.round((doneTasks / tasks.length) * 100)}%` : '—'}
+            valueColor="var(--cl-ink)"
+            sub={
+              runningTasks > 0
+                ? `${runningTasks} running`
+                : tasks.length > 0
+                  ? `${tasks.length - doneTasks} left`
+                  : 'no tasks yet'
+            }
+            subColor="var(--cl-ink-4)"
+            divided
+          />
+        </div>
       </div>
 
-      {/* scrolling flow */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '0 22px 22px' }}>
+      {/* scrolling flow — a stack of islands */}
+      <div
+        style={{
+          flex: 1,
+          minHeight: 0,
+          overflowY: 'auto',
+          padding: '0 20px 20px',
+          display: 'flex',
+          flexDirection: 'column',
+          gap: 12,
+        }}
+      >
         {!sessionId && (
           <p className="cl-transcript-state">Waiting for the CLI session to register…</p>
         )}
@@ -1332,7 +1400,7 @@ export function MissionRail({
           </p>
         )}
 
-        {/* AGENTS — bento card, rows → transcript, trailing button → definition */}
+        {/* AGENTS — glass island, rows → transcript, trailing button → definition */}
         {agents.length > 0 && (
           <AgentsCard
             agents={agents}
@@ -1342,14 +1410,14 @@ export function MissionRail({
           />
         )}
 
-        {/* SKILLS — bento card, pills → output / definition / tool call */}
+        {/* SKILLS — glass island, pills → output / definition / tool call */}
         {skills.length > 0 && (
           <SkillsCard skills={skills} onOpenTool={onOpenTool} onOpenSkillDef={onOpenSkillDef} />
         )}
 
-        {/* CHANGES — grouped by repo area (comfortable) or a flat list (compact) */}
+        {/* CHANGES island — grouped by repo area (comfortable) or a flat list (compact) */}
         {changes.length > 0 && (
-          <>
+          <section style={{ ...islandCard, padding: '14px 16px' }}>
             <RailEyebrow
               label="CHANGES"
               n={changes.length}
@@ -1381,12 +1449,12 @@ export function MissionRail({
                     {g.files.map(renderFileRow)}
                   </div>
                 ))}
-          </>
+          </section>
         )}
 
-        {/* TASKS */}
+        {/* TASKS island */}
         {tasks.length > 0 && (
-          <>
+          <section style={{ ...islandCard, padding: '14px 16px' }}>
             <RailEyebrow label="TASKS" n={`${doneTasks}/${tasks.length}`} />
             {tasks.map(t => {
               // Extra detail the dedicated Tasks page shows: live activeForm,
@@ -1526,10 +1594,10 @@ export function MissionRail({
                 </div>
               );
             })}
-          </>
+          </section>
         )}
 
-        {/* ENVIRONMENT — read-only session setup, kept below the bento + changes */}
+        {/* ENVIRONMENT — slim glass pill with the read-only session setup */}
         <EnvironmentSection init={init} />
       </div>
     </aside>

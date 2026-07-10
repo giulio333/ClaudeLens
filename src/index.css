@@ -2822,162 +2822,253 @@ body {
   filter: saturate(0.4);
 }
 
-/* ── V2 "Outline + Focus" chat content alignment ────────────────────────
-   The reading column drops the continuous left rail/spine, pulls the role
-   orb inline into each turn header, and closes the header row with a
-   trailing hairline rule — matching the design's center Focus column. The
-   article measure tightens and timestamps fall away (the model tag stays). */
+/* ── "Isole di vetro" (design 2a) — glass-island message stream ─────────
+   Each turn is a floating glass card in a 48px-guttered grid: the rail keeps
+   the role avatar (32px rounded tile) with the turn number beneath it; the
+   body is a translucent island — assistant cards carry a soft accent aura in
+   the top-right corner. Timestamps ride the right edge of the in-card header.
+   Command / skill / question / plan / notification turns keep flat bodies
+   (their content is already its own card). */
 .cl-chat-reading .cl-transcript-inner::before {
   display: none; /* no continuous timeline spine */
 }
 .cl-chat-reading .cl-transcript-inner {
-  max-width: 880px;
+  max-width: 920px;
   margin: 0 auto;
   padding: 30px 24px 140px;
 }
 .cl-chat-reading .cl-turn {
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 48px minmax(0, 1fr);
   gap: 0;
+  margin-bottom: 18px;
 }
-/* the rail collapses to just the orb, pulled inline at the header's left */
 .cl-chat-reading .cl-turn-rail {
-  position: absolute;
-  left: 0;
-  top: 1px;
-  flex-direction: row;
-  padding-top: 0;
-  align-self: auto;
+  padding-top: 14px;
+  gap: 7px;
 }
-.cl-chat-reading .cl-turn-index,
 .cl-chat-reading .cl-turn-spine {
   display: none;
 }
 .cl-chat-reading .cl-turn-orb {
-  width: 20px;
-  height: 20px;
-  border-radius: 6px;
-  font-size: 9.5px;
+  width: 32px;
+  height: 32px;
+  border-radius: 10px;
+  font-size: 12px;
 }
+/* every island shows who's speaking — continuation turns keep their avatar */
+.cl-chat-reading .cl-turn--continuation .cl-turn-orb {
+  opacity: 1;
+  pointer-events: auto;
+}
+.cl-chat-reading .cl-turn--continuation .cl-turn-index {
+  visibility: visible;
+}
+.cl-chat-reading .cl-turn--continuation .cl-turn-rail {
+  padding-top: 14px;
+}
+.cl-chat-reading .cl-turn--tool-only {
+  margin-top: 0;
+}
+/* flat turns (command / skill / question / plan / notification) align their
+   content with the island tops */
 .cl-chat-reading .cl-turn-body {
-  padding-top: 0;
+  padding: 12px 0 0;
 }
+/* the glass island — conversation turns only */
+.cl-chat-reading .cl-turn--user .cl-turn-body,
+.cl-chat-reading .cl-turn--claude .cl-turn-body,
+.cl-chat-reading .cl-turn--agent .cl-turn-body {
+  padding: 15px 20px 16px;
+  border-radius: 18px;
+  border: 1px solid var(--cl-glass-edge-top);
+  background: var(--cl-glass-bg);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(18px) saturate(1.7);
+  backdrop-filter: blur(18px) saturate(1.7);
+}
+/* assistant islands carry the soft accent aura in the top-right corner */
+.cl-chat-reading .cl-turn--claude .cl-turn-body,
+.cl-chat-reading .cl-turn--agent .cl-turn-body {
+  background:
+    radial-gradient(
+      55% 90% at 100% 0%,
+      color-mix(in oklch, var(--cl-accent-soft) 80%, transparent),
+      transparent 60%
+    ),
+    var(--cl-glass-bg);
+}
+/* header inside the island */
 .cl-chat-reading .cl-turn-head {
-  position: relative;
-  padding-left: 28px; /* clear the inline orb */
-  min-height: 20px;
-  margin-bottom: 14px;
+  min-height: 0;
+  margin-bottom: 10px;
 }
 .cl-chat-reading .cl-turn-who {
-  font-size: 10px;
-  letter-spacing: 0.16em;
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
 }
-/* drop the timestamp + its separator; keep the model tag (no leading dot) */
-.cl-chat-reading .cl-turn-head time,
-.cl-chat-reading .cl-turn-head .cl-turn-sep:not(.cl-turn-sep--model),
-.cl-chat-reading .cl-turn-sep--model {
+/* CLAUDE wordmark — accent gradient text (agent turns keep their own tint) */
+.cl-chat-reading .cl-turn--claude .cl-turn-who {
+  background: linear-gradient(90deg, var(--cl-accent-ink), var(--cl-accent));
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+/* timestamp rides the right edge of the header; the separator dots fall away */
+.cl-chat-reading .cl-turn-sep {
   display: none;
 }
-/* trailing hairline rule closes the header row */
-.cl-chat-reading .cl-turn-head::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  min-width: 24px;
-  margin-left: 10px;
-  background: var(--cl-line);
+.cl-chat-reading .cl-turn-head time {
+  order: 90;
+  margin-left: auto;
 }
-.cl-chat-reading .cl-turn--continuation .cl-turn-head::after {
-  display: none;
+.cl-chat-reading .cl-turn-copy {
+  order: 91;
+  margin-left: 0;
 }
-/* neutralise the auto-margins that would eat the hairline; the hover actions
-   float over the right end of the rule instead of pushing it out */
-.cl-chat-reading .cl-turn-copy,
+.cl-chat-reading .cl-turn-export {
+  order: 92;
+}
 .cl-chat-reading .cl-turn-tool-count {
   margin-left: 0;
 }
-.cl-chat-reading .cl-turn-copy,
-.cl-chat-reading .cl-turn-export {
-  position: absolute;
-  top: 0;
-  background: var(--cl-paper);
+/* header pills go glassy inside the island */
+.cl-chat-reading .cl-turn-tools-hidden-badge {
+  background: var(--cl-glass-bg);
+  border-color: var(--cl-glass-edge-top);
 }
-.cl-chat-reading .cl-turn-export {
-  right: 0;
+/* file chips → small glass pills (the design's MD chips) */
+.cl-chat-reading .cl-turn-files {
+  margin-top: 12px;
+  gap: 6px;
 }
-.cl-chat-reading .cl-turn-copy {
-  right: 24px;
+.cl-chat-reading .cl-file-chip {
+  gap: 4px;
+  padding: 3px 8px;
+  background: var(--cl-glass-bg);
+  border: 1px solid var(--cl-glass-edge-top);
+}
+/* standalone "tools hidden" rows align with the island column */
+.cl-chat-reading .cl-turn-tools-hidden {
+  margin: 0 0 18px 48px;
 }
 
-/* right-edge minimap timeline — a hairline track with proportional dots */
+/* left-edge turn navigator — the "TURNS" glass capsule (design 2a): rotated
+   label on top, one tick bar per turn, the active turn as a numbered accent
+   circle, the total count at the foot. Ticks are positioned proportionally in
+   a track whose height adapts to the turn count (see FocusMinimap.tsx). */
 .cl-focus-rail {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
   bottom: 0;
-  width: 46px;
+  width: 64px;
   display: flex;
+  align-items: center;
   justify-content: center;
   padding: 64px 0 104px;
   pointer-events: none;
   z-index: 12;
 }
+.cl-turns-capsule {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  max-height: 100%;
+  padding: 14px 9px;
+  border-radius: 999px;
+  background: var(--cl-glass-bg);
+  border: 1px solid var(--cl-glass-edge-top);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    var(--cl-glass-lift);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+}
+.cl-turns-cap-label {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font: 700 8px var(--font-mono);
+  letter-spacing: 0.14em;
+  color: var(--cl-ink-4);
+}
+.cl-turns-total {
+  font: 600 8.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
+}
 .cl-focus-rail-track {
   position: relative;
-  width: 2px;
-  border-radius: 2px;
-  background: var(--cl-line);
-  pointer-events: auto;
-  /* Adaptive ruler sizes — set inline by FocusMinimap from the measured
-     per-dot spacing; these are the roomy (low-density) fallbacks. */
-  --dot: 7px;
-  --dot-accent: 9px;
-  --dot-active: 11px;
-  --ring: 3px;
-  --ring-active: 3px;
+  width: 24px;
+  flex: 0 1 auto;
 }
-.cl-focus-dot {
+/* one tick bar per turn — width/colour set inline (--w/--c) by the component */
+.cl-focus-tick {
   position: absolute;
   left: 50%;
-  width: var(--dot);
-  height: var(--dot);
+  width: var(--w, 10px);
+  height: 3px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
-  background: var(--c);
+  border-radius: 2px;
+  background: var(--c, var(--cl-ink-4));
+  opacity: 0.4;
   transform: translate(-50%, -50%);
   cursor: pointer;
   transition:
-    width 0.12s,
-    height 0.12s,
-    box-shadow 0.18s,
-    opacity 0.2s;
+    opacity 0.15s,
+    width 0.12s;
 }
-/* Invisible hit area keeps tiny high-density dots easy to hover/click. */
-.cl-focus-dot::before {
+.cl-focus-tick[data-accent] {
+  opacity: 0.62;
+}
+.cl-focus-tick:hover {
+  opacity: 0.9;
+}
+.cl-focus-tick[data-dim] {
+  opacity: 0.14;
+}
+/* Invisible hit area keeps dense ticks easy to hover/click. */
+.cl-focus-tick::before {
   content: '';
   position: absolute;
   left: 50%;
   top: 50%;
-  width: 16px;
-  height: 16px;
+  width: 26px;
+  height: 14px;
   transform: translate(-50%, -50%);
 }
-.cl-focus-dot[data-accent] {
-  width: var(--dot-accent);
-  height: var(--dot-accent);
-  box-shadow: 0 0 0 var(--ring) color-mix(in oklch, var(--c) 18%, transparent);
-}
-.cl-focus-dot[data-active] {
-  width: var(--dot-active);
-  height: var(--dot-active);
-  box-shadow: 0 0 0 var(--ring-active) color-mix(in oklch, var(--c) 30%, transparent);
-}
-.cl-focus-dot[data-dim] {
-  opacity: 0.3;
-}
-.cl-focus-dot .lbl {
+/* the active turn — numbered accent circle, the scroll-spy cursor */
+.cl-focus-current {
   position: absolute;
-  right: calc(100% + 10px);
+  left: 50%;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transform: translate(-50%, -50%);
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font: 700 9.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  box-shadow:
+    0 0 0 3px color-mix(in oklch, var(--cl-accent) 25%, transparent),
+    0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 60%, transparent);
+  cursor: pointer;
+  z-index: 2;
+}
+/* hover label — to the right of the capsule */
+.cl-focus-tick .lbl,
+.cl-focus-current .lbl {
+  position: absolute;
+  left: calc(100% + 14px);
   top: 50%;
   transform: translateY(-50%);
   white-space: nowrap;
@@ -2993,8 +3084,10 @@ body {
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.15s;
+  z-index: 3;
 }
-.cl-focus-dot:hover .lbl {
+.cl-focus-tick:hover .lbl,
+.cl-focus-current:hover .lbl {
   opacity: 1;
 }
 
@@ -3032,14 +3125,14 @@ body {
   bottom: 184px;
 }
 /* Embedded Lens (Terminal ↔ Lens split): no composer (so `data-composer` is
-   absent) and no minimap — the mission rail lives in its own flex column. Clip
-   any horizontal overflow so a turn can never bleed under the rail, and let the
-   reading column run wider since there's no minimap gutter to reserve. */
+   absent) — the mission rail lives in its own flex column. Clip any horizontal
+   overflow so a turn can never bleed under the rail; the reading column keeps
+   a slightly wider run but leaves the left gutter for the TURNS capsule. */
 .cl-chat-workspace--focus:not([data-composer]) .cl-chat-feed {
   overflow-x: hidden;
 }
 .cl-chat-workspace--focus:not([data-composer]) .cl-chat-reading {
-  width: 90%;
+  width: 86%;
 }
 .cl-composer {
   position: absolute;
@@ -4038,7 +4131,8 @@ body {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-focus-dot,
+  .cl-focus-tick,
+  .cl-focus-current,
   .cl-pill-filter,
   .cl-pill-more,
   .cl-pill-dock,
@@ -8667,7 +8761,8 @@ button.cl-task-group-head:disabled {
     transparent 100%
   );
 }
-:root[data-theme='dark'] .cl-focus-dot .lbl {
+:root[data-theme='dark'] .cl-focus-tick .lbl,
+:root[data-theme='dark'] .cl-focus-current .lbl {
   box-shadow: 0 8px 20px -8px oklch(0 0 0 / 0.6);
 }
 
