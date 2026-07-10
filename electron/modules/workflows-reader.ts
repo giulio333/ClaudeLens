@@ -214,8 +214,10 @@ export function parseRunFile(rawJson: unknown, ctx: ParseRunCtx): WorkflowRunDet
   if (typeof rawJson !== 'object' || rawJson === null) return null;
   const r = rawJson as Record<string, unknown>;
 
+  // Same gate as getWorkflowRun: an unsafe id would list a row the detail
+  // handler then refuses, leaving an unopenable entry in the UI.
   const runId = asString(r.runId);
-  if (!runId) return null;
+  if (!isSafeRunId(runId)) return null;
 
   const progress = Array.isArray(r.workflowProgress) ? r.workflowProgress : [];
   const agents: WorkflowAgentRow[] = [];
@@ -233,7 +235,8 @@ export function parseRunFile(rawJson: unknown, ctx: ParseRunCtx): WorkflowRunDet
     0;
 
   const sessionId = originSessionFromScriptPath(r.scriptPath, ctx.projectPath) ?? ctx.stateSessionId;
-  const errorAgentCount = agents.filter(a => a.state === 'error').length;
+  // 'failed' is rendered as an error state everywhere in the UI — count it too.
+  const errorAgentCount = agents.filter(a => a.state === 'error' || a.state === 'failed').length;
 
   return {
     runId,
@@ -361,7 +364,7 @@ export async function getProjectWorkflows(projectPath: string): Promise<Workflow
             stateSessionId: dirName,
             fallbackMtimeMs: safeMtimeMs(full),
           });
-          if (!detail) continue;
+          if (!detail || knownRunIds.has(detail.runId)) continue;
           knownRunIds.add(detail.runId);
           summaries.push(summaryOf(detail));
         } catch {
