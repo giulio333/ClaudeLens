@@ -1785,7 +1785,9 @@ async function startWatcher() {
     // Le inbox dei team (~/.claude/teams/*/inboxes/*.json) sono code transienti
     // riscritte ogni pochi secondi durante l'attività: senza ignore sarebbero
     // una tempesta di data:changed. Del registry interessa solo config.json.
-    ignored: /[/\\]teams[/\\][^/\\]+[/\\]inboxes[/\\]/,
+    // Match anche la dir inboxes stessa (non solo i file dentro), così
+    // chokidar non ci scende e non installa watcher su una dir ad alto churn.
+    ignored: /[/\\]teams[/\\][^/\\]+[/\\]inboxes([/\\]|$)/,
   });
 
   const notify = () => {
