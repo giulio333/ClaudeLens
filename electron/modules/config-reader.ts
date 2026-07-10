@@ -1,5 +1,8 @@
 import os from 'os';
+import { existsSync } from 'fs';
+import { join } from 'path';
 import { resolveClaudeExecutablePath } from '../utils';
+import { readTextFile, withTimeout } from './safe-fs';
 
 // Reads the *effective* Claude Code configuration through the official Agent SDK
 // (`@anthropic-ai/claude-agent-sdk`) instead of hand-parsing the settings files.
@@ -52,6 +55,30 @@ export interface EffectiveConfig {
 }
 
 const INIT_TIMEOUT_MS = 30_000;
+// resolveSettings has no abort mechanism of its own: reading the settings
+// cascade of a project on iCloud can hang forever on a dataless file, leaving
+// the config views (and the chat composer) stuck loading. Cap it.
+const SETTINGS_TIMEOUT_MS = 10_000;
+const PROBE_TIMEOUT_MS = 5_000;
+
+// resolveSettings reads the project files with SYNC fs, so a stalled read (a
+// dataless iCloud file whose materialization hangs) blocks the whole main
+// process — no JS timeout can interrupt it (verified live: a 10s Promise.race
+// fired only after the sync read returned at ~32s). Probe the same files
+// asynchronously first: a successful probe also materializes them, and a
+// failed one lets us skip the SDK calls instead of freezing the app.
+async function probeUnreadableFile(dir: string): Promise<string | null> {
+  const candidates = [
+    join(dir, 'CLAUDE.md'),
+    join(dir, 'CLAUDE.local.md'),
+    join(dir, '.claude', 'settings.json'),
+    join(dir, '.claude', 'settings.local.json'),
+  ].filter(f => existsSync(f));
+  const results = await Promise.all(
+    candidates.map(f => readTextFile(f, PROBE_TIMEOUT_MS).then(() => null, () => f)),
+  );
+  return results.find(f => f !== null) ?? null;
+}
 
 async function loadSdk() {
   return import('@anthropic-ai/claude-agent-sdk');
@@ -113,6 +140,23 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
 
 export async function readEffectiveConfig(cwd?: string): Promise<EffectiveConfig> {
   const dir = cwd && cwd.length ? cwd : os.homedir();
+
+  const stuck = await probeUnreadableFile(dir);
+  if (stuck) {
+    const msg =
+      `Cannot read ${stuck}: the file exists but its content is not available on disk ` +
+      `(likely evicted by iCloud and not downloading). Open or download the file, then retry.`;
+    return {
+      cwd: dir,
+      init: null,
+      initError: msg,
+      effective: {},
+      provenance: {},
+      sources: [],
+      settingsError: msg,
+    };
+  }
+
   const sdk = await loadSdk();
 
   let effective: Record<string, unknown> = {};
@@ -120,7 +164,11 @@ export async function readEffectiveConfig(cwd?: string): Promise<EffectiveConfig
   let sources: SettingsSourceEntry[] = [];
   let settingsError: string | null = null;
   try {
-    const resolved = await sdk.resolveSettings({ cwd: dir });
+    const resolved = await withTimeout(
+      sdk.resolveSettings({ cwd: dir }),
+      SETTINGS_TIMEOUT_MS,
+      `resolveSettings timed out after ${SETTINGS_TIMEOUT_MS}ms — a settings file may not be materialized (iCloud/network path): ${dir}`,
+    );
     effective = (resolved.effective as Record<string, unknown>) ?? {};
     provenance = Object.fromEntries(
       Object.entries(resolved.provenance ?? {}).map(([k, v]) => [

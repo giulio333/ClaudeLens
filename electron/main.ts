@@ -19,6 +19,7 @@ import {
   writeClaudeMdFile,
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
+import { readTextFile } from './modules/safe-fs';
 import { readChatSessionViaSdk, readSubagentTranscriptViaSdk } from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
@@ -512,7 +513,7 @@ ipcMain.handle('cost:getByProject', async (_event, hash: string) => {
 
 ipcMain.handle('claudeMd:getGlobal', async () => {
   try {
-    return ok(readGlobalClaudeMd(CLAUDE_DIR));
+    return ok(await readGlobalClaudeMd(CLAUDE_DIR));
   } catch (e) {
     return err(e);
   }
@@ -520,7 +521,7 @@ ipcMain.handle('claudeMd:getGlobal', async () => {
 
 ipcMain.handle('claudeMd:getHierarchy', async (_event, realPath: string) => {
   try {
-    return ok(getClaudeMdHierarchy(realPath));
+    return ok(await getClaudeMdHierarchy(realPath));
   } catch (e) {
     return err(e);
   }
@@ -600,9 +601,8 @@ function resolveSkillFile(skillPath: string, relPath: string): string {
 
 ipcMain.handle('skills:readFile', async (_event, skillPath: string, relPath: string) => {
   try {
-    const fs = require('fs') as typeof import('fs');
     const safePath = resolveSkillFile(skillPath, relPath);
-    return ok(fs.readFileSync(safePath, 'utf-8'));
+    return ok(await readTextFile(safePath));
   } catch (e) {
     return err(e);
   }
@@ -1013,7 +1013,7 @@ ipcMain.handle('rules:getByProject', async (_event, realPath: string) => {
 
 ipcMain.handle('skills:getGlobal', async () => {
   try {
-    return ok(getGlobalSkills());
+    return ok(await getGlobalSkills());
   } catch (e) {
     return err(e);
   }
@@ -1021,7 +1021,7 @@ ipcMain.handle('skills:getGlobal', async () => {
 
 ipcMain.handle('skills:getAll', async (_event, realPath: string) => {
   try {
-    return ok(getAllSkills(realPath));
+    return ok(await getAllSkills(realPath));
   } catch (e) {
     return err(e);
   }
@@ -1029,7 +1029,7 @@ ipcMain.handle('skills:getAll', async (_event, realPath: string) => {
 
 ipcMain.handle('agents:getGlobal', async () => {
   try {
-    return ok(getGlobalAgents());
+    return ok(await getGlobalAgents());
   } catch (e) {
     return err(e);
   }
@@ -1037,7 +1037,7 @@ ipcMain.handle('agents:getGlobal', async () => {
 
 ipcMain.handle('agents:getByProject', async (_event, realPath: string) => {
   try {
-    return ok(getProjectAgents(realPath));
+    return ok(await getProjectAgents(realPath));
   } catch (e) {
     return err(e);
   }
@@ -1045,7 +1045,7 @@ ipcMain.handle('agents:getByProject', async (_event, realPath: string) => {
 
 ipcMain.handle('plugins:getAll', async () => {
   try {
-    return ok(getInstalledPlugins());
+    return ok(await getInstalledPlugins());
   } catch (e) {
     return err(e);
   }
