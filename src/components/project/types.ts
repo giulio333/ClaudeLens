@@ -21,6 +21,10 @@ export type View =
   | { type: 'project-config'; project: { hash: string; realPath: string } }
   | { type: 'project-plans'; project: { hash: string; realPath: string } }
   | { type: 'plan-detail'; project: { hash: string; realPath: string }; plan: Plan }
+  | { type: 'project-workflows'; project: { hash: string; realPath: string } }
+  | { type: 'workflow-detail'; project: { hash: string; realPath: string }; sessionId: string; runId: string }
+  | { type: 'project-teams'; project: { hash: string; realPath: string } }
+  | { type: 'team-detail'; project: { hash: string; realPath: string }; teamName: string }
   | { type: 'project-claudemd'; project: { hash: string; realPath: string }; layer: ClaudeMdLayer }
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }

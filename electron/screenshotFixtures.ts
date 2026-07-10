@@ -573,6 +573,165 @@ const MOCK_PLANS = [
   },
 ];
 
+// ─── Workflow runs (Workflow tool multi-agent orchestration) ──────────────────
+const WF_SCRIPT = `export const meta = {
+  name: 'code-review',
+  description: 'Review the current branch across correctness + cleanup angles',
+  phases: [{ title: 'Scope' }, { title: 'Find' }, { title: 'Verify' }],
+}
+const scope = await agent('Establish the review scope', { schema: SCOPE })
+const findings = await parallel(ANGLES.map(a => () => agent(a.prompt, { schema: FINDINGS })))
+// … verify + synthesize …
+return { confirmed }`;
+
+const wfAgent = (over: Record<string, unknown>) => ({
+  index: 0, label: 'agent', agentId: '', phaseIndex: 1, phaseTitle: 'Find',
+  model: 'claude-fable-5', state: 'done', attempt: 1,
+  tokens: 24000, toolCalls: 6, durationMs: 62000,
+  promptPreview: 'Find correctness bugs in the changed files.',
+  resultPreview: '{"findings":[]}',
+  ...over,
+});
+
+const MOCK_WORKFLOW_DETAILS: Record<string, object> = {
+  'wf_5c8a12f0-abc': {
+    runId: 'wf_5c8a12f0-abc', sessionId: 'wf-sess-1', workflowName: 'code-review',
+    status: 'completed', degraded: false,
+    startTime: Date.parse(minsAgo(18)), timestamp: minsAgo(18), durationMs: 434000,
+    agentCount: 6, errorAgentCount: 0, phaseCount: 3, totalTokens: 439789, totalToolCalls: 96,
+    args: 'high', defaultModel: 'claude-fable-5',
+    summary: 'Workflow-backed code review — one finder per correctness angle plus one covering cleanup, verified adversarially.',
+    scriptPath: '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/code-review-wf_5c8a12f0-abc.js',
+    taskId: 'wgjx17skg', script: WF_SCRIPT,
+    logs: ['high review: 5 changed files', 'find: 6 candidates pooled', 'verify: 4 confirmed / 2 refuted'],
+    result: { confirmed: 4, refuted: 2 },
+    phases: [
+      { title: 'Scope', detail: 'Pin the diff, changed files, applicable conventions' },
+      { title: 'Find', detail: 'One finder per correctness angle plus one for cleanup' },
+      { title: 'Verify', detail: 'One independent verifier per candidate' },
+    ],
+    agents: [
+      wfAgent({ index: 1, label: 'scope', phaseIndex: 1, phaseTitle: 'Scope', agentId: 'a0e579301a85ad036', lastToolName: 'Bash', lastToolSummary: 'git diff HEAD' }),
+      wfAgent({ index: 2, label: 'find:correctness', agentId: 'a1581f738351a2154', lastToolName: 'Grep' }),
+      wfAgent({ index: 3, label: 'find:cleanup', agentId: 'a303dcfdf3f46aa32', lastToolName: 'Read' }),
+      wfAgent({ index: 4, label: 'verify:race', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a44a9b21cc7810def', tokens: 31000, toolCalls: 8 }),
+      wfAgent({ index: 5, label: 'verify:bounds', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a55b0c32dd8921eff', tokens: 28000 }),
+      wfAgent({ index: 6, label: 'synthesize', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a66c1d43ee9032f00', model: 'claude-opus-4-8' }),
+    ],
+  },
+  'wf_9d21bb31-def': {
+    runId: 'wf_9d21bb31-def', sessionId: 'wf-sess-1', workflowName: 'sensitive-audit',
+    status: 'completed', degraded: false,
+    startTime: Date.parse(minsAgo(140)), timestamp: minsAgo(140), durationMs: 268000,
+    agentCount: 5, errorAgentCount: 3, phaseCount: 2, totalTokens: 402423, totalToolCalls: 65,
+    args: 'medium', defaultModel: 'claude-opus-4-8',
+    summary: 'A completed run that lies: most agents died on a session limit, so the report was an empty false-negative.',
+    scriptPath: '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/sensitive-audit-wf_9d21bb31-def.js',
+    taskId: 'wqje0jvsx', script: WF_SCRIPT,
+    logs: ['medium audit: 5 clusters', 'ERROR: agent audit:auth failed — session limit reached', 'ERROR: agent audit:ipc failed — session limit reached'],
+    result: { confirmed: 0, note: 'false negative — see per-agent errors' },
+    phases: [
+      { title: 'Audit', detail: 'Deep-read sensitive clusters' },
+      { title: 'Verify', detail: 'One skeptic per cluster' },
+    ],
+    agents: [
+      wfAgent({ index: 1, label: 'audit:chat-lifecycle', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a7c09fc048ead9b4b', model: 'claude-opus-4-8' }),
+      wfAgent({ index: 2, label: 'audit:auth', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a8d10fd159cae5c2c', model: 'claude-opus-4-8', state: 'error', tokens: 0, toolCalls: 0, durationMs: 0, error: 'session limit reached', resultPreview: undefined }),
+      wfAgent({ index: 3, label: 'audit:ipc', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a9e21fe26adbf6d3d', model: 'claude-opus-4-8', state: 'error', tokens: 0, toolCalls: 0, durationMs: 0, error: 'session limit reached', resultPreview: undefined }),
+      wfAgent({ index: 4, label: 'verify:chat-lifecycle', phaseIndex: 2, phaseTitle: 'Verify', agentId: 'aa032f0371ec07e4e', model: 'claude-opus-4-8', attempt: 2 }),
+      wfAgent({ index: 5, label: 'verify:auth', phaseIndex: 2, phaseTitle: 'Verify', agentId: 'ab143f1482fd18f5f', model: 'claude-opus-4-8', state: 'error', tokens: 0, error: 'session limit reached', resultPreview: undefined }),
+    ],
+  },
+};
+
+const MOCK_WORKFLOWS = [
+  {
+    sessionId: 'wf-sess-1',
+    filename: 'wf-sess-1.jsonl',
+    runs: [
+      {
+        runId: 'wf_5c8a12f0-abc', sessionId: 'wf-sess-1', workflowName: 'code-review',
+        status: 'completed', degraded: false,
+        startTime: Date.parse(minsAgo(18)), timestamp: minsAgo(18), durationMs: 434000,
+        agentCount: 6, errorAgentCount: 0, phaseCount: 3, totalTokens: 439789, totalToolCalls: 96,
+        args: 'high', defaultModel: 'claude-fable-5',
+      },
+      {
+        runId: 'wf_9d21bb31-def', sessionId: 'wf-sess-1', workflowName: 'sensitive-audit',
+        status: 'completed', degraded: false,
+        startTime: Date.parse(minsAgo(140)), timestamp: minsAgo(140), durationMs: 268000,
+        agentCount: 5, errorAgentCount: 3, phaseCount: 2, totalTokens: 402423, totalToolCalls: 65,
+        args: 'medium', defaultModel: 'claude-opus-4-8',
+      },
+    ],
+  },
+];
+
+// ─── Agent teams ───────────────────────────────────────────────────────────────
+const teamMember = (over: Record<string, unknown>) => ({
+  name: 'member',
+  color: 'blue',
+  model: 'haiku',
+  description: '',
+  prompt: '',
+  joinedAt: Date.parse(minsAgo(25)),
+  planModeRequired: false,
+  permissionMode: 'bypassPermissions',
+  cwd: '',
+  source: 'both',
+  messageCount: 14,
+  toolCallCount: 9,
+  totalTokens: 52_000,
+  transcripts: [
+    {
+      sessionId: 'team-sess-1',
+      filename: 'team-sess-1.jsonl',
+      agentId: 'amember-89c154cc382a8dc1',
+      mtimeMs: Date.parse(minsAgo(20)),
+    },
+  ],
+  ...over,
+});
+
+const MOCK_TEAM_DETAIL = {
+  teamName: 'session-f78e79be',
+  displayName: 'session-f78e79be',
+  sessionId: 'team-sess-1',
+  filename: 'team-sess-1.jsonl',
+  sessionIds: ['team-sess-1'],
+  createdAt: Date.parse(minsAgo(30)),
+  lastActivity: Date.parse(minsAgo(18)),
+  hasConfig: true,
+  memberCount: 4,
+  memberNames: ['check-changelog', 'check-claudemd', 'check-readme', 'check-contributing'],
+  memberColors: ['blue', 'green', 'yellow', 'purple'],
+  transcriptCount: 4,
+  memberTokens: [480_000, 620_000, 1_100_000, 0],
+  totalTokens: 2_200_000,
+  messageCount: 42,
+  members: [
+    teamMember({ name: 'check-changelog', color: 'blue', description: 'Audit CHANGELOG', prompt: 'Check that CHANGELOG.md is up to date with package.json and recent git tags; report missing versions and format issues.', totalTokens: 480_000 }),
+    teamMember({ name: 'check-claudemd', color: 'green', description: 'Audit CLAUDE.md', prompt: 'Verify CLAUDE.md against the current codebase: npm scripts, module list, test coverage, conventions.', totalTokens: 620_000 }),
+    teamMember({ name: 'check-readme', color: 'yellow', description: 'Audit README', prompt: 'Verify README.md: features vs real code, install/build instructions, broken links, stale sections.', totalTokens: 1_100_000 }),
+    teamMember({ name: 'check-contributing', color: 'purple', description: 'Audit CONTRIBUTING', prompt: 'Check CONTRIBUTING.md against package.json scripts, CI workflows and repo conventions.', source: 'config-only', transcripts: [], messageCount: 0, toolCallCount: 0, totalTokens: 0 }),
+  ],
+  events: [
+    { timestamp: Date.parse(minsAgo(25)), from: 'team-lead', to: 'check-changelog', summary: 'Audit CHANGELOG', text: 'Check that CHANGELOG.md is up to date with package.json and recent git tags.', kind: 'dispatch' },
+    { timestamp: Date.parse(minsAgo(25)), from: 'team-lead', to: 'check-claudemd', summary: 'Audit CLAUDE.md', text: 'Verify CLAUDE.md against the current codebase.', kind: 'dispatch' },
+    { timestamp: Date.parse(minsAgo(24)), from: 'team-lead', to: 'check-readme', summary: 'Audit README', text: 'Verify README.md: features vs real code, broken links, stale sections.', kind: 'dispatch' },
+    { timestamp: Date.parse(minsAgo(21)), from: 'check-readme', to: 'team-lead', summary: 'README audit — 1 issue found', text: 'The Workflows feature is fully implemented but missing from the Features section. Everything else checks out.', kind: 'message' },
+    { timestamp: Date.parse(minsAgo(20)), from: 'check-changelog', to: 'team-lead', summary: 'CHANGELOG outdated since v1.2.0', text: 'CHANGELOG.md only lists 3 versions; 18 released versions (v1.6.3–v2.1.5) are missing compared to git tags.', kind: 'message' },
+    { timestamp: Date.parse(minsAgo(19)), from: 'team-lead', to: 'check-claudemd', summary: 'Send me the report', text: 'Please send the concise discrepancy report via SendMessage.', kind: 'message' },
+    { timestamp: Date.parse(minsAgo(18)), from: 'check-claudemd', to: 'team-lead', summary: 'CLAUDE.md: 8 undocumented modules', text: 'Eight modules under electron/modules/ are missing from the docs, and the test list is incomplete.', kind: 'message' },
+  ],
+  leadSessionIdFromConfig: 'f78e79be-b5a5-4082-a707-1a335b523067',
+  configPath: '/Users/demo/.claude/teams/session-f78e79be/config.json',
+};
+
+const MOCK_TEAMS = [
+  (({ members: _m, events: _e, configPath: _c, ...s }) => s)(MOCK_TEAM_DETAIL),
+];
+
 // ─── Sessioni agent live / background ──────────────────────────────────────────
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
 // mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
@@ -1053,6 +1212,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'ai:run', 'ai:stop',
     'live:getActiveSessions', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
     'tasks:getByProject', 'plans:getByProject',
+    'workflows:getByProject', 'workflows:getRun',
+    'teams:getByProject', 'teams:getDetail',
     'settings:getCleanupPeriodDays',
     'sessions:getSubagents', 'sessions:getArtifacts', 'sessions:deleteSession',
     'plugins:getAll',
@@ -1144,6 +1305,15 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('tasks:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_TASKS)));
   ipcMain.handle('plans:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_PLANS)));
+  ipcMain.handle('workflows:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_WORKFLOWS)));
+  ipcMain.handle('workflows:getRun', (_e: unknown, _hash: string, _sessionId: string, runId: string) =>
+    ok(MOCK_WORKFLOW_DETAILS[runId] ?? MOCK_WORKFLOW_DETAILS['wf_5c8a12f0-abc']));
+  // Teams also carry the sessionIds array (all rotated lead ids) — rewrite it in
+  // step with the attached sessionId, or the Mission Control rail's THIS SESSION
+  // tag would never match a fixture session.
+  ipcMain.handle('teams:getByProject', (_e: unknown, hash: string) =>
+    ok(attachToSessions(hash, MOCK_TEAMS).map(t => ({ ...t, sessionIds: [t.sessionId] }))));
+  ipcMain.handle('teams:getDetail', () => ok(MOCK_TEAM_DETAIL));
 
   // Finestra di retention fissa così i conteggi demo sono deterministici
   // a prescindere dalle settings reali della macchina.

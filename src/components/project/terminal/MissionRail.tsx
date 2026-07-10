@@ -7,12 +7,14 @@ import {
   useGlobalAgents,
   useProjectAgents,
   useProjectTasks,
+  useProjectTeams,
   usePlugins,
   useSessionList,
   useSessionSubagents,
 } from '../../../hooks/useIPC';
 import type { Agent, Skill } from '../../../hooks/useIPC';
-import type { ChatMessage, InitInfo } from '../../../types';
+import type { ActiveSession, ChatMessage, InitInfo, TeamSummary } from '../../../types';
+import { fmtRelative, liveLeadSession, memberColor, minutesSince, teamLabel } from '../teams/utils';
 import {
   buildProcessedMessages,
   correlateSessionAgents,
@@ -37,7 +39,8 @@ import { fmtCost, fmt } from '../utils';
  * a borderless rail over a soft accent aura, with a pinned vitals band — the
  * CONTEXT WINDOW island ("how full is my context?", conic aura + big %) and one
  * vitals island pairing SPEND (cost + cache-savings ring) and TASKS (done/total
- * ring) — then a scrolling flow of AGENTS (violet island, rows click → full
+ * ring) — then a scrolling flow of TEAMS (project-wide agent teams, live-first,
+ * rows click → team detail overlay), AGENTS (violet island, rows click → full
  * transcript), SKILLS (pills, click → output), file CHANGES **grouped by repo
  * area** with proportional diff bars, the detailed TASKS list, and ENVIRONMENT
  * (a slim glass pill with the session's read-only setup from the SDK init —
@@ -960,6 +963,225 @@ function SkillsCard({
   );
 }
 
+/* ── TEAMS island ─────────────────────────────────────────────────────── */
+
+type TeamRailRow = { team: TeamSummary; lead: ActiveSession | undefined };
+
+/** One team row inside the TEAMS island — triage-grade: title, honest lead
+ *  status, size/recency strip, member chips. The whole row is the single click
+ *  target (→ team detail overlay); the jump to the lead session lives inside
+ *  the detail, where its consequences can be made explicit.
+ *
+ *  Status semantics: LEAD LIVE (+ WORKING/WAITING from the registry) describes
+ *  the *lead session*, not the teammates' work — the label says so. The real
+ *  team-activity signal is `lastActivity` (teammate-transcript mtime): a live
+ *  team gone quiet for minutes is the stuck signature, surfaced as "quiet Nm". */
+function TeamRow({
+  team,
+  lead,
+  title,
+  isThisSession,
+  onOpen,
+}: {
+  team: TeamSummary;
+  lead: ActiveSession | undefined;
+  title: string;
+  isThisSession: boolean;
+  onOpen: () => void;
+}) {
+  const live = !!lead;
+  const quietMins = live ? minutesSince(team.lastActivity) : 0;
+  const quiet = live && quietMins >= 5;
+  const visibleMembers = team.memberNames.slice(0, 4);
+  const hiddenCount = team.memberNames.length - visibleMembers.length;
+  const statusStyle = (color: string): CSSProperties => ({
+    fontSize: 9,
+    fontWeight: 700,
+    letterSpacing: '0.12em',
+    color,
+    whiteSpace: 'nowrap',
+  });
+  return (
+    <button
+      type="button"
+      className="tmc-row w-full text-left"
+      title="Open team detail"
+      onClick={onOpen}
+      style={{
+        display: 'flex',
+        flexDirection: 'column',
+        gap: 7,
+        padding: '9px 4px',
+        margin: '0 -4px',
+        borderTop: '1px solid var(--cl-line-soft)',
+        borderRadius: 6,
+        cursor: 'pointer',
+      }}
+    >
+      <span className="flex items-center w-full" style={{ gap: 8 }}>
+        <span
+          className="truncate min-w-0"
+          style={{ font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}
+        >
+          {title}
+        </span>
+        {isThisSession && (
+          <span
+            className="font-mono shrink-0"
+            title="This team is anchored to the session you are viewing"
+            style={{
+              fontSize: 8.5,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              padding: '2px 6px',
+              borderRadius: 999,
+              color: 'var(--cl-accent-ink)',
+              border: '1px solid color-mix(in oklch, var(--cl-accent) 35%, var(--cl-line))',
+            }}
+          >
+            THIS SESSION
+          </span>
+        )}
+        <span style={{ flex: 1 }} />
+        {live ? (
+          <span
+            className="font-mono shrink-0 inline-flex items-center"
+            style={{ gap: 6 }}
+            title="The team's lead session is alive in the session registry — this reflects the lead session, not each teammate"
+          >
+            <span
+              className="cl-live-dot"
+              aria-hidden
+              style={{
+                width: 6,
+                height: 6,
+                borderRadius: '50%',
+                background: 'var(--cl-ok)',
+                boxShadow: '0 0 8px var(--cl-ok)',
+              }}
+            />
+            <span style={statusStyle('var(--cl-ok)')}>LEAD LIVE</span>
+            {lead.status === 'busy' && <span style={statusStyle('var(--cl-violet-ink)')}>WORKING</span>}
+            {lead.status === 'waiting' && (
+              <span style={statusStyle('var(--cl-accent-ink)')}>WAITING</span>
+            )}
+          </span>
+        ) : team.hasConfig ? (
+          <span className="font-mono shrink-0" style={statusStyle('var(--cl-ink-4)')}>
+            ENDED
+          </span>
+        ) : (
+          <span
+            className="font-mono shrink-0"
+            style={statusStyle('var(--cl-ink-4)')}
+            title="Team configuration is unavailable; transcript history is preserved"
+          >
+            HISTORICAL
+          </span>
+        )}
+      </span>
+      <span
+        className="font-mono w-full truncate"
+        style={{ fontSize: 10, fontVariantNumeric: 'tabular-nums', color: 'var(--cl-ink-3)' }}
+      >
+        {team.memberCount} {team.memberCount === 1 ? 'member' : 'members'} · {team.transcriptCount}{' '}
+        {team.transcriptCount === 1 ? 'transcript' : 'transcripts'}
+        {team.sessionIds.length > 1 && ` · ${team.sessionIds.length} sessions`}
+        {team.lastActivity > 0 &&
+          (quiet ? (
+            <>
+              {' · '}
+              <span
+                style={{ color: 'var(--cl-accent-ink)', fontWeight: 700 }}
+                title="Lead session is alive but no teammate transcript has changed for a while — the team may be stuck"
+              >
+                quiet {quietMins}m
+              </span>
+            </>
+          ) : (
+            ` · last activity ${fmtRelative(team.lastActivity)}`
+          ))}
+      </span>
+      <span className="flex flex-wrap w-full" style={{ gap: 6 }}>
+        {visibleMembers.map((name, i) => (
+          <span
+            key={name}
+            className="cl-team-chip font-mono"
+            style={{ fontSize: 10, padding: '1px 7px' }}
+          >
+            <i style={{ background: memberColor(team.memberColors[i] ?? '') }} />
+            {name}
+          </span>
+        ))}
+        {hiddenCount > 0 && (
+          <span
+            className="cl-team-chip font-mono"
+            style={{ fontSize: 10, padding: '1px 7px', color: 'var(--cl-ink-4)' }}
+          >
+            +{hiddenCount}
+          </span>
+        )}
+      </span>
+    </button>
+  );
+}
+
+/** Full-width TEAMS island — the project's agent teams, live-first. Project-wide
+ *  by design: Mission Control opens on whatever session the user works in (often
+ *  not a team lead), and a session-scoped list would silently vanish there —
+ *  "no teams in the project" and "no teams in this session" would be
+ *  indistinguishable. Teams touching the focused session get a THIS SESSION tag
+ *  instead. List-level data only (TeamSummary never opens member transcripts). */
+function TeamsCard({
+  rows,
+  sessionId,
+  titleOf,
+  onOpenTeam,
+}: {
+  rows: TeamRailRow[];
+  sessionId: string | null;
+  titleOf: (team: TeamSummary) => string;
+  onOpenTeam: (teamName: string) => void;
+}) {
+  const liveCount = rows.filter(r => r.lead).length;
+  return (
+    <section style={{ ...islandCard, padding: '14px 16px' }}>
+      <RailEyebrow
+        label="TEAMS"
+        n={rows.length}
+        extra={
+          liveCount > 0 ? (
+            <span
+              className="font-mono inline-flex items-center"
+              style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--cl-ok)' }}
+            >
+              <span
+                className="cl-live-dot"
+                aria-hidden
+                style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-ok)' }}
+              />
+              {liveCount} LIVE
+            </span>
+          ) : undefined
+        }
+      />
+      {rows.map(({ team, lead }) => (
+        <TeamRow
+          key={team.teamName}
+          team={team}
+          lead={lead}
+          title={titleOf(team)}
+          isThisSession={
+            !!sessionId &&
+            (team.sessionIds.includes(sessionId) || team.leadSessionIdFromConfig === sessionId)
+          }
+          onOpen={() => onOpenTeam(team.teamName)}
+        />
+      ))}
+    </section>
+  );
+}
+
 /* ── the rail ─────────────────────────────────────────────────────────── */
 
 export function MissionRail({
@@ -972,6 +1194,7 @@ export function MissionRail({
   onOpenAgent,
   onOpenSkillDef,
   onOpenAgentDef,
+  onOpenTeam,
 }: {
   hash: string;
   /** Null until the CLI registers itself in `~/.claude/sessions/` (a few seconds). */
@@ -986,6 +1209,8 @@ export function MissionRail({
   onOpenSkillDef: (skill: Skill) => void;
   /** Deep-link an agent row to its definition (read-only overlay in the parent). */
   onOpenAgentDef: (agent: Agent) => void;
+  /** Open a team's detail (the existing TeamDetailView, hosted in the parent's overlay). */
+  onOpenTeam: (teamName: string) => void;
 }) {
   const filename = sessionId ? `${sessionId}.jsonl` : null;
   const { data: messages, isError, error, refetch } = useChatSession(hash, filename);
@@ -1027,6 +1252,22 @@ export function MissionRail({
   const liveStatus = useMemo(
     () => activeSessions?.find(s => s.sessionId === sessionId)?.status,
     [activeSessions, sessionId]
+  );
+
+  // Agent teams — project-wide (see TeamsCard), not gated on the sessionId
+  // latch. Live teams float first (the reader already sorts by lastActivity
+  // desc, so each partition keeps recency order).
+  const { data: teams } = useProjectTeams(hash);
+  const teamRows = useMemo(() => {
+    const rows = (teams ?? []).map(team => ({
+      team,
+      lead: liveLeadSession(team, activeSessions ?? []),
+    }));
+    return [...rows.filter(r => r.lead), ...rows.filter(r => !r.lead)];
+  }, [teams, activeSessions]);
+  const teamTitleOf = useCallback(
+    (team: TeamSummary) => teamLabel(team, sessionList?.find(s => s.filename === team.filename)),
+    [sessionList]
   );
 
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -1122,7 +1363,11 @@ export function MissionRail({
   const doneTasks = tasks.filter(t => t.status === 'completed').length;
   const runningTasks = tasks.filter(t => t.status === 'in_progress').length;
   const empty =
-    agents.length === 0 && skills.length === 0 && changes.length === 0 && tasks.length === 0;
+    agents.length === 0 &&
+    skills.length === 0 &&
+    changes.length === 0 &&
+    tasks.length === 0 &&
+    teamRows.length === 0;
 
   // Borderless rail (design 2a): the islands float over a paper-2 canvas with a
   // soft accent aura bleeding in from the top-right corner.
@@ -1398,6 +1643,16 @@ export function MissionRail({
           <p className="cl-transcript-state">
             Agents, skills and file changes will appear here as Claude works.
           </p>
+        )}
+
+        {/* TEAMS — glass island, project-wide, rows → team detail overlay */}
+        {teamRows.length > 0 && (
+          <TeamsCard
+            rows={teamRows}
+            sessionId={sessionId}
+            titleOf={teamTitleOf}
+            onOpenTeam={onOpenTeam}
+          />
         )}
 
         {/* AGENTS — glass island, rows → transcript, trailing button → definition */}

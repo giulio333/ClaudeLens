@@ -186,6 +186,133 @@ export interface PlanGroup {
   plans: Plan[]
 }
 
+// Workflow runs of the Claude Code Workflow tool. Manually mirrored from
+// electron/modules/workflows-reader.ts (the established IPC type-sync pattern).
+export interface WorkflowAgentRow {
+  index: number
+  label: string
+  agentId: string
+  phaseIndex: number
+  phaseTitle: string
+  model: string
+  state: string
+  attempt: number
+  startedAt?: number
+  queuedAt?: number
+  completedAt?: number
+  durationMs?: number
+  tokens?: number
+  toolCalls?: number
+  lastToolName?: string
+  lastToolSummary?: string
+  promptPreview?: string
+  resultPreview?: string
+  error?: string
+}
+
+export interface WorkflowPhase {
+  title: string
+  detail?: string
+}
+
+export interface WorkflowRunSummary {
+  runId: string
+  sessionId: string
+  workflowName: string
+  status: string
+  degraded: boolean
+  startTime: number
+  timestamp: string
+  durationMs: number
+  agentCount: number
+  errorAgentCount: number
+  phaseCount: number
+  totalTokens: number
+  totalToolCalls: number
+  args: string
+  defaultModel: string
+}
+
+export interface WorkflowGroup {
+  sessionId: string
+  filename: string
+  runs: WorkflowRunSummary[]
+}
+
+export interface WorkflowRunDetail extends WorkflowRunSummary {
+  phases: WorkflowPhase[]
+  agents: WorkflowAgentRow[]
+  logs: string[]
+  result: unknown
+  summary: string
+  script: string | null
+  scriptPath: string
+  taskId: string
+  orphanAgentIds?: string[]
+}
+
+// Agent teams (in-process teammates coordinated by a team-lead). Manually
+// mirrored from electron/modules/teams-reader.ts (the established IPC
+// type-sync pattern).
+export interface TeamMemberTranscript {
+  sessionId: string
+  filename: string
+  agentId: string
+  mtimeMs: number
+}
+
+export interface TeamMemberInfo {
+  name: string
+  color: string
+  model: string
+  description: string
+  prompt: string
+  joinedAt: number
+  planModeRequired: boolean
+  permissionMode: string
+  cwd: string
+  source: 'both' | 'config-only' | 'transcript-only'
+  transcripts: TeamMemberTranscript[]
+  messageCount: number
+  toolCallCount: number
+  totalTokens: number
+}
+
+export interface TeamEvent {
+  timestamp: number
+  from: string
+  to: string
+  summary: string
+  text: string
+  kind: 'dispatch' | 'message'
+}
+
+export interface TeamSummary {
+  teamName: string
+  displayName: string
+  sessionId: string
+  filename: string
+  sessionIds: string[]
+  createdAt: number
+  lastActivity: number
+  hasConfig: boolean
+  memberCount: number
+  memberNames: string[]
+  memberColors: string[]
+  transcriptCount: number
+  /** Usage tokens per member, parallel to memberNames (mtime-cached list scan). */
+  memberTokens: number[]
+  totalTokens: number
+  messageCount: number
+  leadSessionIdFromConfig: string | null
+}
+
+export interface TeamDetail extends TeamSummary {
+  members: TeamMemberInfo[]
+  events: TeamEvent[]
+  configPath: string | null
+}
+
 export interface RuleFile {
   filename: string
   content: string

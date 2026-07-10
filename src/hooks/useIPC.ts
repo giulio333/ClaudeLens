@@ -36,6 +36,16 @@ import type {
   Plan,
   PlanStatus,
   PlanGroup,
+  WorkflowGroup,
+  WorkflowRunSummary,
+  WorkflowRunDetail,
+  WorkflowAgentRow,
+  WorkflowPhase,
+  TeamSummary,
+  TeamDetail,
+  TeamMemberInfo,
+  TeamMemberTranscript,
+  TeamEvent,
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
@@ -87,6 +97,16 @@ export type {
   Plan,
   PlanStatus,
   PlanGroup,
+  WorkflowGroup,
+  WorkflowRunSummary,
+  WorkflowRunDetail,
+  WorkflowAgentRow,
+  WorkflowPhase,
+  TeamSummary,
+  TeamDetail,
+  TeamMemberInfo,
+  TeamMemberTranscript,
+  TeamEvent,
   EffectiveConfig,
   InitInfo,
   SettingsSourceEntry,
@@ -249,6 +269,18 @@ declare global {
       }
       plans: {
         getByProject: (hash: string) => Promise<IpcResult<PlanGroup[]>>
+      }
+      workflows: {
+        getByProject: (hash: string) => Promise<IpcResult<WorkflowGroup[]>>
+        getRun: (
+          hash: string,
+          sessionId: string,
+          runId: string
+        ) => Promise<IpcResult<WorkflowRunDetail | null>>
+      }
+      teams: {
+        getByProject: (hash: string) => Promise<IpcResult<TeamSummary[]>>
+        getDetail: (hash: string, teamName: string) => Promise<IpcResult<TeamDetail | null>>
       }
       skills: {
         getGlobal: () => Promise<IpcResult<Skill[]>>
@@ -492,6 +524,40 @@ export function useProjectPlans(hash: string | null) {
     queryKey: ['plans:project', hash],
     queryFn: () => unwrap(window.electronAPI.plans.getByProject(hash!)),
     enabled: hash !== null,
+  })
+}
+
+export function useProjectWorkflows(hash: string | null) {
+  return useQuery({
+    queryKey: ['workflows:project', hash],
+    queryFn: () => unwrap(window.electronAPI.workflows.getByProject(hash!)),
+    enabled: hash !== null,
+  })
+}
+
+// Full run detail, re-read on demand (watcher-live via useDataChangedRefetch).
+export function useWorkflowRun(hash: string | null, sessionId: string | null, runId: string | null) {
+  return useQuery({
+    queryKey: ['workflows:run', hash, sessionId, runId],
+    queryFn: () => unwrap(window.electronAPI.workflows.getRun(hash!, sessionId!, runId!)),
+    enabled: hash !== null && sessionId !== null && runId !== null,
+  })
+}
+
+export function useProjectTeams(hash: string | null) {
+  return useQuery({
+    queryKey: ['teams:project', hash],
+    queryFn: () => unwrap(window.electronAPI.teams.getByProject(hash!)),
+    enabled: hash !== null,
+  })
+}
+
+// Full team detail, re-read on demand (watcher-live via useDataChangedRefetch).
+export function useTeamDetail(hash: string | null, teamName: string | null) {
+  return useQuery({
+    queryKey: ['teams:detail', hash, teamName],
+    queryFn: () => unwrap(window.electronAPI.teams.getDetail(hash!, teamName!)),
+    enabled: hash !== null && teamName !== null,
   })
 }
 
@@ -928,6 +994,10 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries({ queryKey: ['rules:project'] })
       qc.invalidateQueries({ queryKey: ['tasks:project'] })
       qc.invalidateQueries({ queryKey: ['plans:project'] })
+      qc.invalidateQueries({ queryKey: ['workflows:project'] })
+      qc.invalidateQueries({ queryKey: ['workflows:run'] })
+      qc.invalidateQueries({ queryKey: ['teams:project'] })
+      qc.invalidateQueries({ queryKey: ['teams:detail'] })
       qc.invalidateQueries({ queryKey: ['skills:global'] })
       qc.invalidateQueries({ queryKey: ['skills:all'] })
       qc.invalidateQueries({ queryKey: ['agents:global'] })

@@ -20,6 +20,8 @@ import { AgentsLiveView } from '../agents-live/AgentsLiveView';
 import { TasksSection } from '../tasks/TasksSection';
 import { projectDisplayName } from '../shared/projectName';
 import { PlansSection } from '../plans/PlansSection';
+import { WorkflowsSection } from '../workflows/WorkflowsSection';
+import { TeamsSection } from '../teams/TeamsSection';
 import { ProjectConfigView } from '../settings/ProjectConfigView';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
@@ -54,6 +56,8 @@ export type ProjectSection =
   | 'live-agents'
   | 'tasks'
   | 'plans'
+  | 'workflows'
+  | 'teams'
   | 'config';
 
 type Project = { hash: string; realPath: string };
@@ -272,7 +276,7 @@ export function ProjectView({
   const [memGroupBy, setMemGroupBy] = useState<'none' | 'tag' | 'type'>('none');
   // Inline tag picker target for a memory tile (mirrors the session row picker).
   const [memPickerFor, setMemPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(
-    null,
+    null
   );
   const { data: memory } = useMemoryProject(project.hash);
   const { data: sessions = [] } = useSessionList(project.hash);
@@ -329,6 +333,10 @@ export function ProjectView({
 
   // ── Derived ──
   const projectName = projectDisplayName(project.realPath);
+  // Teams is an operational view rather than a project landing page. It keeps
+  // the project controls in a compact context bar so the team roster is visible
+  // in the first viewport.
+  const isTeamsSection = section === 'teams';
   const retentionDays = normalizeRetentionDays(cleanupDays);
   const statsSessions = useMemo(() => {
     if (nowMs === 0) return sessions;
@@ -386,7 +394,11 @@ export function ProjectView({
   // is keyed by project hash upstream), so the rows' memo never breaks on them.
   const openTerminal = useCallback(
     (s: SessionSummary) =>
-      onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') }),
+      onNavigate({
+        type: 'terminal',
+        project,
+        resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+      }),
     [onNavigate, project]
   );
   const openChat = useCallback(
@@ -558,8 +570,12 @@ export function ProjectView({
       }}
     >
       {/* ─── HERO ─────────────────────────────────────── */}
-      <section className={`cl-hero${liveProc ? ' is-live' : ''}`}>
-        <Lens />
+      <section
+        className={`cl-hero${liveProc && !isTeamsSection ? ' is-live' : ''}${
+          isTeamsSection ? ' cl-hero--compact cl-hero--teams' : ''
+        }`}
+      >
+        {!isTeamsSection && <Lens />}
         <div className="cl-hero-actions">
           <button
             className="cl-btn cl-btn--quiet"
@@ -583,6 +599,7 @@ export function ProjectView({
         <div className="cl-eyebrow">
           <span className="pip" />
           <span title={project.realPath}>Project · {project.realPath}</span>
+          {isTeamsSection && <span className="cl-hero-section-label">Teams</span>}
           <button
             type="button"
             className={`cl-eyebrow-pin${pinnedNow ? ' is-pinned' : ''}`}
@@ -611,14 +628,18 @@ export function ProjectView({
           <span>
             <b>{fmt(sessionCount)}</b> sessions / {retentionDays}d
           </span>
-          <span className="sep">·</span>
-          <span>
-            <b>
-              {tokensFmt.value}
-              {tokensFmt.unit}
-            </b>{' '}
-            tokens
-          </span>
+          {!isTeamsSection && (
+            <>
+              <span className="sep">·</span>
+              <span>
+                <b>
+                  {tokensFmt.value}
+                  {tokensFmt.unit}
+                </b>{' '}
+                tokens
+              </span>
+            </>
+          )}
           {lastActive && (
             <>
               <span className="sep">·</span>
@@ -907,8 +928,7 @@ export function ProjectView({
             )}
           </div>
           {(() => {
-            const showGroupBy =
-              (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
+            const showGroupBy = (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
             if (memTags.length === 0 && !showGroupBy) return null;
             return (
               <div className="cl-mem-toolbar">
@@ -1232,7 +1252,11 @@ export function ProjectView({
         <TasksSection
           project={project}
           onOpenChat={s =>
-            onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+            onNavigate({
+              type: 'terminal',
+              project,
+              resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+            })
           }
         />
       )}
@@ -1241,9 +1265,43 @@ export function ProjectView({
         <PlansSection
           project={project}
           onOpenChat={s =>
-            onNavigate({ type: 'terminal', project, resumeSessionId: s.filename.replace(/\.jsonl$/, '') })
+            onNavigate({
+              type: 'terminal',
+              project,
+              resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+            })
           }
           onOpenPlan={plan => onNavigate({ type: 'plan-detail', project, plan })}
+        />
+      )}
+
+      {section === 'workflows' && (
+        <WorkflowsSection
+          project={project}
+          onOpenChat={s =>
+            onNavigate({
+              type: 'terminal',
+              project,
+              resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+            })
+          }
+          onOpenRun={(sessionId, runId) =>
+            onNavigate({ type: 'workflow-detail', project, sessionId, runId })
+          }
+        />
+      )}
+
+      {section === 'teams' && (
+        <TeamsSection
+          project={project}
+          onOpenChat={s =>
+            onNavigate({
+              type: 'terminal',
+              project,
+              resumeSessionId: s.filename.replace(/\.jsonl$/, ''),
+            })
+          }
+          onOpenTeam={teamName => onNavigate({ type: 'team-detail', project, teamName })}
         />
       )}
 

@@ -24,6 +24,8 @@ import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
+import { getProjectWorkflows, getWorkflowRun } from './modules/workflows-reader';
+import { getProjectTeams, getTeamDetail } from './modules/teams-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { getInstalledPlugins } from './modules/plugins-reader';
@@ -92,6 +94,9 @@ app.commandLine.appendSwitch('use-mock-keychain');
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
 const PLANS_DIR = join(CLAUDE_DIR, 'plans');
+// Registry dei team di agenti: i config.json cambiano quando i membri joinano
+// (prima ancora che esistano transcript), quindi va osservato anche lui.
+const TEAMS_DIR = join(CLAUDE_DIR, 'teams');
 // installed_plugins.json: rinfresca la sezione Plugins su install/update/remove
 // (la cache dei plugin cambia spesso e non va osservata interamente).
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json');
@@ -954,6 +959,49 @@ ipcMain.handle('plans:getByProject', async (_event, hash: string) => {
   }
 });
 
+ipcMain.handle('workflows:getByProject', async (_event, hash: string) => {
+  try {
+    const projectPath = projectDir(hash);
+    const groups = await getProjectWorkflows(projectPath);
+    return ok(groups);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle(
+  'workflows:getRun',
+  async (_event, hash: string, sessionId: string, runId: string) => {
+    try {
+      const projectPath = projectDir(hash);
+      const run = await getWorkflowRun(projectPath, sessionId, runId);
+      return ok(run);
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+ipcMain.handle('teams:getByProject', async (_event, hash: string) => {
+  try {
+    const projectPath = projectDir(hash);
+    const teams = await getProjectTeams(projectPath);
+    return ok(teams);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('teams:getDetail', async (_event, hash: string, teamName: string) => {
+  try {
+    const projectPath = projectDir(hash);
+    const detail = await getTeamDetail(projectPath, teamName);
+    return ok(detail);
+  } catch (e) {
+    return err(e);
+  }
+});
+
 ipcMain.handle('rules:getByProject', async (_event, realPath: string) => {
   try {
     const rules = await readProjectRules(realPath);
@@ -1731,9 +1779,13 @@ async function startWatcher() {
   // depth 5: copre anche i transcript dei sub-agenti annidati nei workflow
   // ({hash}/{sessionId}/subagents/workflows/wf_*/agent-*.jsonl), non solo
   // quelli diretti ({hash}/{sessionId}/subagents/agent-*.jsonl, depth 3).
-  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, INSTALLED_PLUGINS_FILE], {
+  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, TEAMS_DIR, INSTALLED_PLUGINS_FILE], {
     ignoreInitial: true,
     depth: 5,
+    // Le inbox dei team (~/.claude/teams/*/inboxes/*.json) sono code transienti
+    // riscritte ogni pochi secondi durante l'attività: senza ignore sarebbero
+    // una tempesta di data:changed. Del registry interessa solo config.json.
+    ignored: /[/\\]teams[/\\][^/\\]+[/\\]inboxes[/\\]/,
   });
 
   const notify = () => {
