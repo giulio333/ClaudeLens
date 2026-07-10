@@ -1,6 +1,7 @@
-import { readFileSync, existsSync, readdirSync, statSync } from 'fs';
+import { existsSync, readdirSync, statSync } from 'fs';
 import { join, basename, relative, extname, sep } from 'path';
 import { CLAUDE_DIR } from '../utils';
+import { readTextFile } from './safe-fs';
 import { parseFrontmatter } from './frontmatter';
 import { SKILL_FIELDS, parseFields } from './entity-fields';
 
@@ -177,11 +178,11 @@ export function parseSkillMarkdown(content: string): {
  * to read. Shared by `readSkillsFromDir` and the plugin reader (which resolves
  * explicit, declared skill paths rather than scanning).
  */
-export function readSkillDir(skillDir: string, scope: 'global' | 'project' | 'plugin'): Skill | null {
+export async function readSkillDir(skillDir: string, scope: 'global' | 'project' | 'plugin'): Promise<Skill | null> {
   const skillMarkdownPath = join(skillDir, 'SKILL.md');
   if (!existsSync(skillMarkdownPath)) return null;
   try {
-    const rawContent = readFileSync(skillMarkdownPath, 'utf-8');
+    const rawContent = await readTextFile(skillMarkdownPath);
     const { frontmatter, body } = parseSkillMarkdown(rawContent);
     return {
       name: basename(skillDir),
@@ -206,40 +207,38 @@ export function readSkillDir(skillDir: string, scope: 'global' | 'project' | 'pl
   }
 }
 
-export function readSkillsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Skill[] {
+export async function readSkillsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Promise<Skill[]> {
   if (!existsSync(dir)) return [];
-
-  const skills: Skill[] = [];
 
   try {
     const entries = readdirSync(dir, { withFileTypes: true });
-
-    for (const entry of entries) {
-      if (entry.isDirectory()) {
-        const skill = readSkillDir(join(dir, entry.name), scope);
-        if (skill) skills.push(skill);
-      }
-    }
+    const skills = await Promise.all(
+      entries
+        .filter(entry => entry.isDirectory())
+        .map(entry => readSkillDir(join(dir, entry.name), scope)),
+    );
+    return skills.filter((s): s is Skill => s !== null);
   } catch (error) {
     console.error(`Errore leggendo skills da ${dir}: ${error}`);
+    return [];
   }
-
-  return skills;
 }
 
-export function getGlobalSkills(): Skill[] {
+export function getGlobalSkills(): Promise<Skill[]> {
   const skillsDir = join(CLAUDE_DIR, 'skills');
   return readSkillsFromDir(skillsDir, 'global');
 }
 
-export function getProjectSkills(realProjectPath: string): Skill[] {
+export function getProjectSkills(realProjectPath: string): Promise<Skill[]> {
   const skillsDir = join(realProjectPath, '.claude', 'skills');
   return readSkillsFromDir(skillsDir, 'project');
 }
 
-export function getAllSkills(realProjectPath: string): Skill[] {
-  const projectSkills = getProjectSkills(realProjectPath);
-  const globalSkills = getGlobalSkills();
+export async function getAllSkills(realProjectPath: string): Promise<Skill[]> {
+  const [projectSkills, globalSkills] = await Promise.all([
+    getProjectSkills(realProjectPath),
+    getGlobalSkills(),
+  ]);
 
   // Project skills hanno priorità, quindi filtriamo i global skills con lo stesso nome
   const projectNames = new Set(projectSkills.map(s => s.name));

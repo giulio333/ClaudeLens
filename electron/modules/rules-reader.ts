@@ -1,5 +1,5 @@
-import { readFileSync } from 'fs';
 import { join, basename } from 'path';
+import { readTextFile } from './safe-fs';
 import { glob } from 'glob';
 import { parseFrontmatter, getStringArray } from './frontmatter';
 
@@ -29,7 +29,7 @@ export async function readProjectRules(realProjectPath: string): Promise<RuleFil
 
     for (const filePath of files) {
       try {
-        const content = readFileSync(filePath, 'utf-8');
+        const content = await readTextFile(filePath);
         const paths = extractFrontmatterPaths(content);
 
         rules.push({
