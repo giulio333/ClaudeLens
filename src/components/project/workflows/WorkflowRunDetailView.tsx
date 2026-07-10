@@ -110,12 +110,15 @@ function RunBody({
       arr.push(a)
       byPhase.set(a.phaseIndex, arr)
     }
+    // Phase indices seen live are 1-based; detect the basis once from the data
+    // (a 1-based run never keys an agent at 0). A per-phase get(i+1) ?? get(i)
+    // probe would steal the next phase's agents on 0-based data and drop
+    // phase 0's rows entirely.
+    const base = byPhase.has(0) ? 0 : 1
     const out: { title: string; detail?: string; agents: WorkflowAgentRow[] }[] = []
     run.phases.forEach((p, i) => {
-      // Phase indices seen live are 1-based; tolerate 0-based too.
-      const agents = byPhase.get(i + 1) ?? byPhase.get(i) ?? []
-      byPhase.delete(i + 1)
-      byPhase.delete(i)
+      const agents = byPhase.get(i + base) ?? []
+      byPhase.delete(i + base)
       out.push({ title: p.title, detail: p.detail, agents })
     })
     const leftover = [...byPhase.values()].flat()
@@ -136,15 +139,17 @@ function RunBody({
           {run.args && <span className="cl-wf-args cl-mono">{run.args}</span>}
         </div>
         {run.summary && <p className="cl-wf-dhead-summary">{run.summary}</p>}
-        <div className="cl-wf-dhead-meta cl-mono">
-          <span>{fmtDate(new Date(run.startTime).toISOString())}</span>
-          {run.taskId && (
-            <>
-              <span className="sep">·</span>
-              <span>task {run.taskId}</span>
-            </>
-          )}
-        </div>
+        {(run.startTime > 0 || run.taskId) && (
+          <div className="cl-wf-dhead-meta cl-mono">
+            {run.startTime > 0 && <span>{fmtDate(new Date(run.startTime).toISOString())}</span>}
+            {run.taskId && (
+              <>
+                {run.startTime > 0 && <span className="sep">·</span>}
+                <span>task {run.taskId}</span>
+              </>
+            )}
+          </div>
+        )}
         <div className="cl-wf-statgrid">
           <StatChip label="Agents" value={String(run.agentCount)} />
           {run.errorAgentCount > 0 && <StatChip label="Errored" value={String(run.errorAgentCount)} accent />}
@@ -312,6 +317,12 @@ function AgentRow({
             <div className="cl-wf-preview">
               <span className="lbl cl-mono">prompt</span>
               <pre className="cl-wf-pre cl-mono">{agent.promptPreview}</pre>
+            </div>
+          )}
+          {agent.resultPreview && (
+            <div className="cl-wf-preview">
+              <span className="lbl cl-mono">result</span>
+              <pre className="cl-wf-pre cl-mono">{agent.resultPreview}</pre>
             </div>
           )}
           {canDrill && (
