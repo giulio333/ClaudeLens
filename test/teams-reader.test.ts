@@ -297,6 +297,24 @@ describe('scanMemberTranscript', () => {
     expect(scan.totalTokens).toBe(100 + 50 + 1000 + 200 + 80);
   });
 
+  it('captures summary when other attributes sit between teammate_id and summary', () => {
+    // Member-sent messages carry `color` between the two attributes (real
+    // on-disk format); the parser must not depend on attribute order.
+    const line = JSON.stringify({
+      type: 'user',
+      timestamp: '2026-07-09T19:30:00.000Z',
+      message: {
+        role: 'user',
+        content:
+          '<teammate-message teammate_id="check-changelog" color="blue" summary="CHANGELOG non aggiornato">\nReport completo qui.\n</teammate-message>',
+      },
+    });
+    const scan = scanMemberTranscript(line, 'check-readme');
+    expect(scan.events[0].from).toBe('check-changelog');
+    expect(scan.events[0].summary).toBe('CHANGELOG non aggiornato');
+    expect(scan.events[0].text).toBe('Report completo qui.');
+  });
+
   it('unescapes XML entities in attributes', () => {
     const line = JSON.stringify({
       type: 'user',

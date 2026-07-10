@@ -264,8 +264,16 @@ export interface TranscriptScan {
   totalTokens: number;
 }
 
-const TEAMMATE_MSG_RE =
-  /<teammate-message\s+teammate_id="([^"]*)"[^>]*?(?:\ssummary="([^"]*)")?[^>]*>\n?([\s\S]*?)<\/teammate-message>/;
+// The opening tag is matched whole and its attributes extracted separately:
+// attribute order is not fixed (member-sent messages carry `color` between
+// `teammate_id` and `summary`; lead messages don't), and an optional group
+// after a lazy quantifier never backtracks to capture a later attribute.
+const TEAMMATE_MSG_RE = /<teammate-message\s([^>]*)>\n?([\s\S]*?)<\/teammate-message>/;
+
+function tagAttr(attrs: string, name: string): string | null {
+  const m = new RegExp(`(?:^|\\s)${name}="([^"]*)"`).exec(attrs);
+  return m ? m[1] : null;
+}
 
 function unescapeAttr(s: string): string {
   return s
@@ -318,13 +326,15 @@ export function scanMemberTranscript(raw: string, memberName: string): Transcrip
     if (entry.type === 'user') {
       const m = TEAMMATE_MSG_RE.exec(contentText(message.content));
       if (!m) continue;
-      const text = m[3].trim();
+      const from = tagAttr(m[1], 'teammate_id');
+      if (from === null) continue;
+      const text = m[2].trim();
       if (isIdleNotification(text)) continue;
       out.events.push({
         timestamp,
-        from: unescapeAttr(m[1]),
+        from: unescapeAttr(from),
         to: memberName,
-        summary: unescapeAttr(m[2] ?? ''),
+        summary: unescapeAttr(tagAttr(m[1], 'summary') ?? ''),
         text,
         kind: sawDispatch ? 'message' : 'dispatch',
       });
@@ -552,13 +562,15 @@ function buildDetail(
   }
 
   const members = [...byName.values()];
-  const oldestTranscript = (m: TeamMemberInfo) =>
-    m.transcripts.length
+  // Single spawn-order key per member (joinedAt when the config still has it,
+  // else the oldest transcript mtime — both epoch ms): switching the key per
+  // pair is not a consistent total order when only some members carry joinedAt.
+  const spawnOrder = (m: TeamMemberInfo) =>
+    m.joinedAt ||
+    (m.transcripts.length
       ? m.transcripts[m.transcripts.length - 1].mtimeMs
-      : Number.MAX_SAFE_INTEGER;
-  members.sort((a, b) =>
-    a.joinedAt && b.joinedAt ? a.joinedAt - b.joinedAt : oldestTranscript(a) - oldestTranscript(b)
-  );
+      : Number.MAX_SAFE_INTEGER);
+  members.sort((a, b) => spawnOrder(a) - spawnOrder(b));
 
   const allTranscripts = members.flatMap(m => m.transcripts);
   // Session dirs by their newest transcript, newest session first.
@@ -670,6 +682,18 @@ export async function getTeamDetail(
         detail.events.push(...scan.events);
       }
     }
+    // A member→member message is recorded twice — as the sender's SendMessage
+    // tool call and as the receiver's inbound <teammate-message> — with
+    // slightly different timestamps. Same peer route + same text = the same
+    // message: keep the first record. Lead routes are recorded once only.
+    const seenPeer = new Set<string>();
+    detail.events = detail.events.filter(e => {
+      if (e.from === 'team-lead' || e.to === 'team-lead') return true;
+      const key = `${e.from}\u0000${e.to}\u0000${e.text}`;
+      if (seenPeer.has(key)) return false;
+      seenPeer.add(key);
+      return true;
+    });
     detail.events.sort((a, b) => a.timestamp - b.timestamp);
     rollupMetrics(detail);
     return detail;

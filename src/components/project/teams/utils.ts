@@ -1,5 +1,5 @@
 import type { ActiveSession, SessionSummary, TeamSummary } from '../../../types';
-import { sessionTitle } from '../utils';
+import { formatTokens, sessionTitle } from '../utils';
 
 /** A team is live when any session holding its transcripts (or the lead id
  *  recorded in the registry) is alive in the native session registry. The
@@ -89,16 +89,9 @@ export function minutesSince(epochMs: number): number {
   return Math.max(0, Math.floor((Date.now() - epochMs) / 60_000));
 }
 
-/** Compact token count for the distribution footer: 3_700_000 → '3.7m',
- *  52_000 → '52k', 980 → '980'. */
+/** Compact token count ('3.7m', '52k', '980') on the shared formatTokens
+ *  scale, so list, swimlanes, rail and detail all round the same way. */
 export function fmtTokens(n: number): string {
-  if (n >= 1_000_000) {
-    const m = n / 1_000_000;
-    return `${m >= 10 ? Math.round(m) : Math.round(m * 10) / 10}m`;
-  }
-  if (n >= 1_000) {
-    const k = n / 1_000;
-    return `${k >= 10 ? Math.round(k) : Math.round(k * 10) / 10}k`;
-  }
-  return String(n);
+  const { value, unit } = formatTokens(n);
+  return `${value}${unit}`;
 }

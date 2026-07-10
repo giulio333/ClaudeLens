@@ -11,8 +11,8 @@ import { TopBar } from '../shared/TopBar';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
 import { QueryError } from '../../QueryError';
 import Markdown from '../../Markdown';
-import { fmtDate, fmtModel, formatTokens, modelColor, sessionTitle } from '../utils';
-import { eventTime, fmtRelative, isTeamLive, memberColor } from './utils';
+import { fmtDate, fmtModel, modelColor, sessionTitle } from '../utils';
+import { eventTime, fmtRelative, fmtTokens, isTeamLive, memberColor } from './utils';
 import { TeamSwimlanes } from './TeamSwimlanes';
 
 type Project = { hash: string; realPath: string };
@@ -41,11 +41,6 @@ function permissionLabel(mode: string): string {
   if (mode === 'acceptEdits') return 'accept edits';
   if (mode === 'plan') return 'plan mode';
   return mode;
-}
-
-function fmtTok(n: number): string {
-  const { value, unit } = formatTokens(n);
-  return `${value}${unit}`;
 }
 
 /** Sender dot color: teammates keep their named data color, the lead (which
@@ -253,7 +248,7 @@ function TeamBody({
           </span>
           {teamTokens > 0 && (
             <span>
-              <b>{fmtTok(teamTokens)}</b>tokens
+              <b>{fmtTokens(teamTokens)}</b>tokens
             </span>
           )}
         </div>
@@ -382,7 +377,7 @@ function ConstellationGraph({
         const parts: string[] = [];
         const msgs = routeMessages.get(m.name) ?? 0;
         if (msgs > 0) parts.push(`${msgs} msg`);
-        if (m.totalTokens > 0) parts.push(fmtTok(m.totalTokens));
+        if (m.totalTokens > 0) parts.push(fmtTokens(m.totalTokens));
         if (parts.length === 0) return null;
         const x = (cubicAt(0.55, LEAD_X, CTRL_X1, CTRL_X2, MEMBER_X) / GRAPH_W) * 100;
         const y = cubicAt(0.55, leadY, leadY, memberY(i), memberY(i));
@@ -544,7 +539,7 @@ function MemberDossier({
         <div className="cl-tc-dossier-stats cl-mono">
           {member.totalTokens > 0 && (
             <span>
-              <b>{fmtTok(member.totalTokens)}</b> tok
+              <b>{fmtTokens(member.totalTokens)}</b> tok
             </span>
           )}
           {member.messageCount > 0 && (
