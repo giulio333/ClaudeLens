@@ -2,11 +2,22 @@ import { useMemo } from 'react';
 import { useProjectTeams, useSessionList, useActiveSessions } from '../../../hooks/useIPC';
 import type { SessionSummary, TeamSummary } from '../../../types';
 import { QueryError } from '../../QueryError';
+import { fmtDate, sessionTitle } from '../utils';
 import { fmtRelative, fmtTokens, isTeamLive, memberColor, teamLabel } from './utils';
 
 type Project = { hash: string; realPath: string };
 
 const MAX_MEMBER_CHIPS = 6;
+
+// A session header + its team cards. A multi-sessionId team (lead rotated ids
+// on resume) is anchored to its most recent session — the one `team.filename`
+// points to — rather than duplicated under every rotated id.
+type TeamGroup = {
+  filename: string;
+  sessionId: string;
+  session?: SessionSummary;
+  teams: TeamSummary[];
+};
 
 export function TeamsSection({
   project,
@@ -27,6 +38,27 @@ export function TeamsSection({
     return map;
   }, [sessions]);
 
+  // Teams grouped under their anchor session (pattern: PlansSection/TasksSection).
+  // The reader sorts teams by lastActivity desc, so first-appearance order keeps
+  // the groups in recency order too.
+  const groups = useMemo<TeamGroup[]>(() => {
+    const byFilename = new Map<string, TeamGroup>();
+    for (const team of teams) {
+      let g = byFilename.get(team.filename);
+      if (!g) {
+        g = {
+          filename: team.filename,
+          sessionId: team.sessionId,
+          session: sessionByFilename.get(team.filename),
+          teams: [],
+        };
+        byFilename.set(team.filename, g);
+      }
+      g.teams.push(team);
+    }
+    return [...byFilename.values()];
+  }, [teams, sessionByFilename]);
+
   return (
     <section className="cl-section cl-teams">
       <div className="cl-team-heading">
@@ -36,6 +68,8 @@ export function TeamsSection({
         </div>
         <span className="cl-team-count cl-mono">
           {teams.length} {teams.length === 1 ? 'team' : 'teams'}
+          {groups.length > 0 &&
+            ` · ${groups.length} ${groups.length === 1 ? 'session' : 'sessions'}`}
         </span>
       </div>
 
@@ -51,20 +85,37 @@ export function TeamsSection({
           spawns named teammates that work and message each other in-process.
         </div>
       ) : (
-        <div className="cl-team-list">
-          {teams.map(team => {
-            const session = sessionByFilename.get(team.filename);
-            return (
-              <TeamCard
-                key={team.teamName}
-                team={team}
-                leadSession={session}
-                live={isTeamLive(team, activeSessions)}
-                onOpenTeam={() => onOpenTeam(team.teamName)}
-                onOpenChat={session ? () => onOpenChat(session) : undefined}
-              />
-            );
-          })}
+        <div className="cl-team-groups">
+          {groups.map(g => (
+            <section key={g.filename} className="cl-plan-group">
+              <div className="cl-plan-eyebrow cl-mono">
+                <span className="dot" />
+                <span className="name">
+                  {g.session ? sessionTitle(g.session) : `Session ${g.sessionId.slice(0, 8)}`}
+                </span>
+                <span className="meta">
+                  {g.teams.length} {g.teams.length === 1 ? 'team' : 'teams'}
+                  {g.session?.date ? ` · ${fmtDate(g.session.date)}` : ''}
+                  {g.session && (
+                    <button type="button" className="open" onClick={() => onOpenChat(g.session!)}>
+                      open chat ↗
+                    </button>
+                  )}
+                </span>
+              </div>
+              <div className="cl-team-list is-grouped">
+                {g.teams.map(team => (
+                  <TeamCard
+                    key={team.teamName}
+                    team={team}
+                    leadSession={g.session}
+                    live={isTeamLive(team, activeSessions)}
+                    onOpenTeam={() => onOpenTeam(team.teamName)}
+                  />
+                ))}
+              </div>
+            </section>
+          ))}
         </div>
       )}
     </section>
@@ -72,19 +123,18 @@ export function TeamsSection({
 }
 
 /** "Slab card": dark member slab on the left (count, color dots, status),
- *  editorial body on the right with a token-distribution footer. */
+ *  editorial body on the right with a token-distribution footer. The session
+ *  chat entry lives on the group header ("open chat ↗"), not on the card. */
 function TeamCard({
   team,
   leadSession,
   live,
   onOpenTeam,
-  onOpenChat,
 }: {
   team: TeamSummary;
   leadSession?: SessionSummary;
   live: boolean;
   onOpenTeam: () => void;
-  onOpenChat?: () => void;
 }) {
   const title = teamLabel(team, leadSession);
   const visibleMembers = team.memberNames.slice(0, MAX_MEMBER_CHIPS);
@@ -142,18 +192,6 @@ function TeamCard({
             </span>
           </div>
           <div className="cl-team-card-actions">
-            {onOpenChat && (
-              <button
-                type="button"
-                className="cl-team-card-link cl-mono"
-                onClick={e => {
-                  e.stopPropagation();
-                  onOpenChat();
-                }}
-              >
-                Open chat ↗
-              </button>
-            )}
             <button
               type="button"
               className="cl-team-card-cta cl-mono"
