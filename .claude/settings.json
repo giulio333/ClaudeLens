@@ -1,5 +1,3 @@
 {
-  "enabledPlugins": {
-    "github@claude-plugins-official": true
-  }
+  "enabledPlugins": {}
 }
