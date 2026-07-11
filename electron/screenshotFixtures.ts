@@ -1345,8 +1345,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('workflows:getRun', (_e: unknown, _hash: string, _sessionId: string, runId: string) =>
     ok(MOCK_WORKFLOW_DETAILS[runId] ?? MOCK_WORKFLOW_DETAILS['wf_5c8a12f0-abc']));
   // Teams also carry the sessionIds array (all rotated lead ids) — rewrite it in
-  // step with the attached sessionId, or the Mission Control rail's THIS SESSION
-  // tag would never match a fixture session.
+  // step with the attached sessionId, or the Mission Control rail's
+  // session-scoped TEAMS island would never match a fixture session.
   ipcMain.handle('teams:getByProject', (_e: unknown, hash: string) =>
     ok(attachToSessions(hash, MOCK_TEAMS).map(t => ({ ...t, sessionIds: [t.sessionId] }))));
   ipcMain.handle('teams:getDetail', () => ok(MOCK_TEAM_DETAIL));

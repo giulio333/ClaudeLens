@@ -8264,6 +8264,21 @@ button.cl-task-group-head:disabled {
   padding-top: 24px;
   border-top: 1.5px solid var(--cl-ink);
 }
+/* Session-grouped teams: the groups wrapper carries the heavy top rule once;
+   each group's list sits flush under its session eyebrow. */
+.cl-team-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  margin-top: 22px;
+  padding-top: 24px;
+  border-top: 1.5px solid var(--cl-ink);
+}
+.cl-team-list.is-grouped {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: 0;
+}
 
 /* Slab card (design direction 1c): dark member slab + editorial body with a
    token-distribution footer. */
@@ -8402,7 +8417,6 @@ button.cl-task-group-head:disabled {
   align-items: flex-start;
   gap: 8px;
 }
-.cl-team-card-link,
 .cl-team-card-cta {
   padding: 6px 11px;
   border-radius: 7px;
@@ -8411,24 +8425,13 @@ button.cl-task-group-head:disabled {
   font-size: 11px;
   cursor: pointer;
   white-space: nowrap;
-}
-.cl-team-card-cta {
   border: 1px solid color-mix(in oklch, var(--cl-accent) 35%, var(--cl-line));
   color: var(--cl-accent-ink);
 }
 .cl-team-card-cta:hover {
   background: var(--cl-accent-soft);
 }
-.cl-team-card-link {
-  border: 1px solid var(--cl-line);
-  color: var(--cl-ink-3);
-}
-.cl-team-card-link:hover {
-  border-color: var(--cl-ink-4);
-  color: var(--cl-ink);
-}
-.cl-team-card-cta:focus-visible,
-.cl-team-card-link:focus-visible {
+.cl-team-card-cta:focus-visible {
   outline: 2px solid var(--cl-accent);
   outline-offset: 2px;
 }

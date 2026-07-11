@@ -980,13 +980,11 @@ function TeamRow({
   team,
   lead,
   title,
-  isThisSession,
   onOpen,
 }: {
   team: TeamSummary;
   lead: ActiveSession | undefined;
   title: string;
-  isThisSession: boolean;
   onOpen: () => void;
 }) {
   const live = !!lead;
@@ -1025,23 +1023,6 @@ function TeamRow({
         >
           {title}
         </span>
-        {isThisSession && (
-          <span
-            className="font-mono shrink-0"
-            title="This team is anchored to the session you are viewing"
-            style={{
-              fontSize: 8.5,
-              fontWeight: 700,
-              letterSpacing: '0.1em',
-              padding: '2px 6px',
-              borderRadius: 999,
-              color: 'var(--cl-accent-ink)',
-              border: '1px solid color-mix(in oklch, var(--cl-accent) 35%, var(--cl-line))',
-            }}
-          >
-            THIS SESSION
-          </span>
-        )}
         <span style={{ flex: 1 }} />
         {live ? (
           <span
@@ -1126,20 +1107,22 @@ function TeamRow({
   );
 }
 
-/** Full-width TEAMS island — the project's agent teams, live-first. Project-wide
- *  by design: Mission Control opens on whatever session the user works in (often
- *  not a team lead), and a session-scoped list would silently vanish there —
- *  "no teams in the project" and "no teams in this session" would be
- *  indistinguishable. Teams touching the focused session get a THIS SESSION tag
- *  instead. List-level data only (TeamSummary never opens member transcripts). */
+/** Full-width TEAMS island — the focused session's agent teams, live-first.
+ *  Session-scoped: Claude Code launches a team inside one session (the lead
+ *  *is* the session), so only teams whose rotated lead ids include the focused
+ *  session are listed. The island still renders whenever the project has teams
+ *  at all, with an explicit "No teams in this session" state — so "no teams in
+ *  the project" (island hidden) and "no teams in this session" stay
+ *  distinguishable. List-level data only (TeamSummary never opens member
+ *  transcripts). */
 function TeamsCard({
   rows,
-  sessionId,
+  projectTeamCount,
   titleOf,
   onOpenTeam,
 }: {
   rows: TeamRailRow[];
-  sessionId: string | null;
+  projectTeamCount: number;
   titleOf: (team: TeamSummary) => string;
   onOpenTeam: (teamName: string) => void;
 }) {
@@ -1165,19 +1148,24 @@ function TeamsCard({
           ) : undefined
         }
       />
-      {rows.map(({ team, lead }) => (
-        <TeamRow
-          key={team.teamName}
-          team={team}
-          lead={lead}
-          title={titleOf(team)}
-          isThisSession={
-            !!sessionId &&
-            (team.sessionIds.includes(sessionId) || team.leadSessionIdFromConfig === sessionId)
-          }
-          onOpen={() => onOpenTeam(team.teamName)}
-        />
-      ))}
+      {rows.length === 0 ? (
+        <p
+          className="font-mono"
+          style={{ fontSize: 10.5, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
+        >
+          No teams in this session · {projectTeamCount} in the project
+        </p>
+      ) : (
+        rows.map(({ team, lead }) => (
+          <TeamRow
+            key={team.teamName}
+            team={team}
+            lead={lead}
+            title={titleOf(team)}
+            onOpen={() => onOpenTeam(team.teamName)}
+          />
+        ))
+      )}
     </section>
   );
 }
@@ -1254,17 +1242,25 @@ export function MissionRail({
     [activeSessions, sessionId]
   );
 
-  // Agent teams — project-wide (see TeamsCard), not gated on the sessionId
-  // latch. Live teams float first (the reader already sorts by lastActivity
-  // desc, so each partition keeps recency order).
+  // Agent teams — scoped to the focused session (a team is launched inside one
+  // session: the lead *is* the session; see TeamsCard). Matching spans every
+  // rotated lead sessionId; the stale-prone config lead id is only a secondary
+  // signal, never the sole anchor. Live teams float first (the reader already
+  // sorts by lastActivity desc, so each partition keeps recency order).
   const { data: teams } = useProjectTeams(hash);
+  const projectTeamCount = teams?.length ?? 0;
   const teamRows = useMemo(() => {
-    const rows = (teams ?? []).map(team => ({
-      team,
-      lead: liveLeadSession(team, activeSessions ?? []),
-    }));
+    if (!sessionId) return [];
+    const rows = (teams ?? [])
+      .filter(
+        team => team.sessionIds.includes(sessionId) || team.leadSessionIdFromConfig === sessionId
+      )
+      .map(team => ({
+        team,
+        lead: liveLeadSession(team, activeSessions ?? []),
+      }));
     return [...rows.filter(r => r.lead), ...rows.filter(r => !r.lead)];
-  }, [teams, activeSessions]);
+  }, [teams, activeSessions, sessionId]);
   const teamTitleOf = useCallback(
     (team: TeamSummary) => teamLabel(team, sessionList?.find(s => s.filename === team.filename)),
     [sessionList]
@@ -1367,7 +1363,7 @@ export function MissionRail({
     skills.length === 0 &&
     changes.length === 0 &&
     tasks.length === 0 &&
-    teamRows.length === 0;
+    projectTeamCount === 0;
 
   // Borderless rail (design 2a): the islands float over a paper-2 canvas with a
   // soft accent aura bleeding in from the top-right corner.
@@ -1645,11 +1641,11 @@ export function MissionRail({
           </p>
         )}
 
-        {/* TEAMS — glass island, project-wide, rows → team detail overlay */}
-        {teamRows.length > 0 && (
+        {/* TEAMS — glass island, session-scoped, rows → team detail overlay */}
+        {sessionId && projectTeamCount > 0 && (
           <TeamsCard
             rows={teamRows}
-            sessionId={sessionId}
+            projectTeamCount={projectTeamCount}
             titleOf={teamTitleOf}
             onOpenTeam={onOpenTeam}
           />
