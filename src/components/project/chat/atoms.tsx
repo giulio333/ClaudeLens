@@ -48,7 +48,7 @@ export function LiveInTerminalBadge() {
 }
 
 export function PathChip({ path }: { path: string }) {
-  const parts = path.split('/')
+  const parts = path.split(/[\\/]/)
   const file = parts.pop() ?? path
   const dir = parts.join('/') || '/'
   return (
