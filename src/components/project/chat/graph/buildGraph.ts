@@ -59,13 +59,13 @@ export type TimelineModel = {
 
 function shortenPath(path: string, max = 36): string {
   if (path.length <= max) return path
-  const parts = path.split(/[\\/]/)
+  const parts = path.split(/[\\/]/).filter(Boolean)
   const tail = parts[parts.length - 1] ?? path
   return tail.length <= max ? `…/${tail}` : `${tail.slice(0, max - 1)}…`
 }
 
 function fileExt(path: string): string {
-  const tail = path.split(/[\\/]/).pop() ?? ''
+  const tail = path.split(/[\\/]/).filter(Boolean).pop() ?? ''
   const idx = tail.lastIndexOf('.')
   return idx > 0 ? tail.slice(idx + 1).toLowerCase() : ''
 }

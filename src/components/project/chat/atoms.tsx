@@ -48,6 +48,10 @@ export function LiveInTerminalBadge() {
 }
 
 export function PathChip({ path }: { path: string }) {
+  // NB: do NOT .filter(Boolean) here — the leading empty segment of an absolute
+  // POSIX path ("/a/b" → ["", "a", "b"]) is what reconstructs the leading slash
+  // in `dir` below. Split on both separators only, so a Windows path still yields
+  // the file name.
   const parts = path.split(/[\\/]/)
   const file = parts.pop() ?? path
   const dir = parts.join('/') || '/'

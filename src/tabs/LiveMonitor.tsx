@@ -8,7 +8,7 @@ import { projectDisplayName } from '../components/project/shared/projectName'
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getArg(input: Record<string, unknown>): string {
-  if (input.file_path) return '…/' + String(input.file_path).split(/[\\/]/).slice(-2).join('/')
+  if (input.file_path) return '…/' + String(input.file_path).split(/[\\/]/).filter(Boolean).slice(-2).join('/')
   if (input.command)   return String(input.command).slice(0, 48)
   if (input.pattern)   return String(input.pattern).slice(0, 48)
   if (input.query)     return String(input.query).slice(0, 48)
