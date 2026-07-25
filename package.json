@@ -39,7 +39,6 @@
     "test:watch": "vitest",
     "postinstall": "node scripts/fix-spawn-helper.cjs",
     "electron:build": "electron-builder",
-    "memory-stats": "npx ts-node ../scripts/memory-stats.ts",
     "screenshot": "SCREENSHOT_MODE=true concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on http://localhost:5173 dist-electron/main.js && electron .\""
   },
   "dependencies": {
@@ -111,9 +110,7 @@
     "files": [
       "dist/**/*",
       "dist-electron/**/*",
-      "icon4.icns",
-      "icon.png",
-      "icon-win.png"
+      "assets/**"
     ],
     "asarUnpack": [
       "node_modules/@anthropic-ai/claude-agent-sdk-*/**",
@@ -130,7 +127,7 @@
           ]
         }
       ],
-      "icon": "./icon4.icns"
+      "icon": "./assets/icon4.icns"
     },
     "linux": {
       "target": [
@@ -142,7 +139,7 @@
           ]
         }
       ],
-      "icon": "./icon.png",
+      "icon": "./assets/icon.png",
       "category": "Development"
     },
     "win": {
@@ -155,7 +152,7 @@
           ]
         }
       ],
-      "icon": "./icon-win.png"
+      "icon": "./assets/icon-win.png"
     }
   }
 }

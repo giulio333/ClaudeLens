@@ -409,10 +409,10 @@ function createWindow() {
   // la variante a sfondo trasparente, altrove quella con sfondo.
   const iconFile =
     process.platform === 'darwin'
-      ? 'icon4.icns'
+      ? 'assets/icon4.icns'
       : process.platform === 'win32'
-        ? 'icon-win.png'
-        : 'icon.png';
+        ? 'assets/icon-win.png'
+        : 'assets/icon.png';
   const iconPath = isDev ? join(__dirname, '..', iconFile) : join(app.getAppPath(), iconFile);
 
   mainWindow = new BrowserWindow({
