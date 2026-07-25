@@ -31,6 +31,8 @@ export interface BlueprintStep {
   id: string;
   /** Prompt template. `${args}`/`${<step-id>}` interpolate at runtime; any other `${expr}` is preserved verbatim. */
   prompt: string;
+  /** The source wrote the prompt as `` `...`.trim() `` — re-emit the call so whitespace stays stripped. */
+  promptTrim?: boolean;
   /** Native agent type (`.claude/agents/<name>.md`); omitted = default subagent. */
   agentType?: string;
   model?: string;
@@ -68,7 +70,7 @@ export type BlueprintNode =
       stages: PipelineStage[];
       leading?: string;
     }
-  | { kind: 'log'; message: string; leading?: string }
+  | { kind: 'log'; message: string; trim?: boolean; leading?: string }
   | {
       kind: 'code';
       source: string;
@@ -340,7 +342,7 @@ function agentCall(
     ctx.vars,
     opts.verbatimPrompt ?? ctx.hybrid
   );
-  return `agent(${prompt}, { ${options.join(', ')} })`;
+  return `agent(${prompt}${step.promptTrim ? '.trim()' : ''}, { ${options.join(', ')} })`;
 }
 
 function pushLeading(lines: string[], leading: string | undefined): void {
@@ -361,7 +363,8 @@ function emitNode(
     return;
   }
   if (node.kind === 'log') {
-    lines.push(`log(${emitPromptLiteral(node.message, ctx.known, ctx.vars, ctx.hybrid)})`);
+    const message = emitPromptLiteral(node.message, ctx.known, ctx.vars, ctx.hybrid);
+    lines.push(`log(${message}${node.trim ? '.trim()' : ''})`);
     return;
   }
   if (node.kind === 'step') {
