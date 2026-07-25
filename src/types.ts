@@ -417,6 +417,138 @@ export interface SkillInput {
   agent?: string
 }
 
+// ── Agent Studio ─────────────────────────────────────────────────────────────
+// Manually mirrored from electron/modules/studio-compiler.ts + studio-reader.ts
+// (schema model shared directly from electron/shared/studio-schema.ts)
+
+export type {
+  SchemaTypeName,
+  SchemaFieldModel,
+  SchemaNodeModel,
+} from '../electron/shared/studio-schema'
+import type { SchemaNodeModel as StudioSchemaNodeModel } from '../electron/shared/studio-schema'
+
+export interface BlueprintInput {
+  name: string
+  description?: string
+  required?: boolean
+}
+
+export interface BlueprintBrief {
+  goal: string
+  inputs: BlueprintInput[]
+  expectedOutput: string
+  successCriteria: string[]
+  onError: string
+}
+
+export interface BlueprintStep {
+  id: string
+  prompt: string
+  agentType?: string
+  model?: string
+  effort?: string
+  /** Verbatim JS literal for the agent() `schema` option (structured output). */
+  schemaSource?: string
+  /** Editable projection of schemaSource, derived when the literal is fully static. */
+  schemaModel?: StudioSchemaNodeModel
+  isolation?: string
+  /** Verbatim source of a computed label (template literal); `id` is a display fallback. */
+  dynamicLabel?: string
+  /** Original variable name from a parsed script, preserved on save. */
+  resultVar?: string
+  explicitPhase?: boolean
+}
+
+export type PipelineStage =
+  | { kind: 'agent'; params: string; step: BlueprintStep }
+  | { kind: 'code'; source: string }
+
+export type BlueprintNode =
+  | { kind: 'step'; step: BlueprintStep; leading?: string }
+  | { kind: 'parallel'; steps: BlueprintStep[]; leading?: string }
+  | {
+      kind: 'pipeline'
+      resultVar: string | null
+      itemsSource: string
+      stages: PipelineStage[]
+      leading?: string
+    }
+  | { kind: 'log'; message: string; leading?: string }
+  | {
+      kind: 'code'
+      source: string
+      leading?: string
+      /** For a `const NAME = {schema literal}`: the binding name, for display. */
+      schemaName?: string
+      /** Editable projection of the schema literal (present only when static). */
+      schemaModel?: StudioSchemaNodeModel
+    }
+
+export interface BlueprintPhase {
+  title: string
+  detail?: string
+  metaExtra?: Record<string, unknown>
+  leading?: string
+  nodes: BlueprintNode[]
+}
+
+export interface Blueprint {
+  header?: string
+  name: string
+  description: string
+  version: string
+  brief: BlueprintBrief
+  metaExtras?: Record<string, unknown>
+  preamble?: BlueprintNode[]
+  phases: BlueprintPhase[]
+  trailer?: string
+}
+
+export interface BlueprintIssue {
+  severity: 'error' | 'warning'
+  code: string
+  message: string
+  stepId?: string
+  phaseIndex?: number
+}
+
+export interface BlueprintSummary {
+  fileName: string
+  name: string
+  description: string
+  version: string
+  phaseCount: number
+  stepCount: number
+  parallelStepCount: number
+  agentTypes: string[]
+  updatedAt: string | null
+  structured: boolean
+  /** Verbatim JS nodes (code chips): 0 = fully visual, >0 = hybrid. */
+  codeNodeCount: number
+  errorCount: number
+  warningCount: number
+  scope: 'global' | 'project'
+  projectPath: string | null
+}
+
+export interface BlueprintDetail {
+  blueprint: Blueprint
+  fileName: string
+  scriptPath: string
+  source: string
+  structured: boolean
+  parseError: string | null
+  issues: BlueprintIssue[]
+  scope: 'global' | 'project'
+  projectPath: string | null
+}
+
+export interface StudioLibrary {
+  blueprints: BlueprintSummary[]
+  workflowsDir: string
+}
+
 export interface McpServer {
   name: string
   source: 'cloud' | 'local'

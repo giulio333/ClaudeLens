@@ -12971,3 +12971,67 @@ select.cl-opt-input {
   line-height: 1.45;
   color: var(--cl-ink-4);
 }
+
+/* ── Agent Studio · Canvas — "Vetro liquido" (design 1b) ─────────────────
+   Only the Canvas lens: the React Flow viewport goes full-bleed and the
+   control surfaces (phase rail, inspector, zoom controls, minimap) float on
+   top as liquid-glass slabs. Reuses the shared --cl-glass-* tokens, so it
+   tracks light/dark automatically. Scoped under .cl-studio-canvas so no other
+   view is affected. */
+.cl-studio-canvas {
+  position: relative;
+  border-radius: 18px;
+  overflow: hidden;
+  border: 1px solid var(--cl-line);
+}
+/* the frosted slab shared by the floating panels */
+.cl-studio-glass {
+  background: var(--cl-glass-bg-strong);
+  -webkit-backdrop-filter: blur(22px) saturate(1.8);
+  backdrop-filter: blur(22px) saturate(1.8);
+  border: 1px solid var(--cl-glass-border);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    0 24px 52px -24px oklch(0.25 0.03 60 / 0.4);
+}
+/* React Flow's own chrome, re-skinned to match the glass slabs */
+.cl-studio-canvas .react-flow__controls {
+  border-radius: 999px;
+  overflow: hidden;
+  gap: 2px;
+  padding: 5px;
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    0 16px 36px -18px oklch(0.25 0.03 60 / 0.4);
+  background: var(--cl-glass-bg-strong);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid var(--cl-glass-border);
+}
+.cl-studio-canvas .react-flow__controls-button {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cl-ink-2);
+  fill: currentColor;
+}
+.cl-studio-canvas .react-flow__controls-button:hover {
+  background: color-mix(in oklch, var(--cl-ink) 8%, transparent);
+  color: var(--cl-ink);
+}
+.cl-studio-canvas .react-flow__minimap {
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    0 16px 36px -18px oklch(0.25 0.03 60 / 0.4);
+  background: var(--cl-glass-bg-strong);
+  -webkit-backdrop-filter: blur(20px) saturate(1.8);
+  backdrop-filter: blur(20px) saturate(1.8);
+  border: 1px solid var(--cl-glass-border);
+}
+.cl-studio-canvas .react-flow__minimap svg {
+  border-radius: 12px;
+}

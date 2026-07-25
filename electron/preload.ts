@@ -134,6 +134,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
   plugins: {
     getAll: () => ipcRenderer.invoke('plugins:getAll'),
   },
+  studio: {
+    getAll: () => ipcRenderer.invoke('studio:getAll'),
+    get: (name: string, projectPath?: string) => ipcRenderer.invoke('studio:get', name, projectPath),
+    create: (input: object) => ipcRenderer.invoke('studio:create', input),
+    save: (input: object, fileName?: string, projectPath?: string, expectedSource?: string) =>
+      ipcRenderer.invoke('studio:save', input, fileName, projectPath, expectedSource),
+    delete: (name: string, alsoScript?: boolean, projectPath?: string) =>
+      ipcRenderer.invoke('studio:delete', name, alsoScript, projectPath),
+    preview: (input: object) => ipcRenderer.invoke('studio:preview', input),
+    writeScript: (fileName: string, content: string, projectPath?: string, expectedSource?: string) =>
+      ipcRenderer.invoke('studio:writeScript', fileName, content, projectPath, expectedSource),
+  },
   projects: {
     delete: (hash: string) => ipcRenderer.invoke('projects:delete', hash),
     detectDuplicates: () => ipcRenderer.invoke('projects:detectDuplicates'),
