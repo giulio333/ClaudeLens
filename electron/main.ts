@@ -1341,7 +1341,7 @@ ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destH
 
 ipcMain.handle('mcp:getGlobal', async () => {
   try {
-    return ok(getGlobalMcp());
+    return ok(await getGlobalMcp());
   } catch (e) {
     return err(e);
   }

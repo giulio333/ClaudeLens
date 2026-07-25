@@ -1,10 +1,10 @@
 import { useMemo } from 'react'
-import { McpServer, useCostSummary, useMemoryProjects } from '../../../hooks/useIPC'
+import { McpServer, useCostSummary, useGlobalMcp, useMemoryProjects } from '../../../hooks/useIPC'
 import type { ProjectCost } from '../../../types'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
 import { formatTokens } from '../utils'
-import { mcpServiceColor, mcpServiceMeta } from './McpServerCard'
+import { mcpServiceColor, mcpServiceMeta, mcpStatusMeta } from './McpServerCard'
 
 type Project = { hash: string; realPath: string }
 
@@ -51,7 +51,7 @@ function ProjectRow({
 }
 
 export function McpServerDetailView({
-  server,
+  server: navServer,
   totalProjects,
   onBack,
   onSelectProject,
@@ -61,6 +61,17 @@ export function McpServerDetailView({
   onBack: () => void
   onSelectProject?: (p: Project) => void
 }) {
+  // Re-derive the server from the (cached) global read so the detail shows the
+  // current live status rather than the snapshot captured at navigation time.
+  const { data: mcp } = useGlobalMcp()
+  const server = useMemo(() => {
+    const all = [
+      ...(mcp?.cloudServers ?? []),
+      ...(mcp?.localServers ?? []),
+      ...(mcp?.unlistedServers ?? []),
+    ]
+    return all.find(s => s.name === navServer.name) ?? navServer
+  }, [mcp, navServer])
   const { data: allProjects = [] } = useMemoryProjects()
   const { data: costSummary } = useCostSummary()
   const projectByPath = useMemo(() => {
@@ -79,10 +90,13 @@ export function McpServerDetailView({
   const meta = mcpServiceMeta(server.name)
 
   const isLocal = server.source === 'local'
+  const live = mcpStatusMeta(server.status)
+
+  // Per-project adoption only means something for a server that still exists.
   const fullyEnabled = server.disabledInProjects === 0
   const fullyDisabled = server.enabledInProjects === 0
-  const statusColor = fullyEnabled ? 'var(--cl-ok)' : fullyDisabled ? 'var(--cl-danger)' : 'var(--cl-warn)'
-  const statusLabel = fullyEnabled ? 'enabled everywhere' : fullyDisabled ? 'disabled everywhere' : 'partially enabled'
+  const scopeColor = fullyEnabled ? 'var(--cl-ok)' : fullyDisabled ? 'var(--cl-danger)' : 'var(--cl-warn)'
+  const scopeLabel = fullyEnabled ? 'enabled everywhere' : fullyDisabled ? 'disabled everywhere' : 'partially enabled'
 
   const pct = totalProjects > 0 ? Math.round((server.enabledInProjects / totalProjects) * 100) : 0
   const envKeys = server.env ? Object.keys(server.env) : []
@@ -124,20 +138,42 @@ export function McpServerDetailView({
             <span className="label-name">{displayName}</span>
           </h1>
           <div className="cl-h-meta">
-            <span className="tag" style={{ background: 'var(--cl-paper-2)' }}>
-              <span className="led" style={{ background: statusColor }} />
-              {statusLabel}
+            <span className="tag" style={{ background: 'var(--cl-paper-2)' }} title={live.hint}>
+              <span className="led" style={{ background: live.color }} />
+              {live.label}
             </span>
+            {server.live && (
+              <>
+                <span className="sep">·</span>
+                <span title="Per-project toggles in ~/.claude.json">{scopeLabel}</span>
+              </>
+            )}
             <span className="sep">·</span>
             <span>{meta.category}</span>
             <span className="sep">·</span>
             <span>{server.source}</span>
           </div>
           <p style={{ marginTop: 14, maxWidth: 560, color: 'var(--cl-ink-2)', fontSize: 14, lineHeight: 1.6 }}>
-            {meta.description}
+            {server.live ? meta.description : live.hint}
           </p>
         </section>
 
+        {!server.live && (
+          <section className="cl-section">
+            <div
+              className="cl-empty"
+              style={{ borderColor: 'color-mix(in oklch, var(--cl-warn) 40%, transparent)' }}
+            >
+              The last <code style={{ fontFamily: 'var(--font-mono)' }}>claude mcp list</code> did not include this server, so{' '}
+              <code style={{ fontFamily: 'var(--font-mono)' }}>/mcp</code> will not show it and its tools are unavailable. The
+              name survives in <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude.json</code>, which keeps every
+              connector ever connected to your account and never drops one you disconnect. Note that the list Claude Code
+              reports varies between runs, so this reading can change.
+            </div>
+          </section>
+        )}
+
+        {server.live && (
         <section className="cl-section">
           <div className="cl-mcp-metrics">
             <div className="met">
@@ -158,17 +194,24 @@ export function McpServerDetailView({
             </div>
           </div>
           <div className="cl-mcp-bar" style={{ width: '100%', height: 5, marginTop: 20 }}>
-            <i style={{ width: `${pct}%`, background: statusColor }} />
+            <i style={{ width: `${pct}%`, background: scopeColor }} />
           </div>
         </section>
+        )}
 
-        {isLocal && (commandLine || envKeys.length > 0) && (
+        {(server.target || (isLocal && (commandLine || envKeys.length > 0))) && (
           <section className="cl-section">
             <div className="cl-sec-head">
               <h2>Configuration</h2>
-              <span className="ct">~/.claude/settings.json</span>
+              <span className="ct">{isLocal ? '~/.claude.json · settings.json' : 'claude mcp list'}</span>
             </div>
             <div className="cl-mcp-config">
+              {server.target && (
+                <>
+                  <div className="d-label">{isLocal ? 'Resolved' : 'Endpoint'}</div>
+                  <div className="d-cmd">{server.target}</div>
+                </>
+              )}
               {commandLine && (
                 <>
                   <div className="d-label">Command</div>
