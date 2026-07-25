@@ -1,5 +1,11 @@
 # ClaudeLens
 
+[![CI](https://github.com/giulio333/ClaudeLens/actions/workflows/ci.yml/badge.svg)](https://github.com/giulio333/ClaudeLens/actions/workflows/ci.yml)
+[![Latest release](https://img.shields.io/github/v/release/giulio333/ClaudeLens?label=release)](https://github.com/giulio333/ClaudeLens/releases/latest)
+[![Downloads](https://img.shields.io/github/downloads/giulio333/ClaudeLens/total?label=downloads)](https://github.com/giulio333/ClaudeLens/releases)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Platforms](https://img.shields.io/badge/platforms-macOS%20%7C%20Linux%20%7C%20Windows-lightgrey)](#installation)
+
 A desktop app to explore, manage, and work with your local [Claude Code](https://claude.ai/code) data — macOS, with experimental Linux and Windows support.
 
 If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens makes it navigable: read your past sessions, manage memory and CLAUDE.md, edit skills and agents — and pick a conversation back up, either in an embedded terminal or in an in-app chat. Everything stays in sync with `~/.claude/` in real time, so changes you make in the terminal show up instantly, and vice versa.
@@ -157,6 +163,19 @@ ClaudeLens is used and on which platforms.
 
 Telemetry is on by default and can be turned off anytime in
 **Settings → Privacy**. Full details: **[PRIVACY.md](PRIVACY.md)**.
+
+---
+
+## Contributing
+
+Bug reports, feature requests, and pull requests are welcome.
+
+- **Found a bug or want a feature?** [Open an issue](https://github.com/giulio333/ClaudeLens/issues/new/choose) — the templates ask for the few details triage needs.
+- **Question or rough idea?** [Discussions](https://github.com/giulio333/ClaudeLens/discussions) is the better place.
+- **Want to send a patch?** [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, scripts, and conventions; the architecture is documented in [CLAUDE.md](CLAUDE.md).
+- **Found a vulnerability?** Please report it privately — see [SECURITY.md](SECURITY.md).
+
+Participation is covered by our [Code of Conduct](CODE_OF_CONDUCT.md). Release-by-release notes live in [CHANGELOG.md](CHANGELOG.md).
 
 ---
 

@@ -21,6 +21,9 @@
     "developer-tools",
     "macos"
   ],
+  "engines": {
+    "node": ">=22"
+  },
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "concurrently -k \"vite\" \"tsc -p tsconfig.electron.json -w\" \"wait-on http://localhost:5173 dist-electron/main.js && electron .\"",
