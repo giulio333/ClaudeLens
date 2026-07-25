@@ -38,6 +38,23 @@ Download the `.AppImage` from the [latest release](https://github.com/giulio333/
 
 Download and run the `.exe` installer from the [latest release](https://github.com/giulio333/ClaudeLens/releases/latest). Opening a session launches it in a new `cmd` window.
 
+### Verifying your download
+
+The builds are not code-signed, so it's worth checking that what you downloaded is
+what CI produced. Every release ships a `checksums.txt` asset:
+
+```bash
+# from the folder holding the downloaded file and checksums.txt
+shasum -a 256 --check --ignore-missing checksums.txt
+```
+
+Each binary also carries a [build provenance attestation](https://docs.github.com/actions/security-guides/using-artifact-attestations),
+a signed statement that it came out of this repository's release workflow:
+
+```bash
+gh attestation verify ClaudeLens-2.2.0-arm64.dmg --repo giulio333/ClaudeLens
+```
+
 ### Requirements
 
 - macOS 12 Monterey or later, or Linux / Windows (experimental)
