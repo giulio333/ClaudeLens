@@ -9,11 +9,38 @@ export const meta = {
   ],
 }
 
-// args (opzionale): { issue: number } per forzare un'issue specifica
-const forcedIssue = args && args.issue
+// args (opzionale): { issue: number } per forzare un'issue specifica.
+// L'input va normalizzato: se arriva come stringa JSON (`'{"issue":154}'`)
+// il vecchio `args && args.issue` dava undefined e l'issue forzata veniva
+// ignorata in silenzio, con la fase Pick che ne scegliva un'altra.
+function forcedIssueFrom(raw) {
+  if (raw === null || raw === undefined) return null
+  let v = raw
+  if (typeof v === 'string') {
+    const trimmed = v.trim()
+    try {
+      v = JSON.parse(trimmed)
+    } catch (_e) {
+      v = trimmed.replace(/^#/, '')
+    }
+  }
+  const n = Number(v && typeof v === 'object' ? v.issue : v)
+  return Number.isInteger(n) && n > 0 ? n : null
+}
+
+const forcedIssue = forcedIssueFrom(args)
+
+// Un args presente ma illeggibile è un errore, non un via libera a scegliere.
+if (args !== null && args !== undefined && forcedIssue === null) {
+  return {
+    error: `args presente ma non interpretabile come issue: ${JSON.stringify(args)}. Attesi { issue: 154 }, "154" o 154.`,
+  }
+}
 
 // ── Fase 1: scegli l'issue ────────────────────────────────────────────────
 phase('Pick')
+
+if (forcedIssue) log(`Issue forzata da args: #${forcedIssue}`)
 
 const picked = await agent(
   `Nel repository corrente usa \`gh issue list --state open --limit 30\` e \`gh issue view <n> --comments\`.
@@ -36,6 +63,14 @@ Sola lettura: non modificare nulla.`,
 if (!picked || !picked.number) {
   return { error: 'Fase Pick non conclusa (agente interrotto o nessuna issue adatta): rilancia, oppure forza con args.issue.' }
 }
+// Un'issue forzata è un'istruzione, non un suggerimento: fermarsi subito se
+// la fase Pick ne ha scelta un'altra, prima che la fase Fix scriva codice.
+if (forcedIssue && picked.number !== forcedIssue) {
+  return {
+    error: `Fase Pick fuori rotta: chiesta #${forcedIssue}, scelta #${picked.number} (${picked.title}). Niente modificato, nessuna PR aperta.`,
+  }
+}
+
 log(`Issue scelta: #${picked.number} — ${picked.title}`)
 
 // ── Fase 2: implementa e verifica ─────────────────────────────────────────
