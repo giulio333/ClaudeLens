@@ -1,6 +1,13 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
 
+import {
+  categoriesFromPayload,
+  queryKeysForCategories,
+  type DataChangeCategory,
+  type DataChangeEvent,
+} from '../../electron/shared/data-change'
+
 import type {
   MemoryTopic,
   TopicInput,
@@ -352,7 +359,7 @@ declare global {
         setEnabled: (enabled: boolean) => Promise<IpcResult<boolean>>
         track: (name: string, props?: Record<string, string | number>) => Promise<IpcResult<boolean>>
       }
-      onDataChanged: (callback: () => void) => () => void
+      onDataChanged: (callback: (payload?: DataChangeEvent) => void) => () => void
       live: {
         getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
         onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void
@@ -1084,35 +1091,21 @@ export function useDataChangedRefetch() {
     // re-run a full synchronous re-read/parse of the entire file (sessions:chat
     // is an active query). A trailing timer collapses a burst into one pass.
     let timer: ReturnType<typeof setTimeout> | null = null
+    // Union of what changed during the burst: the main process tags each event
+    // with the category of the path it saw (shared/data-change.ts), so a chat
+    // transcript append no longer re-runs the teams/workflows project scans that
+    // only feed the subtab count badges.
+    let pending = new Set<DataChangeCategory>()
     const flush = () => {
       timer = null
-      qc.invalidateQueries({ queryKey: ['memory:projects'] })
-      qc.invalidateQueries({ queryKey: ['memory:project'] })
-      qc.invalidateQueries({ queryKey: ['cost:summary'] })
-      qc.invalidateQueries({ queryKey: ['cost:project'] })
-      qc.invalidateQueries({ queryKey: ['sessions:project'] })
-      qc.invalidateQueries({ queryKey: ['sessions:chat'] })
-      qc.invalidateQueries({ queryKey: ['sessions:subagents'] })
-      qc.invalidateQueries({ queryKey: ['sessions:subagentTranscript'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
-      qc.invalidateQueries({ queryKey: ['rules:project'] })
-      qc.invalidateQueries({ queryKey: ['tasks:project'] })
-      qc.invalidateQueries({ queryKey: ['plans:project'] })
-      qc.invalidateQueries({ queryKey: ['workflows:project'] })
-      qc.invalidateQueries({ queryKey: ['workflows:run'] })
-      qc.invalidateQueries({ queryKey: ['teams:project'] })
-      qc.invalidateQueries({ queryKey: ['teams:detail'] })
-      qc.invalidateQueries({ queryKey: ['skills:global'] })
-      qc.invalidateQueries({ queryKey: ['skills:all'] })
-      qc.invalidateQueries({ queryKey: ['agents:global'] })
-      qc.invalidateQueries({ queryKey: ['agents:project'] })
-      qc.invalidateQueries({ queryKey: ['mcp:global'] })
-      qc.invalidateQueries({ queryKey: ['plugins:all'] })
-      qc.invalidateQueries({ queryKey: ['studio:all'] })
-      qc.invalidateQueries({ queryKey: ['studio:blueprint'] })
+      const categories = pending
+      pending = new Set()
+      for (const key of queryKeysForCategories(categories)) {
+        qc.invalidateQueries({ queryKey: [key] })
+      }
     }
-    const unsubscribe = window.electronAPI.onDataChanged(() => {
+    const unsubscribe = window.electronAPI.onDataChanged((payload?: DataChangeEvent) => {
+      for (const category of categoriesFromPayload(payload)) pending.add(category)
       if (timer) clearTimeout(timer)
       timer = setTimeout(flush, 200)
     })

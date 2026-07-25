@@ -73,6 +73,10 @@ export type {
   PermissionDecision,
 } from '../electron/shared/chat-types'
 
+// Payload del watcher `data:changed` (categoria del path cambiato) — definizione
+// unica condivisa col main process, vedi electron/shared/data-change.ts.
+export type { DataChangeCategory, DataChangeEvent } from '../electron/shared/data-change'
+
 // A normalized session-lifecycle notification pushed from the main process over
 // `notifications:event`. Mirrors electron/modules/notifications/types.ts (the two
 // tsconfigs don't share imports). The renderer renders it as a transient toast.

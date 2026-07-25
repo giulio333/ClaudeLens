@@ -6,7 +6,7 @@ import {
   getProjectWorkflows,
   getWorkflowRun,
 } from '../electron/modules/workflows-reader';
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from 'fs';
+import { mkdtempSync, mkdirSync, rmSync, writeFileSync, utimesSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -269,6 +269,19 @@ describe('getProjectWorkflows', () => {
     expect(run.status).toBe('unknown');
     expect(run.workflowName).toBe('orphanflow');
     expect(run.agentCount).toBe(2);
+    // Sorting relies on the transcript dir's mtime (stat'd asynchronously).
+    expect(run.startTime).toBeGreaterThan(0);
+  });
+
+  it('falls back to the state file mtime when the run carries no start time', async () => {
+    writeRun(SESS_A, SESS_A, 'wf_mt1', { startTime: undefined, timestamp: '' });
+    const stateFile = join(dir, SESS_A, 'workflows', 'wf_mt1.json');
+    const when = new Date(1_700_000_000_000);
+    utimesSync(stateFile, when, when);
+
+    const groups = await getProjectWorkflows(dir);
+    const run = groups.flatMap(g => g.runs).find(r => r.runId === 'wf_mt1');
+    expect(run!.startTime).toBe(1_700_000_000_000);
   });
 
   it('skips malformed run JSON without throwing', async () => {

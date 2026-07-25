@@ -185,8 +185,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     track: (name: string, props?: Record<string, string | number>) =>
       ipcRenderer.invoke('telemetry:track', name, props),
   },
-  onDataChanged: (callback: () => void) => {
-    const handler = () => callback();
+  // The payload tags what changed (`DataChangeEvent` in shared/data-change.ts) so
+  // the renderer invalidates only the affected query keys. It stays optional:
+  // a subscriber that only needs "something changed" ignores the argument.
+  onDataChanged: (callback: (payload?: unknown) => void) => {
+    const handler = (_event: IpcRendererEvent, payload?: unknown) => callback(payload);
     ipcRenderer.on('data:changed', handler);
     return () => ipcRenderer.removeListener('data:changed', handler);
   },

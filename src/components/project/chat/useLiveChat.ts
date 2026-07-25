@@ -6,6 +6,7 @@ import {
   PermissionRequest,
   ToolActivity,
 } from '../../../hooks/useIPC'
+import { categoriesFromPayload } from '../../../../electron/shared/data-change'
 import { trackEvent } from '../../../lib/telemetry'
 
 /** Hook: the single owner of an in-app SDK chat's state.
@@ -210,7 +211,11 @@ export function useLiveChat(
   useEffect(() => {
     if (!followDisk || !resumeRef.current) return
     let timer: ReturnType<typeof setTimeout> | null = null
-    const unsubscribe = window.electronAPI.onDataChanged(() => {
+    const unsubscribe = window.electronAPI.onDataChanged(payload => {
+      // Only a transcript write can change what a disk re-read yields (an
+      // unusable payload degrades to 'all' — re-read to stay safe).
+      const categories = categoriesFromPayload(payload)
+      if (!categories.some(c => c === 'transcript' || c === 'all')) return
       if (pendingRef.current !== null) return
       // Trailing debounce: a turn in the terminal appends the .jsonl in bursts.
       if (timer) clearTimeout(timer)

@@ -1,5 +1,4 @@
-import { readdir, readFile } from 'fs/promises';
-import { existsSync, statSync } from 'fs';
+import { readdir, readFile, stat } from 'fs/promises';
 import { basename, join } from 'path';
 import { assertWithin } from '../utils';
 
@@ -324,11 +323,23 @@ async function recoverNameFromScript(scriptsDir: string, runId: string): Promise
   return '';
 }
 
-function safeMtimeMs(path: string): number {
+/** 0 when missing/unreadable. Async on purpose: the project pass stats a file
+ *  per run/transcript dir of every session, and a synchronous stat storm blocks
+ *  the main process' event loop (visible jank while a chat streams). */
+async function safeMtimeMs(path: string): Promise<number> {
   try {
-    return statSync(path).mtimeMs;
+    return (await stat(path)).mtimeMs;
   } catch {
     return 0;
+  }
+}
+
+async function pathExists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
   }
 }
 
@@ -359,10 +370,14 @@ export async function getProjectWorkflows(projectPath: string): Promise<Workflow
       for (const file of files) {
         const full = join(wfDir, file);
         try {
-          const detail = parseRunFile(JSON.parse(await readFile(full, 'utf-8')), {
+          const [raw, fallbackMtimeMs] = await Promise.all([
+            readFile(full, 'utf-8'),
+            safeMtimeMs(full),
+          ]);
+          const detail = parseRunFile(JSON.parse(raw), {
             projectPath,
             stateSessionId: dirName,
-            fallbackMtimeMs: safeMtimeMs(full),
+            fallbackMtimeMs,
           });
           if (!detail || knownRunIds.has(detail.runId)) continue;
           knownRunIds.add(detail.runId);
@@ -400,7 +415,7 @@ export async function getProjectWorkflows(projectPath: string): Promise<Workflow
           workflowName: name,
           status: 'unknown',
           degraded: true,
-          startTime: safeMtimeMs(transcriptDir),
+          startTime: await safeMtimeMs(transcriptDir),
           timestamp: '',
           durationMs: 0,
           agentCount: orphanIds.length,
@@ -455,12 +470,16 @@ export async function getWorkflowRun(
     } catch {
       continue;
     }
-    if (!existsSync(candidate)) continue;
+    if (!(await pathExists(candidate))) continue;
     try {
-      const detail = parseRunFile(JSON.parse(await readFile(candidate, 'utf-8')), {
+      const [raw, fallbackMtimeMs] = await Promise.all([
+        readFile(candidate, 'utf-8'),
+        safeMtimeMs(candidate),
+      ]);
+      const detail = parseRunFile(JSON.parse(raw), {
         projectPath,
         stateSessionId: dirName,
-        fallbackMtimeMs: safeMtimeMs(candidate),
+        fallbackMtimeMs,
       });
       if (!detail) continue;
       // Script fallback: if not inlined, read the .js from the LAUNCHING
@@ -491,7 +510,7 @@ export async function getWorkflowRun(
     } catch {
       continue;
     }
-    if (!existsSync(transcriptDir)) continue;
+    if (!(await pathExists(transcriptDir))) continue;
     const orphanAgentIds = await readOrphanAgentIds(transcriptDir);
     const name = await recoverNameFromScript(
       join(projectPath, dirName, 'workflows', 'scripts'),
@@ -503,7 +522,7 @@ export async function getWorkflowRun(
       workflowName: name,
       status: 'unknown',
       degraded: true,
-      startTime: safeMtimeMs(transcriptDir),
+      startTime: await safeMtimeMs(transcriptDir),
       timestamp: '',
       durationMs: 0,
       agentCount: orphanAgentIds.length,

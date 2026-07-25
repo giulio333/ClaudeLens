@@ -60,6 +60,11 @@ import {
   PermissionUpdate,
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
+import {
+  classifyChangedPath,
+  type DataChangeCategory,
+  type DataChangeRoots,
+} from './shared/data-change';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
 import { initTelemetry, track, trackExit, isTelemetryEnabled, setTelemetryEnabled } from './modules/telemetry';
@@ -117,6 +122,17 @@ const TEAMS_DIR = join(CLAUDE_DIR, 'teams');
 // installed_plugins.json: rinfresca la sezione Plugins su install/update/remove
 // (la cache dei plugin cambia spesso e non va osservata interamente).
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json');
+
+// Ogni evento `data:changed` porta la categoria del path cambiato: il renderer
+// invalida solo le query che quel path può toccare (vedi shared/data-change.ts).
+const DATA_CHANGE_ROOTS: DataChangeRoots = {
+  projectsDir: PROJECTS_DIR,
+  tasksDir: TASKS_DIR,
+  plansDir: PLANS_DIR,
+  teamsDir: TEAMS_DIR,
+  pluginsFile: INSTALLED_PLUGINS_FILE,
+  workflowsDir: WORKFLOWS_DIR,
+};
 
 type IpcResult<T> = { data: T | null; error: string | null };
 type ExportSaveResult = { canceled: boolean; filePath: string | null };
@@ -300,6 +316,12 @@ function safeSend(channel: string, ...args: unknown[]): void {
   if (mainWindow && !mainWindow.isDestroyed() && !mainWindow.webContents.isDestroyed()) {
     mainWindow.webContents.send(channel, ...args);
   }
+}
+
+/** Emit `data:changed` tagged with what changed, so the renderer can invalidate
+ *  only the affected query keys (`['all']` = the old blanket refresh). */
+function sendDataChanged(categories: DataChangeCategory[]): void {
+  safeSend('data:changed', { categories });
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -1311,7 +1333,9 @@ ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destH
     invalidateCwdCache(sourceHash);
     invalidateCwdCache(destHash);
     resumeWatcher();
-    safeSend('data:changed');
+    // Un merge muove sessioni e fonde la memoria di due progetti: qui il refresh
+    // resta volutamente totale.
+    sendDataChanged(['all']);
   }
 });
 
@@ -1937,9 +1961,12 @@ async function startWatcher() {
     }
   );
 
-  const notify = () => {
+  // Il path è l'unica informazione che distingue "append al transcript di una
+  // chat live" da "è comparso un run di workflow / un teammate": senza di essa il
+  // renderer rilanciava anche le scansioni di teams/workflows a ogni append.
+  const notify = (path: string) => {
     if (watcherPauseDepth > 0) return;
-    safeSend('data:changed');
+    sendDataChanged(classifyChangedPath(path, DATA_CHANGE_ROOTS));
   };
 
   const syncProjectWorkflowDirs = () => {
@@ -1967,13 +1994,15 @@ async function startWatcher() {
       // The immediate event may have refetched through a temporary hash-derived
       // cwd. Refresh again after the authoritative path is watched; ignoreInitial
       // means an already-present workflow will not emit a second file event.
-      notify();
+      // Only the Studio library can change from this (a project's workflow dir
+      // just became watchable), so the refresh is scoped to it.
+      if (watcherPauseDepth === 0) sendDataChanged(['studio']);
     },
   });
 
   const notifyAndRefreshStudioWatches = (path: string) => {
     studioWatchSync.onEvent(path);
-    notify();
+    notify(path);
   };
 
   watcher.on('add', notifyAndRefreshStudioWatches);

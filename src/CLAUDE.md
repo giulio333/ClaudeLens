@@ -6,7 +6,7 @@ This directory contains the Electron renderer process: a single-page React app t
 
 **App.tsx** — Root component
 - Sets up the outer layout (header + main)
-- Calls `useDataChangedRefetch()` to invalidate all queries when `~/.claude/` changes
+- Calls `useDataChangedRefetch()` to invalidate the queries affected by a `~/.claude/` change (the watcher event carries the changed path's category — see `electron/shared/data-change.ts`)
 - Renders `<ProjectOverview />`
 
 **ProjectOverview.tsx** (`tabs/ProjectOverview.tsx`) — Root navigation shell
