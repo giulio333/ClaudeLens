@@ -25,6 +25,10 @@ import type {
   SkillInput,
   InstalledPlugin,
   PluginCommand,
+  Blueprint,
+  BlueprintDetail,
+  BlueprintIssue,
+  StudioLibrary,
   McpServer,
   McpData,
   LiveEvent,
@@ -86,6 +90,10 @@ export type {
   SkillInput,
   InstalledPlugin,
   PluginCommand,
+  Blueprint,
+  BlueprintDetail,
+  BlueprintIssue,
+  StudioLibrary,
   McpServer,
   McpData,
   LiveEvent,
@@ -305,6 +313,15 @@ declare global {
       }
       plugins: {
         getAll: () => Promise<IpcResult<InstalledPlugin[]>>
+      }
+      studio: {
+        getAll: () => Promise<IpcResult<StudioLibrary>>
+        get: (name: string, projectPath?: string) => Promise<IpcResult<BlueprintDetail>>
+        create: (input: Blueprint) => Promise<IpcResult<{ scriptPath: string; script: string }>>
+        save: (input: Blueprint, fileName?: string, projectPath?: string, expectedSource?: string) => Promise<IpcResult<{ scriptPath: string; script: string }>>
+        delete: (name: string, alsoScript?: boolean, projectPath?: string) => Promise<IpcResult<null>>
+        preview: (input: Blueprint) => Promise<IpcResult<{ script: string; issues: BlueprintIssue[] }>>
+        writeScript: (fileName: string, content: string, projectPath?: string, expectedSource?: string) => Promise<IpcResult<{ path: string }>>
       }
       ai: {
         run: (instruction: string, inputContent: string, projectPath: string) => Promise<IpcResult<null>>
@@ -885,6 +902,67 @@ export function usePlugins() {
   })
 }
 
+export function useStudioLibrary() {
+  return useQuery({
+    queryKey: ['studio:all'],
+    queryFn: () => unwrap(window.electronAPI.studio.getAll()),
+  })
+}
+
+export function useBlueprint(name: string | null, projectPath?: string) {
+  return useQuery({
+    queryKey: ['studio:blueprint', name, projectPath ?? null],
+    queryFn: () => unwrap(window.electronAPI.studio.get(name!, projectPath)),
+    enabled: name !== null,
+  })
+}
+
+export function useCreateBlueprint() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: Blueprint) => unwrap(window.electronAPI.studio.create(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['studio:all'] }),
+  })
+}
+
+export function useSaveBlueprint() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ input, fileName, projectPath, expectedSource }: { input: Blueprint; fileName: string; projectPath?: string; expectedSource: string }) =>
+      unwrap(window.electronAPI.studio.save(input, fileName, projectPath, expectedSource)),
+    // Keep the mutation pending until the editor has the source just written.
+    // Otherwise clearing its draft briefly exposes the previous query snapshot.
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['studio:all'] }),
+      qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
+    ]),
+  })
+}
+
+export function useDeleteBlueprint() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ name, alsoScript, projectPath }: { name: string; alsoScript?: boolean; projectPath?: string }) =>
+      unwrap(window.electronAPI.studio.delete(name, alsoScript, projectPath)),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['studio:all'] })
+      qc.invalidateQueries({ queryKey: ['studio:blueprint'] })
+    },
+  })
+}
+
+export function useWriteNativeWorkflowScript() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ fileName, content, projectPath, expectedSource }: { fileName: string; content: string; projectPath?: string; expectedSource: string }) =>
+      unwrap(window.electronAPI.studio.writeScript(fileName, content, projectPath, expectedSource)),
+    onSuccess: () => Promise.all([
+      qc.invalidateQueries({ queryKey: ['studio:all'] }),
+      qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
+    ]),
+  })
+}
+
 export function useProjectAgents(realPath: string | null) {
   return useQuery({
     queryKey: ['agents:project', realPath],
@@ -1031,6 +1109,8 @@ export function useDataChangedRefetch() {
       qc.invalidateQueries({ queryKey: ['agents:project'] })
       qc.invalidateQueries({ queryKey: ['mcp:global'] })
       qc.invalidateQueries({ queryKey: ['plugins:all'] })
+      qc.invalidateQueries({ queryKey: ['studio:all'] })
+      qc.invalidateQueries({ queryKey: ['studio:blueprint'] })
     }
     const unsubscribe = window.electronAPI.onDataChanged(() => {
       if (timer) clearTimeout(timer)

@@ -19,7 +19,10 @@ const MOCK_PROJECTS = [
   { hash: '-Users-alice-projects-webapp', realPath: '/Users/alice/projects/webapp' },
   { hash: '-Users-alice-projects-api-server', realPath: '/Users/alice/projects/api-server' },
   { hash: '-Users-alice-work-data-pipeline', realPath: '/Users/alice/work/data-pipeline' },
-  { hash: '-Users-alice-experiments-llm-playground', realPath: '/Users/alice/experiments/llm-playground' },
+  {
+    hash: '-Users-alice-experiments-llm-playground',
+    realPath: '/Users/alice/experiments/llm-playground',
+  },
   { hash: '-Users-alice-side-blog', realPath: '/Users/alice/side/blog' },
 ];
 
@@ -35,19 +38,84 @@ const SESSION_COUNTS: Record<string, number> = {
   '-Users-alice-side-blog': 3,
 };
 
-const sessionCountFor = (hash: string) => SESSION_COUNTS[hash] ?? SESSION_COUNTS['-Users-alice-projects-webapp'];
+const sessionCountFor = (hash: string) =>
+  SESSION_COUNTS[hash] ?? SESSION_COUNTS['-Users-alice-projects-webapp'];
 
 // ─── Sessioni per progetto ────────────────────────────────────────────────────
 
 const SESSION_TEMPLATES = [
-  { days: 0,  input: 48_000,  output: 21_000, cache: 95_000,  msgs: 34, model: 'claude-sonnet-4-6', title: 'Refactor authentication module' },
-  { days: 1,  input: 31_000,  output: 14_500, cache: 62_000,  msgs: 22, model: 'claude-sonnet-4-6', title: 'Fix TypeScript strict mode errors' },
-  { days: 3,  input: 72_000,  output: 28_000, cache: 140_000, msgs: 51, model: 'claude-opus-4-8',   title: 'Design new API architecture' },
-  { days: 5,  input: 19_000,  output: 8_200,  cache: 38_000,  msgs: 15, model: 'claude-haiku-4-5',  title: 'Write unit tests for utils' },
-  { days: 8,  input: 55_000,  output: 24_000, cache: 110_000, msgs: 40, model: 'claude-sonnet-4-6', title: 'Add dark mode support' },
-  { days: 12, input: 38_000,  output: 16_000, cache: 76_000,  msgs: 28, model: 'claude-sonnet-4-6', title: 'Optimize database queries' },
-  { days: 18, input: 26_000,  output: 11_000, cache: 50_000,  msgs: 19, model: 'claude-haiku-4-5',  title: 'Update dependencies' },
-  { days: 25, input: 61_000,  output: 27_000, cache: 122_000, msgs: 44, model: 'claude-opus-4-8',   title: 'Implement real-time sync' },
+  {
+    days: 0,
+    input: 48_000,
+    output: 21_000,
+    cache: 95_000,
+    msgs: 34,
+    model: 'claude-sonnet-4-6',
+    title: 'Refactor authentication module',
+  },
+  {
+    days: 1,
+    input: 31_000,
+    output: 14_500,
+    cache: 62_000,
+    msgs: 22,
+    model: 'claude-sonnet-4-6',
+    title: 'Fix TypeScript strict mode errors',
+  },
+  {
+    days: 3,
+    input: 72_000,
+    output: 28_000,
+    cache: 140_000,
+    msgs: 51,
+    model: 'claude-opus-4-8',
+    title: 'Design new API architecture',
+  },
+  {
+    days: 5,
+    input: 19_000,
+    output: 8_200,
+    cache: 38_000,
+    msgs: 15,
+    model: 'claude-haiku-4-5',
+    title: 'Write unit tests for utils',
+  },
+  {
+    days: 8,
+    input: 55_000,
+    output: 24_000,
+    cache: 110_000,
+    msgs: 40,
+    model: 'claude-sonnet-4-6',
+    title: 'Add dark mode support',
+  },
+  {
+    days: 12,
+    input: 38_000,
+    output: 16_000,
+    cache: 76_000,
+    msgs: 28,
+    model: 'claude-sonnet-4-6',
+    title: 'Optimize database queries',
+  },
+  {
+    days: 18,
+    input: 26_000,
+    output: 11_000,
+    cache: 50_000,
+    msgs: 19,
+    model: 'claude-haiku-4-5',
+    title: 'Update dependencies',
+  },
+  {
+    days: 25,
+    input: 61_000,
+    output: 27_000,
+    cache: 122_000,
+    msgs: 44,
+    model: 'claude-opus-4-8',
+    title: 'Implement real-time sync',
+  },
 ];
 
 function getSessionList(hash: string) {
@@ -65,7 +133,7 @@ function getSessionList(hash: string) {
     // i < 8 → usa l'offset originale del template; oltre → un giorno in più ciascuno
     const dayOffset = i < SESSION_TEMPLATES.length ? t.days : i;
     const d = new Date(now.getTime() - dayOffset * 86_400_000);
-    const filename = `${d.getFullYear()}${pad(d.getMonth()+1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(i).padStart(6,'0')}.jsonl`;
+    const filename = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(i).padStart(6, '0')}.jsonl`;
     return {
       filename,
       date: d.toISOString(),
@@ -74,12 +142,17 @@ function getSessionList(hash: string) {
       cacheWriteTokens: Math.floor(t.input * 0.12),
       cacheReadTokens: t.cache,
       totalTokens: t.input + t.output,
-      estimatedCost: parseFloat(((t.input / 1_000_000) * 3.0 + (t.output / 1_000_000) * 15.0).toFixed(4)),
+      estimatedCost: parseFloat(
+        ((t.input / 1_000_000) * 3.0 + (t.output / 1_000_000) * 15.0).toFixed(4)
+      ),
       cacheSavings: parseFloat(((t.cache / 1_000_000) * (3.0 - 0.3)).toFixed(4)),
       messageCount: t.msgs,
       model: t.model,
       models: { [t.model]: t.msgs },
-      customTitle: i < SESSION_TEMPLATES.length ? t.title : `${t.title} (${Math.floor(i / SESSION_TEMPLATES.length) + 1})`,
+      customTitle:
+        i < SESSION_TEMPLATES.length
+          ? t.title
+          : `${t.title} (${Math.floor(i / SESSION_TEMPLATES.length) + 1})`,
     };
   });
 }
@@ -112,7 +185,12 @@ const MOCK_CHAT = [
     uuid: 'msg-001',
     role: 'user' as const,
     timestamp: minsAgo(125),
-    content: [{ type: 'text' as const, text: 'Can you refactor the authentication module to use JWT tokens instead of sessions?' }],
+    content: [
+      {
+        type: 'text' as const,
+        text: 'Can you refactor the authentication module to use JWT tokens instead of sessions?',
+      },
+    ],
   },
   {
     uuid: 'msg-002',
@@ -120,15 +198,31 @@ const MOCK_CHAT = [
     timestamp: minsAgo(124),
     model: 'claude-sonnet-4-6',
     content: [
-      { type: 'text' as const, text: "I'll start by reading the current authentication implementation to understand what needs to change." },
-      { type: 'tool_use' as const, id: 'tu-001', name: 'Read', input: { file_path: '/Users/alice/projects/webapp/src/auth/session.ts' } },
+      {
+        type: 'text' as const,
+        text: "I'll start by reading the current authentication implementation to understand what needs to change.",
+      },
+      {
+        type: 'tool_use' as const,
+        id: 'tu-001',
+        name: 'Read',
+        input: { file_path: '/Users/alice/projects/webapp/src/auth/session.ts' },
+      },
     ],
   },
   {
     uuid: 'msg-003',
     role: 'user' as const,
     timestamp: minsAgo(124),
-    content: [{ type: 'tool_result' as const, toolUseId: 'tu-001', content: 'import session from "express-session";\n\nexport function configureSession(app) {\n  app.use(session({ secret: process.env.SESSION_SECRET, resave: false }));\n}\n', isError: false }],
+    content: [
+      {
+        type: 'tool_result' as const,
+        toolUseId: 'tu-001',
+        content:
+          'import session from "express-session";\n\nexport function configureSession(app) {\n  app.use(session({ secret: process.env.SESSION_SECRET, resave: false }));\n}\n',
+        isError: false,
+      },
+    ],
   },
   {
     uuid: 'msg-004',
@@ -136,15 +230,31 @@ const MOCK_CHAT = [
     timestamp: minsAgo(123),
     model: 'claude-sonnet-4-6',
     content: [
-      { type: 'text' as const, text: "Now let me check the route handlers to understand how sessions are used." },
-      { type: 'tool_use' as const, id: 'tu-002', name: 'Grep', input: { pattern: 'req\\.session', path: '/Users/alice/projects/webapp/src' } },
+      {
+        type: 'text' as const,
+        text: 'Now let me check the route handlers to understand how sessions are used.',
+      },
+      {
+        type: 'tool_use' as const,
+        id: 'tu-002',
+        name: 'Grep',
+        input: { pattern: 'req\\.session', path: '/Users/alice/projects/webapp/src' },
+      },
     ],
   },
   {
     uuid: 'msg-005',
     role: 'user' as const,
     timestamp: minsAgo(123),
-    content: [{ type: 'tool_result' as const, toolUseId: 'tu-002', content: 'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n', isError: false }],
+    content: [
+      {
+        type: 'tool_result' as const,
+        toolUseId: 'tu-002',
+        content:
+          'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n',
+        isError: false,
+      },
+    ],
   },
   {
     uuid: 'msg-006',
@@ -170,14 +280,15 @@ const MOCK_CHAT = [
     timestamp: minsAgo(120),
     model: 'claude-sonnet-4-6',
     content: [
-      { type: 'text' as const, text: "Creating the JWT helper module." },
+      { type: 'text' as const, text: 'Creating the JWT helper module.' },
       {
         type: 'tool_use' as const,
         id: 'tu-003',
         name: 'Write',
         input: {
           file_path: '/Users/alice/projects/webapp/src/auth/jwt.ts',
-          content: "import jwt from 'jsonwebtoken';\n\nconst SECRET = process.env.JWT_SECRET!;\n\nexport const signToken = (userId: string) =>\n  jwt.sign({ userId }, SECRET, { expiresIn: '7d' });\n\nexport const verifyToken = (token: string) =>\n  jwt.verify(token, SECRET) as { userId: string };\n",
+          content:
+            "import jwt from 'jsonwebtoken';\n\nconst SECRET = process.env.JWT_SECRET!;\n\nexport const signToken = (userId: string) =>\n  jwt.sign({ userId }, SECRET, { expiresIn: '7d' });\n\nexport const verifyToken = (token: string) =>\n  jwt.verify(token, SECRET) as { userId: string };\n",
         },
       },
     ],
@@ -189,24 +300,57 @@ const MOCK_CHAT = [
 function getMemoryData(_hash: string) {
   return {
     index: [
-      { name: 'User profile', description: 'Senior full-stack engineer, 8yr TypeScript experience', type: 'user', filename: 'user_profile.md', createdAt: daysAgo(90), updatedAt: daysAgo(4) },
-      { name: 'Code style feedback', description: 'Prefers functional patterns, no class components, terse PR descriptions', type: 'feedback', filename: 'feedback_code_style.md', createdAt: daysAgo(72), updatedAt: daysAgo(6) },
-      { name: 'Testing approach', description: 'Integration tests over unit mocks — past incident with divergent mock/prod', type: 'feedback', filename: 'feedback_testing.md', createdAt: daysAgo(63), updatedAt: daysAgo(11) },
+      {
+        name: 'User profile',
+        description: 'Senior full-stack engineer, 8yr TypeScript experience',
+        type: 'user',
+        filename: 'user_profile.md',
+        createdAt: daysAgo(90),
+        updatedAt: daysAgo(4),
+      },
+      {
+        name: 'Code style feedback',
+        description: 'Prefers functional patterns, no class components, terse PR descriptions',
+        type: 'feedback',
+        filename: 'feedback_code_style.md',
+        createdAt: daysAgo(72),
+        updatedAt: daysAgo(6),
+      },
+      {
+        name: 'Testing approach',
+        description: 'Integration tests over unit mocks — past incident with divergent mock/prod',
+        type: 'feedback',
+        filename: 'feedback_testing.md',
+        createdAt: daysAgo(63),
+        updatedAt: daysAgo(11),
+      },
     ],
     topics: {
-      'user_profile.md': '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.',
-      'feedback_code_style.md': '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.',
-      'feedback_testing.md': '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration.\n\n**How to apply:** Never mock the database layer in tests.',
+      'user_profile.md':
+        '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.',
+      'feedback_code_style.md':
+        '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.',
+      'feedback_testing.md':
+        '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration.\n\n**How to apply:** Never mock the database layer in tests.',
     },
     memoryMd: {
-      content: '# Memory Index\n\n- [user_profile.md](user_profile.md) — Senior full-stack engineer\n- [feedback_code_style.md](feedback_code_style.md) — Coding preferences\n- [feedback_testing.md](feedback_testing.md) — Integration tests preferred\n',
+      content:
+        '# Memory Index\n\n- [user_profile.md](user_profile.md) — Senior full-stack engineer\n- [feedback_code_style.md](feedback_code_style.md) — Coding preferences\n- [feedback_testing.md](feedback_testing.md) — Integration tests preferred\n',
       lineCount: 6,
     },
     projectLevelIndex: [
-      { name: 'Project goals', description: 'Q1 targets: launch beta, gather 50 signups', type: 'project', filename: 'project_goals.md', createdAt: daysAgo(95), updatedAt: daysAgo(20) },
+      {
+        name: 'Project goals',
+        description: 'Q1 targets: launch beta, gather 50 signups',
+        type: 'project',
+        filename: 'project_goals.md',
+        createdAt: daysAgo(95),
+        updatedAt: daysAgo(20),
+      },
     ],
     projectLevelTopics: {
-      'project_goals.md': '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.',
+      'project_goals.md':
+        '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.',
     },
     projectLevelMemoryMd: {
       content: '# Project Memory\n\n- [project_goals.md](project_goals.md) — Q1 targets\n',
@@ -265,7 +409,8 @@ const GLOBAL_SKILLS = [
     path: '/Users/alice/.claude/commands/commit.md',
     scope: 'global' as const,
     content: 'Create a conventional commit message and stage changes.',
-    rawContent: '---\ndescription: Create a conventional commit\n---\n\nCreate a conventional commit message and stage changes.',
+    rawContent:
+      '---\ndescription: Create a conventional commit\n---\n\nCreate a conventional commit message and stage changes.',
     description: 'Create a conventional commit',
     userInvocable: true,
   },
@@ -274,7 +419,8 @@ const GLOBAL_SKILLS = [
     path: '/Users/alice/.claude/commands/review-pr.md',
     scope: 'global' as const,
     content: 'Review a GitHub pull request and summarize key changes.',
-    rawContent: '---\ndescription: Review a pull request\nargumentHint: PR number\n---\n\nReview a GitHub pull request.',
+    rawContent:
+      '---\ndescription: Review a pull request\nargumentHint: PR number\n---\n\nReview a GitHub pull request.',
     description: 'Review a pull request',
     argumentHint: 'PR number',
     userInvocable: true,
@@ -284,7 +430,8 @@ const GLOBAL_SKILLS = [
     path: '/Users/alice/.claude/commands/frontend-design.md',
     scope: 'global' as const,
     content: 'Generate polished frontend UI components.',
-    rawContent: '---\ndescription: Generate polished frontend UI\n---\n\nCreate distinctive, production-grade frontend interfaces.',
+    rawContent:
+      '---\ndescription: Generate polished frontend UI\n---\n\nCreate distinctive, production-grade frontend interfaces.',
     description: 'Generate polished frontend UI',
     userInvocable: true,
   },
@@ -293,7 +440,8 @@ const GLOBAL_SKILLS = [
     path: '/Users/alice/.claude/commands/claude-api.md',
     scope: 'global' as const,
     content: 'Build integrations with the Claude API.',
-    rawContent: '---\ndescription: Build Claude API integrations\n---\n\nBuild apps with the Claude API or Anthropic SDK.',
+    rawContent:
+      '---\ndescription: Build Claude API integrations\n---\n\nBuild apps with the Claude API or Anthropic SDK.',
     description: 'Build Claude API integrations',
     userInvocable: true,
   },
@@ -304,7 +452,8 @@ const PROJECT_SKILL = {
   path: '/Users/alice/projects/webapp/.claude/commands/deploy.md',
   scope: 'project' as const,
   content: 'Run the production deployment pipeline.',
-  rawContent: '---\ndescription: Deploy to production\n---\n\nRun the production deployment pipeline.',
+  rawContent:
+    '---\ndescription: Deploy to production\n---\n\nRun the production deployment pipeline.',
   description: 'Deploy to production',
   userInvocable: true,
 };
@@ -317,7 +466,8 @@ const GLOBAL_AGENTS = [
     path: '/Users/alice/.claude/agents/code-reviewer.md',
     scope: 'global' as const,
     content: 'Reviews code for quality, security, and best practices.',
-    rawContent: '---\ndescription: Review code quality\nmodel: claude-opus-4-8\n---\n\nReview code for quality and security.',
+    rawContent:
+      '---\ndescription: Review code quality\nmodel: claude-opus-4-8\n---\n\nReview code for quality and security.',
     description: 'Review code quality',
     model: 'claude-opus-4-8',
     missingRequired: [],
@@ -328,7 +478,8 @@ const GLOBAL_AGENTS = [
     path: '/Users/alice/.claude/agents/docs-writer.md',
     scope: 'global' as const,
     content: 'Generates clear, concise technical documentation.',
-    rawContent: '---\ndescription: Write technical docs\n---\n\nGenerate clear technical documentation.',
+    rawContent:
+      '---\ndescription: Write technical docs\n---\n\nGenerate clear technical documentation.',
     description: 'Write technical docs',
     missingRequired: [],
     filenameHasSpaces: false,
@@ -340,7 +491,8 @@ const PROJECT_AGENT = {
   path: '/Users/alice/projects/webapp/.claude/agents/db-migrator.md',
   scope: 'project' as const,
   content: 'Generates and validates database migration scripts.',
-  rawContent: '---\ndescription: Generate DB migrations\nmodel: claude-sonnet-4-6\n---\n\nGenerate and validate database migration scripts.',
+  rawContent:
+    '---\ndescription: Generate DB migrations\nmodel: claude-sonnet-4-6\n---\n\nGenerate and validate database migration scripts.',
   description: 'Generate DB migrations',
   model: 'claude-sonnet-4-6',
   missingRequired: [],
@@ -428,12 +580,14 @@ const MOCK_ACTIVE_SESSIONS = [
 const MOCK_RULES = [
   {
     filename: 'no-console.md',
-    content: '---\npaths:\n  - "src/**/*.ts"\n  - "src/**/*.tsx"\n---\n\nDo not use `console.log` in production code. Use the structured logger instead.',
+    content:
+      '---\npaths:\n  - "src/**/*.ts"\n  - "src/**/*.tsx"\n---\n\nDo not use `console.log` in production code. Use the structured logger instead.',
     paths: ['src/**/*.ts', 'src/**/*.tsx'],
   },
   {
     filename: 'test-conventions.md',
-    content: '---\npaths:\n  - "**/*.test.ts"\n---\n\nAll tests must use integration style with real dependencies. No mocks for database calls.',
+    content:
+      '---\npaths:\n  - "**/*.test.ts"\n---\n\nAll tests must use integration style with real dependencies. No mocks for database calls.',
     paths: ['**/*.test.ts'],
   },
 ];
@@ -448,7 +602,8 @@ const MOCK_TASKS = [
       {
         id: 'task-1',
         subject: 'Add jsonwebtoken dependency',
-        description: 'Install jsonwebtoken and @types/jsonwebtoken, then add JWT_SECRET to the env schema.',
+        description:
+          'Install jsonwebtoken and @types/jsonwebtoken, then add JWT_SECRET to the env schema.',
         status: 'completed' as const,
         blocks: ['task-2'],
         blockedBy: [],
@@ -456,7 +611,8 @@ const MOCK_TASKS = [
       {
         id: 'task-2',
         subject: 'Create JWT helper module',
-        description: 'Implement signToken / verifyToken in src/auth/jwt.ts and cover them with integration tests.',
+        description:
+          'Implement signToken / verifyToken in src/auth/jwt.ts and cover them with integration tests.',
         status: 'in_progress' as const,
         blocks: ['task-3'],
         blockedBy: ['task-1'],
@@ -465,7 +621,8 @@ const MOCK_TASKS = [
       {
         id: 'task-3',
         subject: 'Replace session middleware',
-        description: 'Swap express-session for the JWT verification middleware across all protected routes.',
+        description:
+          'Swap express-session for the JWT verification middleware across all protected routes.',
         status: 'pending' as const,
         blocks: [],
         blockedBy: ['task-2'],
@@ -473,7 +630,8 @@ const MOCK_TASKS = [
       {
         id: 'task-4',
         subject: 'Remove express-session',
-        description: 'Drop the express-session dependency and its configuration once routes are migrated.',
+        description:
+          'Drop the express-session dependency and its configuration once routes are migrated.',
         status: 'pending' as const,
         blocks: [],
         blockedBy: ['task-3'],
@@ -585,9 +743,17 @@ const findings = await parallel(ANGLES.map(a => () => agent(a.prompt, { schema: 
 return { confirmed }`;
 
 const wfAgent = (over: Record<string, unknown>) => ({
-  index: 0, label: 'agent', agentId: '', phaseIndex: 1, phaseTitle: 'Find',
-  model: 'claude-fable-5', state: 'done', attempt: 1,
-  tokens: 24000, toolCalls: 6, durationMs: 62000,
+  index: 0,
+  label: 'agent',
+  agentId: '',
+  phaseIndex: 1,
+  phaseTitle: 'Find',
+  model: 'claude-fable-5',
+  state: 'done',
+  attempt: 1,
+  tokens: 24000,
+  toolCalls: 6,
+  durationMs: 62000,
   promptPreview: 'Find correctness bugs in the changed files.',
   resultPreview: '{"findings":[]}',
   ...over,
@@ -595,15 +761,32 @@ const wfAgent = (over: Record<string, unknown>) => ({
 
 const MOCK_WORKFLOW_DETAILS: Record<string, object> = {
   'wf_5c8a12f0-abc': {
-    runId: 'wf_5c8a12f0-abc', sessionId: 'wf-sess-1', workflowName: 'code-review',
-    status: 'completed', degraded: false,
-    startTime: Date.parse(minsAgo(18)), timestamp: minsAgo(18), durationMs: 434000,
-    agentCount: 6, errorAgentCount: 0, phaseCount: 3, totalTokens: 439789, totalToolCalls: 96,
-    args: 'high', defaultModel: 'claude-fable-5',
-    summary: 'Workflow-backed code review — one finder per correctness angle plus one covering cleanup, verified adversarially.',
-    scriptPath: '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/code-review-wf_5c8a12f0-abc.js',
-    taskId: 'wgjx17skg', script: WF_SCRIPT,
-    logs: ['high review: 5 changed files', 'find: 6 candidates pooled', 'verify: 4 confirmed / 2 refuted'],
+    runId: 'wf_5c8a12f0-abc',
+    sessionId: 'wf-sess-1',
+    workflowName: 'code-review',
+    status: 'completed',
+    degraded: false,
+    startTime: Date.parse(minsAgo(18)),
+    timestamp: minsAgo(18),
+    durationMs: 434000,
+    agentCount: 6,
+    errorAgentCount: 0,
+    phaseCount: 3,
+    totalTokens: 439789,
+    totalToolCalls: 96,
+    args: 'high',
+    defaultModel: 'claude-fable-5',
+    summary:
+      'Workflow-backed code review — one finder per correctness angle plus one covering cleanup, verified adversarially.',
+    scriptPath:
+      '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/code-review-wf_5c8a12f0-abc.js',
+    taskId: 'wgjx17skg',
+    script: WF_SCRIPT,
+    logs: [
+      'high review: 5 changed files',
+      'find: 6 candidates pooled',
+      'verify: 4 confirmed / 2 refuted',
+    ],
     result: { confirmed: 4, refuted: 2 },
     phases: [
       { title: 'Scope', detail: 'Pin the diff, changed files, applicable conventions' },
@@ -611,35 +794,144 @@ const MOCK_WORKFLOW_DETAILS: Record<string, object> = {
       { title: 'Verify', detail: 'One independent verifier per candidate' },
     ],
     agents: [
-      wfAgent({ index: 1, label: 'scope', phaseIndex: 1, phaseTitle: 'Scope', agentId: 'a0e579301a85ad036', lastToolName: 'Bash', lastToolSummary: 'git diff HEAD' }),
-      wfAgent({ index: 2, label: 'find:correctness', agentId: 'a1581f738351a2154', lastToolName: 'Grep' }),
-      wfAgent({ index: 3, label: 'find:cleanup', agentId: 'a303dcfdf3f46aa32', lastToolName: 'Read' }),
-      wfAgent({ index: 4, label: 'verify:race', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a44a9b21cc7810def', tokens: 31000, toolCalls: 8 }),
-      wfAgent({ index: 5, label: 'verify:bounds', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a55b0c32dd8921eff', tokens: 28000 }),
-      wfAgent({ index: 6, label: 'synthesize', phaseIndex: 3, phaseTitle: 'Verify', agentId: 'a66c1d43ee9032f00', model: 'claude-opus-4-8' }),
+      wfAgent({
+        index: 1,
+        label: 'scope',
+        phaseIndex: 1,
+        phaseTitle: 'Scope',
+        agentId: 'a0e579301a85ad036',
+        lastToolName: 'Bash',
+        lastToolSummary: 'git diff HEAD',
+      }),
+      wfAgent({
+        index: 2,
+        label: 'find:correctness',
+        agentId: 'a1581f738351a2154',
+        lastToolName: 'Grep',
+      }),
+      wfAgent({
+        index: 3,
+        label: 'find:cleanup',
+        agentId: 'a303dcfdf3f46aa32',
+        lastToolName: 'Read',
+      }),
+      wfAgent({
+        index: 4,
+        label: 'verify:race',
+        phaseIndex: 3,
+        phaseTitle: 'Verify',
+        agentId: 'a44a9b21cc7810def',
+        tokens: 31000,
+        toolCalls: 8,
+      }),
+      wfAgent({
+        index: 5,
+        label: 'verify:bounds',
+        phaseIndex: 3,
+        phaseTitle: 'Verify',
+        agentId: 'a55b0c32dd8921eff',
+        tokens: 28000,
+      }),
+      wfAgent({
+        index: 6,
+        label: 'synthesize',
+        phaseIndex: 3,
+        phaseTitle: 'Verify',
+        agentId: 'a66c1d43ee9032f00',
+        model: 'claude-opus-4-8',
+      }),
     ],
   },
   'wf_9d21bb31-def': {
-    runId: 'wf_9d21bb31-def', sessionId: 'wf-sess-1', workflowName: 'sensitive-audit',
-    status: 'completed', degraded: false,
-    startTime: Date.parse(minsAgo(140)), timestamp: minsAgo(140), durationMs: 268000,
-    agentCount: 5, errorAgentCount: 3, phaseCount: 2, totalTokens: 402423, totalToolCalls: 65,
-    args: 'medium', defaultModel: 'claude-opus-4-8',
-    summary: 'A completed run that lies: most agents died on a session limit, so the report was an empty false-negative.',
-    scriptPath: '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/sensitive-audit-wf_9d21bb31-def.js',
-    taskId: 'wqje0jvsx', script: WF_SCRIPT,
-    logs: ['medium audit: 5 clusters', 'ERROR: agent audit:auth failed — session limit reached', 'ERROR: agent audit:ipc failed — session limit reached'],
+    runId: 'wf_9d21bb31-def',
+    sessionId: 'wf-sess-1',
+    workflowName: 'sensitive-audit',
+    status: 'completed',
+    degraded: false,
+    startTime: Date.parse(minsAgo(140)),
+    timestamp: minsAgo(140),
+    durationMs: 268000,
+    agentCount: 5,
+    errorAgentCount: 3,
+    phaseCount: 2,
+    totalTokens: 402423,
+    totalToolCalls: 65,
+    args: 'medium',
+    defaultModel: 'claude-opus-4-8',
+    summary:
+      'A completed run that lies: most agents died on a session limit, so the report was an empty false-negative.',
+    scriptPath:
+      '/Users/alice/.claude/projects/-Users-alice-webapp/wf-sess-1/workflows/scripts/sensitive-audit-wf_9d21bb31-def.js',
+    taskId: 'wqje0jvsx',
+    script: WF_SCRIPT,
+    logs: [
+      'medium audit: 5 clusters',
+      'ERROR: agent audit:auth failed — session limit reached',
+      'ERROR: agent audit:ipc failed — session limit reached',
+    ],
     result: { confirmed: 0, note: 'false negative — see per-agent errors' },
     phases: [
       { title: 'Audit', detail: 'Deep-read sensitive clusters' },
       { title: 'Verify', detail: 'One skeptic per cluster' },
     ],
     agents: [
-      wfAgent({ index: 1, label: 'audit:chat-lifecycle', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a7c09fc048ead9b4b', model: 'claude-opus-4-8' }),
-      wfAgent({ index: 2, label: 'audit:auth', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a8d10fd159cae5c2c', model: 'claude-opus-4-8', state: 'error', tokens: 0, toolCalls: 0, durationMs: 0, error: 'session limit reached', resultPreview: undefined }),
-      wfAgent({ index: 3, label: 'audit:ipc', phaseIndex: 1, phaseTitle: 'Audit', agentId: 'a9e21fe26adbf6d3d', model: 'claude-opus-4-8', state: 'error', tokens: 0, toolCalls: 0, durationMs: 0, error: 'session limit reached', resultPreview: undefined }),
-      wfAgent({ index: 4, label: 'verify:chat-lifecycle', phaseIndex: 2, phaseTitle: 'Verify', agentId: 'aa032f0371ec07e4e', model: 'claude-opus-4-8', attempt: 2 }),
-      wfAgent({ index: 5, label: 'verify:auth', phaseIndex: 2, phaseTitle: 'Verify', agentId: 'ab143f1482fd18f5f', model: 'claude-opus-4-8', state: 'error', tokens: 0, error: 'session limit reached', resultPreview: undefined }),
+      wfAgent({
+        index: 1,
+        label: 'audit:chat-lifecycle',
+        phaseIndex: 1,
+        phaseTitle: 'Audit',
+        agentId: 'a7c09fc048ead9b4b',
+        model: 'claude-opus-4-8',
+      }),
+      wfAgent({
+        index: 2,
+        label: 'audit:auth',
+        phaseIndex: 1,
+        phaseTitle: 'Audit',
+        agentId: 'a8d10fd159cae5c2c',
+        model: 'claude-opus-4-8',
+        state: 'error',
+        tokens: 0,
+        toolCalls: 0,
+        durationMs: 0,
+        error: 'session limit reached',
+        resultPreview: undefined,
+      }),
+      wfAgent({
+        index: 3,
+        label: 'audit:ipc',
+        phaseIndex: 1,
+        phaseTitle: 'Audit',
+        agentId: 'a9e21fe26adbf6d3d',
+        model: 'claude-opus-4-8',
+        state: 'error',
+        tokens: 0,
+        toolCalls: 0,
+        durationMs: 0,
+        error: 'session limit reached',
+        resultPreview: undefined,
+      }),
+      wfAgent({
+        index: 4,
+        label: 'verify:chat-lifecycle',
+        phaseIndex: 2,
+        phaseTitle: 'Verify',
+        agentId: 'aa032f0371ec07e4e',
+        model: 'claude-opus-4-8',
+        attempt: 2,
+      }),
+      wfAgent({
+        index: 5,
+        label: 'verify:auth',
+        phaseIndex: 2,
+        phaseTitle: 'Verify',
+        agentId: 'ab143f1482fd18f5f',
+        model: 'claude-opus-4-8',
+        state: 'error',
+        tokens: 0,
+        error: 'session limit reached',
+        resultPreview: undefined,
+      }),
     ],
   },
 };
@@ -650,18 +942,38 @@ const MOCK_WORKFLOWS = [
     filename: 'wf-sess-1.jsonl',
     runs: [
       {
-        runId: 'wf_5c8a12f0-abc', sessionId: 'wf-sess-1', workflowName: 'code-review',
-        status: 'completed', degraded: false,
-        startTime: Date.parse(minsAgo(18)), timestamp: minsAgo(18), durationMs: 434000,
-        agentCount: 6, errorAgentCount: 0, phaseCount: 3, totalTokens: 439789, totalToolCalls: 96,
-        args: 'high', defaultModel: 'claude-fable-5',
+        runId: 'wf_5c8a12f0-abc',
+        sessionId: 'wf-sess-1',
+        workflowName: 'code-review',
+        status: 'completed',
+        degraded: false,
+        startTime: Date.parse(minsAgo(18)),
+        timestamp: minsAgo(18),
+        durationMs: 434000,
+        agentCount: 6,
+        errorAgentCount: 0,
+        phaseCount: 3,
+        totalTokens: 439789,
+        totalToolCalls: 96,
+        args: 'high',
+        defaultModel: 'claude-fable-5',
       },
       {
-        runId: 'wf_9d21bb31-def', sessionId: 'wf-sess-1', workflowName: 'sensitive-audit',
-        status: 'completed', degraded: false,
-        startTime: Date.parse(minsAgo(140)), timestamp: minsAgo(140), durationMs: 268000,
-        agentCount: 5, errorAgentCount: 3, phaseCount: 2, totalTokens: 402423, totalToolCalls: 65,
-        args: 'medium', defaultModel: 'claude-opus-4-8',
+        runId: 'wf_9d21bb31-def',
+        sessionId: 'wf-sess-1',
+        workflowName: 'sensitive-audit',
+        status: 'completed',
+        degraded: false,
+        startTime: Date.parse(minsAgo(140)),
+        timestamp: minsAgo(140),
+        durationMs: 268000,
+        agentCount: 5,
+        errorAgentCount: 3,
+        phaseCount: 2,
+        totalTokens: 402423,
+        totalToolCalls: 65,
+        args: 'medium',
+        defaultModel: 'claude-opus-4-8',
       },
     ],
   },
@@ -710,27 +1022,106 @@ const MOCK_TEAM_DETAIL = {
   totalTokens: 2_200_000,
   messageCount: 42,
   members: [
-    teamMember({ name: 'check-changelog', color: 'blue', description: 'Audit CHANGELOG', prompt: 'Check that CHANGELOG.md is up to date with package.json and recent git tags; report missing versions and format issues.', totalTokens: 480_000 }),
-    teamMember({ name: 'check-claudemd', color: 'green', description: 'Audit CLAUDE.md', prompt: 'Verify CLAUDE.md against the current codebase: npm scripts, module list, test coverage, conventions.', totalTokens: 620_000 }),
-    teamMember({ name: 'check-readme', color: 'yellow', description: 'Audit README', prompt: 'Verify README.md: features vs real code, install/build instructions, broken links, stale sections.', totalTokens: 1_100_000 }),
-    teamMember({ name: 'check-contributing', color: 'purple', description: 'Audit CONTRIBUTING', prompt: 'Check CONTRIBUTING.md against package.json scripts, CI workflows and repo conventions.', source: 'config-only', transcripts: [], messageCount: 0, toolCallCount: 0, totalTokens: 0 }),
+    teamMember({
+      name: 'check-changelog',
+      color: 'blue',
+      description: 'Audit CHANGELOG',
+      prompt:
+        'Check that CHANGELOG.md is up to date with package.json and recent git tags; report missing versions and format issues.',
+      totalTokens: 480_000,
+    }),
+    teamMember({
+      name: 'check-claudemd',
+      color: 'green',
+      description: 'Audit CLAUDE.md',
+      prompt:
+        'Verify CLAUDE.md against the current codebase: npm scripts, module list, test coverage, conventions.',
+      totalTokens: 620_000,
+    }),
+    teamMember({
+      name: 'check-readme',
+      color: 'yellow',
+      description: 'Audit README',
+      prompt:
+        'Verify README.md: features vs real code, install/build instructions, broken links, stale sections.',
+      totalTokens: 1_100_000,
+    }),
+    teamMember({
+      name: 'check-contributing',
+      color: 'purple',
+      description: 'Audit CONTRIBUTING',
+      prompt:
+        'Check CONTRIBUTING.md against package.json scripts, CI workflows and repo conventions.',
+      source: 'config-only',
+      transcripts: [],
+      messageCount: 0,
+      toolCallCount: 0,
+      totalTokens: 0,
+    }),
   ],
   events: [
-    { timestamp: Date.parse(minsAgo(25)), from: 'team-lead', to: 'check-changelog', summary: 'Audit CHANGELOG', text: 'Check that CHANGELOG.md is up to date with package.json and recent git tags.', kind: 'dispatch' },
-    { timestamp: Date.parse(minsAgo(25)), from: 'team-lead', to: 'check-claudemd', summary: 'Audit CLAUDE.md', text: 'Verify CLAUDE.md against the current codebase.', kind: 'dispatch' },
-    { timestamp: Date.parse(minsAgo(24)), from: 'team-lead', to: 'check-readme', summary: 'Audit README', text: 'Verify README.md: features vs real code, broken links, stale sections.', kind: 'dispatch' },
-    { timestamp: Date.parse(minsAgo(21)), from: 'check-readme', to: 'team-lead', summary: 'README audit — 1 issue found', text: 'The Workflows feature is fully implemented but missing from the Features section. Everything else checks out.', kind: 'message' },
-    { timestamp: Date.parse(minsAgo(20)), from: 'check-changelog', to: 'team-lead', summary: 'CHANGELOG outdated since v1.2.0', text: 'CHANGELOG.md only lists 3 versions; 18 released versions (v1.6.3–v2.1.5) are missing compared to git tags.', kind: 'message' },
-    { timestamp: Date.parse(minsAgo(19)), from: 'team-lead', to: 'check-claudemd', summary: 'Send me the report', text: 'Please send the concise discrepancy report via SendMessage.', kind: 'message' },
-    { timestamp: Date.parse(minsAgo(18)), from: 'check-claudemd', to: 'team-lead', summary: 'CLAUDE.md: 8 undocumented modules', text: 'Eight modules under electron/modules/ are missing from the docs, and the test list is incomplete.', kind: 'message' },
+    {
+      timestamp: Date.parse(minsAgo(25)),
+      from: 'team-lead',
+      to: 'check-changelog',
+      summary: 'Audit CHANGELOG',
+      text: 'Check that CHANGELOG.md is up to date with package.json and recent git tags.',
+      kind: 'dispatch',
+    },
+    {
+      timestamp: Date.parse(minsAgo(25)),
+      from: 'team-lead',
+      to: 'check-claudemd',
+      summary: 'Audit CLAUDE.md',
+      text: 'Verify CLAUDE.md against the current codebase.',
+      kind: 'dispatch',
+    },
+    {
+      timestamp: Date.parse(minsAgo(24)),
+      from: 'team-lead',
+      to: 'check-readme',
+      summary: 'Audit README',
+      text: 'Verify README.md: features vs real code, broken links, stale sections.',
+      kind: 'dispatch',
+    },
+    {
+      timestamp: Date.parse(minsAgo(21)),
+      from: 'check-readme',
+      to: 'team-lead',
+      summary: 'README audit — 1 issue found',
+      text: 'The Workflows feature is fully implemented but missing from the Features section. Everything else checks out.',
+      kind: 'message',
+    },
+    {
+      timestamp: Date.parse(minsAgo(20)),
+      from: 'check-changelog',
+      to: 'team-lead',
+      summary: 'CHANGELOG outdated since v1.2.0',
+      text: 'CHANGELOG.md only lists 3 versions; 18 released versions (v1.6.3–v2.1.5) are missing compared to git tags.',
+      kind: 'message',
+    },
+    {
+      timestamp: Date.parse(minsAgo(19)),
+      from: 'team-lead',
+      to: 'check-claudemd',
+      summary: 'Send me the report',
+      text: 'Please send the concise discrepancy report via SendMessage.',
+      kind: 'message',
+    },
+    {
+      timestamp: Date.parse(minsAgo(18)),
+      from: 'check-claudemd',
+      to: 'team-lead',
+      summary: 'CLAUDE.md: 8 undocumented modules',
+      text: 'Eight modules under electron/modules/ are missing from the docs, and the test list is incomplete.',
+      kind: 'message',
+    },
   ],
   leadSessionIdFromConfig: 'f78e79be-b5a5-4082-a707-1a335b523067',
   configPath: '/Users/demo/.claude/teams/session-f78e79be/config.json',
 };
 
-const MOCK_TEAMS = [
-  (({ members: _m, events: _e, configPath: _c, ...s }) => s)(MOCK_TEAM_DETAIL),
-];
+const MOCK_TEAMS = [(({ members: _m, events: _e, configPath: _c, ...s }) => s)(MOCK_TEAM_DETAIL)];
 
 // ─── Sessioni agent live / background ──────────────────────────────────────────
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
@@ -775,7 +1166,8 @@ const MOCK_BG_SESSIONS = [
     pid: 25104,
     createdAt: minsAgo(32),
     updatedAt: minsAgo(2),
-    needs: 'Should I store the Stripe customer ID on the users table or in a separate billing table?',
+    needs:
+      'Should I store the Stripe customer ID on the users table or in a separate billing table?',
     hasPendingQuestion: true,
   },
   {
@@ -826,7 +1218,8 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Completed — toggle shipped, 6 files changed',
     intent: 'Add a system-aware dark theme switch to the settings menu.',
-    result: 'Added data-theme switching with localStorage persistence; audited 12 components for hardcoded colors.',
+    result:
+      'Added data-theme switching with localStorage persistence; audited 12 components for hardcoded colors.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'bg',
@@ -846,7 +1239,8 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Failed — build broke on circular import',
     intent: 'Convert the server bundle from CommonJS to native ESM.',
-    result: 'Stopped after the build failed: circular dependency between src/db.ts and src/models/user.ts.',
+    result:
+      'Stopped after the build failed: circular dependency between src/db.ts and src/models/user.ts.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'claude',
@@ -926,15 +1320,18 @@ Introduce \`src/auth/jwt.ts\` with \`signToken\`/\`verifyToken\`, then swap the 
 const MOCK_SUBAGENTS = [
   {
     agentId: 'agent-001',
-    filePath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-001.jsonl',
-    firstPrompt: 'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.',
+    filePath:
+      '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-001.jsonl',
+    firstPrompt:
+      'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.',
     startedAt: minsAgo(123),
     endedAt: minsAgo(121),
     messageCount: 14,
   },
   {
     agentId: 'agent-002',
-    filePath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-002.jsonl',
+    filePath:
+      '/Users/alice/.claude/projects/-Users-alice-projects-webapp/subagents/agent-002.jsonl',
     firstPrompt: 'Write integration tests for signToken and verifyToken in src/auth/jwt.ts.',
     startedAt: minsAgo(120),
     endedAt: minsAgo(118),
@@ -949,7 +1346,12 @@ const MOCK_SUBAGENT_TRANSCRIPT = [
     uuid: 'sa-msg-001',
     role: 'user' as const,
     timestamp: minsAgo(123),
-    content: [{ type: 'text' as const, text: 'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.' }],
+    content: [
+      {
+        type: 'text' as const,
+        text: 'Audit every call site of req.session across the codebase and list the files that need migrating to JWT.',
+      },
+    ],
   },
   {
     uuid: 'sa-msg-002',
@@ -958,14 +1360,27 @@ const MOCK_SUBAGENT_TRANSCRIPT = [
     model: 'claude-sonnet-4-6',
     content: [
       { type: 'text' as const, text: 'Scanning the codebase for session usage.' },
-      { type: 'tool_use' as const, id: 'sa-tu-001', name: 'Grep', input: { pattern: 'req\\.session', path: '/Users/alice/projects/webapp/src' } },
+      {
+        type: 'tool_use' as const,
+        id: 'sa-tu-001',
+        name: 'Grep',
+        input: { pattern: 'req\\.session', path: '/Users/alice/projects/webapp/src' },
+      },
     ],
   },
   {
     uuid: 'sa-msg-003',
     role: 'user' as const,
     timestamp: minsAgo(122),
-    content: [{ type: 'tool_result' as const, toolUseId: 'sa-tu-001', content: 'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n', isError: false }],
+    content: [
+      {
+        type: 'tool_result' as const,
+        toolUseId: 'sa-tu-001',
+        content:
+          'src/routes/auth.ts:24:  req.session.userId = user.id;\nsrc/routes/auth.ts:51:  delete req.session.userId;\nsrc/middleware/protect.ts:8:  if (!req.session.userId) return res.status(401).json({ error: "Unauthorized" });\n',
+        isError: false,
+      },
+    ],
   },
   {
     uuid: 'sa-msg-004',
@@ -973,7 +1388,10 @@ const MOCK_SUBAGENT_TRANSCRIPT = [
     timestamp: minsAgo(121),
     model: 'claude-sonnet-4-6',
     content: [
-      { type: 'text' as const, text: 'Three call sites need migrating:\n\n1. `src/routes/auth.ts:24` — login writes `req.session.userId`\n2. `src/routes/auth.ts:51` — logout deletes it\n3. `src/middleware/protect.ts:8` — guard reads it\n\nAll three should move to the new JWT helpers.' },
+      {
+        type: 'text' as const,
+        text: 'Three call sites need migrating:\n\n1. `src/routes/auth.ts:24` — login writes `req.session.userId`\n2. `src/routes/auth.ts:51` — logout deletes it\n3. `src/middleware/protect.ts:8` — guard reads it\n\nAll three should move to the new JWT helpers.',
+      },
     ],
   },
 ];
@@ -996,7 +1414,8 @@ const MOCK_PLUGINS = [
         path: '/Users/alice/.claude/plugins/git-flow/skills/changelog/SKILL.md',
         scope: 'plugin' as const,
         content: 'Generate a changelog entry from the staged diff.',
-        rawContent: '---\nname: changelog\ndescription: Generate a changelog entry from the staged diff\n---\n\nGenerate a changelog entry from the staged diff.',
+        rawContent:
+          '---\nname: changelog\ndescription: Generate a changelog entry from the staged diff\n---\n\nGenerate a changelog entry from the staged diff.',
         description: 'Generate a changelog entry from the staged diff',
         userInvocable: true,
       },
@@ -1007,7 +1426,8 @@ const MOCK_PLUGINS = [
         path: '/Users/alice/.claude/plugins/git-flow/agents/pr-reviewer.md',
         scope: 'plugin' as const,
         content: 'Reviews a pull request and flags risky changes.',
-        rawContent: '---\ndescription: Review a pull request\n---\n\nReviews a pull request and flags risky changes.',
+        rawContent:
+          '---\ndescription: Review a pull request\n---\n\nReviews a pull request and flags risky changes.',
         description: 'Review a pull request',
         missingRequired: [],
         filenameHasSpaces: false,
@@ -1019,7 +1439,8 @@ const MOCK_PLUGINS = [
         path: '/Users/alice/.claude/plugins/git-flow/commands/commit.md',
         description: 'Stage and write a conventional commit',
         content: 'Stage changes and write a conventional commit message.',
-        rawContent: '---\ndescription: Stage and write a conventional commit\n---\n\nStage changes and write a conventional commit message.',
+        rawContent:
+          '---\ndescription: Stage and write a conventional commit\n---\n\nStage changes and write a conventional commit message.',
       },
     ],
   },
@@ -1040,7 +1461,8 @@ const MOCK_PLUGINS = [
         path: '/Users/alice/.claude/plugins/test-runner/commands/test.md',
         description: 'Run the project test suite',
         content: 'Run the project test suite and summarize failures.',
-        rawContent: '---\ndescription: Run the project test suite\n---\n\nRun the project test suite and summarize failures.',
+        rawContent:
+          '---\ndescription: Run the project test suite\n---\n\nRun the project test suite and summarize failures.',
       },
     ],
   },
@@ -1079,7 +1501,10 @@ const MOCK_EFFECTIVE_CONFIG = {
     permissions: { defaultMode: 'default' },
   },
   provenance: {
-    model: { source: 'projectSettings', path: '/Users/alice/projects/webapp/.claude/settings.json' },
+    model: {
+      source: 'projectSettings',
+      path: '/Users/alice/projects/webapp/.claude/settings.json',
+    },
     cleanupPeriodDays: { source: 'userSettings', path: '/Users/alice/.claude/settings.json' },
     includeCoAuthoredBy: { source: 'userSettings', path: '/Users/alice/.claude/settings.json' },
   },
@@ -1144,8 +1569,16 @@ const MOCK_MERGE_PLAN = {
   dest: { hash: DUP_DEST_HASH, realPath: '/Users/alice/projects/webapp', authoritative: true },
   cwdRewrite: { from: '/Users/alice/Projects/webapp', to: '/Users/alice/projects/webapp' },
   sessions: [
-    { filename: '20260615T101500_000300.jsonl', collides: false, targetName: '20260615T101500_000300.jsonl' },
-    { filename: '20260612T084500_000301.jsonl', collides: false, targetName: '20260612T084500_000301.jsonl' },
+    {
+      filename: '20260615T101500_000300.jsonl',
+      collides: false,
+      targetName: '20260615T101500_000300.jsonl',
+    },
+    {
+      filename: '20260612T084500_000301.jsonl',
+      collides: false,
+      targetName: '20260612T084500_000301.jsonl',
+    },
   ],
   sidecars: [{ name: 'subagents', collides: false }],
   memory: [{ filename: 'feedback_naming.md', kind: 'copy' as const }],
@@ -1175,10 +1608,39 @@ function getSessionArtifacts(filename: string) {
   return {
     sessionId,
     artifacts: [
-      { kind: 'session' as const, label: 'Transcript', path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${filename}`, isDir: false, locked: true, defaultSelected: true },
-      { kind: 'subagents' as const, label: 'Sub-agent transcripts', path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${sessionId}/subagents`, isDir: true, count: 2, defaultSelected: true },
-      { kind: 'tasks' as const, label: 'Tasks', path: `/Users/alice/.claude/tasks/${sessionId}`, isDir: true, count: 4, defaultSelected: true },
-      { kind: 'plan' as const, label: 'Plan: migrate-auth-to-jwt.md', path: '/Users/alice/.claude/plans/migrate-auth-to-jwt.md', isDir: false, shared: true, referencedBy: 1, defaultSelected: false },
+      {
+        kind: 'session' as const,
+        label: 'Transcript',
+        path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${filename}`,
+        isDir: false,
+        locked: true,
+        defaultSelected: true,
+      },
+      {
+        kind: 'subagents' as const,
+        label: 'Sub-agent transcripts',
+        path: `/Users/alice/.claude/projects/-Users-alice-projects-webapp/${sessionId}/subagents`,
+        isDir: true,
+        count: 2,
+        defaultSelected: true,
+      },
+      {
+        kind: 'tasks' as const,
+        label: 'Tasks',
+        path: `/Users/alice/.claude/tasks/${sessionId}`,
+        isDir: true,
+        count: 4,
+        defaultSelected: true,
+      },
+      {
+        kind: 'plan' as const,
+        label: 'Plan: migrate-auth-to-jwt.md',
+        path: '/Users/alice/.claude/plans/migrate-auth-to-jwt.md',
+        isDir: false,
+        shared: true,
+        referencedBy: 1,
+        defaultSelected: false,
+      },
     ],
   };
 }
@@ -1229,37 +1691,295 @@ function getPrefs() {
   };
 }
 
+// ── Agent Studio ─────────────────────────────────────────────────────────────
+
+const MOCK_BLUEPRINT = {
+  name: 'release-triage',
+  description: 'triage a release diff → verdict + changelog draft',
+  version: '0.1.0',
+  brief: {
+    goal: 'Given a release tag, triage the diff: inspect changes, audit security, produce a verdict and a changelog draft.',
+    inputs: [{ name: 'tag', description: 'release tag', required: true }],
+    expectedOutput: 'verdict: ship | hold · CHANGELOG.draft.md',
+    successCriteria: ['every changed file inspected', 'no unreviewed criticals'],
+    onError: 'halt and report the failing step',
+  },
+  phases: [
+    {
+      title: 'Collect',
+      nodes: [
+        {
+          kind: 'step',
+          step: {
+            id: 'collect',
+            prompt: 'Collect the release diff and context for ${args}',
+            agentType: 'repo-scout',
+            model: 'haiku',
+          },
+        },
+        {
+          kind: 'code',
+          source: "if (!collect) return { verdict: 'hold', changelog: 'nothing to triage' }",
+        },
+      ],
+    },
+    {
+      title: 'Inspect',
+      detail: 'review + audit in parallel',
+      nodes: [
+        {
+          kind: 'parallel',
+          steps: [
+            {
+              id: 'inspect',
+              prompt: 'Review the changed code for regressions:\n${collect}',
+              agentType: 'code-inspector',
+              model: 'sonnet',
+            },
+            {
+              id: 'security-check',
+              prompt: 'Audit this diff for vulnerabilities:\n${collect}',
+              agentType: 'sec-auditor',
+              model: 'opus',
+            },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Per package',
+      detail: 'one agent per changed package',
+      nodes: [
+        {
+          kind: 'pipeline',
+          resultVar: 'notes',
+          itemsSource: 'packages',
+          stages: [
+            {
+              kind: 'agent',
+              params: 'pkg',
+              step: {
+                id: 'note',
+                prompt: 'Draft release notes for ${pkg.name} from the review:\n${inspect}',
+                dynamicLabel: '`notes:${pkg.name}`',
+                model: 'sonnet',
+              },
+            },
+            { kind: 'code', source: '(r, pkg) => ({ ...r, package: pkg.name })' },
+          ],
+        },
+      ],
+    },
+    {
+      title: 'Finalize',
+      nodes: [
+        {
+          kind: 'step',
+          step: {
+            id: 'finalize',
+            prompt: 'Merge ${inspect} and ${security-check} into a changelog draft.',
+            model: 'sonnet',
+            schemaSource:
+              "{\n        type: 'object',\n        required: ['verdict', 'changelog'],\n        properties: {\n          verdict: { type: 'string', enum: ['ship', 'hold'] },\n          changelog: { type: 'string', description: 'markdown draft' },\n        },\n      }",
+            schemaModel: {
+              type: 'object',
+              children: [
+                {
+                  name: 'verdict',
+                  required: true,
+                  node: { type: 'string', enum: ['ship', 'hold'] },
+                },
+                {
+                  name: 'changelog',
+                  required: true,
+                  node: { type: 'string', description: 'markdown draft' },
+                },
+              ],
+            },
+          },
+        },
+        {
+          kind: 'code',
+          source: 'return { verdict: finalize.verdict, changelog: finalize.changelog }',
+        },
+      ],
+    },
+  ],
+};
+
+const MOCK_BLUEPRINT_SCRIPT = [
+  'export const meta = {',
+  '  name: "release-triage",',
+  '  description: "triage a release diff → verdict + changelog draft",',
+  '  phases: [',
+  '    { title: "Collect" },',
+  '    { title: "Inspect", detail: "review + audit in parallel" },',
+  '    { title: "Finalize" },',
+  '  ],',
+  '}',
+  '',
+  '// Generated by ClaudeLens Agent Studio — plain Claude Code workflow script, edit freely.',
+  '// Run from any session as: /release-triage <tag>',
+  '',
+  'phase("Collect")',
+  'const collect = await agent(`Collect the release diff and context for ${args}`, { label: "collect", agentType: "repo-scout", model: "haiku" })',
+  "if (!collect) return { verdict: 'hold', changelog: 'nothing to triage' }",
+  '',
+  'phase("Inspect")',
+  'const [inspect, securityCheck] = await parallel([',
+  '  () => agent(`Review the changed code for regressions:\\n${collect}`, { label: "inspect", phase: "Inspect", agentType: "code-inspector", model: "sonnet" }),',
+  '  () => agent(`Audit this diff for vulnerabilities:\\n${collect}`, { label: "security-check", phase: "Inspect", agentType: "sec-auditor", model: "opus" }),',
+  '])',
+  '',
+  'phase("Finalize")',
+  'const finalize = await agent(`Merge ${inspect} and ${securityCheck} into a changelog draft.`, { label: "finalize", phase: "Finalize", model: "sonnet" })',
+  '',
+  'return { verdict: finalize.verdict, changelog: finalize.changelog }',
+  '',
+].join('\n');
+
+const MOCK_STUDIO_LIBRARY = {
+  blueprints: [
+    {
+      fileName: 'release-triage.js',
+      name: 'release-triage',
+      description: 'triage a release diff → verdict + changelog draft',
+      version: '0.1.0',
+      phaseCount: 4,
+      stepCount: 5,
+      parallelStepCount: 2,
+      agentTypes: ['repo-scout', 'code-inspector', 'sec-auditor'],
+      updatedAt: '2026-07-10T09:12:00.000Z',
+      structured: true,
+      codeNodeCount: 3,
+      errorCount: 0,
+      warningCount: 0,
+      scope: 'global',
+      projectPath: null,
+    },
+    {
+      fileName: 'docs-sync.js',
+      name: 'docs-sync',
+      description: 'keeps README + docs aligned with exported APIs',
+      version: '0.1.0',
+      phaseCount: 2,
+      stepCount: 2,
+      parallelStepCount: 0,
+      agentTypes: ['doc-writer'],
+      updatedAt: '2026-07-08T15:40:00.000Z',
+      structured: true,
+      codeNodeCount: 0,
+      errorCount: 0,
+      warningCount: 1,
+      scope: 'global',
+      projectPath: null,
+    },
+    {
+      fileName: 'find-flaky-tests.js',
+      name: 'find-flaky-tests',
+      description: 'hand-written: hunt flaky tests in CI logs',
+      version: '0.1.0',
+      phaseCount: 2,
+      stepCount: 3,
+      parallelStepCount: 0,
+      agentTypes: [],
+      updatedAt: '2026-07-05T18:02:00.000Z',
+      structured: true,
+      codeNodeCount: 4,
+      errorCount: 0,
+      warningCount: 0,
+      scope: 'project',
+      projectPath: '/Users/alice/projects/webapp',
+    },
+  ],
+  workflowsDir: '/Users/alice/.claude/workflows',
+};
+
+const MOCK_BLUEPRINT_DETAIL = {
+  blueprint: MOCK_BLUEPRINT,
+  fileName: 'release-triage.js',
+  scriptPath: '/Users/alice/.claude/workflows/release-triage.js',
+  source: MOCK_BLUEPRINT_SCRIPT,
+  structured: true,
+  parseError: null,
+  issues: [],
+  scope: 'global',
+  projectPath: null,
+};
+
 // ─── Registrazione handler mock ───────────────────────────────────────────────
 
 export function registerScreenshotHandlers(ipcMain: IpcMain) {
   const channels = [
-    'memory:listProjects', 'memory:getProject', 'memory:createTopic', 'memory:updateTopic', 'memory:deleteTopic',
-    'cost:getSummary', 'cost:getByProject',
-    'claudeMd:getGlobal', 'claudeMd:getHierarchy', 'claudeMd:writeGlobal', 'claudeMd:writeFile',
-    'claudeMd:deleteGlobal', 'claudeMd:deleteFile',
-    'markdownFile:write', 'markdownFile:delete',
-    'export:markdown', 'export:pdf',
-    'sessions:listByProject', 'sessions:getChat',
+    'memory:listProjects',
+    'memory:getProject',
+    'memory:createTopic',
+    'memory:updateTopic',
+    'memory:deleteTopic',
+    'cost:getSummary',
+    'cost:getByProject',
+    'claudeMd:getGlobal',
+    'claudeMd:getHierarchy',
+    'claudeMd:writeGlobal',
+    'claudeMd:writeFile',
+    'claudeMd:deleteGlobal',
+    'claudeMd:deleteFile',
+    'markdownFile:write',
+    'markdownFile:delete',
+    'export:markdown',
+    'export:pdf',
+    'sessions:listByProject',
+    'sessions:getChat',
     'rules:getByProject',
-    'skills:getGlobal', 'skills:getAll', 'skills:create',
-    'agents:getGlobal', 'agents:getByProject', 'agents:create',
+    'skills:getGlobal',
+    'skills:getAll',
+    'skills:create',
+    'agents:getGlobal',
+    'agents:getByProject',
+    'agents:create',
     'projects:delete',
     'mcp:getGlobal',
-    'ai:run', 'ai:stop',
-    'live:getActiveSessions', 'live:getSessions', 'live:startWatch', 'live:stopWatch',
-    'tasks:getByProject', 'plans:getByProject',
-    'workflows:getByProject', 'workflows:getRun',
-    'teams:getByProject', 'teams:getDetail',
+    'ai:run',
+    'ai:stop',
+    'live:getActiveSessions',
+    'live:getSessions',
+    'live:startWatch',
+    'live:stopWatch',
+    'tasks:getByProject',
+    'plans:getByProject',
+    'workflows:getByProject',
+    'workflows:getRun',
+    'teams:getByProject',
+    'teams:getDetail',
     'settings:getCleanupPeriodDays',
-    'sessions:getSubagents', 'sessions:getSubagentTranscript', 'sessions:getArtifacts', 'sessions:deleteSession',
+    'sessions:getSubagents',
+    'sessions:getSubagentTranscript',
+    'sessions:getArtifacts',
+    'sessions:deleteSession',
     'plugins:getAll',
+    'studio:getAll',
+    'studio:get',
+    'studio:create',
+    'studio:save',
+    'studio:delete',
+    'studio:compile',
+    'studio:preview',
+    'studio:writeScript',
     'config:getEffective',
     'cost:getPricingMeta',
-    'projects:detectDuplicates', 'projects:planMerge', 'projects:executeMerge',
-    'telemetry:isEnabled', 'telemetry:setEnabled', 'telemetry:track',
-    'agents:attachBg', 'agents:stopBg', 'agents:respawnBg', 'agents:deleteBg',
+    'projects:detectDuplicates',
+    'projects:planMerge',
+    'projects:executeMerge',
+    'telemetry:isEnabled',
+    'telemetry:setEnabled',
+    'telemetry:track',
+    'agents:attachBg',
+    'agents:stopBg',
+    'agents:respawnBg',
+    'agents:deleteBg',
     'notifications:clearBadge',
-    'prefs:getAll', 'prefs:set',
+    'prefs:getAll',
+    'prefs:set',
   ];
 
   // Rimuovi handler reali prima di registrare i mock
@@ -1271,9 +1991,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('memory:updateTopic', () => ok(null));
   ipcMain.handle('memory:deleteTopic', () => ok(null));
 
-  ipcMain.handle('cost:getSummary', () =>
-    ok(MOCK_PROJECTS.map(p => getCost(p.hash)))
-  );
+  ipcMain.handle('cost:getSummary', () => ok(MOCK_PROJECTS.map(p => getCost(p.hash))));
   ipcMain.handle('cost:getByProject', (_e: unknown, hash: string) => ok(getCost(hash)));
 
   ipcMain.handle('claudeMd:getGlobal', () => ok(GLOBAL_CLAUDE_MD));
@@ -1284,8 +2002,12 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('claudeMd:deleteFile', () => ok(null));
   ipcMain.handle('markdownFile:write', () => ok(null));
   ipcMain.handle('markdownFile:delete', () => ok(null));
-  ipcMain.handle('export:markdown', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.md' }));
-  ipcMain.handle('export:pdf', () => ok({ canceled: false, filePath: '/tmp/claudelens-export.pdf' }));
+  ipcMain.handle('export:markdown', () =>
+    ok({ canceled: false, filePath: '/tmp/claudelens-export.md' })
+  );
+  ipcMain.handle('export:pdf', () =>
+    ok({ canceled: false, filePath: '/tmp/claudelens-export.pdf' })
+  );
 
   ipcMain.handle('sessions:listByProject', (_e: unknown, hash: string) => ok(getSessionList(hash)));
   ipcMain.handle('sessions:getChat', () => ok(MOCK_CHAT));
@@ -1294,34 +2016,41 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('skills:getGlobal', () => ok(GLOBAL_SKILLS));
   ipcMain.handle('skills:getAll', () => ok([...GLOBAL_SKILLS, PROJECT_SKILL]));
-  ipcMain.handle('skills:create', () => ok({ filePath: '/Users/alice/.claude/commands/new-skill.md' }));
+  ipcMain.handle('skills:create', () =>
+    ok({ filePath: '/Users/alice/.claude/commands/new-skill.md' })
+  );
 
   ipcMain.handle('agents:getGlobal', () => ok(GLOBAL_AGENTS));
   ipcMain.handle('agents:getByProject', () => ok([PROJECT_AGENT]));
-  ipcMain.handle('agents:create', () => ok({ filePath: '/Users/alice/.claude/agents/new-agent.md' }));
+  ipcMain.handle('agents:create', () =>
+    ok({ filePath: '/Users/alice/.claude/agents/new-agent.md' })
+  );
 
   ipcMain.handle('projects:delete', () => ok(null));
 
   ipcMain.handle('mcp:getGlobal', () => ok(MOCK_MCP));
 
   // Streaming AI simulato: invia la risposta a blocchi via `ai:chunk`, poi `ai:done`.
-  ipcMain.handle('ai:run', (event: { sender: { send: (channel: string, ...args: unknown[]) => void } }) => {
-    const words = MOCK_AI_RESPONSE.split(/(\s+)/);
-    let i = 0;
-    const tick = () => {
-      if (i >= words.length) {
-        event.sender.send('ai:done');
-        return;
-      }
-      // Spedisce qualche token alla volta per simulare lo streaming
-      const slice = words.slice(i, i + 4).join('');
-      event.sender.send('ai:chunk', slice);
-      i += 4;
-      setTimeout(tick, 40);
-    };
-    setTimeout(tick, 120);
-    return ok(null);
-  });
+  ipcMain.handle(
+    'ai:run',
+    (event: { sender: { send: (channel: string, ...args: unknown[]) => void } }) => {
+      const words = MOCK_AI_RESPONSE.split(/(\s+)/);
+      let i = 0;
+      const tick = () => {
+        if (i >= words.length) {
+          event.sender.send('ai:done');
+          return;
+        }
+        // Spedisce qualche token alla volta per simulare lo streaming
+        const slice = words.slice(i, i + 4).join('');
+        event.sender.send('ai:chunk', slice);
+        i += 4;
+        setTimeout(tick, 40);
+      };
+      setTimeout(tick, 120);
+      return ok(null);
+    }
+  );
   ipcMain.handle('ai:stop', () => ok(null));
 
   ipcMain.handle('live:getActiveSessions', () => ok(MOCK_ACTIVE_SESSIONS));
@@ -1331,7 +2060,10 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   // Aggancia i gruppi task/plan alle sessioni reali del progetto (per filename),
   // così la UI mostra il titolo e la data della sessione e l'header è cliccabile.
-  const attachToSessions = <T extends { sessionId: string; filename: string }>(hash: string, groups: T[]): T[] => {
+  const attachToSessions = <T extends { sessionId: string; filename: string }>(
+    hash: string,
+    groups: T[]
+  ): T[] => {
     const sessions = getSessionList(hash);
     return groups.map((g, i) => {
       const s = sessions[i];
@@ -1339,16 +2071,26 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     });
   };
 
-  ipcMain.handle('tasks:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_TASKS)));
-  ipcMain.handle('plans:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_PLANS)));
-  ipcMain.handle('workflows:getByProject', (_e: unknown, hash: string) => ok(attachToSessions(hash, MOCK_WORKFLOWS)));
-  ipcMain.handle('workflows:getRun', (_e: unknown, _hash: string, _sessionId: string, runId: string) =>
-    ok(MOCK_WORKFLOW_DETAILS[runId] ?? MOCK_WORKFLOW_DETAILS['wf_5c8a12f0-abc']));
+  ipcMain.handle('tasks:getByProject', (_e: unknown, hash: string) =>
+    ok(attachToSessions(hash, MOCK_TASKS))
+  );
+  ipcMain.handle('plans:getByProject', (_e: unknown, hash: string) =>
+    ok(attachToSessions(hash, MOCK_PLANS))
+  );
+  ipcMain.handle('workflows:getByProject', (_e: unknown, hash: string) =>
+    ok(attachToSessions(hash, MOCK_WORKFLOWS))
+  );
+  ipcMain.handle(
+    'workflows:getRun',
+    (_e: unknown, _hash: string, _sessionId: string, runId: string) =>
+      ok(MOCK_WORKFLOW_DETAILS[runId] ?? MOCK_WORKFLOW_DETAILS['wf_5c8a12f0-abc'])
+  );
   // Teams also carry the sessionIds array (all rotated lead ids) — rewrite it in
   // step with the attached sessionId, or the Mission Control rail's
   // session-scoped TEAMS island would never match a fixture session.
   ipcMain.handle('teams:getByProject', (_e: unknown, hash: string) =>
-    ok(attachToSessions(hash, MOCK_TEAMS).map(t => ({ ...t, sessionIds: [t.sessionId] }))));
+    ok(attachToSessions(hash, MOCK_TEAMS).map(t => ({ ...t, sessionIds: [t.sessionId] })))
+  );
   ipcMain.handle('teams:getDetail', () => ok(MOCK_TEAM_DETAIL));
 
   // Finestra di retention fissa così i conteggi demo sono deterministici
@@ -1358,11 +2100,29 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   // Sub-agent transcripts + artifacts/cancellazione sessione
   ipcMain.handle('sessions:getSubagents', () => ok(MOCK_SUBAGENTS));
   ipcMain.handle('sessions:getSubagentTranscript', () => ok(MOCK_SUBAGENT_TRANSCRIPT));
-  ipcMain.handle('sessions:getArtifacts', (_e: unknown, _hash: string, filename: string) => ok(getSessionArtifacts(filename)));
-  ipcMain.handle('sessions:deleteSession', (_e: unknown, paths: string[]) => ok({ deleted: paths, warnings: [] }));
+  ipcMain.handle('sessions:getArtifacts', (_e: unknown, _hash: string, filename: string) =>
+    ok(getSessionArtifacts(filename))
+  );
+  ipcMain.handle('sessions:deleteSession', (_e: unknown, paths: string[]) =>
+    ok({ deleted: paths, warnings: [] })
+  );
 
   // Plugins installati (user scope)
   ipcMain.handle('plugins:getAll', () => ok(MOCK_PLUGINS));
+
+  // Agent Studio: libreria + detail; le mutazioni sono no-op, la preview
+  // rimanda lo script/issues del blueprint demo (nessun compile reale).
+  ipcMain.handle('studio:getAll', () => ok(MOCK_STUDIO_LIBRARY));
+  ipcMain.handle('studio:get', () => ok(MOCK_BLUEPRINT_DETAIL));
+  ipcMain.handle('studio:create', () =>
+    ok({ scriptPath: MOCK_BLUEPRINT_DETAIL.scriptPath, script: MOCK_BLUEPRINT_SCRIPT })
+  );
+  ipcMain.handle('studio:save', () =>
+    ok({ scriptPath: MOCK_BLUEPRINT_DETAIL.scriptPath, script: MOCK_BLUEPRINT_SCRIPT })
+  );
+  ipcMain.handle('studio:delete', () => ok(null));
+  ipcMain.handle('studio:preview', () => ok({ script: MOCK_BLUEPRINT_SCRIPT, issues: [] }));
+  ipcMain.handle('studio:writeScript', () => ok({ path: MOCK_BLUEPRINT_DETAIL.scriptPath }));
 
   // Config effettiva (Settings → System / Project config)
   ipcMain.handle('config:getEffective', () => ok(MOCK_EFFECTIVE_CONFIG));

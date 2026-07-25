@@ -41,6 +41,9 @@ import { McpServerDetailView } from '../components/project/mcp/McpServerDetailVi
 // ─── Plugins
 import { PluginsView } from '../components/project/plugins/PluginsView'
 import { PluginDetailView } from '../components/project/plugins/PluginDetailView'
+import { StudioLibraryView } from '../components/project/studio/StudioLibraryView'
+import { CreateBlueprintPage } from '../components/project/studio/CreateBlueprintPage'
+import { BlueprintEditorView } from '../components/project/studio/BlueprintEditorView'
 // ─── Agents Live
 import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView'
 // ─── Chat
@@ -251,6 +254,11 @@ export default function ProjectOverview() {
     setView({ type: 'agents-live' })
   }
 
+  function goStudio() {
+    setScope('global')
+    setView({ type: 'studio' })
+  }
+
   // "Open session" from a notification toast: deep-link straight into the exact
   // session (the unified Terminal↔Lens view, defaulting to read-only Lens — the
   // same teleport as Mission Control), mirroring SearchPopover's onSelectSession.
@@ -280,7 +288,8 @@ export default function ProjectOverview() {
   const isGlobalHome = view.type === 'global-home'
   const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type)
   const isGlobalLiveAgents = view.type === 'agents-live' && !view.project
-  const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents
+  const isStudio = view.type === 'studio'
+  const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents || isStudio
 
   // Spike B (motion.dev): identity of the currently-visible editorial-core
   // surface — drives the AnimatePresence crossfade keying below. Changes only on
@@ -292,9 +301,11 @@ export default function ProjectOverview() {
     ? 'global-home'
     : isGlobalLiveAgents
       ? 'global-live-agents'
-      : selected
-        ? `project:${selected.hash}`
-        : 'empty'
+      : isStudio
+        ? 'studio'
+        : selected
+          ? `project:${selected.hash}`
+          : 'empty'
 
   // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
   function renderDeepView() {
@@ -372,6 +383,23 @@ export default function ProjectOverview() {
         )
       case 'plugin-detail':
         return <PluginDetailView plugin={view.plugin} onBack={() => setView({ type: 'plugins' })} />
+      case 'studio-create':
+        return (
+          <CreateBlueprintPage
+            onBack={() => setView({ type: 'studio' })}
+            onSaved={name => setView({ type: 'studio-blueprint', name })}
+          />
+        )
+      case 'studio-blueprint':
+        return (
+          <BlueprintEditorView
+            // Keyed so navigating between blueprints resets the local draft.
+            key={`${view.projectPath ?? 'global'}:${view.name}`}
+            name={view.name}
+            projectPath={view.projectPath}
+            onBack={() => setView({ type: 'studio' })}
+          />
+        )
       case 'project-claudemd':
         return <ProjectClaudeMdView layer={view.layer} onBack={() => setView({ type: 'overview' })} />
       case 'chat':
@@ -516,6 +544,7 @@ export default function ProjectOverview() {
           <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
           <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
           <button className={view.type === 'agents-live' && !view.project ? 'on' : ''} onClick={goLiveAgents}>Agent View</button>
+          <button className={isStudio ? 'on' : ''} onClick={goStudio}>Agent Studio</button>
         </nav>
 
         <div />
@@ -585,6 +614,14 @@ export default function ProjectOverview() {
                     attachJobId: bg?.alive ? bg.jobId : undefined,
                     from: 'agents-live',
                   })}
+                />
+              ) : isStudio ? (
+                <StudioLibraryView
+                  embedded
+                  onBack={goGlobal}
+                  onCreate={() => setView({ type: 'studio-create' })}
+                  onOpenBlueprint={(name, projectPath) =>
+                    setView({ type: 'studio-blueprint', name, projectPath })}
                 />
               ) : selected ? (
                 <ProjectView

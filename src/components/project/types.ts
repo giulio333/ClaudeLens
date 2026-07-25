@@ -14,6 +14,9 @@ export type View =
   | { type: 'mcp-detail'; server: McpServer; totalProjects: number }
   | { type: 'plugins' }
   | { type: 'plugin-detail'; plugin: InstalledPlugin }
+  | { type: 'studio' }
+  | { type: 'studio-create' }
+  | { type: 'studio-blueprint'; name: string; projectPath?: string }
   | { type: 'project-skills'; project: { hash: string; realPath: string } }
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
   | { type: 'project-mcp'; project: { hash: string; realPath: string } }

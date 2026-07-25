@@ -30,6 +30,22 @@ import { getProjectTeams, getTeamDetail } from './modules/teams-reader';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { getInstalledPlugins } from './modules/plugins-reader';
+import {
+  getStudioLibrary,
+  getBlueprintDetail,
+  isKnownProjectPath,
+  discoverKnownProjectPaths,
+  projectWorkflowsDir,
+  WORKFLOWS_DIR,
+} from './modules/studio-reader';
+import {
+  createBlueprint as createStudioBlueprint,
+  saveBlueprint,
+  deleteBlueprint,
+  writeNativeScript,
+} from './modules/studio-writer';
+import { compileBlueprint, validateBlueprint, type Blueprint } from './modules/studio-compiler';
+import { createProjectWorkflowWatchSync } from './modules/studio-watch-sync';
 import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
@@ -1051,6 +1067,123 @@ ipcMain.handle('plugins:getAll', async () => {
   }
 });
 
+ipcMain.handle('studio:getAll', async () => {
+  try {
+    return ok(await getStudioLibrary());
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Un projectPath arriva dal renderer: accetta solo i cwd scoperti dal registro
+// progetti (con una .claude/workflows/), mai path arbitrari.
+function checkedStudioProjectPath(projectPath?: string): string | undefined {
+  if (projectPath === undefined || projectPath === null) return undefined;
+  if (typeof projectPath !== 'string' || !isKnownProjectPath(projectPath)) {
+    throw new Error(`Unknown project path "${projectPath}".`);
+  }
+  return projectPath;
+}
+
+ipcMain.handle('studio:get', async (_event, name: string, projectPath?: string) => {
+  try {
+    // Global agents feed the design-time "unknown agent" check (warnings only:
+    // at runtime the registry also includes the project agents of wherever the
+    // workflow is launched).
+    const agents = await getGlobalAgents();
+    const detail = await getBlueprintDetail(
+      name,
+      agents.map(a => a.name),
+      checkedStudioProjectPath(projectPath)
+    );
+    return detail ? ok(detail) : err(`Blueprint "${name}" not found`);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('studio:create', async (_event, input: Blueprint) => {
+  try {
+    return ok(await createStudioBlueprint(input));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle(
+  'studio:save',
+  async (
+    _event,
+    input: Blueprint,
+    fileName?: string,
+    projectPath?: string,
+    expectedSource?: string,
+  ) => {
+    try {
+      return ok(
+        await saveBlueprint(
+          input,
+          fileName,
+          checkedStudioProjectPath(projectPath),
+          expectedSource,
+        ),
+      );
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+ipcMain.handle(
+  'studio:delete',
+  async (_event, name: string, alsoScript?: boolean, projectPath?: string) => {
+    try {
+      deleteBlueprint(name, alsoScript === true, checkedStudioProjectPath(projectPath));
+      return ok(null);
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+ipcMain.handle(
+  'studio:writeScript',
+  async (
+    _event,
+    fileName: string,
+    content: string,
+    projectPath?: string,
+    expectedSource?: string,
+  ) => {
+    try {
+      return ok(
+        await writeNativeScript(
+          fileName,
+          content,
+          checkedStudioProjectPath(projectPath),
+          expectedSource,
+        ),
+      );
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+// In-memory compile+validate of an unsaved draft: feeds the editor's live
+// "compiles to" panel and checks bar without touching disk.
+ipcMain.handle('studio:preview', async (_event, input: Blueprint) => {
+  try {
+    const agents = await getGlobalAgents();
+    return ok({
+      script: compileBlueprint(input),
+      issues: validateBlueprint(input, { agentTypes: agents.map(a => a.name) }),
+    });
+  } catch (e) {
+    return err(e);
+  }
+});
+
 ipcMain.handle('skills:create', async (_event, input: SkillInput, projectPath?: string) => {
   try {
     const filePath = createSkill(input, projectPath);
@@ -1779,25 +1912,75 @@ async function startWatcher() {
   // depth 5: copre anche i transcript dei sub-agenti annidati nei workflow
   // ({hash}/{sessionId}/subagents/workflows/wf_*/agent-*.jsonl), non solo
   // quelli diretti ({hash}/{sessionId}/subagents/agent-*.jsonl, depth 3).
-  const watcher = watch([PROJECTS_DIR, TASKS_DIR, PLANS_DIR, TEAMS_DIR, INSTALLED_PLUGINS_FILE], {
-    ignoreInitial: true,
-    depth: 5,
-    // Le inbox dei team (~/.claude/teams/*/inboxes/*.json) sono code transienti
-    // riscritte ogni pochi secondi durante l'attività: senza ignore sarebbero
-    // una tempesta di data:changed. Del registry interessa solo config.json.
-    // Match anche la dir inboxes stessa (non solo i file dentro), così
-    // chokidar non ci scende e non installa watcher su una dir ad alto churn.
-    ignored: /[/\\]teams[/\\][^/\\]+[/\\]inboxes([/\\]|$)/,
-  });
+  // Both native workflow locations are source-of-truth for Agent Studio. Project
+  // paths are resolved from the same Claude project registry used by the reader.
+  const projectWorkflowDirs = new Set(discoverKnownProjectPaths().map(projectWorkflowsDir));
+  const watcher = watch(
+    [
+      PROJECTS_DIR,
+      TASKS_DIR,
+      PLANS_DIR,
+      TEAMS_DIR,
+      INSTALLED_PLUGINS_FILE,
+      WORKFLOWS_DIR,
+      ...projectWorkflowDirs,
+    ],
+    {
+      ignoreInitial: true,
+      depth: 5,
+      // Le inbox dei team (~/.claude/teams/*/inboxes/*.json) sono code transienti
+      // riscritte ogni pochi secondi durante l'attività: senza ignore sarebbero
+      // una tempesta di data:changed. Del registry interessa solo config.json.
+      // Match anche la dir inboxes stessa (non solo i file dentro), così
+      // chokidar non ci scende e non installa watcher su una dir ad alto churn.
+      ignored: /[/\\]teams[/\\][^/\\]+[/\\]inboxes([/\\]|$)/,
+    }
+  );
 
   const notify = () => {
     if (watcherPauseDepth > 0) return;
     safeSend('data:changed');
   };
 
-  watcher.on('add', notify);
-  watcher.on('change', notify);
-  watcher.on('unlink', notify);
+  const syncProjectWorkflowDirs = () => {
+    const next = new Set(discoverKnownProjectPaths().map(projectWorkflowsDir));
+    for (const dir of next) {
+      if (projectWorkflowDirs.has(dir)) continue;
+      projectWorkflowDirs.add(dir);
+      watcher.add(dir);
+    }
+    for (const dir of [...projectWorkflowDirs]) {
+      if (next.has(dir)) continue;
+      projectWorkflowDirs.delete(dir);
+      void watcher.unwatch(dir);
+    }
+  };
+
+  // A transcript is often added before its first complete JSONL record. Treat
+  // add/change/unlink as one debounced registry update so the authoritative cwd
+  // replaces any temporary, lossy hash-derived workflow path.
+  const studioWatchSync = createProjectWorkflowWatchSync({
+    projectsDir: PROJECTS_DIR,
+    invalidate: invalidateCwdCache,
+    sync: () => {
+      syncProjectWorkflowDirs();
+      // The immediate event may have refetched through a temporary hash-derived
+      // cwd. Refresh again after the authoritative path is watched; ignoreInitial
+      // means an already-present workflow will not emit a second file event.
+      notify();
+    },
+  });
+
+  const notifyAndRefreshStudioWatches = (path: string) => {
+    studioWatchSync.onEvent(path);
+    notify();
+  };
+
+  watcher.on('add', notifyAndRefreshStudioWatches);
+  watcher.on('addDir', notifyAndRefreshStudioWatches);
+  watcher.on('change', notifyAndRefreshStudioWatches);
+  watcher.on('unlink', notifyAndRefreshStudioWatches);
+  watcher.on('unlinkDir', notifyAndRefreshStudioWatches);
 
   // Registro sessioni vive (~/.claude/sessions/<pid>.json): push dedicato al
   // renderer invece del polling. Il file heartbeat-a ogni pochi secondi, quindi
