@@ -1,7 +1,7 @@
 import { useGlobalMcp, McpData, McpServer } from '../../../hooks/useIPC'
 import { Lens } from '../overview/Lens'
 import { TopBar } from '../shared/TopBar'
-import { mcpServiceColor } from './McpServerCard'
+import { mcpServiceColor, mcpStatusMeta } from './McpServerCard'
 
 const TONES = ['', 'violet', 'cyan'] as const
 
@@ -24,23 +24,18 @@ function McpCell({
 }) {
   const displayName = server.name.replace(/^claude\.ai\s*/i, '')
   const isLocal = server.source === 'local'
-  const fullyEnabled = server.disabledInProjects === 0
-  const fullyDisabled = server.enabledInProjects === 0
-  const ledColor = isLocal
-    ? mcpServiceColor(server.name)
-    : fullyEnabled
-      ? 'var(--cl-ok)'
-      : fullyDisabled
-        ? 'var(--cl-danger)'
-        : 'var(--cl-warn)'
+  const status = mcpStatusMeta(server.status)
+  // The LED reports what Claude Code says about the server right now; the
+  // per-project counters below carry the enabled/disabled dimension.
+  const ledColor = server.live && isLocal ? mcpServiceColor(server.name) : status.color
 
   if (isLocal) {
     const envKeys = server.env ? Object.keys(server.env) : []
     return (
-      <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)}>
+      <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)} title={status.hint}>
         <div className="led-row">
           <span className="led" style={{ background: ledColor }} />
-          {server.source}
+          {status.label}
         </div>
         <div className="mcp-name">{displayName}</div>
         <div className="tools">
@@ -52,13 +47,33 @@ function McpCell({
     )
   }
 
+  if (!server.live) {
+    return (
+      <button
+        type="button"
+        className={`cl-mcp-cell ${tone}`}
+        onClick={() => onSelect(server)}
+        title={status.hint}
+        style={{ opacity: 0.62 }}
+      >
+        <div className="led-row">
+          <span className="led" style={{ background: ledColor }} />
+          {status.label}
+        </div>
+        <div className="mcp-name">{displayName}</div>
+        <div className="tools">absent from the live list</div>
+        <div className="frac">—</div>
+      </button>
+    )
+  }
+
   const total = server.enabledInProjects + server.disabledInProjects
   const denom = totalProjects > 0 ? totalProjects : total
   return (
-    <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)}>
+    <button type="button" className={`cl-mcp-cell ${tone}`} onClick={() => onSelect(server)} title={status.hint}>
       <div className="led-row">
         <span className="led" style={{ background: ledColor }} />
-        {server.source}
+        {status.label}
       </div>
       <div className="mcp-name">{displayName}</div>
       <div className="tools">active in <b>{server.enabledInProjects}</b> of {denom} projects</div>
@@ -105,8 +120,17 @@ export function GlobalMcpView({
 
   const cloud = mcp?.cloudServers ?? []
   const local = mcp?.localServers ?? []
+  const unlisted = mcp?.unlistedServers ?? []
   const total = cloud.length + local.length
   const totalProjects = mcp?.totalProjects ?? 0
+  const probeError = mcp?.probe?.error ?? null
+  const probeCommand = mcp?.probe?.command ?? 'claude mcp list'
+  // The live list varies between runs, so the read time is part of the reading.
+  const observedAt = mcp?.probe?.observedAt ?? null
+  const observedLabel = observedAt
+    ? new Date(observedAt).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
+    : null
+  const connected = [...cloud, ...local].filter(s => s.status === 'connected' || s.status === 'pending').length
 
   // Adozione media dei server cloud (% progetti in cui sono attivi).
   const avgAdoption =
@@ -136,7 +160,11 @@ export function GlobalMcpView({
             <span className="sep">·</span>
             <span><b>{cloud.length}</b> cloud · <b>{local.length}</b> local</span>
             <span className="sep">·</span>
-            <span>extend Claude with external tools</span>
+            {unlisted.length > 0 ? (
+              <span><b>{unlisted.length}</b> not listed</span>
+            ) : (
+              <span>extend Claude with external tools</span>
+            )}
           </div>
         </section>
 
@@ -144,70 +172,113 @@ export function GlobalMcpView({
           <section className="cl-section">
             <p style={{ color: 'var(--cl-ink-3)', fontSize: 13 }}>Loading…</p>
           </section>
-        ) : total === 0 ? (
-          <section className="cl-section">
-            <div className="cl-empty">
-              No MCP servers configured. Connect cloud servers in Claude, or define local ones in{' '}
-              <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude/settings.json</code>.
-            </div>
-          </section>
         ) : (
           <>
-            <section className="cl-section">
-              <div className="cl-mcp-metrics">
-                <div className="met">
-                  <div className="lbl">Servers</div>
-                  <div className="num">{total}</div>
-                </div>
-                <div className="met">
-                  <div className="lbl">Cloud</div>
-                  <div className="num">{cloud.length}</div>
-                </div>
-                <div className="met">
-                  <div className="lbl">Local</div>
-                  <div className="num">{local.length}</div>
-                </div>
-                <div className="met">
-                  <div className="lbl">Avg adoption</div>
-                  <div className="num">{avgAdoption}<small>%</small></div>
-                </div>
-              </div>
-            </section>
-
-            {cloud.length > 0 && (
+            {probeError && (
               <section className="cl-section">
-                <div className="cl-sec-head">
-                  <h2>Cloud</h2>
-                  <span className="ct">connected · across {totalProjects} projects</span>
+                <div
+                  className="cl-empty"
+                  style={{ borderColor: 'color-mix(in oklch, var(--cl-warn) 40%, transparent)' }}
+                >
+                  Live status unavailable: {probeError}
                 </div>
-                {chunk(cloud, 3).map((group, gi) => (
-                  <McpRowGroup
-                    key={gi}
-                    servers={group}
-                    totalProjects={totalProjects}
-                    onSelect={onSelectServer}
-                    baseIndex={gi * 3}
-                  />
-                ))}
               </section>
             )}
 
-            {local.length > 0 && (
+            {total === 0 && unlisted.length === 0 ? (
               <section className="cl-section">
-                <div className="cl-sec-head">
-                  <h2>Local</h2>
-                  <span className="ct">~/.claude/settings.json</span>
+                <div className="cl-empty">
+                  No MCP servers configured. Connect cloud servers in Claude, or define local ones in{' '}
+                  <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude/settings.json</code>.
                 </div>
-                {chunk(local, 3).map((group, gi) => (
-                  <McpRowGroup
-                    key={gi}
-                    servers={group}
-                    totalProjects={totalProjects}
-                    onSelect={onSelectServer}
-                    baseIndex={gi * 3}
-                  />
-                ))}
               </section>
+            ) : (
+              <>
+                <section className="cl-section">
+                  <div className="cl-mcp-metrics">
+                    <div className="met">
+                      <div className="lbl">Servers</div>
+                      <div className="num">{total}</div>
+                    </div>
+                    <div className="met">
+                      <div className="lbl">Connected</div>
+                      <div className="num">{connected}</div>
+                    </div>
+                    <div className="met">
+                      <div className="lbl">Local</div>
+                      <div className="num">{local.length}</div>
+                    </div>
+                    <div className="met">
+                      <div className="lbl">Avg adoption</div>
+                      <div className="num">{avgAdoption}<small>%</small></div>
+                    </div>
+                  </div>
+                </section>
+
+                {cloud.length > 0 && (
+                  <section className="cl-section">
+                    <div className="cl-sec-head">
+                      <h2>Cloud</h2>
+                      <span className="ct">
+                        {probeCommand}
+                        {observedLabel ? ` at ${observedLabel}` : ''} · across {totalProjects} projects
+                      </span>
+                    </div>
+                    {chunk(cloud, 3).map((group, gi) => (
+                      <McpRowGroup
+                        key={gi}
+                        servers={group}
+                        totalProjects={totalProjects}
+                                      onSelect={onSelectServer}
+                        baseIndex={gi * 3}
+                      />
+                    ))}
+                  </section>
+                )}
+
+                {local.length > 0 && (
+                  <section className="cl-section">
+                    <div className="cl-sec-head">
+                      <h2>Local</h2>
+                      <span className="ct">~/.claude.json · ~/.claude/settings.json</span>
+                    </div>
+                    {chunk(local, 3).map((group, gi) => (
+                      <McpRowGroup
+                        key={gi}
+                        servers={group}
+                        totalProjects={totalProjects}
+                                      onSelect={onSelectServer}
+                        baseIndex={gi * 3}
+                      />
+                    ))}
+                  </section>
+                )}
+
+                {unlisted.length > 0 && (
+                  <section className="cl-section">
+                    <div className="cl-sec-head">
+                      <h2>Not listed</h2>
+                      <span className="ct">on disk only</span>
+                    </div>
+                    <p style={{ color: 'var(--cl-ink-3)', fontSize: 13, lineHeight: 1.6, margin: '0 0 14px', maxWidth: 620 }}>
+                      Names recorded in <code style={{ fontFamily: 'var(--font-mono)' }}>~/.claude.json</code> that the last{' '}
+                      <code style={{ fontFamily: 'var(--font-mono)' }}>{probeCommand}</code> did not include. Claude Code never
+                      removes a connector from that file when you disconnect it, so most of these are leftovers you will not see
+                      in <code style={{ fontFamily: 'var(--font-mono)' }}>/mcp</code>. Its list does vary between runs, though,
+                      so a name here can reappear above later.
+                    </p>
+                    {chunk(unlisted, 3).map((group, gi) => (
+                      <McpRowGroup
+                        key={gi}
+                        servers={group}
+                        totalProjects={totalProjects}
+                        onSelect={onSelectServer}
+                        baseIndex={gi * 3}
+                      />
+                    ))}
+                  </section>
+                )}
+              </>
             )}
           </>
         )}
