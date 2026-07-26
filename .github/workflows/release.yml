@@ -65,12 +65,33 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+      # Build provenance: id-token signs the attestation, attestations stores it.
+      id-token: write
+      attestations: write
     steps:
       - name: Download all binaries
         uses: actions/download-artifact@v8
         with:
           path: artifacts
           merge-multiple: true
+
+      # The builds are unsigned, so a checksum is the only way for someone to
+      # tell the download matches what CI produced. Shipped as a release asset.
+      - name: Generate SHA-256 checksums
+        working-directory: artifacts
+        run: |
+          find . -type f ! -name checksums.txt -printf '%P\0' | sort -z | xargs -0 sha256sum > checksums.txt
+          cat checksums.txt
+
+      # Signed, verifiable statement that these exact binaries came out of this
+      # workflow run: `gh attestation verify <file> --repo giulio333/ClaudeLens`.
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v4
+        with:
+          subject-path: |
+            artifacts/*.dmg
+            artifacts/*.AppImage
+            artifacts/*.exe
 
       - name: Create Release
         uses: softprops/action-gh-release@v3

@@ -1,0 +1,96 @@
+name: Bug report
+description: Something in ClaudeLens is broken or behaves unexpectedly
+labels: ['bug']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug.
+
+        ⚠️ **Do not report security vulnerabilities here** — use
+        [private vulnerability reporting](https://github.com/giulio333/ClaudeLens/security)
+        instead (see [SECURITY.md](https://github.com/giulio333/ClaudeLens/blob/main/SECURITY.md)).
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened?
+      description: What you expected, and what happened instead.
+      placeholder: Opening a session with 500+ messages shows a blank transcript instead of the conversation.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: The shortest path from a fresh launch to the bug.
+      placeholder: |
+        1. Open project X
+        2. Click the Sessions subtab
+        3. Open the most recent session
+        4. The transcript stays empty
+    validations:
+      required: true
+
+  - type: input
+    id: app-version
+    attributes:
+      label: ClaudeLens version
+      description: Shown in **Settings → General** (or the release you downloaded).
+      placeholder: 2.2.0
+    validations:
+      required: true
+
+  - type: dropdown
+    id: os
+    attributes:
+      label: Operating system
+      options:
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Linux (experimental)
+        - Windows (experimental)
+    validations:
+      required: true
+
+  - type: input
+    id: claude-code-version
+    attributes:
+      label: Claude Code version
+      description: Output of `claude --version`.
+      placeholder: 2.1.206
+    validations:
+      required: true
+
+  - type: dropdown
+    id: install-method
+    attributes:
+      label: How did you install it?
+      options:
+        - Downloaded a build from the Releases page
+        - Built from source (`npm run dev` / `npm run electron:build`)
+    validations:
+      required: true
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, errors, or screenshots
+      description: |
+        Anything from the DevTools console (**View → Toggle Developer Tools**), the terminal
+        output if you run from source, or a screenshot. Please redact paths or content you
+        don't want public — ClaudeLens renders your local `~/.claude/` data.
+      render: shell
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and this is not a duplicate.
+          required: true
+        - label: I'm on the latest release (or I checked that the bug is still present there).
+          required: true

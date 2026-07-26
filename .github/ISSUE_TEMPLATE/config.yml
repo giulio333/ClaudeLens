@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Question or help with ClaudeLens
+    url: https://github.com/giulio333/ClaudeLens/discussions/categories/q-a
+    about: Ask in Q&A — usage questions are answered faster there than in issues.
+  - name: Idea or feedback
+    url: https://github.com/giulio333/ClaudeLens/discussions/categories/ideas
+    about: Share a rough idea or feedback before it turns into a feature request.
+  - name: Report a security vulnerability
+    url: https://github.com/giulio333/ClaudeLens/security/advisories/new
+    about: Please report vulnerabilities privately, never as a public issue.
