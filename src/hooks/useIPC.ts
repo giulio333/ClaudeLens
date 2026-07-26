@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useEffect } from 'react'
+import { keysForScope, scopesFromPayload } from './dataChangeScopes'
 
 import type {
   MemoryTopic,
@@ -1075,29 +1076,6 @@ export function useDeleteProject() {
   })
 }
 
-// The filesystem-backed queries, grouped by the scope the main process derives
-// from the changed path (electron/modules/data-change-scope.ts). An event only
-// invalidates the groups it can have touched: an append to a live chat's
-// transcript has no reason to re-read skills, agents or plugins.
-const SCOPE_KEYS: Record<string, string[]> = {
-  sessions: ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript'],
-  cost: ['cost:summary', 'cost:project'],
-  plans: ['plans:project'],
-  tasks: ['tasks:project'],
-  teams: ['teams:project', 'teams:detail'],
-  workflows: ['workflows:project', 'workflows:run'],
-  studio: ['studio:all', 'studio:blueprint'],
-  plugins: ['plugins:all'],
-  memory: ['memory:projects', 'memory:project'],
-  claudeMd: ['claudeMd:hierarchy', 'claudeMd:global'],
-  rules: ['rules:project'],
-  skills: ['skills:global', 'skills:all'],
-  agents: ['agents:global', 'agents:project'],
-  mcp: ['mcp:global'],
-}
-
-const ALL_SCOPES = Object.keys(SCOPE_KEYS)
-
 export function useDataChangedRefetch() {
   const qc = useQueryClient()
 
@@ -1114,17 +1092,13 @@ export function useDataChangedRefetch() {
       const scopes = pending
       pending = new Set()
       for (const scope of scopes) {
-        for (const key of SCOPE_KEYS[scope] ?? []) {
+        for (const key of keysForScope(scope)) {
           qc.invalidateQueries({ queryKey: [key] })
         }
       }
     }
     const unsubscribe = window.electronAPI.onDataChanged(scopes => {
-      // An absent or unrecognized payload means "unknown": invalidate
-      // everything, as the previous version always did. Never narrow on a
-      // signal we don't fully understand — a stale view is the worse failure.
-      const known = Array.isArray(scopes) && scopes.every(s => s in SCOPE_KEYS)
-      for (const scope of known ? scopes : ALL_SCOPES) pending.add(scope)
+      for (const scope of scopesFromPayload(scopes)) pending.add(scope)
       if (timer) clearTimeout(timer)
       timer = setTimeout(flush, 200)
     })
