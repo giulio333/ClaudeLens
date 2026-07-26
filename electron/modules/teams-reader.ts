@@ -1,5 +1,4 @@
-import { readdir, readFile } from 'fs/promises';
-import { statSync } from 'fs';
+import { readdir, readFile, stat } from 'fs/promises';
 import { join } from 'path';
 import { assertWithin, CLAUDE_DIR } from '../utils';
 
@@ -168,9 +167,9 @@ async function sessionDirs(dir: string): Promise<string[]> {
   }
 }
 
-function safeMtimeMs(path: string): number {
+async function safeMtimeMs(path: string): Promise<number> {
   try {
-    return statSync(path).mtimeMs;
+    return (await stat(path)).mtimeMs;
   } catch {
     return 0;
   }
@@ -224,7 +223,7 @@ async function scanTranscripts(projectPath: string): Promise<ScanResult> {
 
       const stem = file.slice(0, -META_SUFFIX.length);
       const jsonlPath = join(subagentsDir, `${stem}.jsonl`);
-      const mtimeMs = safeMtimeMs(jsonlPath);
+      const mtimeMs = await safeMtimeMs(jsonlPath);
       if (mtimeMs === 0) continue; // meta without a twin transcript
 
       const members = teams.get(teamName) ?? new Map<string, ScannedMember>();
