@@ -6,7 +6,7 @@ import type {
   SchemaTypeName,
 } from '../../../types';
 import { serializeSchemaModel, schemaFieldCount } from '../../../../electron/shared/studio-schema';
-import { dedentSource } from './studioLang';
+import { dedentSource, stepVarName } from './studioLang';
 import { FieldHint } from '../shared/CreateFormKit';
 
 const TYPES: SchemaTypeName[] = ['string', 'number', 'integer', 'boolean', 'array', 'object'];
@@ -325,10 +325,16 @@ export function ObjectFields({
 }
 
 /**
- * Structured-output editor for a step. The saved value is always
- * `schemaSource`; the builder keeps `schemaModel` alongside it (re-serialized
- * on every edit). Editing the raw source drops the model — the step stays in
- * source mode until the file is re-parsed (reload/save).
+ * The step's output, as one thing: the variable the script binds the result to
+ * and the shape that result has. They used to be two disjoint sections (a
+ * read-only "Output" field near the identity grid, a "Structured output" block
+ * far below the prompt), which read as unrelated settings — the fields *are*
+ * the shape of that variable, so the binding line owns them.
+ *
+ * The saved value is always `schemaSource`; the builder keeps `schemaModel`
+ * alongside it (re-serialized on every edit). Editing the raw source drops the
+ * model — the step stays in source mode until the file is re-parsed
+ * (reload/save).
  */
 export function SchemaBuilder({
   step,
@@ -339,19 +345,59 @@ export function SchemaBuilder({
 }) {
   const [showSource, setShowSource] = useState(false);
   const model = step.schemaModel;
+  const varName = step.resultVar ?? stepVarName(step.id);
+  const derivedVar = !step.resultVar;
 
   const patchModel = (next: SchemaNodeModel) =>
     onPatch({ schemaModel: next, schemaSource: serializeSchemaModel(next) });
 
-  const labelRow = (summary: string, actions: React.ReactNode) => (
-    <div className="flex items-center mb-1.5">
-      <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--cl-ink-3)]">
-        Structured output
-      </span>
-      <FieldHint text="JSON Schema for the agent() schema option — the subagent then returns a validated object instead of free text." />
-      <span className="ml-2 font-mono text-[10px] text-[var(--cl-ink-4)]">{summary}</span>
-      <span className="ml-auto flex items-center gap-2">{actions}</span>
+  const shape = !step.schemaSource
+    ? 'free text'
+    : !model
+      ? 'structured · source only'
+      : `${model.type}${
+          model.type === 'object'
+            ? ` · ${schemaFieldCount(model)} field${schemaFieldCount(model) === 1 ? '' : 's'}`
+            : ''
+        }`;
+
+  /** Eyebrow + the binding line: `picked → object · 3 fields`. */
+  const header = (actions: React.ReactNode) => (
+    <div className="mb-2.5">
+      <div className="flex items-center mb-1.5">
+        <span className="font-mono text-[10px] uppercase tracking-[0.16em] text-[var(--cl-ink-3)]">
+          Output
+        </span>
+        <FieldHint
+          text={
+            'What this agent returns: the variable the script binds the result to, and its shape. ' +
+            'Give it fields and the subagent must return a validated JSON object (the agent() `schema` option) instead of free text.'
+          }
+        />
+        <span className="ml-auto flex items-center gap-2">{actions}</span>
+      </div>
+      <div className="flex items-center gap-2 flex-wrap">
+        <code
+          className="font-mono text-[12.5px] text-[var(--cl-ink)] px-2 py-[3px] rounded-[6px] border border-[var(--cl-line)] bg-[var(--cl-paper-2)]"
+          title={
+            derivedVar
+              ? 'Derived from the step id by the compiler'
+              : 'Bound by the script — renaming it would break every ${…} that reads it, so rename it in Script'
+          }
+        >
+          {varName}
+        </code>
+        <span className="font-mono text-[11px] text-[var(--cl-ink-4)]">→</span>
+        <span className="font-mono text-[10px] uppercase tracking-[0.12em] text-[var(--cl-ink-3)]">
+          {shape}
+        </span>
+      </div>
     </div>
+  );
+
+  /** Everything below the binding line is the shape of that variable. */
+  const shapeBody = (children: React.ReactNode) => (
+    <div className="ml-1 pl-3 border-l-2 border-[var(--cl-line-soft)]">{children}</div>
   );
 
   const smallAction = (label: string, onClick: () => void, danger = false) => (
@@ -368,25 +414,43 @@ export function SchemaBuilder({
     </button>
   );
 
-  // No schema yet — offer to add one.
+  const sourceTextarea = (source: string) => (
+    <textarea
+      className="w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 font-mono text-[12px] leading-[1.6] text-[var(--cl-ink)] outline-none focus:border-[var(--cl-ink)] resize-y"
+      style={{ minHeight: Math.min(280, 48 + source.split('\n').length * 19) }}
+      value={dedentSource(source)}
+      onChange={e => onPatch({ schemaSource: e.target.value || undefined, schemaModel: undefined })}
+      spellCheck={false}
+      aria-label="Schema source"
+    />
+  );
+
+  // No schema yet — the variable holds whatever text the agent writes.
   if (!step.schemaSource) {
     return (
       <div>
-        {labelRow('none — the agent returns text', null)}
-        <button
-          type="button"
-          className="font-mono text-[10.5px] px-3 py-1.5 border border-dashed border-[var(--cl-ink-4)] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink)] hover:border-[var(--cl-ink-2)] transition-colors"
-          onClick={() => {
-            const seed: SchemaNodeModel = {
-              type: 'object',
-              children: [{ name: 'summary', required: true, node: { type: 'string' } }],
-            };
-            patchModel(seed);
-            setShowSource(false);
-          }}
-        >
-          + structured output
-        </button>
+        {header(null)}
+        {shapeBody(
+          <>
+            <p className="mb-2 text-[11.5px] leading-relaxed text-[var(--cl-ink-4)]">
+              Free text — no shape declared.
+            </p>
+            <button
+              type="button"
+              className="font-mono text-[10.5px] px-3 py-1.5 border border-dashed border-[var(--cl-ink-4)] text-[var(--cl-ink-3)] hover:text-[var(--cl-ink)] hover:border-[var(--cl-ink-2)] transition-colors"
+              onClick={() => {
+                const seed: SchemaNodeModel = {
+                  type: 'object',
+                  children: [{ name: 'summary', required: true, node: { type: 'string' } }],
+                };
+                patchModel(seed);
+                setShowSource(false);
+              }}
+            >
+              + give it fields
+            </button>
+          </>
+        )}
       </div>
     );
   }
@@ -395,64 +459,48 @@ export function SchemaBuilder({
   if (!model) {
     return (
       <div>
-        {labelRow(
-          'source only',
+        {header(
           smallAction(
-            'remove',
+            'remove shape',
             () => onPatch({ schemaSource: undefined, schemaModel: undefined }),
             true
           )
         )}
-        <textarea
-          className="w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 font-mono text-[12px] leading-[1.6] text-[var(--cl-ink)] outline-none focus:border-[var(--cl-ink)] resize-y"
-          style={{ minHeight: Math.min(280, 48 + step.schemaSource.split('\n').length * 19) }}
-          value={dedentSource(step.schemaSource)}
-          onChange={e =>
-            onPatch({ schemaSource: e.target.value || undefined, schemaModel: undefined })
-          }
-          spellCheck={false}
-          aria-label="Schema source"
-        />
-        <p className="mt-1 font-mono text-[9.5px] text-[var(--cl-ink-4)]">
-          This schema uses live expressions or shapes the field editor can't represent, so it is
-          edited as source. It is written into the script verbatim.
-        </p>
+        {shapeBody(
+          <>
+            {sourceTextarea(step.schemaSource)}
+            <p className="mt-1 font-mono text-[9.5px] text-[var(--cl-ink-4)]">
+              This shape uses live expressions or forms the field editor can't represent, so it is
+              edited as source. It is written into the script verbatim.
+            </p>
+          </>
+        )}
       </div>
     );
   }
 
-  const summary = `${model.type}${model.type === 'object' ? ` · ${schemaFieldCount(model)} fields` : ''}`;
-
   return (
     <div>
-      {labelRow(
-        summary,
+      {header(
         <>
           {smallAction(showSource ? 'fields' : 'source', () => setShowSource(s => !s))}
           {smallAction(
-            'remove',
+            'remove shape',
             () => onPatch({ schemaSource: undefined, schemaModel: undefined }),
             true
           )}
         </>
       )}
-      {showSource ? (
-        <textarea
-          className="w-full rounded-none border border-[var(--cl-line)] bg-[var(--cl-paper)] px-3 py-2 font-mono text-[12px] leading-[1.6] text-[var(--cl-ink)] outline-none focus:border-[var(--cl-ink)] resize-y"
-          style={{ minHeight: Math.min(280, 48 + step.schemaSource.split('\n').length * 19) }}
-          value={dedentSource(step.schemaSource)}
-          onChange={e =>
-            onPatch({ schemaSource: e.target.value || undefined, schemaModel: undefined })
-          }
-          spellCheck={false}
-          aria-label="Schema source"
-        />
-      ) : model.type === 'object' ? (
-        <ObjectFields node={model} depth={0} onChange={patchModel} />
-      ) : (
-        <p className="font-mono text-[10.5px] text-[var(--cl-ink-4)]">
-          Top-level {model.type} schema — switch to source to edit it.
-        </p>
+      {shapeBody(
+        showSource ? (
+          sourceTextarea(step.schemaSource)
+        ) : model.type === 'object' ? (
+          <ObjectFields node={model} depth={0} onChange={patchModel} />
+        ) : (
+          <p className="font-mono text-[10.5px] text-[var(--cl-ink-4)]">
+            Top-level {model.type} shape — switch to source to edit it.
+          </p>
+        )
       )}
     </div>
   );

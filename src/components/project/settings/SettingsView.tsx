@@ -7,8 +7,11 @@ import {
   useNotifyPrefs,
   useSetNotifyPref,
   useUpdateCheck,
+  useGlobalMcp,
   type EffectiveConfig,
+  type McpServer,
 } from '../../../hooks/useIPC'
+import { mcpStatusMeta } from '../mcp/McpServerCard'
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme'
 import { version as appVersion, claudeCodeVersion } from '../../../../package.json'
 
@@ -43,12 +46,14 @@ const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string;
   general: { eyebrow: 'Appearance & runtime', title: 'General', caption: 'How ClaudeLens looks, and the configuration Claude Code resolves for this scope.', ro: true },
   permissions: { eyebrow: SDK, title: 'Permissions', caption: 'Which tools Claude may run, must ask about, or can never touch.', ro: true },
   tools: { eyebrow: SDK, title: 'Tools', caption: 'Every tool the model can call in this scope.', ro: true },
-  mcp: { eyebrow: SDK, title: 'MCP servers', caption: 'Model Context Protocol integrations and their connection status.', ro: true },
+  mcp: { eyebrow: 'Resolved via claude mcp list', title: 'MCP servers', caption: 'Model Context Protocol integrations and the health Claude Code reports for them.', ro: true },
   extensions: { eyebrow: SDK, title: 'Extensions', caption: 'Skills, subagents, slash commands and plugins available to Claude.', ro: true },
 }
 
 export function SettingsView({ onBack }: { onBack: () => void }) {
   const { data, isLoading, error, refetch, isFetching } = useEffectiveConfig()
+  // The MCP panel reads its own source (see McpTab), so its count must too.
+  const { data: mcp } = useGlobalMcp()
   const [tab, setTab] = useState<TabId>('general')
   const [q, setQ] = useState('')
   const meta = TAB_META[tab]
@@ -115,7 +120,7 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
         {/* ─── Content panel ─── */}
         <main className="set-main">
           <div className="set-panel">
-            <PanelHead meta={meta} count={countFor(tab, data)} />
+            <PanelHead meta={meta} count={countFor(tab, data, mcpServerCount(mcp))} />
 
             {tab === 'privacy' ? (
               <PrivacyTab />
@@ -128,7 +133,15 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
                     SDK config). */}
                 {tab === 'general' && <AppearanceTab />}
                 {tab === 'general' && <UpdatesBlock />}
-                {isLoading ? (
+                {/* MCP reads `claude mcp list`, not the SDK config — so it must
+                    not wait on (or be hidden by) that slower, fallible read. */}
+                {tab === 'mcp' && (
+                  <>
+                    <McpTab cwd={data?.cwd} q={ql} />
+                    <ReadOnlyHint />
+                  </>
+                )}
+                {tab === 'mcp' ? null : isLoading ? (
                   <p className="set-dim" style={{ marginTop: 32 }}>Reading configuration via the Agent SDK…</p>
                 ) : error ? (
                   <p className="set-dim" style={{ marginTop: 32 }}>Couldn’t read configuration: {(error as Error).message}</p>
@@ -137,7 +150,6 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
                     {tab === 'general' && <GeneralTab cfg={data} q={ql} />}
                     {tab === 'permissions' && <PermissionsTab cfg={data} q={ql} />}
                     {tab === 'tools' && <ToolsTab cfg={data} q={ql} />}
-                    {tab === 'mcp' && <McpTab cfg={data} q={ql} />}
                     {tab === 'extensions' && <ExtensionsTab cfg={data} q={ql} />}
                     {meta.ro && <ReadOnlyHint />}
                   </>
@@ -151,12 +163,16 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
   )
 }
 
-function countFor(tab: TabId, cfg?: EffectiveConfig | null): string | undefined {
+function mcpServerCount(mcp?: { cloudServers: McpServer[]; localServers: McpServer[] } | null): number | undefined {
+  return mcp ? mcp.cloudServers.length + mcp.localServers.length : undefined
+}
+
+function countFor(tab: TabId, cfg?: EffectiveConfig | null, mcpCount?: number): string | undefined {
+  if (tab === 'mcp') return mcpCount === undefined ? undefined : `${mcpCount} servers`
   const init = cfg?.init
   if (!init) return undefined
   switch (tab) {
     case 'tools': return `${init.tools.length} tools`
-    case 'mcp': return `${init.mcpServers.length} servers`
     case 'extensions': return `${init.skills.length + init.agents.length + init.slashCommands.length} items`
     default: return undefined
   }
@@ -242,23 +258,61 @@ export function ToolsTab({ cfg, q, heading }: { cfg: EffectiveConfig; q: string;
   )
 }
 
-export function McpTab({ cfg, q, heading }: { cfg: EffectiveConfig; q: string; heading?: boolean }) {
-  const all = cfg.init?.mcpServers ?? []
-  const servers = all.filter(s => !q || s.name.toLowerCase().includes(q))
-  if (!cfg.init) return <RuntimeUnavailable label={heading ? 'MCP servers' : undefined} />
+export function McpTab({ cwd, q, heading }: { cwd?: string; q: string; heading?: boolean }) {
+  // Deliberately NOT cfg.init.mcpServers: the SDK handshake is scoped to the
+  // queried directory, and this panel is resolved against the home dir — which
+  // Claude Code treats as untrusted, so it loads no MCP server there and the
+  // list came back empty. mcp:getGlobal reads `claude mcp list` instead (same
+  // source as /mcp) and is directory-independent. See modules/mcp-reader.ts.
+  const { data: mcp, isLoading } = useGlobalMcp()
+  const match = (s: McpServer) => !q || s.name.toLowerCase().includes(q)
+  const listed = [...(mcp?.cloudServers ?? []), ...(mcp?.localServers ?? [])].filter(match)
+  const unlisted = (mcp?.unlistedServers ?? []).filter(match)
+  const probeError = mcp?.probe?.error ?? null
+
+  // In the project-scoped variant, `cwd` is the project: flag the connectors
+  // that project has turned off rather than implying they are off everywhere.
+  const offHere = (s: McpServer) => !!cwd && s.live && s.disabledProjectPaths.includes(cwd)
+
+  if (isLoading) return <p className="set-dim">Reading MCP servers via <code>claude mcp list</code>…</p>
   return (
-    <Block label={heading ? 'MCP servers' : undefined} bare={!heading}>
-      {servers.length === 0 ? <p className="set-dim">No servers match.</p> : (
-        <div>
-          {servers.map(s => (
-            <div key={s.name} className="set-line">
-              <span className="set-val">{s.name}</span>
-              <StatusDot status={s.status} />
-            </div>
-          ))}
-        </div>
+    <>
+      <Block label={heading ? 'MCP servers' : undefined} bare={!heading}>
+        {probeError && <p className="set-dim">Live status unavailable: {probeError}</p>}
+        {listed.length === 0 ? (
+          <p className="set-dim">{q ? 'No servers match.' : 'No MCP servers are currently listed.'}</p>
+        ) : (
+          <div>
+            {listed.map(s => (
+              <div key={s.name} className="set-line">
+                <span className="set-val">{s.name}</span>
+                <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  {offHere(s) && <SourceBadge source="off in this scope" />}
+                  <StatusDot status={mcpStatusMeta(s.status).label} color={mcpStatusMeta(s.status).color} />
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+      </Block>
+
+      {unlisted.length > 0 && (
+        <Block label="Not listed" count={unlisted.length}>
+          <p className="set-dim" style={{ marginBottom: 10 }}>
+            Recorded in <code>~/.claude.json</code> but absent from the last <code>claude mcp list</code>. Claude Code never
+            removes a connector from that file when you disconnect it, so these are leftovers <code>/mcp</code> will not show.
+          </p>
+          <div>
+            {unlisted.map(s => (
+              <div key={s.name} className="set-line" style={{ opacity: 0.65 }}>
+                <span className="set-val">{s.name}</span>
+                <StatusDot status={mcpStatusMeta(s.status).label} color={mcpStatusMeta(s.status).color} />
+              </div>
+            ))}
+          </div>
+        </Block>
       )}
-    </Block>
+    </>
   )
 }
 
@@ -603,10 +657,12 @@ function Dim({ children }: { children?: ReactNode }) {
   return <span className="set-dim">{children ?? '—'}</span>
 }
 
-function StatusDot({ status }: { status: string }) {
+function StatusDot({ status, color: given }: { status: string; color?: string }) {
+  // `color` wins when the caller already knows the semantics (MCP statuses come
+  // with their own tone); the regex stays for free-form SDK status strings.
   const ok = /connect|ready|running|ok/i.test(status)
   const failed = /fail|error|disconnect/i.test(status)
-  const color = ok ? 'var(--cl-ok)' : failed ? 'var(--cl-danger)' : 'var(--cl-warn)'
+  const color = given ?? (ok ? 'var(--cl-ok)' : failed ? 'var(--cl-danger)' : 'var(--cl-warn)')
   return (
     <span className="set-status">
       <span className="dot" style={{ background: color }} />

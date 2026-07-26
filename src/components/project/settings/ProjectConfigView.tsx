@@ -37,7 +37,7 @@ export function ProjectConfigView({ project }: { project: Project }) {
           <GeneralTab cfg={data} q="" heading />
           <PermissionsTab cfg={data} q="" heading />
           <ToolsTab cfg={data} q="" heading />
-          <McpTab cfg={data} q="" heading />
+          <McpTab cwd={data.cwd} q="" heading />
           <ExtensionsTab cfg={data} q="" heading />
           {/* Sources tab (raw merged tiers + JSON dumps) is intentionally omitted
               here — it's a low-level detail; per-field provenance badges already

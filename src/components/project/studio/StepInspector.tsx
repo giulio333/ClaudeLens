@@ -3,7 +3,7 @@ import type { BlueprintStep } from '../../../types';
 import { FieldHint } from '../shared/CreateFormKit';
 import PromptPreview from './PromptPreview';
 import { SchemaBuilder } from './SchemaBuilder';
-import { inputCls, labelCls, stepVarName } from './studioLang';
+import { inputCls, labelCls } from './studioLang';
 
 const STEP_MODELS = ['inherit', 'sonnet', 'opus', 'haiku'] as const;
 const STEP_EFFORTS = ['inherit', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
@@ -127,28 +127,6 @@ export function StepInspector({
               <option key={n} value={n} />
             ))}
           </datalist>
-        </div>
-        <div>
-          <label className={labelCls}>
-            <span>Output</span>
-            <FieldHint
-              text={
-                step.resultVar
-                  ? 'The variable this script binds the result to. Read-only here: renaming it would leave every ${...} that reads it in a later prompt pointing at nothing — rename it in Script.'
-                  : 'This step binds no variable of its own, so the compiler derives one from the step id.'
-              }
-            />
-          </label>
-          <input
-            className={inputCls + ' font-mono text-[12px] text-[var(--cl-ink-3)]'}
-            value={step.resultVar ?? stepVarName(step.id)}
-            readOnly
-            title={
-              step.resultVar
-                ? 'Bound by the script — edit in Script'
-                : 'Derived from the step id by the compiler'
-            }
-          />
         </div>
       </div>
 

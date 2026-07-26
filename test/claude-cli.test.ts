@@ -52,6 +52,46 @@ describe.skipIf(process.platform === 'win32')('claude-cli (fake CLI on PATH)', (
       rmSync(empty, { recursive: true, force: true });
     }
   });
+
+  it('execClaude usa `executable` quando la CLI non è nel PATH', async () => {
+    // Percorso dell'app pacchettizzata: `claude` non è nel PATH del processo
+    // Electron ma il binario unpacked è noto (resolveClaudeExecutablePath).
+    const empty = mkdtempSync(join(tmpdir(), 'cl-empty-'));
+    try {
+      const { stdout } = await execClaude(['world'], {
+        env: { PATH: empty },
+        executable: join(binDir, 'claude'),
+      });
+      expect(stdout.trim()).toBe('hello world');
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+
+  it('execClaude rigetta con ETIMEDOUT oltre il timeout e uccide il processo', async () => {
+    const slow = join(binDir, 'claude');
+    // `read` e non `sleep`: il PATH del figlio è la sola binDir, dove `sleep`
+    // non esiste e non è un builtin — lo script stampava "command not found",
+    // faceva `echo` e usciva 0 in ~150-190ms, cioè in gara col timeout invece
+    // che oltre. Chi vinceva dipendeva dalla latenza di spawn della macchina
+    // (verde in locale, rosso sui runner CI). `read` è un builtin e blocca sullo
+    // stdin del pipe, che nessuno scrive: il processo non finisce mai da solo.
+    writeFileSync(slow, '#!/bin/sh\nread ignored\necho late\n', 'utf-8');
+    chmodSync(slow, 0o755);
+    const started = Date.now();
+    const e = (await execClaude(['x'], { env: { PATH: binDir }, timeout: 150 }).catch(
+      err => err
+    )) as ExecClaudeError;
+    expect(e.code).toBe('ETIMEDOUT');
+    expect(e.message).toContain('150ms');
+    // Ha atteso davvero il timeout, non è uscito da solo prima.
+    expect(Date.now() - started).toBeGreaterThanOrEqual(150);
+  });
+
+  it('execClaude non lascia timer pendenti sul successo', async () => {
+    const { stdout } = await execClaude(['world'], { env: { PATH: binDir }, timeout: 10_000 });
+    expect(stdout.trim()).toBe('hello world');
+  });
 });
 
 // ── E2E (matrix win/linux/mac, vera CLI installata — vedi ci.yml
