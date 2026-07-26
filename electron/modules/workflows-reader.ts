@@ -1,5 +1,5 @@
-import { readdir, readFile } from 'fs/promises';
-import { existsSync, statSync } from 'fs';
+import { readdir, readFile, stat } from 'fs/promises';
+import { existsSync } from 'fs';
 import { basename, join } from 'path';
 import { assertWithin } from '../utils';
 
@@ -324,9 +324,9 @@ async function recoverNameFromScript(scriptsDir: string, runId: string): Promise
   return '';
 }
 
-function safeMtimeMs(path: string): number {
+async function safeMtimeMs(path: string): Promise<number> {
   try {
-    return statSync(path).mtimeMs;
+    return (await stat(path)).mtimeMs;
   } catch {
     return 0;
   }
@@ -362,7 +362,7 @@ export async function getProjectWorkflows(projectPath: string): Promise<Workflow
           const detail = parseRunFile(JSON.parse(await readFile(full, 'utf-8')), {
             projectPath,
             stateSessionId: dirName,
-            fallbackMtimeMs: safeMtimeMs(full),
+            fallbackMtimeMs: await safeMtimeMs(full),
           });
           if (!detail || knownRunIds.has(detail.runId)) continue;
           knownRunIds.add(detail.runId);
@@ -400,7 +400,7 @@ export async function getProjectWorkflows(projectPath: string): Promise<Workflow
           workflowName: name,
           status: 'unknown',
           degraded: true,
-          startTime: safeMtimeMs(transcriptDir),
+          startTime: await safeMtimeMs(transcriptDir),
           timestamp: '',
           durationMs: 0,
           agentCount: orphanIds.length,
@@ -460,7 +460,7 @@ export async function getWorkflowRun(
       const detail = parseRunFile(JSON.parse(await readFile(candidate, 'utf-8')), {
         projectPath,
         stateSessionId: dirName,
-        fallbackMtimeMs: safeMtimeMs(candidate),
+        fallbackMtimeMs: await safeMtimeMs(candidate),
       });
       if (!detail) continue;
       // Script fallback: if not inlined, read the .js from the LAUNCHING
@@ -503,7 +503,7 @@ export async function getWorkflowRun(
       workflowName: name,
       status: 'unknown',
       degraded: true,
-      startTime: safeMtimeMs(transcriptDir),
+      startTime: await safeMtimeMs(transcriptDir),
       timestamp: '',
       durationMs: 0,
       agentCount: orphanAgentIds.length,

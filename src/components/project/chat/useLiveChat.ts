@@ -210,6 +210,8 @@ export function useLiveChat(
   useEffect(() => {
     if (!followDisk || !resumeRef.current) return
     let timer: ReturnType<typeof setTimeout> | null = null
+    // The scope payload is intentionally ignored: this is a direct disk re-read,
+    // not a query invalidation, and it must follow every change to the session.
     const unsubscribe = window.electronAPI.onDataChanged(() => {
       if (pendingRef.current !== null) return
       // Trailing debounce: a turn in the terminal appends the .jsonl in bursts.

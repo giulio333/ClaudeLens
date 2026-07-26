@@ -3,7 +3,7 @@ import { basename, join, resolve, sep } from 'path';
 import { glob } from 'glob';
 
 import { findSessionFile } from './session-reader';
-import { extractPlanRefs } from './plans-reader';
+import { readPlanRefs } from './plans-reader';
 
 // Una sessione di Claude Code è un semplice file `.jsonl` su disco, ma porta con
 // sé alcuni artefatti collaterali (transcript dei sub-agenti, task, piani). Questo
@@ -69,7 +69,7 @@ async function planReferenceCounts(projectPath: string): Promise<Map<string, num
   const counts = new Map<string, number>();
   const sessionFiles = await glob('**/*.jsonl', { cwd: projectPath, absolute: true });
   for (const file of sessionFiles) {
-    const paths = new Set(extractPlanRefs(file).map(r => r.filePath));
+    const paths = new Set((await readPlanRefs(file)).map(r => r.filePath));
     for (const p of paths) counts.set(p, (counts.get(p) ?? 0) + 1);
   }
   return counts;
@@ -134,7 +134,7 @@ export async function getSessionArtifacts(
   }
 
   // 4. Piani referenziati (file globali condivisi: default deselezionati).
-  const planPaths = new Set(extractPlanRefs(sessionFile).map(r => r.filePath));
+  const planPaths = new Set((await readPlanRefs(sessionFile)).map(r => r.filePath));
   if (planPaths.size > 0) {
     const refCounts = await planReferenceCounts(projectPath);
     for (const planPath of planPaths) {

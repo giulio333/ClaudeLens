@@ -185,8 +185,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     track: (name: string, props?: Record<string, string | number>) =>
       ipcRenderer.invoke('telemetry:track', name, props),
   },
-  onDataChanged: (callback: () => void) => {
-    const handler = () => callback();
+  // `scopes` = the query namespaces the changed path can have touched (see
+  // modules/data-change-scope.ts). `null`/absent means "invalidate everything".
+  onDataChanged: (callback: (scopes?: string[] | null) => void) => {
+    const handler = (_event: IpcRendererEvent, scopes?: string[] | null) => callback(scopes);
     ipcRenderer.on('data:changed', handler);
     return () => ipcRenderer.removeListener('data:changed', handler);
   },

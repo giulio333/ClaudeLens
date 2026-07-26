@@ -1,4 +1,4 @@
-import { readFileSync, statSync } from 'fs';
+import { readFile, stat } from 'fs/promises';
 import { join, basename } from 'path';
 import { glob } from 'glob';
 
@@ -28,9 +28,9 @@ function toStringArray(raw: unknown): string[] {
   return Array.isArray(raw) ? raw.map(String) : [];
 }
 
-function parseTaskFile(filePath: string): Task | null {
+async function parseTaskFile(filePath: string): Promise<Task | null> {
   try {
-    const json = JSON.parse(readFileSync(filePath, 'utf-8')) as Record<string, unknown>;
+    const json = JSON.parse(await readFile(filePath, 'utf-8')) as Record<string, unknown>;
     const id = String(json.id ?? basename(filePath, '.json'));
     return {
       id,
@@ -66,8 +66,7 @@ export async function getProjectTasks(projectPath: string, tasksDir: string): Pr
       const taskFiles = await glob('*.json', { cwd: taskFolder, absolute: true });
       if (taskFiles.length === 0) continue;
 
-      const tasks = taskFiles
-        .map(parseTaskFile)
+      const tasks = (await Promise.all(taskFiles.map(parseTaskFile)))
         .filter((t): t is Task => t !== null)
         // NaN-safe: a non-numeric id would make `Number(id)` NaN and the whole
         // comparator NaN → arbitrary order. Fall back to a stable string compare.
@@ -82,7 +81,7 @@ export async function getProjectTasks(projectPath: string, tasksDir: string): Pr
 
       let mtime = 0;
       try {
-        mtime = statSync(taskFolder).mtimeMs;
+        mtime = (await stat(taskFolder)).mtimeMs;
       } catch {
         // ignora: ordina in fondo
       }
