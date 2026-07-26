@@ -1,3 +1,31 @@
+import type { McpStatus } from '../../../types'
+
+export interface McpStatusMeta {
+  label: string
+  color: string
+  /** Longer explanation, surfaced as a tooltip. */
+  hint: string
+}
+
+// Status comes straight from `claude mcp list` — the same health check `/mcp`
+// runs — so these labels describe the live server, not a cached file entry.
+export function mcpStatusMeta(status: McpStatus): McpStatusMeta {
+  switch (status) {
+    case 'connected':
+      return { label: 'connected', color: 'var(--cl-ok)', hint: 'Health-checked and serving tools.' }
+    case 'pending':
+      return { label: 'pending approval', color: 'var(--cl-warn)', hint: 'Declared in a .mcp.json that has not been approved yet, so Claude Code does not connect to it.' }
+    case 'needs-auth':
+      return { label: 'needs auth', color: 'var(--cl-warn)', hint: 'The server exists but its authentication has not been completed. Run /mcp in Claude Code to authenticate.' }
+    case 'failed':
+      return { label: 'failed', color: 'var(--cl-danger)', hint: 'The health check could not reach this server.' }
+    case 'unlisted':
+      return { label: 'not listed', color: 'var(--cl-ink-4)', hint: 'Recorded in ~/.claude.json but absent from the last `claude mcp list`. Usually a connector disconnected from your account; the list Claude Code reports also varies between runs, so it may reappear.' }
+    default:
+      return { label: 'unknown', color: 'var(--cl-ink-4)', hint: 'Claude Code reported no recognizable status for this server.' }
+  }
+}
+
 export interface McpServiceMeta {
   category: string
   description: string

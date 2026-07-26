@@ -506,6 +506,10 @@ const MOCK_MCP = {
     {
       name: 'github',
       source: 'cloud' as const,
+      status: 'connected' as const,
+      live: true,
+      needsAuth: false,
+      target: 'https://mcp.github.com/mcp',
       enabledInProjects: 3,
       disabledInProjects: 2,
       enabledProjectPaths: [
@@ -518,6 +522,10 @@ const MOCK_MCP = {
     {
       name: 'linear',
       source: 'cloud' as const,
+      status: 'needs-auth' as const,
+      live: true,
+      needsAuth: true,
+      target: 'https://mcp.linear.app/mcp',
       enabledInProjects: 2,
       disabledInProjects: 3,
       enabledProjectPaths: [
@@ -535,6 +543,9 @@ const MOCK_MCP = {
     {
       name: 'filesystem',
       source: 'local' as const,
+      status: 'connected' as const,
+      live: true,
+      needsAuth: false,
       command: 'npx',
       args: ['-y', '@modelcontextprotocol/server-filesystem', '/Users/alice'],
       enabledInProjects: 4,
@@ -548,7 +559,21 @@ const MOCK_MCP = {
       disabledProjectPaths: ['/Users/alice/side/blog'],
     },
   ],
+  unlistedServers: [
+    {
+      name: 'claude.ai Notion',
+      source: 'cloud' as const,
+      status: 'unlisted' as const,
+      live: false,
+      needsAuth: false,
+      enabledInProjects: 0,
+      disabledInProjects: 0,
+      enabledProjectPaths: [],
+      disabledProjectPaths: [],
+    },
+  ],
   totalProjects: 5,
+  probe: { command: 'claude mcp list', observedAt: 1_760_000_000_000, error: null },
 };
 
 // ─── Sessioni live ────────────────────────────────────────────────────────────

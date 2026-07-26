@@ -549,9 +549,27 @@ export interface StudioLibrary {
   workflowsDir: string
 }
 
+export type McpStatus =
+  | 'connected'
+  | 'pending'
+  | 'needs-auth'
+  | 'failed'
+  | 'unknown'
+  /**
+   * Recorded on disk but absent from the last live list. Not "removed": the
+   * list Claude Code reports is volatile, so this is an observation.
+   */
+  | 'unlisted'
+
 export interface McpServer {
   name: string
   source: 'cloud' | 'local'
+  /** Health reported by `claude mcp list` (the source behind `/mcp`). */
+  status: McpStatus
+  live: boolean
+  needsAuth: boolean
+  /** Endpoint (cloud) or command line (local), as reported by the CLI. */
+  target?: string
   command?: string
   args?: string[]
   env?: Record<string, string>
@@ -564,7 +582,10 @@ export interface McpServer {
 export interface McpData {
   cloudServers: McpServer[]
   localServers: McpServer[]
+  /** Names recorded on disk that the last live list did not include. */
+  unlistedServers: McpServer[]
   totalProjects: number
+  probe: { command: string; observedAt: number | null; error: string | null }
 }
 
 export interface LiveEvent {

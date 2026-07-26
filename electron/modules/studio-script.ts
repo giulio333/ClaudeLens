@@ -113,6 +113,30 @@ function stringValue(value: unknown): string | null {
 }
 
 /**
+ * `` `...`.trim() `` — the idiom native workflows use for multi-line prompts —
+ * is a CallExpression, not a template literal, so the prompt readers must see
+ * through it. The flag travels on the node so the compiler re-emits `.trim()`
+ * and the round-trip keeps stripping the leading/trailing newline.
+ */
+function unwrapTrim(value: unknown): { inner: AstNode | null; trimmed: boolean } {
+  const n = node(value);
+  if (!n) return { inner: null, trimmed: false };
+  if (n.type !== 'CallExpression' || nodes(n.arguments).length !== 0) {
+    return { inner: n, trimmed: false };
+  }
+  const callee = node(n.callee);
+  if (callee?.type !== 'MemberExpression' || callee.computed === true) {
+    return { inner: n, trimmed: false };
+  }
+  if (keyOf(callee.property) !== 'trim') return { inner: n, trimmed: false };
+  const object = node(callee.object);
+  if (!object || (object.type !== 'TemplateLiteral' && object.type !== 'Literal')) {
+    return { inner: n, trimmed: false };
+  }
+  return { inner: object, trimmed: true };
+}
+
+/**
  * Escape `${` → `\${` in text that was literal in the source (a plain string
  * value, or a template quasi between expressions). The compiler's
  * `scanInterpolations` skips `\${`, so the sequence stays literal on round-trip
@@ -239,10 +263,12 @@ class ScriptParser {
     if (!call || callName(call) !== 'agent') return null;
     const args = nodes(call.arguments);
     if (args.length > 2) return null;
-    const prompt = this.promptOf(args[0]);
+    const promptArg = unwrapTrim(args[0]);
+    const prompt = this.promptOf(promptArg.inner);
     if (prompt === null) return null;
 
     const step: BlueprintStep = { id: '', prompt };
+    if (promptArg.trimmed) step.promptTrim = true;
     if (resultVar) step.resultVar = resultVar;
     let literalLabel: string | null = null;
 
@@ -365,9 +391,15 @@ class ScriptParser {
     if (callName(expression) !== 'log') return false;
     const args = nodes(expression!.arguments);
     if (args.length !== 1) return false;
-    const message = this.promptOf(args[0]);
+    const messageArg = unwrapTrim(args[0]);
+    const message = this.promptOf(messageArg.inner);
     if (message === null) return false;
-    this.sink().push({ kind: 'log', message, ...(leading ? { leading } : {}) });
+    this.sink().push({
+      kind: 'log',
+      message,
+      ...(messageArg.trimmed ? { trim: true } : {}),
+      ...(leading ? { leading } : {}),
+    });
     return true;
   }
 

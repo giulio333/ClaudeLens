@@ -213,6 +213,45 @@ return run
     expect(runNodes[1]).toMatchObject({ kind: 'code', source: 'return run' });
   });
 
+  it('reads through the `...`.trim() prompt idiom and re-emits the call', () => {
+    const source = `export const meta = { name: "audit", description: "trimmed prompts", phases: [{ title: "Scan" }] }
+phase("Scan")
+log(\`
+  scanning
+\`.trim())
+const inventory = await agent(\`
+List the payslips.
+\`.trim(), { label: 'inventory' })
+
+const results = await pipeline(
+  inventory.items,
+  (item) => agent(\`
+Extract \${item.pdf}.
+\`.trim(), { label: \`extract:\${item.id}\`, phase: 'Scan' }),
+)
+`;
+    const parsed = scriptParser.parseWorkflowScript(source, 'audit.js');
+    const nodes = parsed.blueprint.phases[0].nodes;
+    expect(nodes[0]).toMatchObject({ kind: 'log', message: '\n  scanning\n', trim: true });
+    expect(nodes[1]).toMatchObject({ kind: 'step' });
+    const step = nodes[1].kind === 'step' ? nodes[1].step : undefined;
+    expect(step).toMatchObject({ id: 'inventory', resultVar: 'inventory', promptTrim: true });
+    expect(step?.prompt).toBe('\nList the payslips.\n');
+    expect(nodes[2].kind === 'pipeline' && nodes[2].stages[0]).toMatchObject({
+      kind: 'agent',
+      params: 'item',
+      step: { promptTrim: true },
+    });
+
+    // The `.trim()` survives compilation, so the prompt keeps being stripped.
+    const compiled = compiler.compileBlueprint(parsed.blueprint);
+    expect(compiled).toContain('`.trim(), { label: "inventory" }');
+    expect(compiled).toContain('`.trim())');
+    expect(scriptParser.parseWorkflowScript(compiled, 'audit.js').blueprint).toEqual(
+      parsed.blueprint
+    );
+  });
+
   it('round-trips quoted and prototype-like literal metadata keys safely', () => {
     const source = `export const meta = {
   name: "unusual-meta-keys",
