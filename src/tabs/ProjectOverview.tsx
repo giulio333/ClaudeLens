@@ -15,6 +15,7 @@ import { usePinnedProjects } from '../hooks/usePinnedProjects'
 import { usePinnedSessions } from '../hooks/usePinnedSessions'
 import { View } from '../components/project/types'
 import { reportViewOpened } from '../lib/telemetry'
+import { STUDIO_ENABLED } from '../lib/features'
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog'
 import {
   SearchPopover,
@@ -288,7 +289,7 @@ export default function ProjectOverview() {
   const isGlobalHome = view.type === 'global-home'
   const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type)
   const isGlobalLiveAgents = view.type === 'agents-live' && !view.project
-  const isStudio = view.type === 'studio'
+  const isStudio = STUDIO_ENABLED && view.type === 'studio'
   const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents || isStudio
 
   // Spike B (motion.dev): identity of the currently-visible editorial-core
@@ -544,7 +545,9 @@ export default function ProjectOverview() {
           <button className={isGlobalHome ? 'on' : ''} onClick={goGlobal}>Global</button>
           <button className={scope === 'project' && !isGlobalLiveAgents ? 'on' : ''} onClick={goProjectScope}>Project</button>
           <button className={view.type === 'agents-live' && !view.project ? 'on' : ''} onClick={goLiveAgents}>Agent View</button>
-          <button className={isStudio ? 'on' : ''} onClick={goStudio}>Agent Studio</button>
+          {STUDIO_ENABLED && (
+            <button className={isStudio ? 'on' : ''} onClick={goStudio}>Agent Studio</button>
+          )}
         </nav>
 
         <div />
