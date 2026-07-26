@@ -27,6 +27,7 @@ import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans } from './modules/plans-reader';
 import { getProjectWorkflows, getWorkflowRun } from './modules/workflows-reader';
 import { getProjectTeams, getTeamDetail } from './modules/teams-reader';
+import { scopesForPath, type DataScope } from './modules/data-change-scope';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { getInstalledPlugins } from './modules/plugins-reader';
@@ -1311,7 +1312,9 @@ ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destH
     invalidateCwdCache(sourceHash);
     invalidateCwdCache(destHash);
     resumeWatcher();
-    safeSend('data:changed');
+    // Un merge sposta sessioni e fonde memory tra due progetti: nessuno scope
+    // ristretto lo descrive: `null` = invalida tutto.
+    safeSend('data:changed', null);
   }
 });
 
@@ -1937,9 +1940,12 @@ async function startWatcher() {
     }
   );
 
-  const notify = () => {
+  // `scopes` dice al renderer quali namespace di query il file cambiato può aver
+  // toccato (data-change-scope.ts). `null`/assente = "non lo so" → il renderer
+  // invalida tutto, che è il comportamento storico e resta il fallback sicuro.
+  const notify = (scopes: DataScope[] | null = null) => {
     if (watcherPauseDepth > 0) return;
-    safeSend('data:changed');
+    safeSend('data:changed', scopes);
   };
 
   const syncProjectWorkflowDirs = () => {
@@ -1973,7 +1979,7 @@ async function startWatcher() {
 
   const notifyAndRefreshStudioWatches = (path: string) => {
     studioWatchSync.onEvent(path);
-    notify();
+    notify(scopesForPath(path, CLAUDE_DIR));
   };
 
   watcher.on('add', notifyAndRefreshStudioWatches);
