@@ -352,7 +352,7 @@ declare global {
         setEnabled: (enabled: boolean) => Promise<IpcResult<boolean>>
         track: (name: string, props?: Record<string, string | number>) => Promise<IpcResult<boolean>>
       }
-      onDataChanged: (callback: () => void) => () => void
+      onDataChanged: (callback: (scopes?: string[] | null) => void) => () => void
       live: {
         getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
         onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void
@@ -1075,6 +1075,29 @@ export function useDeleteProject() {
   })
 }
 
+// The filesystem-backed queries, grouped by the scope the main process derives
+// from the changed path (electron/modules/data-change-scope.ts). An event only
+// invalidates the groups it can have touched: an append to a live chat's
+// transcript has no reason to re-read skills, agents or plugins.
+const SCOPE_KEYS: Record<string, string[]> = {
+  sessions: ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript'],
+  cost: ['cost:summary', 'cost:project'],
+  plans: ['plans:project'],
+  tasks: ['tasks:project'],
+  teams: ['teams:project', 'teams:detail'],
+  workflows: ['workflows:project', 'workflows:run'],
+  studio: ['studio:all', 'studio:blueprint'],
+  plugins: ['plugins:all'],
+  memory: ['memory:projects', 'memory:project'],
+  claudeMd: ['claudeMd:hierarchy', 'claudeMd:global'],
+  rules: ['rules:project'],
+  skills: ['skills:global', 'skills:all'],
+  agents: ['agents:global', 'agents:project'],
+  mcp: ['mcp:global'],
+}
+
+const ALL_SCOPES = Object.keys(SCOPE_KEYS)
+
 export function useDataChangedRefetch() {
   const qc = useQueryClient()
 
@@ -1082,37 +1105,26 @@ export function useDataChangedRefetch() {
     // Coalesce bursts: during a live chat turn the transcript .jsonl is appended
     // continuously, firing many undebounced data:changed events; each would
     // re-run a full synchronous re-read/parse of the entire file (sessions:chat
-    // is an active query). A trailing timer collapses a burst into one pass.
+    // is an active query). A trailing timer collapses a burst into one pass,
+    // invalidating the union of the scopes seen during the window.
     let timer: ReturnType<typeof setTimeout> | null = null
+    let pending = new Set<string>()
     const flush = () => {
       timer = null
-      qc.invalidateQueries({ queryKey: ['memory:projects'] })
-      qc.invalidateQueries({ queryKey: ['memory:project'] })
-      qc.invalidateQueries({ queryKey: ['cost:summary'] })
-      qc.invalidateQueries({ queryKey: ['cost:project'] })
-      qc.invalidateQueries({ queryKey: ['sessions:project'] })
-      qc.invalidateQueries({ queryKey: ['sessions:chat'] })
-      qc.invalidateQueries({ queryKey: ['sessions:subagents'] })
-      qc.invalidateQueries({ queryKey: ['sessions:subagentTranscript'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
-      qc.invalidateQueries({ queryKey: ['rules:project'] })
-      qc.invalidateQueries({ queryKey: ['tasks:project'] })
-      qc.invalidateQueries({ queryKey: ['plans:project'] })
-      qc.invalidateQueries({ queryKey: ['workflows:project'] })
-      qc.invalidateQueries({ queryKey: ['workflows:run'] })
-      qc.invalidateQueries({ queryKey: ['teams:project'] })
-      qc.invalidateQueries({ queryKey: ['teams:detail'] })
-      qc.invalidateQueries({ queryKey: ['skills:global'] })
-      qc.invalidateQueries({ queryKey: ['skills:all'] })
-      qc.invalidateQueries({ queryKey: ['agents:global'] })
-      qc.invalidateQueries({ queryKey: ['agents:project'] })
-      qc.invalidateQueries({ queryKey: ['mcp:global'] })
-      qc.invalidateQueries({ queryKey: ['plugins:all'] })
-      qc.invalidateQueries({ queryKey: ['studio:all'] })
-      qc.invalidateQueries({ queryKey: ['studio:blueprint'] })
+      const scopes = pending
+      pending = new Set()
+      for (const scope of scopes) {
+        for (const key of SCOPE_KEYS[scope] ?? []) {
+          qc.invalidateQueries({ queryKey: [key] })
+        }
+      }
     }
-    const unsubscribe = window.electronAPI.onDataChanged(() => {
+    const unsubscribe = window.electronAPI.onDataChanged(scopes => {
+      // An absent or unrecognized payload means "unknown": invalidate
+      // everything, as the previous version always did. Never narrow on a
+      // signal we don't fully understand — a stale view is the worse failure.
+      const known = Array.isArray(scopes) && scopes.every(s => s in SCOPE_KEYS)
+      for (const scope of known ? scopes : ALL_SCOPES) pending.add(scope)
       if (timer) clearTimeout(timer)
       timer = setTimeout(flush, 200)
     })
