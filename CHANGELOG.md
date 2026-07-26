@@ -4,6 +4,25 @@ All notable changes to ClaudeLens are documented here. Each entry condenses the
 corresponding [GitHub Release](https://github.com/giulio333/ClaudeLens/releases),
 where the full notes, the per-PR list, and the downloadable builds live.
 
+## [2.2.1] - 2026-07-26
+
+### Fixed
+
+- Teams: a respawned teammate's older sidecar no longer overwrites the newer color/model/description, and peer-message dedup no longer collapses two genuinely distinct identical messages
+- Mission Control's TEAMS island shows only the focused session's teams, and the project Teams tab groups cards under their session (#150)
+- Workflows: unsafe run ids are rejected in the listing (not only on open), `failed` agents count as errored, duplicate runs are deduped, and load errors surface instead of showing an empty list
+- Live workflow and team views keep the last good data instead of flashing "empty" while a running session rewrites its state files
+- Sub-agent transcripts open in screenshot mode, and two mis-referenced color tokens are corrected
+
+### Changed
+
+- Release assets now ship a `checksums.txt` and build-provenance attestations, so an unsigned download can be verified against what CI produced (#163)
+- Agent Studio stays hidden: the visual workflow editor is still under development and its entry point is disabled in this build
+
+### Compatibility
+
+- Validated against Claude Code 2.1.220
+
 ## [2.2.0] - 2026-07-10
 
 ### Added
