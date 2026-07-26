@@ -1,5 +1,4 @@
 import { readdir, readFile, stat } from 'fs/promises';
-import { existsSync } from 'fs';
 import { basename, join } from 'path';
 import { assertWithin } from '../utils';
 
@@ -332,6 +331,16 @@ async function safeMtimeMs(path: string): Promise<number> {
   }
 }
 
+/** Async existsSync — the sync one blocks the main process event loop. */
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Public API
 // ──────────────────────────────────────────────────────────────────────────
@@ -455,7 +464,8 @@ export async function getWorkflowRun(
     } catch {
       continue;
     }
-    if (!existsSync(candidate)) continue;
+    // No existence probe: a missing file makes the readFile below throw, which
+    // the catch already turns into "try the next dir" — one syscall, not two.
     try {
       const detail = parseRunFile(JSON.parse(await readFile(candidate, 'utf-8')), {
         projectPath,
@@ -491,7 +501,10 @@ export async function getWorkflowRun(
     } catch {
       continue;
     }
-    if (!existsSync(transcriptDir)) continue;
+    // Load-bearing, unlike the probe above: readOrphanAgentIds swallows a
+    // missing dir into [], so without this every session dir would yield a
+    // bogus degraded detail instead of falling through to "not found".
+    if (!(await exists(transcriptDir))) continue;
     const orphanAgentIds = await readOrphanAgentIds(transcriptDir);
     const name = await recoverNameFromScript(
       join(projectPath, dirName, 'workflows', 'scripts'),
