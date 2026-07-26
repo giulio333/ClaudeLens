@@ -1,4 +1,13 @@
-import { readdirSync, readFileSync, statSync, realpathSync, existsSync } from 'fs';
+import {
+  readdirSync,
+  readFileSync,
+  statSync,
+  realpathSync,
+  existsSync,
+  openSync,
+  readSync,
+  closeSync,
+} from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import os from 'os';
 
@@ -130,20 +139,64 @@ export function resolveRealPath(projectsDir: string, hash: string): string {
   return hashToPath(hash);
 }
 
+// Il `cwd` sta nel primo record `user` del transcript, che nella pratica cade
+// entro i primi KB: leggere l'intero .jsonl per estrarlo costa quanto il file
+// (misurato: 6 MB -> 15 ms e +12 MB di heap transitorio per la stringa e lo
+// split, per progetto, in sincrono sul main process all'avvio). Leggiamo prima
+// una testa di 64 KB; il file intero resta il fallback perché quel primo record
+// può essere enorme (un messaggio utente con un incolla grosso) e portare il
+// `cwd` oltre il chunk — nel campione locale ~5% dei transcript, worst case
+// 1,4 MB. Senza fallback quei progetti ricadrebbero sul lossy `hashToPath`.
+const CWD_HEAD_BYTES = 64 * 1024;
+
+function findCwdInJsonl(content: string): string | null {
+  for (const line of content.split('\n')) {
+    if (!line) continue;
+    const idx = line.indexOf('"cwd"');
+    if (idx === -1) continue;
+    try {
+      const obj = JSON.parse(line);
+      if (typeof obj.cwd === 'string' && isAbsolutePath(obj.cwd)) return obj.cwd;
+    } catch {
+      // riga malformata, continua
+    }
+  }
+  return null;
+}
+
 function readCwdFromJsonl(filePath: string): string | null {
+  let fd: number | undefined;
+  let readWholeFile = false;
   try {
-    const content = readFileSync(filePath, 'utf-8');
-    for (const line of content.split('\n')) {
-      if (!line) continue;
-      const idx = line.indexOf('"cwd"');
-      if (idx === -1) continue;
+    fd = openSync(filePath, 'r');
+    const buf = Buffer.allocUnsafe(CWD_HEAD_BYTES);
+    const n = readSync(fd, buf, 0, CWD_HEAD_BYTES, 0);
+    readWholeFile = n < CWD_HEAD_BYTES;
+    const chunk = buf.subarray(0, n).toString('utf-8');
+    // Se il chunk non è tutto il file l'ultima riga è troncata a metà: scartarla
+    // evita un JSON.parse fallito su un record in realtà valido. Tagliare
+    // sull'ultimo '\n' scarta anche l'eventuale carattere UTF-8 spezzato dal
+    // confine del buffer ('\n' non compare mai dentro una sequenza multi-byte).
+    const complete = readWholeFile ? chunk : chunk.slice(0, chunk.lastIndexOf('\n') + 1);
+    const fromHead = findCwdInJsonl(complete);
+    if (fromHead) return fromHead;
+  } catch {
+    // testa illeggibile: ritenta con la lettura piena, che ha il suo catch
+  } finally {
+    if (fd !== undefined) {
       try {
-        const obj = JSON.parse(line);
-        if (typeof obj.cwd === 'string' && isAbsolutePath(obj.cwd)) return obj.cwd;
+        closeSync(fd);
       } catch {
-        // riga malformata, continua
+        // il descrittore resta chiuso dal GC, non c'è recupero utile
       }
     }
+  }
+
+  // La testa era già tutto il file: rileggerlo non troverebbe nulla di nuovo.
+  if (readWholeFile) return null;
+
+  try {
+    return findCwdInJsonl(readFileSync(filePath, 'utf-8'));
   } catch {
     // file illeggibile
   }
