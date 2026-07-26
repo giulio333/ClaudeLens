@@ -26,6 +26,8 @@ npm-debug.log*
 .claude/agent-memory/
 .claude/settings.local.json
 .claude/worktrees/
+# Skill-eval scratch (grading/timing runs), not project content
+.claude/skills/*-workspace/
 
 # Local working documents
 docs/ClaudeLens_Architecture_Guide_IT.docx

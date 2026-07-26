@@ -1,0 +1,64 @@
+name: Feature request
+description: Suggest a new capability or an improvement to an existing one
+labels: ['enhancement']
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Have a rough idea rather than a concrete proposal? Open a
+        [discussion under **Ideas**](https://github.com/giulio333/ClaudeLens/discussions/categories/ideas)
+        instead — it's a better place to shape it before it becomes an issue.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem does this solve?
+      description: Describe the situation you hit, not the solution you have in mind.
+      placeholder: I can't tell which sessions burned the most cache tokens without opening each one.
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: What would you like ClaudeLens to do?
+      description: Where in the app it would live, and what it would show or let you do.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Which area does this touch?
+      options:
+        - Sessions / chat transcript
+        - Memory
+        - CLAUDE.md & rules
+        - Skills / agents / plugins
+        - MCP
+        - Plans & tasks
+        - Analytics & cost
+        - Terminal / in-app chat
+        - Live Monitor
+        - Agent Studio / workflows
+        - Teams
+        - Settings
+        - Other / not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives you've considered
+      description: Workarounds you use today, or other designs you weighed.
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: Before submitting
+      options:
+        - label: I searched the existing issues and discussions for the same idea.
+          required: true
