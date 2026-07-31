@@ -22,7 +22,7 @@ function nameToFilename(type: string, name: string): string {
     .replace(/[òóôõö]/g, 'o')
     .replace(/[ùúûü]/g, 'u')
     .replace(/[^a-z0-9]+/g, '_')
-    .replace(/^_|_$/g, '')
+    .replace(/^_|_$/g, '');
   return `${type}_${slug}.md`;
 }
 
@@ -79,11 +79,13 @@ function removeLineFromMemoryMd(memoryPath: string, filename: string): void {
 
 function updateLineInMemoryMd(memoryPath: string, filename: string, newDescription: string): void {
   if (!existsSync(memoryPath)) return;
-  const lines = readFileSync(memoryPath, 'utf-8').split('\n').map(l =>
-    l.includes(`(${filename})`)
-      ? `- [${filename}](${filename}) — ${sanitizeInline(newDescription)}`
-      : l
-  );
+  const lines = readFileSync(memoryPath, 'utf-8')
+    .split('\n')
+    .map(l =>
+      l.includes(`(${filename})`)
+        ? `- [${filename}](${filename}) — ${sanitizeInline(newDescription)}`
+        : l
+    );
   writeFileSync(memoryPath, lines.join('\n'), 'utf-8');
 }
 
@@ -105,7 +107,9 @@ function validateTopicInput(input: TopicInput): void {
   if (!VALID_TOPIC_TYPES.includes(input.type)) {
     throw new Error(`Invalid topic type "${input.type}".`);
   }
-  const slug = nameToFilename(input.type, input.name).replace(`${input.type}_`, '').replace(/\.md$/, '');
+  const slug = nameToFilename(input.type, input.name)
+    .replace(`${input.type}_`, '')
+    .replace(/\.md$/, '');
   if (!slug) {
     throw new Error(`Invalid topic name "${input.name}": produces an empty slug.`);
   }

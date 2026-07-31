@@ -66,9 +66,7 @@ describe('schemaModelFromLiteral', () => {
       schemaModelFromLiteral({ type: 'object', required: ['ghost'], properties: {} })
     ).toBeNull();
     // a non-literal leaf arrives as undefined from the AST walk
-    expect(
-      schemaModelFromLiteral({ type: 'object', properties: { a: undefined } })
-    ).toBeNull();
+    expect(schemaModelFromLiteral({ type: 'object', properties: { a: undefined } })).toBeNull();
   });
 });
 
@@ -132,7 +130,7 @@ describe('serializeSchemaModel round-trip', () => {
         "  type: 'object',",
         "  required: ['ok'],",
         '  properties: {',
-        "    ok: {",
+        '    ok: {',
         "      type: 'boolean'",
         '    }',
         '  }',
@@ -153,7 +151,9 @@ describe('serializeSchemaModel round-trip', () => {
 
 describe('parser schemaModel derivation', () => {
   it('derives the model from a static schema literal', () => {
-    const model = reparse("{ type: 'object', required: ['a'], properties: { a: { type: 'string' } } }");
+    const model = reparse(
+      "{ type: 'object', required: ['a'], properties: { a: { type: 'string' } } }"
+    );
     expect(model).toBeDefined();
     expect(model!.children![0]).toMatchObject({ name: 'a', required: true });
   });

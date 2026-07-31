@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { resolveClaudeCommand, findClaudeOnWindowsPath } from '../electron/modules/terminal-manager';
+import {
+  resolveClaudeCommand,
+  findClaudeOnWindowsPath,
+} from '../electron/modules/terminal-manager';
 
 // resolveClaudeCommand branches on process.platform; stub it so both branches are
 // exercised on any runner (the integration test then proves the real spawn works

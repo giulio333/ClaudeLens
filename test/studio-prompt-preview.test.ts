@@ -4,8 +4,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import PromptPreview from '../src/components/project/studio/PromptPreview';
 import { maskInterpolations, maskSegments } from '../src/components/project/studio/studioLang';
 
-const render = (prompt: string) =>
-  renderToStaticMarkup(createElement(PromptPreview, { prompt }));
+const render = (prompt: string) => renderToStaticMarkup(createElement(PromptPreview, { prompt }));
 
 /** The fix-issue step prompt: a ternary whose branches are nested templates. */
 const TERNARY_PROMPT = [

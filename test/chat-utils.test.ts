@@ -358,7 +358,13 @@ describe('correlateSessionAgents', () => {
 
   it('links a Task dispatch to its transcript by prompt prefix', () => {
     const processed = buildProcessedMessages([
-      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', description: 'find X', prompt: 'Search the workspace for foo' })]),
+      msg('assistant', [
+        toolUse('t1', 'Task', {
+          subagent_type: 'Explore',
+          description: 'find X',
+          prompt: 'Search the workspace for foo',
+        }),
+      ]),
       msg('user', [toolResult('t1', 'found it')]),
     ]);
     const metas = [meta({ agentId: 'aExplore', firstPrompt: 'Search the workspace for foo' })];
@@ -374,14 +380,19 @@ describe('correlateSessionAgents', () => {
     // The dispatch prompt carries raw newlines; the stored firstPrompt is the
     // same text the reader sliced to 400 chars. Only the first 100 chars (after
     // whitespace normalization) need to agree — and here they do.
-    const head = 'Commit the changes in /Users/me/Projects/Repo. The working tree has several staged files ready now';
+    const head =
+      'Commit the changes in /Users/me/Projects/Repo. The working tree has several staged files ready now';
     const dispatchPrompt = head + '.\n\nFull status:\n- a.ts\n- b.ts\n- c.ts';
     const storedPrompt = head + '. Full status: - a.ts - b.ts'; // truncated tail, same prefix
     const processed = buildProcessedMessages([
-      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'git-committer', prompt: dispatchPrompt })]),
+      msg('assistant', [
+        toolUse('t1', 'Task', { subagent_type: 'git-committer', prompt: dispatchPrompt }),
+      ]),
       msg('user', [toolResult('t1', 'done')]),
     ]);
-    const agents = correlateSessionAgents(processed, [meta({ agentId: 'aGit', firstPrompt: storedPrompt })]);
+    const agents = correlateSessionAgents(processed, [
+      meta({ agentId: 'aGit', firstPrompt: storedPrompt }),
+    ]);
     expect(agents[0].agentId).toBe('aGit');
   });
 
@@ -413,7 +424,9 @@ describe('correlateSessionAgents', () => {
       msg('user', [toolResult('t1', 'ok')]),
     ]);
     // Only B's transcript exists — it must NOT be claimed by A's dispatch.
-    const agents = correlateSessionAgents(processed, [meta({ agentId: 'bravo', firstPrompt: promptB })]);
+    const agents = correlateSessionAgents(processed, [
+      meta({ agentId: 'bravo', firstPrompt: promptB }),
+    ]);
     expect(agents[0].agentId).toBeNull();
   });
 
@@ -437,7 +450,9 @@ describe('correlateSessionAgents', () => {
 
   it('leaves agentId null when no transcript file matches', () => {
     const processed = buildProcessedMessages([
-      msg('assistant', [toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'orphan dispatch' })]),
+      msg('assistant', [
+        toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'orphan dispatch' }),
+      ]),
       msg('user', [toolResult('t1', 'ok')]),
     ]);
     const agents = correlateSessionAgents(processed, []);
@@ -603,7 +618,9 @@ describe('correlateSessionSkills', () => {
       msg('user', [text('<command-name>/build-dmg</command-name>')]),
       msg('user', [skillExpansion('build-dmg')]),
     ]);
-    const skills = correlateSessionSkills(processed, [skillDef('build-dmg', { description: 'Builds the DMG', scope: 'project' })]);
+    const skills = correlateSessionSkills(processed, [
+      skillDef('build-dmg', { description: 'Builds the DMG', scope: 'project' }),
+    ]);
     expect(skills).toHaveLength(1);
     expect(skills[0].name).toBe('build-dmg');
     expect(skills[0].description).toBe('Builds the DMG');
@@ -645,7 +662,11 @@ describe('correlateSessionSkills', () => {
       msg('assistant', [toolUse('skill-1', 'Skill', { skill: 'document-skills:pdf' })]),
       msg('user', [toolResult('skill-1', 'Launching skill: document-skills:pdf')]),
     ]);
-    const plugins = [pluginDef('document-skills', [skillDef('pdf', { scope: 'plugin', description: 'PDF tools' })])];
+    const plugins = [
+      pluginDef('document-skills', [
+        skillDef('pdf', { scope: 'plugin', description: 'PDF tools' }),
+      ]),
+    ];
     const skills = correlateSessionSkills(processed, [], plugins);
     expect(skills).toHaveLength(1);
     expect(skills[0].name).toBe('document-skills:pdf');
@@ -735,10 +756,18 @@ describe('isSkillLaunchOutput', () => {
 
 describe('skillHasViewableOutput', () => {
   it('is false for a launch-only output (nothing worth opening)', () => {
-    expect(skillHasViewableOutput(agenticSkillGroup('document-skills:pdf', 'Launching skill: document-skills:pdf'))).toBe(false);
+    expect(
+      skillHasViewableOutput(
+        agenticSkillGroup('document-skills:pdf', 'Launching skill: document-skills:pdf')
+      )
+    ).toBe(false);
   });
   it('is true for a real completed result', () => {
-    expect(skillHasViewableOutput(agenticSkillGroup('a:b', 'Skill "b" completed.\n\nResult:\n# Analysis'))).toBe(true);
+    expect(
+      skillHasViewableOutput(
+        agenticSkillGroup('a:b', 'Skill "b" completed.\n\nResult:\n# Analysis')
+      )
+    ).toBe(true);
   });
   it('is true for an error result', () => {
     expect(skillHasViewableOutput(agenticSkillGroup('a:b', 'boom', true))).toBe(true);

@@ -36,8 +36,7 @@ describe('readChatSession', () => {
         timestamp: '2026-01-01T00:00:00Z',
         message: {
           role: 'user',
-          content:
-            '<system-reminder></system-reminder>if (a < b && c > d) return List<String>;',
+          content: '<system-reminder></system-reminder>if (a < b && c > d) return List<String>;',
         },
       }),
     ]);
@@ -192,7 +191,12 @@ describe('readChatSession', () => {
         message: {
           role: 'user',
           content: [
-            { type: 'tool_result', tool_use_id: 'tu_1', content: ['plain', null, { text: 'block' }], is_error: false },
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu_1',
+              content: ['plain', null, { text: 'block' }],
+              is_error: false,
+            },
           ],
         },
       }),

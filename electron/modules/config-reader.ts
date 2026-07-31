@@ -75,7 +75,12 @@ async function probeUnreadableFile(dir: string): Promise<string | null> {
     join(dir, '.claude', 'settings.local.json'),
   ].filter(f => existsSync(f));
   const results = await Promise.all(
-    candidates.map(f => readTextFile(f, PROBE_TIMEOUT_MS).then(() => null, () => f)),
+    candidates.map(f =>
+      readTextFile(f, PROBE_TIMEOUT_MS).then(
+        () => null,
+        () => f
+      )
+    )
   );
   return results.find(f => f !== null) ?? null;
 }
@@ -167,7 +172,7 @@ export async function readEffectiveConfig(cwd?: string): Promise<EffectiveConfig
     const resolved = await withTimeout(
       sdk.resolveSettings({ cwd: dir }),
       SETTINGS_TIMEOUT_MS,
-      `resolveSettings timed out after ${SETTINGS_TIMEOUT_MS}ms — a settings file may not be materialized (iCloud/network path): ${dir}`,
+      `resolveSettings timed out after ${SETTINGS_TIMEOUT_MS}ms — a settings file may not be materialized (iCloud/network path): ${dir}`
     );
     effective = (resolved.effective as Record<string, unknown>) ?? {};
     provenance = Object.fromEntries(

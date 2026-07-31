@@ -1,19 +1,19 @@
-import { Component, type ReactNode } from 'react'
-import { QueryError } from './QueryError'
+import { Component, type ReactNode } from 'react';
+import { QueryError } from './QueryError';
 
 interface Props {
-  children: ReactNode
+  children: ReactNode;
 }
 
 interface State {
-  error: Error | null
+  error: Error | null;
 }
 
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { error: null }
+  state: State = { error: null };
 
   static getDerivedStateFromError(error: Error): State {
-    return { error }
+    return { error };
   }
 
   render() {
@@ -24,8 +24,8 @@ export class ErrorBoundary extends Component<Props, State> {
           error={this.state.error}
           onRetry={() => this.setState({ error: null })}
         />
-      )
+      );
     }
-    return this.props.children
+    return this.props.children;
   }
 }

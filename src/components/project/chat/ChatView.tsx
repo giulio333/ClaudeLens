@@ -24,11 +24,7 @@ import {
   TurnFilter,
 } from './utils';
 import { LiveInTerminalBadge } from './atoms';
-import {
-  buildChatExportDocument,
-  ChatExportFormat,
-  ChatExportPreset,
-} from './export';
+import { buildChatExportDocument, ChatExportFormat, ChatExportPreset } from './export';
 import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
@@ -670,7 +666,6 @@ export function ChatView({
           matches={matchesFilter}
           onJump={jumpToTurn}
         />
-
 
         {controlPill(true)}
       </div>

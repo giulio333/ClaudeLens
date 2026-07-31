@@ -14,13 +14,13 @@ plus a lightweight **update check**, described right after it.
 
 ## TL;DR
 
-| | |
-|---|---|
-| **What we collect** | A handful of anonymous events (app launch/exit, which sections you open, a few feature actions), plus your app version, OS, and language. |
-| **What we never collect** | Anything from your Claude Code sessions, files, prompts, paths, or identity. |
-| **Who processes it** | [Aptabase](https://aptabase.com), EU data center. Anonymous by design. |
-| **Why** | To estimate how many people use ClaudeLens and on which platforms. |
-| **Can I opt out?** | Yes — **Settings → Privacy → "Share anonymous usage data"**. Takes effect immediately. |
+|                           |                                                                                                                                           |
+| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| **What we collect**       | A handful of anonymous events (app launch/exit, which sections you open, a few feature actions), plus your app version, OS, and language. |
+| **What we never collect** | Anything from your Claude Code sessions, files, prompts, paths, or identity.                                                              |
+| **Who processes it**      | [Aptabase](https://aptabase.com), EU data center. Anonymous by design.                                                                    |
+| **Why**                   | To estimate how many people use ClaudeLens and on which platforms.                                                                        |
+| **Can I opt out?**        | Yes — **Settings → Privacy → "Share anonymous usage data"**. Takes effect immediately.                                                    |
 
 ---
 
@@ -48,15 +48,15 @@ tracking and no way to single out an individual.
 **Events** record only that an action happened, never its content. The complete
 list of events and their properties:
 
-| Event | When | Extra property |
-|---|---|---|
-| `app_started` | The app launches | — |
-| `app_exited` | The app quits | `duration_seconds` — how long the app was open |
-| `view_opened` | You open a section (first time per run) | `view` — a fixed internal label like `sessions` or `analytics`, **never** a project or session name |
-| `chat_started` | You start a new in-app chat | — |
-| `export_done` | An export finishes | `format` — `markdown` or `pdf` |
-| `terminal_opened` | The embedded terminal starts | — |
-| `session_deleted` | You delete a session | — |
+| Event             | When                                    | Extra property                                                                                      |
+| ----------------- | --------------------------------------- | --------------------------------------------------------------------------------------------------- |
+| `app_started`     | The app launches                        | —                                                                                                   |
+| `app_exited`      | The app quits                           | `duration_seconds` — how long the app was open                                                      |
+| `view_opened`     | You open a section (first time per run) | `view` — a fixed internal label like `sessions` or `analytics`, **never** a project or session name |
+| `chat_started`    | You start a new in-app chat             | —                                                                                                   |
+| `export_done`     | An export finishes                      | `format` — `markdown` or `pdf`                                                                      |
+| `terminal_opened` | The embedded terminal starts            | —                                                                                                   |
+| `session_deleted` | You delete a session                    | —                                                                                                   |
 
 Those fixed labels and numbers are the **entire** custom payload. No event ever
 carries text you wrote, a session/project name, a file path, or any content.
@@ -72,7 +72,7 @@ ClaudeLens **never** sends, and Aptabase never receives, any of the following:
 - IP-based location beyond the coarse country inference Aptabase derives in
   aggregate (we never see or store your IP address ourselves)
 
-In short: nothing that could identify you, and nothing about *what* you do in
+In short: nothing that could identify you, and nothing about _what_ you do in
 Claude Code — only the fact that the app launched, and on what platform.
 
 ## Update check

@@ -14,12 +14,7 @@ describe('scopesForPath', () => {
   it('maps a session transcript to sessions, cost, plans and memory', () => {
     // `plans` is here on purpose: plan refs live INSIDE the transcript, as
     // plan_mode attachments — see plans-reader.
-    expect(scopes(join(PROJECT, 'abc-123.jsonl'))).toEqual([
-      'cost',
-      'memory',
-      'plans',
-      'sessions',
-    ]);
+    expect(scopes(join(PROJECT, 'abc-123.jsonl'))).toEqual(['cost', 'memory', 'plans', 'sessions']);
   });
 
   it('maps a transcript under the sessions/ subdir the same way', () => {
@@ -53,7 +48,7 @@ describe('scopesForPath', () => {
 
   it('gives a workflow sub-agent transcript both branches', () => {
     expect(
-      scopes(join(PROJECT, 'abc-123', 'subagents', 'workflows', 'wf_x1', 'agent-1.jsonl')),
+      scopes(join(PROJECT, 'abc-123', 'subagents', 'workflows', 'wf_x1', 'agent-1.jsonl'))
     ).toEqual(['sessions', 'teams', 'workflows']);
   });
 
@@ -68,7 +63,7 @@ describe('scopesForPath', () => {
   it('maps a project-local .claude/workflows script to studio', () => {
     // Native workflow location outside ~/.claude — watched all the same.
     expect(scopes(join('/Users', 'tester', 'code', 'app', '.claude', 'workflows', 'x.js'))).toEqual(
-      ['studio'],
+      ['studio']
     );
   });
 

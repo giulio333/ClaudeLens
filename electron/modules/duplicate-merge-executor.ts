@@ -79,7 +79,11 @@ function writeAtomicPreservingMtime(srcPath: string, destPath: string, content: 
   }
 }
 
-function descriptionFor(filename: string, sourceMemDir: string, sourceIndexLines: string[]): string {
+function descriptionFor(
+  filename: string,
+  sourceMemDir: string,
+  sourceIndexLines: string[]
+): string {
   // 1) riga indice della source che referenzia il file
   const line = sourceIndexLines.find(l => l.includes(`(${filename})`));
   if (line) {
@@ -128,7 +132,11 @@ function rewriteFrontmatterName(content: string, newSlug: string): string {
  * backup, così non resta uno stato ibrido. Il chiamante (main.ts) mette in pausa il
  * watcher e notifica un solo refresh al termine.
  */
-export function executeMerge(projectsDir: string, sourceHash: string, destHash: string): MergeResult {
+export function executeMerge(
+  projectsDir: string,
+  sourceHash: string,
+  destHash: string
+): MergeResult {
   // ── Ricalcola il piano (TOCTOU): lo stato su disco potrebbe essere cambiato ──
   const plan: MergePlan = computeMergePlan(projectsDir, sourceHash, destHash);
   if (plan.blockers.length > 0) {
@@ -158,7 +166,11 @@ export function executeMerge(projectsDir: string, sourceHash: string, destHash: 
 
   function rollback(): void {
     for (const p of [...createdInDest].reverse()) {
-      try { rmSync(p, { recursive: true, force: true }); } catch { /* best-effort */ }
+      try {
+        rmSync(p, { recursive: true, force: true });
+      } catch {
+        /* best-effort */
+      }
     }
     try {
       if (!destMemDirExisted) {
@@ -168,11 +180,15 @@ export function executeMerge(projectsDir: string, sourceHash: string, destHash: 
       } else if (!destMemoryMdExisted && existsSync(memoryMdPath)) {
         rmSync(memoryMdPath, { force: true });
       }
-    } catch { /* best-effort */ }
+    } catch {
+      /* best-effort */
+    }
     try {
       rmSync(sourceDir, { recursive: true, force: true });
       cpSync(backupPath, sourceDir, { recursive: true });
-    } catch { /* best-effort: il backup resta comunque disponibile */ }
+    } catch {
+      /* best-effort: il backup resta comunque disponibile */
+    }
   }
 
   let movedSessions = 0;
@@ -252,14 +268,18 @@ export function executeMerge(projectsDir: string, sourceHash: string, destHash: 
     let remaining: string[] = [];
     try {
       remaining = readdirSync(sourceDir).filter(n => n !== '.DS_Store' && n !== 'memory');
-    } catch { /* source assente: nessun residuo */ }
+    } catch {
+      /* source assente: nessun residuo */
+    }
 
     let sourceDeleted = false;
     if (remaining.length === 0) {
       rmSync(sourceDir, { recursive: true, force: true });
       sourceDeleted = true;
     } else {
-      warnings.push(`Source folder kept: still contains ${remaining.join(', ')}. Backup at ${backupPath}.`);
+      warnings.push(
+        `Source folder kept: still contains ${remaining.join(', ')}. Backup at ${backupPath}.`
+      );
     }
 
     return {

@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { createTerminal, killTerminal, resolveClaudeCommand } from '../electron/modules/terminal-manager';
+import {
+  createTerminal,
+  killTerminal,
+  resolveClaudeCommand,
+} from '../electron/modules/terminal-manager';
 
 // End-to-end guard for the Windows terminal regression (#110): spawn the REAL
 // `claude` CLI through node-pty exactly like the app does and assert it launches.

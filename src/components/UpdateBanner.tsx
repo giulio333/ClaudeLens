@@ -1,6 +1,6 @@
-import { useState } from 'react'
-import { AnimatePresence, motion } from 'motion/react'
-import { useUpdateCheck, useSkippedUpdateVersion, useSkipUpdateVersion } from '../hooks/useIPC'
+import { useState } from 'react';
+import { AnimatePresence, motion } from 'motion/react';
+import { useUpdateCheck, useSkippedUpdateVersion, useSkipUpdateVersion } from '../hooks/useIPC';
 
 // Passive update notice, shown once per launch when GitHub has a newer release
 // than the running build (see electron/modules/update-checker.ts for why there
@@ -12,19 +12,19 @@ import { useUpdateCheck, useSkippedUpdateVersion, useSkipUpdateVersion } from '.
 // the next one. "View release" opens the GitHub release page in the browser
 // (the main process routes external links through shell.openExternal).
 
-const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform)
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
 
 export function UpdateBanner() {
-  const { data: update } = useUpdateCheck()
-  const { data: skippedVersion, isLoading: skippedLoading } = useSkippedUpdateVersion()
-  const skip = useSkipUpdateVersion()
-  const [hidden, setHidden] = useState(false)
+  const { data: update } = useUpdateCheck();
+  const { data: skippedVersion, isLoading: skippedLoading } = useSkippedUpdateVersion();
+  const skip = useSkipUpdateVersion();
+  const [hidden, setHidden] = useState(false);
 
   const visible =
     !hidden &&
     !skippedLoading &&
     !!update?.updateAvailable &&
-    update.latestVersion !== skippedVersion
+    update.latestVersion !== skippedVersion;
 
   return (
     <AnimatePresence>
@@ -76,7 +76,15 @@ export function UpdateBanner() {
               aria-label="Dismiss"
               onClick={() => setHidden(true)}
             >
-              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+              <svg
+                width="13"
+                height="13"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.4"
+                strokeLinecap="round"
+              >
                 <path d="M18 6 6 18M6 6l12 12" />
               </svg>
             </button>
@@ -84,5 +92,5 @@ export function UpdateBanner() {
         </motion.div>
       )}
     </AnimatePresence>
-  )
+  );
 }

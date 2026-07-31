@@ -12,7 +12,10 @@
 // chain — an object would validate that scope and then hand the caller a
 // function to iterate (TypeError). A Map has no prototype keys to inherit.
 export const SCOPE_KEYS = new Map<string, string[]>([
-  ['sessions', ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript']],
+  [
+    'sessions',
+    ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript'],
+  ],
   ['cost', ['cost:summary', 'cost:project']],
   ['plans', ['plans:project']],
   ['tasks', ['tasks:project']],
@@ -26,9 +29,9 @@ export const SCOPE_KEYS = new Map<string, string[]>([
   ['skills', ['skills:global', 'skills:all']],
   ['agents', ['agents:global', 'agents:project']],
   ['mcp', ['mcp:global']],
-])
+]);
 
-export const ALL_SCOPES = [...SCOPE_KEYS.keys()]
+export const ALL_SCOPES = [...SCOPE_KEYS.keys()];
 
 /**
  * The scopes to invalidate for one `data:changed` payload.

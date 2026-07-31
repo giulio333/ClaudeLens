@@ -43,7 +43,11 @@ import { SessionOutline } from './SessionOutline';
  *  compare case-insensitively (Windows/macOS filesystems are case-preserving
  *  but case-insensitive; a Linux collision on case alone is not worth the risk). */
 function samePath(a: string, b: string): boolean {
-  const norm = (p: string) => p.replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  const norm = (p: string) =>
+    p
+      .replace(/[\\/]+/g, '/')
+      .replace(/\/$/, '')
+      .toLowerCase();
   return norm(a) === norm(b);
 }
 
@@ -91,7 +95,11 @@ function ViewTabs({ view, setView }: { view: View; setView: (v: View) => void })
           >
             <span
               className="font-mono"
-              style={{ fontSize: 10, fontWeight: 700, color: on ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)' }}
+              style={{
+                fontSize: 10,
+                fontWeight: 700,
+                color: on ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
+              }}
             >
               {o.glyph}
             </span>
@@ -148,7 +156,15 @@ function OutlineToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: 
         <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
         <line x1="6.25" y1="3.25" x2="6.25" y2="12.75" />
         {!collapsed && (
-          <rect x="2" y="3.25" width="4.25" height="9.5" fill="currentColor" stroke="none" opacity="0.22" />
+          <rect
+            x="2"
+            y="3.25"
+            width="4.25"
+            height="9.5"
+            fill="currentColor"
+            stroke="none"
+            opacity="0.22"
+          />
         )}
       </svg>
     </button>
@@ -191,7 +207,15 @@ function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () 
         <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
         <line x1="9.75" y1="3.25" x2="9.75" y2="12.75" />
         {!collapsed && (
-          <rect x="9.75" y="3.25" width="4.25" height="9.5" fill="currentColor" stroke="none" opacity="0.22" />
+          <rect
+            x="9.75"
+            y="3.25"
+            width="4.25"
+            height="9.5"
+            fill="currentColor"
+            stroke="none"
+            opacity="0.22"
+          />
         )}
       </svg>
     </button>
@@ -275,17 +299,20 @@ export function TerminalMissionControl({
   // Imperative scroll handle into the embedded Lens transcript — an outline row
   // calls it to jump to a turn (set by ChatView, null in Terminal mode).
   const jumpToTurnRef = useRef<((n: number) => void) | null>(null);
-  const jumpToTurn = useCallback((turnN: number) => {
-    if (view === 'lens') {
-      jumpToTurnRef.current?.(turnN);
-      return;
-    }
-    // Coming from Terminal: reveal the Lens first, then scroll once the
-    // transcript is on screen (it stays mounted under display:none, so the ref
-    // is already wired — only its visibility flips this frame).
-    setView('lens');
-    requestAnimationFrame(() => jumpToTurnRef.current?.(turnN));
-  }, [view, setView]);
+  const jumpToTurn = useCallback(
+    (turnN: number) => {
+      if (view === 'lens') {
+        jumpToTurnRef.current?.(turnN);
+        return;
+      }
+      // Coming from Terminal: reveal the Lens first, then scroll once the
+      // transcript is on screen (it stays mounted under display:none, so the ref
+      // is already wired — only its visibility flips this frame).
+      setView('lens');
+      requestAnimationFrame(() => jumpToTurnRef.current?.(turnN));
+    },
+    [view, setView]
+  );
 
   const [ptyPid, setPtyPid] = useState<number | null>(null);
   const [termStatus, setTermStatus] = useState<TerminalStatus>('starting');
@@ -356,7 +383,9 @@ export function TerminalMissionControl({
       if (
         terminalMounted &&
         termStatus === 'running' &&
-        !window.confirm('Opening another session will close the current terminal session. Continue?')
+        !window.confirm(
+          'Opening another session will close the current terminal session. Continue?'
+        )
       ) {
         return;
       }
@@ -532,7 +561,15 @@ export function TerminalMissionControl({
               rail visible — the same framing the Lens shows when a tool detail
               opens inside the chat, so the skill/tool page reads identically from
               either entry point. */}
-          <div style={{ flex: 1, minHeight: 0, display: 'flex', padding: '12px 26px 22px', position: 'relative' }}>
+          <div
+            style={{
+              flex: 1,
+              minHeight: 0,
+              display: 'flex',
+              padding: '12px 26px 22px',
+              position: 'relative',
+            }}
+          >
             {terminalMounted && (
               <div
                 className="flex-1 min-w-0"
@@ -575,9 +612,19 @@ export function TerminalMissionControl({
                 {overlay.kind === 'tool' ? (
                   <ToolDetailPanel group={overlay.group} onBack={closeOverlay} />
                 ) : overlay.kind === 'skill-def' ? (
-                  <SkillDetailView skill={overlay.skill} project={project} onBack={closeOverlay} readOnly />
+                  <SkillDetailView
+                    skill={overlay.skill}
+                    project={project}
+                    onBack={closeOverlay}
+                    readOnly
+                  />
                 ) : overlay.kind === 'agent-def' ? (
-                  <AgentDetailView agent={overlay.agent} project={project} onBack={closeOverlay} readOnly />
+                  <AgentDetailView
+                    agent={overlay.agent}
+                    project={project}
+                    onBack={closeOverlay}
+                    readOnly
+                  />
                 ) : overlay.kind === 'team' ? (
                   <TeamDetailView
                     project={project}

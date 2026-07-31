@@ -115,7 +115,12 @@ describe('emitPromptLiteral', () => {
   });
 
   it('emits unknown expressions live in verbatim mode (hybrid scripts)', () => {
-    const out = emitPromptLiteral('x ${JSON.stringify(map)} ${args}', new Set(['args']), vars, true);
+    const out = emitPromptLiteral(
+      'x ${JSON.stringify(map)} ${args}',
+      new Set(['args']),
+      vars,
+      true
+    );
     expect(out).toBe('`x ${JSON.stringify(map)} ${args}`');
   });
 
@@ -244,7 +249,11 @@ describe('compileBlueprint', () => {
             resultVar: 'written',
             itemsSource: 'items',
             stages: [
-              { kind: 'agent', params: 'item', step: step({ id: 'write', prompt: 'write ${item.path}' }) },
+              {
+                kind: 'agent',
+                params: 'item',
+                step: step({ id: 'write', prompt: 'write ${item.path}' }),
+              },
               { kind: 'code', source: '(result, item) => (result ? { ...result } : null)' },
             ],
           },
@@ -257,7 +266,9 @@ describe('compileBlueprint', () => {
     expect(out).toContain("const target = (args && args.target) || '.'");
     expect(out).toContain('log(`working on ${target}`)'); // hybrid → live interpolation
     expect(out).toContain('const written = await pipeline(');
-    expect(out).toContain('(item) => agent(`write ${item.path}`, { label: "write", phase: "Write" }),');
+    expect(out).toContain(
+      '(item) => agent(`write ${item.path}`, { label: "write", phase: "Write" }),'
+    );
     expect(out).toContain('(result, item) => (result ? { ...result } : null),');
     expect(out).toContain('return written.filter(Boolean)');
     expect(out.trimEnd().endsWith('return written.filter(Boolean)')).toBe(true);

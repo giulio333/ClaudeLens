@@ -1,30 +1,30 @@
-import { useMemo, useState } from 'react'
-import { useProjectPlans, useSessionList } from '../../../hooks/useIPC'
-import type { Plan, SessionSummary } from '../../../types'
-import { fmtDate, sessionTitle } from '../utils'
+import { useMemo, useState } from 'react';
+import { useProjectPlans, useSessionList } from '../../../hooks/useIPC';
+import type { Plan, SessionSummary } from '../../../types';
+import { fmtDate, sessionTitle } from '../utils';
 
-type Project = { hash: string; realPath: string }
-type StatusKey = 'approved' | 'proposed' | 'deleted'
-type FilterKey = 'all' | StatusKey
-type SortKey = 'recent' | 'status'
+type Project = { hash: string; realPath: string };
+type StatusKey = 'approved' | 'proposed' | 'deleted';
+type FilterKey = 'all' | StatusKey;
+type SortKey = 'recent' | 'status';
 
 const STATUS_LABEL: Record<StatusKey, string> = {
   approved: 'APPROVED',
   proposed: 'PROPOSED',
   deleted: 'DELETED',
-}
+};
 
 function statusKey(p: Plan): StatusKey {
-  if (!p.exists) return 'deleted'
-  return p.status === 'approved' ? 'approved' : 'proposed'
+  if (!p.exists) return 'deleted';
+  return p.status === 'approved' ? 'approved' : 'proposed';
 }
 
-const PLAN_PREVIEW_MAX = 180
-const PLAN_EXCERPT_MAX = 460
+const PLAN_PREVIEW_MAX = 180;
+const PLAN_EXCERPT_MAX = 460;
 
 // Ripulisce il markdown del piano in testo piano.
 function planText(raw: string | null): string {
-  if (!raw) return ''
+  if (!raw) return '';
   return raw
     .replace(/^---\n[\s\S]*?\n---\n?/, '') // frontmatter
     .replace(/```[\s\S]*?```/g, ' ') // blocchi codice
@@ -32,21 +32,21 @@ function planText(raw: string | null): string {
     .replace(/^#{1,6}\s+/gm, '') // heading
     .replace(/[*_~>#]/g, '') // marcatori
     .replace(/\s+/g, ' ')
-    .trim()
+    .trim();
 }
 
 function clamp(s: string, max: number): string {
-  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s
+  return s.length > max ? s.slice(0, max).trimEnd() + '…' : s;
 }
 
 // Anteprima su due righe per la riga del piano.
 function planPreview(raw: string | null): string {
-  return clamp(planText(raw), PLAN_PREVIEW_MAX)
+  return clamp(planText(raw), PLAN_PREVIEW_MAX);
 }
 
 // Estratto più ampio mostrato nell'espansione inline (non l'intero piano).
 function planExcerpt(raw: string | null): string {
-  return clamp(planText(raw), PLAN_EXCERPT_MAX)
+  return clamp(planText(raw), PLAN_EXCERPT_MAX);
 }
 
 function StatusBadge({ k }: { k: StatusKey }) {
@@ -55,7 +55,7 @@ function StatusBadge({ k }: { k: StatusKey }) {
       <i />
       {STATUS_LABEL[k]}
     </span>
-  )
+  );
 }
 
 function Chevron({ open }: { open: boolean }) {
@@ -71,48 +71,48 @@ function Chevron({ open }: { open: boolean }) {
     >
       <path d="m6 9 6 6 6-6" />
     </svg>
-  )
+  );
 }
 
 type FlatPlan = {
-  plan: Plan
-  key: string
-  k: StatusKey
-  sessionId: string
-  sessionName: string
-  sessionDate: number
-}
+  plan: Plan;
+  key: string;
+  k: StatusKey;
+  sessionId: string;
+  sessionName: string;
+  sessionDate: number;
+};
 
 export function PlansSection({
   project,
   onOpenChat,
   onOpenPlan,
 }: {
-  project: Project
-  onOpenChat: (session: SessionSummary) => void
-  onOpenPlan: (plan: Plan) => void
+  project: Project;
+  onOpenChat: (session: SessionSummary) => void;
+  onOpenPlan: (plan: Plan) => void;
 }) {
-  const { data: groups = [], isLoading } = useProjectPlans(project.hash)
-  const { data: sessions = [] } = useSessionList(project.hash)
+  const { data: groups = [], isLoading } = useProjectPlans(project.hash);
+  const { data: sessions = [] } = useSessionList(project.hash);
 
-  const [filter, setFilter] = useState<FilterKey>('all')
-  const [query, setQuery] = useState('')
-  const [sort, setSort] = useState<SortKey>('recent')
-  const [openKey, setOpenKey] = useState<string | null>(null)
+  const [filter, setFilter] = useState<FilterKey>('all');
+  const [query, setQuery] = useState('');
+  const [sort, setSort] = useState<SortKey>('recent');
+  const [openKey, setOpenKey] = useState<string | null>(null);
 
   const sessionByFilename = useMemo(() => {
-    const map = new Map<string, SessionSummary>()
-    for (const s of sessions) map.set(s.filename, s)
-    return map
-  }, [sessions])
+    const map = new Map<string, SessionSummary>();
+    for (const s of sessions) map.set(s.filename, s);
+    return map;
+  }, [sessions]);
 
   // Lista piatta arricchita con info di sessione (nome + data) per filtri e ordinamento.
   const flat = useMemo<FlatPlan[]>(() => {
-    const arr: FlatPlan[] = []
+    const arr: FlatPlan[] = [];
     for (const g of groups) {
-      const session = sessionByFilename.get(g.filename)
-      const sessionName = session ? sessionTitle(session) : g.sessionId.slice(0, 8)
-      const sessionDate = session ? new Date(session.date).getTime() || 0 : 0
+      const session = sessionByFilename.get(g.filename);
+      const sessionName = session ? sessionTitle(session) : g.sessionId.slice(0, 8);
+      const sessionDate = session ? new Date(session.date).getTime() || 0 : 0;
       g.plans.forEach((plan, i) => {
         arr.push({
           plan,
@@ -121,73 +121,73 @@ export function PlansSection({
           sessionId: g.sessionId,
           sessionName,
           sessionDate,
-        })
-      })
+        });
+      });
     }
-    return arr
-  }, [groups, sessionByFilename])
+    return arr;
+  }, [groups, sessionByFilename]);
 
   const counts = useMemo(() => {
-    const c = { all: flat.length, approved: 0, proposed: 0, deleted: 0 }
-    for (const f of flat) c[f.k] += 1
-    return c
-  }, [flat])
+    const c = { all: flat.length, approved: 0, proposed: 0, deleted: 0 };
+    for (const f of flat) c[f.k] += 1;
+    return c;
+  }, [flat]);
 
-  const q = query.trim().toLowerCase()
+  const q = query.trim().toLowerCase();
   const match = (f: FlatPlan) =>
     (filter === 'all' || f.k === filter) &&
     (q === '' ||
-      `${f.plan.title} ${f.plan.content ?? ''} ${f.sessionName}`.toLowerCase().includes(q))
+      `${f.plan.title} ${f.plan.content ?? ''} ${f.sessionName}`.toLowerCase().includes(q));
 
-  const STATUS_ORDER: Record<StatusKey, number> = { proposed: 0, approved: 1, deleted: 2 }
+  const STATUS_ORDER: Record<StatusKey, number> = { proposed: 0, approved: 1, deleted: 2 };
 
   // Gruppi per sessione, rispettando filtro + ricerca, ordinati.
   const visibleGroups = useMemo(() => {
     const bySession = new Map<
       string,
       { sessionId: string; name: string; date: number; session?: SessionSummary; items: FlatPlan[] }
-    >()
+    >();
     for (const f of flat) {
-      if (!match(f)) continue
-      let g = bySession.get(f.sessionId)
+      if (!match(f)) continue;
+      let g = bySession.get(f.sessionId);
       if (!g) {
-        const filename = groups.find(gr => gr.sessionId === f.sessionId)?.filename
+        const filename = groups.find(gr => gr.sessionId === f.sessionId)?.filename;
         g = {
           sessionId: f.sessionId,
           name: f.sessionName,
           date: f.sessionDate,
           session: filename ? sessionByFilename.get(filename) : undefined,
           items: [],
-        }
-        bySession.set(f.sessionId, g)
+        };
+        bySession.set(f.sessionId, g);
       }
-      g.items.push(f)
+      g.items.push(f);
     }
-    const arr = [...bySession.values()]
-    arr.sort((a, b) => b.date - a.date)
+    const arr = [...bySession.values()];
+    arr.sort((a, b) => b.date - a.date);
     if (sort === 'status') {
-      for (const g of arr) g.items.sort((a, b) => STATUS_ORDER[a.k] - STATUS_ORDER[b.k])
+      for (const g of arr) g.items.sort((a, b) => STATUS_ORDER[a.k] - STATUS_ORDER[b.k]);
     }
-    return arr
+    return arr;
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [flat, filter, q, sort, groups, sessionByFilename])
+  }, [flat, filter, q, sort, groups, sessionByFilename]);
 
-  const visibleCount = visibleGroups.reduce((n, g) => n + g.items.length, 0)
+  const visibleCount = visibleGroups.reduce((n, g) => n + g.items.length, 0);
 
   // Header: conta i piani distinti per filePath (lo stesso piano può comparire
   // in più sessioni; nella lista lo mostriamo comunque per ogni sessione).
   const distinctCount = useMemo(() => {
-    const seen = new Set<string>()
-    for (const g of visibleGroups) for (const it of g.items) seen.add(it.plan.filePath)
-    return seen.size
-  }, [visibleGroups])
+    const seen = new Set<string>();
+    for (const g of visibleGroups) for (const it of g.items) seen.add(it.plan.filePath);
+    return seen.size;
+  }, [visibleGroups]);
 
   const chips: [FilterKey, string][] = [
     ['all', 'ALL'],
     ['approved', 'APPROVED'],
     ['proposed', 'PROPOSED'],
     ['deleted', 'DELETED'],
-  ]
+  ];
 
   return (
     <section className="cl-section cl-plans" style={{ paddingTop: 38 }}>
@@ -200,7 +200,14 @@ export function PlansSection({
           </span>
         </div>
         <div className="cl-plans-search">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="2"
+          >
             <circle cx="11" cy="11" r="7" />
             <path d="m20 20-3.5-3.5" />
           </svg>
@@ -264,12 +271,12 @@ export function PlansSection({
 
               <div className="cl-plan-rows">
                 {g.items.map(f => {
-                  const { plan, key } = f
-                  const expanded = openKey === key
+                  const { plan, key } = f;
+                  const expanded = openKey === key;
                   // Status reale (proposed/approved) e cancellazione sono dimensioni
                   // ortogonali: il badge mostra sempre lo status, la cancellazione è
                   // indicata dal titolo barrato + opacità ridotta.
-                  const statusK: StatusKey = plan.status === 'approved' ? 'approved' : 'proposed'
+                  const statusK: StatusKey = plan.status === 'approved' ? 'approved' : 'proposed';
                   return (
                     <div
                       key={key}
@@ -282,8 +289,8 @@ export function PlansSection({
                         onClick={() => setOpenKey(cur => (cur === key ? null : key))}
                         onKeyDown={e => {
                           if (e.key === 'Enter' || e.key === ' ') {
-                            e.preventDefault()
-                            setOpenKey(cur => (cur === key ? null : key))
+                            e.preventDefault();
+                            setOpenKey(cur => (cur === key ? null : key));
                           }
                         }}
                       >
@@ -317,8 +324,8 @@ export function PlansSection({
                               title="Open plan"
                               aria-label="Open plan"
                               onClick={e => {
-                                e.stopPropagation()
-                                onOpenPlan(plan)
+                                e.stopPropagation();
+                                onOpenPlan(plan);
                               }}
                             >
                               ↗
@@ -336,8 +343,8 @@ export function PlansSection({
                                 type="button"
                                 className="cl-plan-full"
                                 onClick={e => {
-                                  e.stopPropagation()
-                                  onOpenPlan(plan)
+                                  e.stopPropagation();
+                                  onOpenPlan(plan);
                                 }}
                               >
                                 View full plan ↗
@@ -349,7 +356,7 @@ export function PlansSection({
                         </div>
                       )}
                     </div>
-                  )
+                  );
                 })}
               </div>
             </section>
@@ -357,5 +364,5 @@ export function PlansSection({
         )}
       </div>
     </section>
-  )
+  );
 }

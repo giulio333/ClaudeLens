@@ -45,8 +45,20 @@ describe('extractPlanRefs (pure)', () => {
     ].join('\n');
 
     expect(extractPlanRefs(raw)).toEqual([
-      { filePath: '/p/a.md', status: 'proposed', timestamp: '2026-01-01T00:00:00Z', slug: undefined, gitBranch: undefined },
-      { filePath: '/p/b.md', status: 'approved', timestamp: '2026-01-01T00:01:00Z', slug: undefined, gitBranch: undefined },
+      {
+        filePath: '/p/a.md',
+        status: 'proposed',
+        timestamp: '2026-01-01T00:00:00Z',
+        slug: undefined,
+        gitBranch: undefined,
+      },
+      {
+        filePath: '/p/b.md',
+        status: 'approved',
+        timestamp: '2026-01-01T00:01:00Z',
+        slug: undefined,
+        gitBranch: undefined,
+      },
     ]);
   });
 
@@ -58,7 +70,10 @@ describe('extractPlanRefs (pure)', () => {
       gitBranch: 'fix/148',
       attachment: { type: 'plan_mode', planFilePath: '/p/a.md' },
     });
-    expect(extractPlanRefs(raw)[0]).toMatchObject({ slug: 'curious-horizon', gitBranch: 'fix/148' });
+    expect(extractPlanRefs(raw)[0]).toMatchObject({
+      slug: 'curious-horizon',
+      gitBranch: 'fix/148',
+    });
   });
 
   it('skips malformed lines, non-attachment lines and attachments without a path', () => {
@@ -80,7 +95,11 @@ describe('extractPlanRefs (pure)', () => {
 
 describe('readPlanRefs (cached, incremental)', () => {
   it('serves an unchanged file from cache with zero file reads', async () => {
-    writeFileSync(transcript, planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n', 'utf-8');
+    writeFileSync(
+      transcript,
+      planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n',
+      'utf-8'
+    );
 
     const first = await readPlanRefs(transcript);
     expect(first.map(r => r.filePath)).toEqual(['/p/a.md']);
@@ -93,10 +112,18 @@ describe('readPlanRefs (cached, incremental)', () => {
   });
 
   it('reads only the tail when the transcript grows', async () => {
-    writeFileSync(transcript, planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n', 'utf-8');
+    writeFileSync(
+      transcript,
+      planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n',
+      'utf-8'
+    );
     await readPlanRefs(transcript);
 
-    appendFileSync(transcript, planLine('/p/b.md', 'plan_mode_exit', '2026-01-01T00:02:00Z') + '\n', 'utf-8');
+    appendFileSync(
+      transcript,
+      planLine('/p/b.md', 'plan_mode_exit', '2026-01-01T00:02:00Z') + '\n',
+      'utf-8'
+    );
     touch(transcript, 1);
 
     const refs = await readPlanRefs(transcript);
@@ -106,14 +133,26 @@ describe('readPlanRefs (cached, incremental)', () => {
   });
 
   it('does not fold an appended line twice across increments', async () => {
-    writeFileSync(transcript, planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n', 'utf-8');
+    writeFileSync(
+      transcript,
+      planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n',
+      'utf-8'
+    );
     await readPlanRefs(transcript);
 
-    appendFileSync(transcript, planLine('/p/b.md', 'plan_mode', '2026-01-01T00:02:00Z') + '\n', 'utf-8');
+    appendFileSync(
+      transcript,
+      planLine('/p/b.md', 'plan_mode', '2026-01-01T00:02:00Z') + '\n',
+      'utf-8'
+    );
     touch(transcript, 1);
     await readPlanRefs(transcript);
 
-    appendFileSync(transcript, planLine('/p/c.md', 'plan_mode', '2026-01-01T00:03:00Z') + '\n', 'utf-8');
+    appendFileSync(
+      transcript,
+      planLine('/p/c.md', 'plan_mode', '2026-01-01T00:03:00Z') + '\n',
+      'utf-8'
+    );
     touch(transcript, 2);
 
     expect((await readPlanRefs(transcript)).map(r => r.filePath)).toEqual([
@@ -131,7 +170,11 @@ describe('readPlanRefs (cached, incremental)', () => {
     expect((await readPlanRefs(transcript)).map(r => r.filePath)).toEqual(['/p/a.md']);
 
     // The writer finishes the line and appends the next one.
-    appendFileSync(transcript, '\n' + planLine('/p/b.md', 'plan_mode', '2026-01-01T00:01:00Z') + '\n', 'utf-8');
+    appendFileSync(
+      transcript,
+      '\n' + planLine('/p/b.md', 'plan_mode', '2026-01-01T00:01:00Z') + '\n',
+      'utf-8'
+    );
     touch(transcript, 1);
     expect((await readPlanRefs(transcript)).map(r => r.filePath)).toEqual(['/p/a.md', '/p/b.md']);
   });
@@ -143,11 +186,15 @@ describe('readPlanRefs (cached, incremental)', () => {
         planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z'),
         planLine('/p/b.md', 'plan_mode', '2026-01-01T00:01:00Z'),
       ].join('\n') + '\n',
-      'utf-8',
+      'utf-8'
     );
     await readPlanRefs(transcript);
 
-    writeFileSync(transcript, planLine('/p/c.md', 'plan_mode', '2026-01-01T00:05:00Z') + '\n', 'utf-8');
+    writeFileSync(
+      transcript,
+      planLine('/p/c.md', 'plan_mode', '2026-01-01T00:05:00Z') + '\n',
+      'utf-8'
+    );
     touch(transcript, 1);
 
     // No stale refs from the previous content.
@@ -163,7 +210,7 @@ describe('readPlanRefs (cached, incremental)', () => {
         slug: 'però-caffè-🚀',
         attachment: { type: 'plan_mode', planFilePath: '/p/à.md' },
       }),
-      'utf-8',
+      'utf-8'
     );
     // Cut INSIDE the 4-byte sequence of the rocket emoji: decoding either half
     // on its own yields U+FFFD, so the ref only survives if the incremental

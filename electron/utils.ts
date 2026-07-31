@@ -76,7 +76,8 @@ export function assertWithin(baseDir: string, target: string): void {
 
 // Claude Code session ids are UUIDs. Validate before interpolating an id into a
 // shell command (resume/attach) so metacharacters can't break out.
-const SESSION_ID_RE = /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
+const SESSION_ID_RE =
+  /^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/;
 
 export function isValidSessionId(id: unknown): id is string {
   return typeof id === 'string' && SESSION_ID_RE.test(id);
@@ -221,10 +222,7 @@ export function resolveClaudeExecutablePath(): string | undefined {
     const pkgJson = require.resolve(`${pkg}/package.json`);
     if (!pkgJson.includes(`app.asar${sep}`)) return undefined;
     const binary = process.platform === 'win32' ? 'claude.exe' : 'claude';
-    return join(dirname(pkgJson), binary).replace(
-      `app.asar${sep}`,
-      `app.asar.unpacked${sep}`
-    );
+    return join(dirname(pkgJson), binary).replace(`app.asar${sep}`, `app.asar.unpacked${sep}`);
   } catch {
     return undefined;
   }

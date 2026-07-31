@@ -16,9 +16,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
   memory: {
     listProjects: () => ipcRenderer.invoke('memory:listProjects'),
     getProject: (hash: string) => ipcRenderer.invoke('memory:getProject', hash),
-    createTopic: (hash: string, input: object) => ipcRenderer.invoke('memory:createTopic', hash, input),
-    updateTopic: (hash: string, filename: string, input: object) => ipcRenderer.invoke('memory:updateTopic', hash, filename, input),
-    deleteTopic: (hash: string, filename: string) => ipcRenderer.invoke('memory:deleteTopic', hash, filename),
+    createTopic: (hash: string, input: object) =>
+      ipcRenderer.invoke('memory:createTopic', hash, input),
+    updateTopic: (hash: string, filename: string, input: object) =>
+      ipcRenderer.invoke('memory:updateTopic', hash, filename, input),
+    deleteTopic: (hash: string, filename: string) =>
+      ipcRenderer.invoke('memory:deleteTopic', hash, filename),
   },
   cost: {
     getSummary: () => ipcRenderer.invoke('cost:getSummary'),
@@ -29,13 +32,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getGlobal: () => ipcRenderer.invoke('claudeMd:getGlobal'),
     getHierarchy: (realPath: string) => ipcRenderer.invoke('claudeMd:getHierarchy', realPath),
     writeGlobal: (content: string) => ipcRenderer.invoke('claudeMd:writeGlobal', content),
-    writeFile: (filePath: string, content: string) => ipcRenderer.invoke('claudeMd:writeFile', filePath, content),
+    writeFile: (filePath: string, content: string) =>
+      ipcRenderer.invoke('claudeMd:writeFile', filePath, content),
     deleteGlobal: () => ipcRenderer.invoke('claudeMd:deleteGlobal'),
     deleteFile: (filePath: string) => ipcRenderer.invoke('claudeMd:deleteFile', filePath),
   },
   markdownFile: {
-    write: (filePath: string, content: string) => ipcRenderer.invoke('markdownFile:write', filePath, content),
-    delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) => ipcRenderer.invoke('markdownFile:delete', filePath, opts),
+    write: (filePath: string, content: string) =>
+      ipcRenderer.invoke('markdownFile:write', filePath, content),
+    delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) =>
+      ipcRenderer.invoke('markdownFile:delete', filePath, opts),
   },
   exportFile: {
     saveMarkdown: (defaultFilename: string, content: string) =>
@@ -45,8 +51,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
-    getChat: (hash: string, filename: string) => ipcRenderer.invoke('sessions:getChat', hash, filename),
-    getSubagents: (hash: string, filename: string) => ipcRenderer.invoke('sessions:getSubagents', hash, filename),
+    getChat: (hash: string, filename: string) =>
+      ipcRenderer.invoke('sessions:getChat', hash, filename),
+    getSubagents: (hash: string, filename: string) =>
+      ipcRenderer.invoke('sessions:getSubagents', hash, filename),
     getSubagentTranscript: (hash: string, filename: string, agentId: string) =>
       ipcRenderer.invoke('sessions:getSubagentTranscript', hash, filename, agentId),
     getArtifacts: (hash: string, filename: string) =>
@@ -58,13 +66,17 @@ contextBridge.exposeInMainWorld('electronAPI', {
       message: string,
       model?: string,
       permissionMode?: string
-    ) => ipcRenderer.invoke('sessions:sendMessage', realPath, sessionId, message, model, permissionMode),
-    startMessage: (
-      realPath: string,
-      message: string,
-      model?: string,
-      permissionMode?: string
-    ) => ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
+    ) =>
+      ipcRenderer.invoke(
+        'sessions:sendMessage',
+        realPath,
+        sessionId,
+        message,
+        model,
+        permissionMode
+      ),
+    startMessage: (realPath: string, message: string, model?: string, permissionMode?: string) =>
+      ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
     stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
     endChat: () => ipcRenderer.invoke('sessions:endChat'),
     respondPermission: (requestId: string, decision: unknown) =>
@@ -82,8 +94,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onChatError: (cb: (event: unknown) => void) => subscribe('sessions:chatError', cb),
   },
   terminal: {
-    create: (opts: { cwd: string; resumeSessionId?: string; attachJobId?: string; cols?: number; rows?: number }) =>
-      ipcRenderer.invoke('terminal:create', opts),
+    create: (opts: {
+      cwd: string;
+      resumeSessionId?: string;
+      attachJobId?: string;
+      cols?: number;
+      rows?: number;
+    }) => ipcRenderer.invoke('terminal:create', opts),
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', id, cols, rows),
@@ -113,16 +130,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
   skills: {
     getGlobal: () => ipcRenderer.invoke('skills:getGlobal'),
     getAll: (realPath: string) => ipcRenderer.invoke('skills:getAll', realPath),
-    create: (input: object, projectPath?: string) => ipcRenderer.invoke('skills:create', input, projectPath),
-    readFile: (skillPath: string, relPath: string) => ipcRenderer.invoke('skills:readFile', skillPath, relPath),
-    writeFile: (skillPath: string, relPath: string, content: string) => ipcRenderer.invoke('skills:writeFile', skillPath, relPath, content),
-    openFile: (skillPath: string, relPath: string) => ipcRenderer.invoke('skills:openFile', skillPath, relPath),
+    create: (input: object, projectPath?: string) =>
+      ipcRenderer.invoke('skills:create', input, projectPath),
+    readFile: (skillPath: string, relPath: string) =>
+      ipcRenderer.invoke('skills:readFile', skillPath, relPath),
+    writeFile: (skillPath: string, relPath: string, content: string) =>
+      ipcRenderer.invoke('skills:writeFile', skillPath, relPath, content),
+    openFile: (skillPath: string, relPath: string) =>
+      ipcRenderer.invoke('skills:openFile', skillPath, relPath),
   },
   agents: {
     getGlobal: () => ipcRenderer.invoke('agents:getGlobal'),
     getByProject: (realPath: string) => ipcRenderer.invoke('agents:getByProject', realPath),
-    create: (input: object, projectPath?: string) => ipcRenderer.invoke('agents:create', input, projectPath),
-    dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string, model?: string) => ipcRenderer.invoke('agents:dispatchBg', cwd, prompt, name, agent, model),
+    create: (input: object, projectPath?: string) =>
+      ipcRenderer.invoke('agents:create', input, projectPath),
+    dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string, model?: string) =>
+      ipcRenderer.invoke('agents:dispatchBg', cwd, prompt, name, agent, model),
     deleteBg: (id: string) => ipcRenderer.invoke('agents:deleteBg', id),
     stopBg: (id: string) => ipcRenderer.invoke('agents:stopBg', id),
     respawnBg: (id: string) => ipcRenderer.invoke('agents:respawnBg', id),
@@ -136,15 +159,20 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   studio: {
     getAll: () => ipcRenderer.invoke('studio:getAll'),
-    get: (name: string, projectPath?: string) => ipcRenderer.invoke('studio:get', name, projectPath),
+    get: (name: string, projectPath?: string) =>
+      ipcRenderer.invoke('studio:get', name, projectPath),
     create: (input: object) => ipcRenderer.invoke('studio:create', input),
     save: (input: object, fileName?: string, projectPath?: string, expectedSource?: string) =>
       ipcRenderer.invoke('studio:save', input, fileName, projectPath, expectedSource),
     delete: (name: string, alsoScript?: boolean, projectPath?: string) =>
       ipcRenderer.invoke('studio:delete', name, alsoScript, projectPath),
     preview: (input: object) => ipcRenderer.invoke('studio:preview', input),
-    writeScript: (fileName: string, content: string, projectPath?: string, expectedSource?: string) =>
-      ipcRenderer.invoke('studio:writeScript', fileName, content, projectPath, expectedSource),
+    writeScript: (
+      fileName: string,
+      content: string,
+      projectPath?: string,
+      expectedSource?: string
+    ) => ipcRenderer.invoke('studio:writeScript', fileName, content, projectPath, expectedSource),
   },
   projects: {
     delete: (hash: string) => ipcRenderer.invoke('projects:delete', hash),

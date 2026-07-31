@@ -99,7 +99,7 @@ export function initTelemetry(): void {
  */
 export async function track(
   eventName: string,
-  props?: Record<string, string | number | boolean>,
+  props?: Record<string, string | number | boolean>
 ): Promise<void> {
   if (!enabled || process.env.SCREENSHOT_MODE) return;
   const host = ingestHost();
@@ -169,7 +169,7 @@ function post(host: string, body: string): Promise<void> {
         res.resume(); // drain so the socket closes; ignore the response body
         res.on('end', finish);
         res.on('error', finish);
-      },
+      }
     );
     req.on('error', finish);
     // Cap the wait so an awaited send (on quit) can't hang shutdown.

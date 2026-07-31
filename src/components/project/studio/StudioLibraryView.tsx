@@ -204,10 +204,10 @@ export function StudioLibraryView({
               )}
               <div className="pt-3.5 px-1 font-mono text-[10.5px] leading-relaxed text-[var(--cl-ink-4)]">
                 Every row is read directly from{' '}
-                <span className="text-[var(--cl-ink-2)]">~/.claude/workflows</span> or a
-                project's local <span className="text-[var(--cl-ink-2)]">.claude/workflows</span>
-                {' '}(tagged with the project name). Visual Brief and Flow are projections of the
-                JavaScript file, never separate data.
+                <span className="text-[var(--cl-ink-2)]">~/.claude/workflows</span> or a project's
+                local <span className="text-[var(--cl-ink-2)]">.claude/workflows</span> (tagged with
+                the project name). Visual Brief and Flow are projections of the JavaScript file,
+                never separate data.
               </div>
             </section>
           </>

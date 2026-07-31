@@ -38,10 +38,7 @@ function runState(runId: string, launchSession: string, over: Record<string, unk
     workflowName: name,
     status: 'completed',
     startTime: 3000,
-    phases: [
-      { title: 'Find', detail: 'find things' },
-      { title: 'Verify' },
-    ],
+    phases: [{ title: 'Find', detail: 'find things' }, { title: 'Verify' }],
     defaultModel: 'claude-fable-5',
     totalTokens: 42000,
     totalToolCalls: 9,
@@ -84,7 +81,11 @@ function runState(runId: string, launchSession: string, over: Record<string, unk
 function writeRun(stateSession: string, launchSession: string, runId: string, over = {}): void {
   const wfDir = join(dir, stateSession, 'workflows');
   mkdirSync(wfDir, { recursive: true });
-  writeFileSync(join(wfDir, `${runId}.json`), JSON.stringify(runState(runId, launchSession, over)), 'utf-8');
+  writeFileSync(
+    join(wfDir, `${runId}.json`),
+    JSON.stringify(runState(runId, launchSession, over)),
+    'utf-8'
+  );
 }
 
 function writeScript(session: string, name: string, runId: string): void {
@@ -130,7 +131,13 @@ describe('parseAgentEntry', () => {
       promptPreview: 'p',
       resultPreview: 'r',
     });
-    expect(a).toMatchObject({ label: 'finder', agentId: 'aX', state: 'done', tokens: 10, lastToolName: 'Grep' });
+    expect(a).toMatchObject({
+      label: 'finder',
+      agentId: 'aX',
+      state: 'done',
+      tokens: 10,
+      lastToolName: 'Grep',
+    });
   });
 
   it('returns null for non-agent entries', () => {
@@ -156,7 +163,9 @@ describe('originSessionFromScriptPath', () => {
   });
 
   it('normalizes backslashes (POSIX path read on Windows)', () => {
-    expect(originSessionFromScriptPath(`/proj/${SESS_A}/workflows/scripts/n-wf_x.js`, '\\proj')).toBe(SESS_A);
+    expect(
+      originSessionFromScriptPath(`/proj/${SESS_A}/workflows/scripts/n-wf_x.js`, '\\proj')
+    ).toBe(SESS_A);
   });
 
   it('returns null when outside the project or unsafe', () => {
@@ -206,7 +215,10 @@ describe('parseRunFile', () => {
     expect(parseRunFile(runState('wf_1', SESS_A, { startTime: 5000 }), ctx)!.startTime).toBe(5000);
     const fromTs = parseRunFile(runState('wf_1', SESS_A, { startTime: undefined }), ctx)!;
     expect(fromTs.startTime).toBe(Date.parse('2026-07-09T17:20:37.164Z'));
-    const fromMtime = parseRunFile(runState('wf_1', SESS_A, { startTime: undefined, timestamp: '' }), ctx)!;
+    const fromMtime = parseRunFile(
+      runState('wf_1', SESS_A, { startTime: undefined, timestamp: '' }),
+      ctx
+    )!;
     expect(fromMtime.startTime).toBe(999);
   });
 

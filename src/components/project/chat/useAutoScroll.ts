@@ -1,10 +1,10 @@
-import { useCallback, useLayoutEffect, useRef } from 'react'
-import type { UIEvent, WheelEvent } from 'react'
+import { useCallback, useLayoutEffect, useRef } from 'react';
+import type { UIEvent, WheelEvent } from 'react';
 
 /** How close to the bottom (px) still counts as "anchored" — wide enough to
  *  absorb sub-line layout jitter, narrow enough that deliberately scrolling
  *  away wins over an incoming pin. */
-const NEAR_BOTTOM_PX = 200
+const NEAR_BOTTOM_PX = 200;
 
 /** Bottom-pinning for a chat feed, robust across MIN/FULL densities and any
  *  content that changes height after mount (streamed tokens, tool cards
@@ -32,63 +32,63 @@ const NEAR_BOTTOM_PX = 200
  *    transcript column (re)mounts, so opening a chat paints already at the
  *    bottom — no smooth slide from the top, no stopping short. */
 export function useChatAutoScroll(resetKey: string) {
-  const feedRef = useRef<HTMLElement | null>(null)
+  const feedRef = useRef<HTMLElement | null>(null);
   /** Whether the feed should follow the bottom. Exposed so sibling effects
    *  (the density toggle) can choose between "back to bottom" and "keep the
    *  active turn in view". */
-  const followRef = useRef(true)
-  const lastPosRef = useRef({ top: 0, height: 0 })
-  const observerRef = useRef<ResizeObserver | null>(null)
+  const followRef = useRef(true);
+  const lastPosRef = useRef({ top: 0, height: 0 });
+  const observerRef = useRef<ResizeObserver | null>(null);
 
   const pin = useCallback(() => {
-    const feed = feedRef.current
-    if (feed) feed.scrollTop = feed.scrollHeight
-  }, [])
+    const feed = feedRef.current;
+    if (feed) feed.scrollTop = feed.scrollHeight;
+  }, []);
 
   // Ref callback for the transcript column: observe its size for as long as it
   // is mounted. The column only exists once messages render, so the attach pin
   // is the "chat just opened" anchor (and the "back from an overlay" one).
   const innerRef = useCallback(
     (el: HTMLElement | null) => {
-      observerRef.current?.disconnect()
-      observerRef.current = null
-      if (!el) return
+      observerRef.current?.disconnect();
+      observerRef.current = null;
+      if (!el) return;
       const ro = new ResizeObserver(() => {
-        if (followRef.current) pin()
-      })
-      ro.observe(el)
-      observerRef.current = ro
-      if (followRef.current) pin()
+        if (followRef.current) pin();
+      });
+      ro.observe(el);
+      observerRef.current = ro;
+      if (followRef.current) pin();
     },
     [pin]
-  )
+  );
 
   // Switching session while mounted: re-arm the anchor and jump. The refetch
   // that follows resizes the column, so the observer settles the final pin.
   useLayoutEffect(() => {
-    followRef.current = true
-    lastPosRef.current = { top: 0, height: 0 }
-    pin()
-  }, [resetKey, pin])
+    followRef.current = true;
+    lastPosRef.current = { top: 0, height: 0 };
+    pin();
+  }, [resetKey, pin]);
 
   // Wheel-up is always the user (pins only ever scroll down): detach right
   // away, so a stream of growing content can't tug the view back down between
   // wheel ticks.
   const onWheel = useCallback((e: WheelEvent<HTMLElement>) => {
-    if (e.deltaY < 0) followRef.current = false
-  }, [])
+    if (e.deltaY < 0) followRef.current = false;
+  }, []);
 
   const onScroll = useCallback((e: UIEvent<HTMLElement>) => {
-    const el = e.currentTarget
-    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX
+    const el = e.currentTarget;
+    const nearBottom = el.scrollHeight - el.scrollTop - el.clientHeight < NEAR_BOTTOM_PX;
     // Lower position at the same content height = the user scrolled up
     // (scrollbar drag, keys). With the height changed it's growth or a
     // shrink-clamp instead — those keep the plain proximity rule.
     const scrolledUp =
-      el.scrollHeight === lastPosRef.current.height && el.scrollTop < lastPosRef.current.top
-    followRef.current = scrolledUp ? false : nearBottom
-    lastPosRef.current = { top: el.scrollTop, height: el.scrollHeight }
-  }, [])
+      el.scrollHeight === lastPosRef.current.height && el.scrollTop < lastPosRef.current.top;
+    followRef.current = scrolledUp ? false : nearBottom;
+    lastPosRef.current = { top: el.scrollTop, height: el.scrollHeight };
+  }, []);
 
-  return { feedRef, innerRef, followRef, pin, onScroll, onWheel }
+  return { feedRef, innerRef, followRef, pin, onScroll, onWheel };
 }

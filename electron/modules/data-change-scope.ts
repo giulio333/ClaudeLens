@@ -49,8 +49,7 @@ export function scopesForPath(path: string, claudeDir: string): DataScope[] | nu
   const wfIdx = parts.lastIndexOf('workflows');
   if (wfIdx > 0 && parts[wfIdx - 1] === '.claude') return ['studio'];
 
-  const insideClaudeDir =
-    parts.length > root.length && root.every((seg, i) => parts[i] === seg);
+  const insideClaudeDir = parts.length > root.length && root.every((seg, i) => parts[i] === seg);
   if (!insideClaudeDir) return null;
 
   const rest = parts.slice(root.length);

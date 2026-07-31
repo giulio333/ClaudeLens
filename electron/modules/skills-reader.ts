@@ -42,24 +42,74 @@ export interface Skill {
 // Directories never worth surfacing: VCS, build output, virtualenvs, caches, and
 // the skill's own runtime/state dir (which can hold credentials — never exposed).
 const IGNORED_DIRS = new Set([
-  '.git', '.venv', 'venv', 'node_modules', '__pycache__', 'dist', 'build', '.next',
-  '.cache', 'data', '.pytest_cache', '.mypy_cache', '.ruff_cache',
+  '.git',
+  '.venv',
+  'venv',
+  'node_modules',
+  '__pycache__',
+  'dist',
+  'build',
+  '.next',
+  '.cache',
+  'data',
+  '.pytest_cache',
+  '.mypy_cache',
+  '.ruff_cache',
 ]);
 
 const SCRIPT_EXTS = new Set([
-  '.py', '.sh', '.bash', '.zsh', '.js', '.mjs', '.cjs', '.ts', '.rb', '.go', '.rs',
-  '.pl', '.php', '.lua', '.ps1',
+  '.py',
+  '.sh',
+  '.bash',
+  '.zsh',
+  '.js',
+  '.mjs',
+  '.cjs',
+  '.ts',
+  '.rb',
+  '.go',
+  '.rs',
+  '.pl',
+  '.php',
+  '.lua',
+  '.ps1',
 ]);
 const IMAGE_EXTS = new Set(['.png', '.jpg', '.jpeg', '.gif', '.webp', '.svg', '.bmp', '.ico']);
 const TEXT_EXTS = new Set([
-  '.md', '.mdx', '.txt', '.json', '.yaml', '.yml', '.toml', '.ini', '.cfg', '.conf',
-  '.csv', '.tsv', '.html', '.htm', '.css', '.xml', '.env', '.svg',
+  '.md',
+  '.mdx',
+  '.txt',
+  '.json',
+  '.yaml',
+  '.yml',
+  '.toml',
+  '.ini',
+  '.cfg',
+  '.conf',
+  '.csv',
+  '.tsv',
+  '.html',
+  '.htm',
+  '.css',
+  '.xml',
+  '.env',
+  '.svg',
   ...SCRIPT_EXTS,
 ]);
 const META_BASENAMES = new Set([
-  'license', 'license.md', 'license.txt', 'requirements.txt', 'package.json',
-  'package-lock.json', 'pyproject.toml', 'setup.py', 'setup.cfg', 'pnpm-lock.yaml',
-  '.gitignore', '.python-version', 'changelog.md',
+  'license',
+  'license.md',
+  'license.txt',
+  'requirements.txt',
+  'package.json',
+  'package-lock.json',
+  'pyproject.toml',
+  'setup.py',
+  'setup.cfg',
+  'pnpm-lock.yaml',
+  '.gitignore',
+  '.python-version',
+  'changelog.md',
 ]);
 const EVAL_BASENAMES = new Set(['evals.json', 'grading.json', 'benchmark.json']);
 
@@ -70,8 +120,14 @@ function classifyRole(relPath: string): SkillFileRole {
   const base = basename(relPath).toLowerCase();
   const ext = extname(relPath).toLowerCase();
 
-  if (top === 'agents' || top === 'hooks' || top === 'output-styles' ||
-      base === '.mcp.json' || segs.includes('.claude-plugin')) return 'extension';
+  if (
+    top === 'agents' ||
+    top === 'hooks' ||
+    top === 'output-styles' ||
+    base === '.mcp.json' ||
+    segs.includes('.claude-plugin')
+  )
+    return 'extension';
   if (top === 'evals' || EVAL_BASENAMES.has(base)) return 'eval';
   if (META_BASENAMES.has(base)) return 'meta';
   if (top === 'scripts' || SCRIPT_EXTS.has(ext)) return 'script';
@@ -124,7 +180,7 @@ function collectSkillFiles(skillDir: string, referencedRel: Set<string>): SkillF
     (a, b) =>
       Number(b.referenced) - Number(a.referenced) ||
       a.role.localeCompare(b.role) ||
-      a.relPath.localeCompare(b.relPath),
+      a.relPath.localeCompare(b.relPath)
   );
 }
 
@@ -137,7 +193,9 @@ function referencedPaths(body: string): Set<string> {
     if (target && !/^[a-z]+:\/\//i.test(target)) set.add(target);
   }
   // Bare paths under known supporting dirs (e.g. `scripts/run.py` in a code block).
-  for (const m of body.matchAll(/\b((?:scripts|references|examples|assets|templates)\/[\w./-]+)/g)) {
+  for (const m of body.matchAll(
+    /\b((?:scripts|references|examples|assets|templates)\/[\w./-]+)/g
+  )) {
     set.add(m[1].replace(/^\.\//, ''));
   }
   return set;
@@ -178,7 +236,10 @@ export function parseSkillMarkdown(content: string): {
  * to read. Shared by `readSkillsFromDir` and the plugin reader (which resolves
  * explicit, declared skill paths rather than scanning).
  */
-export async function readSkillDir(skillDir: string, scope: 'global' | 'project' | 'plugin'): Promise<Skill | null> {
+export async function readSkillDir(
+  skillDir: string,
+  scope: 'global' | 'project' | 'plugin'
+): Promise<Skill | null> {
   const skillMarkdownPath = join(skillDir, 'SKILL.md');
   if (!existsSync(skillMarkdownPath)) return null;
   try {
@@ -207,7 +268,10 @@ export async function readSkillDir(skillDir: string, scope: 'global' | 'project'
   }
 }
 
-export async function readSkillsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Promise<Skill[]> {
+export async function readSkillsFromDir(
+  dir: string,
+  scope: 'global' | 'project' | 'plugin'
+): Promise<Skill[]> {
   if (!existsSync(dir)) return [];
 
   try {
@@ -215,7 +279,7 @@ export async function readSkillsFromDir(dir: string, scope: 'global' | 'project'
     const skills = await Promise.all(
       entries
         .filter(entry => entry.isDirectory())
-        .map(entry => readSkillDir(join(dir, entry.name), scope)),
+        .map(entry => readSkillDir(join(dir, entry.name), scope))
     );
     return skills.filter((s): s is Skill => s !== null);
   } catch (error) {

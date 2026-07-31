@@ -1,6 +1,6 @@
-import { ManagedTagChip } from './ManagedTagChip'
-import { TagChip } from './TagChip'
-import type { SessionTag } from '../../../hooks/useSessionTags'
+import { ManagedTagChip } from './ManagedTagChip';
+import { TagChip } from './TagChip';
+import type { SessionTag } from '../../../hooks/useSessionTags';
 
 export function TagBar({
   tags,
@@ -11,16 +11,16 @@ export function TagBar({
   onRename,
   onDelete,
 }: {
-  tags: SessionTag[]
-  counts: Record<string, number>
-  activeTag: string | null
-  totalCount: number
-  onSelect: (tag: string | null) => void
-  onRename?: (oldName: string, newName: string) => boolean
-  onDelete?: (name: string) => void
+  tags: SessionTag[];
+  counts: Record<string, number>;
+  activeTag: string | null;
+  totalCount: number;
+  onSelect: (tag: string | null) => void;
+  onRename?: (oldName: string, newName: string) => boolean;
+  onDelete?: (name: string) => void;
 }) {
-  if (tags.length === 0) return null
-  const manageable = !!(onRename || onDelete)
+  if (tags.length === 0) return null;
+  const manageable = !!(onRename || onDelete);
   return (
     <div className="cl-tagbar">
       <button
@@ -53,9 +53,9 @@ export function TagBar({
               tone={activeTag === t.name ? 'on' : 'muted'}
               onClick={() => onSelect(activeTag === t.name ? null : t.name)}
             />
-          ),
+          )
         )}
       </div>
     </div>
-  )
+  );
 }

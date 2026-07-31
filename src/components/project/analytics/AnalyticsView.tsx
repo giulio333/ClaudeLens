@@ -1,124 +1,162 @@
-import { useMemo } from 'react'
+import { useMemo } from 'react';
 import {
-  BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer,
-  CartesianGrid, Legend, AreaChart, Area,
-  PieChart, Pie, Cell,
-} from 'recharts'
-import { useSessionList, usePricingMeta } from '../../../hooks/useIPC'
-import { fmt, fmtModel, modelColor } from '../utils'
-import { BackButton } from '../shared/BackButton'
-import { StatChip } from '../shared/StatChip'
-import { projectDisplayName } from '../shared/projectName'
-import { QueryError } from '../../QueryError'
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+  Legend,
+  AreaChart,
+  Area,
+  PieChart,
+  Pie,
+  Cell,
+} from 'recharts';
+import { useSessionList, usePricingMeta } from '../../../hooks/useIPC';
+import { fmt, fmtModel, modelColor } from '../utils';
+import { BackButton } from '../shared/BackButton';
+import { StatChip } from '../shared/StatChip';
+import { projectDisplayName } from '../shared/projectName';
+import { QueryError } from '../../QueryError';
 
 const SIZE_BUCKETS = [
-  { label: '< 10k',   min: 0,       max: 10_000 },
-  { label: '10–50k',  min: 10_000,  max: 50_000 },
-  { label: '50–100k', min: 50_000,  max: 100_000 },
-  { label: '100–200k',min: 100_000, max: 200_000 },
-  { label: '> 200k',  min: 200_000, max: Infinity },
-]
+  { label: '< 10k', min: 0, max: 10_000 },
+  { label: '10–50k', min: 10_000, max: 50_000 },
+  { label: '50–100k', min: 50_000, max: 100_000 },
+  { label: '100–200k', min: 100_000, max: 200_000 },
+  { label: '> 200k', min: 200_000, max: Infinity },
+];
 
-const MAX_SESSIONS = 100
+const MAX_SESSIONS = 100;
 
-function ChartCard({ title, subtitle, children }: {
-  title: string
-  subtitle?: string
-  children: React.ReactNode
+function ChartCard({
+  title,
+  subtitle,
+  children,
+}: {
+  title: string;
+  subtitle?: string;
+  children: React.ReactNode;
 }) {
   return (
     <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-xl p-5">
       <div className="mb-4">
-        <h3 className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-widest">{title}</h3>
+        <h3 className="text-[11px] font-semibold text-[var(--cl-ink-3)] uppercase tracking-widest">
+          {title}
+        </h3>
         {subtitle && <p className="text-[11px] text-[var(--cl-ink-3)] mt-0.5">{subtitle}</p>}
       </div>
       {children}
     </div>
-  )
+  );
 }
 
 export function AnalyticsView({
   project,
   onBack,
 }: {
-  project: { hash: string; realPath: string }
-  onBack: () => void
+  project: { hash: string; realPath: string };
+  onBack: () => void;
 }) {
-  const { data: allSessions, isLoading, isError, error, refetch } = useSessionList(project.hash)
-  const { data: pricingMeta } = usePricingMeta()
-  const projectName = projectDisplayName(project.realPath)
+  const { data: allSessions, isLoading, isError, error, refetch } = useSessionList(project.hash);
+  const { data: pricingMeta } = usePricingMeta();
+  const projectName = projectDisplayName(project.realPath);
 
-  const knownModels = useMemo(() => new Set(pricingMeta?.knownModels ?? []), [pricingMeta])
+  const knownModels = useMemo(() => new Set(pricingMeta?.knownModels ?? []), [pricingMeta]);
   // A model is "estimated" when it's not in the pricing table (priced via the
   // fuzzy family fallback or the conservative default), so its cost is approximate.
-  const isEstimated = (model: string) => model !== '<synthetic>' && !knownModels.has(model)
+  const isEstimated = (model: string) => model !== '<synthetic>' && !knownModels.has(model);
 
   const sessionsToProcess = useMemo(() => {
     const sorted = allSessions
       ? [...allSessions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime())
-      : []
-    return sorted.slice(-MAX_SESSIONS)
-  }, [allSessions])
+      : [];
+    return sorted.slice(-MAX_SESSIONS);
+  }, [allSessions]);
 
   // Derived chart datasets: memoized so Recharts hover/resize re-renders don't
   // recompute them over up to MAX_SESSIONS sessions on every paint (#96).
-  const tokenData = useMemo(() => sessionsToProcess.map(s => ({
-    label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
-    Input: Math.round(s.inputTokens / 1000),
-    Output: Math.round(s.outputTokens / 1000),
-  })), [sessionsToProcess])
+  const tokenData = useMemo(
+    () =>
+      sessionsToProcess.map(s => ({
+        label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
+        Input: Math.round(s.inputTokens / 1000),
+        Output: Math.round(s.outputTokens / 1000),
+      })),
+    [sessionsToProcess]
+  );
 
   const pieData = useMemo(() => {
-    const modelTotals: Record<string, number> = {}
-    sessionsToProcess.forEach(s => Object.entries(s.models).forEach(([m, c]) => {
-      modelTotals[m] = (modelTotals[m] ?? 0) + c
-    }))
+    const modelTotals: Record<string, number> = {};
+    sessionsToProcess.forEach(s =>
+      Object.entries(s.models).forEach(([m, c]) => {
+        modelTotals[m] = (modelTotals[m] ?? 0) + c;
+      })
+    );
     return Object.entries(modelTotals).map(([m, count]) => ({
       name: fmtModel(m),
       value: count,
       color: modelColor(m),
       estimated: isEstimated(m),
-    }))
+    }));
     // isEstimated depends on knownModels; recompute when either changes.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sessionsToProcess, knownModels])
-  const estimatedCount = pieData.filter(d => d.estimated).length
+  }, [sessionsToProcess, knownModels]);
+  const estimatedCount = pieData.filter(d => d.estimated).length;
 
-  const messagesData = useMemo(() => sessionsToProcess.map(s => ({
-    label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
-    Messages: s.messageCount,
-  })), [sessionsToProcess])
+  const messagesData = useMemo(
+    () =>
+      sessionsToProcess.map(s => ({
+        label: new Date(s.date).toLocaleDateString('en-US', { day: '2-digit', month: 'short' }),
+        Messages: s.messageCount,
+      })),
+    [sessionsToProcess]
+  );
 
-  const histData = useMemo(() => SIZE_BUCKETS.map(b => ({
-    label: b.label,
-    Sessions: sessionsToProcess.filter(s => s.totalTokens >= b.min && s.totalTokens < b.max).length,
-  })), [sessionsToProcess])
+  const histData = useMemo(
+    () =>
+      SIZE_BUCKETS.map(b => ({
+        label: b.label,
+        Sessions: sessionsToProcess.filter(s => s.totalTokens >= b.min && s.totalTokens < b.max)
+          .length,
+      })),
+    [sessionsToProcess]
+  );
 
   const { totalTokens, inputPct, outputPct, avgMessages } = useMemo(() => {
-    const tokens = sessionsToProcess.reduce((a, s) => a + s.totalTokens, 0)
-    const input = sessionsToProcess.reduce((a, s) => a + s.inputTokens, 0)
-    const output = sessionsToProcess.reduce((a, s) => a + s.outputTokens, 0)
-    const inPct = tokens > 0 ? Math.round((input / (input + output)) * 100) : 0
+    const tokens = sessionsToProcess.reduce((a, s) => a + s.totalTokens, 0);
+    const input = sessionsToProcess.reduce((a, s) => a + s.inputTokens, 0);
+    const output = sessionsToProcess.reduce((a, s) => a + s.outputTokens, 0);
+    const inPct = tokens > 0 ? Math.round((input / (input + output)) * 100) : 0;
     return {
       totalTokens: tokens,
       inputPct: inPct,
       outputPct: tokens > 0 ? 100 - inPct : 0,
-      avgMessages: sessionsToProcess.length > 0
-        ? Math.round(sessionsToProcess.reduce((a, s) => a + s.messageCount, 0) / sessionsToProcess.length)
-        : 0,
-    }
-  }, [sessionsToProcess])
+      avgMessages:
+        sessionsToProcess.length > 0
+          ? Math.round(
+              sessionsToProcess.reduce((a, s) => a + s.messageCount, 0) / sessionsToProcess.length
+            )
+          : 0,
+    };
+  }, [sessionsToProcess]);
 
-  const AXIS = { tick: { fontSize: 10, fill: 'var(--cl-ink-3)' }, tickLine: false, axisLine: false }
+  const AXIS = {
+    tick: { fontSize: 10, fill: 'var(--cl-ink-3)' },
+    tickLine: false,
+    axisLine: false,
+  };
   const TOOLTIP_STYLE = {
     fontSize: 12,
     background: 'var(--cl-paper-3)',
     border: '1px solid var(--cl-line)',
     borderRadius: 8,
     color: 'var(--cl-ink)',
-  }
-  const TOOLTIP_LABEL_STYLE = { color: 'var(--cl-ink-3)' }
-  const GRID_STROKE = 'var(--cl-line)'
+  };
+  const TOOLTIP_LABEL_STYLE = { color: 'var(--cl-ink-3)' };
+  const GRID_STROKE = 'var(--cl-line)';
 
   return (
     <div className="h-full overflow-y-auto">
@@ -151,7 +189,11 @@ export function AnalyticsView({
             <div className="grid grid-cols-[1fr_260px] gap-4">
               <ChartCard
                 title="Tokens per session"
-                subtitle={totalTokens > 0 ? `${inputPct}% input · ${outputPct}% output · values ×1,000` : undefined}
+                subtitle={
+                  totalTokens > 0
+                    ? `${inputPct}% input · ${outputPct}% output · values ×1,000`
+                    : undefined
+                }
               >
                 <ResponsiveContainer width="100%" height={210}>
                   <BarChart data={tokenData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
@@ -165,8 +207,19 @@ export function AnalyticsView({
                       cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                     />
                     <Legend wrapperStyle={{ fontSize: 11, color: 'var(--cl-ink-3)' }} />
-                    <Bar dataKey="Input" stackId="t" fill="var(--cl-accent)" activeBar={{ fill: 'var(--cl-accent)' }} />
-                    <Bar dataKey="Output" stackId="t" fill="var(--cl-violet)" radius={[3, 3, 0, 0]} activeBar={{ fill: 'var(--cl-violet)' }} />
+                    <Bar
+                      dataKey="Input"
+                      stackId="t"
+                      fill="var(--cl-accent)"
+                      activeBar={{ fill: 'var(--cl-accent)' }}
+                    />
+                    <Bar
+                      dataKey="Output"
+                      stackId="t"
+                      fill="var(--cl-violet)"
+                      radius={[3, 3, 0, 0]}
+                      activeBar={{ fill: 'var(--cl-violet)' }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -203,12 +256,15 @@ export function AnalyticsView({
                       </PieChart>
                     </ResponsiveContainer>
                     {(() => {
-                      const total = pieData.reduce((a, x) => a + x.value, 0)
+                      const total = pieData.reduce((a, x) => a + x.value, 0);
                       return (
                         <div className="flex flex-col gap-1.5 w-full mt-1">
                           {pieData.map(d => (
                             <div key={d.name} className="flex items-center gap-2">
-                              <div className="w-2 h-2 rounded-full shrink-0" style={{ background: d.color }} />
+                              <div
+                                className="w-2 h-2 rounded-full shrink-0"
+                                style={{ background: d.color }}
+                              />
                               <span className="text-[11px] text-[var(--cl-ink-3)] flex-1">
                                 {d.name}
                                 {d.estimated && (
@@ -216,18 +272,21 @@ export function AnalyticsView({
                                     className="text-[var(--cl-ink-4)]"
                                     title="Not in the pricing table — cost estimated from model family"
                                   >
-                                    {' '}~
+                                    {' '}
+                                    ~
                                   </span>
                                 )}
                               </span>
-                              <span className="text-[11px] font-mono text-[var(--cl-ink-4)]">{fmt(d.value)}</span>
+                              <span className="text-[11px] font-mono text-[var(--cl-ink-4)]">
+                                {fmt(d.value)}
+                              </span>
                               <span className="text-[11px] font-mono text-[var(--cl-ink-3)] w-8 text-right">
                                 {Math.round((d.value / total) * 100)}%
                               </span>
                             </div>
                           ))}
                         </div>
-                      )
+                      );
                     })()}
                   </div>
                 ) : (
@@ -237,7 +296,10 @@ export function AnalyticsView({
                   <p className="text-[10px] text-[var(--cl-ink-4)] mt-3 pt-2 border-t border-[var(--cl-line)]">
                     Pricing as of {pricingMeta.lastUpdated}
                     {estimatedCount > 0 && (
-                      <> · {estimatedCount} model{estimatedCount > 1 ? 's' : ''} estimated (~)</>
+                      <>
+                        {' '}
+                        · {estimatedCount} model{estimatedCount > 1 ? 's' : ''} estimated (~)
+                      </>
                     )}
                   </p>
                 )}
@@ -247,7 +309,10 @@ export function AnalyticsView({
             <div className="grid grid-cols-2 gap-4">
               <ChartCard title="Messages per session" subtitle="Trend over time">
                 <ResponsiveContainer width="100%" height={180}>
-                  <AreaChart data={messagesData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
+                  <AreaChart
+                    data={messagesData}
+                    margin={{ top: 0, right: 0, left: -10, bottom: 0 }}
+                  >
                     <defs>
                       <linearGradient id="msgGrad" x1="0" y1="0" x2="0" y2="1">
                         <stop offset="5%" stopColor="var(--cl-accent)" stopOpacity={0.15} />
@@ -258,7 +323,7 @@ export function AnalyticsView({
                     <XAxis dataKey="label" {...AXIS} interval="preserveStartEnd" />
                     <YAxis {...AXIS} />
                     <Tooltip
-                      formatter={(v) => [String(v), 'Messages']}
+                      formatter={v => [String(v), 'Messages']}
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={TOOLTIP_LABEL_STYLE}
                       cursor={{ stroke: 'var(--cl-line)', strokeWidth: 1 }}
@@ -269,26 +334,43 @@ export function AnalyticsView({
                       stroke="var(--cl-accent)"
                       strokeWidth={2}
                       fill="url(#msgGrad)"
-                      dot={sessionsToProcess.length <= 15 ? { r: 3, fill: 'var(--cl-accent)', stroke: 'var(--cl-accent)' } : false}
-                      activeDot={{ r: 4, fill: 'var(--cl-accent)', stroke: 'var(--cl-paper-3)', strokeWidth: 2 }}
+                      dot={
+                        sessionsToProcess.length <= 15
+                          ? { r: 3, fill: 'var(--cl-accent)', stroke: 'var(--cl-accent)' }
+                          : false
+                      }
+                      activeDot={{
+                        r: 4,
+                        fill: 'var(--cl-accent)',
+                        stroke: 'var(--cl-paper-3)',
+                        strokeWidth: 2,
+                      }}
                     />
                   </AreaChart>
                 </ResponsiveContainer>
               </ChartCard>
 
-              <ChartCard title="Session size distribution" subtitle="Number of sessions per total token range">
+              <ChartCard
+                title="Session size distribution"
+                subtitle="Number of sessions per total token range"
+              >
                 <ResponsiveContainer width="100%" height={180}>
                   <BarChart data={histData} margin={{ top: 0, right: 0, left: -10, bottom: 0 }}>
                     <CartesianGrid strokeDasharray="3 3" stroke={GRID_STROKE} vertical={false} />
                     <XAxis dataKey="label" {...AXIS} />
                     <YAxis {...AXIS} allowDecimals={false} />
                     <Tooltip
-                      formatter={(v) => [String(v), 'Sessions']}
+                      formatter={v => [String(v), 'Sessions']}
                       contentStyle={TOOLTIP_STYLE}
                       labelStyle={TOOLTIP_LABEL_STYLE}
                       cursor={{ fill: 'rgba(255,255,255,0.04)' }}
                     />
-                    <Bar dataKey="Sessions" fill="var(--cl-haiku)" radius={[3, 3, 0, 0]} activeBar={{ fill: 'var(--cl-haiku)' }} />
+                    <Bar
+                      dataKey="Sessions"
+                      fill="var(--cl-haiku)"
+                      radius={[3, 3, 0, 0]}
+                      activeBar={{ fill: 'var(--cl-haiku)' }}
+                    />
                   </BarChart>
                 </ResponsiveContainer>
               </ChartCard>
@@ -297,5 +379,5 @@ export function AnalyticsView({
         )}
       </div>
     </div>
-  )
+  );
 }

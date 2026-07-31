@@ -1,65 +1,65 @@
-import { ReactNode, useState } from 'react'
-import Markdown from '../../Markdown'
-import { TopBar } from './TopBar'
+import { ReactNode, useState } from 'react';
+import Markdown from '../../Markdown';
+import { TopBar } from './TopBar';
 
 interface MarkdownDocViewProps {
   /** Navigation back handler */
-  onBack: () => void
+  onBack: () => void;
   /** Label of the back action (e.g. "Back", "Skills", "Agents") */
-  backLabel?: string
+  backLabel?: string;
   /** Breadcrumb segment after "← Back /", uppercased in the topbar (e.g. "Global · CLAUDE.md") */
-  crumb: string
+  crumb: string;
 
   /** Eyebrow text under the pip (top of hero) */
-  eyebrow: ReactNode
+  eyebrow: ReactNode;
   /** Main title label (rendered in ink color) */
-  titleLabel: string
+  titleLabel: string;
   /** Title trailing glyph (rendered in accent color) — e.g. ".md" */
-  titleGlyph?: string
+  titleGlyph?: string;
   /**
    * When true, the title wraps onto multiple lines instead of truncating with
    * an ellipsis, and its font-size scales down as the text grows (stays large
    * for short titles). Use for titles that can be full sentences (e.g. plans).
    */
-  titleFluid?: boolean
+  titleFluid?: boolean;
   /** Optional editorial "standfirst" rendered under the title (e.g. skill/agent description). */
-  lead?: ReactNode
+  lead?: ReactNode;
 
   /** Current persisted markdown content */
-  content: string
+  content: string;
   /** Loading flag — shows placeholder text */
-  isLoading?: boolean
+  isLoading?: boolean;
   /** Shown in View mode when content is empty */
-  emptyMessage?: string
+  emptyMessage?: string;
 
   /**
    * Optional save handler. When provided, the View/Edit toggle and Save/Cancel
    * controls are rendered. The promise resolves on successful save; the
    * component then exits edit mode and updates its internal "current" state.
    */
-  onSave?: (newContent: string) => Promise<void>
+  onSave?: (newContent: string) => Promise<void>;
 
   /** Optional right-side sidebar (e.g. properties panel) */
-  sidebar?: ReactNode
+  sidebar?: ReactNode;
   /** Width in px of the sidebar (default 260) */
-  sidebarWidth?: number
+  sidebarWidth?: number;
 
   /** Extra actions rendered next to View/Edit in the hero (e.g. delete button) */
-  extraActions?: ReactNode
+  extraActions?: ReactNode;
 
   /** Optional notice banner rendered between the hero and the content (e.g. validation warnings) */
-  notice?: ReactNode
+  notice?: ReactNode;
 }
 
 // Per i titoli "fluid" (frasi intere): resta grande quando corto, rimpicciolisce
 // in scaglioni man mano che cresce, sempre con clamp sul viewport.
 function fluidTitleSize(label: string): string {
-  const len = label.length
-  if (len <= 16) return 'clamp(54px, 8.5vw, 120px)'
-  if (len <= 28) return 'clamp(46px, 6.5vw, 88px)'
-  if (len <= 44) return 'clamp(38px, 5vw, 64px)'
-  if (len <= 64) return 'clamp(30px, 4vw, 50px)'
-  return 'clamp(26px, 3.2vw, 40px)'
+  const len = label.length;
+  if (len <= 16) return 'clamp(54px, 8.5vw, 120px)';
+  if (len <= 28) return 'clamp(46px, 6.5vw, 88px)';
+  if (len <= 44) return 'clamp(38px, 5vw, 64px)';
+  if (len <= 64) return 'clamp(30px, 4vw, 50px)';
+  return 'clamp(26px, 3.2vw, 40px)';
 }
 
 function Editor({ value, onChange }: { value: string; onChange: (v: string) => void }) {
@@ -83,7 +83,7 @@ function Editor({ value, onChange }: { value: string; onChange: (v: string) => v
         maxWidth: 820,
       }}
     />
-  )
+  );
 }
 
 export function MarkdownDocView({
@@ -104,42 +104,42 @@ export function MarkdownDocView({
   extraActions,
   notice,
 }: MarkdownDocViewProps) {
-  const editable = typeof onSave === 'function'
-  const [mode, setMode] = useState<'view' | 'edit'>('view')
-  const [current, setCurrent] = useState(content)
-  const [draft, setDraft] = useState(content)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  const editable = typeof onSave === 'function';
+  const [mode, setMode] = useState<'view' | 'edit'>('view');
+  const [current, setCurrent] = useState(content);
+  const [draft, setDraft] = useState(content);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   // Re-seed local state when the source content prop changes (React's
   // "adjust state during render" pattern — no effect needed).
-  const [lastContent, setLastContent] = useState(content)
+  const [lastContent, setLastContent] = useState(content);
   if (content !== lastContent) {
-    setLastContent(content)
-    setCurrent(content)
-    setDraft(content)
+    setLastContent(content);
+    setCurrent(content);
+    setDraft(content);
   }
 
-  const dirty = mode === 'edit' && draft !== current
+  const dirty = mode === 'edit' && draft !== current;
 
   function cancel() {
-    setDraft(current)
-    setMode('view')
-    setError(null)
+    setDraft(current);
+    setMode('view');
+    setError(null);
   }
 
   async function save() {
-    if (!onSave || !dirty) return
+    if (!onSave || !dirty) return;
     try {
-      setSaving(true)
-      setError(null)
-      await onSave(draft)
-      setCurrent(draft)
-      setMode('view')
+      setSaving(true);
+      setError(null);
+      await onSave(draft);
+      setCurrent(draft);
+      setMode('view');
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setSaving(false)
+      setSaving(false);
     }
   }
 
@@ -207,7 +207,11 @@ export function MarkdownDocView({
                   {error && (
                     <span
                       className="font-mono"
-                      style={{ fontSize: 11, letterSpacing: '0.06em', color: 'var(--cl-warn, #d97757)' }}
+                      style={{
+                        fontSize: 11,
+                        letterSpacing: '0.06em',
+                        color: 'var(--cl-warn, #d97757)',
+                      }}
                     >
                       ✕ {error}
                     </span>
@@ -279,5 +283,5 @@ export function MarkdownDocView({
         </section>
       </div>
     </div>
-  )
+  );
 }

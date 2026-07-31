@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState } from 'react';
 import {
   useDuplicateProjects,
   useExecuteMerge,
@@ -6,17 +6,17 @@ import {
   type DuplicateFolder,
   type MergePlan,
   type MergeResult,
-} from '../../../hooks/useIPC'
-import { View } from '../types'
-import { BackButton } from '../shared/BackButton'
-import { MergeConfirmDialog } from '../shared/MergeConfirmDialog'
-import { projectDisplayName } from '../shared/projectName'
+} from '../../../hooks/useIPC';
+import { View } from '../types';
+import { BackButton } from '../shared/BackButton';
+import { MergeConfirmDialog } from '../shared/MergeConfirmDialog';
+import { projectDisplayName } from '../shared/projectName';
 
 function shortWhen(iso: string | null): string {
-  if (!iso) return 'no sessions'
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: '2-digit' })
+  if (!iso) return 'no sessions';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
 function FolderRow({
@@ -24,9 +24,9 @@ function FolderRow({
   primary,
   onMerge,
 }: {
-  folder: DuplicateFolder
-  primary: boolean
-  onMerge?: () => void
+  folder: DuplicateFolder;
+  primary: boolean;
+  onMerge?: () => void;
 }) {
   return (
     <div
@@ -70,7 +70,14 @@ function FolderRow({
             <span style={{ color: 'var(--cl-warn)', marginLeft: 8 }}>· estimated path</span>
           )}
         </div>
-        <div style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cl-ink-2, var(--cl-ink))', opacity: 0.6 }}>
+        <div
+          style={{
+            fontFamily: 'var(--font-mono)',
+            fontSize: 11,
+            color: 'var(--cl-ink-2, var(--cl-ink))',
+            opacity: 0.6,
+          }}
+        >
           {folder.sessionCount} sessions · {folder.memoryTopicCount} memory
           {folder.hasMemoryIndex ? ' (+index)' : ''} · last {shortWhen(folder.lastActivity)}
         </div>
@@ -96,7 +103,7 @@ function FolderRow({
         </button>
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -104,8 +111,8 @@ function FolderRow({
  * dedicated view. Renders nothing when there are no duplicates.
  */
 export function DuplicateProjectsBadge({ onNavigate }: { onNavigate: (v: View) => void }) {
-  const { data: groups = [] } = useDuplicateProjects()
-  if (groups.length === 0) return null
+  const { data: groups = [] } = useDuplicateProjects();
+  if (groups.length === 0) return null;
 
   return (
     <button
@@ -129,49 +136,66 @@ export function DuplicateProjectsBadge({ onNavigate }: { onNavigate: (v: View) =
       <span style={{ fontSize: 13, color: 'var(--cl-ink)', flex: 1 }}>
         {groups.length} possible duplicate {groups.length === 1 ? 'project' : 'projects'} detected
       </span>
-      <span style={{ fontFamily: 'var(--font-mono)', fontSize: 11, color: 'var(--cl-ink)', opacity: 0.55 }}>
+      <span
+        style={{
+          fontFamily: 'var(--font-mono)',
+          fontSize: 11,
+          color: 'var(--cl-ink)',
+          opacity: 0.55,
+        }}
+      >
         details →
       </span>
     </button>
-  )
+  );
 }
 
 /** Dedicated view: short explanation + the intercepted duplicates. */
 export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
-  const { data: groups = [] } = useDuplicateProjects()
-  const executeMerge = useExecuteMerge()
-  const [dialog, setDialog] = useState<
-    { plan: MergePlan; source: DuplicateFolder; dest: DuplicateFolder; sourceName: string; destName: string } | null
-  >(null)
-  const [planError, setPlanError] = useState<string | null>(null)
-  const [result, setResult] = useState<MergeResult | null>(null)
+  const { data: groups = [] } = useDuplicateProjects();
+  const executeMerge = useExecuteMerge();
+  const [dialog, setDialog] = useState<{
+    plan: MergePlan;
+    source: DuplicateFolder;
+    dest: DuplicateFolder;
+    sourceName: string;
+    destName: string;
+  } | null>(null);
+  const [planError, setPlanError] = useState<string | null>(null);
+  const [result, setResult] = useState<MergeResult | null>(null);
 
   function name(realPath: string): string {
-    return projectDisplayName(realPath)
+    return projectDisplayName(realPath);
   }
 
   async function openMerge(source: DuplicateFolder, dest: DuplicateFolder) {
-    setPlanError(null)
+    setPlanError(null);
     try {
-      const plan = await planMerge(source.hash, dest.hash)
-      setDialog({ plan, source, dest, sourceName: name(source.realPath), destName: name(dest.realPath) })
+      const plan = await planMerge(source.hash, dest.hash);
+      setDialog({
+        plan,
+        source,
+        dest,
+        sourceName: name(source.realPath),
+        destName: name(dest.realPath),
+      });
     } catch (e) {
-      setPlanError(e instanceof Error ? e.message : String(e))
+      setPlanError(e instanceof Error ? e.message : String(e));
     }
   }
 
   async function confirmMerge() {
-    if (!dialog) return
+    if (!dialog) return;
     try {
       const res = await executeMerge.mutateAsync({
         sourceHash: dialog.source.hash,
         destHash: dialog.dest.hash,
-      })
-      setDialog(null)
-      setResult(res)
+      });
+      setDialog(null);
+      setResult(res);
     } catch (e) {
-      setPlanError(e instanceof Error ? e.message : String(e))
-      setDialog(null)
+      setPlanError(e instanceof Error ? e.message : String(e));
+      setDialog(null);
     }
   }
 
@@ -201,10 +225,10 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
         }}
       >
         Claude Code identifies projects by <b>absolute path</b>: the same project opened from
-        different folders (e.g. moved from Desktop to Projects) produces separate histories. The
-        old folder often keeps only its <code style={{ fontFamily: 'var(--font-mono)' }}>memory/</code>,
-        because sessions get removed by Claude Code's retention. ClaudeLens{' '}
-        <b>flags them</b> — nothing is moved until you choose to merge a folder into the primary one.
+        different folders (e.g. moved from Desktop to Projects) produces separate histories. The old
+        folder often keeps only its <code style={{ fontFamily: 'var(--font-mono)' }}>memory/</code>,
+        because sessions get removed by Claude Code's retention. ClaudeLens <b>flags them</b> —
+        nothing is moved until you choose to merge a folder into the primary one.
       </div>
 
       {planError && (
@@ -241,7 +265,9 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
                 }}
               >
                 {group.name}{' '}
-                <span style={{ opacity: 0.5, fontWeight: 400 }}>· {group.folders.length} folders</span>
+                <span style={{ opacity: 0.5, fontWeight: 400 }}>
+                  · {group.folders.length} folders
+                </span>
               </div>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
                 {group.folders.map((folder, i) => (
@@ -275,10 +301,16 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
           <div className="bg-[var(--cl-paper-2)] rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
             <h3 className="text-[15px] font-semibold text-[var(--cl-ink)] mb-3">Merge complete</h3>
             <ul className="text-[13px] text-[var(--cl-ink-3)] space-y-1 mb-4">
-              <li>{result.movedSessions} sessions moved{result.renamedSessions > 0 ? ` (${result.renamedSessions} renamed)` : ''}</li>
+              <li>
+                {result.movedSessions} sessions moved
+                {result.renamedSessions > 0 ? ` (${result.renamedSessions} renamed)` : ''}
+              </li>
               <li>{result.movedSidecars} session data folders moved</li>
               <li>{result.cwdRewrittenFiles} sessions had their cwd rewritten</li>
-              <li>{result.memoryCopied} memory copied · {result.memoryRenamed} renamed · {result.memorySkipped} identical</li>
+              <li>
+                {result.memoryCopied} memory copied · {result.memoryRenamed} renamed ·{' '}
+                {result.memorySkipped} identical
+              </li>
               <li>{result.sourceDeleted ? 'Source folder deleted' : 'Source folder kept'}</li>
             </ul>
             <div className="bg-[var(--cl-paper-3)] border border-[var(--cl-line)] rounded-lg p-3 mb-4 font-mono text-[11px] text-[var(--cl-ink-3)] break-all">
@@ -286,7 +318,9 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
             </div>
             {result.warnings.length > 0 && (
               <ul className="text-[12px] text-[var(--cl-warn)] list-disc pl-4 space-y-1 mb-4">
-                {result.warnings.map((w, i) => <li key={i}>{w}</li>)}
+                {result.warnings.map((w, i) => (
+                  <li key={i}>{w}</li>
+                ))}
               </ul>
             )}
             <button
@@ -299,5 +333,5 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
         </div>
       )}
     </div>
-  )
+  );
 }

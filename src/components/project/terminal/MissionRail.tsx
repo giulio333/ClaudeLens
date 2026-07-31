@@ -353,7 +353,12 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
           <span
             key={c.label}
             className="font-mono"
-            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+            style={{
+              fontSize: 9,
+              letterSpacing: '0.1em',
+              color: 'var(--cl-ink-4)',
+              whiteSpace: 'nowrap',
+            }}
           >
             <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{c.n}</b> {c.label}
           </span>
@@ -421,7 +426,12 @@ function Donut({
   const dash = (Math.max(0, Math.min(100, pct)) / 100) * circ;
   return (
     <svg viewBox="0 0 48 48" style={{ width: 46, height: 46, flexShrink: 0 }} aria-hidden>
-      <circle cx="24" cy="24" r={r} style={{ fill: 'none', stroke: 'var(--cl-paper-3)', strokeWidth: 6 }} />
+      <circle
+        cx="24"
+        cy="24"
+        r={r}
+        style={{ fill: 'none', stroke: 'var(--cl-paper-3)', strokeWidth: 6 }}
+      />
       {pct > 0 && (
         <circle
           cx="24"
@@ -531,7 +541,11 @@ function ContextCard({ ctx }: { ctx: ContextState | null }) {
       >
         {ctx ? (
           <>
-            {kTok(ctx.used)} used · <span style={{ color: 'var(--cl-ok)' }}>{kTok(Math.max(0, ctx.max - ctx.used))} left</span> · {kTok(ctx.max)} total
+            {kTok(ctx.used)} used ·{' '}
+            <span style={{ color: 'var(--cl-ok)' }}>
+              {kTok(Math.max(0, ctx.max - ctx.used))} left
+            </span>{' '}
+            · {kTok(ctx.max)} total
           </>
         ) : (
           'waiting for the first turn…'
@@ -588,7 +602,10 @@ function GaugeCard({
         >
           {value}
         </div>
-        <div className="font-mono truncate" style={{ fontSize: 8.5, color: subColor, marginTop: 4 }}>
+        <div
+          className="font-mono truncate"
+          style={{ fontSize: 8.5, color: subColor, marginTop: 4 }}
+        >
           {sub}
         </div>
       </div>
@@ -610,7 +627,8 @@ function AgentAvatars({ n }: { n: number }) {
             width: 24,
             height: 24,
             borderRadius: 6,
-            background: i === 0 ? 'var(--cl-violet)' : 'color-mix(in oklch, var(--cl-violet) 70%, black)',
+            background:
+              i === 0 ? 'var(--cl-violet)' : 'color-mix(in oklch, var(--cl-violet) 70%, black)',
             color: '#fff',
             font: '700 11px/1 var(--font-mono)',
             border: '1.5px solid var(--cl-paper)',
@@ -670,11 +688,7 @@ function AgentRow({
   const running = a.runState === 'running';
   const failed = a.runState === 'failed';
   const canTranscript = !!a.agentId;
-  const statusColor = running
-    ? 'var(--cl-violet)'
-    : failed
-      ? 'var(--cl-danger)'
-      : 'var(--cl-ok)';
+  const statusColor = running ? 'var(--cl-violet)' : failed ? 'var(--cl-danger)' : 'var(--cl-ok)';
   return (
     <div
       className="tmc-row flex items-center"
@@ -688,7 +702,13 @@ function AgentRow({
         type="button"
         className="flex items-center min-w-0 flex-1 text-left disabled:opacity-60"
         disabled={!canTranscript}
-        title={canTranscript ? 'Open the agent transcript' : running ? 'Agent is running…' : 'Transcript not on disk yet'}
+        title={
+          canTranscript
+            ? 'Open the agent transcript'
+            : running
+              ? 'Agent is running…'
+              : 'Transcript not on disk yet'
+        }
         onClick={onOpenTranscript}
         style={{
           gap: 11,
@@ -703,7 +723,14 @@ function AgentRow({
           <span
             aria-hidden
             className="font-mono inline-flex items-center justify-center"
-            style={{ width: 26, height: 26, borderRadius: 6, background: 'var(--cl-violet)', color: '#fff', font: '700 12px/1 var(--font-mono)' }}
+            style={{
+              width: 26,
+              height: 26,
+              borderRadius: 6,
+              background: 'var(--cl-violet)',
+              color: '#fff',
+              font: '700 12px/1 var(--font-mono)',
+            }}
           >
             A
           </span>
@@ -723,12 +750,22 @@ function AgentRow({
           />
         </span>
         <span className="min-w-0 flex-1">
-          <span style={{ display: 'block', font: '600 13.5px/1.2 var(--font-sans)', color: 'var(--cl-ink)' }}>
+          <span
+            style={{
+              display: 'block',
+              font: '600 13.5px/1.2 var(--font-sans)',
+              color: 'var(--cl-ink)',
+            }}
+          >
             {a.subagentType}
           </span>
           <span
             className="font-mono truncate"
-            style={{ display: 'block', fontSize: 10, color: failed ? 'var(--cl-danger)' : 'var(--cl-ink-3)' }}
+            style={{
+              display: 'block',
+              fontSize: 10,
+              color: failed ? 'var(--cl-danger)' : 'var(--cl-ink-3)',
+            }}
           >
             {a.description || a.prompt}
           </span>
@@ -736,9 +773,21 @@ function AgentRow({
         {running ? (
           <span
             className="font-mono shrink-0 inline-flex items-center"
-            style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.12em', color: 'var(--cl-violet-ink)', whiteSpace: 'nowrap', marginLeft: 8 }}
+            style={{
+              gap: 5,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.12em',
+              color: 'var(--cl-violet-ink)',
+              whiteSpace: 'nowrap',
+              marginLeft: 8,
+            }}
           >
-            <span className="cl-run-dot" aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }} />
+            <span
+              className="cl-run-dot"
+              aria-hidden
+              style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }}
+            />
             WORKING
           </span>
         ) : failed ? (
@@ -751,7 +800,14 @@ function AgentRow({
         ) : (
           <span
             className="font-mono shrink-0 inline-flex items-center"
-            style={{ gap: 6, fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)', whiteSpace: 'nowrap', marginLeft: 8 }}
+            style={{
+              gap: 6,
+              fontSize: 9,
+              letterSpacing: '0.1em',
+              color: 'var(--cl-ink-4)',
+              whiteSpace: 'nowrap',
+              marginLeft: 8,
+            }}
           >
             <span style={{ color: 'var(--cl-ok)', fontWeight: 700 }}>✓ DONE</span>
             {a.messageCount != null && (
@@ -810,7 +866,12 @@ function AgentsCard({
       <div className="flex items-center" style={{ gap: 10, marginBottom: 4 }}>
         <span
           className="font-mono"
-          style={{ fontSize: 9, fontWeight: 600, letterSpacing: '0.18em', color: 'var(--cl-violet-ink)' }}
+          style={{
+            fontSize: 9,
+            fontWeight: 600,
+            letterSpacing: '0.18em',
+            color: 'var(--cl-violet-ink)',
+          }}
         >
           AGENTS
         </span>
@@ -820,9 +881,19 @@ function AgentsCard({
         {runningCount > 0 && (
           <span
             className="font-mono inline-flex items-center"
-            style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--cl-violet-ink)' }}
+            style={{
+              gap: 5,
+              fontSize: 9,
+              fontWeight: 700,
+              letterSpacing: '0.1em',
+              color: 'var(--cl-violet-ink)',
+            }}
           >
-            <span className="cl-run-dot" aria-hidden style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }} />
+            <span
+              className="cl-run-dot"
+              aria-hidden
+              style={{ width: 6, height: 6, borderRadius: '50%', background: 'var(--cl-violet)' }}
+            />
             {runningCount} WORKING
           </span>
         )}
@@ -899,7 +970,14 @@ function SkillPill({
       <span
         aria-hidden
         className="inline-flex items-center justify-center"
-        style={{ width: 16, height: 16, borderRadius: 4, background: 'var(--cl-accent)', color: '#fff', font: '700 9px/1 var(--font-mono)' }}
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 4,
+          background: 'var(--cl-accent)',
+          color: '#fff',
+          font: '700 9px/1 var(--font-mono)',
+        }}
       >
         {s.group ? '✦' : '/'}
       </span>
@@ -925,7 +1003,8 @@ function SkillsCard({
         className="font-mono"
         style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)', marginBottom: 11 }}
       >
-        SKILLS <span style={{ color: 'var(--cl-accent-ink)', fontWeight: 700 }}>{skills.length}</span>
+        SKILLS{' '}
+        <span style={{ color: 'var(--cl-accent-ink)', fontWeight: 700 }}>{skills.length}</span>
       </div>
       <div className="flex flex-wrap" style={{ gap: 8 }}>
         {skills.map(s => (
@@ -1015,7 +1094,9 @@ function TeamRow({
               }}
             />
             <span style={statusStyle('var(--cl-ok)')}>LEAD LIVE</span>
-            {lead.status === 'busy' && <span style={statusStyle('var(--cl-violet-ink)')}>WORKING</span>}
+            {lead.status === 'busy' && (
+              <span style={statusStyle('var(--cl-violet-ink)')}>WORKING</span>
+            )}
             {lead.status === 'waiting' && (
               <span style={statusStyle('var(--cl-accent-ink)')}>WAITING</span>
             )}
@@ -1109,7 +1190,13 @@ function TeamsCard({
           liveCount > 0 ? (
             <span
               className="font-mono inline-flex items-center"
-              style={{ gap: 5, fontSize: 9, fontWeight: 700, letterSpacing: '0.1em', color: 'var(--cl-ok)' }}
+              style={{
+                gap: 5,
+                fontSize: 9,
+                fontWeight: 700,
+                letterSpacing: '0.1em',
+                color: 'var(--cl-ok)',
+              }}
             >
               <span
                 className="cl-live-dot"
@@ -1235,7 +1322,11 @@ export function MissionRail({
     return [...rows.filter(r => r.lead), ...rows.filter(r => !r.lead)];
   }, [teams, activeSessions, sessionId]);
   const teamTitleOf = useCallback(
-    (team: TeamSummary) => teamLabel(team, sessionList?.find(s => s.filename === team.filename)),
+    (team: TeamSummary) =>
+      teamLabel(
+        team,
+        sessionList?.find(s => s.filename === team.filename)
+      ),
     [sessionList]
   );
 
@@ -1783,9 +1874,7 @@ export function MissionRail({
                         </span>
                       )}
                       {t.description?.trim() && (
-                        <span
-                          style={{ fontSize: fs, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}
-                        >
+                        <span style={{ fontSize: fs, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}>
                           {t.description}
                         </span>
                       )}

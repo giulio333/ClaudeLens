@@ -559,7 +559,13 @@ describe('parse cache — append-only incremental parsing', () => {
   it('serves an unchanged transcript from cache on refetch (no re-read)', async () => {
     resetParseCache();
     writeSession(tmp, 'a.jsonl', [
-      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 100,
+        output: 50,
+        id: 'm1',
+        requestId: 'r1',
+      }),
     ]);
 
     const first = await getSessionList(tmp);
@@ -579,7 +585,13 @@ describe('parse cache — append-only incremental parsing', () => {
   it('reads only the appended tail when the transcript grows', async () => {
     resetParseCache();
     writeSession(tmp, 'a.jsonl', [
-      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 100,
+        output: 50,
+        id: 'm1',
+        requestId: 'r1',
+      }),
     ]);
     const [s1] = await getSessionList(tmp);
     expect(s1.inputTokens).toBe(100);
@@ -587,7 +599,13 @@ describe('parse cache — append-only incremental parsing', () => {
 
     appendFileSync(
       join(tmp, 'a.jsonl'),
-      assistantLine({ model: 'claude-sonnet-4-5', input: 200, output: 30, id: 'm2', requestId: 'r2' }) + '\n'
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 200,
+        output: 30,
+        id: 'm2',
+        requestId: 'r2',
+      }) + '\n'
     );
     const [s2] = await getSessionList(tmp);
     const after = getParseStats();
@@ -602,9 +620,27 @@ describe('parse cache — append-only incremental parsing', () => {
   it('incremental folding equals a full parse, deduping across the append boundary', async () => {
     // The duplicate of m1 (same id+requestId) lands in a *later* increment than
     // the original — it must still be counted once (issue #56 across the boundary).
-    const l1 = assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' });
-    const dup = assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' });
-    const l2 = assistantLine({ model: 'claude-opus-4-5', input: 200, output: 60, id: 'm2', requestId: 'r2' });
+    const l1 = assistantLine({
+      model: 'claude-opus-4-5',
+      input: 100,
+      output: 50,
+      id: 'm1',
+      requestId: 'r1',
+    });
+    const dup = assistantLine({
+      model: 'claude-opus-4-5',
+      input: 100,
+      output: 50,
+      id: 'm1',
+      requestId: 'r1',
+    });
+    const l2 = assistantLine({
+      model: 'claude-opus-4-5',
+      input: 200,
+      output: 60,
+      id: 'm2',
+      requestId: 'r2',
+    });
 
     // Incremental: write l1, then append dup, then append l2 — parsing between each.
     resetParseCache();
@@ -629,8 +665,20 @@ describe('parse cache — append-only incremental parsing', () => {
   it('buffers a half-written final line and folds it once when completed', async () => {
     resetParseCache();
     const file = join(tmp, 'a.jsonl');
-    const l1 = assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 10, id: 'm1', requestId: 'r1' });
-    const l2 = assistantLine({ model: 'claude-sonnet-4-5', input: 200, output: 20, id: 'm2', requestId: 'r2' });
+    const l1 = assistantLine({
+      model: 'claude-sonnet-4-5',
+      input: 100,
+      output: 10,
+      id: 'm1',
+      requestId: 'r1',
+    });
+    const l2 = assistantLine({
+      model: 'claude-sonnet-4-5',
+      input: 200,
+      output: 20,
+      id: 'm2',
+      requestId: 'r2',
+    });
 
     // l1 complete + the first 20 bytes of l2, with no terminating newline.
     writeFileSync(file, l1 + '\n' + l2.slice(0, 20), 'utf-8');
@@ -647,8 +695,20 @@ describe('parse cache — append-only incremental parsing', () => {
   it('falls back to a full re-parse when the transcript shrinks (replaced/truncated)', async () => {
     resetParseCache();
     writeSession(tmp, 'a.jsonl', [
-      assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm1', requestId: 'r1' }),
-      assistantLine({ model: 'claude-opus-4-5', input: 100, output: 50, id: 'm2', requestId: 'r2' }),
+      assistantLine({
+        model: 'claude-opus-4-5',
+        input: 100,
+        output: 50,
+        id: 'm1',
+        requestId: 'r1',
+      }),
+      assistantLine({
+        model: 'claude-opus-4-5',
+        input: 100,
+        output: 50,
+        id: 'm2',
+        requestId: 'r2',
+      }),
     ]);
     const [s1] = await getSessionList(tmp);
     expect(s1.inputTokens).toBe(200);
@@ -671,7 +731,15 @@ describe('parse cache — append-only incremental parsing', () => {
     resetParseCache();
     const lines: string[] = [];
     for (let i = 0; i < 5000; i++) {
-      lines.push(assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 5, id: `m${i}`, requestId: `r${i}` }));
+      lines.push(
+        assistantLine({
+          model: 'claude-sonnet-4-5',
+          input: 10,
+          output: 5,
+          id: `m${i}`,
+          requestId: `r${i}`,
+        })
+      );
     }
     writeSession(tmp, 'big.jsonl', lines);
 

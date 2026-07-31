@@ -148,7 +148,11 @@ describe('readMemory', () => {
 
   it('leaves originSessionId undefined when the frontmatter omits it', async () => {
     writeTopicFile('user_plain.md', 'Plain', 'desc', 'user', 'body');
-    writeFileSync(join(memoryDir, 'MEMORY.md'), '- [user_plain.md](user_plain.md) — desc\n', 'utf-8');
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      '- [user_plain.md](user_plain.md) — desc\n',
+      'utf-8'
+    );
 
     const data = await readMemory(tmp);
     expect(data.index[0].originSessionId).toBeUndefined();

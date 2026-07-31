@@ -55,11 +55,10 @@ function readJson<T>(path: string): T | null {
 /** Read description/author from a plugin's `.claude-plugin/plugin.json`. */
 function readPluginManifest(installPath: string): { description?: string; author?: string } {
   const manifest = readJson<{ description?: string; author?: { name?: string } | string }>(
-    join(installPath, '.claude-plugin', 'plugin.json'),
+    join(installPath, '.claude-plugin', 'plugin.json')
   );
   if (!manifest) return {};
-  const author =
-    typeof manifest.author === 'string' ? manifest.author : manifest.author?.name;
+  const author = typeof manifest.author === 'string' ? manifest.author : manifest.author?.name;
   const out: { description?: string; author?: string } = {};
   if (manifest.description) out.description = manifest.description;
   if (author) out.author = author;
@@ -118,7 +117,7 @@ interface MarketplaceEntry {
  */
 function readMarketplaceEntry(installPath: string, pluginName: string): MarketplaceEntry | null {
   const manifest = readJson<{ plugins?: MarketplaceEntry[] }>(
-    join(installPath, '.claude-plugin', 'marketplace.json'),
+    join(installPath, '.claude-plugin', 'marketplace.json')
   );
   return manifest?.plugins?.find(p => p?.name === pluginName) ?? null;
 }
@@ -130,7 +129,9 @@ async function readDeclaredSkills(installPath: string, rels: string[]): Promise<
 }
 
 async function readDeclaredAgents(installPath: string, rels: string[]): Promise<Agent[]> {
-  const agents = await Promise.all(rels.map(rel => readAgentFile(join(installPath, rel), 'plugin')));
+  const agents = await Promise.all(
+    rels.map(rel => readAgentFile(join(installPath, rel), 'plugin'))
+  );
   return agents.filter((a): a is Agent => a !== null);
 }
 
@@ -160,9 +161,9 @@ export async function getInstalledPlugins(): Promise<InstalledPlugin[]> {
   }>(join(PLUGINS_DIR, 'installed_plugins.json'));
   if (!installed?.plugins) return [];
 
-  const marketplaces = readJson<
-    Record<string, { source?: { repo?: string } }>
-  >(join(PLUGINS_DIR, 'known_marketplaces.json'));
+  const marketplaces = readJson<Record<string, { source?: { repo?: string } }>>(
+    join(PLUGINS_DIR, 'known_marketplaces.json')
+  );
 
   const plugins: InstalledPlugin[] = [];
 
@@ -203,7 +204,7 @@ export async function getInstalledPlugins(): Promise<InstalledPlugin[]> {
 
   // Stable order: by marketplace then plugin name.
   plugins.sort(
-    (a, b) => a.marketplace.localeCompare(b.marketplace) || a.name.localeCompare(b.name),
+    (a, b) => a.marketplace.localeCompare(b.marketplace) || a.name.localeCompare(b.name)
   );
   return plugins;
 }

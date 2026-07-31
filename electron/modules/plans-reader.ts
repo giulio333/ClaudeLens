@@ -21,7 +21,7 @@ export interface Plan {
   slug: string;
   title: string;
   status: PlanStatus;
-  exists: boolean;        // il file markdown è ancora leggibile su disco
+  exists: boolean; // il file markdown è ancora leggibile su disco
   content: string | null; // markdown del piano, null se mancante
   timestamp: string;
   gitBranch?: string;
@@ -102,7 +102,7 @@ export function extractPlanRefs(raw: string): PlanRef[] {
 // ──────────────────────────────────────────────────────────────────────────
 
 interface RefCacheEntry {
-  consumed: number;  // byte già ripiegati in `refs`
+  consumed: number; // byte già ripiegati in `refs`
   mtimeMs: number;
   // Byte dopo l'ultimo newline non ancora terminati (riga finale a metà
   // scrittura). Buffer e non stringa: un carattere UTF-8 multi-byte spezzato
@@ -266,8 +266,9 @@ export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]>
       const refs = dedupeRefs(await readPlanRefs(sessionFile));
       if (refs.length === 0) continue;
 
-      const plans = (await Promise.all(refs.map(toPlan)))
-        .sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1)); // piano più recente prima
+      const plans = (await Promise.all(refs.map(toPlan))).sort((a, b) =>
+        a.timestamp < b.timestamp ? 1 : -1
+      ); // piano più recente prima
 
       if (plans.length === 0) continue;
 

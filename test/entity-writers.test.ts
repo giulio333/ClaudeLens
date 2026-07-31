@@ -66,7 +66,13 @@ describe('createSkill (issue #58)', () => {
   it('round-trips a description containing YAML metacharacters', async () => {
     const description = 'Use this skill when: editing, fixing, or building # the deck';
     createSkill(
-      { name: 'tricky', content: 'Body', description, model: 'sonnet', allowedTools: ['Read', 'Bash'] },
+      {
+        name: 'tricky',
+        content: 'Body',
+        description,
+        model: 'sonnet',
+        allowedTools: ['Read', 'Bash'],
+      },
       proj
     );
     const skill = await readSkillDir(join(proj, '.claude', 'skills', 'tricky'), 'project');
@@ -111,7 +117,14 @@ describe('createAgent (issue #58)', () => {
   it('round-trips a description containing YAML metacharacters', async () => {
     const description = 'Use this agent when the user asks: features, hooks # and more';
     const filePath = createAgent(
-      { name: 'guide', content: 'Body', description, model: 'opus', color: 'blue', allowedTools: ['Read', 'Grep'] },
+      {
+        name: 'guide',
+        content: 'Body',
+        description,
+        model: 'opus',
+        color: 'blue',
+        allowedTools: ['Read', 'Grep'],
+      },
       proj
     );
     const agent = await readAgentFile(filePath, 'project');
@@ -126,7 +139,10 @@ describe('createAgent (issue #58)', () => {
   // A model/version-like string must stay a string, not be coerced to a number
   // on read (js-yaml would parse a bare 4.8 as a float).
   it('keeps a numeric-looking scalar a string after round-trip', async () => {
-    const filePath = createAgent({ name: 'numish', content: 'b', description: 'x', model: '4.8' }, proj);
+    const filePath = createAgent(
+      { name: 'numish', content: 'b', description: 'x', model: '4.8' },
+      proj
+    );
     const agent = await readAgentFile(filePath, 'project');
     expect(agent!.model).toBe('4.8');
   });

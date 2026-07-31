@@ -1,29 +1,47 @@
-import type { Plan } from '../../../types'
-import { useProjectPlans, useWriteMarkdownFile, useDeleteMarkdownFile } from '../../../hooks/useIPC'
-import { EntityDetailView, EntityConfig, TapeCell } from '../shared/EntityDetailView'
+import type { Plan } from '../../../types';
+import {
+  useProjectPlans,
+  useWriteMarkdownFile,
+  useDeleteMarkdownFile,
+} from '../../../hooks/useIPC';
+import { EntityDetailView, EntityConfig, TapeCell } from '../shared/EntityDetailView';
 
 function fmtDateTime(iso: string): string {
-  const d = new Date(iso)
-  if (isNaN(d.getTime())) return '—'
-  return d.toLocaleString('it-IT', { day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' })
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '—';
+  return d.toLocaleString('it-IT', {
+    day: '2-digit',
+    month: 'short',
+    year: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit',
+  });
 }
 
-type Project = { hash: string; realPath: string }
+type Project = { hash: string; realPath: string };
 
-export function PlanDetailView({ plan: initialPlan, project, onBack }: { plan: Plan; project: Project; onBack: () => void }) {
-  const write = useWriteMarkdownFile(['plans:project'])
-  const del = useDeleteMarkdownFile(['plans:project'])
+export function PlanDetailView({
+  plan: initialPlan,
+  project,
+  onBack,
+}: {
+  plan: Plan;
+  project: Project;
+  onBack: () => void;
+}) {
+  const write = useWriteMarkdownFile(['plans:project']);
+  const del = useDeleteMarkdownFile(['plans:project']);
 
   // Ri-deriva il piano fresco dopo un save (il watcher invalida 'plans:project').
-  const { data: groups } = useProjectPlans(project.hash)
-  const fresh = groups?.flatMap(g => g.plans).find(p => p.filePath === initialPlan.filePath)
-  const plan = fresh ?? initialPlan
+  const { data: groups } = useProjectPlans(project.hash);
+  const fresh = groups?.flatMap(g => g.plans).find(p => p.filePath === initialPlan.filePath);
+  const plan = fresh ?? initialPlan;
 
-  const statusLabel = plan.status === 'approved' ? 'Approved' : 'Proposed'
+  const statusLabel = plan.status === 'approved' ? 'Approved' : 'Proposed';
 
-  const tape: TapeCell[] = [{ label: 'Status', value: statusLabel }]
-  if (plan.timestamp) tape.push({ label: 'Created', value: fmtDateTime(plan.timestamp) })
-  if (plan.gitBranch) tape.push({ label: 'Branch', value: plan.gitBranch, mono: true })
+  const tape: TapeCell[] = [{ label: 'Status', value: statusLabel }];
+  if (plan.timestamp) tape.push({ label: 'Created', value: fmtDateTime(plan.timestamp) });
+  if (plan.gitBranch) tape.push({ label: 'Branch', value: plan.gitBranch, mono: true });
 
   const config: EntityConfig = {
     kind: 'plan',
@@ -51,14 +69,18 @@ export function PlanDetailView({ plan: initialPlan, project, onBack }: { plan: P
     runnable: false,
     emptyMessage: 'Plan file no longer on disk.',
     footerNote: 'Stored globally in ~/.claude/plans',
-  }
+  };
 
   return (
     <EntityDetailView
       config={config}
       onBack={onBack}
-      onSave={async raw => { await write.mutateAsync({ filePath: plan.filePath, content: raw }) }}
-      onDelete={async () => { await del.mutateAsync({ filePath: plan.filePath }) }}
+      onSave={async raw => {
+        await write.mutateAsync({ filePath: plan.filePath, content: raw });
+      }}
+      onDelete={async () => {
+        await del.mutateAsync({ filePath: plan.filePath });
+      }}
     />
-  )
+  );
 }

@@ -1,38 +1,38 @@
-import { useMemo, useState } from 'react'
-import { useWorkflowRun } from '../../../hooks/useIPC'
-import type { WorkflowAgentRow, WorkflowRunDetail } from '../../../types'
-import { TopBar } from '../shared/TopBar'
-import { StatChip } from '../shared/StatChip'
-import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel'
-import { QueryError } from '../../QueryError'
-import { fmt, fmtDate, fmtModel, modelColor } from '../utils'
-import { fmtDuration, statusTone } from './utils'
+import { useMemo, useState } from 'react';
+import { useWorkflowRun } from '../../../hooks/useIPC';
+import type { WorkflowAgentRow, WorkflowRunDetail } from '../../../types';
+import { TopBar } from '../shared/TopBar';
+import { StatChip } from '../shared/StatChip';
+import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
+import { QueryError } from '../../QueryError';
+import { fmt, fmtDate, fmtModel, modelColor } from '../utils';
+import { fmtDuration, statusTone } from './utils';
 
-type Project = { hash: string; realPath: string }
+type Project = { hash: string; realPath: string };
 
 function StatusPill({ status, degraded }: { status: string; degraded: boolean }) {
-  const tone = statusTone(status, degraded)
+  const tone = statusTone(status, degraded);
   return (
     <span className={`cl-wf-pill cl-mono ${tone}`}>
       <i />
       {degraded ? 'RECOVERED' : status.toUpperCase()}
     </span>
-  )
+  );
 }
 
 function stateGlyph(state: string): string {
-  if (state === 'done') return '✓'
-  if (state === 'error' || state === 'failed') return '✕'
-  if (state === 'running') return '◍'
-  return '·'
+  if (state === 'done') return '✓';
+  if (state === 'error' || state === 'failed') return '✕';
+  if (state === 'running') return '◍';
+  return '·';
 }
 
 function agentStats(agent: WorkflowAgentRow): string {
-  const parts: string[] = []
-  if (agent.tokens) parts.push(`${fmt(agent.tokens)} tok`)
-  if (agent.toolCalls) parts.push(`${agent.toolCalls} tools`)
-  if (agent.durationMs) parts.push(fmtDuration(agent.durationMs))
-  return parts.join(' · ')
+  const parts: string[] = [];
+  if (agent.tokens) parts.push(`${fmt(agent.tokens)} tok`);
+  if (agent.toolCalls) parts.push(`${agent.toolCalls} tools`);
+  if (agent.durationMs) parts.push(fmtDuration(agent.durationMs));
+  return parts.join(' · ');
 }
 
 export function WorkflowRunDetailView({
@@ -41,13 +41,23 @@ export function WorkflowRunDetailView({
   runId,
   onBack,
 }: {
-  project: Project
-  sessionId: string
-  runId: string
-  onBack: () => void
+  project: Project;
+  sessionId: string;
+  runId: string;
+  onBack: () => void;
 }) {
-  const { data: run, isLoading, isError, error, refetch } = useWorkflowRun(project.hash, sessionId, runId)
-  const [transcriptAgent, setTranscriptAgent] = useState<{ agentId: string; label: string; prompt?: string } | null>(null)
+  const {
+    data: run,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useWorkflowRun(project.hash, sessionId, runId);
+  const [transcriptAgent, setTranscriptAgent] = useState<{
+    agentId: string;
+    label: string;
+    prompt?: string;
+  } | null>(null);
 
   if (transcriptAgent) {
     // Host wrapper: SubagentTranscriptPanel is `flex:1; min-height:0` and is
@@ -55,7 +65,10 @@ export function WorkflowRunDetailView({
     // scroll and its header collides with the macOS traffic lights. The host
     // gives it a full-height flex context and a left gutter for the buttons.
     return (
-      <div className="cl-wf-transcript-host h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+      <div
+        className="cl-wf-transcript-host h-full flex flex-col"
+        style={{ background: 'var(--cl-paper)' }}
+      >
         <SubagentTranscriptPanel
           hash={project.hash}
           sessionFilename={`${run?.sessionId ?? sessionId}.jsonl`}
@@ -66,7 +79,7 @@ export function WorkflowRunDetailView({
           onBack={() => setTranscriptAgent(null)}
         />
       </div>
-    )
+    );
   }
 
   return (
@@ -79,52 +92,65 @@ export function WorkflowRunDetailView({
       <div className="flex-1 overflow-y-auto">
         {isError ? (
           <div className="cl-section" style={{ paddingTop: 32 }}>
-            <QueryError title="Failed to load workflow run" error={error} onRetry={() => refetch()} />
+            <QueryError
+              title="Failed to load workflow run"
+              error={error}
+              onRetry={() => refetch()}
+            />
           </div>
         ) : isLoading ? (
-          <div className="cl-empty" style={{ marginTop: 40 }}>Loading workflow run…</div>
+          <div className="cl-empty" style={{ marginTop: 40 }}>
+            Loading workflow run…
+          </div>
         ) : !run ? (
-          <div className="cl-empty" style={{ marginTop: 40 }}>Workflow run not found.</div>
+          <div className="cl-empty" style={{ marginTop: 40 }}>
+            Workflow run not found.
+          </div>
         ) : (
-          <RunBody run={run} onOpenTranscript={(a) => setTranscriptAgent({ agentId: a.agentId, label: a.label, prompt: a.promptPreview })} />
+          <RunBody
+            run={run}
+            onOpenTranscript={a =>
+              setTranscriptAgent({ agentId: a.agentId, label: a.label, prompt: a.promptPreview })
+            }
+          />
         )}
       </div>
     </div>
-  )
+  );
 }
 
 function RunBody({
   run,
   onOpenTranscript,
 }: {
-  run: WorkflowRunDetail
-  onOpenTranscript: (agent: WorkflowAgentRow) => void
+  run: WorkflowRunDetail;
+  onOpenTranscript: (agent: WorkflowAgentRow) => void;
 }) {
-  const duration = fmtDuration(run.durationMs)
+  const duration = fmtDuration(run.durationMs);
 
   // Group agents under their phase, preserving phase order; unmatched → "Other".
   const groups = useMemo(() => {
-    const byPhase = new Map<number, WorkflowAgentRow[]>()
+    const byPhase = new Map<number, WorkflowAgentRow[]>();
     for (const a of run.agents) {
-      const arr = byPhase.get(a.phaseIndex) ?? []
-      arr.push(a)
-      byPhase.set(a.phaseIndex, arr)
+      const arr = byPhase.get(a.phaseIndex) ?? [];
+      arr.push(a);
+      byPhase.set(a.phaseIndex, arr);
     }
     // Phase indices seen live are 1-based; detect the basis once from the data
     // (a 1-based run never keys an agent at 0). A per-phase get(i+1) ?? get(i)
     // probe would steal the next phase's agents on 0-based data and drop
     // phase 0's rows entirely.
-    const base = byPhase.has(0) ? 0 : 1
-    const out: { title: string; detail?: string; agents: WorkflowAgentRow[] }[] = []
+    const base = byPhase.has(0) ? 0 : 1;
+    const out: { title: string; detail?: string; agents: WorkflowAgentRow[] }[] = [];
     run.phases.forEach((p, i) => {
-      const agents = byPhase.get(i + base) ?? []
-      byPhase.delete(i + base)
-      out.push({ title: p.title, detail: p.detail, agents })
-    })
-    const leftover = [...byPhase.values()].flat()
-    if (leftover.length) out.push({ title: 'Other', agents: leftover })
-    return out
-  }, [run.agents, run.phases])
+      const agents = byPhase.get(i + base) ?? [];
+      byPhase.delete(i + base);
+      out.push({ title: p.title, detail: p.detail, agents });
+    });
+    const leftover = [...byPhase.values()].flat();
+    if (leftover.length) out.push({ title: 'Other', agents: leftover });
+    return out;
+  }, [run.agents, run.phases]);
 
   return (
     <>
@@ -152,11 +178,15 @@ function RunBody({
         )}
         <div className="cl-wf-statgrid">
           <StatChip label="Agents" value={String(run.agentCount)} />
-          {run.errorAgentCount > 0 && <StatChip label="Errored" value={String(run.errorAgentCount)} accent />}
+          {run.errorAgentCount > 0 && (
+            <StatChip label="Errored" value={String(run.errorAgentCount)} accent />
+          )}
           <StatChip label="Phases" value={String(run.phaseCount)} />
           {duration && <StatChip label="Duration" value={duration} />}
           {run.totalTokens > 0 && <StatChip label="Tokens" value={fmt(run.totalTokens)} />}
-          {run.totalToolCalls > 0 && <StatChip label="Tool calls" value={String(run.totalToolCalls)} />}
+          {run.totalToolCalls > 0 && (
+            <StatChip label="Tool calls" value={String(run.totalToolCalls)} />
+          )}
           {run.defaultModel && <StatChip label="Model" value={fmtModel(run.defaultModel)} />}
         </div>
       </header>
@@ -176,7 +206,9 @@ function RunBody({
                     <button
                       type="button"
                       className="cl-wf-agent-open cl-mono"
-                      onClick={() => onOpenTranscript({ agentId: id, label: id } as WorkflowAgentRow)}
+                      onClick={() =>
+                        onOpenTranscript({ agentId: id, label: id } as WorkflowAgentRow)
+                      }
                     >
                       view transcript →
                     </button>
@@ -190,7 +222,7 @@ function RunBody({
 
       <div className="cl-wf-phases">
         {groups.map((g, gi) => {
-          const reached = g.agents.length > 0
+          const reached = g.agents.length > 0;
           return (
             <section key={gi} className={`cl-wf-phase${reached ? '' : ' is-empty'}`}>
               <div className="cl-wf-phase-head">
@@ -200,7 +232,9 @@ function RunBody({
                   {g.detail && <p className="cl-wf-phase-detail">{g.detail}</p>}
                 </div>
                 <span className="cl-wf-phase-ct cl-mono">
-                  {reached ? `${g.agents.length} ${g.agents.length === 1 ? 'agent' : 'agents'}` : 'not reached'}
+                  {reached
+                    ? `${g.agents.length} ${g.agents.length === 1 ? 'agent' : 'agents'}`
+                    : 'not reached'}
                 </span>
               </div>
               {reached && (
@@ -211,7 +245,7 @@ function RunBody({
                 </div>
               )}
             </section>
-          )
+          );
         })}
       </div>
 
@@ -219,7 +253,9 @@ function RunBody({
         <section className="cl-section cl-wf-artifacts">
           {run.logs.length > 0 && (
             <details className="cl-wf-collapse">
-              <summary className="cl-mono">Logs <span className="ct">{run.logs.length}</span></summary>
+              <summary className="cl-mono">
+                Logs <span className="ct">{run.logs.length}</span>
+              </summary>
               <pre className="cl-wf-pre cl-mono">{run.logs.join('\n')}</pre>
             </details>
           )}
@@ -241,21 +277,26 @@ function RunBody({
         </section>
       )}
     </>
-  )
+  );
 }
 
 function AgentRow({
   agent,
   onOpenTranscript,
 }: {
-  agent: WorkflowAgentRow
-  onOpenTranscript: (agent: WorkflowAgentRow) => void
+  agent: WorkflowAgentRow;
+  onOpenTranscript: (agent: WorkflowAgentRow) => void;
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const tone = agent.state === 'error' || agent.state === 'failed' ? 'error' : agent.state === 'done' ? 'ok' : 'muted'
-  const stats = agentStats(agent)
-  const canDrill = agent.agentId.length > 0
-  const canExpand = Boolean(agent.promptPreview || agent.resultPreview || agent.lastToolName)
+  const [expanded, setExpanded] = useState(false);
+  const tone =
+    agent.state === 'error' || agent.state === 'failed'
+      ? 'error'
+      : agent.state === 'done'
+        ? 'ok'
+        : 'muted';
+  const stats = agentStats(agent);
+  const canDrill = agent.agentId.length > 0;
+  const canExpand = Boolean(agent.promptPreview || agent.resultPreview || agent.lastToolName);
 
   return (
     <div className={`cl-wf-agent-row is-${tone}${expanded ? ' is-expanded' : ''}`}>
@@ -266,8 +307,8 @@ function AgentRow({
         onClick={() => canExpand && setExpanded(v => !v)}
         onKeyDown={e => {
           if (canExpand && (e.key === 'Enter' || e.key === ' ')) {
-            e.preventDefault()
-            setExpanded(v => !v)
+            e.preventDefault();
+            setExpanded(v => !v);
           }
         }}
       >
@@ -279,15 +320,17 @@ function AgentRow({
           title={fmtModel(agent.model)}
         />
         <span className="cl-wf-agent-label">{agent.label || agent.agentId || 'agent'}</span>
-        {agent.attempt > 1 && <span className="cl-wf-agent-attempt cl-mono">retry {agent.attempt}</span>}
+        {agent.attempt > 1 && (
+          <span className="cl-wf-agent-attempt cl-mono">retry {agent.attempt}</span>
+        )}
         {stats && <span className="cl-wf-agent-stats cl-mono">{stats}</span>}
         {canDrill && (
           <button
             type="button"
             className="cl-wf-agent-open cl-mono"
             onClick={e => {
-              e.stopPropagation()
-              onOpenTranscript(agent)
+              e.stopPropagation();
+              onOpenTranscript(agent);
             }}
           >
             view transcript →
@@ -327,7 +370,11 @@ function AgentRow({
           )}
           {canDrill && (
             <div className="cl-wf-agent-footer cl-mono">
-              <button type="button" className="cl-wf-agent-fulltx" onClick={() => onOpenTranscript(agent)}>
+              <button
+                type="button"
+                className="cl-wf-agent-fulltx"
+                onClick={() => onOpenTranscript(agent)}
+              >
                 Open full transcript →
               </button>
             </div>
@@ -335,5 +382,5 @@ function AgentRow({
         </div>
       )}
     </div>
-  )
+  );
 }

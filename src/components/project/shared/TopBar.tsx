@@ -1,6 +1,6 @@
-import { Fragment, ReactNode } from 'react'
+import { Fragment, ReactNode } from 'react';
 
-export type Crumb = { label: ReactNode; accent?: boolean }
+export type Crumb = { label: ReactNode; accent?: boolean };
 
 /**
  * Editorial top bar shared by every full-screen "deep" view.
@@ -16,26 +16,28 @@ export function TopBar({
   crumbs = [],
   right,
 }: {
-  onBack: () => void
-  backLabel?: string
-  crumbs?: Crumb[]
-  right?: ReactNode
+  onBack: () => void;
+  backLabel?: string;
+  crumbs?: Crumb[];
+  right?: ReactNode;
 }) {
   const crumbStyle = (accent?: boolean): React.CSSProperties => ({
     fontSize: 12,
     letterSpacing: '0.01em',
     color: accent ? 'var(--cl-ink)' : 'var(--cl-ink-3)',
     lineHeight: 1,
-  })
+  });
 
   return (
     <div
       className="cl-topbar shrink-0 flex items-center gap-3"
-      style={{
-        WebkitAppRegion: 'drag',
-        height: 52,
-        padding: '0 28px 0 88px',
-      } as React.CSSProperties}
+      style={
+        {
+          WebkitAppRegion: 'drag',
+          height: 52,
+          padding: '0 28px 0 88px',
+        } as React.CSSProperties
+      }
     >
       <button
         onClick={onBack}
@@ -48,8 +50,15 @@ export function TopBar({
 
       {crumbs.map((c, i) => (
         <Fragment key={i}>
-          <span className="shrink-0" style={{ color: 'var(--cl-ink-4)', fontSize: 12, lineHeight: 1, opacity: 0.5 }}>/</span>
-          <span className="font-mono truncate min-w-0" style={crumbStyle(c.accent)}>{c.label}</span>
+          <span
+            className="shrink-0"
+            style={{ color: 'var(--cl-ink-4)', fontSize: 12, lineHeight: 1, opacity: 0.5 }}
+          >
+            /
+          </span>
+          <span className="font-mono truncate min-w-0" style={crumbStyle(c.accent)}>
+            {c.label}
+          </span>
         </Fragment>
       ))}
 
@@ -62,5 +71,5 @@ export function TopBar({
         </div>
       )}
     </div>
-  )
+  );
 }

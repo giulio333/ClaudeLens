@@ -16,19 +16,19 @@ const KEY_EVENTS: Record<string, string> = {
   'cl-memory-tags': 'cl-memory-tags-changed',
   'cl-theme': 'cl-theme-changed',
   'cl-highlights': 'cl-highlights-changed',
-}
+};
 
 function hasBackend(): boolean {
-  return typeof window !== 'undefined' && !!window.electronAPI?.prefs
+  return typeof window !== 'undefined' && !!window.electronAPI?.prefs;
 }
 
 // Fire-and-forget mirror of a hook write to the on-disk store. `value` is the
 // already-parsed structure (array/object), not the JSON string.
 export function persistToDisk(key: string, value: unknown): void {
-  if (!hasBackend()) return
+  if (!hasBackend()) return;
   window.electronAPI.prefs.set(key, value).catch(() => {
     /* best-effort: localStorage already holds the value for this session */
-  })
+  });
 }
 
 // Load on-disk prefs into localStorage once at startup. For each known key:
@@ -36,27 +36,33 @@ export function persistToDisk(key: string, value: unknown): void {
 // - disk is empty      → migrate any pre-existing localStorage value to disk
 //   (preserves pins/tags created by older, localStorage-only builds)
 export async function hydratePrefs(): Promise<void> {
-  if (!hasBackend() || typeof localStorage === 'undefined') return
-  let disk: Record<string, unknown>
+  if (!hasBackend() || typeof localStorage === 'undefined') return;
+  let disk: Record<string, unknown>;
   try {
-    const res = await window.electronAPI.prefs.getAll()
-    if (res.error || !res.data) return
-    disk = res.data
+    const res = await window.electronAPI.prefs.getAll();
+    if (res.error || !res.data) return;
+    disk = res.data;
   } catch {
-    return
+    return;
   }
 
   for (const [key, event] of Object.entries(KEY_EVENTS)) {
-    const diskVal = disk[key]
+    const diskVal = disk[key];
     if (diskVal !== undefined && diskVal !== null) {
       try {
-        localStorage.setItem(key, JSON.stringify(diskVal))
-        window.dispatchEvent(new CustomEvent(event))
-      } catch { /* ignore */ }
+        localStorage.setItem(key, JSON.stringify(diskVal));
+        window.dispatchEvent(new CustomEvent(event));
+      } catch {
+        /* ignore */
+      }
     } else {
-      const local = localStorage.getItem(key)
+      const local = localStorage.getItem(key);
       if (local) {
-        try { persistToDisk(key, JSON.parse(local)) } catch { /* ignore */ }
+        try {
+          persistToDisk(key, JSON.parse(local));
+        } catch {
+          /* ignore */
+        }
       }
     }
   }

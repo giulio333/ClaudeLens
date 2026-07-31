@@ -1,14 +1,14 @@
-import type { MergePlan } from '../../../hooks/useIPC'
+import type { MergePlan } from '../../../hooks/useIPC';
 
 interface MergeConfirmDialogProps {
-  plan: MergePlan
-  sourceName: string
-  destName: string
-  isLoading: boolean
+  plan: MergePlan;
+  sourceName: string;
+  destName: string;
+  isLoading: boolean;
   /** Finché l'esecuzione del merge non è disponibile, il bottone di conferma resta disattivato. */
-  canExecute: boolean
-  onConfirm: () => void
-  onCancel: () => void
+  canExecute: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
 }
 
 export function MergeConfirmDialog({
@@ -20,13 +20,13 @@ export function MergeConfirmDialog({
   onConfirm,
   onCancel,
 }: MergeConfirmDialogProps) {
-  const moved = plan.sessions.length
-  const renamed = plan.sessions.filter(s => s.collides).length
-  const memCopy = plan.memory.filter(m => m.kind === 'copy').length
-  const memConflicts = plan.memory.filter(m => m.kind === 'conflict-rename')
-  const memIdentical = plan.memory.filter(m => m.kind === 'identical').length
-  const hasBlockers = plan.blockers.length > 0
-  const confirmDisabled = hasBlockers || !canExecute || isLoading
+  const moved = plan.sessions.length;
+  const renamed = plan.sessions.filter(s => s.collides).length;
+  const memCopy = plan.memory.filter(m => m.kind === 'copy').length;
+  const memConflicts = plan.memory.filter(m => m.kind === 'conflict-rename');
+  const memIdentical = plan.memory.filter(m => m.kind === 'identical').length;
+  const hasBlockers = plan.blockers.length > 0;
+  const confirmDisabled = hasBlockers || !canExecute || isLoading;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -40,9 +40,13 @@ export function MergeConfirmDialog({
         {/* Blockers — stop the merge */}
         {hasBlockers && (
           <div className="rounded-lg border border-[var(--cl-danger)] bg-[var(--cl-danger-soft)] p-3 mb-4">
-            <div className="text-[12px] font-semibold text-[var(--cl-danger)] mb-1">Cannot merge</div>
+            <div className="text-[12px] font-semibold text-[var(--cl-danger)] mb-1">
+              Cannot merge
+            </div>
             <ul className="text-[12px] text-[var(--cl-ink-3)] list-disc pl-4 space-y-1">
-              {plan.blockers.map((b, i) => <li key={i}>{b}</li>)}
+              {plan.blockers.map((b, i) => (
+                <li key={i}>{b}</li>
+              ))}
             </ul>
           </div>
         )}
@@ -50,7 +54,9 @@ export function MergeConfirmDialog({
         {/* Plan summary */}
         <div className="space-y-3 text-[13px] text-[var(--cl-ink-3)] mb-4">
           <PlanRow label="Sessions">
-            {moved === 0 ? 'none' : `${moved} moved${renamed > 0 ? ` (${renamed} renamed to avoid collision)` : ''}`}
+            {moved === 0
+              ? 'none'
+              : `${moved} moved${renamed > 0 ? ` (${renamed} renamed to avoid collision)` : ''}`}
           </PlanRow>
 
           <PlanRow label="Session data">
@@ -64,7 +70,9 @@ export function MergeConfirmDialog({
               <span className="font-mono text-[11px] break-all">
                 {plan.cwdRewrite.from} → {plan.cwdRewrite.to}
               </span>
-            ) : 'not needed'}
+            ) : (
+              'not needed'
+            )}
           </PlanRow>
 
           <PlanRow label="Memory">
@@ -74,7 +82,9 @@ export function MergeConfirmDialog({
             {memConflicts.length > 0 && (
               <ul className="mt-1 text-[11px] font-mono text-[var(--cl-ink-4)] list-disc pl-4">
                 {memConflicts.map(m => (
-                  <li key={m.filename}>{m.filename} → {m.targetName}</li>
+                  <li key={m.filename}>
+                    {m.filename} → {m.targetName}
+                  </li>
                 ))}
               </ul>
             )}
@@ -96,7 +106,9 @@ export function MergeConfirmDialog({
           <div className="rounded-lg border border-[var(--cl-line)] bg-[var(--cl-warn-soft)] p-3 mb-4">
             <div className="text-[12px] font-semibold text-[var(--cl-warn)] mb-1">Warnings</div>
             <ul className="text-[12px] text-[var(--cl-ink-3)] list-disc pl-4 space-y-1">
-              {plan.warnings.map((w, i) => <li key={i}>{w}</li>)}
+              {plan.warnings.map((w, i) => (
+                <li key={i}>{w}</li>
+              ))}
             </ul>
           </div>
         )}
@@ -124,7 +136,7 @@ export function MergeConfirmDialog({
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function PlanRow({ label, children }: { label: string; children: React.ReactNode }) {
@@ -135,5 +147,5 @@ function PlanRow({ label, children }: { label: string; children: React.ReactNode
       </span>
       <div className="flex-1 min-w-0">{children}</div>
     </div>
-  )
+  );
 }

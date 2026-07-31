@@ -7,4 +7,4 @@
  * but nothing can navigate to them. Flip this back to `true` to re-enable the
  * "Agent Studio" item in the top-bar nav.
  */
-export const STUDIO_ENABLED: boolean = false
+export const STUDIO_ENABLED: boolean = false;

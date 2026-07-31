@@ -1,46 +1,52 @@
-import { useState } from 'react'
-import type { CSSProperties } from 'react'
-import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils'
-import { ToolInput, ToolOutput } from './ToolDetailPanel'
+import { useState } from 'react';
+import type { CSSProperties } from 'react';
+import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils';
+import { ToolInput, ToolOutput } from './ToolDetailPanel';
 
-export function ToolGroupCard({ group, showDetails, tint: tintOverride, detailLabel, onViewDetail }: {
-  group: ToolGroup
-  showDetails: boolean
+export function ToolGroupCard({
+  group,
+  showDetails,
+  tint: tintOverride,
+  detailLabel,
+  onViewDetail,
+}: {
+  group: ToolGroup;
+  showDetails: boolean;
   /** Explicit tint color (e.g. a dispatched agent's identity color) overriding
    *  the tool-name default. */
-  tint?: string
+  tint?: string;
   /** Optional deep-link shown at the foot of the expanded card (e.g. "View
    *  agent" on an agent dispatch). Only rendered when the card is open. */
-  detailLabel?: string
-  onViewDetail?: () => void
+  detailLabel?: string;
+  onViewDetail?: () => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const { use, result } = group
-  const isMemory = isMemoryFile(use.input as Record<string, unknown>)
+  const [open, setOpen] = useState(false);
+  const { use, result } = group;
+  const isMemory = isMemoryFile(use.input as Record<string, unknown>);
   const monogram = isMemory
     ? 'M'
     : AGENT_TOOLS.has(use.name)
       ? ((use.input.subagent_type as string)?.[0] ?? 'A').toUpperCase()
-      : toolMonogram(use.name)
-  const tint = tintOverride ?? (isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)'))
+      : toolMonogram(use.name);
+  const tint =
+    tintOverride ?? (isMemory ? 'var(--cl-violet)' : (TOOL_TINT[use.name] ?? 'var(--cl-ink-3)'));
   // For an agent dispatch ("Agent"/"Task") the tool name carries no signal —
   // surface the delegated sub-agent type instead (e.g. "git-committer").
   const displayName = AGENT_TOOLS.has(use.name)
-    ? ((use.input.subagent_type as string) || use.name)
-    : use.name
-  const inputPreview = (
-    use.input.description as string ??
-    use.input.command as string ??
-    use.input.file_path as string ??
-    use.input.pattern as string ??
-    use.input.prompt as string ??
-    ''
-  )
-  const resultPreview = result ? result.content.split('\n')[0]?.slice(0, 120) ?? '' : null
-  const hasExpandable = showDetails || (result && result.content.length > 80) || !!onViewDetail
+    ? (use.input.subagent_type as string) || use.name
+    : use.name;
+  const inputPreview =
+    (use.input.description as string) ??
+    (use.input.command as string) ??
+    (use.input.file_path as string) ??
+    (use.input.pattern as string) ??
+    (use.input.prompt as string) ??
+    '';
+  const resultPreview = result ? (result.content.split('\n')[0]?.slice(0, 120) ?? '') : null;
+  const hasExpandable = showDetails || (result && result.content.length > 80) || !!onViewDetail;
   // Right-edge status glyph: resolved result → ✓/✕, otherwise a hint that the
   // row expands (caret when open, arrow when collapsed).
-  const status = result ? (result.isError ? '✕' : '✓') : (hasExpandable ? (open ? '▾' : '→') : '')
+  const status = result ? (result.isError ? '✕' : '✓') : hasExpandable ? (open ? '▾' : '→') : '';
 
   return (
     <div
@@ -55,15 +61,17 @@ export function ToolGroupCard({ group, showDetails, tint: tintOverride, detailLa
           aria-label={`${use.name} tool — ${open ? 'collapse' : 'expand'} details`}
           aria-expanded={hasExpandable ? open : undefined}
         >
-          <span className="cl-tool-card-mono" aria-hidden>{monogram}</span>
+          <span className="cl-tool-card-mono" aria-hidden>
+            {monogram}
+          </span>
           <span className="cl-tool-card-id">
             <span className="cl-tool-card-name">{displayName}</span>
-            {inputPreview && (
-              <span className="cl-tool-card-preview">{String(inputPreview)}</span>
-            )}
+            {inputPreview && <span className="cl-tool-card-preview">{String(inputPreview)}</span>}
           </span>
           {status && (
-            <span className={`cl-tool-card-status ${result ? (result.isError ? 'is-error' : 'is-ok') : ''}`}>
+            <span
+              className={`cl-tool-card-status ${result ? (result.isError ? 'is-error' : 'is-ok') : ''}`}
+            >
               {status}
             </span>
           )}
@@ -87,10 +95,16 @@ export function ToolGroupCard({ group, showDetails, tint: tintOverride, detailLa
           )}
           {result && (
             <div className={`cl-tool-card-section ${result.isError ? 'is-error' : ''}`}>
-              <div className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}>
+              <div
+                className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}
+              >
                 {result.isError ? 'Error' : 'Result'}
               </div>
-              <ToolOutput name={use.name} input={use.input as Record<string, unknown>} result={result} />
+              <ToolOutput
+                name={use.name}
+                input={use.input as Record<string, unknown>}
+                result={result}
+              />
             </div>
           )}
           {onViewDetail && (
@@ -103,5 +117,5 @@ export function ToolGroupCard({ group, showDetails, tint: tintOverride, detailLa
         </div>
       )}
     </div>
-  )
+  );
 }

@@ -1,7 +1,7 @@
-import { useNamespacedTags, type NamespacedTag } from './useNamespacedTags'
+import { useNamespacedTags, type NamespacedTag } from './useNamespacedTags';
 
-const STORAGE_KEY = 'cl-memory-tags'
-const EVENT = 'cl-memory-tags-changed'
+const STORAGE_KEY = 'cl-memory-tags';
+const EVENT = 'cl-memory-tags-changed';
 
 // Memory-topic tags are a namespaced-tags store keyed by the topic `.md`
 // filename. See useNamespacedTags for the shared logic; this wrapper pins the
@@ -9,7 +9,7 @@ const EVENT = 'cl-memory-tags-changed'
 // public names. Note: useMemoryTags never exposed `createTag` or a
 // remove-from-item helper, so they are intentionally not re-exported here.
 
-export type MemoryTag = NamespacedTag
+export type MemoryTag = NamespacedTag;
 
 export function useMemoryTags(projectHash: string) {
   const { tags, tagCounts, tagsFor, deleteTag, renameTag, toggleTag } = useNamespacedTags(
@@ -18,8 +18,8 @@ export function useMemoryTags(projectHash: string) {
       storageKey: STORAGE_KEY,
       eventName: EVENT,
       itemsField: 'memoryTags',
-    },
-  )
+    }
+  );
 
   return {
     tags,
@@ -28,5 +28,5 @@ export function useMemoryTags(projectHash: string) {
     deleteTag,
     renameTag,
     toggleTagOnMemory: toggleTag,
-  }
+  };
 }
