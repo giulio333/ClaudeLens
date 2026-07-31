@@ -5791,10 +5791,34 @@ body {
 }
 /* Perf: skip layout/paint of off-screen turns on long sessions (Chromium/Electron).
    `contain-intrinsic-size: auto N` lets the browser remember each turn's real
-   measured height, so the scrollbar stays stable after first paint. */
+   measured height, so the scrollbar stays stable after first paint.
+   Deliberately a direct-child selector: it covers the transcripts that mount
+   every turn (live chat, sub-agent panel) and must NOT reach the windowed
+   transcript below, whose rows sit inside a `.cl-vrow` wrapper. There an
+   off-screen turn would report `contain-intrinsic-size` instead of its real
+   height, and the overscan rows would be measured wrong. */
 .cl-transcript-inner > .cl-turn {
   content-visibility: auto;
   contain-intrinsic-size: auto 240px;
+}
+
+/* ── Windowed transcript (ChatView) ───────────────────────────────────────
+   The sizer spans the full measured height of the session; each mounted row is
+   absolutely placed at its own offset. Absolute positioning also gives every
+   row its own block formatting context, so a turn's `margin-bottom` counts
+   toward the measured height instead of collapsing out of it — otherwise every
+   row would measure short and the offsets would drift down the list. */
+.cl-vlist {
+  position: relative;
+  width: 100%;
+}
+/* Offset via `top`, not `transform`: rows only move when a measurement lands
+   (scrolling is the parent's, not theirs), and a transform would make each row
+   the containing block for any `position: fixed` descendant. */
+.cl-vrow {
+  position: absolute;
+  left: 0;
+  right: 0;
 }
 .cl-transcript-inner::before {
   content: '';

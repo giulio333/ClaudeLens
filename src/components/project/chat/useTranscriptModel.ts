@@ -5,9 +5,12 @@ import {
   MinimapItem,
   ProcessedMessage,
   RenderItem,
+  RenderRow,
   TurnDescriptor,
   TurnFilterCounts,
   buildRenderItems,
+  buildRenderRows,
+  buildRowIndexByTurn,
   computeFilterCounts,
   describeTurn,
 } from './utils';
@@ -24,6 +27,11 @@ export type TranscriptModel = {
   minimapItems: MinimapItem[];
   /** The transcript stream rows (message turns + collapsed "tools hidden" runs). */
   renderItems: RenderItem[];
+  /** The same rows, resolved so each one renders from its index alone — what the
+   *  windowed transcript iterates over. */
+  rows: RenderRow[];
+  /** Turn number → row index, for scrolling the window to a turn. */
+  rowIndexByTurn: Map<number, number>;
   /** Per-type counts for the filter chips. */
   filterCounts: TurnFilterCounts;
 };
@@ -78,7 +86,19 @@ export function useTranscriptModel({
     [processed, descriptors]
   );
 
+  const rows = useMemo(() => buildRenderRows(processed, renderItems), [processed, renderItems]);
+
+  const rowIndexByTurn = useMemo(() => buildRowIndexByTurn(rows), [rows]);
+
   const filterCounts = useMemo(() => computeFilterCounts(visibleItems), [visibleItems]);
 
-  return { descriptors, visibleItems, minimapItems, renderItems, filterCounts };
+  return {
+    descriptors,
+    visibleItems,
+    minimapItems,
+    renderItems,
+    rows,
+    rowIndexByTurn,
+    filterCounts,
+  };
 }
