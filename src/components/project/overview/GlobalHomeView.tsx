@@ -151,7 +151,9 @@ export function GlobalHomeView({
           </div>
           <div className="cl-proc-list">
             {procs.map(p => {
-              const name = p.cwd.split('/').pop() ?? p.cwd
+              // Split on both separators so a Windows cwd (backslashes) yields the
+              // folder name, not the whole path.
+              const name = p.cwd.split(/[\\/]/).filter(Boolean).pop() ?? p.cwd
               const proj = projectByPath.get(p.cwd)
               return (
                 <button key={p.pid} type="button" className="cl-proc"

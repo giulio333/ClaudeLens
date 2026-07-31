@@ -21,7 +21,7 @@ function ProjectRow({
   cost?: ProjectCost
   onSelect?: (p: Project) => void
 }) {
-  const name = path.split('/').pop() ?? path
+  const name = path.split(/[\\/]/).filter(Boolean).pop() ?? path
   const initial = (name[0] ?? '?').toUpperCase()
   const tokens = formatTokens(cost?.totalTokens ?? 0)
   const clickable = !!(project && onSelect)
