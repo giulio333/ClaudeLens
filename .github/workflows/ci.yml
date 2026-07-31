@@ -12,7 +12,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck · Lint · Test · Build
+    name: Format · Typecheck · Lint · Test · Build
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -27,9 +27,15 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # Style gate: `npm run format` fixes anything this flags.
+      - name: Format check
+        run: npm run format:check
+
       - name: Typecheck
         run: npm run typecheck
 
+      # `lint` carries --max-warnings 0, so a warning fails the build like an
+      # error: fix it, or add an explicit inline disable with a reason.
       - name: Lint
         run: npm run lint
 

@@ -1,7 +1,7 @@
 import { useEffect } from 'react';
 import { useDataChangedRefetch } from './hooks/useIPC';
 import { hydratePrefs } from './hooks/prefsBackend';
-import { ThemeProvider } from './hooks/useTheme';
+import { ThemeProvider } from './hooks/ThemeProvider';
 import ProjectOverview from './tabs/ProjectOverview';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UpdateBanner } from './components/UpdateBanner';

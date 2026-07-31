@@ -4,7 +4,9 @@ import { AreaChart, Area, XAxis, YAxis, ResponsiveContainer, Tooltip } from 'rec
 import { LiveEvent } from '../../hooks/useIPC';
 import { Bucket, WINDOW_S } from './types';
 
-export function buildBuckets(events: LiveEvent[]): Bucket[] {
+// Local to the chart (no other consumer): keeping it unexported also keeps this
+// file component-only, which is what react-refresh needs for fast refresh.
+function buildBuckets(events: LiveEvent[]): Bucket[] {
   const now = Date.now();
   const buckets: Bucket[] = Array.from({ length: WINDOW_S }, (_, i) => {
     const age = WINDOW_S - 1 - i;
