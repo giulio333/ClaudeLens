@@ -1,27 +1,27 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useState } from 'react';
 
-import { useSessionArtifacts, useDeleteSession } from '../../../hooks/useIPC'
-import type { SessionArtifact } from '../../../types'
-import { trackEvent } from '../../../lib/telemetry'
+import { useSessionArtifacts, useDeleteSession } from '../../../hooks/useIPC';
+import type { SessionArtifact } from '../../../types';
+import { trackEvent } from '../../../lib/telemetry';
 
 interface DeleteSessionDialogProps {
-  hash: string
-  sessionFilename: string
+  hash: string;
+  sessionFilename: string;
   /** Titolo leggibile della sessione, mostrato nell'intestazione. */
-  title?: string
-  onCancel: () => void
-  onDeleted: () => void
+  title?: string;
+  onCancel: () => void;
+  onDeleted: () => void;
 }
 
 // Descrizione secondaria di una voce (conteggio file o avviso "shared").
 function artifactDetail(a: SessionArtifact): string | null {
-  if (a.kind === 'subagents') return `${a.count ?? 0} transcript${a.count === 1 ? '' : 's'}`
-  if (a.kind === 'tasks') return `${a.count ?? 0} task${a.count === 1 ? '' : 's'}`
+  if (a.kind === 'subagents') return `${a.count ?? 0} transcript${a.count === 1 ? '' : 's'}`;
+  if (a.kind === 'tasks') return `${a.count ?? 0} task${a.count === 1 ? '' : 's'}`;
   if (a.kind === 'plan') {
-    const n = a.referencedBy ?? 1
-    return n > 1 ? `shared · referenced by ${n} sessions` : 'shared plan file'
+    const n = a.referencedBy ?? 1;
+    return n > 1 ? `shared · referenced by ${n} sessions` : 'shared plan file';
   }
-  return null
+  return null;
 }
 
 export function DeleteSessionDialog({
@@ -31,44 +31,44 @@ export function DeleteSessionDialog({
   onCancel,
   onDeleted,
 }: DeleteSessionDialogProps) {
-  const { data, isLoading, error } = useSessionArtifacts(hash, sessionFilename)
-  const del = useDeleteSession(hash)
-  const [selected, setSelected] = useState<Record<string, boolean>>({})
+  const { data, isLoading, error } = useSessionArtifacts(hash, sessionFilename);
+  const del = useDeleteSession(hash);
+  const [selected, setSelected] = useState<Record<string, boolean>>({});
 
-  const artifacts = useMemo(() => data?.artifacts ?? [], [data])
+  const artifacts = useMemo(() => data?.artifacts ?? [], [data]);
 
   // Seed the checkboxes from the backend defaults as soon as the artifacts
   // arrive (React's "adjust state during render" pattern — no effect needed).
-  const [lastData, setLastData] = useState(data)
+  const [lastData, setLastData] = useState(data);
   if (data && data !== lastData) {
-    setLastData(data)
-    const init: Record<string, boolean> = {}
-    for (const a of data.artifacts) init[a.path] = a.locked ? true : a.defaultSelected
-    setSelected(init)
+    setLastData(data);
+    const init: Record<string, boolean> = {};
+    for (const a of data.artifacts) init[a.path] = a.locked ? true : a.defaultSelected;
+    setSelected(init);
   }
 
   const toggle = (a: SessionArtifact) => {
-    if (a.locked) return
-    setSelected(s => ({ ...s, [a.path]: !s[a.path] }))
-  }
+    if (a.locked) return;
+    setSelected(s => ({ ...s, [a.path]: !s[a.path] }));
+  };
 
   const selectedPaths = useMemo(
     () => artifacts.filter(a => a.locked || selected[a.path]).map(a => a.path),
-    [artifacts, selected],
-  )
+    [artifacts, selected]
+  );
 
-  const busy = del.isPending
-  const mutationError = del.error instanceof Error ? del.error.message : null
+  const busy = del.isPending;
+  const mutationError = del.error instanceof Error ? del.error.message : null;
 
   const onConfirm = async () => {
     try {
-      await del.mutateAsync(selectedPaths)
-      trackEvent('session_deleted')
-      onDeleted()
+      await del.mutateAsync(selectedPaths);
+      trackEvent('session_deleted');
+      onDeleted();
     } catch {
       // l'errore è esposto via del.error: il dialog resta aperto
     }
-  }
+  };
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -77,8 +77,9 @@ export function DeleteSessionDialog({
         <p className="text-[13px] text-[var(--cl-ink-3)] mb-4">
           {title ? (
             <>
-              This will permanently delete <span className="font-medium text-[var(--cl-ink)]">{title}</span> and
-              the selected artifacts. This cannot be undone.
+              This will permanently delete{' '}
+              <span className="font-medium text-[var(--cl-ink)]">{title}</span> and the selected
+              artifacts. This cannot be undone.
             </>
           ) : (
             'This will permanently delete the session and the selected artifacts. This cannot be undone.'
@@ -98,8 +99,8 @@ export function DeleteSessionDialog({
         {!isLoading && !error && (
           <div className="flex flex-col gap-1.5 mb-5">
             {artifacts.map(a => {
-              const checked = a.locked || !!selected[a.path]
-              const detail = artifactDetail(a)
+              const checked = a.locked || !!selected[a.path];
+              const detail = artifactDetail(a);
               return (
                 <label
                   key={a.path}
@@ -118,12 +119,18 @@ export function DeleteSessionDialog({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
-                      <span className="text-[13px] font-medium text-[var(--cl-ink)] truncate">{a.label}</span>
+                      <span className="text-[13px] font-medium text-[var(--cl-ink)] truncate">
+                        {a.label}
+                      </span>
                       {a.locked && (
-                        <span className="text-[10px] uppercase tracking-wide text-[var(--cl-ink-4)]">always</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[var(--cl-ink-4)]">
+                          always
+                        </span>
                       )}
                       {a.shared && (
-                        <span className="text-[10px] uppercase tracking-wide text-[var(--cl-ink-4)]">shared</span>
+                        <span className="text-[10px] uppercase tracking-wide text-[var(--cl-ink-4)]">
+                          shared
+                        </span>
                       )}
                     </span>
                     {detail && (
@@ -131,7 +138,7 @@ export function DeleteSessionDialog({
                     )}
                   </span>
                 </label>
-              )
+              );
             })}
           </div>
         )}
@@ -158,5 +165,5 @@ export function DeleteSessionDialog({
         </div>
       </div>
     </div>
-  )
+  );
 }

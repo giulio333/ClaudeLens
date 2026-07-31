@@ -81,25 +81,41 @@ export async function getClaudeMdHierarchy(realPath: string): Promise<ClaudeMdHi
   // 1. Global
   const globalContent = await tryRead(join(claudeDir, 'CLAUDE.md'));
   if (globalContent !== undefined) {
-    layers.push({ scope: 'global', filePath: join(claudeDir, 'CLAUDE.md'), content: globalContent });
+    layers.push({
+      scope: 'global',
+      filePath: join(claudeDir, 'CLAUDE.md'),
+      content: globalContent,
+    });
   }
 
   // 2. Project root
   const projectContent = await tryRead(join(realPath, 'CLAUDE.md'));
   if (projectContent !== undefined) {
-    layers.push({ scope: 'project', filePath: join(realPath, 'CLAUDE.md'), content: projectContent });
+    layers.push({
+      scope: 'project',
+      filePath: join(realPath, 'CLAUDE.md'),
+      content: projectContent,
+    });
   }
 
   // 3. Local override
   const localContent = await tryRead(join(realPath, 'CLAUDE.local.md'));
   if (localContent !== undefined) {
-    layers.push({ scope: 'local', filePath: join(realPath, 'CLAUDE.local.md'), content: localContent });
+    layers.push({
+      scope: 'local',
+      filePath: join(realPath, 'CLAUDE.local.md'),
+      content: localContent,
+    });
   }
 
   // 4. .claude/CLAUDE.md nel progetto
   const subdirContent = await tryRead(join(realPath, '.claude', 'CLAUDE.md'));
   if (subdirContent !== undefined) {
-    layers.push({ scope: 'subdir', filePath: join(realPath, '.claude', 'CLAUDE.md'), content: subdirContent });
+    layers.push({
+      scope: 'subdir',
+      filePath: join(realPath, '.claude', 'CLAUDE.md'),
+      content: subdirContent,
+    });
   }
 
   // 5. Cerca ricorsivamente tutti i CLAUDE.md nelle sottocartelle

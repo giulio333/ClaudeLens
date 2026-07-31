@@ -1,4 +1,13 @@
-import { ClaudeMdLayer, SessionSummary, MemoryTopic, Skill, Agent, McpServer, Plan, InstalledPlugin } from '../../hooks/useIPC'
+import {
+  ClaudeMdLayer,
+  SessionSummary,
+  MemoryTopic,
+  Skill,
+  Agent,
+  McpServer,
+  Plan,
+  InstalledPlugin,
+} from '../../hooks/useIPC';
 
 export type View =
   | { type: 'global-home' }
@@ -25,19 +34,39 @@ export type View =
   | { type: 'project-plans'; project: { hash: string; realPath: string } }
   | { type: 'plan-detail'; project: { hash: string; realPath: string }; plan: Plan }
   | { type: 'project-workflows'; project: { hash: string; realPath: string } }
-  | { type: 'workflow-detail'; project: { hash: string; realPath: string }; sessionId: string; runId: string }
+  | {
+      type: 'workflow-detail';
+      project: { hash: string; realPath: string };
+      sessionId: string;
+      runId: string;
+    }
   | { type: 'project-teams'; project: { hash: string; realPath: string } }
   | { type: 'team-detail'; project: { hash: string; realPath: string }; teamName: string }
   | { type: 'project-claudemd'; project: { hash: string; realPath: string }; layer: ClaudeMdLayer }
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }
   | { type: 'analytics'; project: { hash: string; realPath: string } }
-  | { type: 'chat'; project: { hash: string; realPath: string }; session: SessionSummary; from?: 'agents-live' | 'sessions' }
-  | { type: 'new-chat'; project: { hash: string; realPath: string }; resumeSession?: SessionSummary }
-  | { type: 'terminal'; project: { hash: string; realPath: string }; resumeSessionId?: string; attachJobId?: string; from?: 'agents-live' }
+  | {
+      type: 'chat';
+      project: { hash: string; realPath: string };
+      session: SessionSummary;
+      from?: 'agents-live' | 'sessions';
+    }
+  | {
+      type: 'new-chat';
+      project: { hash: string; realPath: string };
+      resumeSession?: SessionSummary;
+    }
+  | {
+      type: 'terminal';
+      project: { hash: string; realPath: string };
+      resumeSessionId?: string;
+      attachJobId?: string;
+      from?: 'agents-live';
+    }
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
   | { type: 'agents-live'; project?: { hash: string; realPath: string } }
   | { type: 'duplicates' }
-  | { type: 'settings' }
+  | { type: 'settings' };

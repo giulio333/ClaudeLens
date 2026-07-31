@@ -1,14 +1,14 @@
-import { useMemo } from 'react'
-import { TopBar } from '../shared/TopBar'
-import { buildProcessedMessages } from './utils'
-import { LiveInTerminalBadge } from './atoms'
-import { ChatComposer } from './ChatComposer'
-import { MessageBubble } from './MessageBubble'
-import { LiveTurn } from './LiveTurn'
-import { useChatAutoScroll } from './useAutoScroll'
-import { useLiveChat } from './useLiveChat'
-import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils'
-import { SessionSummary, useActiveSessions } from '../../../hooks/useIPC'
+import { useMemo } from 'react';
+import { TopBar } from '../shared/TopBar';
+import { buildProcessedMessages } from './utils';
+import { LiveInTerminalBadge } from './atoms';
+import { ChatComposer } from './ChatComposer';
+import { MessageBubble } from './MessageBubble';
+import { LiveTurn } from './LiveTurn';
+import { useChatAutoScroll } from './useAutoScroll';
+import { useLiveChat } from './useLiveChat';
+import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils';
+import { SessionSummary, useActiveSessions } from '../../../hooks/useIPC';
 
 /** The in-app SDK chat — a Claude Code conversation driven entirely by the
  *  Agent SDK stream. This is the deliberate split from `ChatView` (which is a
@@ -36,10 +36,10 @@ export function LiveChatView({
   resumeSession,
   onBack,
 }: {
-  project: { hash: string; realPath: string }
+  project: { hash: string; realPath: string };
   /** When set, continue this existing session instead of starting a new one. */
-  resumeSession?: SessionSummary
-  onBack: () => void
+  resumeSession?: SessionSummary;
+  onBack: () => void;
 }) {
   const resume = useMemo(
     () =>
@@ -47,7 +47,7 @@ export function LiveChatView({
         ? { hash: project.hash, sessionId: resumeSession.filename.replace(/\.jsonl$/, '') }
         : undefined,
     [project.hash, resumeSession]
-  )
+  );
 
   // A resumed session may be running in a terminal right now (the registry
   // tracks CLI sessions only, so our own SDK session can never self-lock).
@@ -55,31 +55,31 @@ export function LiveChatView({
   // same transcript — and the transcript follows the disk so the terminal's
   // conversation flows through this view. The CLI updates its registry file on
   // exit, so the watcher push unlocks the composer by itself.
-  const { data: activeSessions = [] } = useActiveSessions()
+  const { data: activeSessions = [] } = useActiveSessions();
   const liveInTerminal =
-    resume !== undefined && activeSessions.some(a => a.sessionId === resume.sessionId)
+    resume !== undefined && activeSessions.some(a => a.sessionId === resume.sessionId);
 
-  const chat = useLiveChat(project.realPath, resume, liveInTerminal)
+  const chat = useLiveChat(project.realPath, resume, liveInTerminal);
 
   const processed = useMemo(
     () => buildProcessedMessages(chat.displayMessages),
     [chat.displayMessages]
-  )
+  );
 
   // Keep the growing conversation pinned to the bottom (same as ChatView). Keyed
   // by the stable project hash — the session id arrives mid-life and must not
   // re-key the scroller.
-  const { feedRef, innerRef, onScroll, onWheel } = useChatAutoScroll(project.hash)
+  const { feedRef, innerRef, onScroll, onWheel } = useChatAutoScroll(project.hash);
 
   // First prompt titles the view once sent (optimistic bubble included).
   const firstPrompt = useMemo(() => {
     for (const m of chat.displayMessages) {
-      if (m.role !== 'user') continue
-      const text = m.content.find(b => b.type === 'text')
-      if (text && text.type === 'text') return text.text
+      if (m.role !== 'user') continue;
+      const text = m.content.find(b => b.type === 'text');
+      if (text && text.type === 'text') return text.text;
     }
-    return ''
-  }, [chat.displayMessages])
+    return '';
+  }, [chat.displayMessages]);
 
   const title = resumeSession
     ? sessionTitle(resumeSession)
@@ -87,20 +87,20 @@ export function LiveChatView({
       ? firstPrompt.length > 48
         ? `${firstPrompt.slice(0, 48)}…`
         : firstPrompt
-      : 'New chat'
+      : 'New chat';
 
   // The model the conversation is currently on (its last assistant turn,
   // synthetic notes excluded) — seeds the composer's model picker so a reply
   // defaults to the same model, exactly as a resumed terminal session would.
   const inheritedModel = useMemo(() => {
     for (let i = chat.displayMessages.length - 1; i >= 0; i--) {
-      const m = chat.displayMessages[i]
-      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model
+      const m = chat.displayMessages[i];
+      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model;
     }
-    return undefined
-  }, [chat.displayMessages])
+    return undefined;
+  }, [chat.displayMessages]);
 
-  const summary = chat.summary
+  const summary = chat.summary;
 
   return (
     <div className="cl-chat">
@@ -190,5 +190,5 @@ export function LiveChatView({
         />
       </div>
     </div>
-  )
+  );
 }

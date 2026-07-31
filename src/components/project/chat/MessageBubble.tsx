@@ -1,26 +1,44 @@
-import { memo, useState } from 'react'
-import type { CSSProperties, Ref } from 'react'
-import Markdown from '../../Markdown'
-import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC'
-import { ProcessedMessage, ToolGroup, ChatDetailsFilter, ClaudeSlashCommand, TaskNotification, parseAskUserQuestions, parseAnswersFromResultText, isQuestionDismissed, describeTurn, touchedFiles, fileCategoryTint, TouchedFile, skillInitial, AGENT_TOOLS, PLAN_TOOLS, QUESTION_TOOL, SKILL_TOOL } from './utils'
-import { fmtModel, modelColor } from '../utils'
-import { agentTintColor } from '../shared/entityOptions'
-import { ToolGroupCard } from './ToolGroupCard'
-import { FileIcon } from './fileIcons'
-import { blockKey, isPersistableMessageUuid } from './highlights'
+import { memo, useState } from 'react';
+import type { CSSProperties, Ref } from 'react';
+import Markdown from '../../Markdown';
+import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC';
+import {
+  ProcessedMessage,
+  ToolGroup,
+  ChatDetailsFilter,
+  ClaudeSlashCommand,
+  TaskNotification,
+  parseAskUserQuestions,
+  parseAnswersFromResultText,
+  isQuestionDismissed,
+  describeTurn,
+  touchedFiles,
+  fileCategoryTint,
+  TouchedFile,
+  skillInitial,
+  AGENT_TOOLS,
+  PLAN_TOOLS,
+  QUESTION_TOOL,
+  SKILL_TOOL,
+} from './utils';
+import { fmtModel, modelColor } from '../utils';
+import { agentTintColor } from '../shared/entityOptions';
+import { ToolGroupCard } from './ToolGroupCard';
+import { FileIcon } from './fileIcons';
+import { blockKey, isPersistableMessageUuid } from './highlights';
 
 /** Unobtrusive header button that copies a turn's plain markdown text (text
  *  blocks only — no tools, thinking, or indicators), so pasting into a .md file
  *  reproduces exactly what ClaudeLens renders. Hidden until the turn is hovered. */
 function CopyTurnButton({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
+  const [copied, setCopied] = useState(false);
   const handleCopy = () => {
-    if (!text) return
+    if (!text) return;
     void navigator.clipboard.writeText(text).then(() => {
-      setCopied(true)
-      setTimeout(() => setCopied(false), 1500)
-    })
-  }
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1500);
+    });
+  };
   return (
     <button
       type="button"
@@ -30,17 +48,37 @@ function CopyTurnButton({ text }: { text: string }) {
       title={copied ? 'Copied' : 'Copy message as markdown'}
     >
       {copied ? (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
           <path d="M20 6 9 17l-5-5" />
         </svg>
       ) : (
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+        <svg
+          width="13"
+          height="13"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.8"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden
+        >
           <rect x="9" y="9" width="11" height="11" rx="2" />
           <path d="M5 15V5a2 2 0 0 1 2-2h10" />
         </svg>
       )}
     </button>
-  )
+  );
 }
 
 /** Header companion to CopyTurnButton: exports just this turn (seeds the export
@@ -54,39 +92,56 @@ function ExportTurnButton({ onClick }: { onClick: () => void }) {
       aria-label="Export this message"
       title="Export this message"
     >
-      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <svg
+        width="13"
+        height="13"
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.8"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden
+      >
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
         <path d="M7 10l5 5 5-5" />
         <path d="M12 15V3" />
       </svg>
     </button>
-  )
+  );
 }
 
 /** Compact token count for the notification chips: 55059 → "55.1k". */
 function fmtTokens(n: number): string {
-  if (n < 1000) return String(n)
-  return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`
+  if (n < 1000) return String(n);
+  return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`;
 }
 
 /** Duration in ms → "1m23s" / "8.3s" for the notification chips. */
 function fmtDuration(ms: number): string {
-  const s = ms / 1000
-  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`
-  const m = Math.floor(s / 60)
-  return `${m}m${Math.round(s - m * 60)}s`
+  const s = ms / 1000;
+  if (s < 60) return `${s.toFixed(s < 10 ? 1 : 0)}s`;
+  const m = Math.floor(s / 60);
+  return `${m}m${Math.round(s - m * 60)}s`;
 }
 
 /** Compact, non-interactive marker for a harness task-notification (background
  *  agent/task completed). The agent's output is surfaced in Mission Control, so
  *  the card is a quiet event marker — no expand, no click. Subagent metrics
  *  (tokens / tool calls / duration), when present, render as inline chips. */
-function TaskNotificationCard({ notification, timestamp }: { notification: TaskNotification; timestamp?: string }) {
-  const { summary, usage } = notification
-  const chips: string[] = []
-  if (usage?.tokens != null) chips.push(`${fmtTokens(usage.tokens)} tok`)
-  if (usage?.toolUses != null) chips.push(`${usage.toolUses} ${usage.toolUses === 1 ? 'tool' : 'tools'}`)
-  if (usage?.durationMs != null) chips.push(fmtDuration(usage.durationMs))
+function TaskNotificationCard({
+  notification,
+  timestamp,
+}: {
+  notification: TaskNotification;
+  timestamp?: string;
+}) {
+  const { summary, usage } = notification;
+  const chips: string[] = [];
+  if (usage?.tokens != null) chips.push(`${fmtTokens(usage.tokens)} tok`);
+  if (usage?.toolUses != null)
+    chips.push(`${usage.toolUses} ${usage.toolUses === 1 ? 'tool' : 'tools'}`);
+  if (usage?.durationMs != null) chips.push(fmtDuration(usage.durationMs));
 
   return (
     <div className="cl-notif-card">
@@ -98,19 +153,20 @@ function TaskNotificationCard({ notification, timestamp }: { notification: TaskN
         </span>
       </div>
     </div>
-  )
+  );
 }
 
 /** AskUserQuestion card: surfaces the prompts and chosen answers, always visible. */
 function AskQuestionCard({ group }: { group: ToolGroup }) {
-  const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>)
-  if (questions.length === 0) return null
-  const resultText = group.result?.content ?? ''
-  const answers = group.result ? parseAnswersFromResultText(resultText) : {}
-  const pending = !group.result
+  const questions = parseAskUserQuestions(group.use.input as Record<string, unknown>);
+  if (questions.length === 0) return null;
+  const resultText = group.result?.content ?? '';
+  const answers = group.result ? parseAnswersFromResultText(resultText) : {};
+  const pending = !group.result;
   // L'utente ha chiuso la domanda senza rispondere (clarify / continua a parlare):
   // il result esiste ma è una rejection, non ci sono risposte da evidenziare.
-  const dismissed = !pending && Object.keys(answers).length === 0 && isQuestionDismissed(resultText)
+  const dismissed =
+    !pending && Object.keys(answers).length === 0 && isQuestionDismissed(resultText);
 
   return (
     <div className="cl-ask-card">
@@ -126,23 +182,21 @@ function AskQuestionCard({ group }: { group: ToolGroup }) {
         </span>
       </div>
       {questions.map((q, i) => {
-        const chosen = answers[q.question]
+        const chosen = answers[q.question];
         return (
           <div key={i} className="cl-ask-card-q" data-dismissed={dismissed || undefined}>
             <div className="cl-ask-card-question">{q.question}</div>
             <div className="cl-ask-card-options">
               {q.options.map((opt, j) => {
-                const selected = chosen ? opt.label === chosen : false
+                const selected = chosen ? opt.label === chosen : false;
                 return (
-                  <div
-                    key={j}
-                    className="cl-ask-card-option"
-                    data-selected={selected || undefined}
-                  >
+                  <div key={j} className="cl-ask-card-option" data-selected={selected || undefined}>
                     <span className="cl-ask-card-option-label">{opt.label}</span>
-                    {opt.description && <span className="cl-ask-card-option-desc">{opt.description}</span>}
+                    {opt.description && (
+                      <span className="cl-ask-card-option-desc">{opt.description}</span>
+                    )}
                   </div>
-                )
+                );
               })}
             </div>
             {dismissed && (
@@ -151,43 +205,62 @@ function AskQuestionCard({ group }: { group: ToolGroup }) {
               </div>
             )}
             {chosen && !q.options.some(o => o.label === chosen) && (
-              <div className="cl-ask-card-custom">Reply: <b>{chosen}</b></div>
+              <div className="cl-ask-card-custom">
+                Reply: <b>{chosen}</b>
+              </div>
             )}
           </div>
-        )
+        );
       })}
     </div>
-  )
+  );
 }
 
 export function ThinkingBlock({ thinking }: { thinking: string }) {
-  const [open, setOpen] = useState(false)
-  if (!thinking) return null
+  const [open, setOpen] = useState(false);
+  if (!thinking) return null;
   return (
     <div className="cl-thinking">
-      <button type="button" onClick={() => setOpen(o => !o)} className="cl-thinking-toggle" aria-label={`Thinking — ${open ? 'collapse' : 'expand'} content`} aria-expanded={open}>
+      <button
+        type="button"
+        onClick={() => setOpen(o => !o)}
+        className="cl-thinking-toggle"
+        aria-label={`Thinking — ${open ? 'collapse' : 'expand'} content`}
+        aria-expanded={open}
+      >
         <span className="tw">Thinking</span>
-        <svg className="caret" width="9" height="9" viewBox="0 0 9 9" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round">
+        <svg
+          className="caret"
+          width="9"
+          height="9"
+          viewBox="0 0 9 9"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          strokeLinecap="round"
+        >
           <path d="M3 1.5L6 4.5L3 7.5" />
         </svg>
         <b>{open ? 'Hide' : 'Show'}</b>
       </button>
-      {open && (
-        <pre className="cl-thinking-body">{thinking}</pre>
-      )}
+      {open && <pre className="cl-thinking-body">{thinking}</pre>}
     </div>
-  )
+  );
 }
 
 /** Plan-mode milestone rendered as an editorial card. EnterPlanMode is a bare
  *  marker; ExitPlanMode carries the proposed plan (title + snippet), click → detail. */
 function PlanCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
-  const input = group.use.input as Record<string, unknown>
-  const isExit = group.use.name === 'ExitPlanMode'
-  const planText = typeof input.plan === 'string' ? input.plan : ''
-  const titleMatch = planText.match(/^#+\s*(.+)$/m)
-  const title = titleMatch ? titleMatch[1].trim() : 'Plan presented'
-  const snippet = planText.replace(/^#+\s*.+$/m, '').replace(/\s+/g, ' ').trim().slice(0, 280)
+  const input = group.use.input as Record<string, unknown>;
+  const isExit = group.use.name === 'ExitPlanMode';
+  const planText = typeof input.plan === 'string' ? input.plan : '';
+  const titleMatch = planText.match(/^#+\s*(.+)$/m);
+  const title = titleMatch ? titleMatch[1].trim() : 'Plan presented';
+  const snippet = planText
+    .replace(/^#+\s*.+$/m, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .slice(0, 280);
 
   return (
     <button type="button" className="cl-plan-card" onClick={onOpen} title="View plan detail">
@@ -205,15 +278,21 @@ function PlanCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
         <span className="desc">Claude entered plan mode to design an approach before editing.</span>
       )}
     </button>
-  )
+  );
 }
 
-function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand; timestamp?: string }) {
-  const [open, setOpen] = useState(false)
+function SlashCommandCard({
+  command,
+  timestamp,
+}: {
+  command: ClaudeSlashCommand;
+  timestamp?: string;
+}) {
+  const [open, setOpen] = useState(false);
   // Nascondi args se è solo l'echo del command name (es. <command-message>model</command-message> per /model)
-  const showArgs = command.args && command.args !== command.command
-  const hasExpandable = !!(showArgs || command.output)
-  const status = hasExpandable ? (open ? '▾' : '→') : ''
+  const showArgs = command.args && command.args !== command.command;
+  const hasExpandable = !!(showArgs || command.output);
+  const status = hasExpandable ? (open ? '▾' : '→') : '';
 
   return (
     <div
@@ -257,30 +336,37 @@ function SlashCommandCard({ command, timestamp }: { command: ClaudeSlashCommand;
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /** Inline card for a Skill invocation — a first-class sibling of SlashCommandCard
  *  with a first-letter orb (no icon), the skill description, and an expandable
  *  body surfacing the skill's definition (scope / model / tools / arguments) plus
  *  a "View skill →" deep link. The link only shows once the card is expanded. */
-function SkillCommandCard({ command, timestamp, skill, onOpenSkill }: {
-  command: ClaudeSlashCommand
-  timestamp?: string
-  skill?: Skill
-  onOpenSkill?: (skill: Skill) => void
+function SkillCommandCard({
+  command,
+  timestamp,
+  skill,
+  onOpenSkill,
+}: {
+  command: ClaudeSlashCommand;
+  timestamp?: string;
+  skill?: Skill;
+  onOpenSkill?: (skill: Skill) => void;
 }) {
-  const [open, setOpen] = useState(false)
-  const desc = skill?.description ?? (command.description !== 'Claude Code command' ? command.description : '')
-  const showArgs = command.args && command.args !== command.command
-  const metaRows: [string, string][] = []
-  if (skill?.scope) metaRows.push(['Scope', skill.scope])
-  if (skill?.model) metaRows.push(['Model', skill.model])
-  if (skill?.argumentHint) metaRows.push(['Arguments', skill.argumentHint])
-  if (skill?.allowedTools?.length) metaRows.push(['Tools', skill.allowedTools.join(', ')])
-  const canOpen = !!(skill && onOpenSkill)
-  const hasExpandable = metaRows.length > 0 || !!showArgs || !!command.output || canOpen
-  const status = hasExpandable ? (open ? '▾' : '→') : ''
+  const [open, setOpen] = useState(false);
+  const desc =
+    skill?.description ??
+    (command.description !== 'Claude Code command' ? command.description : '');
+  const showArgs = command.args && command.args !== command.command;
+  const metaRows: [string, string][] = [];
+  if (skill?.scope) metaRows.push(['Scope', skill.scope]);
+  if (skill?.model) metaRows.push(['Model', skill.model]);
+  if (skill?.argumentHint) metaRows.push(['Arguments', skill.argumentHint]);
+  if (skill?.allowedTools?.length) metaRows.push(['Tools', skill.allowedTools.join(', ')]);
+  const canOpen = !!(skill && onOpenSkill);
+  const hasExpandable = metaRows.length > 0 || !!showArgs || !!command.output || canOpen;
+  const status = hasExpandable ? (open ? '▾' : '→') : '';
 
   return (
     <div
@@ -294,11 +380,12 @@ function SkillCommandCard({ command, timestamp, skill, onOpenSkill }: {
           className={`cl-command-card-main${!hasExpandable ? ' is-static' : ''}`}
           aria-expanded={hasExpandable ? open : undefined}
         >
-          <span className="cl-command-mono" aria-hidden>{skillInitial(command.command)}</span>
+          <span className="cl-command-mono" aria-hidden>
+            {skillInitial(command.command)}
+          </span>
           <span className="cl-command-id">
             <span className="cl-command-name">
-              <span className="cl-skill-tag">Skill</span>
-              /{command.command}
+              <span className="cl-skill-tag">Skill</span>/{command.command}
             </span>
             {desc && <span className="cl-command-preview">{desc}</span>}
           </span>
@@ -342,14 +429,22 @@ function SkillCommandCard({ command, timestamp, skill, onOpenSkill }: {
         </div>
       )}
     </div>
-  )
+  );
 }
 
 /** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
  *  A single badge with a "× N" multiplier replaces the stack of identical
  *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
-export function ToolsHiddenBadge({ count, files = [], dimmed }: { count: number; files?: TouchedFile[]; dimmed?: boolean }) {
-  if (count <= 0) return null
+export function ToolsHiddenBadge({
+  count,
+  files = [],
+  dimmed,
+}: {
+  count: number;
+  files?: TouchedFile[];
+  dimmed?: boolean;
+}) {
+  if (count <= 0) return null;
   return (
     <div className="cl-turn-tools-hidden" data-dim={dimmed || undefined}>
       <span className="cl-turn-tools-hidden-badge">
@@ -358,28 +453,28 @@ export function ToolsHiddenBadge({ count, files = [], dimmed }: { count: number;
       </span>
       <FileChipCluster files={files} />
     </div>
-  )
+  );
 }
 
 /** Row of file chips at the foot of a turn: one icon per file the (hidden) tools
  *  touched, tinted by file kind, with the file name on hover. */
 function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: number }) {
-  if (files.length === 0) return null
+  if (files.length === 0) return null;
   // One chip per distinct file (dedupe by path across the run + own tools).
-  const seen = new Set<string>()
-  const distinct: TouchedFile[] = []
+  const seen = new Set<string>();
+  const distinct: TouchedFile[] = [];
   for (const f of files) {
     if (!seen.has(f.path)) {
-      seen.add(f.path)
-      distinct.push(f)
+      seen.add(f.path);
+      distinct.push(f);
     }
   }
-  const shown = distinct.slice(0, max)
-  const overflow = distinct.length - shown.length
+  const shown = distinct.slice(0, max);
+  const overflow = distinct.length - shown.length;
   return (
     <div className="cl-turn-files">
       {shown.map((f, i) => {
-        const name = f.path.split(/[\\/]/).filter(Boolean).pop() ?? f.path
+        const name = f.path.split(/[\\/]/).filter(Boolean).pop() ?? f.path;
         return (
           <span
             key={i}
@@ -391,18 +486,21 @@ function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: numb
             <FileIcon ext={f.ext} />
             {f.ext && <span className="cl-file-chip-ext">{f.ext}</span>}
           </span>
-        )
+        );
       })}
       {overflow > 0 && (
         <span
           className="cl-file-chip cl-file-chip--more"
-          data-file={distinct.slice(max).map(f => f.path.split(/[\\/]/).filter(Boolean).pop()).join('\n')}
+          data-file={distinct
+            .slice(max)
+            .map(f => f.path.split(/[\\/]/).filter(Boolean).pop())
+            .join('\n')}
         >
           +{overflow}
         </span>
       )}
     </div>
-  )
+  );
 }
 
 // Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
@@ -428,71 +526,77 @@ export const MessageBubble = memo(function MessageBubble({
   onToggleSelect,
   onExportTurn,
 }: {
-  processed: ProcessedMessage
-  detailsFilter: ChatDetailsFilter
-  onOpenToolDetail: (group: ToolGroup) => void
+  processed: ProcessedMessage;
+  detailsFilter: ChatDetailsFilter;
+  onOpenToolDetail: (group: ToolGroup) => void;
   /** Resolves a dispatched sub-agent's identity color from its `subagent_type`. */
-  agentColorOf?: (subagentType: string) => string | undefined
+  agentColorOf?: (subagentType: string) => string | undefined;
   /** Resolves a skill definition from a slash-command name (for the skill card link). */
-  skillOf?: (name: string) => Skill | undefined
+  skillOf?: (name: string) => Skill | undefined;
   /** Navigates to the skill detail view (deep link from an expanded skill card). */
-  onOpenSkill?: (skill: Skill) => void
+  onOpenSkill?: (skill: Skill) => void;
   /** Resolves an agent definition from its `subagent_type` (for the agent card link). */
-  agentOf?: (subagentType: string) => Agent | undefined
+  agentOf?: (subagentType: string) => Agent | undefined;
   /** Navigates to the agent detail view (deep link from an expanded agent card). */
-  onOpenAgent?: (agent: Agent) => void
-  turnIndex?: number
+  onOpenAgent?: (agent: Agent) => void;
+  turnIndex?: number;
   /** Faded out because it doesn't match the active type filter (kept visible for context). */
-  dimmed?: boolean
+  dimmed?: boolean;
   /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
-  isContinuation?: boolean
+  isContinuation?: boolean;
   /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
-  innerRef?: Ref<HTMLElement>
+  innerRef?: Ref<HTMLElement>;
   /** Count of tool-only turns collapsed *out of this same assistant turn* (their
    *  tool_use lines were persisted separately) — surfaced as a header chip. */
-  hiddenToolCount?: number
+  hiddenToolCount?: number;
   /** Files touched by that collapsed run of hidden tools, shown at the turn foot. */
-  hiddenFiles?: TouchedFile[]
+  hiddenFiles?: TouchedFile[];
   /** Selective export: show a per-turn checkbox so the turn can be picked. */
-  selectionMode?: boolean
+  selectionMode?: boolean;
   /** Whether this turn is currently picked for selective export. */
-  selected?: boolean
+  selected?: boolean;
   /** Toggle this turn's selection (by message uuid). */
-  onToggleSelect?: (uuid: string) => void
+  onToggleSelect?: (uuid: string) => void;
   /** Export just this turn — seeds the selection and raises the export sheet. */
-  onExportTurn?: (uuid: string) => void
+  onExportTurn?: (uuid: string) => void;
 }) {
-  const { msg, toolGroups, command, notification } = processed
-  const isUser = msg.role === 'user'
+  const { msg, toolGroups, command, notification } = processed;
+  const isUser = msg.role === 'user';
   // Only durable transcript messages anchor highlights — never the optimistic
   // mid-stream bubble, whose synthetic uuid is replaced on reconcile (which would
   // orphan any highlight stored against it). Gate the data-hl-block attribute.
-  const canHighlight = isPersistableMessageUuid(msg.uuid)
+  const canHighlight = isPersistableMessageUuid(msg.uuid);
 
-  const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<ChatContentBlock, { type: 'text' }>[]
-  const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<ChatContentBlock, { type: 'thinking' }>[]
-  const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name))
-  const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name))
-  const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL)
-  const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL)
+  const textBlocks = msg.content.filter(b => b.type === 'text') as Extract<
+    ChatContentBlock,
+    { type: 'text' }
+  >[];
+  const thinkingBlocks = msg.content.filter(b => b.type === 'thinking') as Extract<
+    ChatContentBlock,
+    { type: 'thinking' }
+  >[];
+  const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name));
+  const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name));
+  const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL);
+  const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL);
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
   // (those use the AgentDispatchCard).
-  const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL)
+  const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL);
 
-  const showThinking = detailsFilter === 'all'
-  const showTools = detailsFilter === 'all'
-  const showToolDetails = detailsFilter === 'all'
+  const showThinking = detailsFilter === 'all';
+  const showTools = detailsFilter === 'all';
+  const showToolDetails = detailsFilter === 'all';
   // In minimal mode tools are hidden, but agent dispatches stay visible so the
   // reader can see when Claude Code delegated work to a sub-agent.
-  const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0
+  const showAgentStrip = detailsFilter === 'minimal' && agentGroups.length > 0;
   // Plan-mode milestones surface as a dedicated strip in minimal (raw card in full).
-  const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0
+  const showPlanStrip = detailsFilter === 'minimal' && planGroups.length > 0;
   // Agentic skills get a dedicated minimal strip too (raw tool card in full),
   // so a skill reads as a first-class unit instead of a hidden tool.
-  const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0
+  const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0;
   // Questions are first-class content: always visible regardless of filter.
-  const showQuestions = questionGroups.length > 0
+  const showQuestions = questionGroups.length > 0;
 
   const hasVisibleContent =
     textBlocks.length > 0 ||
@@ -501,35 +605,39 @@ export const MessageBubble = memo(function MessageBubble({
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
-    showQuestions
+    showQuestions;
 
   // Tool-only turns (no text/agents/questions) render nothing here: in minimal
   // mode ChatView collapses runs of them into a single <ToolsHiddenBadge>, and
   // in full mode they always have visible content. So a bare turn is dropped.
-  if (!hasVisibleContent) return null
+  if (!hasVisibleContent) return null;
 
   // Role identity is resolved by the shared describeTurn() so the minimap and
   // the rendered bubble always agree on who's speaking.
-  const isCommandTurn = !!command
+  const isCommandTurn = !!command;
   // The rail orb of an agent turn wears the dispatched sub-agent's identity color
   // (same resolution the dispatch card uses); resolved inside describeTurn so the
   // minimap dots and the bubble orb always agree.
-  const { variant: roleVariant, label: roleLabel, initial: roleInitial, color: roleColor } =
-    describeTurn(processed, detailsFilter, t => agentTintColor(agentColorOf?.(t)))
+  const {
+    variant: roleVariant,
+    label: roleLabel,
+    initial: roleInitial,
+    color: roleColor,
+  } = describeTurn(processed, detailsFilter, t => agentTintColor(agentColorOf?.(t)));
 
   // Deep link surfaced at the foot of an expanded agent-dispatch card — resolves
   // the dispatched sub-agent's definition by type, mirroring the skill card link.
   const agentLink = (group: ToolGroup): { label: string; onClick: () => void } | undefined => {
-    if (!AGENT_TOOLS.has(group.use.name) || !agentOf || !onOpenAgent) return undefined
-    const t = (group.use.input as Record<string, unknown>).subagent_type as string | undefined
-    const agent = t ? agentOf(t) : undefined
-    return agent ? { label: 'View agent', onClick: () => onOpenAgent(agent) } : undefined
-  }
+    if (!AGENT_TOOLS.has(group.use.name) || !agentOf || !onOpenAgent) return undefined;
+    const t = (group.use.input as Record<string, unknown>).subagent_type as string | undefined;
+    const agent = t ? agentOf(t) : undefined;
+    return agent ? { label: 'View agent', onClick: () => onOpenAgent(agent) } : undefined;
+  };
 
   // Guard against a missing/invalid timestamp (e.g. a synthetic slash-command
   // message): format only when the date is real, else render nothing — never the
   // literal "Invalid Date".
-  const parsedTs = new Date(msg.timestamp)
+  const parsedTs = new Date(msg.timestamp);
   const timestamp = Number.isNaN(parsedTs.getTime())
     ? ''
     : parsedTs.toLocaleTimeString('it-IT', {
@@ -537,21 +645,23 @@ export const MessageBubble = memo(function MessageBubble({
         minute: '2-digit',
         second: '2-digit',
         hour12: false,
-      })
-  const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial
+      });
+  const turnNumber = turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : roleInitial;
 
   // Notification turn: compact system-event card. The orb carries the status
   // color (green/red/gray) — no duplicate dot inside the card.
   if (notification) {
-    const parsedTs = new Date(msg.timestamp)
+    const parsedTs = new Date(msg.timestamp);
     const ts = Number.isNaN(parsedTs.getTime())
       ? ''
-      : parsedTs.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false })
-    const st = notification.status
+      : parsedTs.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const st = notification.status;
     const orbColor =
-      st === 'completed' ? 'var(--cl-ok)' :
-      st === 'failed' || st === 'error' ? 'var(--cl-danger)' :
-      'var(--cl-ink-3)'
+      st === 'completed'
+        ? 'var(--cl-ok)'
+        : st === 'failed' || st === 'error'
+          ? 'var(--cl-danger)'
+          : 'var(--cl-ink-3)';
     return (
       <article
         className={`cl-turn cl-turn--notification${isContinuation ? ' cl-turn--continuation' : ''}`}
@@ -562,22 +672,24 @@ export const MessageBubble = memo(function MessageBubble({
       >
         <aside className="cl-turn-rail">
           <span className="cl-turn-orb cl-turn-orb--notif" aria-label="Task event" />
-          <span className="cl-turn-index">{turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : 'T'}</span>
+          <span className="cl-turn-index">
+            {turnIndex !== undefined ? String(turnIndex).padStart(2, '0') : 'T'}
+          </span>
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
           <TaskNotificationCard notification={notification} timestamp={ts} />
         </section>
       </article>
-    )
+    );
   }
 
   // Command turn: layout snello, niente "YOU · time", solo la card del comando.
   // Una skill (slash command con `isSkill` o che risolve a una skill nota) usa
   // la SkillCommandCard di prima classe; un comando normale la SlashCommandCard.
   if (isCommandTurn && command) {
-    const skill = skillOf?.(command.command)
-    const isSkill = command.isSkill || !!skill
+    const skill = skillOf?.(command.command);
+    const isSkill = command.isSkill || !!skill;
     return (
       <article
         className={`cl-turn cl-turn--${roleVariant}${isContinuation ? ' cl-turn--continuation' : ''}`}
@@ -587,22 +699,29 @@ export const MessageBubble = memo(function MessageBubble({
         data-dim={dimmed || undefined}
       >
         <aside className="cl-turn-rail">
-          <span className="cl-turn-orb" aria-label={roleLabel}>{roleInitial}</span>
+          <span className="cl-turn-orb" aria-label={roleLabel}>
+            {roleInitial}
+          </span>
           <span className="cl-turn-index">{turnNumber}</span>
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
           {isSkill ? (
-            <SkillCommandCard command={command} timestamp={timestamp} skill={skill} onOpenSkill={onOpenSkill} />
+            <SkillCommandCard
+              command={command}
+              timestamp={timestamp}
+              skill={skill}
+              onOpenSkill={onOpenSkill}
+            />
           ) : (
             <SlashCommandCard command={command} timestamp={timestamp} />
           )}
         </section>
       </article>
-    )
+    );
   }
 
-  const isAgentOnly = showAgentStrip && textBlocks.length === 0
+  const isAgentOnly = showAgentStrip && textBlocks.length === 0;
 
   return (
     <article
@@ -631,7 +750,17 @@ export const MessageBubble = memo(function MessageBubble({
               onClick={() => onToggleSelect?.(msg.uuid)}
             >
               {selected && (
-                <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="3"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  aria-hidden
+                >
                   <path d="M20 6 9 17l-5-5" />
                 </svg>
               )}
@@ -639,13 +768,13 @@ export const MessageBubble = memo(function MessageBubble({
           )}
           <span className="cl-turn-who">{roleLabel}</span>
           {timestamp &&
-           !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
-           !(showAgentStrip && textBlocks.length === 0) && (
-            <>
-              <span className="cl-turn-sep">·</span>
-              <time>{timestamp}</time>
-            </>
-          )}
+            !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
+            !(showAgentStrip && textBlocks.length === 0) && (
+              <>
+                <span className="cl-turn-sep">·</span>
+                <time>{timestamp}</time>
+              </>
+            )}
           {msg.model && msg.role === 'assistant' && (
             <>
               <span className="cl-turn-sep cl-turn-sep--model">·</span>
@@ -653,9 +782,14 @@ export const MessageBubble = memo(function MessageBubble({
                 // Output of a built-in slash command (/context, /usage, …) — not a
                 // real model turn, so label it as such instead of showing the raw
                 // "<synthetic>" model tag.
-                <span className="cl-turn-model-chip cl-turn-model-chip--synthetic">Command output</span>
+                <span className="cl-turn-model-chip cl-turn-model-chip--synthetic">
+                  Command output
+                </span>
               ) : (
-                <span className="cl-turn-model-chip" style={{ '--mt': modelColor(msg.model) } as CSSProperties}>
+                <span
+                  className="cl-turn-model-chip"
+                  style={{ '--mt': modelColor(msg.model) } as CSSProperties}
+                >
                   {fmtModel(msg.model)}
                 </span>
               )}
@@ -664,35 +798,38 @@ export const MessageBubble = memo(function MessageBubble({
           {hiddenToolCount > 0 && (
             <span className="cl-turn-tools-hidden-badge">
               {hiddenToolCount === 1 ? '1 tool hidden' : 'tools hidden'}
-              {hiddenToolCount > 1 && <span className="cl-turn-tools-hidden-x">×{hiddenToolCount}</span>}
+              {hiddenToolCount > 1 && (
+                <span className="cl-turn-tools-hidden-x">×{hiddenToolCount}</span>
+              )}
             </span>
           )}
           {(() => {
             // Tools collapsed into the "N tools" badge — minus anything already
             // surfaced as its own strip (agent dispatches, agentic skills).
             const stripHidden = standardToolGroups.filter(
-              g => !(showAgentStrip && AGENT_TOOLS.has(g.use.name)) && !(showSkillStrip && g.use.name === SKILL_TOOL)
-            ).length
+              g =>
+                !(showAgentStrip && AGENT_TOOLS.has(g.use.name)) &&
+                !(showSkillStrip && g.use.name === SKILL_TOOL)
+            ).length;
             return stripHidden > 0 && !showTools ? (
-              <span className="cl-turn-tool-count">{stripHidden} tool{stripHidden === 1 ? '' : 's'}</span>
-            ) : null
+              <span className="cl-turn-tool-count">
+                {stripHidden} tool{stripHidden === 1 ? '' : 's'}
+              </span>
+            ) : null;
           })()}
           {textBlocks.length > 0 && (
             <>
               <CopyTurnButton text={textBlocks.map(b => b.text).join('\n\n')} />
-              {onExportTurn && (
-                <ExportTurnButton onClick={() => onExportTurn(msg.uuid)} />
-              )}
+              {onExportTurn && <ExportTurnButton onClick={() => onExportTurn(msg.uuid)} />}
             </>
           )}
         </header>
 
-        {showThinking && thinkingBlocks.map((b, i) => (
-          <ThinkingBlock key={i} thinking={b.thinking} />
-        ))}
+        {showThinking &&
+          thinkingBlocks.map((b, i) => <ThinkingBlock key={i} thinking={b.thinking} />)}
 
         <div className="cl-turn-content">
-          {textBlocks.map((b, i) => (
+          {textBlocks.map((b, i) =>
             isUser ? (
               <p
                 key={i}
@@ -710,17 +847,20 @@ export const MessageBubble = memo(function MessageBubble({
                 <Markdown>{b.text}</Markdown>
               </div>
             )
-          ))}
+          )}
         </div>
 
-        {!showTools && (() => {
-          // Files touched in this turn — the run of tool-only turns folded back
-          // into it (their tool_use lines were persisted separately) plus this
-          // turn's own (hidden) file tools. One chip per file at the turn foot.
-          const ownFiles = touchedFiles(standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name)))
-          const allFiles = [...hiddenFiles, ...ownFiles]
-          return allFiles.length > 0 ? <FileChipCluster files={allFiles} /> : null
-        })()}
+        {!showTools &&
+          (() => {
+            // Files touched in this turn — the run of tool-only turns folded back
+            // into it (their tool_use lines were persisted separately) plus this
+            // turn's own (hidden) file tools. One chip per file at the turn foot.
+            const ownFiles = touchedFiles(
+              standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name))
+            );
+            const allFiles = [...hiddenFiles, ...ownFiles];
+            return allFiles.length > 0 ? <FileChipCluster files={allFiles} /> : null;
+          })()}
 
         {showQuestions && (
           <div className="cl-ask-stack">
@@ -733,17 +873,21 @@ export const MessageBubble = memo(function MessageBubble({
         {showAgentStrip && (
           <div className="cl-tool-stack">
             {agentGroups.map(group => {
-              const link = agentLink(group)
+              const link = agentLink(group);
               return (
                 <ToolGroupCard
                   key={group.use.id}
                   group={group}
                   showDetails
-                  tint={agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))}
+                  tint={agentTintColor(
+                    agentColorOf?.(
+                      (group.use.input as Record<string, unknown>).subagent_type as string
+                    )
+                  )}
                   detailLabel={link?.label}
                   onViewDetail={link?.onClick}
                 />
-              )
+              );
             })}
           </div>
         )}
@@ -773,23 +917,29 @@ export const MessageBubble = memo(function MessageBubble({
         {showTools && standardToolGroups.length > 0 && (
           <div className="cl-tool-stack">
             {standardToolGroups.map(group => {
-              const link = agentLink(group)
+              const link = agentLink(group);
               return (
                 <ToolGroupCard
                   key={group.use.id}
                   group={group}
                   showDetails={showToolDetails}
-                  tint={AGENT_TOOLS.has(group.use.name)
-                    ? agentTintColor(agentColorOf?.((group.use.input as Record<string, unknown>).subagent_type as string))
-                    : undefined}
+                  tint={
+                    AGENT_TOOLS.has(group.use.name)
+                      ? agentTintColor(
+                          agentColorOf?.(
+                            (group.use.input as Record<string, unknown>).subagent_type as string
+                          )
+                        )
+                      : undefined
+                  }
                   detailLabel={link?.label}
                   onViewDetail={link?.onClick}
                 />
-              )
+              );
             })}
           </div>
         )}
       </section>
     </article>
-  )
-})
+  );
+});

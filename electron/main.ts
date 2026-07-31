@@ -63,7 +63,13 @@ import {
 import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
-import { initTelemetry, track, trackExit, isTelemetryEnabled, setTelemetryEnabled } from './modules/telemetry';
+import {
+  initTelemetry,
+  track,
+  trackExit,
+  isTelemetryEnabled,
+  setTelemetryEnabled,
+} from './modules/telemetry';
 import {
   createTerminal,
   writeTerminal,
@@ -73,10 +79,7 @@ import {
   resolveClaudeCommand,
 } from './modules/terminal-manager';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
-import {
-  createRegistryDiffState,
-  diffRegistry,
-} from './modules/notifications/registry-diff';
+import { createRegistryDiffState, diffRegistry } from './modules/notifications/registry-diff';
 import {
   NOTIFY_ENABLED_KEY,
   NOTIFY_OS_KEY,
@@ -316,8 +319,14 @@ let badgeCount = 0;
 function readNotifyPrefs(): NotificationPrefs {
   const p = readPrefs();
   return {
-    enabled: typeof p[NOTIFY_ENABLED_KEY] === 'boolean' ? (p[NOTIFY_ENABLED_KEY] as boolean) : DEFAULT_NOTIFY_PREFS.enabled,
-    os: typeof p[NOTIFY_OS_KEY] === 'boolean' ? (p[NOTIFY_OS_KEY] as boolean) : DEFAULT_NOTIFY_PREFS.os,
+    enabled:
+      typeof p[NOTIFY_ENABLED_KEY] === 'boolean'
+        ? (p[NOTIFY_ENABLED_KEY] as boolean)
+        : DEFAULT_NOTIFY_PREFS.enabled,
+    os:
+      typeof p[NOTIFY_OS_KEY] === 'boolean'
+        ? (p[NOTIFY_OS_KEY] as boolean)
+        : DEFAULT_NOTIFY_PREFS.os,
   };
 }
 
@@ -368,9 +377,24 @@ function notifyFromRegistry(sessions: Awaited<ReturnType<typeof readActiveSessio
 // when the window is focused: the in-app chat already shows the permission dialog
 // / inline error, so a toast there would just duplicate it. Notifications earn
 // their keep when the user has tabbed away.
-function emitChatNotification(kind: NotificationKind, cwd: string, sessionId: string, title: string, body?: string): void {
+function emitChatNotification(
+  kind: NotificationKind,
+  cwd: string,
+  sessionId: string,
+  title: string,
+  body?: string
+): void {
   if (windowFocused()) return;
-  emitNotification({ id: randomUUID(), kind, sessionId, cwd, title, body, createdAt: Date.now(), source: 'chat' });
+  emitNotification({
+    id: randomUUID(),
+    kind,
+    sessionId,
+    cwd,
+    title,
+    body,
+    createdAt: Date.now(),
+    source: 'chat',
+  });
 }
 
 // Set a Content Security Policy on every response so the renderer (which renders
@@ -566,7 +590,10 @@ ipcMain.handle('claudeMd:writeFile', async (_event, filePath: string, content: s
 ipcMain.handle('markdownFile:write', async (_event, filePath: string, content: string) => {
   try {
     const fs = require('fs') as typeof import('fs');
-    const safePath = assertSafeWritePath(filePath, { requireUnderHome: true, markdownEntityScope: true });
+    const safePath = assertSafeWritePath(filePath, {
+      requireUnderHome: true,
+      markdownEntityScope: true,
+    });
     const dir = require('path').dirname(safePath) as string;
     if (!fs.existsSync(dir)) fs.mkdirSync(dir, { recursive: true });
     fs.writeFileSync(safePath, content, 'utf-8');
@@ -582,7 +609,10 @@ ipcMain.handle(
     try {
       const fs = require('fs') as typeof import('fs');
       const path = require('path') as typeof import('path');
-      const safePath = assertSafeWritePath(filePath, { requireUnderHome: true, markdownEntityScope: true });
+      const safePath = assertSafeWritePath(filePath, {
+        requireUnderHome: true,
+        markdownEntityScope: true,
+      });
       if (fs.existsSync(safePath)) fs.rmSync(safePath);
       // Per le skill (skills/<name>/SKILL.md) rimuovi la cartella contenitore se resta vuota.
       // Guard: prune solo una sottocartella di skills/ (basename del parent === 'skills'),
@@ -636,7 +666,7 @@ ipcMain.handle(
     } catch (e) {
       return err(e);
     }
-  },
+  }
 );
 
 ipcMain.handle('skills:openFile', async (_event, skillPath: string, relPath: string) => {
@@ -1118,16 +1148,11 @@ ipcMain.handle(
     input: Blueprint,
     fileName?: string,
     projectPath?: string,
-    expectedSource?: string,
+    expectedSource?: string
   ) => {
     try {
       return ok(
-        await saveBlueprint(
-          input,
-          fileName,
-          checkedStudioProjectPath(projectPath),
-          expectedSource,
-        ),
+        await saveBlueprint(input, fileName, checkedStudioProjectPath(projectPath), expectedSource)
       );
     } catch (e) {
       return err(e);
@@ -1154,7 +1179,7 @@ ipcMain.handle(
     fileName: string,
     content: string,
     projectPath?: string,
-    expectedSource?: string,
+    expectedSource?: string
   ) => {
     try {
       return ok(
@@ -1162,8 +1187,8 @@ ipcMain.handle(
           fileName,
           content,
           checkedStudioProjectPath(projectPath),
-          expectedSource,
-        ),
+          expectedSource
+        )
       );
     } catch (e) {
       return err(e);
@@ -1581,54 +1606,54 @@ ipcMain.handle(
     permissionMode?: string
   ) => {
     try {
-    const { existsSync, statSync } = await import('fs');
-    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
-      return err(
-        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
-      );
-    }
-    if (!sessionId) return err(new Error('Missing session id.'));
-    // Validate the id before handing it to the SDK as `resume` (it resolves the
-    // transcript file path from it), mirroring the terminal:create handler.
-    if (!isValidSessionId(sessionId)) return err(new Error('Invalid session id.'));
-    if (typeof message !== 'string' || !message.trim()) {
-      return err(new Error('Cannot send an empty message.'));
-    }
+      const { existsSync, statSync } = await import('fs');
+      if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+        return err(
+          `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+        );
+      }
+      if (!sessionId) return err(new Error('Missing session id.'));
+      // Validate the id before handing it to the SDK as `resume` (it resolves the
+      // transcript file path from it), mirroring the terminal:create handler.
+      if (!isValidSessionId(sessionId)) return err(new Error('Invalid session id.'));
+      if (typeof message !== 'string' || !message.trim()) {
+        return err(new Error('Cannot send an empty message.'));
+      }
 
-    const mode = asPermissionMode(permissionMode);
-    // Same transcript already live: push into the warm query (applying any
-    // model/permission switch first) so the turn rides the persistent session.
-    const live = currentChatSession;
-    if (live && live.sessionId === sessionId) {
-      try {
-        await live.setModel(model);
-        await live.setPermissionMode(mode);
-      } catch {
-        // The live session was disposed mid-switch (a concurrent endChat/stop/
-        // supersede); fall through to resume a fresh one below.
+      const mode = asPermissionMode(permissionMode);
+      // Same transcript already live: push into the warm query (applying any
+      // model/permission switch first) so the turn rides the persistent session.
+      const live = currentChatSession;
+      if (live && live.sessionId === sessionId) {
+        try {
+          await live.setModel(model);
+          await live.setPermissionMode(mode);
+        } catch {
+          // The live session was disposed mid-switch (a concurrent endChat/stop/
+          // supersede); fall through to resume a fresh one below.
+        }
+        // Re-check identity after the awaits: a concurrent teardown could have
+        // disposed or replaced the session between them, and sending into a
+        // torn-down query would silently drop the message.
+        if (currentChatSession === live) {
+          live.send(message);
+          return ok(null);
+        }
       }
-      // Re-check identity after the awaits: a concurrent teardown could have
-      // disposed or replaced the session between them, and sending into a
-      // torn-down query would silently drop the message.
-      if (currentChatSession === live) {
-        live.send(message);
-        return ok(null);
-      }
-    }
-    // No live session for this transcript (or it was just superseded): supersede
-    // whatever's running and resume this one into a fresh persistent query.
-    currentChatSession?.dispose();
-    denyAllPending('Superseded by a new request.');
-    currentChatSession = launchSession(event, {
-      cwd: realPath,
-      resume: sessionId,
-      model,
-      permissionMode: mode,
-      canUseTool: makeCanUseTool(event, realPath),
-      env: claudeEnv(),
-    });
-    currentChatSession.send(message);
-    return ok(null);
+      // No live session for this transcript (or it was just superseded): supersede
+      // whatever's running and resume this one into a fresh persistent query.
+      currentChatSession?.dispose();
+      denyAllPending('Superseded by a new request.');
+      currentChatSession = launchSession(event, {
+        cwd: realPath,
+        resume: sessionId,
+        model,
+        permissionMode: mode,
+        canUseTool: makeCanUseTool(event, realPath),
+        env: claudeEnv(),
+      });
+      currentChatSession.send(message);
+      return ok(null);
     } catch (e) {
       return err(e);
     }
@@ -1643,32 +1668,32 @@ ipcMain.handle(
   'sessions:startMessage',
   async (event, realPath: string, message: string, model?: string, permissionMode?: string) => {
     try {
-    const { existsSync, statSync } = await import('fs');
-    if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
-      return err(
-        `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
-      );
-    }
-    if (typeof message !== 'string' || !message.trim()) {
-      return err(new Error('Cannot send an empty message.'));
-    }
+      const { existsSync, statSync } = await import('fs');
+      if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
+        return err(
+          `Project directory not found on disk: ${realPath}. The project may have been moved or deleted.`
+        );
+      }
+      if (typeof message !== 'string' || !message.trim()) {
+        return err(new Error('Cannot send an empty message.'));
+      }
 
-    currentChatSession?.dispose();
-    denyAllPending('Superseded by a new request.');
+      currentChatSession?.dispose();
+      denyAllPending('Superseded by a new request.');
 
-    const id = randomUUID();
-    event.sender.send('sessions:chatStarted', id);
+      const id = randomUUID();
+      event.sender.send('sessions:chatStarted', id);
 
-    currentChatSession = launchSession(event, {
-      cwd: realPath,
-      sessionId: id,
-      model,
-      permissionMode: asPermissionMode(permissionMode),
-      canUseTool: makeCanUseTool(event, realPath),
-      env: claudeEnv(),
-    });
-    currentChatSession.send(message);
-    return ok(null);
+      currentChatSession = launchSession(event, {
+        cwd: realPath,
+        sessionId: id,
+        model,
+        permissionMode: asPermissionMode(permissionMode),
+        canUseTool: makeCanUseTool(event, realPath),
+        env: claudeEnv(),
+      });
+      currentChatSession.send(message);
+      return ok(null);
     } catch (e) {
       return err(e);
     }
@@ -1721,7 +1746,16 @@ ipcMain.handle('sessions:endChat', async () => {
 
 ipcMain.handle(
   'terminal:create',
-  async (event, opts: { cwd: string; resumeSessionId?: string; attachJobId?: string; cols?: number; rows?: number }) => {
+  async (
+    event,
+    opts: {
+      cwd: string;
+      resumeSessionId?: string;
+      attachJobId?: string;
+      cols?: number;
+      rows?: number;
+    }
+  ) => {
     try {
       const { existsSync, statSync } = await import('fs');
       const cwd = opts?.cwd;

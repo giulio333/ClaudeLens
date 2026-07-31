@@ -68,7 +68,10 @@ describe('parseLatestRelease', () => {
   it('falls back to the releases page for a missing/non-https html_url', () => {
     const noUrl = parseLatestRelease({ tag_name: 'v2.2.0' }, '2.1.5');
     expect(noUrl!.releaseUrl).toBe(RELEASES_PAGE_URL);
-    const badUrl = parseLatestRelease({ tag_name: 'v2.2.0', html_url: 'javascript:alert(1)' }, '2.1.5');
+    const badUrl = parseLatestRelease(
+      { tag_name: 'v2.2.0', html_url: 'javascript:alert(1)' },
+      '2.1.5'
+    );
     expect(badUrl!.releaseUrl).toBe(RELEASES_PAGE_URL);
   });
 

@@ -5,9 +5,11 @@ Reusable UI components for the ClaudeLens renderer.
 ## Components
 
 ### Markdown.tsx
+
 Renders markdown with syntax highlighting and styled headings.
 
 **Features:**
+
 - Syntax highlighting via `rehype-highlight`
 - GitHub-flavored markdown (GFM)
 - Frontmatter support (YAML)
@@ -15,28 +17,33 @@ Renders markdown with syntax highlighting and styled headings.
 - External links open in system browser (safe from Electron context)
 
 **Props:**
+
 - `children: string` — markdown source
 - `className?: string` — optional wrapper CSS classes
 
 **Usage:**
+
 ```tsx
-import Markdown from './components/Markdown'
+import Markdown from './components/Markdown';
 
 export default function MyDoc() {
-  return <Markdown className="max-w-2xl">{markdownString}</Markdown>
+  return <Markdown className="max-w-2xl">{markdownString}</Markdown>;
 }
 ```
 
 ### ErrorBoundary.tsx
+
 React class error boundary that catches render-time errors in its subtree and
 renders `<QueryError />` instead of crashing the app.
 
 ### QueryError.tsx
+
 Presentational error surface for failed IPC/React Query calls. Accepts an
 `error` (Error, string, or unknown) and an optional `onRetry` handler (renders
 a "Retry" button when provided).
 
 ### UpdateBanner.tsx
+
 Passive "new release available" notice, mounted in `App.tsx`. Shows once per
 launch when `useUpdateCheck()` (IPC `updates:check` → GitHub releases API)
 reports a version newer than the running build. Bottom-left toast (the session

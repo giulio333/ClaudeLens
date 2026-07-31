@@ -82,13 +82,14 @@ async function planReferenceCounts(projectPath: string): Promise<Map<string, num
 export async function getSessionArtifacts(
   projectPath: string,
   tasksDir: string,
-  sessionFilename: string,
+  sessionFilename: string
 ): Promise<SessionArtifacts> {
   const sessionId = basename(sessionFilename, '.jsonl');
   const artifacts: SessionArtifact[] = [];
 
   // 1. Transcript della sessione (sempre cancellato).
-  const sessionFile = (await findSessionFile(projectPath, sessionFilename)) ?? join(projectPath, sessionFilename);
+  const sessionFile =
+    (await findSessionFile(projectPath, sessionFilename)) ?? join(projectPath, sessionFilename);
   artifacts.push({
     kind: 'session',
     label: 'Session transcript',

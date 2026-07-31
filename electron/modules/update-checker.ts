@@ -135,7 +135,7 @@ function fetchLatestRelease(): Promise<unknown> {
           }
         });
         res.on('error', reject);
-      },
+      }
     );
     req.on('error', reject);
     req.setTimeout(TIMEOUT_MS, () => req.destroy(new Error('Update check timed out')));

@@ -105,7 +105,15 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
             updatedAt = s.mtime.toISOString();
           } catch {}
 
-          topics.push({ name, description, type, filename: file, createdAt, updatedAt, originSessionId: fm.originSessionId });
+          topics.push({
+            name,
+            description,
+            type,
+            filename: file,
+            createdAt,
+            updatedAt,
+            originSessionId: fm.originSessionId,
+          });
         }
       }
 
@@ -140,7 +148,15 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
             updatedAt = s.mtime.toISOString();
           } catch {}
 
-          topics.push({ name, description, type, filename: file, createdAt, updatedAt, originSessionId: fm.originSessionId });
+          topics.push({
+            name,
+            description,
+            type,
+            filename: file,
+            createdAt,
+            updatedAt,
+            originSessionId: fm.originSessionId,
+          });
         }
       } catch (e) {
         // Ignora file non leggibili
@@ -180,7 +196,10 @@ async function readTopicFiles(memoryDir: string): Promise<Map<string, string>> {
   return topics;
 }
 
-async function readMemoryDir(memoryDir: string, isProjectLevel: boolean): Promise<{
+async function readMemoryDir(
+  memoryDir: string,
+  isProjectLevel: boolean
+): Promise<{
   index: MemoryTopic[];
   topics: Map<string, string>;
   memoryMd: { content: string; lineCount: number } | null;

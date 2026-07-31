@@ -10,5 +10,5 @@ export function Lens() {
       <path className="arc" d="M 270 10 A 260 260 0 0 1 530 270" />
       <circle className="pupil" cx="270" cy="270" r="22" />
     </svg>
-  )
+  );
 }

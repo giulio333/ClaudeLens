@@ -54,7 +54,9 @@ export function diffRegistry(
   deps: DiffDeps
 ): NotificationEvent[] {
   // Only registry entries with a real session id are trackable.
-  const currMap = new Map(curr.filter(s => s.source === 'registry' && s.sessionId).map(s => [s.sessionId, s]));
+  const currMap = new Map(
+    curr.filter(s => s.source === 'registry' && s.sessionId).map(s => [s.sessionId, s])
+  );
 
   // Warm-up: first snapshot just seeds the state, emits nothing. Sessions
   // already waiting are marked as notified so they can't fire later (e.g. after

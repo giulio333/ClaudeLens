@@ -1,29 +1,66 @@
-import Markdown from '../../Markdown'
-import type { ReactNode } from 'react'
-import { ToolGroup, isMemoryFile, resolveToolIcon, stripLineNumbers, fileExt, SKILL_TOOL } from './utils'
-import { PathChip, SectionLabel, CodeBlock } from './atoms'
+import Markdown from '../../Markdown';
+import type { ReactNode } from 'react';
+import {
+  ToolGroup,
+  isMemoryFile,
+  resolveToolIcon,
+  stripLineNumbers,
+  fileExt,
+  SKILL_TOOL,
+} from './utils';
+import { PathChip, SectionLabel, CodeBlock } from './atoms';
 
 function BackChevron() {
   return (
-    <svg width="15" height="15" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="15"
+      height="15"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M10 3 5 8l5 5" />
     </svg>
-  )
+  );
 }
 
 function OpenBoxIcon() {
   return (
-    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       <path d="M2.5 5 8 2.4 13.5 5 8 7.6 2.5 5Z" />
       <path d="M2.5 5v6L8 13.6 13.5 11V5" />
       <path d="M8 7.6v6" />
     </svg>
-  )
+  );
 }
 
 function ResultIcon({ error }: { error: boolean }) {
   return (
-    <svg width="18" height="18" viewBox="0 0 16 16" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.7"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+    >
       {error ? (
         <>
           <path d="M8 2.4 14 13H2L8 2.4Z" />
@@ -37,40 +74,44 @@ function ResultIcon({ error }: { error: boolean }) {
         </>
       )}
     </svg>
-  )
+  );
 }
 
 function outputLineCount(result: ToolGroup['result']): number {
-  if (!result?.content) return 0
-  return result.content.split('\n').length
+  if (!result?.content) return 0;
+  return result.content.split('\n').length;
 }
 
 function formatDuration(ms?: number): string | null {
-  if (ms === undefined) return null
-  if (ms < 1000) return `${ms}ms`
-  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`
+  if (ms === undefined) return null;
+  if (ms < 1000) return `${ms}ms`;
+  return `${(ms / 1000).toFixed(ms < 10_000 ? 1 : 0)}s`;
 }
 
 function formatDurationParts(ms?: number): { value: string; unit: string } | null {
-  if (ms === undefined) return null
-  if (ms < 1000) return { value: String(ms), unit: 'ms' }
-  return { value: (ms / 1000).toFixed(ms < 10_000 ? 1 : 0), unit: 's' }
+  if (ms === undefined) return null;
+  if (ms < 1000) return { value: String(ms), unit: 'ms' };
+  return { value: (ms / 1000).toFixed(ms < 10_000 ? 1 : 0), unit: 's' };
 }
 
 function agentGlyph(name: string): string {
-  const parts = name.replace(/[^a-zA-Z0-9]+/g, ' ').trim().split(/\s+/).filter(Boolean)
-  if (parts.length === 0) return 'AG'
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase()
-  return parts[0].slice(0, 2).toUpperCase()
+  const parts = name
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+  if (parts.length === 0) return 'AG';
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return parts[0].slice(0, 2).toUpperCase();
 }
 
 function parseAgentResult(content: string) {
-  const usageMatch = content.match(/<usage>([\s\S]*?)<\/usage>/)
-  const usage = usageMatch?.[1] ?? ''
+  const usageMatch = content.match(/<usage>([\s\S]*?)<\/usage>/);
+  const usage = usageMatch?.[1] ?? '';
   const readNumber = (key: string) => {
-    const match = usage.match(new RegExp(`${key}:\\s*(\\d+)`))
-    return match ? Number(match[1]) : undefined
-  }
+    const match = usage.match(new RegExp(`${key}:\\s*(\\d+)`));
+    return match ? Number(match[1]) : undefined;
+  };
 
   return {
     cleanContent: content.replace(/\s*<usage>[\s\S]*?<\/usage>\s*/g, '').trim(),
@@ -78,7 +119,7 @@ function parseAgentResult(content: string) {
     toolUses: readNumber('tool_uses'),
     durationMs: readNumber('duration_ms'),
     agentId: content.match(/agentId:\s*([A-Za-z0-9_-]+)/)?.[1],
-  }
+  };
 }
 
 function ToolDetailShell({
@@ -94,20 +135,20 @@ function ToolDetailShell({
   noHero,
   noBar,
 }: {
-  icon: string
-  name: string
-  title: string
-  subtitle?: string
-  result: ToolGroup['result']
-  isMemory: boolean
-  onBack: () => void
-  children: ReactNode
-  variant?: 'default' | 'agent'
-  noHero?: boolean
-  noBar?: boolean
+  icon: string;
+  name: string;
+  title: string;
+  subtitle?: string;
+  result: ToolGroup['result'];
+  isMemory: boolean;
+  onBack: () => void;
+  children: ReactNode;
+  variant?: 'default' | 'agent';
+  noHero?: boolean;
+  noBar?: boolean;
 }) {
-  const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending'
-  const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending'
+  const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending';
+  const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending';
 
   return (
     <div className={`cl-tool-detail${variant === 'agent' ? ' cl-tool-detail--agent' : ''}`}>
@@ -140,21 +181,29 @@ function ToolDetailShell({
         {children}
       </div>
     </div>
-  )
+  );
 }
 
-function StatChip({ label, value, unit, variant }: {
-  label: string
-  value: string
-  unit?: string
-  variant?: 'id'
+function StatChip({
+  label,
+  value,
+  unit,
+  variant,
+}: {
+  label: string;
+  value: string;
+  unit?: string;
+  variant?: 'id';
 }) {
   return (
     <div className={`cl-agent-v1-chip${variant === 'id' ? ' is-id' : ''}`}>
       <span className="ll">{label}</span>
-      <div className="vv">{value}{unit && <small>{unit}</small>}</div>
+      <div className="vv">
+        {value}
+        {unit && <small>{unit}</small>}
+      </div>
     </div>
-  )
+  );
 }
 
 function AgentDetailBody({
@@ -163,31 +212,34 @@ function AgentDetailBody({
   result,
   onBack,
 }: {
-  name: string
-  input: Record<string, unknown>
-  result: ToolGroup['result']
-  onBack: () => void
+  name: string;
+  input: Record<string, unknown>;
+  result: ToolGroup['result'];
+  onBack: () => void;
 }) {
-  const subtype = (input.subagent_type as string | undefined) || (name === 'Task' ? 'task' : 'general-purpose')
-  const description = (input.description as string | undefined) || 'Agent dispatch'
-  const prompt = (input.prompt as string | undefined) || ''
-  const parsed = parseAgentResult(result?.content ?? '')
-  const cleanOutput = parsed.cleanContent || result?.content || ''
-  const isError = Boolean(result?.isError)
-  const isPending = !result
-  const statusLabel = isPending ? 'Pending' : isError ? 'Error' : 'Complete'
-  const statusClass = isPending ? 'is-pending' : isError ? 'is-error' : 'is-ok'
-  const lineCount = result ? cleanOutput.split('\n').filter(Boolean).length : 0
-  const totalLineCount = result ? outputLineCount(result) : 0
-  const durationParts = formatDurationParts(parsed.durationMs)
-  const durationFull = formatDuration(parsed.durationMs)
-  const glyph = agentGlyph(subtype)
+  const subtype =
+    (input.subagent_type as string | undefined) || (name === 'Task' ? 'task' : 'general-purpose');
+  const description = (input.description as string | undefined) || 'Agent dispatch';
+  const prompt = (input.prompt as string | undefined) || '';
+  const parsed = parseAgentResult(result?.content ?? '');
+  const cleanOutput = parsed.cleanContent || result?.content || '';
+  const isError = Boolean(result?.isError);
+  const isPending = !result;
+  const statusLabel = isPending ? 'Pending' : isError ? 'Error' : 'Complete';
+  const statusClass = isPending ? 'is-pending' : isError ? 'is-error' : 'is-ok';
+  const lineCount = result ? cleanOutput.split('\n').filter(Boolean).length : 0;
+  const totalLineCount = result ? outputLineCount(result) : 0;
+  const durationParts = formatDurationParts(parsed.durationMs);
+  const durationFull = formatDuration(parsed.durationMs);
+  const glyph = agentGlyph(subtype);
 
   return (
     <div className="cl-agent-v1">
       <nav className="cl-agent-v1-subbread">
         <button type="button" onClick={onBack} className="cl-agent-v1-back-pill">
-          <span className="ico"><BackChevron /></span>
+          <span className="ico">
+            <BackChevron />
+          </span>
           Back to chat
         </button>
         <span className="sep">/</span>
@@ -206,7 +258,11 @@ function AgentDetailBody({
             {(durationFull || lineCount > 0) && <span className="sep">·</span>}
             {durationFull && <span>{durationFull}</span>}
             {durationFull && lineCount > 0 && <span className="sep">·</span>}
-            {lineCount > 0 && <span>{lineCount} {lineCount === 1 ? 'line' : 'lines'}</span>}
+            {lineCount > 0 && (
+              <span>
+                {lineCount} {lineCount === 1 ? 'line' : 'lines'}
+              </span>
+            )}
           </div>
         </div>
         <div className="cl-agent-v1-status-col">
@@ -239,8 +295,12 @@ function AgentDetailBody({
       <div className="cl-agent-v1-io">
         <section className="cl-agent-v1-card prompt">
           <div className="cl-agent-v1-card-head">
-            <span className="ico"><OpenBoxIcon /></span>
-            <span className="lbl">Input · <b>Prompt</b></span>
+            <span className="ico">
+              <OpenBoxIcon />
+            </span>
+            <span className="lbl">
+              Input · <b>Prompt</b>
+            </span>
             <span className="meta">{prompt.length} chars</span>
           </div>
           {prompt ? (
@@ -252,12 +312,17 @@ function AgentDetailBody({
 
         <section className={`cl-agent-v1-card output${isError ? ' is-error' : ''}`}>
           <div className="cl-agent-v1-card-head">
-            <span className="ico"><ResultIcon error={isError} /></span>
+            <span className="ico">
+              <ResultIcon error={isError} />
+            </span>
             <span className="lbl">
               {isError ? 'Error' : 'Output'}
               {totalLineCount > 0 && (
                 <>
-                  {' · '}<b>{totalLineCount} {totalLineCount === 1 ? 'line' : 'lines'}</b>
+                  {' · '}
+                  <b>
+                    {totalLineCount} {totalLineCount === 1 ? 'line' : 'lines'}
+                  </b>
                 </>
               )}
             </span>
@@ -274,32 +339,37 @@ function AgentDetailBody({
           )}
           {parsed.agentId && !isError && !isPending && (
             <div className="cl-agent-v1-notice">
-              <b>Continue this agent:</b> use <code>SendMessage</code> with <code>to: '{parsed.agentId}'</code>
+              <b>Continue this agent:</b> use <code>SendMessage</code> with{' '}
+              <code>to: '{parsed.agentId}'</code>
             </div>
           )}
         </section>
       </div>
     </div>
-  )
+  );
 }
 
 export function ToolInput({ name, input }: { name: string; input: Record<string, unknown> }) {
   if (name === 'Read') {
-    const fp = input.file_path as string
-    const ext = fileExt(fp)
+    const fp = input.file_path as string;
+    const ext = fileExt(fp);
     return (
       <div className="space-y-3">
         <PathChip path={fp} />
-        {ext && <span className="inline-block text-[10px] font-mono bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded px-2 py-0.5">.{ext}</span>}
+        {ext && (
+          <span className="inline-block text-[10px] font-mono bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded px-2 py-0.5">
+            .{ext}
+          </span>
+        )}
       </div>
-    )
+    );
   }
 
   if (name === 'Write' || name === 'Edit') {
-    const fp = input.file_path as string
-    const content = input.content as string | undefined
-    const oldStr = input.old_string as string | undefined
-    const newStr = input.new_string as string | undefined
+    const fp = input.file_path as string;
+    const content = input.content as string | undefined;
+    const oldStr = input.old_string as string | undefined;
+    const newStr = input.new_string as string | undefined;
     return (
       <div className="space-y-3">
         <PathChip path={fp} />
@@ -312,18 +382,22 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
         {oldStr !== undefined && (
           <>
             <SectionLabel label="Replaced text" />
-            <CodeBlock code={oldStr} lang={fileExt(fp)} className="border-[var(--cl-danger)] opacity-75" />
+            <CodeBlock
+              code={oldStr}
+              lang={fileExt(fp)}
+              className="border-[var(--cl-danger)] opacity-75"
+            />
             <SectionLabel label="New text" />
             <CodeBlock code={newStr ?? ''} lang={fileExt(fp)} className="border-[var(--cl-ok)]" />
           </>
         )}
       </div>
-    )
+    );
   }
 
   if (name === 'Bash') {
-    const cmd = input.command as string
-    const desc = input.description as string | undefined
+    const cmd = input.command as string;
+    const desc = input.description as string | undefined;
     return (
       <div className="space-y-3">
         {desc && <p className="text-[12px] text-[var(--cl-ink-3)] italic">{desc}</p>}
@@ -335,47 +409,56 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
             <span className="text-[10px] text-[var(--cl-ink-3)] ml-1">shell</span>
           </div>
           <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ok)] whitespace-pre-wrap break-words">
-            <span className="text-[var(--cl-ink-3)] select-none">$ </span>{cmd}
+            <span className="text-[var(--cl-ink-3)] select-none">$ </span>
+            {cmd}
           </pre>
         </div>
       </div>
-    )
+    );
   }
 
   if (name === 'Grep') {
-    const pattern = input.pattern as string
-    const path = input.path as string | undefined
-    const mode = input.output_mode as string | undefined
+    const pattern = input.pattern as string;
+    const path = input.path as string | undefined;
+    const mode = input.output_mode as string | undefined;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           <span className="text-[11px] text-[var(--cl-ink-3)]">Pattern:</span>
-          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
-          {mode && <span className="text-[10px] bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5 font-mono">{mode}</span>}
+          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">
+            {pattern}
+          </code>
+          {mode && (
+            <span className="text-[10px] bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5 font-mono">
+              {mode}
+            </span>
+          )}
         </div>
         {path && <PathChip path={path} />}
       </div>
-    )
+    );
   }
 
   if (name === 'Glob') {
-    const pattern = input.pattern as string
-    const path = input.path as string | undefined
+    const pattern = input.pattern as string;
+    const path = input.path as string | undefined;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2">
           <span className="text-[11px] text-[var(--cl-ink-3)]">Pattern:</span>
-          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">{pattern}</code>
+          <code className="bg-[var(--cl-warn-soft)] border border-[var(--cl-warn)] text-[var(--cl-warn)] rounded px-2 py-0.5 text-[12px] font-mono">
+            {pattern}
+          </code>
         </div>
         {path && <PathChip path={path} />}
       </div>
-    )
+    );
   }
 
   if (name === 'Agent') {
-    const prompt = input.prompt as string
-    const subtype = input.subagent_type as string | undefined
-    const desc = input.description as string | undefined
+    const prompt = input.prompt as string;
+    const subtype = input.subagent_type as string | undefined;
+    const desc = input.description as string | undefined;
     return (
       <div className="space-y-3">
         {subtype && (
@@ -385,71 +468,104 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
         )}
         {desc && <p className="text-[13px] font-medium text-[var(--cl-ink-3)]">{desc}</p>}
         <div className="rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line)] px-4 py-3">
-          <p className="text-[12px] text-[var(--cl-ink-3)] whitespace-pre-wrap leading-relaxed">{prompt}</p>
+          <p className="text-[12px] text-[var(--cl-ink-3)] whitespace-pre-wrap leading-relaxed">
+            {prompt}
+          </p>
         </div>
       </div>
-    )
+    );
   }
 
   if (name === 'memory:createTopic') {
-    const topicName = input.name as string | undefined
-    const type = input.type as string | undefined
-    const desc = input.description as string | undefined
-    const content = input.content as string | undefined
+    const topicName = input.name as string | undefined;
+    const type = input.type as string | undefined;
+    const desc = input.description as string | undefined;
+    const content = input.content as string | undefined;
     return (
       <div className="space-y-3">
         <div className="flex items-center gap-2 flex-wrap">
           {type && (
-            <span className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
-              type === 'user' ? 'bg-[var(--cl-paper-3)] text-[var(--cl-cyan)] border border-[var(--cl-cyan)]' :
-              type === 'feedback' ? 'bg-[var(--cl-warn-soft)] text-[var(--cl-warn)] border border-[var(--cl-warn)]' :
-              type === 'project' ? 'bg-[var(--cl-paper-3)] text-[var(--cl-ok)] border border-[var(--cl-ok)]' :
-              'bg-[var(--cl-paper-3)] text-[var(--cl-violet)] border border-[var(--cl-violet)]'
-            }`}>{type}</span>
+            <span
+              className={`text-[10px] font-semibold px-2 py-1 rounded-full ${
+                type === 'user'
+                  ? 'bg-[var(--cl-paper-3)] text-[var(--cl-cyan)] border border-[var(--cl-cyan)]'
+                  : type === 'feedback'
+                    ? 'bg-[var(--cl-warn-soft)] text-[var(--cl-warn)] border border-[var(--cl-warn)]'
+                    : type === 'project'
+                      ? 'bg-[var(--cl-paper-3)] text-[var(--cl-ok)] border border-[var(--cl-ok)]'
+                      : 'bg-[var(--cl-paper-3)] text-[var(--cl-violet)] border border-[var(--cl-violet)]'
+              }`}
+            >
+              {type}
+            </span>
           )}
-          {topicName && <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">{topicName}</span>}
+          {topicName && (
+            <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">
+              {topicName}
+            </span>
+          )}
         </div>
         {desc && <p className="text-[12px] text-[var(--cl-ink-3)]">{desc}</p>}
         {content && (
           <>
             <SectionLabel label="Content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} lang="markdown" />
+            <CodeBlock
+              code={
+                content.split('\n').slice(0, 15).join('\n') +
+                (content.split('\n').length > 15 ? '\n...' : '')
+              }
+              lang="markdown"
+            />
           </>
         )}
       </div>
-    )
+    );
   }
 
   if (name === 'memory:updateTopic') {
-    const filename = input.filename as string | undefined
-    const topicName = input.name as string | undefined
-    const content = input.content as string | undefined
+    const filename = input.filename as string | undefined;
+    const topicName = input.name as string | undefined;
+    const content = input.content as string | undefined;
     return (
       <div className="space-y-3">
         {filename && <PathChip path={filename} />}
-        {topicName && <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">{topicName}</span>}
+        {topicName && (
+          <span className="text-[12px] font-semibold text-[var(--cl-ink-2)] font-mono">
+            {topicName}
+          </span>
+        )}
         {content && (
           <>
             <SectionLabel label="New content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content.split('\n').slice(0, 15).join('\n') + (content.split('\n').length > 15 ? '\n...' : '')} lang="markdown" />
+            <CodeBlock
+              code={
+                content.split('\n').slice(0, 15).join('\n') +
+                (content.split('\n').length > 15 ? '\n...' : '')
+              }
+              lang="markdown"
+            />
           </>
         )}
       </div>
-    )
+    );
   }
 
   if (name === 'memory:deleteTopic') {
-    const filename = input.filename as string | undefined
+    const filename = input.filename as string | undefined;
     return (
       <div className="space-y-2">
-        {filename ? <PathChip path={filename} /> : <p className="text-[12px] text-[var(--cl-ink-3)]">No filename</p>}
+        {filename ? (
+          <PathChip path={filename} />
+        ) : (
+          <p className="text-[12px] text-[var(--cl-ink-3)]">No filename</p>
+        )}
       </div>
-    )
+    );
   }
 
   if (name === SKILL_TOOL) {
-    const skill = input.skill as string | undefined
-    const rest = Object.entries(input).filter(([k]) => k !== 'skill')
+    const skill = input.skill as string | undefined;
+    const rest = Object.entries(input).filter(([k]) => k !== 'skill');
     return (
       <div className="space-y-3">
         {skill && (
@@ -458,55 +574,70 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
             {skill}
           </span>
         )}
-        {rest.length > 0 && <CodeBlock code={JSON.stringify(Object.fromEntries(rest), null, 2)} lang="json" />}
+        {rest.length > 0 && (
+          <CodeBlock code={JSON.stringify(Object.fromEntries(rest), null, 2)} lang="json" />
+        )}
       </div>
-    )
+    );
   }
 
-  return <CodeBlock code={JSON.stringify(input, null, 2)} lang="json" />
+  return <CodeBlock code={JSON.stringify(input, null, 2)} lang="json" />;
 }
 
-export function ToolOutput({ name, input, result }: {
-  name: string
-  input: Record<string, unknown>
-  result: ToolGroup['result']
+export function ToolOutput({
+  name,
+  input,
+  result,
+}: {
+  name: string;
+  input: Record<string, unknown>;
+  result: ToolGroup['result'];
 }) {
-  if (!result) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">No result available</p>
+  if (!result)
+    return <p className="text-[12px] text-[var(--cl-ink-3)] italic">No result available</p>;
 
-  const raw = result.content
-  if (!raw) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">(no output)</p>
+  const raw = result.content;
+  if (!raw) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">(no output)</p>;
 
   if (result.isError) {
     return (
       <div className="rounded-lg bg-[var(--cl-danger-soft)] border border-[var(--cl-danger)] px-4 py-3">
-        <pre className="text-[12px] text-[var(--cl-danger)] font-mono whitespace-pre-wrap break-words leading-relaxed">{raw}</pre>
+        <pre className="text-[12px] text-[var(--cl-danger)] font-mono whitespace-pre-wrap break-words leading-relaxed">
+          {raw}
+        </pre>
       </div>
-    )
+    );
   }
 
   if (name === 'Read' && raw.match(/^\s*\d+→/m)) {
-    const stripped = stripLineNumbers(raw)
-    const fp = input.file_path as string
-    const ext = fileExt(fp)
+    const stripped = stripLineNumbers(raw);
+    const fp = input.file_path as string;
+    const ext = fileExt(fp);
     return (
       <div className="space-y-2">
         <div className="flex items-center gap-2">
-          {ext && <span className="text-[10px] font-mono bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5">.{ext}</span>}
+          {ext && (
+            <span className="text-[10px] font-mono bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5">
+              .{ext}
+            </span>
+          )}
         </div>
         <CodeBlock code={stripped} lang={ext} />
       </div>
-    )
+    );
   }
 
   if (name === 'Bash') {
     return (
       <div className="rounded-lg bg-[var(--cl-paper-2)] border border-[var(--cl-line)] overflow-hidden">
-        <div className="px-3 py-1.5 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)] text-[10px] text-[var(--cl-ink-3)]">output</div>
+        <div className="px-3 py-1.5 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)] text-[10px] text-[var(--cl-ink-3)]">
+          output
+        </div>
         <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ink-2)] whitespace-pre-wrap break-words leading-relaxed max-h-[400px] overflow-y-auto">
           {raw || '(no output)'}
         </pre>
       </div>
-    )
+    );
   }
 
   if (name === 'Agent') {
@@ -516,64 +647,78 @@ export function ToolOutput({ name, input, result }: {
           <Markdown>{raw}</Markdown>
         </div>
       </div>
-    )
+    );
   }
 
   if (name === SKILL_TOOL) {
     // Skill output is `Skill "<name>" completed (...).\n\nResult:\n<markdown>`.
     // Strip the preamble so the analysis renders as the markdown it is.
-    const body = raw.replace(/^Skill\s+"[^"]*"\s+completed[^\n]*\.\s*\n+(?:Result:\s*\n+)?/, '')
+    const body = raw.replace(/^Skill\s+"[^"]*"\s+completed[^\n]*\.\s*\n+(?:Result:\s*\n+)?/, '');
     return (
       <div className="bg-[var(--cl-paper-2)] border border-[var(--cl-line)] rounded-lg px-5 py-4 overflow-x-auto">
         <div className="prose prose-sm prose-zinc max-w-none">
           <Markdown>{body || raw}</Markdown>
         </div>
       </div>
-    )
+    );
   }
 
   if (name === 'Glob') {
-    const paths = raw.split('\n').filter(Boolean)
+    const paths = raw.split('\n').filter(Boolean);
     return (
       <div className="space-y-1">
         {paths.map((p, i) => (
-          <div key={i} className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line-soft)] text-[12px] font-mono text-[var(--cl-ink-3)] hover:bg-[var(--cl-paper-3)] transition-colors">
+          <div
+            key={i}
+            className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line-soft)] text-[12px] font-mono text-[var(--cl-ink-3)] hover:bg-[var(--cl-paper-3)] transition-colors"
+          >
             <span className="text-[var(--cl-ink-3)] shrink-0 text-[10px]">{i + 1}</span>
             <span className="truncate">{p}</span>
           </div>
         ))}
-        {paths.length === 0 && <p className="text-[12px] text-[var(--cl-ink-3)] italic">No files found</p>}
+        {paths.length === 0 && (
+          <p className="text-[12px] text-[var(--cl-ink-3)] italic">No files found</p>
+        )}
       </div>
-    )
+    );
   }
 
   if (name === 'Grep') {
-    const lines = raw.split('\n').filter(Boolean)
+    const lines = raw.split('\n').filter(Boolean);
     return (
       <div className="rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-line)] overflow-hidden">
         {lines.map((line, i) => (
-          <div key={i} className="flex items-start gap-3 px-3 py-1.5 border-b border-[var(--cl-line-soft)] last:border-0 hover:bg-[var(--cl-paper-2)] transition-colors">
-            <span className="text-[var(--cl-ink-2)] text-[10px] font-mono shrink-0 pt-0.5">{i + 1}</span>
-            <pre className="text-[11px] font-mono text-[var(--cl-ink-3)] whitespace-pre-wrap break-words flex-1">{line}</pre>
+          <div
+            key={i}
+            className="flex items-start gap-3 px-3 py-1.5 border-b border-[var(--cl-line-soft)] last:border-0 hover:bg-[var(--cl-paper-2)] transition-colors"
+          >
+            <span className="text-[var(--cl-ink-2)] text-[10px] font-mono shrink-0 pt-0.5">
+              {i + 1}
+            </span>
+            <pre className="text-[11px] font-mono text-[var(--cl-ink-3)] whitespace-pre-wrap break-words flex-1">
+              {line}
+            </pre>
           </div>
         ))}
-        {lines.length === 0 && <p className="px-3 py-2 text-[12px] text-[var(--cl-ink-3)] italic">No results</p>}
+        {lines.length === 0 && (
+          <p className="px-3 py-2 text-[12px] text-[var(--cl-ink-3)] italic">No results</p>
+        )}
       </div>
-    )
+    );
   }
 
   if (name.startsWith('memory:')) {
     // Parse inside try/catch, but keep JSX returns outside it so a render-time
     // throw propagates to the error boundary instead of being swallowed.
-    let json: { data?: { filename?: string }; filename?: string } | null = null
+    let json: { data?: { filename?: string }; filename?: string } | null = null;
     try {
-      json = JSON.parse(raw)
+      json = JSON.parse(raw);
     } catch {
       // Not JSON — fall through to the raw code block below.
     }
     if (json) {
       if (name === 'memory:createTopic' || name === 'memory:updateTopic') {
-        const filename = json.data?.filename || json.filename
+        const filename = json.data?.filename || json.filename;
         return filename ? (
           <div className="flex items-center gap-2 p-3 rounded-lg bg-[var(--cl-paper-3)] border border-[var(--cl-ok)]">
             <span className="text-[var(--cl-ok)] text-[13px]">✓</span>
@@ -581,7 +726,7 @@ export function ToolOutput({ name, input, result }: {
           </div>
         ) : (
           <p className="text-[12px] text-[var(--cl-ink-3)]">Operation completed.</p>
-        )
+        );
       }
       if (name === 'memory:deleteTopic') {
         return (
@@ -589,29 +734,29 @@ export function ToolOutput({ name, input, result }: {
             <span className="text-[var(--cl-ok)] text-[13px]">✓</span>
             <span className="text-[12px] text-[var(--cl-ok)]">Topic deleted.</span>
           </div>
-        )
+        );
       }
     }
   }
 
-  return <CodeBlock code={raw} />
+  return <CodeBlock code={raw} />;
 }
 
 export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: () => void }) {
-  const { use, result } = group
-  const icon = resolveToolIcon(use.name, use.input as Record<string, unknown>)
-  const isMemory = isMemoryFile(use.input as Record<string, unknown>)
-  const name = use.name
-  const input = use.input as Record<string, unknown>
-  const isAgent = name === 'Agent' || name === 'Task'
+  const { use, result } = group;
+  const icon = resolveToolIcon(use.name, use.input as Record<string, unknown>);
+  const isMemory = isMemoryFile(use.input as Record<string, unknown>);
+  const name = use.name;
+  const input = use.input as Record<string, unknown>;
+  const isAgent = name === 'Agent' || name === 'Task';
   const detailTitle = isAgent
-    ? ((input.description as string | undefined) || 'Agent dispatch')
-    : name
+    ? (input.description as string | undefined) || 'Agent dispatch'
+    : name;
   const detailSubtitle = isAgent
-    ? ((input.subagent_type as string | undefined) || 'general-purpose')
+    ? (input.subagent_type as string | undefined) || 'general-purpose'
     : isMemory
       ? 'Memory operation'
-      : 'Tool execution'
+      : 'Tool execution';
 
   return (
     <ToolDetailShell
@@ -645,5 +790,5 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
         </div>
       )}
     </ToolDetailShell>
-  )
+  );
 }

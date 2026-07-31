@@ -5,17 +5,20 @@ This directory contains the Electron renderer process: a single-page React app t
 ## Architecture
 
 **App.tsx** — Root component
+
 - Sets up the outer layout (header + main)
 - Calls `useDataChangedRefetch()` to invalidate the affected queries when `~/.claude/` changes (the main process tags each `data:changed` with the namespaces the changed path can touch; an untagged event still invalidates everything)
 - Renders `<ProjectOverview />`
 
 **ProjectOverview.tsx** (`tabs/ProjectOverview.tsx`) — Root navigation shell
+
 - Manages all UI state in a single `View` discriminated union (no router)
 - Views (~30 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `studio` | `studio-create` | `studio-blueprint` | `project-skills` | `project-agents` | `project-mcp` | `project-tasks` | `project-plans` | `plan-detail` | `project-workflows` | `workflow-detail` | `project-teams` | `team-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates` | `settings` | `project-config`
 - Thin shell (~340 righe): sidebar + `switch(view.type)` → delegates to feature components
 - All feature components live in `components/project/`
 
 **Hooks** (`hooks/useIPC.ts`)
+
 - React Query hooks wrapping IPC calls to the main process
 - All results follow `{ data: T | null, error: string | null }` shape
 - `unwrap()` helper raises on error
@@ -23,6 +26,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - Types: `MemoryTopic`, `MemoryProject`, `SessionSummary`, `ClaudeMdLayer`, `RuleFile`, etc.
 
 **Components** (`components/`)
+
 - `Markdown.tsx` — Renders markdown with syntax highlighting
 - `project/types.ts` — `View` union type + `TYPE_STYLES` / `SCOPE_STYLES` design tokens
 - `project/utils.ts` — Pure formatters: `fmt`, `fmtCost`, `fmtDate`, `fmtModel`, `modelColor`
@@ -63,6 +67,7 @@ This directory contains the Electron renderer process: a single-page React app t
 Pure modules are covered by Vitest unit tests under `test/` (run `npm test`).
 UI/IPC behavior has no automated tests — validate against real `~/.claude/`
 data by running:
+
 ```bash
 npm run dev
 ```

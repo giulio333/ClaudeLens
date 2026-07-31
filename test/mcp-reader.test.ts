@@ -43,7 +43,11 @@ claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✔ Connected
     const servers = parseMcpList(REAL);
     expect(servers).toEqual([
       { name: 'claude.ai Splice', target: 'https://mcp.splice.com/mcp', status: 'connected' },
-      { name: 'claude.ai Postman', target: 'https://mcp.postman.com/minimal', status: 'needs-auth' },
+      {
+        name: 'claude.ai Postman',
+        target: 'https://mcp.postman.com/minimal',
+        status: 'needs-auth',
+      },
       {
         name: 'claude.ai Google Drive',
         target: 'https://drivemcp.googleapis.com/mcp/v1',
@@ -62,7 +66,7 @@ claude.ai Google Drive: https://drivemcp.googleapis.com/mcp/v1 - ✔ Connected
         'a: https://a/mcp - ⏸ Pending approval',
         'b: https://b/mcp - ✗ Failed to connect',
         'c: https://c/mcp - ✻ Something new',
-      ].join('\n'),
+      ].join('\n')
     );
     expect(servers.map(s => s.status)).toEqual(['pending', 'failed', 'unknown']);
   });
@@ -115,7 +119,7 @@ describe('buildMcpData', () => {
         everConnected: [],
         projects: [{ path: '/p/a', disabled: ['claude.ai Expedia'], enabled: [] }],
       }),
-      okProbe,
+      okProbe
     );
     expect(data.unlistedServers.map(s => s.name)).toEqual(['claude.ai Expedia']);
   });
@@ -134,7 +138,7 @@ describe('buildMcpData', () => {
     const data = buildMcpData(
       [live('claude.ai Gmail')],
       disk({ projects: [{ path: '/p/b', disabled: ['claude.ai Gmail'], enabled: [] }] }),
-      okProbe,
+      okProbe
     );
     expect(data.cloudServers[0].live).toBe(true);
     expect(data.cloudServers[0].enabledInProjects).toBe(0);
@@ -158,7 +162,7 @@ describe('buildMcpData', () => {
     const data = buildMcpData(
       [{ name: 'filesystem', target: 'npx -y server-fs', status: 'connected' }],
       disk({ localConfigs: { filesystem: { command: 'npx', args: ['-y', 'server-fs'] } } }),
-      okProbe,
+      okProbe
     );
     expect(data.cloudServers).toHaveLength(0);
     expect(data.localServers).toHaveLength(1);
@@ -181,7 +185,11 @@ describe('buildMcpData', () => {
   });
 
   it('carries the needs-auth cache onto a server the CLI reports as connected', () => {
-    const data = buildMcpData([live('claude.ai Atlassian')], disk({ needsAuth: ['claude.ai Atlassian'] }), okProbe);
+    const data = buildMcpData(
+      [live('claude.ai Atlassian')],
+      disk({ needsAuth: ['claude.ai Atlassian'] }),
+      okProbe
+    );
     expect(data.cloudServers[0].needsAuth).toBe(true);
   });
 });

@@ -1,6 +1,6 @@
-import { createPortal } from 'react-dom'
-import { HighlightColor, HIGHLIGHT_COLORS } from './highlights'
-import type { ToolbarState } from './useHighlightLayer'
+import { createPortal } from 'react-dom';
+import { HighlightColor, HIGHLIGHT_COLORS } from './highlights';
+import type { ToolbarState } from './useHighlightLayer';
 
 // Floating swatch bar shown on text selection (create) or on clicking an existing
 // highlight (edit + remove). Portaled to <body> and positioned in fixed-viewport
@@ -10,14 +10,14 @@ export function HighlightToolbar({
   onPick,
   onRemove,
 }: {
-  toolbar: ToolbarState
-  onPick: (color: HighlightColor) => void
-  onRemove: () => void
+  toolbar: ToolbarState;
+  onPick: (color: HighlightColor) => void;
+  onRemove: () => void;
 }) {
-  if (!toolbar) return null
+  if (!toolbar) return null;
   // Clamp into the viewport; the bar sits just above the selection/click.
-  const left = Math.min(Math.max(toolbar.at.left, 90), window.innerWidth - 90)
-  const top = Math.max(toolbar.at.top - 46, 8)
+  const left = Math.min(Math.max(toolbar.at.left, 90), window.innerWidth - 90);
+  const top = Math.max(toolbar.at.top - 46, 8);
   return createPortal(
     <div
       data-hl-toolbar
@@ -49,7 +49,17 @@ export function HighlightToolbar({
             aria-label="Remove highlight"
             onClick={onRemove}
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.9"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden
+            >
               <path d="M3 6h18" />
               <path d="M8 6V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
               <path d="M6 6l1 14a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2l1-14" />
@@ -58,6 +68,6 @@ export function HighlightToolbar({
         </>
       )}
     </div>,
-    document.body,
-  )
+    document.body
+  );
 }

@@ -11,11 +11,7 @@ import {
   skillHasViewableOutput,
   skillInitial,
 } from './utils';
-import {
-  CHAT_EXPORT_PRESETS,
-  ChatExportFormat,
-  ChatExportPreset,
-} from './export';
+import { CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export';
 import { ChevronUpGlyph, DockCaretGlyph, LocateGlyph, TrashGlyph } from './icons';
 
 function fmtAgentSpan(startedAt?: string, endedAt?: string): string | null {

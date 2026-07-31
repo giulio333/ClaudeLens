@@ -1,11 +1,5 @@
-import { useEffectiveConfig } from '../../../hooks/useIPC'
-import {
-  GeneralTab,
-  PermissionsTab,
-  ToolsTab,
-  McpTab,
-  ExtensionsTab,
-} from './SettingsView'
+import { useEffectiveConfig } from '../../../hooks/useIPC';
+import { GeneralTab, PermissionsTab, ToolsTab, McpTab, ExtensionsTab } from './SettingsView';
 
 // Project-scoped variant of the Settings page. Resolves the effective config
 // against the project's own working directory (so the `project`/`local` tiers
@@ -13,10 +7,10 @@ import {
 // blocks stacked vertically — flat scroll, no inner tab rail — to fit the
 // editorial project chrome (hero + subtabs). Read-only, like the global page.
 
-type Project = { hash: string; realPath: string }
+type Project = { hash: string; realPath: string };
 
 export function ProjectConfigView({ project }: { project: Project }) {
-  const { data, isLoading, error, refetch, isFetching } = useEffectiveConfig(project.realPath)
+  const { data, isLoading, error, refetch, isFetching } = useEffectiveConfig(project.realPath);
 
   return (
     <section className="cl-section" style={{ paddingTop: 38 }}>
@@ -46,5 +40,5 @@ export function ProjectConfigView({ project }: { project: Project }) {
         </div>
       ) : null}
     </section>
-  )
+  );
 }

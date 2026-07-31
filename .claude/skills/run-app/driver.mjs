@@ -47,8 +47,11 @@ const COMMANDS = {
   // DOM click (not coordinates): exact text match first, then substring.
   async 'click-text'(text) {
     const r = await page.evaluate(t => {
-      const els = [...document.querySelectorAll('button, a, [role="button"], .cl-tile, [class*=card]')];
-      const el = els.find(e => e.textContent?.trim() === t) ?? els.find(e => e.textContent?.includes(t));
+      const els = [
+        ...document.querySelectorAll('button, a, [role="button"], .cl-tile, [class*=card]'),
+      ];
+      const el =
+        els.find(e => e.textContent?.trim() === t) ?? els.find(e => e.textContent?.includes(t));
       if (!el) return 'NOT_FOUND';
       el.click();
       return 'OK:' + el.tagName;
@@ -74,7 +77,10 @@ const COMMANDS = {
   },
   async text(sel) {
     console.log(
-      await page.evaluate(s => (s ? document.querySelector(s) : document.body)?.innerText ?? '(null)', sel || null)
+      await page.evaluate(
+        s => (s ? document.querySelector(s) : document.body)?.innerText ?? '(null)',
+        sel || null
+      )
     );
   },
   async eval(expr) {
@@ -106,7 +112,8 @@ rl.on('line', async line => {
   const fn = COMMANDS[cmd];
   if (!cmd) return rl.prompt();
   if (!fn) console.log('unknown:', cmd, '— try: help');
-  else if (cmd !== 'launch' && cmd !== 'help' && cmd !== 'quit' && !page) console.log('ERROR: launch first');
+  else if (cmd !== 'launch' && cmd !== 'help' && cmd !== 'quit' && !page)
+    console.log('ERROR: launch first');
   else {
     try {
       await fn(rest.join(' '));

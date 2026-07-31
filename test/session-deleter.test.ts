@@ -31,21 +31,42 @@ beforeEach(() => {
   writeFileSync(
     join(projectPath, 'sess1.jsonl'),
     [
-      line({ type: 'user', uuid: 'u1', timestamp: '2026-01-01T00:00:00Z', message: { role: 'user', content: 'hi' } }),
-      line({ type: 'attachment', timestamp: '2026-01-01T00:01:00Z', attachment: { type: 'plan_mode_exit', planFilePath: planPath } }),
+      line({
+        type: 'user',
+        uuid: 'u1',
+        timestamp: '2026-01-01T00:00:00Z',
+        message: { role: 'user', content: 'hi' },
+      }),
+      line({
+        type: 'attachment',
+        timestamp: '2026-01-01T00:01:00Z',
+        attachment: { type: 'plan_mode_exit', planFilePath: planPath },
+      }),
     ].join('\n'),
-    'utf-8',
+    'utf-8'
   );
   mkdirSync(join(projectPath, 'sess1', 'subagents'), { recursive: true });
-  writeFileSync(join(projectPath, 'sess1', 'subagents', 'agent-aaa.jsonl'), line({ type: 'user', message: { role: 'user', content: 'x' } }), 'utf-8');
+  writeFileSync(
+    join(projectPath, 'sess1', 'subagents', 'agent-aaa.jsonl'),
+    line({ type: 'user', message: { role: 'user', content: 'x' } }),
+    'utf-8'
+  );
   mkdirSync(join(tasksDir, 'sess1'), { recursive: true });
-  writeFileSync(join(tasksDir, 'sess1', '1.json'), JSON.stringify({ id: '1', subject: 't', status: 'pending' }), 'utf-8');
+  writeFileSync(
+    join(tasksDir, 'sess1', '1.json'),
+    JSON.stringify({ id: '1', subject: 't', status: 'pending' }),
+    'utf-8'
+  );
 
   // Sessione 2: referenzia lo stesso piano (refCount = 2).
   writeFileSync(
     join(projectPath, 'sess2.jsonl'),
-    line({ type: 'attachment', timestamp: '2026-01-02T00:00:00Z', attachment: { type: 'plan_mode', planFilePath: planPath } }),
-    'utf-8',
+    line({
+      type: 'attachment',
+      timestamp: '2026-01-02T00:00:00Z',
+      attachment: { type: 'plan_mode', planFilePath: planPath },
+    }),
+    'utf-8'
   );
 });
 
@@ -78,7 +99,11 @@ describe('getSessionArtifacts', () => {
   });
 
   it('per una sessione senza artefatti restituisce solo il transcript', async () => {
-    writeFileSync(join(projectPath, 'lonely.jsonl'), line({ type: 'user', message: { role: 'user', content: 'hi' } }), 'utf-8');
+    writeFileSync(
+      join(projectPath, 'lonely.jsonl'),
+      line({ type: 'user', message: { role: 'user', content: 'hi' } }),
+      'utf-8'
+    );
     const res = await getSessionArtifacts(projectPath, tasksDir, 'lonely.jsonl');
     expect(res.artifacts).toHaveLength(1);
     expect(res.artifacts[0].kind).toBe('session');

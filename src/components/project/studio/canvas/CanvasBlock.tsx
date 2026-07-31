@@ -120,7 +120,9 @@ function AnnotationRow({
   warn?: boolean;
   italic?: boolean;
 }) {
-  const accent = warn ? 'color-mix(in oklch, var(--cl-warn) 62%, var(--cl-ink))' : 'var(--cl-ink-4)';
+  const accent = warn
+    ? 'color-mix(in oklch, var(--cl-warn) 62%, var(--cl-ink))'
+    : 'var(--cl-ink-4)';
   return (
     <div
       data-block={block.id}

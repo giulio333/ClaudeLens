@@ -573,7 +573,11 @@ describe('project-local workflows (.claude/workflows in the project cwd)', () =>
   afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
 
   it('saves and reads back a blueprint in the project scope', async () => {
-    const { scriptPath } = await writer.saveBlueprint(blueprint('proj-flow'), undefined, projectDir);
+    const { scriptPath } = await writer.saveBlueprint(
+      blueprint('proj-flow'),
+      undefined,
+      projectDir
+    );
     expect(scriptPath).toBe(join(projectWorkflows, 'proj-flow.js'));
     const detail = await reader.getBlueprintDetail('proj-flow', undefined, projectDir);
     expect(detail).toMatchObject({ scope: 'project', projectPath: projectDir });
@@ -615,9 +619,9 @@ describe('project-local workflows (.claude/workflows in the project cwd)', () =>
   });
 
   it('rejects relative project paths', async () => {
-    await expect(
-      reader.getBlueprintDetail('proj-flow', undefined, 'relative/dir')
-    ).rejects.toThrow(/Invalid project path/);
+    await expect(reader.getBlueprintDetail('proj-flow', undefined, 'relative/dir')).rejects.toThrow(
+      /Invalid project path/
+    );
     await expect(
       writer.saveBlueprint(blueprint('evil-flow'), undefined, '../evil')
     ).rejects.toThrow(/Invalid project path/);

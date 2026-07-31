@@ -79,7 +79,9 @@ export function FocusMinimap({
                 type="button"
                 className={isActive ? 'cl-focus-current' : 'cl-focus-tick'}
                 style={style}
-                data-accent={(!isActive && it.variant !== 'user' && it.variant !== 'claude') || undefined}
+                data-accent={
+                  (!isActive && it.variant !== 'user' && it.variant !== 'claude') || undefined
+                }
                 data-dim={!matches(it) || undefined}
                 onClick={() => onJump(it.n)}
                 title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}

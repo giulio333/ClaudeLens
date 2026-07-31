@@ -136,11 +136,7 @@ describe('diffRegistry', () => {
     const a = session({ sessionId: 'a', status: 'busy' });
     const b = session({ sessionId: 'b', status: 'busy' });
     diffRegistry([a, b], state, deps); // warm-up
-    const events = diffRegistry(
-      [{ ...a, status: 'waiting' }, b],
-      state,
-      deps
-    );
+    const events = diffRegistry([{ ...a, status: 'waiting' }, b], state, deps);
     expect(events).toHaveLength(1);
     expect(events[0].sessionId).toBe('a');
   });

@@ -43,7 +43,6 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
 
     if (b.type === 'text' && typeof b.text === 'string') {
       if (b.text.trim()) blocks.push({ type: 'text', text: b.text });
-
     } else if (b.type === 'thinking') {
       // Mirror the text handling: skip empty/whitespace-only thinking blocks so
       // they don't survive as zero-content entries that defeat the empty-message
@@ -51,7 +50,6 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
       if (typeof b.thinking === 'string' && b.thinking.trim()) {
         blocks.push({ type: 'thinking', thinking: b.thinking });
       }
-
     } else if (b.type === 'tool_use') {
       blocks.push({
         type: 'tool_use',
@@ -59,28 +57,28 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
         name: String(b.name ?? 'tool'),
         input: (b.input as Record<string, unknown>) ?? {},
       });
-
     } else if (b.type === 'tool_result') {
       const content =
-        typeof b.content === 'string' ? b.content :
-        Array.isArray(b.content)
-          ? (b.content as Array<unknown>)
-              .map(c => {
-                // Nel formato Anthropic gli elementi possono essere stringhe
-                // semplici (`["text"]`) o anche `null`: senza guardia sul tipo
-                // l'accesso a `c.type` lancerebbe TypeError, scartando l'intero
-                // messaggio dal try/catch per-riga.
-                if (typeof c === 'string') return c;
-                if (c && typeof c === 'object') {
-                  const block = c as { type?: string; text?: string; tool_name?: string };
-                  return block.type === 'tool_reference' && block.tool_name
-                    ? `→ ${block.tool_name}`
-                    : (block.text ?? '');
-                }
-                return '';
-              })
-              .join('\n')
-          : '';
+        typeof b.content === 'string'
+          ? b.content
+          : Array.isArray(b.content)
+            ? (b.content as Array<unknown>)
+                .map(c => {
+                  // Nel formato Anthropic gli elementi possono essere stringhe
+                  // semplici (`["text"]`) o anche `null`: senza guardia sul tipo
+                  // l'accesso a `c.type` lancerebbe TypeError, scartando l'intero
+                  // messaggio dal try/catch per-riga.
+                  if (typeof c === 'string') return c;
+                  if (c && typeof c === 'object') {
+                    const block = c as { type?: string; text?: string; tool_name?: string };
+                    return block.type === 'tool_reference' && block.tool_name
+                      ? `→ ${block.tool_name}`
+                      : (block.text ?? '');
+                  }
+                  return '';
+                })
+                .join('\n')
+            : '';
       blocks.push({
         type: 'tool_result',
         toolUseId: String(b.tool_use_id ?? ''),
@@ -123,7 +121,9 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   const seenUuids = new Set<string>();
 
   try {
-    const lines = readFileSync(filePath, 'utf-8').split('\n').filter(l => l.trim());
+    const lines = readFileSync(filePath, 'utf-8')
+      .split('\n')
+      .filter(l => l.trim());
 
     for (const line of lines) {
       try {
@@ -255,14 +255,17 @@ export async function readChatSessionViaSdk(sessionId: string): Promise<ChatMess
 // della lettura diretta del file `subagents/agent-*.jsonl`.
 export async function readSubagentTranscriptViaSdk(
   sessionId: string,
-  agentId: string,
+  agentId: string
 ): Promise<ChatMessage[]> {
   const sdk = await import('@anthropic-ai/claude-agent-sdk');
   const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
   return mapSdkMessagesToChat(raw);
 }
 
-export async function findSessionFile(projectPath: string, filename: string): Promise<string | null> {
+export async function findSessionFile(
+  projectPath: string,
+  filename: string
+): Promise<string | null> {
   const sessionsDir = join(projectPath, 'sessions');
   const inSessions = join(sessionsDir, filename);
   if (existsSync(inSessions)) return inSessions;

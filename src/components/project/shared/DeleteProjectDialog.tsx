@@ -1,11 +1,16 @@
 interface DeleteProjectDialogProps {
-  project: { hash: string; realPath: string }
-  isLoading: boolean
-  onConfirm: () => void
-  onCancel: () => void
+  project: { hash: string; realPath: string };
+  isLoading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
 }
 
-export function DeleteProjectDialog({ project, isLoading, onConfirm, onCancel }: DeleteProjectDialogProps) {
+export function DeleteProjectDialog({
+  project,
+  isLoading,
+  onConfirm,
+  onCancel,
+}: DeleteProjectDialogProps) {
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
       <div className="bg-[var(--cl-paper-2)] rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
@@ -33,5 +38,5 @@ export function DeleteProjectDialog({ project, isLoading, onConfirm, onCancel }:
         </div>
       </div>
     </div>
-  )
+  );
 }

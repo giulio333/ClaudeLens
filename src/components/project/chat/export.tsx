@@ -1,31 +1,31 @@
-import { renderToStaticMarkup } from 'react-dom/server'
-import ReactMarkdown from 'react-markdown'
-import remarkGfm from 'remark-gfm'
-import remarkMath from 'remark-math'
-import rehypeKatex from 'rehype-katex'
-import rehypeHighlight from 'rehype-highlight'
+import { renderToStaticMarkup } from 'react-dom/server';
+import ReactMarkdown from 'react-markdown';
+import remarkGfm from 'remark-gfm';
+import remarkMath from 'remark-math';
+import rehypeKatex from 'rehype-katex';
+import rehypeHighlight from 'rehype-highlight';
 // Inlined at build time (Vite ?raw) so the standalone export document needs no
 // external stylesheet. Light theme: the export sheet is always light, unlike
 // the UI which ships github-dark-dimmed.
-import hljsLightCss from 'highlight.js/styles/github.css?raw'
-import { ChatContentBlock, SessionSummary } from '../../../types'
-import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils'
-import { ClaudeSlashCommand, ProcessedMessage, TaskNotification, ToolGroup } from './utils'
+import hljsLightCss from 'highlight.js/styles/github.css?raw';
+import { ChatContentBlock, SessionSummary } from '../../../types';
+import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils';
+import { ClaudeSlashCommand, ProcessedMessage, TaskNotification, ToolGroup } from './utils';
 import {
   Highlight,
   exportHighlightCss,
   fencedCodeRanges,
   materializeHighlightSentinels,
   wrapHighlightsWithSentinels,
-} from './highlights'
+} from './highlights';
 
-export type ChatExportFormat = 'markdown' | 'pdf'
-export type ChatExportPreset = 'message' | 'team' | 'docs' | 'audit'
+export type ChatExportFormat = 'markdown' | 'pdf';
+export type ChatExportPreset = 'message' | 'team' | 'docs' | 'audit';
 
 export const CHAT_EXPORT_PRESETS: Array<{
-  value: ChatExportPreset
-  label: string
-  description: string
+  value: ChatExportPreset;
+  label: string;
+  description: string;
 }> = [
   {
     value: 'message',
@@ -47,37 +47,37 @@ export const CHAT_EXPORT_PRESETS: Array<{
     label: 'Audit',
     description: 'Full transcript with thinking, tool inputs, and results.',
   },
-]
+];
 
 type ExportOptions = {
-  includeThinking: boolean
-  includeToolInputs: boolean
-  includeToolResults: boolean
-  includeToolErrors: boolean
-  includeCompactToolNotes: boolean
-}
+  includeThinking: boolean;
+  includeToolInputs: boolean;
+  includeToolResults: boolean;
+  includeToolErrors: boolean;
+  includeCompactToolNotes: boolean;
+};
 
 type BuildChatExportInput = {
-  session: SessionSummary
-  processed: ProcessedMessage[]
-  preset: ChatExportPreset
+  session: SessionSummary;
+  processed: ProcessedMessage[];
+  preset: ChatExportPreset;
   /** Persistent text highlights to bake into the export as <mark>. */
-  highlights?: Highlight[]
-}
+  highlights?: Highlight[];
+};
 
 export type ChatExportDocument = {
-  title: string
-  defaultBaseName: string
-  markdown: string
-  html: string
-}
+  title: string;
+  defaultBaseName: string;
+  markdown: string;
+  html: string;
+};
 
 const PRESET_LABEL: Record<ChatExportPreset, string> = {
   message: 'Message only',
   team: 'Team summary',
   docs: 'Documentation',
   audit: 'Full audit',
-}
+};
 
 function optionsForPreset(preset: ChatExportPreset): ExportOptions {
   // "Message only" strips everything but the visible message text — the export
@@ -89,7 +89,7 @@ function optionsForPreset(preset: ChatExportPreset): ExportOptions {
       includeToolResults: false,
       includeToolErrors: false,
       includeCompactToolNotes: false,
-    }
+    };
   }
   return {
     includeThinking: preset === 'audit',
@@ -97,18 +97,18 @@ function optionsForPreset(preset: ChatExportPreset): ExportOptions {
     includeToolResults: preset === 'audit',
     includeToolErrors: preset !== 'team',
     includeCompactToolNotes: preset !== 'audit',
-  }
+  };
 }
 
 function turnTime(timestamp: string): string {
-  const d = new Date(timestamp)
-  if (Number.isNaN(d.getTime())) return ''
+  const d = new Date(timestamp);
+  if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleTimeString('it-IT', {
     hour: '2-digit',
     minute: '2-digit',
     second: '2-digit',
     hour12: false,
-  })
+  });
 }
 
 function safeSlug(value: string): string {
@@ -117,17 +117,17 @@ function safeSlug(value: string): string {
     .replace(/[\u0300-\u036f]/g, '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-  return (normalized || 'untitled-session').slice(0, 72)
+    .replace(/^-+|-+$/g, '');
+  return (normalized || 'untitled-session').slice(0, 72);
 }
 
 function previewValue(value: unknown, max = 96): string {
-  const text = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value)
-  return text.replace(/\s+/g, ' ').trim().slice(0, max)
+  const text = typeof value === 'string' ? value : value == null ? '' : JSON.stringify(value);
+  return text.replace(/\s+/g, ' ').trim().slice(0, max);
 }
 
 function toolPreview(input: Record<string, unknown> | null | undefined): string {
-  const i = input ?? {}
+  const i = input ?? {};
   return (
     previewValue(i.file_path) ||
     previewValue(i.command) ||
@@ -135,41 +135,41 @@ function toolPreview(input: Record<string, unknown> | null | undefined): string 
     previewValue(i.description) ||
     previewValue(i.url) ||
     previewValue(i.prompt)
-  )
+  );
 }
 
 function jsonFence(value: unknown): string {
-  return fence(JSON.stringify(value, null, 2), 'json')
+  return fence(JSON.stringify(value, null, 2), 'json');
 }
 
 function fence(value: string, lang = 'text'): string {
-  const cleaned = value.trimEnd()
+  const cleaned = value.trimEnd();
   // A fence must be longer than any backtick run inside it, or the content
   // would close it early (the old ```/~~~ toggle still broke on content
   // carrying both markers).
-  const runs = cleaned.match(/`{3,}/g)
-  const longest = runs ? Math.max(...runs.map(r => r.length)) : 0
-  const marker = '`'.repeat(Math.max(3, longest + 1))
-  return `${marker}${lang}\n${cleaned}\n${marker}`
+  const runs = cleaned.match(/`{3,}/g);
+  const longest = runs ? Math.max(...runs.map(r => r.length)) : 0;
+  const marker = '`'.repeat(Math.max(3, longest + 1));
+  return `${marker}${lang}\n${cleaned}\n${marker}`;
 }
 
 function roleLabel(role: 'user' | 'assistant'): string {
-  return role === 'user' ? 'User' : 'Claude'
+  return role === 'user' ? 'User' : 'Claude';
 }
 
 function toolStatus(group: ToolGroup): string {
-  if (!group.result) return 'no result'
-  return group.result.isError ? 'error' : 'ok'
+  if (!group.result) return 'no result';
+  return group.result.isError ? 'error' : 'ok';
 }
 
 function toolLine(group: ToolGroup): string {
-  const preview = toolPreview(group.use.input as Record<string, unknown>)
-  const suffix = preview ? ` - ${preview}` : ''
-  return `- \`${group.use.name}\`${suffix} (${toolStatus(group)})`
+  const preview = toolPreview(group.use.input as Record<string, unknown>);
+  const suffix = preview ? ` - ${preview}` : '';
+  return `- \`${group.use.name}\`${suffix} (${toolStatus(group)})`;
 }
 
 function allToolGroups(processed: ProcessedMessage[]): ToolGroup[] {
-  return processed.flatMap(p => p.toolGroups)
+  return processed.flatMap(p => p.toolGroups);
 }
 
 /** Whether the chosen options surface any tool content at all (false for the
@@ -180,30 +180,31 @@ function showsTools(options: ExportOptions): boolean {
     options.includeToolInputs ||
     options.includeToolResults ||
     options.includeToolErrors
-  )
+  );
 }
 
 /** Whether a turn contributes anything under the chosen options. A tool-only
  *  assistant turn exported with the "message" preset would otherwise render as
  *  an empty shell ("No visible message text.") — skip it entirely instead. */
 function turnHasVisibleContent(processed: ProcessedMessage, options: ExportOptions): boolean {
-  const { msg, toolGroups } = processed
+  const { msg, toolGroups } = processed;
   // A slash-command turn always shows (the command IS the user's message); a
   // task-notification is a background-agent system event, surfaced only when
   // the preset shows tool activity (the "message" preset strips it).
-  if (processed.command) return true
-  if (processed.notification) return showsTools(options)
-  if (textBlocks(msg.content).some(b => b.text.trim())) return true
-  if (options.includeThinking && thinkingBlocks(msg.content).some(b => b.thinking.trim())) return true
-  return toolGroups.length > 0 && showsTools(options)
+  if (processed.command) return true;
+  if (processed.notification) return showsTools(options);
+  if (textBlocks(msg.content).some(b => b.text.trim())) return true;
+  if (options.includeThinking && thinkingBlocks(msg.content).some(b => b.thinking.trim()))
+    return true;
+  return toolGroups.length > 0 && showsTools(options);
 }
 
 function buildToolSummaryMarkdown(processed: ProcessedMessage[]): string[] {
-  const groups = allToolGroups(processed)
-  if (groups.length === 0) return []
+  const groups = allToolGroups(processed);
+  if (groups.length === 0) return [];
 
-  const counts = new Map<string, number>()
-  groups.forEach(g => counts.set(g.use.name, (counts.get(g.use.name) ?? 0) + 1))
+  const counts = new Map<string, number>();
+  groups.forEach(g => counts.set(g.use.name, (counts.get(g.use.name) ?? 0) + 1));
 
   return [
     '## Tool Summary',
@@ -212,102 +213,116 @@ function buildToolSummaryMarkdown(processed: ProcessedMessage[]): string[] {
       .sort((a, b) => b[1] - a[1])
       .map(([name, count]) => `- \`${name}\`: ${count}`),
     '',
-  ]
+  ];
 }
 
 function textBlocks(blocks: ChatContentBlock[]) {
-  return blocks.filter((b): b is Extract<ChatContentBlock, { type: 'text' }> => b.type === 'text')
+  return blocks.filter((b): b is Extract<ChatContentBlock, { type: 'text' }> => b.type === 'text');
 }
 
 function thinkingBlocks(blocks: ChatContentBlock[]) {
-  return blocks.filter((b): b is Extract<ChatContentBlock, { type: 'thinking' }> => b.type === 'thinking')
+  return blocks.filter(
+    (b): b is Extract<ChatContentBlock, { type: 'thinking' }> => b.type === 'thinking'
+  );
 }
 
 /** Highlights belonging to one text block of a message (same indexing as the
  *  rendered MessageBubble: position within the message's text blocks). */
 function blockHighlights(highlights: Highlight[], uuid: string, blockIndex: number): Highlight[] {
-  return highlights.filter(h => h.messageUuid === uuid && h.blockIndex === blockIndex)
+  return highlights.filter(h => h.messageUuid === uuid && h.blockIndex === blockIndex);
 }
 
 /** Markdown one-liner for a slash-command turn — mirrors the live view's
  *  command card instead of leaking the raw <command-name> XML framing that
  *  Claude Code persists in the user message. */
 function commandMarkdown(command: ClaudeSlashCommand, options: ExportOptions): string[] {
-  const args = command.args && command.args !== command.command ? ` ${command.args}` : ''
-  const lines = [`\`/${command.command}\`${args}`, '']
-  if (command.output && showsTools(options)) lines.push(fence(command.output), '')
-  return lines
+  const args = command.args && command.args !== command.command ? ` ${command.args}` : '';
+  const lines = [`\`/${command.command}\`${args}`, ''];
+  if (command.output && showsTools(options)) lines.push(fence(command.output), '');
+  return lines;
 }
 
 function notificationMarkdown(notification: TaskNotification): string[] {
-  return [`*Task event (${notification.status}): ${notification.summary}*`, '']
+  return [`*Task event (${notification.status}): ${notification.summary}*`, ''];
 }
 
 function buildTurnMarkdown(
   processed: ProcessedMessage,
   index: number,
   options: ExportOptions,
-  highlights: Highlight[],
+  highlights: Highlight[]
 ): string[] {
-  const { msg, toolGroups } = processed
-  const who = processed.notification ? 'Task event' : roleLabel(msg.role)
-  const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`
-  const lines = [heading, '']
+  const { msg, toolGroups } = processed;
+  const who = processed.notification ? 'Task event' : roleLabel(msg.role);
+  const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`;
+  const lines = [heading, ''];
 
   // Command / notification turns replace their raw text blocks (which carry
   // Claude Code's internal XML framing) with the same compact representation
   // the live view renders.
-  if (processed.command) return [...lines, ...commandMarkdown(processed.command, options)]
-  if (processed.notification) return [...lines, ...notificationMarkdown(processed.notification)]
+  if (processed.command) return [...lines, ...commandMarkdown(processed.command, options)];
+  if (processed.notification) return [...lines, ...notificationMarkdown(processed.notification)];
 
   if (options.includeThinking) {
     for (const block of thinkingBlocks(msg.content)) {
-      if (!block.thinking.trim()) continue
-      lines.push('#### Thinking', '', fence(block.thinking), '')
+      if (!block.thinking.trim()) continue;
+      lines.push('#### Thinking', '', fence(block.thinking), '');
     }
   }
 
   textBlocks(msg.content).forEach((block, blockIndex) => {
-    const hls = blockHighlights(highlights, msg.uuid, blockIndex)
+    const hls = blockHighlights(highlights, msg.uuid, blockIndex);
     // Highlights bake in as inline <mark> (renders on GitHub & most viewers); a
     // quote that can't be located literally is dropped, text left intact.
     // skipFencedCode: a <mark> inside a ``` fence would print as literal text in
     // Markdown, so a highlight resolving inside a code block is soft-degraded
     // here (it still renders on screen and in the HTML/PDF export).
-    const text = hls.length > 0
-      ? materializeHighlightSentinels(wrapHighlightsWithSentinels(block.text, hls, { skipFencedCode: true }))
-      : block.text
-    lines.push(text.trim(), '')
-  })
+    const text =
+      hls.length > 0
+        ? materializeHighlightSentinels(
+            wrapHighlightsWithSentinels(block.text, hls, { skipFencedCode: true })
+          )
+        : block.text;
+    lines.push(text.trim(), '');
+  });
 
   if (toolGroups.length > 0 && options.includeCompactToolNotes) {
-    lines.push('#### Tool Activity', '')
+    lines.push('#### Tool Activity', '');
     for (const group of toolGroups) {
-      lines.push(toolLine(group))
+      lines.push(toolLine(group));
       if (options.includeToolErrors && group.result?.isError) {
-        lines.push(`  - Error: ${previewValue(group.result.content, 180)}`)
+        lines.push(`  - Error: ${previewValue(group.result.content, 180)}`);
       }
     }
-    lines.push('')
+    lines.push('');
   }
 
   if (toolGroups.length > 0 && (options.includeToolInputs || options.includeToolResults)) {
-    lines.push('#### Tool Audit', '')
+    lines.push('#### Tool Audit', '');
     for (const group of toolGroups) {
       // Escape the tool name before embedding it in raw <summary> HTML — a tool
       // name carrying markup would otherwise inject into the Markdown export.
-      lines.push(`<details>`, `<summary>${escapeHtml(group.use.name)} - ${toolStatus(group)}</summary>`, '')
+      lines.push(
+        `<details>`,
+        `<summary>${escapeHtml(group.use.name)} - ${toolStatus(group)}</summary>`,
+        ''
+      );
       if (options.includeToolInputs) {
-        lines.push('Input:', '', jsonFence(group.use.input), '')
+        lines.push('Input:', '', jsonFence(group.use.input), '');
       }
       if (options.includeToolResults && group.result) {
-        lines.push(group.result.isError ? 'Error result:' : 'Result:', '', fence(group.result.content), '')
+        lines.push(
+          group.result.isError ? 'Error result:' : 'Result:',
+          '',
+          fence(group.result.content),
+          ''
+        );
       }
-      lines.push('</details>', '')
+      lines.push('</details>', '');
     }
   }
 
-  return lines
+  return lines;
 }
 
 /** The session's primary model id: first real model from the per-model usage
@@ -316,24 +331,24 @@ function buildTurnMarkdown(
 function primaryModelOf(session: SessionSummary): string | undefined {
   const fromMap = session.models
     ? Object.keys(session.models).filter(k => k !== '<synthetic>')[0]
-    : undefined
-  return fromMap ?? session.model
+    : undefined;
+  return fromMap ?? session.model;
 }
 
 /** Collapse runs of 4+ newlines (generation artifacts) — but never inside a
  *  fenced code block, where blank lines are content (a tool result or a code
  *  sample would come out altered). */
 function collapseBlankRuns(text: string): string {
-  const fences = fencedCodeRanges(text)
+  const fences = fencedCodeRanges(text);
   return text.replace(/\n{4,}/g, (m, offset: number) =>
-    fences.some(f => offset >= f.from && offset < f.to) ? m : '\n\n\n',
-  )
+    fences.some(f => offset >= f.from && offset < f.to) ? m : '\n\n\n'
+  );
 }
 
 function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): string {
-  const { session, processed, preset } = input
-  const title = sessionTitle(session, 120)
-  const primaryModel = primaryModelOf(session)
+  const { session, processed, preset } = input;
+  const title = sessionTitle(session, 120);
+  const primaryModel = primaryModelOf(session);
   // The absolute project path is deliberately omitted — it can leak the username
   // and internal directory structure into a shared export.
   const lines = [
@@ -346,19 +361,19 @@ function buildMarkdown(input: BuildChatExportInput, options: ExportOptions): str
     primaryModel ? `> Model: ${fmtModel(primaryModel)}` : null,
     `> Tokens: ${fmt(session.totalTokens)} | Estimated cost: ${fmtCost(session.estimatedCost)}`,
     '',
-  ].filter((line): line is string => line !== null)
+  ].filter((line): line is string => line !== null);
 
-  if (showsTools(options)) lines.push(...buildToolSummaryMarkdown(processed))
-  lines.push('## Conversation', '')
+  if (showsTools(options)) lines.push(...buildToolSummaryMarkdown(processed));
+  lines.push('## Conversation', '');
 
-  const highlights = input.highlights ?? []
+  const highlights = input.highlights ?? [];
   processed
     .filter(p => turnHasVisibleContent(p, options))
     .forEach((p, i) => {
-      lines.push(...buildTurnMarkdown(p, i, options, highlights))
-    })
+      lines.push(...buildTurnMarkdown(p, i, options, highlights));
+    });
 
-  return collapseBlankRuns(lines.join('\n')).trimEnd() + '\n'
+  return collapseBlankRuns(lines.join('\n')).trimEnd() + '\n';
 }
 
 function escapeHtml(value: string): string {
@@ -367,7 +382,7 @@ function escapeHtml(value: string): string {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;')
+    .replace(/'/g, '&#39;');
 }
 
 // Render markdown to a static HTML string using the SAME react-markdown pipeline
@@ -387,14 +402,14 @@ function markdownToHtml(value: string): string {
       rehypePlugins={[[rehypeKatex, { output: 'mathml' }], rehypeHighlight]}
     >
       {value}
-    </ReactMarkdown>,
-  )
+    </ReactMarkdown>
+  );
 }
 
 function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
-  const preview = toolPreview(group.use.input as Record<string, unknown>)
-  const status = toolStatus(group)
-  const statusClass = status === 'error' ? 'is-error' : status === 'ok' ? 'is-ok' : ''
+  const preview = toolPreview(group.use.input as Record<string, unknown>);
+  const status = toolStatus(group);
+  const statusClass = status === 'error' ? 'is-error' : status === 'ok' ? 'is-ok' : '';
 
   if (options.includeToolInputs || options.includeToolResults) {
     return `
@@ -406,12 +421,13 @@ function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
         ${options.includeToolInputs ? `<h5>Input</h5><pre><code>${escapeHtml(JSON.stringify(group.use.input, null, 2))}</code></pre>` : ''}
         ${options.includeToolResults && group.result ? `<h5>${group.result.isError ? 'Error result' : 'Result'}</h5><pre><code>${escapeHtml(group.result.content)}</code></pre>` : ''}
       </section>
-    `
+    `;
   }
 
-  const error = options.includeToolErrors && group.result?.isError
-    ? `<div class="tool-error">${escapeHtml(previewValue(group.result.content, 220))}</div>`
-    : ''
+  const error =
+    options.includeToolErrors && group.result?.isError
+      ? `<div class="tool-error">${escapeHtml(previewValue(group.result.content, 220))}</div>`
+      : '';
 
   return `
     <div class="tool-note">
@@ -420,23 +436,24 @@ function renderToolHtml(group: ToolGroup, options: ExportOptions): string {
       <b class="${statusClass}">${escapeHtml(status)}</b>
       ${error}
     </div>
-  `
+  `;
 }
 
 /** HTML for a slash-command turn — the compact command chip the live view
  *  shows, never the raw <command-name> XML persisted in the transcript. */
 function renderCommandHtml(command: ClaudeSlashCommand, options: ExportOptions): string {
-  const args = command.args && command.args !== command.command ? command.args : ''
-  const output = command.output && showsTools(options)
-    ? `<pre><code>${escapeHtml(command.output)}</code></pre>`
-    : ''
+  const args = command.args && command.args !== command.command ? command.args : '';
+  const output =
+    command.output && showsTools(options)
+      ? `<pre><code>${escapeHtml(command.output)}</code></pre>`
+      : '';
   return `
     <div class="command-line">
       <code>/${escapeHtml(command.command)}</code>
       ${args ? `<span class="command-args">${escapeHtml(args)}</span>` : ''}
     </div>
     ${output}
-  `
+  `;
 }
 
 function renderNotificationHtml(notification: TaskNotification): string {
@@ -446,54 +463,63 @@ function renderNotificationHtml(notification: TaskNotification): string {
       <em>${escapeHtml(notification.summary)}</em>
       <b class="${notification.status === 'completed' ? 'is-ok' : 'is-error'}">${escapeHtml(notification.status)}</b>
     </div>
-  `
+  `;
 }
 
 function renderTurnHtml(
   processed: ProcessedMessage,
   _index: number,
   options: ExportOptions,
-  highlights: Highlight[],
+  highlights: Highlight[]
 ): string {
-  const { msg, toolGroups } = processed
-  const time = turnTime(msg.timestamp)
-  const role = processed.notification ? 'Task event' : roleLabel(msg.role)
+  const { msg, toolGroups } = processed;
+  const time = turnTime(msg.timestamp);
+  const role = processed.notification ? 'Task event' : roleLabel(msg.role);
   // Command / notification turns replace their raw text blocks (Claude Code's
   // internal XML framing) with the live view's compact representation.
   const specialHtml = processed.command
     ? renderCommandHtml(processed.command, options)
     : processed.notification
       ? renderNotificationHtml(processed.notification)
-      : null
-  const textHtml = specialHtml !== null ? '' : textBlocks(msg.content)
-    .map((block, blockIndex) => {
-      const hls = blockHighlights(highlights, msg.uuid, blockIndex)
-      // Sentinels are injected into the raw text, pass through react-markdown as
-      // plain text (PUA chars), then become real <mark> tags.
-      const wrapped = hls.length > 0 ? wrapHighlightsWithSentinels(block.text, hls) : block.text
-      // User prompts render verbatim in the live view (a plain <p>, not markdown),
-      // so the export mirrors that: escape + <br>, no markdown interpretation —
-      // a literal "*x*" or "# y" typed in a prompt stays literal. Assistant text
-      // is markdown, matching <Markdown> on screen.
-      const html =
-        msg.role === 'user'
-          ? materializeHighlightSentinels(escapeHtml(wrapped).replace(/\n/g, '<br>'))
-          : materializeHighlightSentinels(markdownToHtml(wrapped))
-      return `<div class="message-text">${html}</div>`
-    })
-    .join('')
+      : null;
+  const textHtml =
+    specialHtml !== null
+      ? ''
+      : textBlocks(msg.content)
+          .map((block, blockIndex) => {
+            const hls = blockHighlights(highlights, msg.uuid, blockIndex);
+            // Sentinels are injected into the raw text, pass through react-markdown as
+            // plain text (PUA chars), then become real <mark> tags.
+            const wrapped =
+              hls.length > 0 ? wrapHighlightsWithSentinels(block.text, hls) : block.text;
+            // User prompts render verbatim in the live view (a plain <p>, not markdown),
+            // so the export mirrors that: escape + <br>, no markdown interpretation —
+            // a literal "*x*" or "# y" typed in a prompt stays literal. Assistant text
+            // is markdown, matching <Markdown> on screen.
+            const html =
+              msg.role === 'user'
+                ? materializeHighlightSentinels(escapeHtml(wrapped).replace(/\n/g, '<br>'))
+                : materializeHighlightSentinels(markdownToHtml(wrapped));
+            return `<div class="message-text">${html}</div>`;
+          })
+          .join('');
   const thinkingHtml = options.includeThinking
     ? thinkingBlocks(msg.content)
-      .filter(block => block.thinking.trim())
-      .map(block => `<div class="thinking"><strong>Thinking</strong>${markdownToHtml(block.thinking)}</div>`)
-      .join('')
-    : ''
-  const toolsHtml = toolGroups.length > 0 && showsTools(options)
-    ? `<div class="turn-tools">${toolGroups.map(group => renderToolHtml(group, options)).join('')}</div>`
-    : ''
-  const model = msg.role === 'assistant' && msg.model && msg.model !== '<synthetic>'
-    ? `<span class="turn-model">${escapeHtml(fmtModel(msg.model))}</span>`
-    : ''
+        .filter(block => block.thinking.trim())
+        .map(
+          block =>
+            `<div class="thinking"><strong>Thinking</strong>${markdownToHtml(block.thinking)}</div>`
+        )
+        .join('')
+    : '';
+  const toolsHtml =
+    toolGroups.length > 0 && showsTools(options)
+      ? `<div class="turn-tools">${toolGroups.map(group => renderToolHtml(group, options)).join('')}</div>`
+      : '';
+  const model =
+    msg.role === 'assistant' && msg.model && msg.model !== '<synthetic>'
+      ? `<span class="turn-model">${escapeHtml(fmtModel(msg.model))}</span>`
+      : '';
 
   // Clean reading column matching the ClaudeLens chat view: a small textual
   // header (role · time · model) over the message body — no colored rail.
@@ -508,13 +534,13 @@ function renderTurnHtml(
       ${specialHtml ?? (textHtml || '<p class="muted">No visible message text.</p>')}
       ${toolsHtml}
     </article>
-  `
+  `;
 }
 
 function buildHtml(input: BuildChatExportInput, options: ExportOptions): string {
-  const { session, processed } = input
-  const title = sessionTitle(session, 120)
-  const primaryModel = primaryModelOf(session)
+  const { session, processed } = input;
+  const title = sessionTitle(session, 120);
+  const primaryModel = primaryModelOf(session);
 
   return `<!doctype html>
 <html>
@@ -673,23 +699,25 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
     <div class="footer">Exported from ClaudeLens on ${escapeHtml(fmtDate(new Date().toISOString()))}. Review before sharing outside your organization.</div>
   </div>
 </body>
-</html>`
+</html>`;
 }
 
 export function buildChatExportDocument(input: BuildChatExportInput): ChatExportDocument {
-  const options = optionsForPreset(input.preset)
-  const title = sessionTitle(input.session, 120)
+  const options = optionsForPreset(input.preset);
+  const title = sessionTitle(input.session, 120);
   const base = [
     'claudelens',
     safeSlug(title),
     input.session.filename.replace(/\.jsonl$/i, ''),
     input.preset,
-  ].filter(Boolean).join('-')
+  ]
+    .filter(Boolean)
+    .join('-');
 
   return {
     title,
     defaultBaseName: base,
     markdown: buildMarkdown(input, options),
     html: buildHtml(input, options),
-  }
+  };
 }

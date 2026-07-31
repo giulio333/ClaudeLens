@@ -1,14 +1,29 @@
-import { useState } from 'react'
-import { Skill, SkillFile, SkillFileRole, useSkillFile, useWriteSkillFile, useOpenSkillFile } from '../../../hooks/useIPC'
-import { Lens } from '../overview/Lens'
-import { TopBar } from '../shared/TopBar'
-import { FileIcon } from '../chat/fileIcons'
-import { fileExt } from '../chat/utils'
-import Markdown from '../../Markdown'
+import { useState } from 'react';
+import {
+  Skill,
+  SkillFile,
+  SkillFileRole,
+  useSkillFile,
+  useWriteSkillFile,
+  useOpenSkillFile,
+} from '../../../hooks/useIPC';
+import { Lens } from '../overview/Lens';
+import { TopBar } from '../shared/TopBar';
+import { FileIcon } from '../chat/fileIcons';
+import { fileExt } from '../chat/utils';
+import Markdown from '../../Markdown';
 
 // Display order + labels for the role buckets. Referenced files float to the top
 // of each bucket (the reader already sorted `skill.files` that way).
-const ROLE_ORDER: SkillFileRole[] = ['doc', 'script', 'template', 'asset', 'extension', 'eval', 'meta']
+const ROLE_ORDER: SkillFileRole[] = [
+  'doc',
+  'script',
+  'template',
+  'asset',
+  'extension',
+  'eval',
+  'meta',
+];
 const ROLE_LABEL: Record<SkillFileRole, string> = {
   doc: 'Reference docs',
   script: 'Scripts',
@@ -17,17 +32,37 @@ const ROLE_LABEL: Record<SkillFileRole, string> = {
   extension: 'Extensions',
   eval: 'Evals',
   meta: 'Other files',
-}
+};
 
 function fmtSize(bytes: number): string {
-  if (bytes < 1024) return `${bytes} B`
-  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
-  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function FileTile({ glyph, name, desc, meta, accent, dense, onOpen }: { glyph: React.ReactNode; name: React.ReactNode; desc?: React.ReactNode; meta?: React.ReactNode; accent?: boolean; dense?: boolean; onOpen: () => void }) {
+function FileTile({
+  glyph,
+  name,
+  desc,
+  meta,
+  accent,
+  dense,
+  onOpen,
+}: {
+  glyph: React.ReactNode;
+  name: React.ReactNode;
+  desc?: React.ReactNode;
+  meta?: React.ReactNode;
+  accent?: boolean;
+  dense?: boolean;
+  onOpen: () => void;
+}) {
   return (
-    <button type="button" className={`cl-tile ${accent ? 'accent' : ''} ${dense ? 'cl-tile--file' : ''}`} onClick={onOpen}>
+    <button
+      type="button"
+      className={`cl-tile ${accent ? 'accent' : ''} ${dense ? 'cl-tile--file' : ''}`}
+      onClick={onOpen}
+    >
       <span className="glyph">{glyph}</span>
       <div style={{ minWidth: 0 }}>
         <div className="t-name">{name}</div>
@@ -35,7 +70,7 @@ function FileTile({ glyph, name, desc, meta, accent, dense, onOpen }: { glyph: R
       </div>
       {meta && <span className="t-meta">{meta}</span>}
     </button>
-  )
+  );
 }
 
 /**
@@ -49,20 +84,24 @@ export function SkillExplorer({
   onOpenManifest,
   onOpenFile,
 }: {
-  skill: Skill
-  onBack: () => void
-  onOpenManifest: () => void
-  onOpenFile: (f: SkillFile) => void
+  skill: Skill;
+  onBack: () => void;
+  onOpenManifest: () => void;
+  onOpenFile: (f: SkillFile) => void;
 }) {
-  const files = skill.files ?? []
-  const groups = ROLE_ORDER.map(role => ({ role, items: files.filter(f => f.role === role) })).filter(
-    g => g.items.length > 0,
-  )
-  const scope = skill.scope === 'global' ? 'Global' : skill.scope === 'plugin' ? 'Plugin' : 'Project'
+  const files = skill.files ?? [];
+  const groups = ROLE_ORDER.map(role => ({
+    role,
+    items: files.filter(f => f.role === role),
+  })).filter(g => g.items.length > 0);
+  const scope =
+    skill.scope === 'global' ? 'Global' : skill.scope === 'plugin' ? 'Plugin' : 'Project';
 
-  const meta: string[] = [scope]
-  if (skill.model) meta.push(skill.model)
-  meta.push(files.length === 0 ? 'no extra files' : `${files.length} file${files.length === 1 ? '' : 's'}`)
+  const meta: string[] = [scope];
+  if (skill.model) meta.push(skill.model);
+  meta.push(
+    files.length === 0 ? 'no extra files' : `${files.length} file${files.length === 1 ? '' : 's'}`
+  );
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
@@ -80,7 +119,9 @@ export function SkillExplorer({
             <span className="glyph">/</span>
           </h1>
           {skill.description && (
-            <p style={{ color: 'var(--cl-ink-3)', fontSize: 14, maxWidth: 720, marginTop: 8 }}>{skill.description}</p>
+            <p style={{ color: 'var(--cl-ink-3)', fontSize: 14, maxWidth: 720, marginTop: 8 }}>
+              {skill.description}
+            </p>
           )}
           <div className="cl-h-meta">
             {meta.map((m, i) => (
@@ -120,7 +161,9 @@ export function SkillExplorer({
                   glyph={<FileIcon ext={fileExt(f.relPath)} />}
                   name={
                     <span style={{ display: 'flex', alignItems: 'center', gap: 6, minWidth: 0 }}>
-                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>{f.relPath}</span>
+                      <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                        {f.relPath}
+                      </span>
                       {f.referenced && <span className="cl-skill-ref-tag">referenced</span>}
                     </span>
                   }
@@ -133,7 +176,7 @@ export function SkillExplorer({
         ))}
       </div>
     </div>
-  )
+  );
 }
 
 /** Inline view/edit of a single supporting file (drill from the explorer). */
@@ -143,43 +186,62 @@ export function SkillFileDetail({
   onBack,
   readOnly = false,
 }: {
-  skill: Skill
-  file: SkillFile
-  onBack: () => void
-  readOnly?: boolean
+  skill: Skill;
+  file: SkillFile;
+  onBack: () => void;
+  readOnly?: boolean;
 }) {
-  const { data: content, isLoading } = useSkillFile(skill.path, file)
-  const write = useWriteSkillFile()
-  const openExt = useOpenSkillFile()
+  const { data: content, isLoading } = useSkillFile(skill.path, file);
+  const write = useWriteSkillFile();
+  const openExt = useOpenSkillFile();
   // `draft` holds the in-edit buffer; null means "not editing". Seeded from the
   // loaded content at the moment Edit is pressed (no content→state effect).
-  const [draft, setDraft] = useState<string | null>(null)
-  const editing = draft !== null
+  const [draft, setDraft] = useState<string | null>(null);
+  const editing = draft !== null;
 
-  const ext = fileExt(file.relPath)
-  const isMarkdown = ext === 'md' || ext === 'mdx'
-  const dirty = editing && draft !== (content ?? '')
+  const ext = fileExt(file.relPath);
+  const isMarkdown = ext === 'md' || ext === 'mdx';
+  const dirty = editing && draft !== (content ?? '');
 
   const save = async () => {
-    if (draft === null) return
-    await write.mutateAsync({ skillPath: skill.path, relPath: file.relPath, content: draft })
-    setDraft(null)
-  }
+    if (draft === null) return;
+    await write.mutateAsync({ skillPath: skill.path, relPath: file.relPath, content: draft });
+    setDraft(null);
+  };
 
   const right = file.isText ? (
     editing ? (
       <div style={{ display: 'flex', gap: 8 }}>
-        <button type="button" className="cl-btn-ghost" onClick={() => setDraft(null)}>Discard</button>
-        <button type="button" className="cl-btn-solid" disabled={!dirty || write.isPending} onClick={save}>Save</button>
+        <button type="button" className="cl-btn-ghost" onClick={() => setDraft(null)}>
+          Discard
+        </button>
+        <button
+          type="button"
+          className="cl-btn-solid"
+          disabled={!dirty || write.isPending}
+          onClick={save}
+        >
+          Save
+        </button>
       </div>
     ) : (
-      !readOnly && content !== undefined && content !== null && (
-        <button type="button" className="cl-btn-ghost" onClick={() => setDraft(content)}>Edit</button>
+      !readOnly &&
+      content !== undefined &&
+      content !== null && (
+        <button type="button" className="cl-btn-ghost" onClick={() => setDraft(content)}>
+          Edit
+        </button>
       )
     )
   ) : (
-    <button type="button" className="cl-btn-ghost" onClick={() => openExt.mutate({ skillPath: skill.path, relPath: file.relPath })}>Open externally</button>
-  )
+    <button
+      type="button"
+      className="cl-btn-ghost"
+      onClick={() => openExt.mutate({ skillPath: skill.path, relPath: file.relPath })}
+    >
+      Open externally
+    </button>
+  );
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
@@ -195,11 +257,15 @@ export function SkillFileDetail({
               <FileIcon ext={ext} />
               {file.relPath}
             </h2>
-            <span className="ct">{ROLE_LABEL[file.role]} · {fmtSize(file.size)}</span>
+            <span className="ct">
+              {ROLE_LABEL[file.role]} · {fmtSize(file.size)}
+            </span>
           </div>
 
           {!file.isText ? (
-            <div className="cl-empty">Binary / non-text file — open it in the default app to inspect.</div>
+            <div className="cl-empty">
+              Binary / non-text file — open it in the default app to inspect.
+            </div>
           ) : isLoading ? (
             <div className="cl-empty">Loading…</div>
           ) : editing ? (
@@ -210,12 +276,16 @@ export function SkillFileDetail({
               spellCheck={false}
             />
           ) : isMarkdown ? (
-            <div className="prose"><Markdown>{content ?? ''}</Markdown></div>
+            <div className="prose">
+              <Markdown>{content ?? ''}</Markdown>
+            </div>
           ) : (
-            <div className="prose"><Markdown>{'```' + (ext || '') + '\n' + (content ?? '') + '\n```'}</Markdown></div>
+            <div className="prose">
+              <Markdown>{'```' + (ext || '') + '\n' + (content ?? '') + '\n```'}</Markdown>
+            </div>
           )}
         </section>
       </div>
     </div>
-  )
+  );
 }

@@ -67,7 +67,10 @@ function parseAgentMarkdown(content: string): { frontmatter: AgentFrontmatter; b
  * read. Shared by `readAgentsFromDir` and the plugin reader (which resolves
  * explicit, declared agent paths rather than scanning).
  */
-export async function readAgentFile(filePath: string, scope: 'global' | 'project' | 'plugin'): Promise<Agent | null> {
+export async function readAgentFile(
+  filePath: string,
+  scope: 'global' | 'project' | 'plugin'
+): Promise<Agent | null> {
   if (!existsSync(filePath)) return null;
   const fileName = basename(filePath);
   try {
@@ -103,7 +106,10 @@ export async function readAgentFile(filePath: string, scope: 'global' | 'project
   }
 }
 
-export async function readAgentsFromDir(dir: string, scope: 'global' | 'project' | 'plugin'): Promise<Agent[]> {
+export async function readAgentsFromDir(
+  dir: string,
+  scope: 'global' | 'project' | 'plugin'
+): Promise<Agent[]> {
   if (!existsSync(dir)) return [];
 
   try {
@@ -111,7 +117,7 @@ export async function readAgentsFromDir(dir: string, scope: 'global' | 'project'
     const agents = await Promise.all(
       entries
         .filter(entry => entry.isFile() && entry.name.endsWith('.md'))
-        .map(entry => readAgentFile(join(dir, entry.name), scope)),
+        .map(entry => readAgentFile(join(dir, entry.name), scope))
     );
     return agents.filter((a): a is Agent => a !== null);
   } catch (e) {

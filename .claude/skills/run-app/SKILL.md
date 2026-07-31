@@ -36,16 +36,16 @@ Quit with `quit` and kill the Vite process when done.
 
 ## Commands
 
-| command | effect |
-|---|---|
-| `launch [real]` | start app (mock data; `real` = real `~/.claude/`) |
-| `ss [name]` | screenshot → `$SCREENSHOT_DIR/<name>.png` |
-| `click-text <text>` | DOM-click button/link/card by text (exact, then substring) |
-| `click <css>` / `wait <css>` | DOM-click / wait for selector |
-| `text [css]` | print innerText (body if omitted) |
-| `eval <js>` | evaluate in page, print JSON |
-| `theme [light\|dark]` | force `data-theme` |
-| `quit` | close app and exit |
+| command                      | effect                                                     |
+| ---------------------------- | ---------------------------------------------------------- |
+| `launch [real]`              | start app (mock data; `real` = real `~/.claude/`)          |
+| `ss [name]`                  | screenshot → `$SCREENSHOT_DIR/<name>.png`                  |
+| `click-text <text>`          | DOM-click button/link/card by text (exact, then substring) |
+| `click <css>` / `wait <css>` | DOM-click / wait for selector                              |
+| `text [css]`                 | print innerText (body if omitted)                          |
+| `eval <js>`                  | evaluate in page, print JSON                               |
+| `theme [light\|dark]`        | force `data-theme`                                         |
+| `quit`                       | close app and exit                                         |
 
 ## Gotchas
 

@@ -1,15 +1,15 @@
 // SVG sub-components for the session timeline (file name kept; original
 // React Flow node components removed).
 
-import type { Heartbeat, Lane, ToolEvent, UserMark } from './buildGraph'
-import { fmtAxisTime, timeTicks, type TimeScale } from './useForceLayout'
+import type { Heartbeat, Lane, ToolEvent, UserMark } from './buildGraph';
+import { fmtAxisTime, timeTicks, type TimeScale } from './useForceLayout';
 
-export const LANE_HEIGHT = 28
-export const LANE_PAD = 4
-export const HEADER_HEIGHT = 80          // heartbeat + axis at the top
-export const LANE_LABEL_WIDTH = 220
-export const RIGHT_PAD = 24
-export const TOP_PAD = 18
+export const LANE_HEIGHT = 28;
+export const LANE_PAD = 4;
+export const HEADER_HEIGHT = 80; // heartbeat + axis at the top
+export const LANE_LABEL_WIDTH = 220;
+export const RIGHT_PAD = 24;
+export const TOP_PAD = 18;
 
 export function HeartbeatStrip({
   heartbeat,
@@ -18,32 +18,34 @@ export function HeartbeatStrip({
   height,
   scale,
 }: {
-  heartbeat: Heartbeat
-  domain: { start: number; end: number }
-  width: number
-  height: number
-  scale: TimeScale
+  heartbeat: Heartbeat;
+  domain: { start: number; end: number };
+  width: number;
+  height: number;
+  scale: TimeScale;
 }) {
-  const { bins, binMs } = heartbeat
-  if (bins.length === 0) return null
+  const { bins, binMs } = heartbeat;
+  if (bins.length === 0) return null;
 
-  const max = Math.max(...bins, 1)
+  const max = Math.max(...bins, 1);
   // Build a smooth area path (bezier-ish) from binned counts.
   const points: { x: number; y: number }[] = bins.map((v, i) => {
-    const t = domain.start + (i + 0.5) * binMs
+    const t = domain.start + (i + 0.5) * binMs;
     return {
       x: scale(t),
       y: height - (v / max) * (height - 4) - 2,
-    }
-  })
+    };
+  });
 
-  const baseY = height
+  const baseY = height;
   const path =
     `M ${points[0]?.x ?? 0} ${baseY} ` +
     points.map(p => `L ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ') +
-    ` L ${points[points.length - 1]?.x ?? width} ${baseY} Z`
+    ` L ${points[points.length - 1]?.x ?? width} ${baseY} Z`;
 
-  const linePath = points.map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`).join(' ')
+  const linePath = points
+    .map((p, i) => `${i === 0 ? 'M' : 'L'} ${p.x.toFixed(2)} ${p.y.toFixed(2)}`)
+    .join(' ');
 
   return (
     <g className="cl-tl-heartbeat">
@@ -54,9 +56,15 @@ export function HeartbeatStrip({
         </linearGradient>
       </defs>
       <path d={path} fill="url(#cl-tl-heart-grad)" stroke="none" />
-      <path d={linePath} fill="none" stroke="var(--cl-accent)" strokeWidth="1.2" strokeLinejoin="round" />
+      <path
+        d={linePath}
+        fill="none"
+        stroke="var(--cl-accent)"
+        strokeWidth="1.2"
+        strokeLinejoin="round"
+      />
     </g>
-  )
+  );
 }
 
 export function TimeAxis({
@@ -65,18 +73,18 @@ export function TimeAxis({
   y,
   scale,
 }: {
-  domain: { start: number; end: number }
-  width: number
-  y: number
-  scale: TimeScale
+  domain: { start: number; end: number };
+  width: number;
+  y: number;
+  scale: TimeScale;
 }) {
-  const ticks = timeTicks(domain, 7)
+  const ticks = timeTicks(domain, 7);
   return (
     <g className="cl-tl-axis">
       <line x1={0} y1={y} x2={width} y2={y} stroke="var(--cl-line)" strokeWidth="1" />
       {ticks.map(t => {
-        const x = scale(t)
-        if (x < 0 || x > width) return null
+        const x = scale(t);
+        if (x < 0 || x > width) return null;
         return (
           <g key={t} transform={`translate(${x}, ${y})`}>
             <line x1={0} y1={0} x2={0} y2={4} stroke="var(--cl-ink-4)" strokeWidth="1" />
@@ -91,10 +99,10 @@ export function TimeAxis({
               {fmtAxisTime(t, domain)}
             </text>
           </g>
-        )
+        );
       })}
     </g>
-  )
+  );
 }
 
 export function UserMarkers({
@@ -103,15 +111,15 @@ export function UserMarkers({
   height,
   onHover,
 }: {
-  marks: UserMark[]
-  scale: TimeScale
-  height: number
-  onHover?: (m: UserMark | null) => void
+  marks: UserMark[];
+  scale: TimeScale;
+  height: number;
+  onHover?: (m: UserMark | null) => void;
 }) {
   return (
     <g className="cl-tl-usermarks">
       {marks.map(m => {
-        const x = scale(m.t)
+        const x = scale(m.t);
         return (
           <g
             key={m.id}
@@ -139,22 +147,29 @@ export function UserMarkers({
               strokeWidth="2"
             />
           </g>
-        )
+        );
       })}
     </g>
-  )
+  );
 }
 
 const TOOL_GLYPH: Record<string, string> = {
-  Read: 'R', Write: 'W', Edit: 'E',
-  Bash: 'B', Glob: 'G', Grep: 'g',
-  WebFetch: 'w', WebSearch: 's',
-  Agent: 'A', Task: 'T', Skill: 'S',
+  Read: 'R',
+  Write: 'W',
+  Edit: 'E',
+  Bash: 'B',
+  Glob: 'G',
+  Grep: 'g',
+  WebFetch: 'w',
+  WebSearch: 's',
+  Agent: 'A',
+  Task: 'T',
+  Skill: 'S',
   NotebookEdit: 'N',
-}
+};
 
 function glyph(name: string): string {
-  return TOOL_GLYPH[name] ?? '·'
+  return TOOL_GLYPH[name] ?? '·';
 }
 
 export function LaneRow({
@@ -168,18 +183,18 @@ export function LaneRow({
   hoveredEventId,
   setHoveredEventId,
 }: {
-  lane: Lane
-  index: number
-  scale: TimeScale
-  totalWidth: number
-  selected: boolean
-  onSelectLane: (id: string | null) => void
-  onSelectEvent: (e: ToolEvent) => void
-  hoveredEventId: string | null
-  setHoveredEventId: (id: string | null) => void
+  lane: Lane;
+  index: number;
+  scale: TimeScale;
+  totalWidth: number;
+  selected: boolean;
+  onSelectLane: (id: string | null) => void;
+  onSelectEvent: (e: ToolEvent) => void;
+  hoveredEventId: string | null;
+  setHoveredEventId: (id: string | null) => void;
 }) {
-  const yTop = HEADER_HEIGHT + TOP_PAD + index * LANE_HEIGHT
-  const yCenter = yTop + LANE_HEIGHT / 2
+  const yTop = HEADER_HEIGHT + TOP_PAD + index * LANE_HEIGHT;
+  const yCenter = yTop + LANE_HEIGHT / 2;
 
   return (
     <g
@@ -223,11 +238,11 @@ export function LaneRow({
 
       {/* Events */}
       {lane.events.map(ev => {
-        const x = scale(ev.t)
-        if (x < LANE_LABEL_WIDTH - 4 || x > totalWidth - RIGHT_PAD + 4) return null
-        const isHovered = hoveredEventId === ev.id
-        const r = isHovered ? 8 : 6
-        const fill = ev.toolIsError ? 'var(--cl-danger)' : eventColor(lane.kind, ev.toolName)
+        const x = scale(ev.t);
+        if (x < LANE_LABEL_WIDTH - 4 || x > totalWidth - RIGHT_PAD + 4) return null;
+        const isHovered = hoveredEventId === ev.id;
+        const r = isHovered ? 8 : 6;
+        const fill = ev.toolIsError ? 'var(--cl-danger)' : eventColor(lane.kind, ev.toolName);
         return (
           <g
             key={ev.id}
@@ -235,7 +250,10 @@ export function LaneRow({
             style={{ cursor: 'pointer' }}
             onMouseEnter={() => setHoveredEventId(ev.id)}
             onMouseLeave={() => setHoveredEventId(null)}
-            onClick={(e) => { e.stopPropagation(); onSelectEvent(ev) }}
+            onClick={e => {
+              e.stopPropagation();
+              onSelectEvent(ev);
+            }}
           >
             <circle r={r + 2} fill="var(--cl-paper)" />
             <circle
@@ -256,20 +274,26 @@ export function LaneRow({
               {glyph(ev.toolName)}
             </text>
           </g>
-        )
+        );
       })}
     </g>
-  )
+  );
 }
 
 function eventColor(kind: Lane['kind'], _toolName: string): string {
   switch (kind) {
-    case 'file': return 'var(--cl-accent)'
-    case 'memory': return 'var(--cl-violet)'
-    case 'bash': return 'var(--cl-ink-2)'
-    case 'web': return 'var(--cl-haiku)'
-    case 'agent': return 'var(--cl-accent)'
-    case 'other': return 'var(--cl-ink-3)'
+    case 'file':
+      return 'var(--cl-accent)';
+    case 'memory':
+      return 'var(--cl-violet)';
+    case 'bash':
+      return 'var(--cl-ink-2)';
+    case 'web':
+      return 'var(--cl-haiku)';
+    case 'agent':
+      return 'var(--cl-accent)';
+    case 'other':
+      return 'var(--cl-ink-3)';
   }
 }
 
@@ -278,15 +302,15 @@ export function LaneLabels({
   selectedLane,
   onSelectLane,
 }: {
-  lanes: Lane[]
-  selectedLane: string | null
-  onSelectLane: (id: string | null) => void
+  lanes: Lane[];
+  selectedLane: string | null;
+  onSelectLane: (id: string | null) => void;
 }) {
   return (
     <div className="cl-tl-labels" style={{ width: LANE_LABEL_WIDTH }}>
       {lanes.map((lane, i) => {
-        const top = HEADER_HEIGHT + TOP_PAD + i * LANE_HEIGHT
-        const selected = lane.id === selectedLane
+        const top = HEADER_HEIGHT + TOP_PAD + i * LANE_HEIGHT;
+        const selected = lane.id === selectedLane;
         return (
           <button
             type="button"
@@ -307,8 +331,8 @@ export function LaneLabels({
             <span className="cl-tl-label-text">{lane.label}</span>
             <span className="cl-tl-label-count">{lane.events.length}</span>
           </button>
-        )
+        );
       })}
     </div>
-  )
+  );
 }

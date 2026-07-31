@@ -176,11 +176,7 @@ export function parseMcpList(stdout: string): LiveMcpServer[] {
  * The live list is the authority on existence; disk contributes the per-project
  * toggles and the local configs.
  */
-export function buildMcpData(
-  live: LiveMcpServer[],
-  disk: McpDiskState,
-  probe: McpProbe,
-): McpData {
+export function buildMcpData(live: LiveMcpServer[], disk: McpDiskState, probe: McpProbe): McpData {
   const totalProjects = disk.projects.length;
   const needsAuthSet = new Set(disk.needsAuth);
 

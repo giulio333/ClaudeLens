@@ -124,7 +124,9 @@ export async function startLiveMonitor(
           const n = readSync(fd, buf, 0, chunkSize, offset);
           if (n <= 0) break;
           offset += n;
-          pending = pending.length ? Buffer.concat([pending, buf.subarray(0, n)]) : buf.subarray(0, n);
+          pending = pending.length
+            ? Buffer.concat([pending, buf.subarray(0, n)])
+            : buf.subarray(0, n);
 
           let nl: number;
           while ((nl = pending.indexOf(0x0a)) !== -1) {
@@ -146,12 +148,16 @@ export async function startLiveMonitor(
         state.fileOffset = consumed;
 
         if (dropped > 0) {
-          console.warn(`[live-monitor] dropped ${dropped} malformed/oversized JSONL line(s) in ${state.filePath}`);
+          console.warn(
+            `[live-monitor] dropped ${dropped} malformed/oversized JSONL line(s) in ${state.filePath}`
+          );
         }
       } finally {
         closeSync(fd);
       }
-    } catch { /* errore file */ }
+    } catch {
+      /* errore file */
+    }
   });
 
   return true;
@@ -207,14 +213,26 @@ function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
 
   for (const block of msg.content as Record<string, unknown>[]) {
     if (block.type === 'text' && role === 'assistant') {
-      const text = (block.text as string ?? '').trim();
+      const text = ((block.text as string) ?? '').trim();
       if (text) {
-        events.push({ id: `${baseId}-t`, timestamp: ts, type: 'text', content: text.slice(0, 400), model });
+        events.push({
+          id: `${baseId}-t`,
+          timestamp: ts,
+          type: 'text',
+          content: text.slice(0, 400),
+          model,
+        });
       }
     } else if (block.type === 'thinking') {
-      const text = (block.thinking as string ?? '').trim();
+      const text = ((block.thinking as string) ?? '').trim();
       if (text) {
-        events.push({ id: `${baseId}-th`, timestamp: ts, type: 'thinking', content: text.slice(0, 300), model });
+        events.push({
+          id: `${baseId}-th`,
+          timestamp: ts,
+          type: 'thinking',
+          content: text.slice(0, 300),
+          model,
+        });
       }
     } else if (block.type === 'tool_use') {
       events.push({
@@ -227,10 +245,11 @@ function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
       });
     } else if (block.type === 'tool_result') {
       const content =
-        typeof block.content === 'string' ? block.content :
-        Array.isArray(block.content)
-          ? (block.content as { text?: string }[]).map(c => c.text ?? '').join(' ')
-          : '';
+        typeof block.content === 'string'
+          ? block.content
+          : Array.isArray(block.content)
+            ? (block.content as { text?: string }[]).map(c => c.text ?? '').join(' ')
+            : '';
       events.push({
         id: `${baseId}-tr-${String(block.tool_use_id ?? '').slice(-4)}`,
         timestamp: ts,

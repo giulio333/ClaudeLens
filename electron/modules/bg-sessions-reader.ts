@@ -7,23 +7,23 @@ const ROSTER_PATH = join(CLAUDE_DIR, 'daemon', 'roster.json');
 
 // Sessione background gestita dal supervisor di `claude agents`.
 export interface BgSession {
-  id: string;            // short id (= nome cartella in ~/.claude/jobs)
+  id: string; // short id (= nome cartella in ~/.claude/jobs)
   sessionId: string;
-  name: string;          // name esplicito, o derivato dall'intent, o id
-  state: string;         // running | done | failed | stopped | ...
-  tempo: string;         // idle | thinking | busy
-  detail: string;        // ultima riga di stato
-  intent: string;        // prompt originale
+  name: string; // name esplicito, o derivato dall'intent, o id
+  state: string; // running | done | failed | stopped | ...
+  tempo: string; // idle | thinking | busy
+  detail: string; // ultima riga di stato
+  intent: string; // prompt originale
   result: string | null; // output.result quando done
   cwd: string;
   projectName: string;
-  template: string;      // bg | claude
+  template: string; // bg | claude
   inFlightTasks: number;
-  alive: boolean;        // processo attivo secondo il roster del supervisor
+  alive: boolean; // processo attivo secondo il roster del supervisor
   pid: number | null;
   createdAt: string;
   updatedAt: string;
-  needs: string | null;  // testo libero quando il worker richiede input umano (rate-limit, blocco, ecc.)
+  needs: string | null; // testo libero quando il worker richiede input umano (rate-limit, blocco, ecc.)
   hasPendingQuestion: boolean; // true se c'è un AskUserQuestion senza risposta
 }
 
@@ -36,7 +36,9 @@ interface RosterWorker {
 function readRoster(): Record<string, RosterWorker> {
   if (!existsSync(ROSTER_PATH)) return {};
   try {
-    const json = JSON.parse(readFileSync(ROSTER_PATH, 'utf-8')) as { workers?: Record<string, RosterWorker> };
+    const json = JSON.parse(readFileSync(ROSTER_PATH, 'utf-8')) as {
+      workers?: Record<string, RosterWorker>;
+    };
     return json.workers ?? {};
   } catch {
     return {};
@@ -68,7 +70,8 @@ function readNeeds(state: Record<string, unknown>): string | null {
 
 function hasPending(state: Record<string, unknown>): boolean {
   if (state.pendingQuestion && typeof state.pendingQuestion === 'object') return true;
-  if (typeof state.pendingQuestion === 'string' && (state.pendingQuestion as string).trim()) return true;
+  if (typeof state.pendingQuestion === 'string' && (state.pendingQuestion as string).trim())
+    return true;
   return false;
 }
 
@@ -117,7 +120,7 @@ export function getBgSessions(): BgSession[] {
       intent: (state.intent as string) ?? '',
       result: readResult(state.output),
       cwd,
-      projectName: cwd ? (basename(cwd) || cwd) : '',
+      projectName: cwd ? basename(cwd) || cwd : '',
       template: (state.template as string) ?? '',
       inFlightTasks:
         state.inFlight && typeof state.inFlight === 'object'

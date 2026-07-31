@@ -1,43 +1,51 @@
-import { useState } from 'react'
-import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC'
-import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC'
-import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView'
-import { MEMORY_OPTION_DEFS, readOptions, serializeMemory, initialOf } from '../shared/entityOptions'
-import { parseMemoryContent, readingTime, formatDate } from './utils'
-import { useMemoryTags } from '../../../hooks/useMemoryTags'
-import { ManagedTagChip } from '../sessions/ManagedTagChip'
-import { TagPicker } from '../sessions/TagPicker'
+import { useState } from 'react';
+import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC';
+import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC';
+import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView';
+import {
+  MEMORY_OPTION_DEFS,
+  readOptions,
+  serializeMemory,
+  initialOf,
+} from '../shared/entityOptions';
+import { parseMemoryContent, readingTime, formatDate } from './utils';
+import { useMemoryTags } from '../../../hooks/useMemoryTags';
+import { ManagedTagChip } from '../sessions/ManagedTagChip';
+import { TagPicker } from '../sessions/TagPicker';
 
 const TYPE_LABEL: Record<string, string> = {
   user: 'User',
   feedback: 'Feedback',
   project: 'Project',
   reference: 'Reference',
-}
+};
 
 /** Estrae name/description/type/body dal markdown grezzo con frontmatter YAML. */
 function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
-  const m = raw.match(/^---\n([\s\S]*?)\n---\n?/)
-  let name = fallback.name
-  let description = fallback.description
-  let type: TopicInput['type'] = fallback.type
-  let body = raw
+  const m = raw.match(/^---\n([\s\S]*?)\n---\n?/);
+  let name = fallback.name;
+  let description = fallback.description;
+  let type: TopicInput['type'] = fallback.type;
+  let body = raw;
 
-  let originSessionId = fallback.originSessionId
+  let originSessionId = fallback.originSessionId;
 
   if (m) {
-    const fm = m[1]
+    const fm = m[1];
     const get = (k: string) =>
-      fm.match(new RegExp(`^\\s*${k}:\\s*(.*)$`, 'm'))?.[1]?.trim().replace(/^["']|["']$/g, '')
-    name = get('name') ?? name
-    description = get('description') ?? description
-    const t = get('type')
-    if (t === 'user' || t === 'feedback' || t === 'project' || t === 'reference') type = t
-    originSessionId = get('originSessionId') ?? originSessionId
-    body = raw.slice(m[0].length)
+      fm
+        .match(new RegExp(`^\\s*${k}:\\s*(.*)$`, 'm'))?.[1]
+        ?.trim()
+        .replace(/^["']|["']$/g, '');
+    name = get('name') ?? name;
+    description = get('description') ?? description;
+    const t = get('type');
+    if (t === 'user' || t === 'feedback' || t === 'project' || t === 'reference') type = t;
+    originSessionId = get('originSessionId') ?? originSessionId;
+    body = raw.slice(m[0].length);
   }
 
-  return { name, description, type, content: body, originSessionId }
+  return { name, description, type, content: body, originSessionId };
 }
 
 /**
@@ -48,9 +56,9 @@ function parseTopicInput(raw: string, fallback: MemoryTopic): TopicInput {
  * slot): lo store è event-synced, quindi le istanze restano coerenti.
  */
 function MemoryTags({ hash, filename }: { hash: string; filename: string }) {
-  const { tags, tagsForMemory, toggleTagOnMemory, renameTag, deleteTag } = useMemoryTags(hash)
-  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null)
-  const topicTags = tagsForMemory(filename)
+  const { tags, tagsForMemory, toggleTagOnMemory, renameTag, deleteTag } = useMemoryTags(hash);
+  const [pickerAnchor, setPickerAnchor] = useState<DOMRect | null>(null);
+  const topicTags = tagsForMemory(filename);
 
   return (
     <div className="cl-mem-tags">
@@ -70,8 +78,8 @@ function MemoryTags({ hash, filename }: { hash: string; filename: string }) {
         onClick={e => {
           // Cattura il rect in modo sincrono: React azzera `currentTarget`
           // quando l'handler ritorna, leggerlo nell'updater (più tardi) lancia.
-          const rect = e.currentTarget.getBoundingClientRect()
-          setPickerAnchor(prev => (prev ? null : rect))
+          const rect = e.currentTarget.getBoundingClientRect();
+          setPickerAnchor(prev => (prev ? null : rect));
         }}
       >
         + Add
@@ -86,7 +94,7 @@ function MemoryTags({ hash, filename }: { hash: string; filename: string }) {
         />
       )}
     </div>
-  )
+  );
 }
 
 /**
@@ -98,12 +106,12 @@ function OriginValue({
   session,
   onOpen,
 }: {
-  sessionId: string
-  session?: SessionSummary
-  onOpen?: (session: SessionSummary) => void
+  sessionId: string;
+  session?: SessionSummary;
+  onOpen?: (session: SessionSummary) => void;
 }) {
   if (session && onOpen) {
-    const title = session.customTitle ?? session.aiTitle ?? sessionId.slice(0, 8)
+    const title = session.customTitle ?? session.aiTitle ?? sessionId.slice(0, 8);
     return (
       <button
         type="button"
@@ -113,13 +121,13 @@ function OriginValue({
       >
         {title}
       </button>
-    )
+    );
   }
   return (
     <span className="cl-mem-meta-mono" title="Session not found in this project">
       {sessionId}
     </span>
-  )
+  );
 }
 
 /** Blocco "Metadata" in view mode: tag gestiti, sessione origine, date, file. */
@@ -130,29 +138,39 @@ function MemoryMetaPanel({
   onOpenSession,
   readOnly,
 }: {
-  topic: MemoryTopic
-  hash: string
-  originSession?: SessionSummary
-  onOpenSession?: (session: SessionSummary) => void
-  readOnly: boolean
+  topic: MemoryTopic;
+  hash: string;
+  originSession?: SessionSummary;
+  onOpenSession?: (session: SessionSummary) => void;
+  readOnly: boolean;
 }) {
-  const createdAt = topic.createdAt ?? null
-  const updatedAt = topic.updatedAt ?? null
-  const sameDate = createdAt && updatedAt ? createdAt.slice(0, 10) === updatedAt.slice(0, 10) : true
+  const createdAt = topic.createdAt ?? null;
+  const updatedAt = topic.updatedAt ?? null;
+  const sameDate =
+    createdAt && updatedAt ? createdAt.slice(0, 10) === updatedAt.slice(0, 10) : true;
 
   return (
     <div className="cl-entity-v2-opts">
-      <h3><span>Metadata</span><b>tags · origin · dates</b></h3>
+      <h3>
+        <span>Metadata</span>
+        <b>tags · origin · dates</b>
+      </h3>
       <div className="cl-mem-meta">
         <div className="cl-mem-meta-row">
           <div className="k">Tags</div>
-          <div className="v"><MemoryTags hash={hash} filename={topic.filename} /></div>
+          <div className="v">
+            <MemoryTags hash={hash} filename={topic.filename} />
+          </div>
         </div>
         {topic.originSessionId && (
           <div className="cl-mem-meta-row">
             <div className="k">Origin session</div>
             <div className="v">
-              <OriginValue sessionId={topic.originSessionId} session={originSession} onOpen={onOpenSession} />
+              <OriginValue
+                sessionId={topic.originSessionId}
+                session={originSession}
+                onOpen={onOpenSession}
+              />
             </div>
           </div>
         )}
@@ -170,7 +188,9 @@ function MemoryMetaPanel({
         )}
         <div className="cl-mem-meta-row">
           <div className="k">File</div>
-          <div className="v"><span className="cl-mem-meta-mono">{topic.filename}</span></div>
+          <div className="v">
+            <span className="cl-mem-meta-mono">{topic.filename}</span>
+          </div>
         </div>
         {readOnly && (
           <div className="cl-mem-meta-row">
@@ -180,7 +200,7 @@ function MemoryMetaPanel({
         )}
       </div>
     </div>
-  )
+  );
 }
 
 export function MemoryTopicView({
@@ -190,25 +210,25 @@ export function MemoryTopicView({
   onBack,
   onOpenSession,
 }: {
-  topic: MemoryTopic
-  content: string
-  hash: string
-  onBack: () => void
-  onOpenSession?: (session: SessionSummary) => void
+  topic: MemoryTopic;
+  content: string;
+  hash: string;
+  onBack: () => void;
+  onOpenSession?: (session: SessionSummary) => void;
 }) {
-  const { body, wordCount, linkCount } = parseMemoryContent(content)
-  const updateMut = useUpdateTopic(hash)
-  const deleteMut = useDeleteTopic(hash)
+  const { body, wordCount, linkCount } = parseMemoryContent(content);
+  const updateMut = useUpdateTopic(hash);
+  const deleteMut = useDeleteTopic(hash);
 
   // Risolve la sessione che ha generato la memoria (originSessionId = UUID del
   // file .jsonl nello stesso progetto). La lista è già in cache (stessa
   // queryKey della vista Sessions), quindi nessuna fetch extra.
-  const { data: sessions } = useSessionList(topic.originSessionId ? hash : null)
+  const { data: sessions } = useSessionList(topic.originSessionId ? hash : null);
   const originSession = topic.originSessionId
     ? sessions?.find(s => s.filename === `${topic.originSessionId}.jsonl`)
-    : undefined
+    : undefined;
 
-  const readOnly = !!topic.isProjectLevel
+  const readOnly = !!topic.isProjectLevel;
 
   const config: EntityConfig = {
     kind: 'memory',
@@ -239,7 +259,8 @@ export function MemoryTopicView({
     // `type` è già nella tape + editabile in edit mode; in view i metadata
     // (tags/origin/dates) sono nel blocco `viewExtras`, quindi niente tile.
     hideViewProperties: true,
-    serialize: ({ body: b, description, options }) => serializeMemory(topic, b, { description, options }),
+    serialize: ({ body: b, description, options }) =>
+      serializeMemory(topic, b, { description, options }),
     editable: !readOnly,
     deletable: !readOnly,
     duplicable: false,
@@ -249,7 +270,10 @@ export function MemoryTopicView({
     // non contenuto del file committato).
     editExtras: (
       <>
-        <h2 style={{ marginTop: 22 }}><span>Tags</span><b>managed · not frontmatter</b></h2>
+        <h2 style={{ marginTop: 22 }}>
+          <span>Tags</span>
+          <b>managed · not frontmatter</b>
+        </h2>
         <div className="cl-entity-edit-v2-card" style={{ padding: '14px 16px' }}>
           <MemoryTags hash={hash} filename={topic.filename} />
         </div>
@@ -264,18 +288,29 @@ export function MemoryTopicView({
         readOnly={readOnly}
       />
     ),
-  }
+  };
 
   return (
     <EntityDetailView
       config={config}
       onBack={onBack}
-      onSave={readOnly ? undefined : async raw => {
-        await updateMut.mutateAsync({ filename: topic.filename, input: parseTopicInput(raw, topic) })
-      }}
-      onDelete={readOnly ? undefined : async () => {
-        await deleteMut.mutateAsync(topic.filename)
-      }}
+      onSave={
+        readOnly
+          ? undefined
+          : async raw => {
+              await updateMut.mutateAsync({
+                filename: topic.filename,
+                input: parseTopicInput(raw, topic),
+              });
+            }
+      }
+      onDelete={
+        readOnly
+          ? undefined
+          : async () => {
+              await deleteMut.mutateAsync(topic.filename);
+            }
+      }
     />
-  )
+  );
 }

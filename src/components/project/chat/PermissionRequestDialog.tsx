@@ -1,20 +1,20 @@
-import { useState } from 'react'
-import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC'
+import { useState } from 'react';
+import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC';
 
 /** Pretty-prints the most relevant slice of a tool input for the dialog body.
  *  Bash shows its `command`; file tools show their `file_path`/`path`; anything
  *  else falls back to a compact JSON of the input. */
 function describeInput(req: PermissionRequest): string | null {
-  const input = req.input ?? {}
-  if (typeof input.command === 'string') return input.command
-  if (typeof input.file_path === 'string') return input.file_path
-  if (typeof input.path === 'string') return input.path
-  const keys = Object.keys(input)
-  if (keys.length === 0) return null
+  const input = req.input ?? {};
+  if (typeof input.command === 'string') return input.command;
+  if (typeof input.file_path === 'string') return input.file_path;
+  if (typeof input.path === 'string') return input.path;
+  const keys = Object.keys(input);
+  if (keys.length === 0) return null;
   try {
-    return JSON.stringify(input, null, 2)
+    return JSON.stringify(input, null, 2);
   } catch {
-    return null
+    return null;
   }
 }
 
@@ -22,25 +22,25 @@ function describeInput(req: PermissionRequest): string | null {
  *  tool input (`questions[]`). Options are multiple-choice; `multiSelect`
  *  allows picking more than one. */
 interface AskQuestion {
-  question: string
-  header?: string
-  options: { label: string; description?: string }[]
-  multiSelect?: boolean
+  question: string;
+  header?: string;
+  options: { label: string; description?: string }[];
+  multiSelect?: boolean;
 }
 
 /** Extracts the `questions` array from an AskUserQuestion input, dropping any
  *  malformed entries. An empty result makes the dialog fall back to the
  *  generic Allow/Deny rendering rather than an unanswerable form. */
 function parseQuestions(input: Record<string, unknown>): AskQuestion[] {
-  const raw = input?.questions
-  if (!Array.isArray(raw)) return []
+  const raw = input?.questions;
+  if (!Array.isArray(raw)) return [];
   return raw.filter(
     (q): q is AskQuestion =>
       !!q &&
       typeof q === 'object' &&
       typeof (q as { question?: unknown }).question === 'string' &&
       Array.isArray((q as { options?: unknown }).options)
-  )
+  );
 }
 
 /** Form for Claude's clarifying questions (the AskUserQuestion tool). The SDK
@@ -55,49 +55,49 @@ function QuestionForm({
   questions,
   onRespond,
 }: {
-  request: PermissionRequest
-  questions: AskQuestion[]
-  onRespond: (decision: PermissionDecision) => void
+  request: PermissionRequest;
+  questions: AskQuestion[];
+  onRespond: (decision: PermissionDecision) => void;
 }) {
-  const [picks, setPicks] = useState<Record<number, string[]>>({})
-  const [others, setOthers] = useState<Record<number, string>>({})
+  const [picks, setPicks] = useState<Record<number, string[]>>({});
+  const [others, setOthers] = useState<Record<number, string>>({});
 
   function toggle(qi: number, label: string, multi: boolean) {
     setPicks(prev => {
-      const cur = prev[qi] ?? []
+      const cur = prev[qi] ?? [];
       if (multi) {
         return {
           ...prev,
           [qi]: cur.includes(label) ? cur.filter(l => l !== label) : [...cur, label],
-        }
+        };
       }
-      return { ...prev, [qi]: [label] }
-    })
+      return { ...prev, [qi]: [label] };
+    });
     // On single-select, picking an option supersedes any free-text answer.
-    if (!multi) setOthers(prev => ({ ...prev, [qi]: '' }))
+    if (!multi) setOthers(prev => ({ ...prev, [qi]: '' }));
   }
 
   function setOther(qi: number, value: string, multi: boolean) {
-    setOthers(prev => ({ ...prev, [qi]: value }))
+    setOthers(prev => ({ ...prev, [qi]: value }));
     // Free text replaces the picked option on single-select questions.
-    if (!multi && value.trim()) setPicks(prev => ({ ...prev, [qi]: [] }))
+    if (!multi && value.trim()) setPicks(prev => ({ ...prev, [qi]: [] }));
   }
 
   function answerOf(qi: number): string {
-    const parts = [...(picks[qi] ?? [])]
-    const other = (others[qi] ?? '').trim()
-    if (other) parts.push(other)
-    return parts.join(', ')
+    const parts = [...(picks[qi] ?? [])];
+    const other = (others[qi] ?? '').trim();
+    if (other) parts.push(other);
+    return parts.join(', ');
   }
 
-  const complete = questions.every((_q, qi) => answerOf(qi) !== '')
+  const complete = questions.every((_q, qi) => answerOf(qi) !== '');
 
   function submit() {
-    const answers: Record<string, string> = {}
+    const answers: Record<string, string> = {};
     questions.forEach((q, qi) => {
-      answers[q.question] = answerOf(qi)
-    })
-    onRespond({ kind: 'allow', input: { questions: request.input.questions, answers } })
+      answers[q.question] = answerOf(qi);
+    });
+    onRespond({ kind: 'allow', input: { questions: request.input.questions, answers } });
   }
 
   return (
@@ -113,7 +113,7 @@ function QuestionForm({
             <p className="text-[13px] font-medium text-[var(--cl-ink)] mb-2">{q.question}</p>
             <div className="flex flex-col gap-1.5">
               {q.options.map(opt => {
-                const on = (picks[qi] ?? []).includes(opt.label)
+                const on = (picks[qi] ?? []).includes(opt.label);
                 return (
                   <button
                     key={opt.label}
@@ -136,7 +136,7 @@ function QuestionForm({
                       </span>
                     )}
                   </button>
-                )
+                );
               })}
               <input
                 type="text"
@@ -167,7 +167,7 @@ function QuestionForm({
         </button>
       </div>
     </>
-  )
+  );
 }
 
 /** Interactive tool-approval dialog — the in-app equivalent of the terminal's
@@ -182,22 +182,22 @@ export function PermissionRequestDialog({
   pendingCount = 0,
   onRespond,
 }: {
-  request: PermissionRequest
+  request: PermissionRequest;
   /** How many further requests are queued behind this one (shown as a hint). */
-  pendingCount?: number
-  onRespond: (decision: PermissionDecision) => void
+  pendingCount?: number;
+  onRespond: (decision: PermissionDecision) => void;
 }) {
-  const [denying, setDenying] = useState(false)
-  const [denyMessage, setDenyMessage] = useState('')
+  const [denying, setDenying] = useState(false);
+  const [denyMessage, setDenyMessage] = useState('');
 
-  const questions = request.toolName === 'AskUserQuestion' ? parseQuestions(request.input) : []
-  const isQuestion = questions.length > 0
+  const questions = request.toolName === 'AskUserQuestion' ? parseQuestions(request.input) : [];
+  const isQuestion = questions.length > 0;
 
   const heading = isQuestion
     ? 'Claude has a question'
-    : request.title || `Allow ${request.displayName || request.toolName}?`
-  const detail = isQuestion ? null : describeInput(request)
-  const canAlways = (request.suggestions?.length ?? 0) > 0
+    : request.title || `Allow ${request.displayName || request.toolName}?`;
+  const detail = isQuestion ? null : describeInput(request);
+  const canAlways = (request.suggestions?.length ?? 0) > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -294,5 +294,5 @@ export function PermissionRequestDialog({
         )}
       </div>
     </div>
-  )
+  );
 }

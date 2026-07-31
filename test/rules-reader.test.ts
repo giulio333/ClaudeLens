@@ -21,7 +21,7 @@ describe('readProjectRules', () => {
     writeFileSync(
       join(rulesDir, 'backend', 'api.md'),
       '---\npaths:\n  - "src/api/**"\n---\n# API rules\n',
-      'utf-8',
+      'utf-8'
     );
 
     const rules = await readProjectRules(projectPath);

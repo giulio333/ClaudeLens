@@ -105,7 +105,11 @@ describe('resolveRealPath (cwd extraction)', () => {
       const full = join(dir, `s${i}.jsonl`);
       writeFileSync(full, content);
       // mtime crescente: l'ultimo file è il più recente, quello che il reader prova per primo.
-      utimesSync(full, new Date(1_700_000_000_000 + i * 1000), new Date(1_700_000_000_000 + i * 1000));
+      utimesSync(
+        full,
+        new Date(1_700_000_000_000 + i * 1000),
+        new Date(1_700_000_000_000 + i * 1000)
+      );
     });
     return hash;
   }
@@ -114,14 +118,20 @@ describe('resolveRealPath (cwd extraction)', () => {
   afterAll(() => rmSync(root, { recursive: true, force: true }));
 
   it('reads the cwd from the head of the file', () => {
-    const hash = project([`${PREAMBLE}\n${JSON.stringify({ type: 'user', cwd: '/Users/foo/bar' })}\n`]);
+    const hash = project([
+      `${PREAMBLE}\n${JSON.stringify({ type: 'user', cwd: '/Users/foo/bar' })}\n`,
+    ]);
     expect(resolveRealPath(root, hash)).toBe('/Users/foo/bar');
   });
 
   it('still finds a cwd that sits past the 64KB head (huge first record)', () => {
     // Il primo record utente porta un incolla enorme e il `cwd` cade dopo di
     // esso: la testa non basta, deve intervenire il fallback a file intero.
-    const huge = JSON.stringify({ type: 'user', text: 'x'.repeat(200_000), cwd: '/Users/foo/huge' });
+    const huge = JSON.stringify({
+      type: 'user',
+      text: 'x'.repeat(200_000),
+      cwd: '/Users/foo/huge',
+    });
     const hash = project([`${PREAMBLE}\n${huge}\n`]);
     expect(resolveRealPath(root, hash)).toBe('/Users/foo/huge');
   });

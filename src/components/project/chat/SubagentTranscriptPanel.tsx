@@ -1,9 +1,9 @@
-import { useMemo, useState } from 'react'
-import { useSubagentTranscript } from '../../../hooks/useIPC'
-import { buildProcessedMessages, ToolGroup } from './utils'
-import { MessageBubble } from './MessageBubble'
-import { ToolDetailPanel } from './ToolDetailPanel'
-import { QueryError } from '../../QueryError'
+import { useMemo, useState } from 'react';
+import { useSubagentTranscript } from '../../../hooks/useIPC';
+import { buildProcessedMessages, ToolGroup } from './utils';
+import { MessageBubble } from './MessageBubble';
+import { ToolDetailPanel } from './ToolDetailPanel';
+import { QueryError } from '../../QueryError';
 
 /** Full internal transcript of a single sub-agent, opened from the agent rail.
  *  Reuses the same MessageBubble pipeline as the main chat so the delegated
@@ -17,36 +17,45 @@ export function SubagentTranscriptPanel({
   prompt,
   onBack,
 }: {
-  hash: string
-  sessionFilename: string
-  agentId: string
-  subagentType: string
-  description: string
+  hash: string;
+  sessionFilename: string;
+  agentId: string;
+  subagentType: string;
+  description: string;
   /** The dispatch prompt shown above the transcript for context (may be truncated). */
-  prompt?: string
-  onBack: () => void
+  prompt?: string;
+  onBack: () => void;
 }) {
-  const { data: messages, isLoading, isError, error, refetch } = useSubagentTranscript(
-    hash,
-    sessionFilename,
-    agentId,
-  )
-  const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null)
-  const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages])
+  const {
+    data: messages,
+    isLoading,
+    isError,
+    error,
+    refetch,
+  } = useSubagentTranscript(hash, sessionFilename, agentId);
+  const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);
+  const processed = useMemo(() => (messages ? buildProcessedMessages(messages) : []), [messages]);
 
   if (selectedTool) {
-    return <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
+    return <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />;
   }
 
   return (
     <div className="cl-subagent-panel">
       <header className="cl-subagent-panel-head">
-        <button type="button" className="cl-subagent-back" onClick={onBack} aria-label="Back to chat">
+        <button
+          type="button"
+          className="cl-subagent-back"
+          onClick={onBack}
+          aria-label="Back to chat"
+        >
           <span aria-hidden>←</span>
           <span>Back</span>
         </button>
         <div className="cl-subagent-head-id">
-          <span className="ic" aria-hidden>A</span>
+          <span className="ic" aria-hidden>
+            A
+          </span>
           <span className="chip">{subagentType}</span>
           {description && <span className="desc">{description}</span>}
         </div>
@@ -54,7 +63,11 @@ export function SubagentTranscriptPanel({
 
       <main className="cl-subagent-feed">
         {isError ? (
-          <QueryError title="Failed to load agent transcript" error={error} onRetry={() => refetch()} />
+          <QueryError
+            title="Failed to load agent transcript"
+            error={error}
+            onRetry={() => refetch()}
+          />
         ) : isLoading ? (
           <p className="cl-transcript-state">Loading agent transcript…</p>
         ) : (
@@ -65,7 +78,9 @@ export function SubagentTranscriptPanel({
                 style={{ '--turn-role-color': 'var(--cl-ink)' } as React.CSSProperties}
               >
                 <div className="cl-turn-rail">
-                  <span className="cl-turn-orb" aria-hidden>P</span>
+                  <span className="cl-turn-orb" aria-hidden>
+                    P
+                  </span>
                 </div>
                 <div className="cl-turn-body">
                   <div className="cl-turn-head">
@@ -92,5 +107,5 @@ export function SubagentTranscriptPanel({
         )}
       </main>
     </div>
-  )
+  );
 }

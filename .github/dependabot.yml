@@ -1,7 +1,7 @@
 version: 2
 updates:
   - package-ecosystem: npm
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
@@ -17,16 +17,16 @@ updates:
           - major
         exclude-patterns:
           # Tailwind CSS 4 requires a manual migration — keep it out of automation.
-          - "tailwindcss"
+          - 'tailwindcss'
     ignore:
-      - dependency-name: "tailwindcss"
+      - dependency-name: 'tailwindcss'
         update-types:
           - version-update:semver-major
     labels:
       - dependencies
 
   - package-ecosystem: github-actions
-    directory: "/"
+    directory: '/'
     schedule:
       interval: weekly
     groups:

@@ -8,7 +8,7 @@
 
 export function trackEvent(name: string, props?: Record<string, string | number>): void {
   // Fire-and-forget; telemetry must never block or break the UI.
-  window.electronAPI?.telemetry?.track(name, props).catch(() => {})
+  window.electronAPI?.telemetry?.track(name, props).catch(() => {});
 }
 
 // `view_opened` fires on EVERY navigation to a view (no per-run dedup) while the
@@ -16,5 +16,5 @@ export function trackEvent(name: string, props?: Record<string, string | number>
 // people open and how often, not just which they touched once. Re-introduce
 // once-per-run dedup later if volume grows.
 export function reportViewOpened(view: string): void {
-  trackEvent('view_opened', { view })
+  trackEvent('view_opened', { view });
 }

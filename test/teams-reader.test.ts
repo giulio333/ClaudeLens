@@ -531,8 +531,20 @@ describe('getTeamDetail', () => {
   });
 
   it('takes member meta fields from the newest sidecar after a respawn', async () => {
-    writeMeta(SESS_A, 'check-readme', 'aaaa000011112222', { color: 'blue', model: 'haiku' }, { mtime: 1_700_000_000_000 });
-    writeMeta(SESS_B, 'check-readme', 'bbbb000011112222', { color: 'red', model: 'sonnet' }, { mtime: 1_700_000_100_000 });
+    writeMeta(
+      SESS_A,
+      'check-readme',
+      'aaaa000011112222',
+      { color: 'blue', model: 'haiku' },
+      { mtime: 1_700_000_000_000 }
+    );
+    writeMeta(
+      SESS_B,
+      'check-readme',
+      'bbbb000011112222',
+      { color: 'red', model: 'sonnet' },
+      { mtime: 1_700_000_100_000 }
+    );
 
     const d = await getTeamDetail(projectDir, TEAM, opts());
     const m = d!.members.find(mm => mm.name === 'check-readme')!;

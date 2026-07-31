@@ -2,7 +2,7 @@
 
 Status: **superseded by the per-view split (§10)** — the in-app SDK chat and the
 disk-backed viewer are now two separate views, so the live chat never touches the
-`.jsonl` at all (display *and* session context). The history below is kept for
+`.jsonl` at all (display _and_ session context). The history below is kept for
 context; §6 (band-aids), the §7 framing, and §9 ("stream-as-truth inside the one
 hybrid `ChatView`") are all superseded by §10 (what shipped).
 
@@ -34,7 +34,7 @@ Two important facts about the current design:
    source of truth is `useChatSession(hash, filename)` (`src/hooks/useIPC.ts`),
    which reads the session transcript from
    `~/.claude/projects/<hash>/<id>.jsonl` via the `sessions:getChat` IPC. It was
-   originally built to *view* existing sessions; the SDK chat/composer was added
+   originally built to _view_ existing sessions; the SDK chat/composer was added
    on top later.
 
 2. **The SDK live stream is an overlay, not the source of truth.** During a turn,
@@ -55,7 +55,7 @@ Two important facts about the current design:
 
 So the data flow for one turn is: **disk → stream overlay → disk again.** The
 stream is treated as ephemeral even though it already contains the whole turn
-(with the *same message uuids* the disk uses — see §5).
+(with the _same message uuids_ the disk uses — see §5).
 
 ### Two views, not one
 
@@ -86,7 +86,7 @@ explicitly kicked at `chatDone` via `onTurnComplete={refetch}` in `ChatView`).
 
 - **Turn 2+ (in `ChatView`):** the reconcile in `useLiveTurn` fired as soon as
   the disk read grew past the pre-send length (`messages.length >
-  pendingBaseCount`). But the disk often grows by the **user-echo line first**,
+pendingBaseCount`). But the disk often grows by the **user-echo line first**,
   before the assistant reply is flushed. So the reconcile swapped the live
   transcript (reply present) for a disk snapshot that had the user line but **not
   the assistant reply** → the reply blinked out, then came back on the next
@@ -105,7 +105,10 @@ window flag. To re-add it, drop this right after `processed` is computed in
 `ChatView`:
 
 ```ts
-if (typeof window !== 'undefined' && (window as unknown as { __CL_DEBUG_CHAT?: boolean }).__CL_DEBUG_CHAT) {
+if (
+  typeof window !== 'undefined' &&
+  (window as unknown as { __CL_DEBUG_CHAT?: boolean }).__CL_DEBUG_CHAT
+) {
   const last = processed[processed.length - 1];
   const lastText = last?.msg.content.find(b => b.type === 'text');
   const len = lastText && lastText.type === 'text' ? lastText.text.length : 0;
@@ -158,7 +161,7 @@ The blink is the `turns=4 → turns=3 (user) → turns=4` sequence at reconcile.
   (`5fd8921f` above) has the **same uuid** as the persisted one on disk. The SDK
   and the transcript reader (`mapSdkMessageToChat` / `session-reader`) produce
   equivalent messages. This is what makes a uuid-based reconcile gate reliable.
-- **The SDK chat always opens a *new* chat.** Existing sessions are only
+- **The SDK chat always opens a _new_ chat.** Existing sessions are only
   reopenable via Terminal/Lens. So turn 1 is always the `NewChatView → ChatView`
   remount path.
 - **Slash-command output is never persisted to disk.** `/context`, `/usage`,
@@ -261,15 +264,15 @@ the synthetic slash output the disk lacks). The clean design:
 
 ## 8. File reference
 
-| File | Role |
-|---|---|
-| `src/components/project/chat/ChatView.tsx` | Disk-backed transcript view; hosts the composer for turns 2+; renders `displayMessages` from `useLiveTurn`. |
-| `src/components/project/chat/useLiveTurn.ts` | The in-flight overlay state machine + the **reconcile** (the thing to remove for the real fix). Current uuid-gate band-aid lives here. |
-| `src/components/project/chat/NewChatView.tsx` | New-chat view; streams turn 1, then navigates to `ChatView`. Current poll-and-seed band-aid lives here. |
-| `src/components/project/chat/ChatComposer.tsx` | Wires the SDK stream events (`chatChunk`/`chatMessage`/`chatToolActivity`/`chatDone`) up to the parent handlers. |
-| `src/components/project/chat/LiveTurn.tsx` | The separate provisional node for streaming text / "Using X…" indicator. |
-| `src/hooks/useIPC.ts` | `useChatSession` (disk read + `keepLastGood`), the watcher-driven invalidation (`useDataChangedRefetch`). |
-| `electron/modules/chat-runner.ts` | The SDK `ChatSession` that produces the stream + persists the `.jsonl`. |
+| File                                           | Role                                                                                                                                   |
+| ---------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `src/components/project/chat/ChatView.tsx`     | Disk-backed transcript view; hosts the composer for turns 2+; renders `displayMessages` from `useLiveTurn`.                            |
+| `src/components/project/chat/useLiveTurn.ts`   | The in-flight overlay state machine + the **reconcile** (the thing to remove for the real fix). Current uuid-gate band-aid lives here. |
+| `src/components/project/chat/NewChatView.tsx`  | New-chat view; streams turn 1, then navigates to `ChatView`. Current poll-and-seed band-aid lives here.                                |
+| `src/components/project/chat/ChatComposer.tsx` | Wires the SDK stream events (`chatChunk`/`chatMessage`/`chatToolActivity`/`chatDone`) up to the parent handlers.                       |
+| `src/components/project/chat/LiveTurn.tsx`     | The separate provisional node for streaming text / "Using X…" indicator.                                                               |
+| `src/hooks/useIPC.ts`                          | `useChatSession` (disk read + `keepLastGood`), the watcher-driven invalidation (`useDataChangedRefetch`).                              |
+| `electron/modules/chat-runner.ts`              | The SDK `ChatSession` that produces the stream + persists the `.jsonl`.                                                                |
 
 ---
 
@@ -317,7 +320,7 @@ survives. Acceptable; revisit only if user-prompt highlighting becomes important
 disk viewer, switching on a `streamAsTruth` flag. It still read disk for the seed
 and metadata, and the `NewChatView → ChatView` hand-off disposed the SDK session
 between turn 1 and turn 2 — so the **backend re-read the `.jsonl` (resume)** to
-re-warm the context. The chat was stream-truth for *display* but not truly
+re-warm the context. The chat was stream-truth for _display_ but not truly
 independent of the file.
 
 The current design **separates the two concerns into two views**, so the live

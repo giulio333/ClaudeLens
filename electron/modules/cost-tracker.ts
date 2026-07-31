@@ -28,9 +28,9 @@ export interface SessionSummary {
   cacheReadTokens: number;
   totalTokens: number;
   estimatedCost: number;
-  cacheSavings: number;    // $ risparmiati dai cache read vs. prezzo input pieno
+  cacheSavings: number; // $ risparmiati dai cache read vs. prezzo input pieno
   messageCount: number;
-  model?: string;          // modello dominante (retrocompatibilità)
+  model?: string; // modello dominante (retrocompatibilità)
   models: Record<string, number>; // conteggio messaggi per modello
   customTitle?: string;
   aiTitle?: string;
@@ -53,23 +53,23 @@ interface ModelPricing {
 
 const PRICING: Record<string, ModelPricing> = {
   // Haiku 4.5
-  'claude-haiku-4-5':             { input: 0.80, output: 4.00,  cacheWrite: 1.00,  cacheRead: 0.08 },
-  'claude-haiku-4-5-20251001':    { input: 0.80, output: 4.00,  cacheWrite: 1.00,  cacheRead: 0.08 },
+  'claude-haiku-4-5': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
+  'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
   // Haiku 3.5
-  'claude-3-5-haiku':             { input: 0.80, output: 4.00,  cacheWrite: 1.00,  cacheRead: 0.08 },
-  'claude-3-5-haiku-20241022':    { input: 0.80, output: 4.00,  cacheWrite: 1.00,  cacheRead: 0.08 },
+  'claude-3-5-haiku': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
+  'claude-3-5-haiku-20241022': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
   // Sonnet 4.x
-  'claude-sonnet-4':              { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-sonnet-4-5':            { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-sonnet-4-6':            { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
+  'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   // Sonnet 3.5
-  'claude-3-5-sonnet':            { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-3-5-sonnet-20241022':   { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
-  'claude-3-5-sonnet-20240620':   { input: 3.00, output: 15.00, cacheWrite: 3.75,  cacheRead: 0.30 },
+  'claude-3-5-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-3-5-sonnet-20240620': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   // Opus 4.x
-  'claude-opus-4':                { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
-  'claude-opus-4-5':              { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
-  'claude-opus-4-6':              { input: 15.00, output: 75.00, cacheWrite: 18.75, cacheRead: 1.50 },
+  'claude-opus-4': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
+  'claude-opus-4-5': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
+  'claude-opus-4-6': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
 };
 
 // Fallback: normalizza l'ID modello per trovare una corrispondenza parziale
@@ -78,8 +78,8 @@ function getPricing(model: string | undefined): ModelPricing {
   if (PRICING[model]) return PRICING[model];
 
   const m = model.toLowerCase();
-  if (m.includes('haiku'))  return PRICING['claude-haiku-4-5'];
-  if (m.includes('opus'))   return PRICING['claude-opus-4-6'];
+  if (m.includes('haiku')) return PRICING['claude-haiku-4-5'];
+  if (m.includes('opus')) return PRICING['claude-opus-4-6'];
   if (m.includes('sonnet')) return PRICING['claude-sonnet-4-6'];
 
   // Default conservativo: Sonnet
@@ -116,10 +116,10 @@ function calculateCost(
 ): number {
   const p = getPricing(model);
   return (
-    (inputTokens      / 1_000_000) * p.input      +
-    (outputTokens     / 1_000_000) * p.output      +
-    (cacheWriteTokens / 1_000_000) * p.cacheWrite  +
-    (cacheReadTokens  / 1_000_000) * p.cacheRead
+    (inputTokens / 1_000_000) * p.input +
+    (outputTokens / 1_000_000) * p.output +
+    (cacheWriteTokens / 1_000_000) * p.cacheWrite +
+    (cacheReadTokens / 1_000_000) * p.cacheRead
   );
 }
 
@@ -128,10 +128,7 @@ function calculateCost(
  * rate for those tokens. Cache reads bill at ~10% of input, so this is the avoided
  * delta (`input − cacheRead`) — what the session would have cost extra with no cache.
  */
-export function calculateCacheSavings(
-  cacheReadTokens: number,
-  model: string | undefined
-): number {
+export function calculateCacheSavings(cacheReadTokens: number, model: string | undefined): number {
   const p = getPricing(model);
   return (cacheReadTokens / 1_000_000) * (p.input - p.cacheRead);
 }
@@ -145,7 +142,7 @@ interface ParsedSession {
   cacheReadTokens: number;
   messageCount: number;
   date: string;
-  model: string | undefined;  // modello dominante
+  model: string | undefined; // modello dominante
   models: Record<string, number>;
   customTitle?: string;
   aiTitle?: string;
@@ -181,7 +178,14 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
     // A user turn carrying a tool_result is the system's reply to a tool call,
     // not text the user typed — never treat it as the "first user message".
     // session-reader absorbs these into the preceding assistant turn the same way.
-    if (raw.some(b => b !== null && typeof b === 'object' && (b as Record<string, unknown>).type === 'tool_result')) {
+    if (
+      raw.some(
+        b =>
+          b !== null &&
+          typeof b === 'object' &&
+          (b as Record<string, unknown>).type === 'tool_result'
+      )
+    ) {
       return undefined;
     }
     for (const block of raw) {
@@ -199,7 +203,8 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   // di framing noti, così prosa con `<`/`>` da codice resta intatta (#93).
   const stripped = stripFramingTags(text).trim();
   if (!stripped) return undefined;
-  if (stripped.startsWith('Caveat:') || stripped.startsWith('[Request interrupted')) return undefined;
+  if (stripped.startsWith('Caveat:') || stripped.startsWith('[Request interrupted'))
+    return undefined;
   return stripped;
 }
 
@@ -212,7 +217,8 @@ function extractLineData(json: any): LineData | null {
   // abort the whole file and under-count every later line (issue #88).
   const d = json.timestamp ? new Date(json.timestamp) : null;
   const date = d && !isNaN(d.getTime()) ? d.toISOString() : '';
-  const customTitle = json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
+  const customTitle =
+    json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
   const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
   const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
   const usage = json.message?.usage;
@@ -225,9 +231,8 @@ function extractLineData(json: any): LineData | null {
   // count each unique turn once instead of inflating tokens/cost (issue #56).
   const messageId: string | undefined = json.message?.id;
   const requestId: string | undefined = json.requestId;
-  const usageKey = usage && (messageId || requestId)
-    ? `${messageId ?? ''}:${requestId ?? ''}`
-    : undefined;
+  const usageKey =
+    usage && (messageId || requestId) ? `${messageId ?? ''}:${requestId ?? ''}` : undefined;
   // Coerce each usage field through a numeric guard: a non-numeric value (e.g. a
   // string) would pass the `?? 0` nullish check and then poison the running
   // total via string concatenation. Keep a bad field at 0 instead.
@@ -237,11 +242,11 @@ function extractLineData(json: any): LineData | null {
     customTitle,
     aiTitle,
     firstUserMessage,
-    inputTokens:      num(usage?.input_tokens),
-    outputTokens:     num(usage?.output_tokens),
+    inputTokens: num(usage?.input_tokens),
+    outputTokens: num(usage?.output_tokens),
     cacheWriteTokens: num(usage?.cache_creation_input_tokens),
-    cacheReadTokens:  num(usage?.cache_read_input_tokens),
-    model:            model && model !== '<synthetic>' ? model : undefined,
+    cacheReadTokens: num(usage?.cache_read_input_tokens),
+    model: model && model !== '<synthetic>' ? model : undefined,
     usageKey,
   };
 }
@@ -271,7 +276,7 @@ interface SessionAccumulator {
 // grown file is read only from `consumed` onward — the dominant win when the
 // watcher invalidates the session list on every append of the *active* session.
 interface ParseCacheEntry {
-  consumed: number;   // bytes already folded into `acc`
+  consumed: number; // bytes already folded into `acc`
   mtimeMs: number;
   // Bytes after the last newline not yet terminated (a half-written final line);
   // a Buffer, not a string, so a multi-byte UTF-8 char split across a read
@@ -298,8 +303,15 @@ export function resetParseCache() {
 
 function newAccumulator(): SessionAccumulator {
   return {
-    inputTokens: 0, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0,
-    messageCount: 0, date: '', modelCounts: {}, dropped: 0, seenUsage: new Set(),
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+    messageCount: 0,
+    date: '',
+    modelCounts: {},
+    dropped: 0,
+    seenUsage: new Set(),
   };
 }
 
@@ -320,20 +332,26 @@ function foldLine(line: string, acc: SessionAccumulator): void {
 
   if (parsed.customTitle) acc.customTitle = parsed.customTitle;
   if (parsed.aiTitle) acc.aiTitle = parsed.aiTitle;
-  if (!acc.firstUserMessage && parsed.firstUserMessage) acc.firstUserMessage = parsed.firstUserMessage;
+  if (!acc.firstUserMessage && parsed.firstUserMessage)
+    acc.firstUserMessage = parsed.firstUserMessage;
   if (parsed.date) acc.date = parsed.date;
 
-  if (parsed.inputTokens || parsed.outputTokens || parsed.cacheWriteTokens || parsed.cacheReadTokens) {
+  if (
+    parsed.inputTokens ||
+    parsed.outputTokens ||
+    parsed.cacheWriteTokens ||
+    parsed.cacheReadTokens
+  ) {
     if (parsed.usageKey) {
       if (acc.seenUsage.has(parsed.usageKey)) return;
       acc.seenUsage.add(parsed.usageKey);
     }
     acc.messageCount++;
     if (parsed.model) acc.modelCounts[parsed.model] = (acc.modelCounts[parsed.model] ?? 0) + 1;
-    acc.inputTokens      += parsed.inputTokens;
-    acc.outputTokens     += parsed.outputTokens;
+    acc.inputTokens += parsed.inputTokens;
+    acc.outputTokens += parsed.outputTokens;
     acc.cacheWriteTokens += parsed.cacheWriteTokens;
-    acc.cacheReadTokens  += parsed.cacheReadTokens;
+    acc.cacheReadTokens += parsed.cacheReadTokens;
   }
 }
 
@@ -439,7 +457,11 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
 // Map with bounded concurrency: parses sessions in parallel (the I/O win) while
 // capping open file descriptors, so a project with hundreds of transcripts can't
 // hit EMFILE on the cold pass. Order is preserved.
-async function mapLimit<T, R>(items: T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+async function mapLimit<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T) => Promise<R>
+): Promise<R[]> {
   const results: R[] = new Array(items.length);
   let next = 0;
   async function worker(): Promise<void> {
@@ -478,27 +500,41 @@ interface ProjectAggregate {
 // (modello dominante + cache token), così summary e per-progetto coincidono.
 async function aggregateProject(projectPath: string): Promise<ProjectAggregate> {
   const files = await findSessionFiles(projectPath);
-  let inputTokens = 0, outputTokens = 0, cacheWriteTokens = 0, cacheReadTokens = 0;
+  let inputTokens = 0,
+    outputTokens = 0,
+    cacheWriteTokens = 0,
+    cacheReadTokens = 0;
   let cost = 0;
 
   const parsed = await mapLimit(files, PARSE_CONCURRENCY, f => parseSession(f));
   for (const s of parsed) {
-    inputTokens      += s.inputTokens;
-    outputTokens     += s.outputTokens;
+    inputTokens += s.inputTokens;
+    outputTokens += s.outputTokens;
     cacheWriteTokens += s.cacheWriteTokens;
-    cacheReadTokens  += s.cacheReadTokens;
+    cacheReadTokens += s.cacheReadTokens;
     // Price each session at its OWN dominant model and sum the dollar costs.
     // Summing tokens across the whole project and applying a single rate (the
     // file-count-dominant model) mispriced any project mixing Opus/Sonnet/Haiku
     // — e.g. many small Haiku subagent files would force a huge Opus session to
     // Haiku rates, or vice versa. Per-session pricing keeps the project rollup
     // consistent with the per-session list (getSessionList).
-    cost += calculateCost(s.inputTokens, s.outputTokens, s.cacheWriteTokens, s.cacheReadTokens, s.model);
+    cost += calculateCost(
+      s.inputTokens,
+      s.outputTokens,
+      s.cacheWriteTokens,
+      s.cacheReadTokens,
+      s.model
+    );
   }
 
   return {
-    inputTokens, outputTokens, cacheWriteTokens, cacheReadTokens,
-    totalTokens: inputTokens + outputTokens, cost, sessionCount: files.length,
+    inputTokens,
+    outputTokens,
+    cacheWriteTokens,
+    cacheReadTokens,
+    totalTokens: inputTokens + outputTokens,
+    cost,
+    sessionCount: files.length,
   };
 }
 
@@ -546,45 +582,55 @@ export async function calculateCostSummary(claudeDir: string): Promise<ProjectCo
 export async function getSessionList(projectPath: string): Promise<SessionSummary[]> {
   const files = await findSessionFiles(projectPath);
 
-  const parsed = await mapLimit(files, PARSE_CONCURRENCY, async (filePath): Promise<SessionSummary | null> => {
-    try {
-      const s = await parseSession(filePath);
-      const totalTokens = s.inputTokens + s.outputTokens;
-      const estimatedCost = calculateCost(
-        s.inputTokens, s.outputTokens, s.cacheWriteTokens, s.cacheReadTokens, s.model
-      );
+  const parsed = await mapLimit(
+    files,
+    PARSE_CONCURRENCY,
+    async (filePath): Promise<SessionSummary | null> => {
+      try {
+        const s = await parseSession(filePath);
+        const totalTokens = s.inputTokens + s.outputTokens;
+        const estimatedCost = calculateCost(
+          s.inputTokens,
+          s.outputTokens,
+          s.cacheWriteTokens,
+          s.cacheReadTokens,
+          s.model
+        );
 
-      return {
-        filename: basename(filePath),
-        date: s.date,
-        inputTokens: s.inputTokens,
-        outputTokens: s.outputTokens,
-        cacheWriteTokens: s.cacheWriteTokens,
-        cacheReadTokens: s.cacheReadTokens,
-        totalTokens,
-        estimatedCost,
-        cacheSavings: calculateCacheSavings(s.cacheReadTokens, s.model),
-        messageCount: s.messageCount,
-        model: s.model,
-        models: s.models,
-        customTitle: s.customTitle,
-        aiTitle: s.aiTitle,
-        firstUserMessage: s.firstUserMessage,
-        template: s.template,
-      };
-    } catch {
-      // sessione non leggibile
-      return null;
+        return {
+          filename: basename(filePath),
+          date: s.date,
+          inputTokens: s.inputTokens,
+          outputTokens: s.outputTokens,
+          cacheWriteTokens: s.cacheWriteTokens,
+          cacheReadTokens: s.cacheReadTokens,
+          totalTokens,
+          estimatedCost,
+          cacheSavings: calculateCacheSavings(s.cacheReadTokens, s.model),
+          messageCount: s.messageCount,
+          model: s.model,
+          models: s.models,
+          customTitle: s.customTitle,
+          aiTitle: s.aiTitle,
+          firstUserMessage: s.firstUserMessage,
+          template: s.template,
+        };
+      } catch {
+        // sessione non leggibile
+        return null;
+      }
     }
-  });
+  );
 
-  return parsed
-    .filter((s): s is SessionSummary => s !== null)
-    // NaN-safe: an empty/invalid `date` makes `new Date(x).getTime()` NaN and the
-    // comparator NaN → arbitrary order. Treat an unparseable date as oldest.
-    .sort((a, b) => {
-      const tb = new Date(b.date).getTime();
-      const ta = new Date(a.date).getTime();
-      return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
-    });
+  return (
+    parsed
+      .filter((s): s is SessionSummary => s !== null)
+      // NaN-safe: an empty/invalid `date` makes `new Date(x).getTime()` NaN and the
+      // comparator NaN → arbitrary order. Treat an unparseable date as oldest.
+      .sort((a, b) => {
+        const tb = new Date(b.date).getTime();
+        const ta = new Date(a.date).getTime();
+        return (Number.isNaN(tb) ? 0 : tb) - (Number.isNaN(ta) ? 0 : ta);
+      })
+  );
 }

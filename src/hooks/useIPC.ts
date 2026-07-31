@@ -1,6 +1,6 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useEffect } from 'react'
-import { keysForScope, scopesFromPayload } from './dataChangeScopes'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useEffect } from 'react';
+import { keysForScope, scopesFromPayload } from './dataChangeScopes';
 
 import type {
   MemoryTopic,
@@ -65,7 +65,7 @@ import type {
   ChatDoneEvent,
   ChatErrorEvent,
   NotificationEvent,
-} from '../types'
+} from '../types';
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
 export type {
@@ -130,282 +130,335 @@ export type {
   ChatMessageEvent,
   ChatDoneEvent,
   ChatErrorEvent,
-}
+};
 
-type IpcResult<T> = { data: T | null; error: string | null }
+type IpcResult<T> = { data: T | null; error: string | null };
 
 export interface DuplicateFolder {
-  hash: string
-  realPath: string
-  realPathAuthoritative: boolean
-  sessionCount: number
-  lastActivity: string | null
-  memoryTopicCount: number
-  hasMemoryIndex: boolean
+  hash: string;
+  realPath: string;
+  realPathAuthoritative: boolean;
+  sessionCount: number;
+  lastActivity: string | null;
+  memoryTopicCount: number;
+  hasMemoryIndex: boolean;
 }
 
 export interface DuplicateGroup {
-  key: string
-  name: string
-  folders: DuplicateFolder[]
+  key: string;
+  name: string;
+  folders: DuplicateFolder[];
 }
 
 export interface SessionMove {
-  filename: string
-  collides: boolean
-  targetName: string
+  filename: string;
+  collides: boolean;
+  targetName: string;
 }
 
-export type MemoryActionKind = 'copy' | 'identical' | 'conflict-rename'
+export type MemoryActionKind = 'copy' | 'identical' | 'conflict-rename';
 
 export interface MemoryAction {
-  filename: string
-  kind: MemoryActionKind
-  targetName?: string
+  filename: string;
+  kind: MemoryActionKind;
+  targetName?: string;
 }
 
 export interface MergeResult {
-  movedSessions: number
-  renamedSessions: number
-  movedSidecars: number
-  cwdRewrittenFiles: number
-  memoryCopied: number
-  memoryRenamed: number
-  memorySkipped: number
-  sourceDeleted: boolean
-  backupPath: string
-  warnings: string[]
+  movedSessions: number;
+  renamedSessions: number;
+  movedSidecars: number;
+  cwdRewrittenFiles: number;
+  memoryCopied: number;
+  memoryRenamed: number;
+  memorySkipped: number;
+  sourceDeleted: boolean;
+  backupPath: string;
+  warnings: string[];
 }
 
 export interface MergePlan {
-  source: { hash: string; realPath: string; authoritative: boolean }
-  dest: { hash: string; realPath: string; authoritative: boolean }
-  cwdRewrite: { from: string; to: string } | null
-  sessions: SessionMove[]
-  sidecars: { name: string; collides: boolean }[]
-  memory: MemoryAction[]
-  regenerateIndex: boolean
-  sourceEmptyAfter: boolean
-  blockers: string[]
-  warnings: string[]
+  source: { hash: string; realPath: string; authoritative: boolean };
+  dest: { hash: string; realPath: string; authoritative: boolean };
+  cwdRewrite: { from: string; to: string } | null;
+  sessions: SessionMove[];
+  sidecars: { name: string; collides: boolean }[];
+  memory: MemoryAction[];
+  regenerateIndex: boolean;
+  sourceEmptyAfter: boolean;
+  blockers: string[];
+  warnings: string[];
 }
 
 declare global {
   interface Window {
     electronAPI: {
       memory: {
-        listProjects: () => Promise<IpcResult<Array<{ hash: string; realPath: string }>>>
-        getProject: (hash: string) => Promise<IpcResult<MemoryData>>
-        createTopic: (hash: string, input: TopicInput) => Promise<IpcResult<{ filename: string }>>
-        updateTopic: (hash: string, filename: string, input: TopicInput) => Promise<IpcResult<null>>
-        deleteTopic: (hash: string, filename: string) => Promise<IpcResult<null>>
-      }
+        listProjects: () => Promise<IpcResult<Array<{ hash: string; realPath: string }>>>;
+        getProject: (hash: string) => Promise<IpcResult<MemoryData>>;
+        createTopic: (hash: string, input: TopicInput) => Promise<IpcResult<{ filename: string }>>;
+        updateTopic: (
+          hash: string,
+          filename: string,
+          input: TopicInput
+        ) => Promise<IpcResult<null>>;
+        deleteTopic: (hash: string, filename: string) => Promise<IpcResult<null>>;
+      };
       projects: {
-        delete: (hash: string) => Promise<IpcResult<null>>
-        detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>
-        planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>
-        executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>
-      }
+        delete: (hash: string) => Promise<IpcResult<null>>;
+        detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>;
+        planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>;
+        executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>;
+      };
       cost: {
-        getSummary: () => Promise<IpcResult<ProjectCost[]>>
-        getByProject: (hash: string) => Promise<IpcResult<ProjectCost>>
-        getPricingMeta: () => Promise<IpcResult<PricingMeta>>
-      }
+        getSummary: () => Promise<IpcResult<ProjectCost[]>>;
+        getByProject: (hash: string) => Promise<IpcResult<ProjectCost>>;
+        getPricingMeta: () => Promise<IpcResult<PricingMeta>>;
+      };
       claudeMd: {
-        getGlobal: () => Promise<IpcResult<string | undefined>>
-        getHierarchy: (realPath: string) => Promise<IpcResult<ClaudeMdHierarchy>>
-        writeGlobal: (content: string) => Promise<IpcResult<null>>
-        writeFile: (filePath: string, content: string) => Promise<IpcResult<null>>
-        deleteGlobal: () => Promise<IpcResult<null>>
-        deleteFile: (filePath: string) => Promise<IpcResult<null>>
-      }
+        getGlobal: () => Promise<IpcResult<string | undefined>>;
+        getHierarchy: (realPath: string) => Promise<IpcResult<ClaudeMdHierarchy>>;
+        writeGlobal: (content: string) => Promise<IpcResult<null>>;
+        writeFile: (filePath: string, content: string) => Promise<IpcResult<null>>;
+        deleteGlobal: () => Promise<IpcResult<null>>;
+        deleteFile: (filePath: string) => Promise<IpcResult<null>>;
+      };
       markdownFile: {
-        write: (filePath: string, content: string) => Promise<IpcResult<null>>
-        delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) => Promise<IpcResult<null>>
-      }
+        write: (filePath: string, content: string) => Promise<IpcResult<null>>;
+        delete: (filePath: string, opts?: { pruneEmptyDir?: boolean }) => Promise<IpcResult<null>>;
+      };
       exportFile: {
-        saveMarkdown: (defaultFilename: string, content: string) => Promise<IpcResult<ExportSaveResult>>
-        savePdf: (defaultFilename: string, html: string) => Promise<IpcResult<ExportSaveResult>>
-      }
+        saveMarkdown: (
+          defaultFilename: string,
+          content: string
+        ) => Promise<IpcResult<ExportSaveResult>>;
+        savePdf: (defaultFilename: string, html: string) => Promise<IpcResult<ExportSaveResult>>;
+      };
       sessions: {
-        listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>
-        getChat: (hash: string, filename: string) => Promise<IpcResult<ChatMessage[]>>
-        getSubagents: (hash: string, filename: string) => Promise<IpcResult<SubagentMeta[]>>
-        getSubagentTranscript: (hash: string, filename: string, agentId: string) => Promise<IpcResult<ChatMessage[]>>
-        getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>
-        deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>
+        listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>;
+        getChat: (hash: string, filename: string) => Promise<IpcResult<ChatMessage[]>>;
+        getSubagents: (hash: string, filename: string) => Promise<IpcResult<SubagentMeta[]>>;
+        getSubagentTranscript: (
+          hash: string,
+          filename: string,
+          agentId: string
+        ) => Promise<IpcResult<ChatMessage[]>>;
+        getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>;
+        deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>;
         sendMessage: (
           realPath: string,
           sessionId: string,
           message: string,
           model?: string,
           permissionMode?: string
-        ) => Promise<IpcResult<null>>
+        ) => Promise<IpcResult<null>>;
         startMessage: (
           realPath: string,
           message: string,
           model?: string,
           permissionMode?: string
-        ) => Promise<IpcResult<null>>
-        stopMessage: () => Promise<IpcResult<null>>
-        endChat: () => Promise<IpcResult<null>>
-        respondPermission: (requestId: string, decision: PermissionDecision) => Promise<IpcResult<null>>
-        onPermissionRequest: (cb: (request: PermissionRequest) => void) => () => void
-        onChatStarted: (cb: (sessionId: string) => void) => () => void
-        onChatChunk: (cb: (event: ChatChunkEvent) => void) => () => void
-        onChatToolActivity: (cb: (event: ChatToolActivityEvent) => void) => () => void
-        onChatMessage: (cb: (event: ChatMessageEvent) => void) => () => void
-        onChatDone: (cb: (event: ChatDoneEvent) => void) => () => void
-        onChatError: (cb: (event: ChatErrorEvent) => void) => () => void
-      }
+        ) => Promise<IpcResult<null>>;
+        stopMessage: () => Promise<IpcResult<null>>;
+        endChat: () => Promise<IpcResult<null>>;
+        respondPermission: (
+          requestId: string,
+          decision: PermissionDecision
+        ) => Promise<IpcResult<null>>;
+        onPermissionRequest: (cb: (request: PermissionRequest) => void) => () => void;
+        onChatStarted: (cb: (sessionId: string) => void) => () => void;
+        onChatChunk: (cb: (event: ChatChunkEvent) => void) => () => void;
+        onChatToolActivity: (cb: (event: ChatToolActivityEvent) => void) => () => void;
+        onChatMessage: (cb: (event: ChatMessageEvent) => void) => () => void;
+        onChatDone: (cb: (event: ChatDoneEvent) => void) => () => void;
+        onChatError: (cb: (event: ChatErrorEvent) => void) => () => void;
+      };
       terminal: {
         create: (opts: {
-          cwd: string
-          resumeSessionId?: string
-          attachJobId?: string
-          cols?: number
-          rows?: number
-        }) => Promise<IpcResult<{ id: string; pid: number }>>
-        write: (id: string, data: string) => Promise<IpcResult<null>>
-        resize: (id: string, cols: number, rows: number) => Promise<IpcResult<null>>
-        kill: (id: string) => Promise<IpcResult<null>>
-        onData: (cb: (id: string, data: string) => void) => () => void
-        onExit: (cb: (id: string, exitCode: number) => void) => () => void
-      }
+          cwd: string;
+          resumeSessionId?: string;
+          attachJobId?: string;
+          cols?: number;
+          rows?: number;
+        }) => Promise<IpcResult<{ id: string; pid: number }>>;
+        write: (id: string, data: string) => Promise<IpcResult<null>>;
+        resize: (id: string, cols: number, rows: number) => Promise<IpcResult<null>>;
+        kill: (id: string) => Promise<IpcResult<null>>;
+        onData: (cb: (id: string, data: string) => void) => () => void;
+        onExit: (cb: (id: string, exitCode: number) => void) => () => void;
+      };
       rules: {
-        getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>
-      }
+        getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>;
+      };
       tasks: {
-        getByProject: (hash: string) => Promise<IpcResult<TaskGroup[]>>
-      }
+        getByProject: (hash: string) => Promise<IpcResult<TaskGroup[]>>;
+      };
       plans: {
-        getByProject: (hash: string) => Promise<IpcResult<PlanGroup[]>>
-      }
+        getByProject: (hash: string) => Promise<IpcResult<PlanGroup[]>>;
+      };
       workflows: {
-        getByProject: (hash: string) => Promise<IpcResult<WorkflowGroup[]>>
+        getByProject: (hash: string) => Promise<IpcResult<WorkflowGroup[]>>;
         getRun: (
           hash: string,
           sessionId: string,
           runId: string
-        ) => Promise<IpcResult<WorkflowRunDetail | null>>
-      }
+        ) => Promise<IpcResult<WorkflowRunDetail | null>>;
+      };
       teams: {
-        getByProject: (hash: string) => Promise<IpcResult<TeamSummary[]>>
-        getDetail: (hash: string, teamName: string) => Promise<IpcResult<TeamDetail | null>>
-      }
+        getByProject: (hash: string) => Promise<IpcResult<TeamSummary[]>>;
+        getDetail: (hash: string, teamName: string) => Promise<IpcResult<TeamDetail | null>>;
+      };
       skills: {
-        getGlobal: () => Promise<IpcResult<Skill[]>>
-        getAll: (realPath: string) => Promise<IpcResult<Skill[]>>
-        create: (input: SkillInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
-        readFile: (skillPath: string, relPath: string) => Promise<IpcResult<string>>
-        writeFile: (skillPath: string, relPath: string, content: string) => Promise<IpcResult<null>>
-        openFile: (skillPath: string, relPath: string) => Promise<IpcResult<null>>
-      }
+        getGlobal: () => Promise<IpcResult<Skill[]>>;
+        getAll: (realPath: string) => Promise<IpcResult<Skill[]>>;
+        create: (
+          input: SkillInput,
+          projectPath?: string
+        ) => Promise<IpcResult<{ filePath: string }>>;
+        readFile: (skillPath: string, relPath: string) => Promise<IpcResult<string>>;
+        writeFile: (
+          skillPath: string,
+          relPath: string,
+          content: string
+        ) => Promise<IpcResult<null>>;
+        openFile: (skillPath: string, relPath: string) => Promise<IpcResult<null>>;
+      };
       agents: {
-        getGlobal: () => Promise<IpcResult<Agent[]>>
-        getByProject: (realPath: string) => Promise<IpcResult<Agent[]>>
-        create: (input: AgentInput, projectPath?: string) => Promise<IpcResult<{ filePath: string }>>
-        dispatchBg: (cwd: string, prompt: string, name?: string, agent?: string, model?: string) => Promise<IpcResult<null>>
-        deleteBg: (id: string) => Promise<IpcResult<string>>
-        stopBg: (id: string) => Promise<IpcResult<string>>
-        respawnBg: (id: string) => Promise<IpcResult<string>>
-        attachBg: (cwd: string, id: string) => Promise<IpcResult<null>>
-      }
+        getGlobal: () => Promise<IpcResult<Agent[]>>;
+        getByProject: (realPath: string) => Promise<IpcResult<Agent[]>>;
+        create: (
+          input: AgentInput,
+          projectPath?: string
+        ) => Promise<IpcResult<{ filePath: string }>>;
+        dispatchBg: (
+          cwd: string,
+          prompt: string,
+          name?: string,
+          agent?: string,
+          model?: string
+        ) => Promise<IpcResult<null>>;
+        deleteBg: (id: string) => Promise<IpcResult<string>>;
+        stopBg: (id: string) => Promise<IpcResult<string>>;
+        respawnBg: (id: string) => Promise<IpcResult<string>>;
+        attachBg: (cwd: string, id: string) => Promise<IpcResult<null>>;
+      };
       mcp: {
-        getGlobal: () => Promise<IpcResult<McpData>>
-      }
+        getGlobal: () => Promise<IpcResult<McpData>>;
+      };
       plugins: {
-        getAll: () => Promise<IpcResult<InstalledPlugin[]>>
-      }
+        getAll: () => Promise<IpcResult<InstalledPlugin[]>>;
+      };
       studio: {
-        getAll: () => Promise<IpcResult<StudioLibrary>>
-        get: (name: string, projectPath?: string) => Promise<IpcResult<BlueprintDetail>>
-        create: (input: Blueprint) => Promise<IpcResult<{ scriptPath: string; script: string }>>
-        save: (input: Blueprint, fileName?: string, projectPath?: string, expectedSource?: string) => Promise<IpcResult<{ scriptPath: string; script: string }>>
-        delete: (name: string, alsoScript?: boolean, projectPath?: string) => Promise<IpcResult<null>>
-        preview: (input: Blueprint) => Promise<IpcResult<{ script: string; issues: BlueprintIssue[] }>>
-        writeScript: (fileName: string, content: string, projectPath?: string, expectedSource?: string) => Promise<IpcResult<{ path: string }>>
-      }
+        getAll: () => Promise<IpcResult<StudioLibrary>>;
+        get: (name: string, projectPath?: string) => Promise<IpcResult<BlueprintDetail>>;
+        create: (input: Blueprint) => Promise<IpcResult<{ scriptPath: string; script: string }>>;
+        save: (
+          input: Blueprint,
+          fileName?: string,
+          projectPath?: string,
+          expectedSource?: string
+        ) => Promise<IpcResult<{ scriptPath: string; script: string }>>;
+        delete: (
+          name: string,
+          alsoScript?: boolean,
+          projectPath?: string
+        ) => Promise<IpcResult<null>>;
+        preview: (
+          input: Blueprint
+        ) => Promise<IpcResult<{ script: string; issues: BlueprintIssue[] }>>;
+        writeScript: (
+          fileName: string,
+          content: string,
+          projectPath?: string,
+          expectedSource?: string
+        ) => Promise<IpcResult<{ path: string }>>;
+      };
       ai: {
-        run: (instruction: string, inputContent: string, projectPath: string) => Promise<IpcResult<null>>
-        stop: () => Promise<IpcResult<null>>
-        onChunk: (cb: (chunk: string) => void) => () => void
-        onDone: (cb: () => void) => () => void
-        onError: (cb: (error: string) => void) => () => void
-      }
+        run: (
+          instruction: string,
+          inputContent: string,
+          projectPath: string
+        ) => Promise<IpcResult<null>>;
+        stop: () => Promise<IpcResult<null>>;
+        onChunk: (cb: (chunk: string) => void) => () => void;
+        onDone: (cb: () => void) => () => void;
+        onError: (cb: (error: string) => void) => () => void;
+      };
       settings: {
-        getCleanupPeriodDays: () => Promise<IpcResult<number>>
-      }
+        getCleanupPeriodDays: () => Promise<IpcResult<number>>;
+      };
       updates: {
-        check: () => Promise<IpcResult<UpdateInfo>>
-      }
+        check: () => Promise<IpcResult<UpdateInfo>>;
+      };
       config: {
-        getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>
-      }
+        getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>;
+      };
       prefs: {
-        getAll: () => Promise<IpcResult<Record<string, unknown>>>
-        set: (key: string, value: unknown) => Promise<IpcResult<boolean>>
-      }
+        getAll: () => Promise<IpcResult<Record<string, unknown>>>;
+        set: (key: string, value: unknown) => Promise<IpcResult<boolean>>;
+      };
       notifications: {
-        onEvent: (cb: (event: NotificationEvent) => void) => () => void
-        clearBadge: () => Promise<IpcResult<boolean>>
-      }
+        onEvent: (cb: (event: NotificationEvent) => void) => () => void;
+        clearBadge: () => Promise<IpcResult<boolean>>;
+      };
       telemetry: {
-        isEnabled: () => Promise<IpcResult<boolean>>
-        setEnabled: (enabled: boolean) => Promise<IpcResult<boolean>>
-        track: (name: string, props?: Record<string, string | number>) => Promise<IpcResult<boolean>>
-      }
-      onDataChanged: (callback: (scopes?: string[] | null) => void) => () => void
+        isEnabled: () => Promise<IpcResult<boolean>>;
+        setEnabled: (enabled: boolean) => Promise<IpcResult<boolean>>;
+        track: (
+          name: string,
+          props?: Record<string, string | number>
+        ) => Promise<IpcResult<boolean>>;
+      };
+      onDataChanged: (callback: (scopes?: string[] | null) => void) => () => void;
       live: {
-        getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>
-        onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void
-        getSessions: () => Promise<IpcResult<BgSession[]>>
-        onBgSessionsChanged: (cb: (sessions: BgSession[]) => void) => () => void
-        startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>
-        stopWatch: () => Promise<IpcResult<null>>
-        onEvent: (cb: (event: unknown) => void) => () => void
-      }
-    }
+        getActiveSessions: () => Promise<IpcResult<ActiveSession[]>>;
+        onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void;
+        getSessions: () => Promise<IpcResult<BgSession[]>>;
+        onBgSessionsChanged: (cb: (sessions: BgSession[]) => void) => () => void;
+        startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>;
+        stopWatch: () => Promise<IpcResult<null>>;
+        onEvent: (cb: (event: unknown) => void) => () => void;
+      };
+    };
   }
 }
 
 async function unwrap<T>(promise: Promise<IpcResult<T>>): Promise<T> {
-  const result = await promise
-  if (result.error) throw new Error(result.error)
-  return result.data as T
+  const result = await promise;
+  if (result.error) throw new Error(result.error);
+  return result.data as T;
 }
 
 export function useMemoryProjects() {
   return useQuery({
     queryKey: ['memory:projects'],
     queryFn: () => unwrap(window.electronAPI.memory.listProjects()),
-  })
+  });
 }
 
 export function useDuplicateProjects() {
   return useQuery({
     queryKey: ['projects:duplicates'],
     queryFn: () => unwrap(window.electronAPI.projects.detectDuplicates()),
-  })
+  });
 }
 
 /** Calcola il piano di merge (read-only) per una coppia source → dest. */
 export function planMerge(sourceHash: string, destHash: string): Promise<MergePlan> {
-  return unwrap(window.electronAPI.projects.planMerge(sourceHash, destHash))
+  return unwrap(window.electronAPI.projects.planMerge(sourceHash, destHash));
 }
 
 /** Mutation: esegue il merge e invalida le query sui duplicati/progetti. */
 export function useExecuteMerge() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ sourceHash, destHash }: { sourceHash: string; destHash: string }) =>
       unwrap(window.electronAPI.projects.executeMerge(sourceHash, destHash)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects:duplicates'] })
-      qc.invalidateQueries({ queryKey: ['memory:projects'] })
-      qc.invalidateQueries({ queryKey: ['cost:summary'] })
+      qc.invalidateQueries({ queryKey: ['projects:duplicates'] });
+      qc.invalidateQueries({ queryKey: ['memory:projects'] });
+      qc.invalidateQueries({ queryKey: ['cost:summary'] });
     },
-  })
+  });
 }
 
 export function useMemoryProject(hash: string | null) {
@@ -413,14 +466,14 @@ export function useMemoryProject(hash: string | null) {
     queryKey: ['memory:project', hash],
     queryFn: () => unwrap(window.electronAPI.memory.getProject(hash!)),
     enabled: hash !== null,
-  })
+  });
 }
 
 export function useCostSummary() {
   return useQuery({
     queryKey: ['cost:summary'],
     queryFn: () => unwrap(window.electronAPI.cost.getSummary()),
-  })
+  });
 }
 
 export function usePricingMeta() {
@@ -428,7 +481,7 @@ export function usePricingMeta() {
     queryKey: ['cost:pricingMeta'],
     queryFn: () => unwrap(window.electronAPI.cost.getPricingMeta()),
     staleTime: Infinity,
-  })
+  });
 }
 
 export function useClaudeMdHierarchy(realPath: string | null) {
@@ -436,51 +489,56 @@ export function useClaudeMdHierarchy(realPath: string | null) {
     queryKey: ['claudeMd:hierarchy', realPath],
     queryFn: () => unwrap(window.electronAPI.claudeMd.getHierarchy(realPath!)),
     enabled: realPath !== null,
-  })
+  });
 }
 
 export function useGlobalClaudeMd() {
   return useQuery({
     queryKey: ['claudeMd:global'],
     queryFn: () => unwrap(window.electronAPI.claudeMd.getGlobal()),
-  })
+  });
 }
 
 export function useWriteGlobalClaudeMd() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (content: string) => unwrap(window.electronAPI.claudeMd.writeGlobal(content)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] });
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] });
     },
-  })
+  });
 }
 
 export function useWriteMarkdownFile(invalidateKeys: string[] = []) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ filePath, content }: { filePath: string; content: string }) =>
       unwrap(window.electronAPI.markdownFile.write(filePath, content)),
     onSuccess: () => {
-      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }))
+      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }));
     },
-  })
+  });
 }
 
 export function useDeleteMarkdownFile(invalidateKeys: string[] = []) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ filePath, pruneEmptyDir }: { filePath: string; pruneEmptyDir?: boolean }) =>
-      unwrap(window.electronAPI.markdownFile.delete(filePath, pruneEmptyDir ? { pruneEmptyDir } : undefined)),
+      unwrap(
+        window.electronAPI.markdownFile.delete(
+          filePath,
+          pruneEmptyDir ? { pruneEmptyDir } : undefined
+        )
+      ),
     onSuccess: () => {
-      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }))
+      invalidateKeys.forEach(k => qc.invalidateQueries({ queryKey: [k] }));
     },
-  })
+  });
 }
 
 export function useDeleteClaudeMdFile() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (filePath: string | null) =>
       unwrap(
@@ -489,30 +547,33 @@ export function useDeleteClaudeMdFile() {
           : window.electronAPI.claudeMd.deleteGlobal()
       ),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] });
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] });
     },
-  })
+  });
 }
 
-export function saveMarkdownExport(defaultFilename: string, content: string): Promise<ExportSaveResult> {
-  return unwrap(window.electronAPI.exportFile.saveMarkdown(defaultFilename, content))
+export function saveMarkdownExport(
+  defaultFilename: string,
+  content: string
+): Promise<ExportSaveResult> {
+  return unwrap(window.electronAPI.exportFile.saveMarkdown(defaultFilename, content));
 }
 
 export function savePdfExport(defaultFilename: string, html: string): Promise<ExportSaveResult> {
-  return unwrap(window.electronAPI.exportFile.savePdf(defaultFilename, html))
+  return unwrap(window.electronAPI.exportFile.savePdf(defaultFilename, html));
 }
 
 export function useWriteClaudeMdFile() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ filePath, content }: { filePath: string; content: string }) =>
       unwrap(window.electronAPI.claudeMd.writeFile(filePath, content)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['claudeMd:global'] })
-      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] })
+      qc.invalidateQueries({ queryKey: ['claudeMd:global'] });
+      qc.invalidateQueries({ queryKey: ['claudeMd:hierarchy'] });
     },
-  })
+  });
 }
 
 export function useProjectRules(realPath: string | null) {
@@ -520,7 +581,7 @@ export function useProjectRules(realPath: string | null) {
     queryKey: ['rules:project', realPath],
     queryFn: () => unwrap(window.electronAPI.rules.getByProject(realPath!)),
     enabled: realPath !== null,
-  })
+  });
 }
 
 export function useSessionList(hash: string | null) {
@@ -528,7 +589,7 @@ export function useSessionList(hash: string | null) {
     queryKey: ['sessions:project', hash],
     queryFn: () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
     enabled: hash !== null,
-  })
+  });
 }
 
 export function useProjectTasks(hash: string | null) {
@@ -536,7 +597,7 @@ export function useProjectTasks(hash: string | null) {
     queryKey: ['tasks:project', hash],
     queryFn: () => unwrap(window.electronAPI.tasks.getByProject(hash!)),
     enabled: hash !== null,
-  })
+  });
 }
 
 export function useProjectPlans(hash: string | null) {
@@ -544,7 +605,7 @@ export function useProjectPlans(hash: string | null) {
     queryKey: ['plans:project', hash],
     queryFn: () => unwrap(window.electronAPI.plans.getByProject(hash!)),
     enabled: hash !== null,
-  })
+  });
 }
 
 // The workflows/teams readers deliberately skip mid-write JSON (state files and
@@ -552,49 +613,61 @@ export function useProjectPlans(hash: string | null) {
 // data:changed can transiently resolve empty/null and flash an already-populated
 // view to "empty"/"not found" — same failure mode keepLastGood guards for chat.
 export function useProjectWorkflows(hash: string | null) {
-  const qc = useQueryClient()
-  const key = ['workflows:project', hash]
+  const qc = useQueryClient();
+  const key = ['workflows:project', hash];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
       keepLastGood(qc, key, await unwrap(window.electronAPI.workflows.getByProject(hash!))),
     enabled: hash !== null,
-  })
+  });
 }
 
 // Full run detail, re-read on demand (watcher-live via useDataChangedRefetch).
-export function useWorkflowRun(hash: string | null, sessionId: string | null, runId: string | null) {
-  const qc = useQueryClient()
-  const key = ['workflows:run', hash, sessionId, runId]
+export function useWorkflowRun(
+  hash: string | null,
+  sessionId: string | null,
+  runId: string | null
+) {
+  const qc = useQueryClient();
+  const key = ['workflows:run', hash, sessionId, runId];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
-      keepLastGoodValue(qc, key, await unwrap(window.electronAPI.workflows.getRun(hash!, sessionId!, runId!))),
+      keepLastGoodValue(
+        qc,
+        key,
+        await unwrap(window.electronAPI.workflows.getRun(hash!, sessionId!, runId!))
+      ),
     enabled: hash !== null && sessionId !== null && runId !== null,
-  })
+  });
 }
 
 export function useProjectTeams(hash: string | null) {
-  const qc = useQueryClient()
-  const key = ['teams:project', hash]
+  const qc = useQueryClient();
+  const key = ['teams:project', hash];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
       keepLastGood(qc, key, await unwrap(window.electronAPI.teams.getByProject(hash!))),
     enabled: hash !== null,
-  })
+  });
 }
 
 // Full team detail, re-read on demand (watcher-live via useDataChangedRefetch).
 export function useTeamDetail(hash: string | null, teamName: string | null) {
-  const qc = useQueryClient()
-  const key = ['teams:detail', hash, teamName]
+  const qc = useQueryClient();
+  const key = ['teams:detail', hash, teamName];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
-      keepLastGoodValue(qc, key, await unwrap(window.electronAPI.teams.getDetail(hash!, teamName!))),
+      keepLastGoodValue(
+        qc,
+        key,
+        await unwrap(window.electronAPI.teams.getDetail(hash!, teamName!))
+      ),
     enabled: hash !== null && teamName !== null,
-  })
+  });
 }
 
 // Inventario degli artefatti di una sessione (transcript, sub-agenti, task, piani).
@@ -606,23 +679,23 @@ export function useSessionArtifacts(hash: string | null, filename: string | null
     enabled: hash !== null && filename !== null,
     staleTime: 0,
     gcTime: 0,
-  })
+  });
 }
 
 export function useDeleteSession(hash: string) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (paths: string[]) => unwrap(window.electronAPI.sessions.deleteSession(paths)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['sessions:project', hash] })
-      qc.invalidateQueries({ queryKey: ['tasks:project', hash] })
-      qc.invalidateQueries({ queryKey: ['plans:project', hash] })
+      qc.invalidateQueries({ queryKey: ['sessions:project', hash] });
+      qc.invalidateQueries({ queryKey: ['tasks:project', hash] });
+      qc.invalidateQueries({ queryKey: ['plans:project', hash] });
       // The deleted .jsonl is the cost source for this project — refresh the
       // cost rollups it fed so the figures don't keep counting a gone session.
-      qc.invalidateQueries({ queryKey: ['cost:summary'] })
-      qc.invalidateQueries({ queryKey: ['cost:project', hash] })
+      qc.invalidateQueries({ queryKey: ['cost:summary'] });
+      qc.invalidateQueries({ queryKey: ['cost:project', hash] });
     },
-  })
+  });
 }
 
 export function useCleanupPeriodDays() {
@@ -630,7 +703,7 @@ export function useCleanupPeriodDays() {
     queryKey: ['settings:cleanupPeriodDays'],
     queryFn: () => unwrap(window.electronAPI.settings.getCleanupPeriodDays()),
     staleTime: 60_000,
-  })
+  });
 }
 
 // Anonymous usage telemetry (Aptabase) opt-out toggle. Default ON; the toggle
@@ -640,17 +713,17 @@ export function useTelemetryEnabled() {
     queryKey: ['telemetry:enabled'],
     queryFn: () => unwrap(window.electronAPI.telemetry.isEnabled()),
     staleTime: Infinity,
-  })
+  });
 }
 
 export function useSetTelemetryEnabled() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (enabled: boolean) => unwrap(window.electronAPI.telemetry.setEnabled(enabled)),
     onSuccess: (_data, enabled) => {
-      qc.setQueryData(['telemetry:enabled'], enabled)
+      qc.setQueryData(['telemetry:enabled'], enabled);
     },
-  })
+  });
 }
 
 // ─── Update check (GitHub releases) ──────────────────────────────────────────
@@ -658,12 +731,12 @@ export function useSetTelemetryEnabled() {
 // refetch(). Mirrors electron/modules/update-checker.ts. A failed check throws
 // — the banner stays silent on error, Settings shows "couldn't check".
 export interface UpdateInfo {
-  currentVersion: string
-  latestVersion: string
-  updateAvailable: boolean
-  releaseName: string | null
-  releaseUrl: string
-  publishedAt: string | null
+  currentVersion: string;
+  latestVersion: string;
+  updateAvailable: boolean;
+  releaseName: string | null;
+  releaseUrl: string;
+  publishedAt: string | null;
 }
 
 export function useUpdateCheck() {
@@ -673,74 +746,80 @@ export function useUpdateCheck() {
     staleTime: Infinity,
     retry: false,
     refetchOnWindowFocus: false,
-  })
+  });
 }
 
 // Per-version "skip" for the update notice, persisted in
 // ~/.claudelens/preferences.json so a skipped release stays quiet across
 // launches (the next release shows the notice again).
-const UPDATE_SKIPPED_KEY = 'cl-update-skipped-version'
+const UPDATE_SKIPPED_KEY = 'cl-update-skipped-version';
 
 export function useSkippedUpdateVersion() {
   return useQuery({
     queryKey: ['prefs:update-skipped'],
     queryFn: async (): Promise<string | null> => {
-      const all = await unwrap(window.electronAPI.prefs.getAll())
-      const v = all[UPDATE_SKIPPED_KEY]
-      return typeof v === 'string' ? v : null
+      const all = await unwrap(window.electronAPI.prefs.getAll());
+      const v = all[UPDATE_SKIPPED_KEY];
+      return typeof v === 'string' ? v : null;
     },
     staleTime: Infinity,
-  })
+  });
 }
 
 export function useSkipUpdateVersion() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: (version: string) => unwrap(window.electronAPI.prefs.set(UPDATE_SKIPPED_KEY, version)),
+    mutationFn: (version: string) =>
+      unwrap(window.electronAPI.prefs.set(UPDATE_SKIPPED_KEY, version)),
     onSuccess: (_data, version) => {
-      qc.setQueryData(['prefs:update-skipped'], version)
+      qc.setQueryData(['prefs:update-skipped'], version);
     },
-  })
+  });
 }
 
 // Notification preferences (master switch + OS-mirror toggle). Persisted in
 // ~/.claudelens/preferences.json via the generic prefs store; the main process
 // reads them live when gating each notification (instant, no restart).
 export interface NotifyPrefs {
-  enabled: boolean
-  os: boolean
+  enabled: boolean;
+  os: boolean;
 }
-const NOTIFY_ENABLED_KEY = 'cl-notify-enabled'
-const NOTIFY_OS_KEY = 'cl-notify-os'
+const NOTIFY_ENABLED_KEY = 'cl-notify-enabled';
+const NOTIFY_OS_KEY = 'cl-notify-os';
 
 export function useNotifyPrefs() {
   return useQuery({
     queryKey: ['prefs:notify'],
     queryFn: async (): Promise<NotifyPrefs> => {
-      const all = await unwrap(window.electronAPI.prefs.getAll())
+      const all = await unwrap(window.electronAPI.prefs.getAll());
       return {
-        enabled: typeof all[NOTIFY_ENABLED_KEY] === 'boolean' ? (all[NOTIFY_ENABLED_KEY] as boolean) : true,
+        enabled:
+          typeof all[NOTIFY_ENABLED_KEY] === 'boolean'
+            ? (all[NOTIFY_ENABLED_KEY] as boolean)
+            : true,
         os: typeof all[NOTIFY_OS_KEY] === 'boolean' ? (all[NOTIFY_OS_KEY] as boolean) : true,
-      }
+      };
     },
     staleTime: Infinity,
-  })
+  });
 }
 
 export function useSetNotifyPref() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ key, value }: { key: 'enabled' | 'os'; value: boolean }) =>
-      unwrap(window.electronAPI.prefs.set(key === 'enabled' ? NOTIFY_ENABLED_KEY : NOTIFY_OS_KEY, value)),
+      unwrap(
+        window.electronAPI.prefs.set(key === 'enabled' ? NOTIFY_ENABLED_KEY : NOTIFY_OS_KEY, value)
+      ),
     onSuccess: (_data, { key, value }) => {
       qc.setQueryData(['prefs:notify'], (prev: NotifyPrefs | undefined) => ({
         enabled: true,
         os: true,
         ...prev,
         [key]: value,
-      }))
+      }));
     },
-  })
+  });
 }
 
 export function useProjectCost(hash: string | null) {
@@ -748,7 +827,7 @@ export function useProjectCost(hash: string | null) {
     queryKey: ['cost:project', hash],
     queryFn: () => unwrap(window.electronAPI.cost.getByProject(hash!)),
     enabled: hash !== null,
-  })
+  });
 }
 
 // The transcript `.jsonl` is read through the Agent SDK on every `data:changed`,
@@ -760,9 +839,9 @@ export function useProjectCost(hash: string | null) {
 // good data instead of flashing to the empty state. A genuinely empty session
 // (prev also empty) is unaffected; a remount always re-reads from scratch.
 function keepLastGood<T>(qc: ReturnType<typeof useQueryClient>, key: unknown[], next: T[]): T[] {
-  if (next.length > 0) return next
-  const prev = qc.getQueryData<T[]>(key)
-  return prev && prev.length > 0 ? prev : next
+  if (next.length > 0) return next;
+  const prev = qc.getQueryData<T[]>(key);
+  return prev && prev.length > 0 ? prev : next;
 }
 
 // Single-object variant: a transient null (state file mid-write) must not
@@ -770,110 +849,119 @@ function keepLastGood<T>(qc: ReturnType<typeof useQueryClient>, key: unknown[], 
 function keepLastGoodValue<T>(
   qc: ReturnType<typeof useQueryClient>,
   key: unknown[],
-  next: T | null,
+  next: T | null
 ): T | null {
-  if (next !== null) return next
-  return qc.getQueryData<T>(key) ?? null
+  if (next !== null) return next;
+  return qc.getQueryData<T>(key) ?? null;
 }
 
 export function useChatSession(hash: string, filename: string | null) {
-  const qc = useQueryClient()
-  const key = ['sessions:chat', hash, filename]
+  const qc = useQueryClient();
+  const key = ['sessions:chat', hash, filename];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
       keepLastGood(qc, key, await unwrap(window.electronAPI.sessions.getChat(hash, filename!))),
     enabled: filename !== null,
-  })
+  });
 }
 
 export function useSessionSubagents(hash: string, filename: string | null) {
-  const qc = useQueryClient()
-  const key = ['sessions:subagents', hash, filename]
+  const qc = useQueryClient();
+  const key = ['sessions:subagents', hash, filename];
   return useQuery({
     queryKey: key,
     queryFn: async () =>
-      keepLastGood(qc, key, await unwrap(window.electronAPI.sessions.getSubagents(hash, filename!))),
+      keepLastGood(
+        qc,
+        key,
+        await unwrap(window.electronAPI.sessions.getSubagents(hash, filename!))
+      ),
     enabled: filename !== null,
-  })
+  });
 }
 
-export function useSubagentTranscript(hash: string, filename: string | null, agentId: string | null) {
+export function useSubagentTranscript(
+  hash: string,
+  filename: string | null,
+  agentId: string | null
+) {
   return useQuery({
     queryKey: ['sessions:subagentTranscript', hash, filename, agentId],
-    queryFn: () => unwrap(window.electronAPI.sessions.getSubagentTranscript(hash, filename!, agentId!)),
+    queryFn: () =>
+      unwrap(window.electronAPI.sessions.getSubagentTranscript(hash, filename!, agentId!)),
     enabled: filename !== null && agentId !== null,
-  })
+  });
 }
 
 // Background-agent sessions (~/.claude/jobs + daemon/roster): the main pushes
 // the fresh list via watcher; the slow refetch is just a safety net for a lost
 // push or a dead pid whose state.json never changed.
 export function useLiveSessions() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   useEffect(
     () =>
       window.electronAPI.live.onBgSessionsChanged(sessions =>
         qc.setQueryData(['live:sessions'], sessions)
       ),
     [qc]
-  )
+  );
   return useQuery({
     queryKey: ['live:sessions'],
     queryFn: () => unwrap(window.electronAPI.live.getSessions()),
     refetchInterval: 15000,
-  })
+  });
 }
 
 // Sessioni Claude attive (registro ~/.claude/sessions): il main pusha gli
 // aggiornamenti via watcher, il refetch lento fa solo da rete di sicurezza
 // (es. watcher perso o pid morto senza unlink del file).
 export function useActiveSessions() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   useEffect(
     () =>
       window.electronAPI.live.onActiveSessionsChanged(sessions =>
         qc.setQueryData(['live:activeSessions'], sessions)
       ),
     [qc]
-  )
+  );
   return useQuery({
     queryKey: ['live:activeSessions'],
     queryFn: () => unwrap(window.electronAPI.live.getActiveSessions()),
     refetchInterval: 15000,
-  })
+  });
 }
 
 export function useCreateTopic(hash: string) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: TopicInput) => unwrap(window.electronAPI.memory.createTopic(hash, input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
-  })
+  });
 }
 
 export function useUpdateTopic(hash: string) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ filename, input }: { filename: string; input: TopicInput }) =>
       unwrap(window.electronAPI.memory.updateTopic(hash, filename, input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
-  })
+  });
 }
 
 export function useDeleteTopic(hash: string) {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (filename: string) => unwrap(window.electronAPI.memory.deleteTopic(hash, filename)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
-  })
+  });
 }
 
 export function useGlobalSkills() {
   return useQuery({
     queryKey: ['skills:global'],
     queryFn: () => unwrap(window.electronAPI.skills.getGlobal()),
-  })
+  });
 }
 
 export function useAllSkills(realPath: string | null) {
@@ -881,35 +969,35 @@ export function useAllSkills(realPath: string | null) {
     queryKey: ['skills:all', realPath],
     queryFn: () => unwrap(window.electronAPI.skills.getAll(realPath!)),
     enabled: realPath !== null,
-  })
+  });
 }
 
 export function useGlobalAgents() {
   return useQuery({
     queryKey: ['agents:global'],
     queryFn: () => unwrap(window.electronAPI.agents.getGlobal()),
-  })
+  });
 }
 
 export function useGlobalMcp() {
   return useQuery({
     queryKey: ['mcp:global'],
     queryFn: () => unwrap(window.electronAPI.mcp.getGlobal()),
-  })
+  });
 }
 
 export function usePlugins() {
   return useQuery({
     queryKey: ['plugins:all'],
     queryFn: () => unwrap(window.electronAPI.plugins.getAll()),
-  })
+  });
 }
 
 export function useStudioLibrary() {
   return useQuery({
     queryKey: ['studio:all'],
     queryFn: () => unwrap(window.electronAPI.studio.getAll()),
-  })
+  });
 }
 
 export function useBlueprint(name: string | null, projectPath?: string) {
@@ -917,53 +1005,81 @@ export function useBlueprint(name: string | null, projectPath?: string) {
     queryKey: ['studio:blueprint', name, projectPath ?? null],
     queryFn: () => unwrap(window.electronAPI.studio.get(name!, projectPath)),
     enabled: name !== null,
-  })
+  });
 }
 
 export function useCreateBlueprint() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (input: Blueprint) => unwrap(window.electronAPI.studio.create(input)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['studio:all'] }),
-  })
+  });
 }
 
 export function useSaveBlueprint() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ input, fileName, projectPath, expectedSource }: { input: Blueprint; fileName: string; projectPath?: string; expectedSource: string }) =>
-      unwrap(window.electronAPI.studio.save(input, fileName, projectPath, expectedSource)),
+    mutationFn: ({
+      input,
+      fileName,
+      projectPath,
+      expectedSource,
+    }: {
+      input: Blueprint;
+      fileName: string;
+      projectPath?: string;
+      expectedSource: string;
+    }) => unwrap(window.electronAPI.studio.save(input, fileName, projectPath, expectedSource)),
     // Keep the mutation pending until the editor has the source just written.
     // Otherwise clearing its draft briefly exposes the previous query snapshot.
-    onSuccess: () => Promise.all([
-      qc.invalidateQueries({ queryKey: ['studio:all'] }),
-      qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
-    ]),
-  })
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['studio:all'] }),
+        qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
+      ]),
+  });
 }
 
 export function useDeleteBlueprint() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ name, alsoScript, projectPath }: { name: string; alsoScript?: boolean; projectPath?: string }) =>
-      unwrap(window.electronAPI.studio.delete(name, alsoScript, projectPath)),
+    mutationFn: ({
+      name,
+      alsoScript,
+      projectPath,
+    }: {
+      name: string;
+      alsoScript?: boolean;
+      projectPath?: string;
+    }) => unwrap(window.electronAPI.studio.delete(name, alsoScript, projectPath)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['studio:all'] })
-      qc.invalidateQueries({ queryKey: ['studio:blueprint'] })
+      qc.invalidateQueries({ queryKey: ['studio:all'] });
+      qc.invalidateQueries({ queryKey: ['studio:blueprint'] });
     },
-  })
+  });
 }
 
 export function useWriteNativeWorkflowScript() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ fileName, content, projectPath, expectedSource }: { fileName: string; content: string; projectPath?: string; expectedSource: string }) =>
+    mutationFn: ({
+      fileName,
+      content,
+      projectPath,
+      expectedSource,
+    }: {
+      fileName: string;
+      content: string;
+      projectPath?: string;
+      expectedSource: string;
+    }) =>
       unwrap(window.electronAPI.studio.writeScript(fileName, content, projectPath, expectedSource)),
-    onSuccess: () => Promise.all([
-      qc.invalidateQueries({ queryKey: ['studio:all'] }),
-      qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
-    ]),
-  })
+    onSuccess: () =>
+      Promise.all([
+        qc.invalidateQueries({ queryKey: ['studio:all'] }),
+        qc.invalidateQueries({ queryKey: ['studio:blueprint'] }),
+      ]),
+  });
 }
 
 export function useProjectAgents(realPath: string | null) {
@@ -971,19 +1087,19 @@ export function useProjectAgents(realPath: string | null) {
     queryKey: ['agents:project', realPath],
     queryFn: () => unwrap(window.electronAPI.agents.getByProject(realPath!)),
     enabled: realPath !== null,
-  })
+  });
 }
 
 export function useCreateSkill() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ input, projectPath }: { input: SkillInput; projectPath?: string }) =>
       unwrap(window.electronAPI.skills.create(input, projectPath)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['skills:global'] })
-      qc.invalidateQueries({ queryKey: ['skills:all'] })
+      qc.invalidateQueries({ queryKey: ['skills:global'] });
+      qc.invalidateQueries({ queryKey: ['skills:all'] });
     },
-  })
+  });
 }
 
 // Lazily read a supporting file's content (only when a bundle file is opened).
@@ -992,20 +1108,27 @@ export function useSkillFile(skillPath: string | null, file: SkillFile | null) {
     queryKey: ['skills:file', skillPath, file?.relPath],
     queryFn: () => unwrap(window.electronAPI.skills.readFile(skillPath!, file!.relPath)),
     enabled: skillPath !== null && file !== null && file.isText,
-  })
+  });
 }
 
 export function useWriteSkillFile() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ skillPath, relPath, content }: { skillPath: string; relPath: string; content: string }) =>
-      unwrap(window.electronAPI.skills.writeFile(skillPath, relPath, content)),
+    mutationFn: ({
+      skillPath,
+      relPath,
+      content,
+    }: {
+      skillPath: string;
+      relPath: string;
+      content: string;
+    }) => unwrap(window.electronAPI.skills.writeFile(skillPath, relPath, content)),
     onSuccess: (_data, { skillPath, relPath }) => {
-      qc.invalidateQueries({ queryKey: ['skills:file', skillPath, relPath] })
-      qc.invalidateQueries({ queryKey: ['skills:global'] })
-      qc.invalidateQueries({ queryKey: ['skills:all'] })
+      qc.invalidateQueries({ queryKey: ['skills:file', skillPath, relPath] });
+      qc.invalidateQueries({ queryKey: ['skills:global'] });
+      qc.invalidateQueries({ queryKey: ['skills:all'] });
     },
-  })
+  });
 }
 
 // Open a non-text supporting file (image/binary) in the OS default app.
@@ -1013,73 +1136,84 @@ export function useOpenSkillFile() {
   return useMutation({
     mutationFn: ({ skillPath, relPath }: { skillPath: string; relPath: string }) =>
       unwrap(window.electronAPI.skills.openFile(skillPath, relPath)),
-  })
+  });
 }
 
 export function useCreateAgent() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ input, projectPath }: { input: AgentInput; projectPath?: string }) =>
       unwrap(window.electronAPI.agents.create(input, projectPath)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['agents:global'] })
-      qc.invalidateQueries({ queryKey: ['agents:project'] })
+      qc.invalidateQueries({ queryKey: ['agents:global'] });
+      qc.invalidateQueries({ queryKey: ['agents:project'] });
     },
-  })
+  });
 }
 
 export function useDispatchBackgroundAgent() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ cwd, prompt, name, agent, model }: { cwd: string; prompt: string; name?: string; agent?: string; model?: string }) =>
-      unwrap(window.electronAPI.agents.dispatchBg(cwd, prompt, name, agent, model)),
+    mutationFn: ({
+      cwd,
+      prompt,
+      name,
+      agent,
+      model,
+    }: {
+      cwd: string;
+      prompt: string;
+      name?: string;
+      agent?: string;
+      model?: string;
+    }) => unwrap(window.electronAPI.agents.dispatchBg(cwd, prompt, name, agent, model)),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['live:sessions'] })
+      qc.invalidateQueries({ queryKey: ['live:sessions'] });
     },
-  })
+  });
 }
 
 export function useDeleteBackgroundAgent() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrap(window.electronAPI.agents.deleteBg(id)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
-  })
+  });
 }
 
 export function useStopBackgroundAgent() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrap(window.electronAPI.agents.stopBg(id)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
-  })
+  });
 }
 
 export function useRespawnBackgroundAgent() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (id: string) => unwrap(window.electronAPI.agents.respawnBg(id)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['live:sessions'] }),
-  })
+  });
 }
 
 export function useAttachBackgroundAgent() {
   return useMutation({
     mutationFn: ({ cwd, id }: { cwd: string; id: string }) =>
       unwrap(window.electronAPI.agents.attachBg(cwd, id)),
-  })
+  });
 }
 
 export function useDeleteProject() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: (hash: string) => unwrap(window.electronAPI.projects.delete(hash)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:projects'] }),
-  })
+  });
 }
 
 export function useDataChangedRefetch() {
-  const qc = useQueryClient()
+  const qc = useQueryClient();
 
   useEffect(() => {
     // Coalesce bursts: during a live chat turn the transcript .jsonl is appended
@@ -1087,28 +1221,28 @@ export function useDataChangedRefetch() {
     // re-run a full synchronous re-read/parse of the entire file (sessions:chat
     // is an active query). A trailing timer collapses a burst into one pass,
     // invalidating the union of the scopes seen during the window.
-    let timer: ReturnType<typeof setTimeout> | null = null
-    let pending = new Set<string>()
+    let timer: ReturnType<typeof setTimeout> | null = null;
+    let pending = new Set<string>();
     const flush = () => {
-      timer = null
-      const scopes = pending
-      pending = new Set()
+      timer = null;
+      const scopes = pending;
+      pending = new Set();
       for (const scope of scopes) {
         for (const key of keysForScope(scope)) {
-          qc.invalidateQueries({ queryKey: [key] })
+          qc.invalidateQueries({ queryKey: [key] });
         }
       }
-    }
+    };
     const unsubscribe = window.electronAPI.onDataChanged(scopes => {
-      for (const scope of scopesFromPayload(scopes)) pending.add(scope)
-      if (timer) clearTimeout(timer)
-      timer = setTimeout(flush, 200)
-    })
+      for (const scope of scopesFromPayload(scopes)) pending.add(scope);
+      if (timer) clearTimeout(timer);
+      timer = setTimeout(flush, 200);
+    });
     return () => {
-      if (timer) clearTimeout(timer)
-      unsubscribe()
-    }
-  }, [qc])
+      if (timer) clearTimeout(timer);
+      unsubscribe();
+    };
+  }, [qc]);
 }
 
 /**
@@ -1122,5 +1256,5 @@ export function useEffectiveConfig(cwd?: string) {
     queryFn: () => unwrap(window.electronAPI.config.getEffective(cwd)),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
-  })
+  });
 }

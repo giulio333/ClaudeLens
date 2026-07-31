@@ -53,8 +53,9 @@ export type PermissionResult = Awaited<ReturnType<CanUseTool>>;
 export type PermissionUpdate = NonNullable<Parameters<CanUseTool>[2]['suggestions']>[number];
 export type PermissionMode = NonNullable<QueryOptions['permissionMode']>;
 // The streaming-input element type: what the push-generator must yield.
-type SdkUserMessage =
-  Parameters<Sdk['query']>[0]['prompt'] extends string | AsyncIterable<infer U> ? U : never;
+type SdkUserMessage = Parameters<Sdk['query']>[0]['prompt'] extends string | AsyncIterable<infer U>
+  ? U
+  : never;
 type SdkQuery = ReturnType<Sdk['query']>;
 
 export interface ChatSessionParams {
@@ -282,9 +283,7 @@ export class ChatSession {
           // A result with is_error surfaces a model/permission failure.
           if (msg.is_error) {
             const detail =
-              msg.subtype === 'success'
-                ? msg.result
-                : (msg.errors?.join('\n') ?? msg.subtype);
+              msg.subtype === 'success' ? msg.result : (msg.errors?.join('\n') ?? msg.subtype);
             cb.onError(detail || 'The session reported an error.');
           } else if (!this.sawAssistant && msg.subtype === 'success' && msg.result?.trim()) {
             // A local slash command (/context, /usage, …) returned text directly

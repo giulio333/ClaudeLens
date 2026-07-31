@@ -47,8 +47,7 @@ type OutlineRow =
 /** First non-empty text line of a message — the outline row's title. */
 function firstLine(m: ChatMessage): string {
   const t = m.content.find(b => b.type === 'text') as
-    | Extract<ChatContentBlock, { type: 'text' }>
-    | undefined;
+    Extract<ChatContentBlock, { type: 'text' }> | undefined;
   const line = (t?.text ?? '')
     .split('\n')
     .map(s => s.trim())
@@ -99,7 +98,13 @@ function buildEditRows(processed: ProcessedMessage[]): EditRow[] {
         row.removed += stats.removed;
         row.turnN = idx + 1;
       } else {
-        byPath.set(path, { name, turnN: idx + 1, count: 1, added: stats.added, removed: stats.removed });
+        byPath.set(path, {
+          name,
+          turnN: idx + 1,
+          count: 1,
+          added: stats.added,
+          removed: stats.removed,
+        });
       }
     }
   });
@@ -117,7 +122,12 @@ function buildOutline(
   // User prompts (real turns; command cards are surfaced as skills; notifications separately).
   processed.forEach((p, idx) => {
     if (p.notification) {
-      rows.push({ kind: 'notification', turnN: idx + 1, summary: p.notification.summary, status: p.notification.status });
+      rows.push({
+        kind: 'notification',
+        turnN: idx + 1,
+        summary: p.notification.summary,
+        status: p.notification.status,
+      });
       return;
     }
     if (p.msg.role !== 'user' || p.command) return;
@@ -129,7 +139,14 @@ function buildOutline(
   for (const s of skills) rows.push({ kind: 'skill', turnN: s.turnN, skill: s });
   for (const a of agents) rows.push({ kind: 'agent', turnN: a.turnN, agent: a });
   for (const e of buildEditRows(processed))
-    rows.push({ kind: 'edit', turnN: e.turnN, name: e.name, count: e.count, added: e.added, removed: e.removed });
+    rows.push({
+      kind: 'edit',
+      turnN: e.turnN,
+      name: e.name,
+      count: e.count,
+      added: e.added,
+      removed: e.removed,
+    });
 
   // The latest real Claude turn (skipping synthetic slash-command notes) is
   // pinned as the current position — the "◂ qui" marker in the design.
@@ -180,7 +197,13 @@ function PromptGlyph() {
   return (
     <span
       aria-hidden
-      style={{ width: 14, height: 14, borderRadius: '50%', background: 'var(--cl-ink)', marginTop: 1 }}
+      style={{
+        width: 14,
+        height: 14,
+        borderRadius: '50%',
+        background: 'var(--cl-ink)',
+        marginTop: 1,
+      }}
     />
   );
 }
@@ -190,7 +213,15 @@ function SquareGlyph({ bg, children }: { bg: string; children: string }) {
     <span
       aria-hidden
       className="font-mono inline-flex items-center justify-center"
-      style={{ width: 16, height: 16, borderRadius: 4, background: bg, color: '#fff', font: '700 9px/1 var(--font-mono)', marginTop: 1 }}
+      style={{
+        width: 16,
+        height: 16,
+        borderRadius: 4,
+        background: bg,
+        color: '#fff',
+        font: '700 9px/1 var(--font-mono)',
+        marginTop: 1,
+      }}
     >
       {children}
     </span>
@@ -201,20 +232,36 @@ function DiamondGlyph() {
   return (
     <span
       aria-hidden
-      style={{ width: 11, height: 11, background: 'var(--cl-cyan)', transform: 'rotate(45deg)', margin: '2px 0 0 2px' }}
+      style={{
+        width: 11,
+        height: 11,
+        background: 'var(--cl-cyan)',
+        transform: 'rotate(45deg)',
+        margin: '2px 0 0 2px',
+      }}
     />
   );
 }
 
 function NotifGlyph({ status }: { status: string }) {
   const color =
-    status === 'completed' ? 'var(--cl-ok)' :
-    status === 'failed' || status === 'error' ? 'var(--cl-danger)' :
-    'var(--cl-ink-3)';
+    status === 'completed'
+      ? 'var(--cl-ok)'
+      : status === 'failed' || status === 'error'
+        ? 'var(--cl-danger)'
+        : 'var(--cl-ink-3)';
   return (
     <span
       aria-hidden
-      style={{ width: 10, height: 10, borderRadius: '50%', background: color, margin: '3px 0 0 3px', display: 'block', flexShrink: 0 }}
+      style={{
+        width: 10,
+        height: 10,
+        borderRadius: '50%',
+        background: color,
+        margin: '3px 0 0 3px',
+        display: 'block',
+        flexShrink: 0,
+      }}
     />
   );
 }
@@ -257,12 +304,14 @@ export function SessionOutline({
     () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []),
     [processed, allSkills, plugins]
   );
-  const outline = useMemo(() => buildOutline(processed, agents, skills), [processed, agents, skills]);
+  const outline = useMemo(
+    () => buildOutline(processed, agents, skills),
+    [processed, agents, skills]
+  );
 
   // Real Claude turns (the footer count, matching the Lens header / rail).
   const turns = useMemo(
-    () =>
-      messages?.filter(m => m.role === 'assistant' && m.model !== '<synthetic>').length ?? 0,
+    () => messages?.filter(m => m.role === 'assistant' && m.model !== '<synthetic>').length ?? 0,
     [messages]
   );
 
@@ -293,7 +342,12 @@ export function SessionOutline({
       >
         <span
           className="font-mono"
-          style={{ fontSize: 9.5, fontWeight: 700, letterSpacing: '0.2em', color: 'var(--cl-ink-2)' }}
+          style={{
+            fontSize: 9.5,
+            fontWeight: 700,
+            letterSpacing: '0.2em',
+            color: 'var(--cl-ink-2)',
+          }}
         >
           OUTLINE
         </span>
@@ -319,7 +373,13 @@ export function SessionOutline({
         {outline.map((r, i) => {
           if (r.kind === 'prompt') {
             return (
-              <button key={`p${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onJump(r.turnN)}>
+              <button
+                key={`p${i}`}
+                type="button"
+                className="cl-otrow"
+                style={rowBase}
+                onClick={() => onJump(r.turnN)}
+              >
                 <PromptGlyph />
                 <span className="min-w-0">
                   <span style={titleStyle}>{r.title}</span>
@@ -329,9 +389,19 @@ export function SessionOutline({
             );
           }
           if (r.kind === 'skill') {
-            const route = skillHasViewableOutput(r.skill.group) ? 'output' : r.skill.skill ? 'def' : 'launch';
+            const route = skillHasViewableOutput(r.skill.group)
+              ? 'output'
+              : r.skill.skill
+                ? 'def'
+                : 'launch';
             return (
-              <button key={`s${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onSkillClick(r.skill)}>
+              <button
+                key={`s${i}`}
+                type="button"
+                className="cl-otrow"
+                style={rowBase}
+                onClick={() => onSkillClick(r.skill)}
+              >
                 <SquareGlyph bg="var(--cl-accent)">✦</SquareGlyph>
                 <span className="min-w-0">
                   <span style={titleStyle}>{r.skill.name}</span>
@@ -342,7 +412,13 @@ export function SessionOutline({
           }
           if (r.kind === 'agent') {
             return (
-              <button key={`a${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onOpenAgent(r.agent)}>
+              <button
+                key={`a${i}`}
+                type="button"
+                className="cl-otrow"
+                style={rowBase}
+                onClick={() => onOpenAgent(r.agent)}
+              >
                 <SquareGlyph bg="var(--cl-violet)">A</SquareGlyph>
                 <span className="min-w-0">
                   <span style={titleStyle}>{r.agent.subagentType}</span>
@@ -355,7 +431,13 @@ export function SessionOutline({
           }
           if (r.kind === 'edit') {
             return (
-              <button key={`e${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onJump(r.turnN)}>
+              <button
+                key={`e${i}`}
+                type="button"
+                className="cl-otrow"
+                style={rowBase}
+                onClick={() => onJump(r.turnN)}
+              >
                 <DiamondGlyph />
                 <span className="min-w-0">
                   <span style={{ ...titleStyle, color: 'var(--cl-ink-2)' }}>{r.name}</span>
@@ -369,11 +451,19 @@ export function SessionOutline({
           }
           if (r.kind === 'notification') {
             const metaColor =
-              r.status === 'completed' ? 'var(--cl-ok)' :
-              r.status === 'failed' || r.status === 'error' ? 'var(--cl-danger)' :
-              'var(--cl-ink-4)';
+              r.status === 'completed'
+                ? 'var(--cl-ok)'
+                : r.status === 'failed' || r.status === 'error'
+                  ? 'var(--cl-danger)'
+                  : 'var(--cl-ink-4)';
             return (
-              <button key={`n${i}`} type="button" className="cl-otrow" style={rowBase} onClick={() => onJump(r.turnN)}>
+              <button
+                key={`n${i}`}
+                type="button"
+                className="cl-otrow"
+                style={rowBase}
+                onClick={() => onJump(r.turnN)}
+              >
                 <NotifGlyph status={r.status} />
                 <span className="min-w-0">
                   <span style={{ ...titleStyle, color: 'var(--cl-ink-2)' }}>{r.summary}</span>
@@ -392,7 +482,8 @@ export function SessionOutline({
                 ...rowBase,
                 padding: '8px 9px',
                 background: 'var(--cl-paper)',
-                boxShadow: 'inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 30%, var(--cl-line))',
+                boxShadow:
+                  'inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 30%, var(--cl-line))',
               }}
               onClick={() => onJump(r.turnN)}
             >

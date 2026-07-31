@@ -183,7 +183,10 @@ function parsePhases(raw: unknown): WorkflowPhase[] {
   for (const p of raw) {
     if (typeof p !== 'object' || p === null) continue;
     const r = p as Record<string, unknown>;
-    out.push({ title: asString(r.title), ...(optString(r.detail) ? { detail: r.detail as string } : {}) });
+    out.push({
+      title: asString(r.title),
+      ...(optString(r.detail) ? { detail: r.detail as string } : {}),
+    });
   }
   return out;
 }
@@ -233,7 +236,8 @@ export function parseRunFile(rawJson: unknown, ctx: ParseRunCtx): WorkflowRunDet
     ctx.fallbackMtimeMs ??
     0;
 
-  const sessionId = originSessionFromScriptPath(r.scriptPath, ctx.projectPath) ?? ctx.stateSessionId;
+  const sessionId =
+    originSessionFromScriptPath(r.scriptPath, ctx.projectPath) ?? ctx.stateSessionId;
   // 'failed' is rendered as an error state everywhere in the UI — count it too.
   const errorAgentCount = agents.filter(a => a.state === 'error' || a.state === 'failed').length;
 
@@ -477,7 +481,13 @@ export async function getWorkflowRun(
       // session's scripts/ (detail.sessionId, from scriptPath) — on a
       // resumed/forked run the state JSON dir (dirName) is a different session.
       if (detail.script === null && detail.scriptPath) {
-        const scriptFile = join(projectPath, detail.sessionId, 'workflows', 'scripts', basename(detail.scriptPath));
+        const scriptFile = join(
+          projectPath,
+          detail.sessionId,
+          'workflows',
+          'scripts',
+          basename(detail.scriptPath)
+        );
         try {
           assertWithin(projectPath, scriptFile);
           detail.script = await readFile(scriptFile, 'utf-8');

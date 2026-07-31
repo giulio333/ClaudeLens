@@ -1,13 +1,13 @@
-import { useEffect, useRef, useState } from 'react'
-import { Agent } from '../../../hooks/useIPC'
-import { entityTint } from '../shared/entityOptions'
-import { projectDisplayName } from '../shared/projectName'
+import { useEffect, useRef, useState } from 'react';
+import { Agent } from '../../../hooks/useIPC';
+import { entityTint } from '../shared/entityOptions';
+import { projectDisplayName } from '../shared/projectName';
 
 const PlayIcon = () => (
   <svg viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
     <path d="M4 3l9 5-9 5z" />
   </svg>
-)
+);
 
 /* RUN AGENT DIALOG — prompt input → dispatch background agent */
 export function RunAgentDialog({
@@ -16,50 +16,57 @@ export function RunAgentDialog({
   onClose,
   onSubmit,
 }: {
-  agent: Agent
-  project: { hash: string; realPath: string }
-  onClose: () => void
-  onSubmit: (args: { prompt: string; sessionName?: string }) => Promise<void>
+  agent: Agent;
+  project: { hash: string; realPath: string };
+  onClose: () => void;
+  onSubmit: (args: { prompt: string; sessionName?: string }) => Promise<void>;
 }) {
-  const [prompt, setPrompt] = useState('')
-  const [sessionName, setSessionName] = useState('')
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const promptRef = useRef<HTMLTextAreaElement>(null)
+  const [prompt, setPrompt] = useState('');
+  const [sessionName, setSessionName] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const promptRef = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
-    promptRef.current?.focus()
+    promptRef.current?.focus();
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onClose();
       if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') {
-        e.preventDefault()
-        submit()
+        e.preventDefault();
+        submit();
       }
     }
-    window.addEventListener('keydown', onKey)
-    return () => window.removeEventListener('keydown', onKey)
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
+  }, []);
 
   async function submit() {
-    if (!prompt.trim() || busy) return
+    if (!prompt.trim() || busy) return;
     try {
-      setBusy(true)
-      setError(null)
-      await onSubmit({ prompt: prompt.trim(), sessionName: sessionName.trim() || undefined })
+      setBusy(true);
+      setError(null);
+      await onSubmit({ prompt: prompt.trim(), sessionName: sessionName.trim() || undefined });
     } catch (e) {
-      setError(e instanceof Error ? e.message : String(e))
+      setError(e instanceof Error ? e.message : String(e));
     } finally {
-      setBusy(false)
+      setBusy(false);
     }
   }
 
-  const projectName = projectDisplayName(project.realPath)
+  const projectName = projectDisplayName(project.realPath);
 
   return (
     <div className="cl-run-agent-backdrop" onClick={onClose}>
-      <div className="cl-run-agent-panel" onClick={e => e.stopPropagation()} style={entityTint(agent.color)}>
-        <div className="ey"><span className="pip" />Dispatch background agent</div>
+      <div
+        className="cl-run-agent-panel"
+        onClick={e => e.stopPropagation()}
+        style={entityTint(agent.color)}
+      >
+        <div className="ey">
+          <span className="pip" />
+          Dispatch background agent
+        </div>
         <h2>
           Run <span style={{ color: 'var(--cl-accent)' }}>{agent.name}</span>
           <span className="g"> in {projectName}</span>
@@ -101,5 +108,5 @@ export function RunAgentDialog({
         </div>
       </div>
     </div>
-  )
+  );
 }

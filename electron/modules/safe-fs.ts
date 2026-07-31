@@ -12,12 +12,12 @@ const DEFAULT_TIMEOUT_MS = 5000;
  */
 export async function readTextFile(
   filePath: string,
-  timeoutMs: number = DEFAULT_TIMEOUT_MS,
+  timeoutMs: number = DEFAULT_TIMEOUT_MS
 ): Promise<string> {
   return withTimeout(
     fsp.readFile(filePath, 'utf-8'),
     timeoutMs,
-    `Read timed out after ${timeoutMs}ms (file not materialized?): ${filePath}`,
+    `Read timed out after ${timeoutMs}ms (file not materialized?): ${filePath}`
   );
 }
 
@@ -29,7 +29,7 @@ export async function readTextFile(
 export async function withTimeout<T>(
   promise: Promise<T>,
   timeoutMs: number,
-  message: string,
+  message: string
 ): Promise<T> {
   let timer: NodeJS.Timeout | undefined;
   const timeout = new Promise<never>((_, reject) => {

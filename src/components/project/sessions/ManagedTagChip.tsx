@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState } from 'react'
-import { createPortal } from 'react-dom'
-import { TagChip } from './TagChip'
+import { useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
+import { TagChip } from './TagChip';
 
 // The single tag affordance used everywhere (overview filter bar, topic/session
 // sidebars). Clicking the chip opens ONE shared actions menu; the actions shown
@@ -17,44 +17,44 @@ export function ManagedTagChip({
   onRename,
   onDelete,
 }: {
-  name: string
-  count?: number
-  active?: boolean
-  onFilter?: () => void
-  onRemoveFromItem?: () => void
-  removeLabel?: string
-  onRename?: (oldName: string, newName: string) => boolean
-  onDelete?: () => void
+  name: string;
+  count?: number;
+  active?: boolean;
+  onFilter?: () => void;
+  onRemoveFromItem?: () => void;
+  removeLabel?: string;
+  onRename?: (oldName: string, newName: string) => boolean;
+  onDelete?: () => void;
 }) {
-  const [menuRect, setMenuRect] = useState<DOMRect | null>(null)
-  const [renaming, setRenaming] = useState(false)
-  const [value, setValue] = useState(name)
-  const [error, setError] = useState(false)
-  const inputRef = useRef<HTMLInputElement>(null)
+  const [menuRect, setMenuRect] = useState<DOMRect | null>(null);
+  const [renaming, setRenaming] = useState(false);
+  const [value, setValue] = useState(name);
+  const [error, setError] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
   // Guards a stray onBlur commit after Enter/Escape already closed the editor.
-  const sealedRef = useRef(false)
+  const sealedRef = useRef(false);
 
   useEffect(() => {
     if (renaming) {
-      inputRef.current?.focus()
-      inputRef.current?.select()
+      inputRef.current?.focus();
+      inputRef.current?.select();
     }
-  }, [renaming])
+  }, [renaming]);
 
   const startRename = () => {
-    setValue(name)
-    setError(false)
-    sealedRef.current = false
-    setMenuRect(null)
-    setRenaming(true)
-  }
+    setValue(name);
+    setError(false);
+    sealedRef.current = false;
+    setMenuRect(null);
+    setRenaming(true);
+  };
 
   // Returns true when there is nothing to do or the rename succeeded.
   const tryCommit = (): boolean => {
-    const next = value.trim()
-    if (!next || next === name) return true
-    return onRename?.(name, next) ?? false
-  }
+    const next = value.trim();
+    if (!next || next === name) return true;
+    return onRename?.(name, next) ?? false;
+  };
 
   if (renaming) {
     return (
@@ -70,33 +70,33 @@ export function ManagedTagChip({
           aria-label={`Rename tag ${name}`}
           style={{ width: `${Math.max(40, value.length * 7 + 6)}px` }}
           onChange={e => {
-            setValue(e.target.value)
-            setError(false)
+            setValue(e.target.value);
+            setError(false);
           }}
           onKeyDown={e => {
             if (e.key === 'Enter') {
-              e.preventDefault()
+              e.preventDefault();
               if (tryCommit()) {
-                sealedRef.current = true
-                setRenaming(false)
+                sealedRef.current = true;
+                setRenaming(false);
               } else {
-                setError(true)
+                setError(true);
               }
             } else if (e.key === 'Escape') {
-              e.preventDefault()
-              sealedRef.current = true
-              setRenaming(false)
+              e.preventDefault();
+              sealedRef.current = true;
+              setRenaming(false);
             }
           }}
           onBlur={() => {
-            if (sealedRef.current) return
-            sealedRef.current = true
-            tryCommit()
-            setRenaming(false)
+            if (sealedRef.current) return;
+            sealedRef.current = true;
+            tryCommit();
+            setRenaming(false);
           }}
         />
       </span>
-    )
+    );
   }
 
   return (
@@ -122,7 +122,7 @@ export function ManagedTagChip({
         />
       )}
     </span>
-  )
+  );
 }
 
 function TagActionsMenu({
@@ -136,42 +136,42 @@ function TagActionsMenu({
   onDelete,
   onClose,
 }: {
-  anchorRect: DOMRect
-  name: string
-  active: boolean
-  onFilter?: () => void
-  onRemoveFromItem?: () => void
-  removeLabel: string
-  onRename?: () => void
-  onDelete?: () => void
-  onClose: () => void
+  anchorRect: DOMRect;
+  name: string;
+  active: boolean;
+  onFilter?: () => void;
+  onRemoveFromItem?: () => void;
+  removeLabel: string;
+  onRename?: () => void;
+  onDelete?: () => void;
+  onClose: () => void;
 }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false);
 
   useEffect(() => {
     function onDocClick(e: MouseEvent) {
-      const target = e.target as Node | null
-      const menu = document.getElementById('cl-tag-menu-root')
-      if (menu && target && !menu.contains(target)) onClose()
+      const target = e.target as Node | null;
+      const menu = document.getElementById('cl-tag-menu-root');
+      if (menu && target && !menu.contains(target)) onClose();
     }
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') onClose()
+      if (e.key === 'Escape') onClose();
     }
-    document.addEventListener('mousedown', onDocClick)
-    document.addEventListener('keydown', onKey)
+    document.addEventListener('mousedown', onDocClick);
+    document.addEventListener('keydown', onKey);
     return () => {
-      document.removeEventListener('mousedown', onDocClick)
-      document.removeEventListener('keydown', onKey)
-    }
-  }, [onClose])
+      document.removeEventListener('mousedown', onDocClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [onClose]);
 
-  const top = anchorRect.bottom + 6
-  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - 208))
+  const top = anchorRect.bottom + 6;
+  const left = Math.max(8, Math.min(anchorRect.left, window.innerWidth - 208));
 
   const run = (fn?: () => void) => () => {
-    fn?.()
-    onClose()
-  }
+    fn?.();
+    onClose();
+  };
 
   return createPortal(
     <div
@@ -207,11 +207,7 @@ function TagActionsMenu({
       )}
       {onDelete &&
         (confirmDelete ? (
-          <button
-            type="button"
-            className="cl-tag-menu-item danger confirm"
-            onClick={run(onDelete)}
-          >
+          <button type="button" className="cl-tag-menu-item danger confirm" onClick={run(onDelete)}>
             Delete tag everywhere?
           </button>
         ) : (
@@ -227,6 +223,6 @@ function TagActionsMenu({
           </button>
         ))}
     </div>,
-    document.body,
-  )
+    document.body
+  );
 }
