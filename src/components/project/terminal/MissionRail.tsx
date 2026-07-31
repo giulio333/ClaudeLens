@@ -13,7 +13,7 @@ import {
   useSessionSubagents,
 } from '../../../hooks/useIPC';
 import type { Agent, Skill } from '../../../hooks/useIPC';
-import type { ActiveSession, ChatMessage, InitInfo, TeamSummary } from '../../../types';
+import type { ActiveSession, InitInfo, TeamSummary } from '../../../types';
 import { fmtRelative, liveLeadSession, memberColor, minutesSince, teamLabel } from '../teams/utils';
 import {
   buildProcessedMessages,
@@ -29,6 +29,8 @@ import {
 import { FileIcon } from '../chat/fileIcons';
 import { QueryError } from '../../QueryError';
 import { fmtCost, fmt } from '../utils';
+import { deriveContext } from './context-window';
+import type { ContextState } from './context-window';
 
 /**
  * The scrolling Mission Control rail beside the unified Terminal/Lens view.
@@ -58,39 +60,10 @@ const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
 
-/** A 1M-context variant, detected by the `[1m]`/`1m` marker on the model id or
- *  the raw `model` setting (e.g. `opus[1m]`). */
-function isOneMillion(model: string | undefined): boolean {
-  return !!model && /\[1m\]|\b1m\b/i.test(model);
-}
-
 /** Compact token count for the gauge: 156_312 → "156k", 1_240_000 → "1.2M". */
 function kTok(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   return `${Math.round(n / 1000)}k`;
-}
-
-type ContextState = { used: number; max: number; pct: number };
-
-/** CONTEXT occupancy from the latest assistant turn's usage (input + both cache
- *  tiers ≈ the prompt size sent). The transcript records only the bare model id
- *  (`claude-opus-4-8`); the 1M window is opt-in and visible only in the raw `model`
- *  setting (`opus[1m]`, from useEffectiveConfig), so trust either marker — and bump
- *  to 1M anyway if usage already exceeds 200k. */
-function deriveContext(
-  messages: ChatMessage[] | undefined,
-  rawModel: string | undefined
-): ContextState | null {
-  if (!messages) return null;
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const m = messages[i];
-    if (m.role !== 'assistant' || !m.usage) continue;
-    const used = m.usage.inputTokens + m.usage.cacheReadTokens + m.usage.cacheWriteTokens;
-    const oneM = isOneMillion(m.model) || isOneMillion(rawModel) || used > 200_000;
-    const max = oneM ? 1_000_000 : 200_000;
-    return { used, max, pct: Math.min(100, Math.round((used / max) * 100)) };
-  }
-  return null;
 }
 
 function lines(s: unknown): number {
