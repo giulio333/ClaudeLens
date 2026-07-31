@@ -37,6 +37,16 @@ import { SessionOutline } from './SessionOutline';
  * immediately until then.
  */
 
+/** Compare two absolute paths tolerantly: registry `cwd` (from the CLI) and the
+ *  project realPath can differ in slash direction and drive-letter case on
+ *  Windows. Normalize both to forward slashes, drop a trailing slash, and
+ *  compare case-insensitively (Windows/macOS filesystems are case-preserving
+ *  but case-insensitive; a Linux collision on case alone is not worth the risk). */
+function samePath(a: string, b: string): boolean {
+  const norm = (p: string) => p.replace(/[\\/]+/g, '/').replace(/\/$/, '').toLowerCase();
+  return norm(a) === norm(b);
+}
+
 const RAIL_DEFAULT = 432;
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
@@ -297,8 +307,20 @@ export function TerminalMissionControl({
   // Until then (or on CLI < 2.x) fall back to the resumed id. The registry wins
   // once available: `--resume` may mint a fresh session id.
   const { data: activeSessions } = useActiveSessions();
-  const registrySessionId =
-    (ptyPid && activeSessions?.find(s => s.pid === ptyPid && s.sessionId)?.sessionId) || null;
+  const registrySessionId = useMemo(() => {
+    if (!ptyPid || !activeSessions) return null;
+    // Primary: the PTY's pid IS the CLI's pid (POSIX, and Windows native
+    // claude.exe launched directly) — the registry is keyed by it.
+    const byPid = activeSessions.find(s => s.pid === ptyPid && s.sessionId);
+    if (byPid) return byPid.sessionId;
+    // Fallback for a legacy Windows `claude.cmd` install: the PTY pid is the
+    // cmd.exe wrapper, never in the registry, so the pid match can't work. Match
+    // this pane's cwd instead — but only when it is UNAMBIGUOUS (exactly one live
+    // session in this folder): with a second `claude` running here (e.g. an
+    // external terminal) we bail rather than pin the wrong session.
+    const inCwd = activeSessions.filter(s => s.sessionId && samePath(s.cwd, project.realPath));
+    return inCwd.length === 1 ? inCwd[0].sessionId : null;
+  }, [ptyPid, activeSessions, project.realPath]);
   // Latch the resolved id. The CLI rewrites `~/.claude/sessions/<pid>.json` on
   // every heartbeat; a (debounced) registry read landing mid-write transiently
   // drops our entry, so `registrySessionId` flaps to null — which would null out

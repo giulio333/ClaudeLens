@@ -379,7 +379,7 @@ function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: numb
   return (
     <div className="cl-turn-files">
       {shown.map((f, i) => {
-        const name = f.path.split('/').pop() ?? f.path
+        const name = f.path.split(/[\\/]/).filter(Boolean).pop() ?? f.path
         return (
           <span
             key={i}
@@ -396,7 +396,7 @@ function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: numb
       {overflow > 0 && (
         <span
           className="cl-file-chip cl-file-chip--more"
-          data-file={distinct.slice(max).map(f => f.path.split('/').pop()).join('\n')}
+          data-file={distinct.slice(max).map(f => f.path.split(/[\\/]/).filter(Boolean).pop()).join('\n')}
         >
           +{overflow}
         </span>

@@ -15,6 +15,8 @@
 // error on first use instead of crashing the main process at boot.
 
 import { randomUUID } from 'crypto';
+import { existsSync } from 'fs';
+import { win32 as pathWin32 } from 'path';
 import type { IPty } from 'node-pty';
 
 export interface TerminalCallbacks {
@@ -34,15 +36,54 @@ export interface CreateTerminalOptions {
   rows?: number;
 }
 
+// Image extensions node-pty/CreateProcess can launch directly (a PE binary).
+// A `.cmd`/`.bat` shim is a script, not a PE image, so it must be run via cmd.exe.
+const DIRECT_EXEC_EXTS = new Set(['.EXE', '.COM']);
+
+/**
+ * Find `claude` on the Windows PATH, honoring PATHEXT (same resolution order as
+ * `where claude`: PATH dir first, then extension). Returns the resolved absolute
+ * path and whether it is a directly-launchable image (`.exe`/`.com`) versus a
+ * shim (`.cmd`/`.bat`) that needs a cmd.exe wrapper. Injectable for tests.
+ */
+export function findClaudeOnWindowsPath(
+  env: NodeJS.ProcessEnv = process.env,
+  exists: (p: string) => boolean = existsSync
+): { path: string; direct: boolean } | null {
+  const pathVar = env.Path ?? env.PATH ?? '';
+  const pathExt = (env.PATHEXT ?? '.COM;.EXE;.BAT;.CMD').split(';').filter(Boolean);
+  // Windows semantics regardless of the host OS (win32-only fn; keeps unit tests
+  // deterministic on a Linux/macOS CI runner): `;` PATH delimiter, `\` joins.
+  for (const dir of pathVar.split(pathWin32.delimiter).filter(Boolean)) {
+    for (const ext of pathExt) {
+      const candidate = pathWin32.join(dir, `claude${ext}`);
+      if (exists(candidate)) {
+        return { path: candidate, direct: DIRECT_EXEC_EXTS.has(ext.toUpperCase()) };
+      }
+    }
+  }
+  return null;
+}
+
 // Build the executable + args to launch the interactive `claude` CLI in a PTY.
-// Windows installs the CLI as the `claude.cmd` batch shim, and node-pty spawns
-// through CreateProcess, which cannot launch a `.cmd`/`.bat` directly (it is not
-// a PE executable → "File not found"). Route it through cmd.exe — `cmd /c claude
-// …` resolves the shim on PATH and runs it inside the same ConPTY, so the CLI
-// still gets the pseudo-console for its TUI. On POSIX the binary is exec'd
-// directly. Pure + exported so it is unit/integration testable on its own.
-export function resolveClaudeCommand(args: string[] = []): { command: string; args: string[] } {
+// On Windows we PREFER launching the native `claude.exe` directly: node-pty then
+// reports the CLI's OWN pid — the pid the session registry
+// (`~/.claude/sessions/<pid>.json`) is keyed by — so the Lens / Mission Control
+// pid-match resolves this terminal's session (transcript + rail render). The
+// older npm install ships `claude.cmd`, a batch shim node-pty/CreateProcess
+// cannot launch directly (not a PE image → "File not found"); that still routes
+// through cmd.exe (`cmd /c claude …`, resolved on PATH, same ConPTY for the TUI),
+// where the reported pid is the cmd.exe wrapper's — the registry misses it and
+// the renderer falls back to matching by cwd (see TerminalMissionControl). On
+// POSIX the binary is exec'd directly. Pure + exported so it is unit/integration
+// testable on its own; the PATH lookup is injectable.
+export function resolveClaudeCommand(
+  args: string[] = [],
+  find: typeof findClaudeOnWindowsPath = findClaudeOnWindowsPath
+): { command: string; args: string[] } {
   if (process.platform === 'win32') {
+    const resolved = find();
+    if (resolved?.direct) return { command: resolved.path, args };
     return { command: process.env.ComSpec || 'cmd.exe', args: ['/c', 'claude', ...args] };
   }
   return { command: 'claude', args };
@@ -81,11 +122,11 @@ export function createTerminal(
     terminals.delete(id);
     callbacks.onExit(exitCode);
   });
-  // On POSIX the pid is the CLI process itself (spawned directly), which the
+  // On POSIX — and on Windows when the native `claude.exe` was launched directly
+  // (see resolveClaudeCommand) — the pid IS the CLI process itself, which the
   // renderer matches against the active-sessions registry to pin this session.
-  // On Windows it is the cmd.exe shim wrapping `claude` (see terminal:create),
-  // so the registry-by-pid match misses; the renderer falls back to the resumed
-  // session id there.
+  // Only a legacy `claude.cmd` install still wraps in cmd.exe, so the pid is the
+  // shim's; there the renderer falls back to matching by cwd.
   return { id, pid: term.pid };
 }
 
