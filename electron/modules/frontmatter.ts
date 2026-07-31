@@ -1,4 +1,6 @@
-import yaml from 'js-yaml';
+// js-yaml 5 dropped the default export — it ships named exports only, so a
+// default import resolves to undefined under ESM (vitest) and throws on first use.
+import { load, dump } from 'js-yaml';
 
 /**
  * Parse the leading YAML frontmatter block (`^---\n ... \n---\n?`) from a
@@ -26,7 +28,7 @@ export function parseFrontmatter(content: string): {
   const body = match[2];
 
   try {
-    const parsed = yaml.load(match[1]);
+    const parsed = load(match[1]);
     if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
       return { frontmatter: parsed as Record<string, unknown>, body };
     }
@@ -50,7 +52,7 @@ export function yamlScalar(value: string | number | boolean): string {
   // `dump` appends a trailing newline; a scalar always fits on one line, so we
   // strip it. `lineWidth: -1` disables line folding, keeping a long description
   // on a single line instead of wrapping it into a block scalar.
-  return yaml.dump(value, { lineWidth: -1 }).replace(/\n$/, '');
+  return dump(value, { lineWidth: -1 }).replace(/\n$/, '');
 }
 
 /** Read a scalar string value. Numbers/booleans are coerced to their string form. */
@@ -61,11 +63,22 @@ export function getString(rec: Record<string, unknown>, key: string): string | u
   return undefined;
 }
 
-/** Read a boolean value. Accepts a real YAML boolean or a `'true'`/`'false'` string. */
+/**
+ * Read a boolean value. Accepts a real YAML boolean or a truthy string.
+ *
+ * The string forms are load-bearing: js-yaml 5 defaults to the YAML 1.2 core
+ * schema, where only `true`/`false` are booleans — `yes`/`on` now arrive as
+ * plain strings. Frontmatter is hand-written (`background: yes` in an agent
+ * file), so treating those as true keeps the author's intent instead of
+ * silently flipping the flag off.
+ */
 export function getBoolean(rec: Record<string, unknown>, key: string): boolean | undefined {
   const v = rec[key];
   if (typeof v === 'boolean') return v;
-  if (typeof v === 'string') return v.trim().toLowerCase() === 'true';
+  if (typeof v === 'string') {
+    const s = v.trim().toLowerCase();
+    return s === 'true' || s === 'yes' || s === 'on';
+  }
   return undefined;
 }
 
