@@ -2,17 +2,8 @@ import { useState } from 'react';
 import { useCreateSkill, SkillInput } from '../../../hooks/useIPC';
 import Markdown from '../../Markdown';
 import { TopBar } from '../shared/TopBar';
-import {
-  NAME_MAX,
-  DESC_MAX,
-  openDocs,
-  validateName,
-  useCreateFormKeys,
-  ModelPicker,
-  ToolsInput,
-  FieldHint,
-  CharCounter,
-} from '../shared/CreateFormKit';
+import { ModelPicker, ToolsInput, FieldHint, CharCounter } from '../shared/CreateFormKit';
+import { NAME_MAX, DESC_MAX, openDocs, validateName, useCreateFormKeys } from '../shared/formKit';
 import { projectDisplayName } from '../shared/projectName';
 
 const DOCS_URL = 'https://code.claude.com/docs/en/skills#frontmatter-reference';

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import LiveMonitor from './LiveMonitor';
 import {
@@ -180,21 +180,30 @@ export default function ProjectOverview() {
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
   const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
   const [searchSessionsLoading, setSearchSessionsLoading] = useState(false);
-  function openSearch(mode: SearchMode, rect: DOMRect | null, align: SearchAnchorAlign) {
-    setSearchMode(mode);
-    setSearchAnchorAlign(align);
-    setAnchorRect(rect);
-    setSearchOpen(true);
-  }
-  function openGlobalSearch() {
+  // Stable identities: the ⌘F/⌘P key handler below lists openGlobalSearch as a
+  // dependency, so a fresh closure each render would re-bind the listener on
+  // every render.
+  const openSearch = useCallback(
+    (mode: SearchMode, rect: DOMRect | null, align: SearchAnchorAlign) => {
+      setSearchMode(mode);
+      setSearchAnchorAlign(align);
+      setAnchorRect(rect);
+      setSearchOpen(true);
+    },
+    []
+  );
+  const openGlobalSearch = useCallback(() => {
     openSearch('global', lensBtnRef.current?.getBoundingClientRect() ?? null, 'right');
-  }
-  function openProjectSearch(rect: DOMRect) {
-    openSearch('projects', rect, 'left');
-  }
-  function closeSearch() {
+  }, [openSearch]);
+  const openProjectSearch = useCallback(
+    (rect: DOMRect) => {
+      openSearch('projects', rect, 'left');
+    },
+    [openSearch]
+  );
+  const closeSearch = useCallback(() => {
     setSearchOpen(false);
-  }
+  }, []);
 
   const costByHash = useMemo(() => {
     const m = new Map<string, ProjectCost>();
@@ -275,7 +284,7 @@ export default function ProjectOverview() {
     }
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [searchMode, searchOpen, selected, togglePin]);
+  }, [searchMode, searchOpen, selected, togglePin, openGlobalSearch, closeSearch]);
 
   function selectProject(p: Project) {
     setSelected(p);

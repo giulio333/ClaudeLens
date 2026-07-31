@@ -3,6 +3,6 @@
 try {
   var t = localStorage.getItem('cl-theme') || 'light';
   document.documentElement.setAttribute('data-theme', t);
-} catch (e) {
+} catch {
   document.documentElement.setAttribute('data-theme', 'light');
 }

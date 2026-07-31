@@ -1,31 +1,17 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { persistToDisk } from './prefsBackend';
-
-// ─── Theme preference ─────────────────────────────────────────────────────────
-// A single source of truth shared between the top-bar toggle and the Settings
-// "Appearance" section. The stored *preference* may be 'system'; the *resolved*
-// theme is always 'light' | 'dark' and is what we apply to <html data-theme>.
-//
-//   preference = 'light' | 'dark' → manual; the top-bar toggle is editable.
-//   preference = 'system'         → follows the OS via matchMedia (live), and
-//                                   the top-bar toggle becomes read-only.
-
-export type ThemePreference = 'light' | 'dark' | 'system';
-export type ResolvedTheme = 'light' | 'dark';
+import {
+  ThemeContext,
+  type ResolvedTheme,
+  type ThemeContextValue,
+  type ThemePreference,
+} from './useTheme';
 
 const STORAGE_KEY = 'cl-theme';
 // Custom event dispatched by hydratePrefs() after it loads the on-disk theme
 // into localStorage at startup; keep in sync with prefsBackend's KEY_EVENTS.
 const STORAGE_EVENT = 'cl-theme-changed';
 const DARK_QUERY = '(prefers-color-scheme: dark)';
-
-type ThemeContextValue = {
-  preference: ThemePreference;
-  resolved: ResolvedTheme;
-  setPreference: (p: ThemePreference) => void;
-};
-
-const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 function isPreference(v: unknown): v is ThemePreference {
   return v === 'dark' || v === 'system' || v === 'light';
@@ -104,10 +90,4 @@ export function ThemeProvider({ children }: { children: ReactNode }) {
   };
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) throw new Error('useTheme must be used within a ThemeProvider');
-  return ctx;
 }

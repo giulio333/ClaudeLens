@@ -9,7 +9,7 @@ npm run dev             # Vite dev server + Electron in parallel
 npm run build           # tsc (electron) + vite build (renderer)
 npm run electron:build  # Package distributable DMG (macOS)
 npm run typecheck       # tsc --noEmit on both configs (renderer + electron)
-npm run lint            # ESLint (flat config); lint:fix to autofix
+npm run lint            # ESLint (flat config, --max-warnings 0); lint:fix to autofix
 npm run format          # Prettier write; format:check to verify
 npm test                # Vitest (unit tests for pure modules)
 ```
@@ -18,8 +18,11 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, and the chat `utils`. UI/IPC behavior still needs manual validation against real `~/.claude/`
-data via `npm run dev`. CI (`.github/workflows/ci.yml`) runs typecheck + lint +
-test + build on every push/PR.
+data via `npm run dev`. CI (`.github/workflows/ci.yml`) runs format:check +
+typecheck + lint + test + build on every push/PR. The style gate is strict:
+Prettier formatting is enforced repo-wide and `lint` runs with
+`--max-warnings 0`, so a new warning fails the build — fix it or add an inline
+`eslint-disable` with a reason.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
 nor the `run-app` skill / Playwright driver) — it doesn't work reliably in this

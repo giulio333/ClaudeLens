@@ -2,13 +2,8 @@ import { useState } from 'react';
 import { useCreateBlueprint } from '../../../hooks/useIPC';
 import type { Blueprint } from '../../../types';
 import { TopBar } from '../shared/TopBar';
-import {
-  FieldHint,
-  CharCounter,
-  useCreateFormKeys,
-  NAME_MAX,
-  DESC_MAX,
-} from '../shared/CreateFormKit';
+import { FieldHint, CharCounter } from '../shared/CreateFormKit';
+import { useCreateFormKeys, NAME_MAX, DESC_MAX } from '../shared/formKit';
 
 const BLUEPRINT_NAME_RE = /^[a-z0-9][a-z0-9-]*$/;
 

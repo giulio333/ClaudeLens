@@ -158,7 +158,7 @@ async function readMemoryIndex(memoryDir: string): Promise<MemoryTopic[]> {
             originSessionId: fm.originSessionId,
           });
         }
-      } catch (e) {
+      } catch {
         // Ignora file non leggibili
       }
     }
@@ -185,7 +185,7 @@ async function readTopicFiles(memoryDir: string): Promise<Map<string, string>> {
         // Chiave = filename: univoco e sempre allineato a MemoryTopic.filename.
         // Il name della frontmatter può divergere dal link text di MEMORY.md.
         topics.set(file, content);
-      } catch (e) {
+      } catch {
         // Ignora file non leggibili
       }
     }
