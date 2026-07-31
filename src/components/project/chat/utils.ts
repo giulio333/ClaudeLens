@@ -1077,3 +1077,46 @@ export function computeFilterCounts(visible: TurnDescriptor[]): TurnFilterCounts
     plan: visible.filter(d => d.hasPlan).length,
   };
 }
+
+/** A transcript stream row, resolved to everything the renderer needs to draw it
+ *  from its index alone. Splitting this out of the render loop is what makes the
+ *  list windowable: `isContinuation` used to be derived by walking neighbours in
+ *  render order, which only works when every row is mounted. */
+export type RenderRow = {
+  /** Stable identity — React key and virtualizer item key. */
+  key: string;
+  /** The stream entry this row draws. */
+  item: RenderItem;
+  /** 1-based turn number for a message row; null for a collapsed tool run. */
+  turnN: number | null;
+  /** Assistant turn with no text of its own, following another assistant turn:
+   *  rendered without its own orb so the pair reads as one response. A folded
+   *  tool run breaks the grouping — the next turn shows its orb again. */
+  isContinuation: boolean;
+};
+
+/** Resolve the stream rows once, so each can then be rendered independently. */
+export function buildRenderRows(processed: ProcessedMessage[], items: RenderItem[]): RenderRow[] {
+  let prevRole: string | null = null;
+  return items.map(item => {
+    if (item.kind !== 'turn') {
+      prevRole = null;
+      return { key: item.key, item, turnN: null, isContinuation: false };
+    }
+    const msg = processed[item.idx].msg;
+    const hasText = msg.content.some(b => b.type === 'text');
+    const isContinuation = !hasText && msg.role === prevRole && msg.role === 'assistant';
+    prevRole = item.hiddenCount ? null : msg.role;
+    return { key: `${item.idx}:${msg.uuid}`, item, turnN: item.idx + 1, isContinuation };
+  });
+}
+
+/** Row index of each turn number — the minimap, the outline and the agent/skill
+ *  docks navigate by turn, the virtualizer scrolls by row. */
+export function buildRowIndexByTurn(rows: RenderRow[]): Map<number, number> {
+  const m = new Map<number, number>();
+  rows.forEach((r, i) => {
+    if (r.turnN !== null) m.set(r.turnN, i);
+  });
+  return m;
+}

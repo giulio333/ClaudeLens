@@ -1,4 +1,6 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import type { UIEvent } from 'react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   saveMarkdownExport,
   savePdfExport,
@@ -18,6 +20,7 @@ import {
   correlateSessionAgents,
   correlateSessionSkills,
   ChatDetailsFilter,
+  RenderRow,
   SessionAgent,
   ToolGroup,
   TurnDescriptor,
@@ -45,6 +48,16 @@ import { useHighlightLayer } from './useHighlightLayer';
 import { HighlightToolbar } from './HighlightToolbar';
 
 type ViewMode = 'chat' | 'timeline';
+
+/** First-paint height guess for an unmeasured transcript row. Only the rows in
+ *  the window are ever measured, so this is what the scrollbar is made of for
+ *  everything the reader hasn't reached yet — it matches the
+ *  `contain-intrinsic-size` the non-windowed transcripts use. */
+const ESTIMATED_ROW_PX = 240;
+
+/** Rows kept mounted above and below the viewport. Enough that a fast wheel
+ *  flick lands on measured content instead of a blank patch. */
+const ROW_OVERSCAN = 6;
 
 export function ChatView({
   project,
@@ -152,7 +165,6 @@ export function ChatView({
 
   const [turnFilter, setTurnFilter] = useState<TurnFilter>('all');
   const [activeTurn, setActiveTurn] = useState<number | null>(null);
-  const turnRefs = useRef<Record<number, HTMLElement | null>>({});
   // Bottom-pinning scroll: open at the bottom, follow every content growth
   // (stream, tool cards, density, late reflows) while anchored, detach on user
   // scroll-up, re-attach near the bottom — see useAutoScroll.ts.
@@ -213,11 +225,51 @@ export function ChatView({
     (t: string) => agentTintColor(agentColorOf(t)),
     [agentColorOf]
   );
-  const { descriptors, minimapItems, renderItems, filterCounts } = useTranscriptModel({
+  const { descriptors, minimapItems, rows, rowIndexByTurn, filterCounts } = useTranscriptModel({
     processed,
     detailsFilter,
     agentColor: resolveAgentTint,
   });
+
+  // Windowed transcript: only the rows near the viewport are mounted. A long
+  // session used to mount every MessageBubble at once — tool cards, diffs and a
+  // markdown parse each — which is what made big transcripts slow to open and
+  // to scroll. Heights are content-dependent, so rows are measured as they
+  // mount (`measureElement`) rather than estimated once.
+  //
+  // The virtualizer hands back live getters (`getVirtualItems`, `getTotalSize`)
+  // that must not be memoized, so React Compiler would skip this component. That
+  // costs nothing today — the compiler isn't in the build (no babel plugin in
+  // vite.config.ts) — and the alternative is mounting every turn again.
+  // eslint-disable-next-line react-hooks/incompatible-library -- see above
+  const rowVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => feedRef.current,
+    estimateSize: () => ESTIMATED_ROW_PX,
+    getItemKey: i => rows[i]?.key ?? i,
+    overscan: ROW_OVERSCAN,
+  });
+
+  // Ref mirror so the layout effects below can look up a row without listing the
+  // map as a dependency — it changes on every transcript append, and they must
+  // only fire on the event they anchor (density change, overlay close).
+  // Synced in a *layout* effect, declared above them: a density change rebuilds
+  // the rows, and an anchoring effect reading last render's map would scroll to
+  // the row a turn used to occupy.
+  const rowIndexByTurnRef = useRef(rowIndexByTurn);
+  useLayoutEffect(() => {
+    rowIndexByTurnRef.current = rowIndexByTurn;
+  }, [rowIndexByTurn]);
+
+  const scrollToTurn = useCallback(
+    (n: number) => {
+      const row = rowIndexByTurnRef.current.get(n);
+      if (row === undefined) return false;
+      rowVirtualizer.scrollToIndex(row, { align: 'start' });
+      return true;
+    },
+    [rowVirtualizer]
+  );
 
   // Derived (not stored) so it can never get stuck: the active filter falls back
   // to "All" when it no longer has matching turns — e.g. Thinking in minimal
@@ -249,28 +301,36 @@ export function ChatView({
     [activeFilter, detailsFilter]
   );
 
-  // Stable ref setter (keyed by the turn's data-n) so MessageBubble's memo holds.
-  const setTurnRef = useCallback((el: HTMLElement | null) => {
-    const n = el?.dataset.n;
-    if (el && n) turnRefs.current[Number(n)] = el;
-  }, []);
+  // Scroll-spy: highlight the turn nearest the viewport centre. Read off the
+  // virtualizer's own geometry rather than an IntersectionObserver over mounted
+  // turns — with a windowed list most turns have no node to observe, and the
+  // ones that do come and go on every scroll.
+  const syncActiveTurn = useCallback(() => {
+    const feed = feedRef.current;
+    if (!feed || rows.length === 0) return;
+    const hit = rowVirtualizer.getVirtualItemForOffset(feed.scrollTop + feed.clientHeight / 2);
+    if (!hit) return;
+    // A collapsed tool run carries no turn number of its own: credit it to the
+    // nearest message row above it, which is the turn it belongs to.
+    let i = Math.min(hit.index, rows.length - 1);
+    while (i >= 0 && rows[i].turnN === null) i--;
+    const n = i >= 0 ? rows[i].turnN : (rows.find(r => r.turnN !== null)?.turnN ?? null);
+    if (n !== null) setActiveTurn(prev => (prev === n ? prev : n));
+  }, [feedRef, rows, rowVirtualizer]);
 
-  // Scroll-spy: highlight the turn nearest the viewport centre.
+  // Seed / re-seed the active turn: on open, and whenever the row list changes
+  // under it (density toggle, transcript append).
   useEffect(() => {
-    const root = feedRef.current;
-    if (!root || minimapItems.length === 0) return;
-    setActiveTurn(prev => prev ?? minimapItems[0].n);
-    const io = new IntersectionObserver(
-      entries => {
-        entries.forEach(e => {
-          if (e.isIntersecting) setActiveTurn(Number((e.target as HTMLElement).dataset.n));
-        });
-      },
-      { root, rootMargin: '-45% 0px -45% 0px', threshold: 0 }
-    );
-    Object.values(turnRefs.current).forEach(el => el && io.observe(el));
-    return () => io.disconnect();
-  }, [minimapItems, viewMode, feedRef]);
+    syncActiveTurn();
+  }, [syncActiveTurn]);
+
+  const handleFeedScroll = useCallback(
+    (e: UIEvent<HTMLElement>) => {
+      onFeedScroll(e);
+      syncActiveTurn();
+    },
+    [onFeedScroll, syncActiveTurn]
+  );
 
   // Keep activeTurnRef in sync so layout effects can read it without deps.
   useEffect(() => {
@@ -280,15 +340,18 @@ export function ChatView({
   // Anchor the feed after a density change: if anchored to the bottom, snap
   // back to bottom; otherwise keep the scroll-spy turn in view. useLayoutEffect
   // fires after DOM mutations but before paint, so the corrected position never
-  // flashes.
+  // flashes. The measurement cache is dropped first: the same turn is a
+  // different height in MIN and in FULL, so keeping the old sizes would leave
+  // the scrollbar (and every row offset) describing the previous density.
   useLayoutEffect(() => {
+    rowVirtualizer.measure();
     if (followRef.current) {
       pin();
     } else {
       const turn = activeTurnRef.current;
-      if (turn !== null) turnRefs.current[turn]?.scrollIntoView({ block: 'nearest' });
+      if (turn !== null) scrollToTurn(turn);
     }
-  }, [detailsFilter, followRef, pin]);
+  }, [detailsFilter, followRef, pin, rowVirtualizer, scrollToTurn]);
 
   // The feed hides (display:none) behind overlays (tool detail, sub-agent
   // transcript) and in Timeline mode — it stays mounted so the composer keeps
@@ -300,16 +363,20 @@ export function ChatView({
     if (selectedTool || transcriptAgent || viewMode !== 'chat') return;
     if (!followRef.current) {
       const turn = activeTurnRef.current;
-      if (turn !== null) turnRefs.current[turn]?.scrollIntoView({ block: 'start' });
+      if (turn !== null) scrollToTurn(turn);
     }
-  }, [selectedTool, transcriptAgent, viewMode, followRef]);
+  }, [selectedTool, transcriptAgent, viewMode, followRef, scrollToTurn]);
 
-  const jumpToTurn = useCallback((n: number) => {
-    const el = turnRefs.current[n];
-    if (!el) return;
-    el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    setActiveTurn(n);
-  }, []);
+  const jumpToTurn = useCallback(
+    (n: number) => {
+      if (!scrollToTurn(n)) return;
+      // A deliberate jump detaches bottom-pinning, or the next content
+      // measurement would yank the view straight back down to the last turn.
+      followRef.current = false;
+      setActiveTurn(n);
+    },
+    [scrollToTurn, followRef]
+  );
 
   // Publish `jumpToTurn` to an outside navigator (the v2 session Outline). The
   // outline lives in the unified Terminal/Lens frame, beside this embedded view;
@@ -423,6 +490,55 @@ export function ChatView({
       setExporting(null);
     }
   }
+
+  // One transcript row, drawn from its resolved `RenderRow` alone — no lookahead
+  // at its neighbours, since a windowed list has none to look at.
+  const renderRow = (row: RenderRow) => {
+    const item = row.item;
+    // Fallback only: a run of tool-only turns with no assistant turn before it
+    // (it leads the conversation, or follows a user turn) renders as a
+    // standalone badge at its stream position. The common case is folded into
+    // the preceding turn's header — that "tools hidden" chip used to be
+    // deferred onto the *following* message, pinning it to the wrong turn.
+    if (item.kind !== 'turn') {
+      return (
+        <ToolsHiddenBadge
+          count={item.count}
+          files={item.files}
+          dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
+        />
+      );
+    }
+    const p = processed[item.idx];
+    return (
+      <MessageBubble
+        processed={p}
+        detailsFilter={detailsFilter}
+        onOpenToolDetail={setSelectedTool}
+        agentColorOf={agentColorOf}
+        skillOf={skillOf}
+        onOpenSkill={onOpenSkill}
+        agentOf={agentOf}
+        onOpenAgent={onOpenAgent}
+        turnIndex={item.idx + 1}
+        dimmed={
+          activeFilter !== 'all' &&
+          descriptors[item.idx]?.visible &&
+          !matchesFilter(descriptors[item.idx]) &&
+          // A turn carrying a folded "tools hidden" chip counts as a tools turn
+          // under the Tools filter — keep it lit.
+          !(activeFilter === 'tools' && !!item.hiddenCount)
+        }
+        isContinuation={row.isContinuation}
+        hiddenToolCount={item.hiddenCount}
+        hiddenFiles={item.hiddenFiles}
+        selectionMode={selectionMode}
+        selected={selectedTurns.has(p.msg.uuid)}
+        onToggleSelect={handleToggleSelect}
+        onExportTurn={handleExportTurn}
+      />
+    );
+  };
 
   const controlPill = (showTranscriptControls: boolean) => (
     <ChatControlPill
@@ -581,7 +697,12 @@ export function ChatView({
         className="cl-chat-workspace cl-chat-workspace--focus"
         style={chatHidden ? { display: 'none' } : undefined}
       >
-        <main className="cl-chat-feed" ref={feedRef} onScroll={onFeedScroll} onWheel={onFeedWheel}>
+        <main
+          className="cl-chat-feed"
+          ref={feedRef}
+          onScroll={handleFeedScroll}
+          onWheel={onFeedWheel}
+        >
           {isLoading && <p className="cl-transcript-state">Loading transcript…</p>}
           {messages?.length === 0 && !isLoading && (
             <p className="cl-transcript-state">No messages found in this session.</p>
@@ -590,65 +711,23 @@ export function ChatView({
           {processed.length > 0 && (
             <div className="cl-chat-reading">
               <div className="cl-transcript-inner" ref={mergedInnerRef}>
-                {(() => {
-                  let prevRole: string | null = null;
-                  return renderItems.map(item => {
-                    // Fallback only: a run of tool-only turns with no assistant
-                    // turn before it (it leads the conversation, or follows a user
-                    // turn) renders as a standalone badge at its stream position.
-                    // The common case is folded into the preceding turn's header
-                    // below — that "tools hidden" chip used to be deferred onto the
-                    // *following* message, pinning it to the wrong turn.
-                    if (item.kind !== 'turn') {
-                      prevRole = null;
-                      return (
-                        <ToolsHiddenBadge
-                          key={item.key}
-                          count={item.count}
-                          files={item.files}
-                          dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
-                        />
-                      );
-                    }
-                    const curRole = processed[item.idx].msg.role;
-                    const hasText = processed[item.idx].msg.content.some(b => b.type === 'text');
-                    const isContinuation =
-                      !hasText && curRole === prevRole && curRole === 'assistant';
-                    // A folded tool run breaks the visual grouping — the next turn
-                    // shows its orb rather than reading as a continuation.
-                    prevRole = item.hiddenCount ? null : curRole;
-                    return (
-                      <MessageBubble
-                        key={`${item.idx}:${processed[item.idx].msg.uuid}`}
-                        processed={processed[item.idx]}
-                        detailsFilter={detailsFilter}
-                        onOpenToolDetail={setSelectedTool}
-                        agentColorOf={agentColorOf}
-                        skillOf={skillOf}
-                        onOpenSkill={onOpenSkill}
-                        agentOf={agentOf}
-                        onOpenAgent={onOpenAgent}
-                        turnIndex={item.idx + 1}
-                        dimmed={
-                          activeFilter !== 'all' &&
-                          descriptors[item.idx]?.visible &&
-                          !matchesFilter(descriptors[item.idx]) &&
-                          // A turn carrying a folded "tools hidden" chip counts as
-                          // a tools turn under the Tools filter — keep it lit.
-                          !(activeFilter === 'tools' && !!item.hiddenCount)
-                        }
-                        isContinuation={isContinuation}
-                        innerRef={setTurnRef}
-                        hiddenToolCount={item.hiddenCount}
-                        hiddenFiles={item.hiddenFiles}
-                        selectionMode={selectionMode}
-                        selected={selectedTurns.has(processed[item.idx].msg.uuid)}
-                        onToggleSelect={handleToggleSelect}
-                        onExportTurn={handleExportTurn}
-                      />
-                    );
-                  });
-                })()}
+                {/* The sizer carries the full measured height of the list, so the
+                    scrollbar, the bottom-pinning ResizeObserver and the minimap
+                    all see the whole session even though only the rows around the
+                    viewport are mounted. */}
+                <div className="cl-vlist" style={{ height: rowVirtualizer.getTotalSize() }}>
+                  {rowVirtualizer.getVirtualItems().map(v => (
+                    <div
+                      key={v.key}
+                      data-index={v.index}
+                      ref={rowVirtualizer.measureElement}
+                      className="cl-vrow"
+                      style={{ top: v.start }}
+                    >
+                      {renderRow(rows[v.index])}
+                    </div>
+                  ))}
+                </div>
               </div>
             </div>
           )}

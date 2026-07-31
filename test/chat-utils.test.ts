@@ -1,6 +1,8 @@
 import {
   buildProcessedMessages,
   buildRenderItems,
+  buildRenderRows,
+  buildRowIndexByTurn,
   computeFilterCounts,
   correlateSessionAgents,
   correlateSessionSkills,
@@ -721,6 +723,85 @@ describe('buildRenderItems', () => {
     const descriptors = processed.map(p => describeTurn(p, 'all'));
     const items = buildRenderItems(processed, descriptors);
     expect(items.map(i => i.kind)).toEqual(['turn', 'turn']);
+  });
+});
+
+describe('buildRenderRows', () => {
+  // The windowed transcript renders each row from its index alone, so every
+  // flag that used to be derived by walking neighbours in render order has to
+  // be resolved here — a mounted predecessor is no longer guaranteed.
+  const rowsFor = (messages: ChatMessage[], filter: 'minimal' | 'all' = 'all') => {
+    const processed = buildProcessedMessages(messages);
+    const descriptors = processed.map(p => describeTurn(p, filter));
+    return buildRenderRows(processed, buildRenderItems(processed, descriptors));
+  };
+
+  it('marks a text-less assistant turn following another assistant turn as a continuation', () => {
+    const rows = rowsFor([
+      msg('assistant', [text('First half')]),
+      msg('assistant', [toolUse('t1', 'Bash', { command: 'ls' })]),
+      msg('user', [toolResult('t1', 'out')]),
+    ]);
+    expect(rows.map(r => r.isContinuation)).toEqual([false, true]);
+  });
+
+  it('breaks the continuation after a turn that folded a tool run', () => {
+    const rows = rowsFor(
+      [
+        msg('assistant', [text('First')]),
+        msg('assistant', [toolUse('t1', 'Bash', { command: 'ls' })]),
+        msg('user', [toolResult('t1', 'out')]),
+        msg('assistant', [toolUse('t2', 'Read', { file_path: '/a.ts' })]),
+        msg('user', [toolResult('t2', 'body')]),
+      ],
+      'minimal'
+    );
+    // Minimal mode folds both tool turns into the assistant turn's chip, so the
+    // single remaining row can't be a continuation of anything.
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({ turnN: 1, isContinuation: false });
+  });
+
+  it('never marks a user turn as a continuation', () => {
+    const rows = rowsFor([
+      msg('assistant', [text('Answer')]),
+      msg('user', [text('Follow-up')]),
+      msg('assistant', [text('Second answer')]),
+    ]);
+    expect(rows.map(r => r.isContinuation)).toEqual([false, false, false]);
+  });
+
+  it('gives a collapsed tool run no turn number, and keys every row uniquely', () => {
+    const rows = rowsFor(
+      [
+        msg('assistant', [toolUse('t1', 'Read', { file_path: '/a.ts' })]),
+        msg('user', [toolResult('t1', 'body')]),
+        msg('assistant', [text('Done')]),
+      ],
+      'minimal'
+    );
+    expect(rows.map(r => r.turnN)).toEqual([null, 2]);
+    expect(new Set(rows.map(r => r.key)).size).toBe(rows.length);
+  });
+
+  it('indexes turn numbers back to their row', () => {
+    const rows = rowsFor(
+      [
+        msg('assistant', [toolUse('t1', 'Read', { file_path: '/a.ts' })]),
+        msg('user', [toolResult('t1', 'body')]),
+        msg('assistant', [text('Done')]),
+      ],
+      'minimal'
+    );
+    const byTurn = buildRowIndexByTurn(rows);
+    // Turn 2 is the second row (the collapsed tool badge sits above it).
+    expect(byTurn.get(2)).toBe(1);
+    expect(byTurn.has(1)).toBe(false);
+  });
+
+  it('returns nothing for an empty transcript', () => {
+    expect(buildRenderRows([], [])).toEqual([]);
+    expect(buildRowIndexByTurn([]).size).toBe(0);
   });
 });
 
