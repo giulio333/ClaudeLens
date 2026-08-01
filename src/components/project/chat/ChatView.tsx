@@ -248,6 +248,15 @@ export function ChatView({
     estimateSize: () => ESTIMATED_ROW_PX,
     getItemKey: i => rows[i]?.key ?? i,
     overscan: ROW_OVERSCAN,
+    // Deliberately NOT `anchorTo: 'end'`. It looks like the right way to hold
+    // the bottom while measurements land, but this feed already has an end
+    // anchor — useAutoScroll's ResizeObserver pin — and the two chase the
+    // bottom in different coordinate spaces: `pin()` targets the DOM bottom,
+    // which includes the 140px of padding under the list, while the virtualizer
+    // only knows `getTotalSize()`. They settle ~170px apart, so each correction
+    // provokes the other, remounting rows and re-measuring on every pass. The
+    // renderer never goes idle, and the terminal slab mounted beside this view
+    // (TerminalMissionControl keeps both alive) stops responding with it.
   });
 
   // Ref mirror so the layout effects below can look up a row without listing the
@@ -261,11 +270,14 @@ export function ChatView({
     rowIndexByTurnRef.current = rowIndexByTurn;
   }, [rowIndexByTurn]);
 
+  // `align` mirrors what `scrollIntoView` used to be handed: 'auto' only moves
+  // when the turn isn't already on screen (the old `block: 'nearest'`), 'start'
+  // brings it to the top (the old `block: 'start'`).
   const scrollToTurn = useCallback(
-    (n: number) => {
+    (n: number, align: 'auto' | 'start' = 'start') => {
       const row = rowIndexByTurnRef.current.get(n);
       if (row === undefined) return false;
-      rowVirtualizer.scrollToIndex(row, { align: 'start' });
+      rowVirtualizer.scrollToIndex(row, { align });
       return true;
     },
     [rowVirtualizer]
@@ -340,18 +352,24 @@ export function ChatView({
   // Anchor the feed after a density change: if anchored to the bottom, snap
   // back to bottom; otherwise keep the scroll-spy turn in view. useLayoutEffect
   // fires after DOM mutations but before paint, so the corrected position never
-  // flashes. The measurement cache is dropped first: the same turn is a
-  // different height in MIN and in FULL, so keeping the old sizes would leave
-  // the scrollbar (and every row offset) describing the previous density.
+  // flashes.
+  //
+  // The measurement cache is deliberately NOT dropped here. Rows that are
+  // mounted re-measure themselves (measureElement observes each one), and the
+  // rows *above* the viewport keeping their previous size is what holds the
+  // reading position still: their offsets don't move, so neither does the turn
+  // being read. Resetting instead collapsed the whole list back to estimates,
+  // and the anchor was then computed against a layout that no longer existed —
+  // which is what sent the position wandering on every toggle. The stale sizes
+  // are corrected the moment a row is scrolled into view.
   useLayoutEffect(() => {
-    rowVirtualizer.measure();
     if (followRef.current) {
       pin();
     } else {
       const turn = activeTurnRef.current;
-      if (turn !== null) scrollToTurn(turn);
+      if (turn !== null) scrollToTurn(turn, 'auto');
     }
-  }, [detailsFilter, followRef, pin, rowVirtualizer, scrollToTurn]);
+  }, [detailsFilter, followRef, pin, scrollToTurn]);
 
   // The feed hides (display:none) behind overlays (tool detail, sub-agent
   // transcript) and in Timeline mode — it stays mounted so the composer keeps
@@ -493,7 +511,12 @@ export function ChatView({
 
   // One transcript row, drawn from its resolved `RenderRow` alone — no lookahead
   // at its neighbours, since a windowed list has none to look at.
-  const renderRow = (row: RenderRow) => {
+  const renderRow = (row: RenderRow | undefined) => {
+    // A virtual item can outlive the row list it was computed from by a render
+    // (the transcript shrinks on a density toggle or a watcher refetch). This
+    // view is mounted inside TerminalMissionControl alongside the terminal
+    // slab, so throwing here would take the whole Mission Control down with it.
+    if (!row) return null;
     const item = row.item;
     // Fallback only: a run of tool-only turns with no assistant turn before it
     // (it leads the conversation, or follows a user turn) renders as a
