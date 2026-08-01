@@ -1,0 +1,16 @@
+# Commits that only moved code around — `git blame` should look straight
+# through them to whoever actually wrote the line.
+#
+# GitHub honours this file automatically in its blame view. Locally it needs to
+# be enabled once per clone:
+#
+#     git config blame.ignoreRevsFile .git-blame-ignore-revs
+#
+# Only add a commit here if it is provably behaviour-free (a formatter run, a
+# bulk rename) AND landed on its own. A commit that also changes logic can't be
+# skipped without hiding that logic's author.
+
+# style: format the whole repo with prettier (#168)
+# The one-off `npm run format` sweep over 171 files that preceded the
+# format:check CI gate.
+7e028b588f44291790c6b28b554f7b1b81f4ca5d
