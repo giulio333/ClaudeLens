@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
+import { StampCache, firstFileStamp, treeStamp } from './session-read-cache';
 import type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
 
 // The message shapes live in the shared module (single definition for main and
@@ -244,22 +245,131 @@ function mapSdkMessagesToChat(raw: SdkSessionMessage[]): ChatMessage[] {
   return messages;
 }
 
-export async function readChatSessionViaSdk(sessionId: string): Promise<ChatMessage[]> {
+/**
+ * Where a session's transcripts live on disk, so a read can be narrowed and
+ * change-detected. Both fields are optional: with neither, the readers behave
+ * exactly as before (search every project, never cache).
+ */
+export interface SessionSource {
+  /** `~/.claude/projects/<hash>` — used to fingerprint the transcript files. */
+  projectDir?: string;
+  /**
+   * The project's REAL cwd, which is what the SDK's `dir` option wants (verified
+   * against the SDK: `dir` has `listSessions({ dir })` semantics, so passing
+   * `~/.claude/projects/<hash>` finds nothing). Use `resolveRealPath`.
+   */
+  cwd?: string;
+}
+
+/** The two places Claude Code puts a session transcript, in the order
+ *  `cost-tracker`'s `findSessionFiles` and `findSessionFile` below probe them. */
+function transcriptCandidates(projectDir: string, sessionId: string): string[] {
+  return [
+    join(projectDir, `${sessionId}.jsonl`),
+    join(projectDir, 'sessions', `${sessionId}.jsonl`),
+  ];
+}
+
+/** `subagents/` sidecar dir of a session, whose tree feeds the sub-agent readers. */
+export function subagentsDirFor(projectDir: string, sessionId: string): string {
+  return join(projectDir, sessionId, 'subagents');
+}
+
+/** Change fingerprint of a session's own transcript; `null` when we don't know
+ *  where it is (no `projectDir`, or the file isn't in either usual place), which
+ *  disables caching for that read rather than risking a stale transcript. */
+export async function sessionTranscriptStamp(
+  sessionId: string,
+  source: SessionSource
+): Promise<string | null> {
+  if (!source.projectDir) return null;
+  return firstFileStamp(transcriptCandidates(source.projectDir, sessionId));
+}
+
+/** Cache key. Scoped by project dir as well as id so an entry can never be
+ *  reused across projects — a duplicate-merge moves transcripts between project
+ *  dirs and preserves their mtime, which would otherwise look unchanged. */
+export function sessionCacheKey(sessionId: string, source: SessionSource): string {
+  return `${source.projectDir ?? ''} ${sessionId}`;
+}
+
+/**
+ * `getSessionMessages`, narrowed to one project when the cwd is known.
+ *
+ * Without `dir` the SDK scans EVERY project dir under ~/.claude to locate the
+ * id — measured at ~38 ms of the ~74 ms total on a registry of 150 projects.
+ * A wrong `dir` makes the SDK return an empty array rather than raise, and
+ * `resolveRealPath` falls back to a lossy hash→path inversion when no transcript
+ * carries an authoritative cwd, so an empty narrowed read is retried unscoped.
+ * The hint can then only ever save work, never hide a transcript.
+ */
+async function getSessionMessagesScoped(
+  sessionId: string,
+  cwd: string | undefined
+): Promise<SdkSessionMessage[]> {
   const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  // Senza `dir` l'SDK cerca l'id in tutte le project directory di ~/.claude.
-  const raw = (await sdk.getSessionMessages(sessionId, {})) as SdkSessionMessage[];
-  return mapSdkMessagesToChat(raw);
+  if (cwd) {
+    const scoped = (await sdk.getSessionMessages(sessionId, { dir: cwd })) as SdkSessionMessage[];
+    if (scoped.length > 0) return scoped;
+  }
+  return (await sdk.getSessionMessages(sessionId, {})) as SdkSessionMessage[];
+}
+
+// Bound 2: the renderer views one session at a time (ChatView is keyed per
+// filename), and each entry holds a whole mapped transcript. Two covers
+// switching back and forth without letting the ceiling grow with history size.
+const chatCache = new StampCache<ChatMessage[]>(2);
+
+export async function readChatSessionViaSdk(
+  sessionId: string,
+  source: SessionSource = {}
+): Promise<ChatMessage[]> {
+  const stamp = await sessionTranscriptStamp(sessionId, source);
+  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () =>
+    mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source.cwd))
+  );
 }
 
 // Transcript interno di un sub-agente via SDK (`getSubagentMessages`), in luogo
 // della lettura diretta del file `subagents/agent-*.jsonl`.
+//
+// Keyed on the WHOLE `subagents/` tree, not the one agent's file: the SDK doesn't
+// expose which file backs an agentId (a teammate's is `agent-a<name>-*.jsonl`,
+// a workflow's is nested under `workflows/<runId>/`), so guessing it risks
+// serving a stale transcript. Stamping the tree over-invalidates a little —
+// another agent's append misses this one's entry — and never goes stale.
+const subagentTranscriptCache = new StampCache<ChatMessage[]>(4);
+
 export async function readSubagentTranscriptViaSdk(
   sessionId: string,
-  agentId: string
+  agentId: string,
+  source: SessionSource = {}
 ): Promise<ChatMessage[]> {
-  const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
-  return mapSdkMessagesToChat(raw);
+  const stamp = source.projectDir
+    ? await treeStamp(subagentsDirFor(source.projectDir, sessionId))
+    : null;
+  const key = `${sessionCacheKey(sessionId, source)} ${agentId}`;
+  return subagentTranscriptCache.read(key, stamp, async () => {
+    const sdk = await import('@anthropic-ai/claude-agent-sdk');
+    if (source.cwd) {
+      const scoped = (await sdk.getSubagentMessages(sessionId, agentId, {
+        dir: source.cwd,
+      })) as SdkSessionMessage[];
+      if (scoped.length > 0) return mapSdkMessagesToChat(scoped);
+    }
+    const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
+    return mapSdkMessagesToChat(raw);
+  });
+}
+
+/** Test/diagnostics hook: proves an unchanged transcript is served without a read. */
+export function getSessionReadCacheStats() {
+  return { chat: chatCache.stats(), subagentTranscript: subagentTranscriptCache.stats() };
+}
+
+export function resetSessionReadCache(): void {
+  chatCache.reset();
+  subagentTranscriptCache.reset();
 }
 
 export async function findSessionFile(
