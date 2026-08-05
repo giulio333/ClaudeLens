@@ -1,6 +1,7 @@
 import {
   extractPlanRefs,
   readPlanRefs,
+  getProjectPlans,
   getPlanRefStats,
   resetPlanRefCache,
 } from '../electron/modules/plans-reader';
@@ -233,5 +234,26 @@ describe('readPlanRefs (cached, incremental)', () => {
   it('returns [] for a missing path or a directory, without throwing', async () => {
     expect(await readPlanRefs(join(dir, 'nope.jsonl'))).toEqual([]);
     expect(await readPlanRefs(dir)).toEqual([]);
+  });
+});
+
+// La cache sfrattava solo un path che qualcuno richiedeva DI NUOVO e il cui stat
+// falliva: un transcript cancellato non viene più richiesto, quindi la sua entry
+// sopravviveva per tutta la vita del processo. La glob di ogni scansione è
+// l'insieme vivo della directory, ed è ciò che rende esatta la potatura.
+describe('cache dei plan ref — potatura dei transcript spariti', () => {
+  it('sfratta un transcript cancellato alla scansione successiva, tenendo il superstite', async () => {
+    const other = join(dir, 'sess2.jsonl');
+    writeFileSync(transcript, planLine('/p/a.md', 'plan_mode', '2026-01-01T00:00:00Z') + '\n');
+    writeFileSync(other, planLine('/p/b.md', 'plan_mode_exit', '2026-01-01T00:01:00Z') + '\n');
+
+    await getProjectPlans(dir);
+    expect(getPlanRefStats()).toMatchObject({ cachedFiles: 2, evictions: 0 });
+
+    rmSync(other);
+    const groups = await getProjectPlans(dir);
+
+    expect(groups.map(g => g.filename)).toEqual(['sess.jsonl']);
+    expect(getPlanRefStats()).toMatchObject({ cachedFiles: 1, evictions: 1, cacheHits: 1 });
   });
 });

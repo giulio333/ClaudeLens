@@ -1,5 +1,5 @@
 import { open, readFile, stat } from 'fs/promises';
-import { basename, resolve, sep, join } from 'path';
+import { basename, dirname, resolve, sep, join } from 'path';
 import { glob } from 'glob';
 import { CLAUDE_DIR } from '../utils';
 
@@ -112,20 +112,77 @@ interface RefCacheEntry {
   refs: PlanRef[];
 }
 
-const refCache = new Map<string, RefCacheEntry>();
+// Raggruppata per directory contenitore (dir → path del transcript → entry)
+// invece che path→entry piatta, così una scansione può scartare le entry dei
+// file spariti in O(file della dir) anziché percorrere tutta la cache — vedi
+// `retainSessions`. Le chiavi di directory passano da `resolve()` perché sono
+// confrontate con path costruiti via `join()`, mentre glob restituisce
+// separatori POSIX anche su Windows.
+const refCache = new Map<string, Map<string, RefCacheEntry>>();
 
 // Osservabilità per i test: dimostra che un file invariato è un cache hit
-// (nessuna lettura) e che un file cresciuto si legge in modo incrementale.
-const refStats = { cacheHits: 0, fullParses: 0, incrementalParses: 0, fileReads: 0 };
+// (nessuna lettura), che un file cresciuto si legge in modo incrementale e che
+// un transcript sparito smette di essere in cache (`cachedFiles`/`evictions`).
+const refStats = { cacheHits: 0, fullParses: 0, incrementalParses: 0, fileReads: 0, evictions: 0 };
+
 export function getPlanRefStats() {
-  return { ...refStats };
+  let cachedFiles = 0;
+  for (const byFile of refCache.values()) cachedFiles += byFile.size;
+  return { ...refStats, cachedFiles };
 }
+
 export function resetPlanRefCache() {
   refCache.clear();
   refStats.cacheHits = 0;
   refStats.fullParses = 0;
   refStats.incrementalParses = 0;
   refStats.fileReads = 0;
+  refStats.evictions = 0;
+}
+
+function dirKey(path: string): string {
+  return resolve(dirname(path));
+}
+
+function cacheGet(filePath: string): RefCacheEntry | undefined {
+  return refCache.get(dirKey(filePath))?.get(filePath);
+}
+
+function cacheSet(filePath: string, entry: RefCacheEntry): void {
+  const key = dirKey(filePath);
+  const byFile = refCache.get(key);
+  if (byFile) byFile.set(filePath, entry);
+  else refCache.set(key, new Map([[filePath, entry]]));
+}
+
+function cacheDelete(filePath: string): void {
+  const key = dirKey(filePath);
+  const byFile = refCache.get(key);
+  if (!byFile) return;
+  if (byFile.delete(filePath)) refStats.evictions++;
+  if (byFile.size === 0) refCache.delete(key);
+}
+
+/** Scarta le entry dei transcript non più presenti in `dir`. `live` è la glob
+ *  che ogni scansione già esegue, cioè l'insieme COMPLETO dei transcript di
+ *  quella directory: ciò che è in cache sotto di essa e non compare nella lista
+ *  è sparito per certo (sessione cancellata dall'app, progetto mergiato
+ *  altrove, retention `cleanupPeriodDays` di Claude Code). Senza questo passo
+ *  l'entry sopravvive per tutta la vita del processo — `readPlanRefs` sfratta
+ *  solo un path che qualcuno richiede di nuovo, e un transcript cancellato non
+ *  viene più richiesto. */
+function retainSessions(dir: string, live: string[]): void {
+  const key = resolve(dir);
+  const byFile = refCache.get(key);
+  if (!byFile) return;
+  const keep = new Set(live);
+  for (const path of byFile.keys()) {
+    if (!keep.has(path)) {
+      byFile.delete(path);
+      refStats.evictions++;
+    }
+  }
+  if (byFile.size === 0) refCache.delete(key);
 }
 
 /** Riferimenti ai piani di un transcript, riusando il lavoro già fatto:
@@ -138,15 +195,15 @@ export async function readPlanRefs(sessionFilePath: string): Promise<PlanRef[]> 
   try {
     st = await stat(sessionFilePath);
   } catch {
-    refCache.delete(sessionFilePath);
+    cacheDelete(sessionFilePath);
     return [];
   }
   if (!st.isFile()) {
-    refCache.delete(sessionFilePath);
+    cacheDelete(sessionFilePath);
     return [];
   }
 
-  const cached = refCache.get(sessionFilePath);
+  const cached = cacheGet(sessionFilePath);
   if (cached && cached.mtimeMs === st.mtimeMs && cached.consumed === st.size) {
     refStats.cacheHits++;
     return withPartial(cached);
@@ -190,7 +247,7 @@ export async function readPlanRefs(sessionFilePath: string): Promise<PlanRef[]> 
   entry.partial = combined.subarray(start);
   entry.consumed += chunk.length;
   entry.mtimeMs = st.mtimeMs;
-  refCache.set(sessionFilePath, entry);
+  cacheSet(sessionFilePath, entry);
 
   return withPartial(entry);
 }
@@ -257,6 +314,9 @@ export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]>
     // also match `{sessionId}/subagents/**/agent-*.jsonl`, roughly doubling I/O
     // by re-reading every sub-agent transcript (#95). Aligned with findSessionFiles.
     const sessionFiles = await glob('*.jsonl', { cwd: projectPath, absolute: true });
+    // La glob è l'insieme vivo della directory: sfratta le entry dei transcript
+    // spariti da quando è stata popolata la cache.
+    retainSessions(projectPath, sessionFiles);
     const groups: { group: PlanGroup; sortKey: string }[] = [];
 
     for (const sessionFile of sessionFiles) {
