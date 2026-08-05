@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import { stat, open } from 'fs/promises';
-import { join, basename } from 'path';
+import { join, basename, dirname, resolve, sep } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
 
@@ -285,20 +285,101 @@ interface ParseCacheEntry {
   acc: SessionAccumulator;
 }
 
-const parseCache = new Map<string, ParseCacheEntry>();
+// Grouped by containing directory (dir → transcript path → entry) rather than a
+// flat path→entry map, so a scan can drop the entries of files that disappeared
+// in O(files in that dir) instead of walking the whole cache — see `retainSessions`.
+// Directory keys go through `resolve()` because they are compared against paths
+// built with `join()`, and glob returns POSIX separators even on Windows.
+const parseCache = new Map<string, Map<string, ParseCacheEntry>>();
 
 // Observability for tests/diagnostics: lets a test prove an unchanged file is a
-// cache hit (no read) and a grown file is read incrementally (not from scratch).
-const parseStats = { cacheHits: 0, fullParses: 0, incrementalParses: 0, fileReads: 0 };
+// cache hit (no read), a grown file is read incrementally (not from scratch), and
+// a vanished transcript stops being cached (`cachedFiles` / `evictions`).
+const parseStats = {
+  cacheHits: 0,
+  fullParses: 0,
+  incrementalParses: 0,
+  fileReads: 0,
+  evictions: 0,
+};
+
 export function getParseStats() {
-  return { ...parseStats };
+  let cachedFiles = 0;
+  for (const byFile of parseCache.values()) cachedFiles += byFile.size;
+  return { ...parseStats, cachedFiles };
 }
+
 export function resetParseCache() {
   parseCache.clear();
   parseStats.cacheHits = 0;
   parseStats.fullParses = 0;
   parseStats.incrementalParses = 0;
   parseStats.fileReads = 0;
+  parseStats.evictions = 0;
+}
+
+function dirKey(path: string): string {
+  return resolve(dirname(path));
+}
+
+function cacheGet(filePath: string): ParseCacheEntry | undefined {
+  return parseCache.get(dirKey(filePath))?.get(filePath);
+}
+
+function cacheSet(filePath: string, entry: ParseCacheEntry): void {
+  const key = dirKey(filePath);
+  const byFile = parseCache.get(key);
+  if (byFile) byFile.set(filePath, entry);
+  else parseCache.set(key, new Map([[filePath, entry]]));
+}
+
+function cacheDelete(filePath: string): void {
+  const key = dirKey(filePath);
+  const byFile = parseCache.get(key);
+  if (!byFile) return;
+  if (byFile.delete(filePath)) parseStats.evictions++;
+  if (byFile.size === 0) parseCache.delete(key);
+}
+
+// Drop the cached parses of transcripts that are no longer in `dir`. `live` comes
+// from the glob every scan already runs, which IS the complete set of transcripts
+// in that directory — so anything cached under it and missing from the list is
+// provably gone (session deleted in-app, project merged elsewhere, or Claude
+// Code's `cleanupPeriodDays` retention). Without this the entry survives for the
+// life of the process: `parseSession` only evicts a path someone asks for again,
+// and nobody ever asks for a deleted transcript. That matters because an entry
+// holds its `seenUsage` set — one string per assistant turn of the transcript.
+function retainSessions(dir: string, live: string[]): void {
+  const key = resolve(dir);
+  const byFile = parseCache.get(key);
+  if (!byFile) return;
+  const keep = new Set(live);
+  for (const path of byFile.keys()) {
+    if (!keep.has(path)) {
+      byFile.delete(path);
+      parseStats.evictions++;
+    }
+  }
+  if (byFile.size === 0) parseCache.delete(key);
+}
+
+// Per-directory pruning never fires for a project directory that vanished whole
+// (deleted or merged away): nothing scans it again. The project-dir glob in
+// `calculateCostSummary` is the live set at that level, so drop every cached
+// directory that isn't one of them (or its `sessions/` subdir). Scoped to `root`
+// so summarizing one projects dir can never evict entries cached under another.
+function retainProjects(root: string, liveProjectDirs: string[]): void {
+  const keep = new Set<string>();
+  for (const dir of liveProjectDirs) {
+    keep.add(resolve(dir));
+    keep.add(resolve(join(dir, 'sessions')));
+  }
+  const prefix = resolve(root) + sep;
+  for (const [key, byFile] of parseCache) {
+    if (keep.has(key) || !key.startsWith(prefix)) continue;
+    parseStats.evictions += byFile.size;
+    parseCache.delete(key);
+  }
 }
 
 function newAccumulator(): SessionAccumulator {
@@ -386,15 +467,15 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
   try {
     st = await stat(filePath);
   } catch {
-    parseCache.delete(filePath);
+    cacheDelete(filePath);
     return finalize(newAccumulator(), Date.now());
   }
   if (!st.isFile()) {
-    parseCache.delete(filePath);
+    cacheDelete(filePath);
     return finalize(newAccumulator(), st.mtimeMs);
   }
 
-  const cached = parseCache.get(filePath);
+  const cached = cacheGet(filePath);
   if (cached && cached.mtimeMs === st.mtimeMs && cached.consumed === st.size) {
     parseStats.cacheHits++;
     return finalize(cached.acc, st.mtimeMs);
@@ -442,7 +523,7 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
   entry.partial = combined.subarray(start);
   entry.consumed += chunk.length;
   entry.mtimeMs = st.mtimeMs;
-  parseCache.set(filePath, entry);
+  cacheSet(filePath, entry);
 
   const newlyDropped = entry.acc.dropped - droppedBefore;
   if (newlyDropped > 0) {
@@ -477,13 +558,21 @@ async function mapLimit<T, R>(
 
 const PARSE_CONCURRENCY = 8;
 
+// Enumerate a project's transcripts. Doubles as the pruning point for the parse
+// cache: each glob is the live set of its directory, so `retainSessions` can drop
+// what has since been deleted. Both candidate directories are pruned — a project
+// whose `sessions/` was emptied falls through to the root glob, and its stale
+// `sessions/` entries would otherwise never be revisited.
 async function findSessionFiles(projectPath: string): Promise<string[]> {
   const sessionsDir = join(projectPath, 'sessions');
   if (existsSync(sessionsDir)) {
     const files = await glob('*.jsonl', { cwd: sessionsDir, absolute: true });
+    retainSessions(sessionsDir, files);
     if (files.length > 0) return files;
   }
-  return glob('*.jsonl', { cwd: projectPath, absolute: true });
+  const files = await glob('*.jsonl', { cwd: projectPath, absolute: true });
+  retainSessions(projectPath, files);
+  return files;
 }
 
 interface ProjectAggregate {
@@ -552,6 +641,9 @@ export async function getProjectUsage(
 export async function calculateCostSummary(claudeDir: string): Promise<ProjectCost[]> {
   try {
     const projectDirs = await glob('[!.]*', { cwd: claudeDir, absolute: true });
+    // Whole-project pruning: a project deleted or merged away is never scanned
+    // again, so per-directory pruning can't reach its cached transcripts.
+    retainProjects(claudeDir, projectDirs);
     const costs: ProjectCost[] = [];
 
     for (const projectPath of projectDirs) {

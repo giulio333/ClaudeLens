@@ -764,3 +764,80 @@ describe('parse cache — append-only incremental parsing', () => {
     );
   });
 });
+
+// ─── Parse cache: pruning of vanished transcripts ─────────────────────────────
+// The cache used to only evict a path someone asked for *again* and whose stat
+// then failed — so a transcript deleted in-app (session delete, project delete,
+// project merge) or aged out by Claude Code's `cleanupPeriodDays` retention kept
+// its entry, and its `seenUsage` set, for the life of the process. Each scan's
+// glob is the live set of its directory, which is what makes the sweep exact.
+describe('parse cache — pruning of vanished transcripts', () => {
+  it('evicts a deleted transcript on the next scan, keeping the survivor cached', async () => {
+    resetParseCache();
+    writeSession(tmp, 'a.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1' }),
+    ]);
+    writeSession(tmp, 'b.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 200, output: 60, id: 'm2' }),
+    ]);
+
+    await getSessionList(tmp);
+    expect(getParseStats().cachedFiles).toBe(2);
+    expect(getParseStats().evictions).toBe(0);
+
+    rmSync(join(tmp, 'b.jsonl'));
+    const after = await getSessionList(tmp);
+    const stats = getParseStats();
+
+    expect(after.map(s => s.filename)).toEqual(['a.jsonl']);
+    expect(stats.cachedFiles).toBe(1); // b's entry is gone, not merely unreachable
+    expect(stats.evictions).toBe(1);
+    expect(stats.cacheHits).toBe(1); // a is still served from cache, not re-parsed
+    expect(stats.fullParses).toBe(2); // only the two cold parses
+  });
+
+  it('evicts a whole project directory that vanished, on the next summary', async () => {
+    resetParseCache();
+    const kept = join(tmp, 'kept-proj');
+    const removed = join(tmp, 'removed-proj');
+    mkdirSync(kept);
+    mkdirSync(removed);
+    writeSession(kept, 's.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'k1' }),
+    ]);
+    writeSession(removed, 's.jsonl', [
+      assistantLine({ model: 'claude-opus-4-5', input: 300, output: 90, id: 'r1' }),
+    ]);
+
+    await calculateCostSummary(tmp);
+    expect(getParseStats().cachedFiles).toBe(2);
+
+    // A merged-away or deleted project is never scanned again, so per-directory
+    // pruning can't reach it — the project-level sweep is what frees it.
+    rmSync(removed, { recursive: true, force: true });
+    const result = await calculateCostSummary(tmp);
+
+    expect(result.map(r => r.project)).toEqual(['kept-proj']);
+    expect(getParseStats().cachedFiles).toBe(1);
+    expect(getParseStats().evictions).toBe(1);
+  });
+
+  it('evicts entries under sessions/ once that directory is emptied', async () => {
+    resetParseCache();
+    const sessionsDir = join(tmp, 'sessions');
+    mkdirSync(sessionsDir);
+    writeSession(sessionsDir, 'a.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 100, output: 50, id: 'm1' }),
+    ]);
+
+    await getSessionList(tmp);
+    expect(getParseStats().cachedFiles).toBe(1);
+
+    // With sessions/ empty, findSessionFiles falls through to the project root:
+    // without pruning both candidate dirs, the sessions/ entry is never revisited.
+    rmSync(join(sessionsDir, 'a.jsonl'));
+    expect(await getSessionList(tmp)).toEqual([]);
+    expect(getParseStats().cachedFiles).toBe(0);
+    expect(getParseStats().evictions).toBe(1);
+  });
+});
