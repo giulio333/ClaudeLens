@@ -1,3 +1,16 @@
+import { StampCache, treeStamp } from './session-read-cache';
+import {
+  canTrustEmptyScoped,
+  markScopeVerified,
+  noteUnscopedRetry,
+  readChatSessionViaSdk,
+  sessionCacheKey,
+  sessionTranscriptStamp,
+  subagentsDirFor,
+  type SessionSource,
+} from './session-reader';
+import type { ChatMessage } from '../shared/chat-types';
+
 // Metadati di un subagent eseguito durante una sessione. Claude Code salva il
 // transcript interno di ogni sub-agente in
 // `{projectPath}/{sessionId}/subagents/agent-<agentId>.jsonl` (righe con
@@ -48,35 +61,98 @@ type SdkRaw = {
 // transcript padre. È la fonte del prompt di dispatch: l'SDK lo omette dal
 // transcript del sub-agente, ma ogni messaggio del sub-agente porta il
 // `parent_tool_use_id` che punta esattamente al tool_use che l'ha generato.
-function dispatchPromptsByToolUse(main: SdkRaw[]): Map<string, string> {
+//
+// Reads the ALREADY-MAPPED parent transcript rather than the raw SDK messages,
+// so this shares `readChatSessionViaSdk`'s cached read instead of parsing the
+// same multi-MB file a second time on every call (`sessions:getChat` and
+// `sessions:getSubagents` fire together). Equivalent by construction: `tool_use`
+// blocks only ride assistant messages, `parseContentArray` preserves their
+// `id`/`name`/`input` verbatim, and no mapping filter can drop a message that
+// carries one (a tool_use always yields a block, and the placeholder-note filter
+// needs a lone text block).
+function dispatchPromptsByToolUse(main: ChatMessage[]): Map<string, string> {
   const out = new Map<string, string>();
   for (const m of main) {
-    const content = (m.message as Record<string, unknown> | undefined)?.content;
-    if (!Array.isArray(content)) continue;
-    for (const b of content) {
-      if (!b || typeof b !== 'object') continue;
-      const blk = b as Record<string, unknown>;
+    for (const blk of m.content) {
       if (blk.type !== 'tool_use' || (blk.name !== 'Task' && blk.name !== 'Agent')) continue;
-      const tid = typeof blk.id === 'string' ? blk.id : '';
-      const input = blk.input as Record<string, unknown> | undefined;
-      const prompt = typeof input?.prompt === 'string' ? input.prompt : '';
-      if (tid) out.set(tid, prompt);
+      const prompt = typeof blk.input?.prompt === 'string' ? blk.input.prompt : '';
+      if (blk.id) out.set(blk.id, prompt);
     }
   }
   return out;
 }
 
-export async function readSessionSubagentsViaSdk(sessionId: string): Promise<SubagentMeta[]> {
+/** Sub-agent metadata derives from the parent transcript AND the whole
+ *  `subagents/` tree, so both have to be in the change fingerprint: a teammate
+ *  appending to its own sidecar must invalidate this, and so must a new dispatch
+ *  in the parent. `null` (unknown transcript location) disables caching. */
+async function subagentsStamp(
+  sessionId: string,
+  source: SessionSource,
+  main: string | null
+): Promise<string | null> {
+  if (main === null || !source.projectDir) return null;
+  return `${main}|${await treeStamp(subagentsDirFor(source.projectDir, sessionId))}`;
+}
+
+// Bound 8: each entry is a handful of small metadata objects (no transcripts),
+// so this can cover several sessions cheaply.
+const subagentsCache = new StampCache<SubagentMeta[]>(8);
+
+export async function readSessionSubagentsViaSdk(
+  sessionId: string,
+  source: SessionSource = {}
+): Promise<SubagentMeta[]> {
+  // The parent transcript's stamp does double duty: part of the fingerprint, and
+  // the presence evidence that lets an empty `listSubagents` be believed instead
+  // of retried across every project (see `canTrustEmptyScoped`).
+  const mainStamp = await sessionTranscriptStamp(sessionId, source);
+  const stamp = await subagentsStamp(sessionId, source, mainStamp);
+  return subagentsCache.read(sessionCacheKey(sessionId, source), stamp, () =>
+    loadSessionSubagents(sessionId, source, mainStamp)
+  );
+}
+
+/** Test/diagnostics hook (see `getSessionReadCacheStats`). */
+export function getSubagentsCacheStats() {
+  return subagentsCache.stats();
+}
+
+export function resetSubagentsCache(): void {
+  subagentsCache.reset();
+}
+
+async function loadSessionSubagents(
+  sessionId: string,
+  source: SessionSource,
+  mainStamp: string | null
+): Promise<SubagentMeta[]> {
   const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  const ids = await sdk.listSubagents(sessionId, {});
+  // Same `dir` narrowing as the transcript reads: a wrong cwd must never look
+  // like "this session has no sub-agents". But the retry is skipped once the
+  // scope is proven, because HERE the empty answer is the normal one — most
+  // sessions dispatch no sub-agent, and an unconditional retry would run the
+  // cross-project scan on every flush of a live session.
+  let ids = source.cwd ? await sdk.listSubagents(sessionId, { dir: source.cwd }) : [];
+  if (source.cwd) markScopeVerified(source.cwd, ids.length > 0);
+  if (ids.length === 0 && !canTrustEmptyScoped(source, mainStamp)) {
+    noteUnscopedRetry();
+    ids = await sdk.listSubagents(sessionId, {});
+  }
   if (ids.length === 0) return [];
 
-  const main = (await sdk.getSessionMessages(sessionId, {})) as SdkRaw[];
-  const promptByToolUse = dispatchPromptsByToolUse(main);
+  const promptByToolUse = dispatchPromptsByToolUse(await readChatSessionViaSdk(sessionId, source));
 
   const metas: SubagentMeta[] = [];
   for (const agentId of ids) {
-    const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkRaw[];
+    let raw = (
+      source.cwd ? await sdk.getSubagentMessages(sessionId, agentId, { dir: source.cwd }) : []
+    ) as SdkRaw[];
+    if (source.cwd) markScopeVerified(source.cwd, raw.length > 0);
+    if (raw.length === 0 && !canTrustEmptyScoped(source, mainStamp)) {
+      noteUnscopedRetry();
+      raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkRaw[];
+    }
 
     let startedAt = '';
     let endedAt = '';

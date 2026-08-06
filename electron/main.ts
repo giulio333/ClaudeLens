@@ -20,7 +20,11 @@ import {
 } from './modules/claude-md-reader';
 import { readProjectRules } from './modules/rules-reader';
 import { readTextFile } from './modules/safe-fs';
-import { readChatSessionViaSdk, readSubagentTranscriptViaSdk } from './modules/session-reader';
+import {
+  readChatSessionViaSdk,
+  readSubagentTranscriptViaSdk,
+  type SessionSource,
+} from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
@@ -924,26 +928,35 @@ ipcMain.handle('memory:deleteTopic', async (_event, hash: string, filename: stri
   }
 });
 
-ipcMain.handle('sessions:getChat', async (_event, _hash: string, filename: string) => {
+// Where a session's files live, for the SDK-backed readers. `projectDir` lets
+// them fingerprint the transcript (mtime+size) and skip a re-read when nothing
+// changed; `cwd` is the SDK's `dir` hint, which spares it a scan of every
+// project dir in ~/.claude. NB `dir` wants the project's REAL cwd, not
+// ~/.claude/projects/<hash> — hence resolveRealPath. `projectDir(hash)` also
+// validates the hash.
+function sessionSource(hash: string): SessionSource {
+  return { projectDir: projectDir(hash), cwd: resolveRealPath(PROJECTS_DIR, hash) };
+}
+
+ipcMain.handle('sessions:getChat', async (_event, hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
     // POC: lo storico è letto ESCLUSIVAMENTE via Agent SDK (getSessionMessages).
-    // L'SDK cerca l'id in tutte le project dir di ~/.claude, quindi `hash` non
-    // serve. NB: tronca alla compaction (perde la storia pre-`/compact`).
+    // NB: tronca alla compaction (perde la storia pre-`/compact`).
     const sessionId = filename.replace(/\.jsonl$/, '');
-    const messages = await readChatSessionViaSdk(sessionId);
+    const messages = await readChatSessionViaSdk(sessionId, sessionSource(hash));
     return ok(messages);
   } catch (e) {
     return err(e);
   }
 });
 
-ipcMain.handle('sessions:getSubagents', async (_event, _hash: string, filename: string) => {
+ipcMain.handle('sessions:getSubagents', async (_event, hash: string, filename: string) => {
   try {
     assertValidFilename(filename);
     // POC: metadati sub-agenti via SDK (listSubagents + getSubagentMessages).
     const sessionId = filename.replace(/\.jsonl$/, '');
-    const metas = await readSessionSubagentsViaSdk(sessionId);
+    const metas = await readSessionSubagentsViaSdk(sessionId, sessionSource(hash));
     return ok(metas);
   } catch (e) {
     return err(e);
@@ -952,12 +965,12 @@ ipcMain.handle('sessions:getSubagents', async (_event, _hash: string, filename: 
 
 ipcMain.handle(
   'sessions:getSubagentTranscript',
-  async (_event, _hash: string, filename: string, agentId: string) => {
+  async (_event, hash: string, filename: string, agentId: string) => {
     try {
       assertValidFilename(filename);
       // POC: transcript sub-agente via SDK (getSubagentMessages).
       const sessionId = filename.replace(/\.jsonl$/, '');
-      const messages = await readSubagentTranscriptViaSdk(sessionId, agentId);
+      const messages = await readSubagentTranscriptViaSdk(sessionId, agentId, sessionSource(hash));
       return ok(messages);
     } catch (e) {
       return err(e);
