@@ -17,7 +17,7 @@ export const SCOPE_KEYS = new Map<string, string[]>([
     ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript'],
   ],
   ['cost', ['cost:summary', 'cost:project']],
-  ['plans', ['plans:project']],
+  ['plans', ['plans:project', 'plans:unlinked']],
   ['tasks', ['tasks:project']],
   ['teams', ['teams:project', 'teams:detail']],
   ['workflows', ['workflows:project', 'workflows:run']],

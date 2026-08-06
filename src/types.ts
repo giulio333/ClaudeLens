@@ -167,7 +167,9 @@ export interface TaskGroup {
   tasks: Task[];
 }
 
-export type PlanStatus = 'proposed' | 'approved';
+// 'unlinked' = markdown presente in ~/.claude/plans che nessuna sessione
+// referenzia in un attachment plan_mode/plan_mode_exit (#154).
+export type PlanStatus = 'proposed' | 'approved' | 'unlinked';
 
 export interface Plan {
   filePath: string;

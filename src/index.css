@@ -7252,6 +7252,9 @@ button.cl-task-group-head:disabled {
   background: var(--cl-paper);
   box-shadow: inset 0 0 0 1.5px var(--cl-ink-4);
 }
+.cl-plan-chip.unlinked i {
+  background: var(--cl-ink-4);
+}
 .cl-plan-chip .ct {
   color: var(--cl-ink-4);
   font-weight: 500;
@@ -7371,6 +7374,11 @@ button.cl-task-group-head:disabled {
 .cl-plan-row.deleted::before {
   background: var(--cl-ink-4);
 }
+/* Piano non collegato: barra tratteggiata: nessuna sessione lo rivendica, e il
+   tratteggio lo dice senza introdurre una tinta nuova. */
+.cl-plan-row.unlinked::before {
+  background: repeating-linear-gradient(to bottom, var(--cl-ink-4) 0 5px, transparent 5px 10px);
+}
 .cl-plan-row:hover {
   border-color: var(--cl-ink-4);
   box-shadow: 0 4px 18px -12px rgba(40, 30, 20, 0.3);
@@ -7383,6 +7391,9 @@ button.cl-task-group-head:disabled {
 }
 .cl-plan-row.proposed.is-expanded {
   border-color: var(--cl-accent);
+}
+.cl-plan-row.unlinked.is-expanded {
+  border-color: var(--cl-ink-4);
 }
 /* Piano cancellato: status reale conservato nel badge, ma riga attenuata e
    barra laterale neutra per segnalare che il file non è più su disco. */
@@ -7461,6 +7472,14 @@ button.cl-task-group-head:disabled {
 .cl-plan-badge.deleted i {
   background: transparent;
   box-shadow: inset 0 0 0 1.5px var(--cl-ink-4);
+}
+.cl-plan-badge.unlinked {
+  color: var(--cl-ink-3);
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--cl-line);
+}
+.cl-plan-badge.unlinked i {
+  background: var(--cl-ink-4);
 }
 
 .cl-plan-summary {

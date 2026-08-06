@@ -1,20 +1,27 @@
 import { useMemo, useState } from 'react';
-import { useProjectPlans, useSessionList } from '../../../hooks/useIPC';
+import { useProjectPlans, useSessionList, useUnlinkedPlans } from '../../../hooks/useIPC';
 import type { Plan, SessionSummary } from '../../../types';
 import { fmtDate, sessionTitle } from '../utils';
 
 type Project = { hash: string; realPath: string };
-type StatusKey = 'approved' | 'proposed' | 'deleted';
+type StatusKey = 'approved' | 'proposed' | 'deleted' | 'unlinked';
 type FilterKey = 'all' | StatusKey;
 type SortKey = 'recent' | 'status';
+
+// I piani non collegati non hanno sessione: entrano nella stessa lista piatta
+// sotto un id sentinella, così filtri, conteggi e ordinamento restano un solo
+// percorso e il gruppo sintetico si ordina in fondo da sé (data 0).
+const UNLINKED_GROUP = '__unlinked__';
 
 const STATUS_LABEL: Record<StatusKey, string> = {
   approved: 'APPROVED',
   proposed: 'PROPOSED',
   deleted: 'DELETED',
+  unlinked: 'UNLINKED',
 };
 
 function statusKey(p: Plan): StatusKey {
+  if (p.status === 'unlinked') return 'unlinked';
   if (!p.exists) return 'deleted';
   return p.status === 'approved' ? 'approved' : 'proposed';
 }
@@ -92,8 +99,12 @@ export function PlansSection({
   onOpenChat: (session: SessionSummary) => void;
   onOpenPlan: (plan: Plan) => void;
 }) {
-  const { data: groups = [], isLoading } = useProjectPlans(project.hash);
+  const { data: groups = [], isLoading: loadingGroups } = useProjectPlans(project.hash);
+  const { data: unlinked = [], isLoading: loadingUnlinked } = useUnlinkedPlans();
   const { data: sessions = [] } = useSessionList(project.hash);
+  // Entrambe le sorgenti: attendere solo i gruppi farebbe lampeggiare "No plans
+  // recorded" su un progetto che ha solo piani non collegati.
+  const isLoading = loadingGroups || loadingUnlinked;
 
   const [filter, setFilter] = useState<FilterKey>('all');
   const [query, setQuery] = useState('');
@@ -124,11 +135,23 @@ export function PlansSection({
         });
       });
     }
+    // Data 0: nessuna sessione da cui ereditarla, e i gruppi si ordinano per
+    // data decrescente — il gruppo sintetico finisce così in coda.
+    unlinked.forEach((plan, i) => {
+      arr.push({
+        plan,
+        key: `${UNLINKED_GROUP}:${plan.filePath}:${i}`,
+        k: statusKey(plan),
+        sessionId: UNLINKED_GROUP,
+        sessionName: 'Unlinked plans',
+        sessionDate: 0,
+      });
+    });
     return arr;
-  }, [groups, sessionByFilename]);
+  }, [groups, unlinked, sessionByFilename]);
 
   const counts = useMemo(() => {
-    const c = { all: flat.length, approved: 0, proposed: 0, deleted: 0 };
+    const c = { all: flat.length, approved: 0, proposed: 0, deleted: 0, unlinked: 0 };
     for (const f of flat) c[f.k] += 1;
     return c;
   }, [flat]);
@@ -139,7 +162,12 @@ export function PlansSection({
     (q === '' ||
       `${f.plan.title} ${f.plan.content ?? ''} ${f.sessionName}`.toLowerCase().includes(q));
 
-  const STATUS_ORDER: Record<StatusKey, number> = { proposed: 0, approved: 1, deleted: 2 };
+  const STATUS_ORDER: Record<StatusKey, number> = {
+    proposed: 0,
+    approved: 1,
+    deleted: 2,
+    unlinked: 3,
+  };
 
   // Gruppi per sessione, rispettando filtro + ricerca, ordinati.
   const visibleGroups = useMemo(() => {
@@ -187,6 +215,7 @@ export function PlansSection({
     ['approved', 'APPROVED'],
     ['proposed', 'PROPOSED'],
     ['deleted', 'DELETED'],
+    ['unlinked', 'UNLINKED'],
   ];
 
   return (
@@ -248,7 +277,7 @@ export function PlansSection({
       <div className="cl-plans-body">
         {isLoading ? (
           <div className="cl-empty">Loading plans…</div>
-        ) : groups.length === 0 ? (
+        ) : flat.length === 0 ? (
           <div className="cl-empty">No plans recorded for this project.</div>
         ) : visibleCount === 0 ? (
           <div className="cl-empty">No plans match your filters.</div>
@@ -260,7 +289,11 @@ export function PlansSection({
                 <span className="name">{g.name}</span>
                 <span className="meta">
                   {g.items.length} {g.items.length === 1 ? 'plan' : 'plans'}
-                  {g.date ? ` · ${fmtDate(new Date(g.date).toISOString())}` : ''}
+                  {g.sessionId === UNLINKED_GROUP
+                    ? ' · in ~/.claude/plans, not referenced by any session'
+                    : g.date
+                      ? ` · ${fmtDate(new Date(g.date).toISOString())}`
+                      : ''}
                   {g.session && (
                     <button type="button" className="open" onClick={() => onOpenChat(g.session!)}>
                       open chat ↗
@@ -273,10 +306,15 @@ export function PlansSection({
                 {g.items.map(f => {
                   const { plan, key } = f;
                   const expanded = openKey === key;
-                  // Status reale (proposed/approved) e cancellazione sono dimensioni
-                  // ortogonali: il badge mostra sempre lo status, la cancellazione è
-                  // indicata dal titolo barrato + opacità ridotta.
-                  const statusK: StatusKey = plan.status === 'approved' ? 'approved' : 'proposed';
+                  // Status reale (proposed/approved/unlinked) e cancellazione sono
+                  // dimensioni ortogonali: il badge mostra sempre lo status, la
+                  // cancellazione è indicata dal titolo barrato + opacità ridotta.
+                  const statusK: StatusKey =
+                    plan.status === 'unlinked'
+                      ? 'unlinked'
+                      : plan.status === 'approved'
+                        ? 'approved'
+                        : 'proposed';
                   return (
                     <div
                       key={key}

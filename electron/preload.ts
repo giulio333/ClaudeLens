@@ -116,6 +116,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   plans: {
     getByProject: (hash: string) => ipcRenderer.invoke('plans:getByProject', hash),
+    // Nessun hash: i piani non collegati vivono nella cartella globale e non
+    // appartengono a nessun progetto.
+    getUnlinked: () => ipcRenderer.invoke('plans:getUnlinked'),
   },
   workflows: {
     getByProject: (hash: string) => ipcRenderer.invoke('workflows:getByProject', hash),
