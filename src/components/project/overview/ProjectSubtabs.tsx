@@ -9,6 +9,7 @@ import {
   useLiveSessions,
   useProjectTasks,
   useProjectPlans,
+  useUnlinkedPlans,
   useProjectWorkflows,
   useProjectTeams,
 } from '../../../hooks/useIPC';
@@ -35,6 +36,7 @@ export function ProjectSubtabs({
   const { data: liveSessions = [] } = useLiveSessions();
   const { data: taskGroups = [] } = useProjectTasks(project.hash);
   const { data: planGroups = [] } = useProjectPlans(project.hash);
+  const { data: unlinkedPlans = [] } = useUnlinkedPlans();
   const { data: workflowGroups = [] } = useProjectWorkflows(project.hash);
   const { data: teams = [] } = useProjectTeams(project.hash);
 
@@ -55,7 +57,11 @@ export function ProjectSubtabs({
     [liveSessions, project.realPath]
   );
   const taskCount = useMemo(() => taskGroups.reduce((n, g) => n + g.tasks.length, 0), [taskGroups]);
-  const planCount = useMemo(() => planGroups.reduce((n, g) => n + g.plans.length, 0), [planGroups]);
+  // Include i non collegati: il badge deve contare quello che il subtab elenca.
+  const planCount = useMemo(
+    () => planGroups.reduce((n, g) => n + g.plans.length, 0) + unlinkedPlans.length,
+    [planGroups, unlinkedPlans]
+  );
   const workflowCount = useMemo(
     () => workflowGroups.reduce((n, g) => n + g.runs.length, 0),
     [workflowGroups]

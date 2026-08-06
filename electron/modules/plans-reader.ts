@@ -1,4 +1,5 @@
 import { open, readFile, stat } from 'fs/promises';
+import { existsSync } from 'fs';
 import { basename, dirname, resolve, sep, join } from 'path';
 import { glob } from 'glob';
 import { CLAUDE_DIR } from '../utils';
@@ -14,7 +15,12 @@ function isWithinPlansDir(filePath: string): boolean {
   return resolved === PLANS_DIR || resolved.startsWith(PLANS_DIR + sep);
 }
 
-export type PlanStatus = 'proposed' | 'approved';
+// Lo status che una riga `attachment` può dichiarare…
+export type PlanRefStatus = 'proposed' | 'approved';
+// …e quello che la UI può mostrare: un piano "unlinked" è un .md presente in
+// ~/.claude/plans che nessun attachment referenzia, quindi non ha transizione di
+// plan mode da cui derivare proposed/approved (#154).
+export type PlanStatus = PlanRefStatus | 'unlinked';
 
 export interface Plan {
   filePath: string;
@@ -36,14 +42,14 @@ export interface PlanGroup {
 // Una riga `attachment` di tipo plan estratta da una sessione .jsonl.
 export interface PlanRef {
   filePath: string;
-  status: PlanStatus;
+  status: PlanRefStatus;
   timestamp: string;
   slug?: string;
   gitBranch?: string;
 }
 
 // A parità di timestamp, plan_mode_exit (approvato) ha priorità su plan_mode (proposto).
-function statusRank(s: PlanStatus): number {
+function statusRank(s: PlanRefStatus): number {
   return s === 'approved' ? 1 : 0;
 }
 
@@ -305,18 +311,37 @@ async function toPlan(ref: PlanRef): Promise<Plan> {
   };
 }
 
+/** I transcript di sessione di un progetto, dalle DUE location che Claude Code
+ *  usa: `<hash>/sessions/*.jsonl` quando esiste, altrimenti `<hash>/*.jsonl`.
+ *  Stessa logica di `findSessionFiles` in cost-tracker: dev'essere la stessa
+ *  qui, perché `getUnlinkedPlans` deriva "non referenziato" dalla lista dei
+ *  transcript — mancarne una location farebbe passare per orfani tutti i piani
+ *  di un progetto in layout `sessions/`.
+ *
+ *  Non ricorsiva: i file di sessione veri sono figli diretti. `**\/*.jsonl`
+ *  matcherebbe anche `{sessionId}/subagents/**\/agent-*.jsonl`, raddoppiando
+ *  l'I/O per rileggere ogni transcript di sub-agente (#95).
+ *
+ *  Ogni glob è l'insieme vivo della sua directory: la passa a `retainSessions`
+ *  per sfrattare le entry dei transcript spariti dopo il popolamento della cache. */
+async function sessionFilesIn(projectPath: string): Promise<string[]> {
+  const sessionsDir = join(projectPath, 'sessions');
+  if (existsSync(sessionsDir)) {
+    const files = await glob('*.jsonl', { cwd: sessionsDir, absolute: true });
+    retainSessions(sessionsDir, files);
+    if (files.length > 0) return files;
+  }
+  const files = await glob('*.jsonl', { cwd: projectPath, absolute: true });
+  retainSessions(projectPath, files);
+  return files;
+}
+
 // Per ogni sessione del progetto, raccoglie i piani referenziati negli attachment
 // (plan_mode / plan_mode_exit) e legge il markdown dal dir globale ~/.claude/plans/.
 // Restituisce solo i gruppi non vuoti, sessione più recente prima.
 export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]> {
   try {
-    // Non-recursive: real session files are direct children. `**/*.jsonl` would
-    // also match `{sessionId}/subagents/**/agent-*.jsonl`, roughly doubling I/O
-    // by re-reading every sub-agent transcript (#95). Aligned with findSessionFiles.
-    const sessionFiles = await glob('*.jsonl', { cwd: projectPath, absolute: true });
-    // La glob è l'insieme vivo della directory: sfratta le entry dei transcript
-    // spariti da quando è stata popolata la cache.
-    retainSessions(projectPath, sessionFiles);
+    const sessionFiles = await sessionFilesIn(projectPath);
     const groups: { group: PlanGroup; sortKey: string }[] = [];
 
     for (const sessionFile of sessionFiles) {
@@ -339,6 +364,82 @@ export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]>
     return groups.sort((a, b) => (a.sortKey < b.sortKey ? 1 : -1)).map(g => g.group);
   } catch (error) {
     console.error(`Errore leggendo piani progetto: ${error}`);
+    return [];
+  }
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Piani "unlinked" (#154)
+//
+// Il modello dei piani è "piano = riferimento trovato in una sessione", non
+// "piano = file nella cartella": un .md scritto direttamente in ~/.claude/plans
+// (Write/Bash, o qualunque strada che non passi dal plan mode nativo) non compare
+// da nessuna parte, pur essendo un piano validissimo su disco.
+//
+// "Non referenziato" è deliberatamente definito sull'INTERA installazione, non
+// sul progetto corrente: la cartella dei piani è globale, quindi restringendo lo
+// scan al progetto aperto ogni piano nato in un altro progetto sfilerebbe qui
+// come orfano. Il costo è una scansione di tutti i transcript, che la cache
+// incrementale di `readPlanRefs` riduce a uno `stat` per file invariato.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Ogni `planFilePath` referenziato da un attachment, in tutti i progetti. */
+async function referencedPlanPaths(projectsDir: string): Promise<Set<string>> {
+  const referenced = new Set<string>();
+  // Le dir di progetto, non i transcript: `sessionFilesIn` sa poi da quale delle
+  // due location leggerli, e riceve la lista viva che serve alla potatura.
+  // Stesso pattern di `calculateCostSummary` per enumerare i progetti.
+  const projectDirs = await glob('[!.]*', { cwd: projectsDir, absolute: true });
+  for (const projectPath of projectDirs) {
+    for (const sessionFile of await sessionFilesIn(projectPath)) {
+      for (const ref of await readPlanRefs(sessionFile)) referenced.add(resolve(ref.filePath));
+    }
+  }
+  return referenced;
+}
+
+async function toUnlinkedPlan(filePath: string): Promise<Plan | null> {
+  let content: string;
+  let mtime: Date;
+  try {
+    [content, { mtime }] = await Promise.all([readFile(filePath, 'utf-8'), stat(filePath)]);
+  } catch {
+    // Sparito tra la glob e la lettura: semplicemente non è più un piano.
+    return null;
+  }
+  const slug = basename(filePath, '.md');
+  return {
+    filePath,
+    slug,
+    title: deriveTitle(content, slug),
+    status: 'unlinked',
+    // Un orfano è per definizione un file che ESISTE: lo stato "deleted" (piano
+    // referenziato il cui markdown è sparito) qui non è rappresentabile.
+    exists: true,
+    content,
+    // Nessun attachment da cui leggere l'ora: resta l'mtime del file.
+    timestamp: mtime.toISOString(),
+  };
+}
+
+/** I `.md` di ~/.claude/plans che nessuna sessione, di nessun progetto,
+ *  referenzia in un attachment plan_mode/plan_mode_exit. Più recenti prima. */
+export async function getUnlinkedPlans(projectsDir: string): Promise<Plan[]> {
+  try {
+    const candidates = await glob('*.md', { cwd: PLANS_DIR, absolute: true });
+    // Nessun candidato (cartella vuota o inesistente) → nessun motivo di toccare
+    // un solo transcript: è il caso di chi non ha mai usato il plan mode.
+    if (candidates.length === 0) return [];
+
+    const referenced = await referencedPlanPaths(projectsDir);
+    const orphans = candidates.filter(f => !referenced.has(resolve(f)));
+
+    const plans = (await Promise.all(orphans.map(toUnlinkedPlan))).filter(
+      (p): p is Plan => p !== null
+    );
+    return plans.sort((a, b) => (a.timestamp < b.timestamp ? 1 : -1));
+  } catch (error) {
+    console.error(`Errore leggendo piani non collegati: ${error}`);
     return [];
   }
 }
