@@ -294,6 +294,7 @@ declare global {
       };
       plans: {
         getByProject: (hash: string) => Promise<IpcResult<PlanGroup[]>>;
+        getUnlinked: () => Promise<IpcResult<Plan[]>>;
       };
       workflows: {
         getByProject: (hash: string) => Promise<IpcResult<WorkflowGroup[]>>;
@@ -605,6 +606,16 @@ export function useProjectPlans(hash: string | null) {
     queryKey: ['plans:project', hash],
     queryFn: () => unwrap(window.electronAPI.plans.getByProject(hash!)),
     enabled: hash !== null,
+  });
+}
+
+// I piani di ~/.claude/plans che nessuna sessione referenzia. Chiave SENZA hash:
+// la cartella è globale e "non collegato" è calcolato sull'intera installazione,
+// quindi la stessa lista serve ogni progetto da una sola entry di cache.
+export function useUnlinkedPlans() {
+  return useQuery({
+    queryKey: ['plans:unlinked'],
+    queryFn: () => unwrap(window.electronAPI.plans.getUnlinked()),
   });
 }
 

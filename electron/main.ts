@@ -28,7 +28,7 @@ import {
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
-import { getProjectPlans } from './modules/plans-reader';
+import { getProjectPlans, getUnlinkedPlans } from './modules/plans-reader';
 import { getProjectWorkflows, getWorkflowRun } from './modules/workflows-reader';
 import { getProjectTeams, getTeamDetail } from './modules/teams-reader';
 import { scopesForPath, type DataScope } from './modules/data-change-scope';
@@ -1014,6 +1014,16 @@ ipcMain.handle('plans:getByProject', async (_event, hash: string) => {
     const projectPath = projectDir(hash);
     const groups = await getProjectPlans(projectPath);
     return ok(groups);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Senza hash: "non collegato" è vero rispetto all'intera installazione, non al
+// progetto aperto (la cartella dei piani è globale).
+ipcMain.handle('plans:getUnlinked', async () => {
+  try {
+    return ok(await getUnlinkedPlans(PROJECTS_DIR));
   } catch (e) {
     return err(e);
   }

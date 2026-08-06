@@ -1,6 +1,7 @@
 import type { Plan } from '../../../types';
 import {
   useProjectPlans,
+  useUnlinkedPlans,
   useWriteMarkdownFile,
   useDeleteMarkdownFile,
 } from '../../../hooks/useIPC';
@@ -29,18 +30,28 @@ export function PlanDetailView({
   project: Project;
   onBack: () => void;
 }) {
-  const write = useWriteMarkdownFile(['plans:project']);
-  const del = useDeleteMarkdownFile(['plans:project']);
+  const write = useWriteMarkdownFile(['plans:project', 'plans:unlinked']);
+  const del = useDeleteMarkdownFile(['plans:project', 'plans:unlinked']);
 
-  // Ri-deriva il piano fresco dopo un save (il watcher invalida 'plans:project').
+  // Ri-deriva il piano fresco dopo un save (il watcher invalida 'plans:*'). Un
+  // piano non collegato non compare in nessun gruppo di sessione: senza il
+  // fallback sulla lista globale resterebbe fermo al contenuto d'apertura.
   const { data: groups } = useProjectPlans(project.hash);
-  const fresh = groups?.flatMap(g => g.plans).find(p => p.filePath === initialPlan.filePath);
+  const { data: unlinked } = useUnlinkedPlans();
+  const sameFile = (p: Plan) => p.filePath === initialPlan.filePath;
+  const fresh = groups?.flatMap(g => g.plans).find(sameFile) ?? unlinked?.find(sameFile);
   const plan = fresh ?? initialPlan;
 
-  const statusLabel = plan.status === 'approved' ? 'Approved' : 'Proposed';
+  const statusLabel =
+    plan.status === 'unlinked' ? 'Unlinked' : plan.status === 'approved' ? 'Approved' : 'Proposed';
+
+  const unlinkedPlan = plan.status === 'unlinked';
 
   const tape: TapeCell[] = [{ label: 'Status', value: statusLabel }];
-  if (plan.timestamp) tape.push({ label: 'Created', value: fmtDateTime(plan.timestamp) });
+  // Un piano non collegato non ha attachment da cui leggere l'ora: il timestamp
+  // è l'mtime del file, e la label lo dice invece di spacciarlo per "Created".
+  if (plan.timestamp)
+    tape.push({ label: unlinkedPlan ? 'Modified' : 'Created', value: fmtDateTime(plan.timestamp) });
   if (plan.gitBranch) tape.push({ label: 'Branch', value: plan.gitBranch, mono: true });
 
   const config: EntityConfig = {
