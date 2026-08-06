@@ -1,7 +1,7 @@
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { readMemory } from '../electron/modules/memory-reader';
+import { readMemory, parseIndexLines } from '../electron/modules/memory-reader';
 import { createTopic, updateTopic, deleteTopic } from '../electron/modules/memory-writer';
 
 let tmp: string;
@@ -177,6 +177,122 @@ describe('readMemory', () => {
     expect(data.topics.get('reference_x.md')).toContain('body x');
   });
 
+  // The reader now reads each topic file once (index + body share the read) and
+  // derives everything from a single directory listing. These pin the edge cases
+  // that listing has to keep answering the same way.
+  it('keeps an index line whose topic file is gone', async () => {
+    writeTopicFile('user_here.md', 'Here', 'present', 'user', 'body');
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      [
+        '- [user_here.md](user_here.md) — present',
+        '- [feedback_gone.md](feedback_gone.md) — vanished',
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+
+    // A desynced index must stay visible, not silently short.
+    expect(data.index.map(t => t.filename)).toEqual(['user_here.md', 'feedback_gone.md']);
+    const gone = data.index[1];
+    expect(gone.name).toBe('feedback_gone.md');
+    expect(gone.description).toBe('vanished');
+    // No file to read, so the type falls back to the filename prefix.
+    expect(gone.type).toBe('feedback');
+    expect(data.topics.has('feedback_gone.md')).toBe(false);
+  });
+
+  it('still reads a topic the flat *.md listing does not cover (nested link)', async () => {
+    mkdirSync(join(memoryDir, 'sub'), { recursive: true });
+    writeFileSync(
+      join(memoryDir, 'sub', 'nested.md'),
+      '---\nname: Nested\ndescription: d\ntype: project\n---\n\nnested body\n',
+      'utf-8'
+    );
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      '- [sub/nested.md](sub/nested.md) — indexed nested\n',
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.index).toHaveLength(1);
+    // Type comes from the nested file's frontmatter, not from the 'user' default.
+    expect(data.index[0].type).toBe('project');
+    expect(data.index[0].description).toBe('indexed nested');
+  });
+
+  it('never opens a topic link that escapes the memory dir', async () => {
+    // A traversal link resolves outside the memory dir: it must be treated as a
+    // missing file, never read (the outside file's frontmatter must not leak in).
+    writeFileSync(
+      join(tmp, 'outside.md'),
+      '---\nname: Outside\ndescription: secret\ntype: reference\n---\n\nsecret body\n',
+      'utf-8'
+    );
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      '- [../outside.md](../outside.md) — traversal attempt\n',
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.index).toHaveLength(1);
+    expect(data.index[0].name).toBe('../outside.md');
+    // 'reference' would mean the outside frontmatter was parsed; 'user' is the
+    // filename-prefix fallback, i.e. nothing was read.
+    expect(data.index[0].type).toBe('user');
+    expect(data.topics.size).toBe(0);
+  });
+
+  it('reads a file referenced twice in the index only once, keeping both entries', async () => {
+    writeTopicFile('user_dup.md', 'Dup', 'first', 'user', 'body');
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      ['- [user_dup.md](user_dup.md) — first', '- [Alias](user_dup.md) — second'].join('\n'),
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.index).toHaveLength(2);
+    expect(data.index[0].description).toBe('first');
+    // Link text that is not a filename wins over the frontmatter name.
+    expect(data.index[1].name).toBe('Alias');
+    expect(data.topics.size).toBe(1);
+  });
+
+  it('degrades to the auto-index when MEMORY.md is unreadable', async () => {
+    // A directory named MEMORY.md is listed but cannot be read: the reader falls
+    // back to the topic frontmatter instead of failing the whole memory read.
+    mkdirSync(join(memoryDir, 'MEMORY.md'), { recursive: true });
+    writeTopicFile('project_ok.md', 'Ok', 'still indexed', 'project', 'body');
+
+    const data = await readMemory(tmp);
+    expect(data.memoryMd).toBeNull();
+    expect(data.index).toHaveLength(1);
+    expect(data.index[0].name).toBe('Ok');
+    expect(data.topics.get('project_ok.md')).toContain('body');
+  });
+
+  it('treats a lowercase memory.md as the index, not as a topic', async () => {
+    // The dir listing now decides whether an index exists, so the match must be
+    // case-insensitive: on macOS/Windows the old existsSync probe found this file,
+    // and it must never be indexed as a topic of its own.
+    writeTopicFile('user_t.md', 'T', 'a topic', 'user', 'body');
+    writeFileSync(
+      join(memoryDir, 'memory.md'),
+      '- [user_t.md](user_t.md) — from the index\n',
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.memoryMd).not.toBeNull();
+    expect(data.index).toHaveLength(1);
+    expect(data.index[0].description).toBe('from the index');
+    expect(data.topics.has('memory.md')).toBe(false);
+  });
+
   it('parses index lines using a plain hyphen separator too', async () => {
     writeTopicFile('user_h.md', 'Hyphen', 'hyphen desc', 'user', 'h');
     writeFileSync(
@@ -187,6 +303,31 @@ describe('readMemory', () => {
     const data = await readMemory(tmp);
     expect(data.index).toHaveLength(1);
     expect(data.index[0].description).toBe('hyphen desc');
+  });
+});
+
+describe('parseIndexLines', () => {
+  it('keeps only index lines, in file order, with either separator', () => {
+    const lines = parseIndexLines(
+      [
+        '# Memory Index',
+        '',
+        'Some prose that mentions [a link](nope.md) mid-sentence.',
+        '- [feedback_a.md](feedback_a.md) — em dash desc',
+        '  - [Nested Bullet](b.md) - hyphen desc',
+        '- [no-description.md](no-description.md)',
+        '',
+      ].join('\n')
+    );
+
+    expect(lines).toEqual([
+      { linkText: 'feedback_a.md', file: 'feedback_a.md', description: 'em dash desc' },
+      { linkText: 'Nested Bullet', file: 'b.md', description: 'hyphen desc' },
+    ]);
+  });
+
+  it('returns nothing for an index with no entries', () => {
+    expect(parseIndexLines('# Memory Index\n\nnothing here yet\n')).toEqual([]);
   });
 });
 
