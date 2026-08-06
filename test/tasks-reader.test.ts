@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { mkdirSync, mkdtempSync, rmSync, utimesSync, writeFileSync } from 'fs';
+import { mkdirSync, mkdtempSync, rmSync, symlinkSync, utimesSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { getProjectTasks } from '../electron/modules/tasks-reader';
@@ -86,6 +86,21 @@ describe('getProjectTasks', () => {
 
     const groups = await getProjectTasks(projectPath, tasksDir);
     expect(groups[0].tasks.map(t => t.subject)).toEqual(['real']);
+  });
+
+  it('follows a symlinked task file, like the previous glob did', async () => {
+    session(SESSION_A);
+    task(SESSION_A, '1.json', { id: '1', subject: 'real' });
+    const target = join(root, 'elsewhere.json');
+    writeFileSync(target, JSON.stringify({ id: '2', subject: 'linked' }));
+    try {
+      symlinkSync(target, join(tasksDir, SESSION_A, '2.json'));
+    } catch {
+      return; // unprivileged Windows: symlinks aren't creatable, nothing to pin
+    }
+
+    const groups = await getProjectTasks(projectPath, tasksDir);
+    expect(groups[0].tasks.map(t => t.subject)).toEqual(['real', 'linked']);
   });
 
   it('ignores a directory named like a task file', async () => {

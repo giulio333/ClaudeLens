@@ -1,5 +1,8 @@
 import { StampCache, treeStamp } from './session-read-cache';
 import {
+  canTrustEmptyScoped,
+  markScopeVerified,
+  noteUnscopedRetry,
   readChatSessionViaSdk,
   sessionCacheKey,
   sessionTranscriptStamp,
@@ -83,8 +86,11 @@ function dispatchPromptsByToolUse(main: ChatMessage[]): Map<string, string> {
  *  `subagents/` tree, so both have to be in the change fingerprint: a teammate
  *  appending to its own sidecar must invalidate this, and so must a new dispatch
  *  in the parent. `null` (unknown transcript location) disables caching. */
-async function subagentsStamp(sessionId: string, source: SessionSource): Promise<string | null> {
-  const main = await sessionTranscriptStamp(sessionId, source);
+async function subagentsStamp(
+  sessionId: string,
+  source: SessionSource,
+  main: string | null
+): Promise<string | null> {
   if (main === null || !source.projectDir) return null;
   return `${main}|${await treeStamp(subagentsDirFor(source.projectDir, sessionId))}`;
 }
@@ -97,9 +103,13 @@ export async function readSessionSubagentsViaSdk(
   sessionId: string,
   source: SessionSource = {}
 ): Promise<SubagentMeta[]> {
-  const stamp = await subagentsStamp(sessionId, source);
+  // The parent transcript's stamp does double duty: part of the fingerprint, and
+  // the presence evidence that lets an empty `listSubagents` be believed instead
+  // of retried across every project (see `canTrustEmptyScoped`).
+  const mainStamp = await sessionTranscriptStamp(sessionId, source);
+  const stamp = await subagentsStamp(sessionId, source, mainStamp);
   return subagentsCache.read(sessionCacheKey(sessionId, source), stamp, () =>
-    loadSessionSubagents(sessionId, source)
+    loadSessionSubagents(sessionId, source, mainStamp)
   );
 }
 
@@ -114,13 +124,21 @@ export function resetSubagentsCache(): void {
 
 async function loadSessionSubagents(
   sessionId: string,
-  source: SessionSource
+  source: SessionSource,
+  mainStamp: string | null
 ): Promise<SubagentMeta[]> {
   const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  // Same `dir` narrowing (and same empty-result fallback) as the transcript
-  // reads: a wrong cwd must never look like "this session has no sub-agents".
+  // Same `dir` narrowing as the transcript reads: a wrong cwd must never look
+  // like "this session has no sub-agents". But the retry is skipped once the
+  // scope is proven, because HERE the empty answer is the normal one — most
+  // sessions dispatch no sub-agent, and an unconditional retry would run the
+  // cross-project scan on every flush of a live session.
   let ids = source.cwd ? await sdk.listSubagents(sessionId, { dir: source.cwd }) : [];
-  if (ids.length === 0) ids = await sdk.listSubagents(sessionId, {});
+  if (source.cwd) markScopeVerified(source.cwd, ids.length > 0);
+  if (ids.length === 0 && !canTrustEmptyScoped(source, mainStamp)) {
+    noteUnscopedRetry();
+    ids = await sdk.listSubagents(sessionId, {});
+  }
   if (ids.length === 0) return [];
 
   const promptByToolUse = dispatchPromptsByToolUse(await readChatSessionViaSdk(sessionId, source));
@@ -130,7 +148,9 @@ async function loadSessionSubagents(
     let raw = (
       source.cwd ? await sdk.getSubagentMessages(sessionId, agentId, { dir: source.cwd }) : []
     ) as SdkRaw[];
-    if (raw.length === 0) {
+    if (source.cwd) markScopeVerified(source.cwd, raw.length > 0);
+    if (raw.length === 0 && !canTrustEmptyScoped(source, mainStamp)) {
+      noteUnscopedRetry();
       raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkRaw[];
     }
 

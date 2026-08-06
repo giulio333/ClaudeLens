@@ -21,6 +21,9 @@ import {
 // read cache — plus the sub-agent prompt correlation, which now derives from the
 // mapped parent transcript instead of a second raw read of the same file.
 const SESSION_ID = '11111111-2222-3333-4444-555555555555';
+/** A session in the SAME project that dispatched no sub-agent — the common case,
+ *  and the one where an empty scoped read has to be believed rather than retried. */
+const SESSION_NO_SUB = '66666666-7777-8888-9999-000000000000';
 const AGENT_ID = 'abc123';
 const DISPATCH_PROMPT = 'Investigate the flaky test in the parser suite';
 const CWD = join(tmpdir(), 'cl-cache-proj');
@@ -115,6 +118,16 @@ beforeAll(() => {
     JSON.stringify({ toolUseId: 'toolu_1', parentAgentId: null })
   );
 
+  // Same project, no `subagents/` dir at all.
+  writeFileSync(
+    join(projDir, `${SESSION_NO_SUB}.jsonl`),
+    jsonl([
+      { type: 'mode', mode: 'normal', sessionId: SESSION_NO_SUB, cwd: CWD },
+      userLine('n1', null, 'a session that dispatched nothing'),
+      assistantLine('n2', 'n1', [{ type: 'text', text: 'answered directly' }]),
+    ])
+  );
+
   source = { projectDir: projDir, cwd: CWD };
 });
 
@@ -197,7 +210,54 @@ describe('readChatSessionViaSdk — change-stamped cache', () => {
 
     expect(second).not.toBe(first);
     expect(second).toEqual(first);
-    expect(getSessionReadCacheStats().chat).toMatchObject({ hits: 0, misses: 2 });
+    expect(getSessionReadCacheStats().chat).toMatchObject({
+      hits: 0,
+      misses: 0,
+      uncacheable: 2,
+    });
+  });
+});
+
+// The `dir` hint only pays off if an EMPTY scoped answer can be believed: the
+// common case is a session with no sub-agents, and retrying that unscoped runs
+// the cross-project scan the hint exists to avoid — on every flush of a live
+// session, since each append invalidates the entry.
+describe('dir narrowing — a proven scope spares the cross-project retry', () => {
+  it('retries while the scope is unproven', async () => {
+    const metas = await readSessionSubagentsViaSdk(SESSION_NO_SUB, source);
+
+    expect(metas).toEqual([]);
+    // Nothing has confirmed this cwd yet, so [] is treated as "maybe the hint is
+    // wrong" and the unscoped search runs.
+    expect(getSessionReadCacheStats().unscopedRetries).toBe(1);
+  });
+
+  it('believes an empty scoped read once the same cwd has produced results', async () => {
+    // One successful scoped read is the evidence: the SDK does resolve this cwd
+    // to a project dir holding our sessions.
+    await readChatSessionViaSdk(SESSION_ID, source);
+    expect(getSessionReadCacheStats().unscopedRetries).toBe(0);
+
+    const metas = await readSessionSubagentsViaSdk(SESSION_NO_SUB, source);
+
+    expect(metas).toEqual([]);
+    expect(getSessionReadCacheStats().unscopedRetries).toBe(0);
+  });
+
+  it('still retries for a wrong hint, even after another cwd was proven', async () => {
+    await readChatSessionViaSdk(SESSION_ID, source);
+
+    // A different session (so the read actually runs rather than hitting the
+    // cache) read through a hint nothing has confirmed.
+    const messages = await readChatSessionViaSdk(SESSION_NO_SUB, {
+      projectDir: projDir,
+      cwd: join(tmpdir(), 'cl-not-a-project'),
+    });
+
+    // The evidence is per-cwd: an unproven hint is never trusted, so the
+    // transcript is still found.
+    expect(messages.map(m => m.role)).toEqual(['user', 'assistant']);
+    expect(getSessionReadCacheStats().unscopedRetries).toBe(1);
   });
 });
 

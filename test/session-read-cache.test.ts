@@ -106,7 +106,7 @@ describe('StampCache', () => {
     expect(await cache.read('k', 'v1', load)).toBe(1);
     expect(await cache.read('k', 'v1', load)).toBe(1);
     expect(calls).toBe(1);
-    expect(cache.stats()).toMatchObject({ hits: 1, misses: 1 });
+    expect(cache.stats()).toMatchObject({ hits: 1, misses: 1, coalesced: 0, uncacheable: 0 });
   });
 
   it('reloads when the stamp changes', async () => {
@@ -128,6 +128,8 @@ describe('StampCache', () => {
     await cache.read('k', null, load);
     expect(calls).toBe(2);
     expect(cache.stats().size).toBe(0);
+    // Counted apart from a miss: a miss can become a hit, this never can.
+    expect(cache.stats()).toMatchObject({ hits: 0, misses: 0, uncacheable: 2 });
   });
 
   it('shares one in-flight load between concurrent callers', async () => {
@@ -142,6 +144,8 @@ describe('StampCache', () => {
     const [a, b] = await Promise.all([cache.read('k', 'v1', load), cache.read('k', 'v1', load)]);
     expect(calls).toBe(1);
     expect(a).toBe(b);
+    // The joined caller is not a cache hit: nothing was stored when it arrived.
+    expect(cache.stats()).toMatchObject({ hits: 0, misses: 1, coalesced: 1 });
   });
 
   it('drops the in-flight entry when the load rejects, so the next call retries', async () => {

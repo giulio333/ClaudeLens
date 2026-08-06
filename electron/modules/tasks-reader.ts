@@ -60,7 +60,10 @@ async function parseTaskFile(filePath: string): Promise<Task | null> {
 async function sessionsWithTaskFolder(tasksDir: string): Promise<Set<string>> {
   try {
     const entries = await readdir(tasksDir, { withFileTypes: true });
-    return new Set(entries.filter(e => e.isDirectory()).map(e => e.name));
+    // Symlinks are kept: `glob` resolved them, so a symlinked task folder used to
+    // work and must keep working. A symlink that turns out NOT to be a directory
+    // costs one failed `readdir` in `taskFilesIn` and drops out there.
+    return new Set(entries.filter(e => e.isDirectory() || e.isSymbolicLink()).map(e => e.name));
   } catch {
     // Tasks dir assente/illeggibile: nessuna sessione ha task.
     return new Set();
@@ -69,12 +72,17 @@ async function sessionsWithTaskFolder(tasksDir: string): Promise<Set<string>> {
 
 /** The task files of one session folder. Mirrors the previous `glob('*.json')`:
  *  direct children only, no dotfiles (glob's `*` never matches a leading dot),
- *  and directories named `*.json` are skipped rather than read. */
+ *  symlinks followed like glob did, and directories named `*.json` skipped
+ *  rather than read (a directory that slips through fails `parseTaskFile`'s
+ *  `readFile` and is dropped as unparseable, exactly as before). */
 async function taskFilesIn(taskFolder: string): Promise<string[]> {
   try {
     const entries = await readdir(taskFolder, { withFileTypes: true });
     return entries
-      .filter(e => e.isFile() && e.name.endsWith('.json') && !e.name.startsWith('.'))
+      .filter(
+        e =>
+          (e.isFile() || e.isSymbolicLink()) && e.name.endsWith('.json') && !e.name.startsWith('.')
+      )
       .map(e => join(taskFolder, e.name));
   } catch {
     return [];
