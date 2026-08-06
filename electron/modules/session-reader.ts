@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
+import { StampCache, firstFileStamp, treeStamp } from './session-read-cache';
 import type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
 
 // The message shapes live in the shared module (single definition for main and
@@ -244,22 +245,200 @@ function mapSdkMessagesToChat(raw: SdkSessionMessage[]): ChatMessage[] {
   return messages;
 }
 
-export async function readChatSessionViaSdk(sessionId: string): Promise<ChatMessage[]> {
+/**
+ * Where a session's transcripts live on disk, so a read can be narrowed and
+ * change-detected. Both fields are optional: with neither, the readers behave
+ * exactly as before (search every project, never cache).
+ */
+export interface SessionSource {
+  /** `~/.claude/projects/<hash>` — used to fingerprint the transcript files. */
+  projectDir?: string;
+  /**
+   * The project's REAL cwd, which is what the SDK's `dir` option wants (verified
+   * against the SDK: `dir` has `listSessions({ dir })` semantics, so passing
+   * `~/.claude/projects/<hash>` finds nothing). Use `resolveRealPath`.
+   */
+  cwd?: string;
+}
+
+/** The two places Claude Code puts a session transcript, in the order
+ *  `cost-tracker`'s `findSessionFiles` and `findSessionFile` below probe them. */
+function transcriptCandidates(projectDir: string, sessionId: string): string[] {
+  return [
+    join(projectDir, `${sessionId}.jsonl`),
+    join(projectDir, 'sessions', `${sessionId}.jsonl`),
+  ];
+}
+
+/** `subagents/` sidecar dir of a session, whose tree feeds the sub-agent readers. */
+export function subagentsDirFor(projectDir: string, sessionId: string): string {
+  return join(projectDir, sessionId, 'subagents');
+}
+
+/** Change fingerprint of a session's own transcript; `null` when we don't know
+ *  where it is (no `projectDir`, or the file isn't in either usual place), which
+ *  disables caching for that read rather than risking a stale transcript. */
+export async function sessionTranscriptStamp(
+  sessionId: string,
+  source: SessionSource
+): Promise<string | null> {
+  if (!source.projectDir) return null;
+  return firstFileStamp(transcriptCandidates(source.projectDir, sessionId));
+}
+
+/** Cache key. Scoped by project dir as well as id so an entry can never be
+ *  reused across projects — a duplicate-merge moves transcripts between project
+ *  dirs and preserves their mtime, which would otherwise look unchanged. */
+export function sessionCacheKey(sessionId: string, source: SessionSource): string {
+  return `${source.projectDir ?? ''}\u0000${sessionId}`;
+}
+
+/**
+ * The cwds whose `dir` hint has been OBSERVED to work: a scoped read for it came
+ * back non-empty at least once, so the SDK does resolve it to a project dir that
+ * holds our sessions.
+ *
+ * This is what lets an empty scoped read be believed instead of retried (see
+ * `canTrustEmptyScoped`). It is deliberately empirical rather than derived —
+ * checking `pathToHash(cwd) === basename(projectDir)` would bake in an
+ * assumption about how the SDK turns a `dir` into a project dir (Claude Code
+ * folds both '/' and '.' into '-', which is exactly the kind of detail that
+ * drifts), and being wrong there would HIDE a transcript. An observation cannot
+ * be wrong about the only thing we ask of it.
+ */
+const verifiedCwds = new Set<string>();
+
+/** How many reads fell back to the cross-project scan. Diagnostics only, but it
+ *  is what the tests assert on: "this read did NOT pay the unscoped scan" has no
+ *  other observable signature. */
+let unscopedRetries = 0;
+
+export function markScopeVerified(cwd: string | undefined, gotResults: boolean): void {
+  if (cwd && gotResults) verifiedCwds.add(cwd);
+}
+
+export function noteUnscopedRetry(): void {
+  unscopedRetries++;
+}
+
+/**
+ * Can an empty scoped read be taken at face value, instead of retried without
+ * `dir`? Only with two pieces of evidence, both observed:
+ *
+ *  - the hint has already produced results for this cwd (`verifiedCwds`);
+ *  - the source we fingerprinted really is under `projectDir` — a non-null
+ *    stamp — so the scoped and the unscoped read are looking at the same files.
+ *
+ * Anything short of that retries: the hint must only ever save work, never hide
+ * a transcript. Getting this right matters because the common case IS the empty
+ * one — most sessions have no sub-agents, so `listSubagents` legitimately
+ * returns [] and the retry would pay the full ~38 ms cross-project scan on every
+ * flush of a live session, which is the exact cost this cache exists to remove.
+ */
+export function canTrustEmptyScoped(source: SessionSource, stamp: string | null): boolean {
+  return stamp !== null && !!source.cwd && verifiedCwds.has(source.cwd);
+}
+
+/**
+ * `getSessionMessages`, narrowed to one project when the cwd is known.
+ *
+ * Without `dir` the SDK scans EVERY project dir under ~/.claude to locate the
+ * id — measured at ~38 ms of the ~74 ms total on a registry of 150 projects.
+ * A wrong `dir` makes the SDK return an empty array rather than raise, and
+ * `resolveRealPath` falls back to a lossy hash→path inversion when no transcript
+ * carries an authoritative cwd, so an empty narrowed read is retried unscoped
+ * unless the scope is already proven. The hint can then only ever save work,
+ * never hide a transcript.
+ */
+async function getSessionMessagesScoped(
+  sessionId: string,
+  source: SessionSource,
+  stamp: string | null
+): Promise<SdkSessionMessage[]> {
   const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  // Senza `dir` l'SDK cerca l'id in tutte le project directory di ~/.claude.
-  const raw = (await sdk.getSessionMessages(sessionId, {})) as SdkSessionMessage[];
-  return mapSdkMessagesToChat(raw);
+  if (source.cwd) {
+    const scoped = (await sdk.getSessionMessages(sessionId, {
+      dir: source.cwd,
+    })) as SdkSessionMessage[];
+    markScopeVerified(source.cwd, scoped.length > 0);
+    if (scoped.length > 0 || canTrustEmptyScoped(source, stamp)) return scoped;
+  }
+  noteUnscopedRetry();
+  return (await sdk.getSessionMessages(sessionId, {})) as SdkSessionMessage[];
+}
+
+// Bound 4: ChatView is keyed per filename so one session is focused at a time,
+// but `sessions:getSubagents` shares this cache (it derives the dispatch prompts
+// from the parent transcript) and Mission Control can have a second session in
+// view, so a bound of 2 thrashes as soon as three are in play — and a thrash
+// here costs a whole re-read. Each entry is a mapped transcript, so the ceiling
+// stays a handful of them rather than growing with history size.
+const chatCache = new StampCache<ChatMessage[]>(4);
+
+export async function readChatSessionViaSdk(
+  sessionId: string,
+  source: SessionSource = {}
+): Promise<ChatMessage[]> {
+  const stamp = await sessionTranscriptStamp(sessionId, source);
+  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () =>
+    mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp))
+  );
 }
 
 // Transcript interno di un sub-agente via SDK (`getSubagentMessages`), in luogo
 // della lettura diretta del file `subagents/agent-*.jsonl`.
+//
+// Keyed on the WHOLE `subagents/` tree, not the one agent's file: the SDK doesn't
+// expose which file backs an agentId (a teammate's is `agent-a<name>-*.jsonl`,
+// a workflow's is nested under `workflows/<runId>/`), so guessing it risks
+// serving a stale transcript. Stamping the tree over-invalidates a little —
+// another agent's append misses this one's entry — and never goes stale.
+const subagentTranscriptCache = new StampCache<ChatMessage[]>(4);
+
 export async function readSubagentTranscriptViaSdk(
   sessionId: string,
-  agentId: string
+  agentId: string,
+  source: SessionSource = {}
 ): Promise<ChatMessage[]> {
-  const sdk = await import('@anthropic-ai/claude-agent-sdk');
-  const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
-  return mapSdkMessagesToChat(raw);
+  const stamp = source.projectDir
+    ? await treeStamp(subagentsDirFor(source.projectDir, sessionId))
+    : null;
+  // An empty tree stamp is "no files under subagents/", which is presence
+  // evidence of nothing — so it must not license trusting an empty scoped read.
+  const presence = stamp ? stamp : null;
+  const key = `${sessionCacheKey(sessionId, source)} ${agentId}`;
+  return subagentTranscriptCache.read(key, stamp, async () => {
+    const sdk = await import('@anthropic-ai/claude-agent-sdk');
+    if (source.cwd) {
+      const scoped = (await sdk.getSubagentMessages(sessionId, agentId, {
+        dir: source.cwd,
+      })) as SdkSessionMessage[];
+      markScopeVerified(source.cwd, scoped.length > 0);
+      if (scoped.length > 0 || canTrustEmptyScoped(source, presence)) {
+        return mapSdkMessagesToChat(scoped);
+      }
+    }
+    noteUnscopedRetry();
+    const raw = (await sdk.getSubagentMessages(sessionId, agentId, {})) as SdkSessionMessage[];
+    return mapSdkMessagesToChat(raw);
+  });
+}
+
+/** Test/diagnostics hook: proves an unchanged transcript is served without a
+ *  read, and that a proven `dir` scope spares the cross-project scan. */
+export function getSessionReadCacheStats() {
+  return {
+    chat: chatCache.stats(),
+    subagentTranscript: subagentTranscriptCache.stats(),
+    unscopedRetries,
+  };
+}
+
+export function resetSessionReadCache(): void {
+  chatCache.reset();
+  subagentTranscriptCache.reset();
+  verifiedCwds.clear();
+  unscopedRetries = 0;
 }
 
 export async function findSessionFile(

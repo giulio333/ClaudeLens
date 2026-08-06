@@ -1,0 +1,192 @@
+import { readdir, stat } from 'fs/promises';
+import { join } from 'path';
+
+// The SDK-backed session readers (`session-reader`, `subagents-reader`) re-parse
+// an ENTIRE transcript on every call, and the renderer calls them again on every
+// `data:changed` burst — up to five times a second while a session runs in the
+// terminal and Mission Control / ChatView is watching it. Measured on a 4.2 MB
+// transcript: ~74 ms per read, and `sessions:getChat` + `sessions:getSubagents`
+// each did one, so the main process was blocked ~150 ms per flush.
+//
+// The transcripts are plain append-only files, so we can tell for free whether a
+// read could possibly return anything new: mtime+size of the sources it derives
+// from. Unchanged sources → serve the previous result with no read at all. This
+// is the same contract the `cost-tracker` / `plans-reader` caches already rely
+// on, applied to readers whose parsing lives inside the SDK and so cannot be
+// folded incrementally — here we can only skip the whole call, not part of it.
+//
+// The invalidation that makes this pay off is deliberately coarse: scope
+// `sessions` invalidates the `sessions:chat` key PREFIX, so an append in one
+// session (or in a sub-agent sidecar) re-reads every other session's transcript
+// too. Those reads are exactly the ones that now cost two `stat` calls.
+
+/** mtime+size fingerprint of a single file. `null` when it can't be stat'd — the
+ *  caller must then treat the read as uncacheable rather than guess. */
+export async function fileStamp(path: string): Promise<string | null> {
+  try {
+    const st = await stat(path);
+    if (!st.isFile()) return null;
+    return `${st.size}:${st.mtimeMs}`;
+  } catch {
+    return null;
+  }
+}
+
+/** The first of `paths` that fingerprints, or `null` if none does. Transcripts
+ *  live either directly in the project dir or under its `sessions/` subdir. */
+export async function firstFileStamp(paths: string[]): Promise<string | null> {
+  for (const path of paths) {
+    const stamp = await fileStamp(path);
+    if (stamp !== null) return stamp;
+  }
+  return null;
+}
+
+/** What a `subagents/` tree contributes to a read: the transcripts themselves and
+ *  the `.meta.json` sidecars. The sidecar is not incidental — the SDK sources a
+ *  sub-agent's `parent_tool_use_id` from its `toolUseId` field (verified against
+ *  the SDK), which is what correlates the agent to its dispatch prompt. A sidecar
+ *  landing after the transcript would otherwise leave a stale result cached. */
+const STAMPED_EXTENSIONS = ['.jsonl', '.meta.json'];
+
+/**
+ * Fingerprint over every transcript and sidecar under `dir`, recursively.
+ *
+ * Recursive because sub-agent transcripts nest: a workflow run stores them at
+ * `subagents/workflows/<runId>/agent-*.jsonl`, and `listSubagents` reports those
+ * too (#86/#123) — a flat listing would miss their changes and serve stale data.
+ *
+ * Returns `''` for an absent or unreadable directory. That is a real, cacheable
+ * state ("this session has no sub-agents"), not an error: if the dir later
+ * appears, the stamp changes and the entry misses.
+ */
+export async function treeStamp(dir: string): Promise<string> {
+  let names: string[];
+  try {
+    names = await readdir(dir, { recursive: true });
+  } catch {
+    return '';
+  }
+  const parts: string[] = [];
+  for (const name of names.sort()) {
+    if (!STAMPED_EXTENSIONS.some(ext => name.endsWith(ext))) continue;
+    const stamp = await fileStamp(join(dir, name));
+    // A directory named `*.jsonl` stamps as null; skipping it matches what the
+    // readers do with it (nothing).
+    if (stamp !== null) parts.push(`${name}:${stamp}`);
+  }
+  return parts.join('|');
+}
+
+export interface StampCacheStats {
+  /** Reads served from a stored value whose fingerprint still holds. */
+  hits: number;
+  /** Reads that ran the loader. */
+  misses: number;
+  /** Reads that joined a load already in flight for the same key+stamp. */
+  coalesced: number;
+  /** Reads whose source could not be fingerprinted: the loader ran and its
+   *  result was NOT stored. Counted apart from `misses` — a miss can become a
+   *  hit next time, an uncacheable read never will. */
+  uncacheable: number;
+  size: number;
+}
+
+/**
+ * Serves a previously computed value while its source fingerprint is unchanged.
+ *
+ * Bounded by `maxEntries` with least-recently-used eviction, because the cached
+ * values are whole transcripts: the access pattern is one focused session at a
+ * time, so a small bound keeps the memory ceiling low while still covering the
+ * repeated re-reads of the SAME session that the watcher provokes.
+ *
+ * A `null` stamp means "the source could not be fingerprinted" and disables
+ * caching for that call — the loader runs and its result is not stored. Serving
+ * a stale transcript is a worse failure than re-reading one.
+ */
+export class StampCache<T> {
+  private readonly entries = new Map<string, { stamp: string; value: T }>();
+  /** Loads already running, keyed by key+stamp, so concurrent callers for the
+   *  same unchanged source share one read instead of racing two. `sessions:getChat`
+   *  and `sessions:getSubagents` fire together from the same render and both need
+   *  the main transcript. */
+  private readonly pending = new Map<string, Promise<T>>();
+  private hits = 0;
+  private misses = 0;
+  private coalesced = 0;
+  private uncacheable = 0;
+
+  constructor(private readonly maxEntries: number) {}
+
+  async read(key: string, stamp: string | null, load: () => Promise<T>): Promise<T> {
+    if (stamp === null) {
+      this.uncacheable++;
+      return load();
+    }
+
+    const hit = this.entries.get(key);
+    if (hit && hit.stamp === stamp) {
+      this.hits++;
+      this.touch(key, hit);
+      return hit.value;
+    }
+
+    // NB the separator is an escaped NUL, never a literal one: a raw U+0000 in
+    // the source makes git classify the whole file as binary, which silently
+    // drops it out of every diff and blame.
+    const pendingKey = `${key}\u0000${stamp}`;
+    const inFlight = this.pending.get(pendingKey);
+    if (inFlight) {
+      this.coalesced++;
+      return inFlight;
+    }
+
+    this.misses++;
+    const run = load()
+      .then(value => {
+        this.touch(key, { stamp, value });
+        this.evict();
+        return value;
+      })
+      .finally(() => {
+        this.pending.delete(pendingKey);
+      });
+    this.pending.set(pendingKey, run);
+    return run;
+  }
+
+  /** (Re)insert at the tail — Map preserves insertion order, so the head is LRU. */
+  private touch(key: string, entry: { stamp: string; value: T }): void {
+    this.entries.delete(key);
+    this.entries.set(key, entry);
+  }
+
+  private evict(): void {
+    while (this.entries.size > this.maxEntries) {
+      const oldest = this.entries.keys().next();
+      if (oldest.done) break;
+      this.entries.delete(oldest.value);
+    }
+  }
+
+  /** Observability for tests/diagnostics: proves an unchanged source is served
+   *  without a read, and that the bound is honoured. */
+  stats(): StampCacheStats {
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      coalesced: this.coalesced,
+      uncacheable: this.uncacheable,
+      size: this.entries.size,
+    };
+  }
+
+  reset(): void {
+    this.entries.clear();
+    this.pending.clear();
+    this.hits = 0;
+    this.misses = 0;
+    this.coalesced = 0;
+    this.uncacheable = 0;
+  }
+}
