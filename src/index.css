@@ -2897,98 +2897,129 @@ body {
   filter: saturate(0.4);
 }
 
-/* ── "Isole di vetro" (design 2a) — glass-island message stream ─────────
-   Each turn is a floating glass card in a 48px-guttered grid: the rail keeps
-   the role avatar (32px rounded tile) with the turn number beneath it; the
-   body is a translucent island — assistant cards carry a soft accent aura in
-   the top-right corner. Timestamps ride the right edge of the in-card header.
-   Command / skill / question / plan / notification turns keep flat bodies
-   (their content is already its own card). */
+/* ── "Nastro" (design handoff "Lens variants" → nastro) ─────────────────
+   The conversation as a ribbon. No cards, no glass: every turn is a 9px role
+   dot hung on a hairline thread, the body sits straight on paper and is
+   closed by a rule that starts at the text column. Tools drop to inline
+   chips that wrap (an opened chip claims the whole row, so its input/result
+   panel still has somewhere to unfold); inline code loses its pill. Maximum
+   quiet, plenty of air.
+
+   Several rules below out-weigh their selector on purpose: the base
+   `.cl-turn*` declarations live further down this file, so an equally
+   specific override here would lose on source order. */
 .cl-chat-reading .cl-transcript-inner::before {
-  display: none; /* no continuous timeline spine */
+  display: none; /* the thread is per-turn, not one page-long spine */
 }
+/* Reading measure: narrower than the island layout, generous side air. The
+   140px foot clears the floating control pill (composer variants add more). */
 .cl-chat-reading .cl-transcript-inner {
-  max-width: 920px;
+  max-width: 820px;
   margin: 0 auto;
-  padding: 30px 24px 140px;
-}
-.cl-chat-reading .cl-turn {
-  grid-template-columns: 48px minmax(0, 1fr);
+  padding: 18px 34px 140px;
+  /* Turns must abut: the rhythm comes from the body's own padding and its
+     closing rule, and a flex gap here would cut the thread between the dots.
+     (The windowed transcript places rows absolutely and never sees the gap —
+     the live chat, which stacks them in this flex column, does.) */
   gap: 0;
-  margin-bottom: 18px;
+}
+
+/* ── the ribbon: 30px rail + body, no gutter, no gap between turns ── */
+.cl-chat-reading .cl-turn {
+  grid-template-columns: 30px minmax(0, 1fr);
+  gap: 0;
+  margin-bottom: 0;
 }
 .cl-chat-reading .cl-turn-rail {
-  padding-top: 14px;
-  gap: 7px;
+  padding-top: 19px;
+  gap: 0;
 }
-.cl-chat-reading .cl-turn-spine {
+/* Role dot — identity carried by colour alone; the letter and the turn number
+   fall away (the header already names the speaker). */
+.cl-chat-reading .cl-turn-orb {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  font-size: 0;
+  background: var(--turn-role-color, var(--cl-accent));
+  box-shadow: none;
+}
+/* A continuation carries no dot at all, so the thread runs through it unbroken:
+   one dot per utterance, not per persisted record. */
+.cl-chat-reading .cl-turn--continuation .cl-turn-rail {
+  padding-top: 0;
+}
+.cl-chat-reading .cl-turn--continuation .cl-turn-orb {
   display: none;
 }
-.cl-chat-reading .cl-turn-orb {
-  width: 32px;
-  height: 32px;
-  border-radius: 10px;
-  font-size: 12px;
+.cl-chat-reading .cl-turn-index {
+  display: none;
 }
-/* every island shows who's speaking — continuation turns keep their avatar */
-.cl-chat-reading .cl-turn--continuation .cl-turn-orb {
+/* The thread: a hairline from under the dot to the foot of the turn. Every
+   virtualized row is an only child, so the base `:last-child` rule would hide
+   it on *every* turn — hence the extra weight. The run simply ends at the
+   last turn's rule. */
+.cl-chat-workspace--focus .cl-chat-reading .cl-turn .cl-turn-spine {
+  display: block;
+  flex: 1;
+  width: 1px;
+  min-height: 0;
+  margin-top: 8px;
+  border-radius: 0;
+  background: var(--cl-line);
   opacity: 1;
-  pointer-events: auto;
 }
-.cl-chat-reading .cl-turn--continuation .cl-turn-index {
-  visibility: visible;
+.cl-chat-workspace--focus .cl-chat-reading .cl-turn--continuation .cl-turn-spine {
+  margin-top: 0;
 }
-.cl-chat-reading .cl-turn--continuation .cl-turn-rail {
-  padding-top: 14px;
+
+/* ── body: on paper, closed by a rule aligned to the text column ── */
+.cl-chat-reading .cl-turn-body {
+  padding: 10px 0 24px;
+  border: 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  border-radius: 0;
+  background: none;
+  box-shadow: none;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+}
+/* Turn variants whose own (later) rules would otherwise reclaim the padding. */
+.cl-chat-reading .cl-turn--agent-only .cl-turn-body {
+  padding-bottom: 24px;
+}
+/* A continuation is a text-less assistant turn following another one — the same
+   utterance, split across records. It keeps its dot but drops the rule: in Full
+   density a run of tool-only turns would otherwise stack into a ladder of
+   hairlines, which is the opposite of what this variant is for. (Declared after
+   the variants above so it wins at equal specificity.) */
+.cl-chat-reading .cl-turn--continuation .cl-turn-body {
+  padding: 4px 0 10px;
+  border-bottom: 0;
+}
+.cl-chat-workspace--focus .cl-chat-reading .cl-turn--notification .cl-turn-body {
+  padding: 10px 0 24px;
+  border-bottom: 1px solid var(--cl-line-soft);
 }
 .cl-chat-reading .cl-turn--tool-only {
   margin-top: 0;
 }
-/* flat turns (command / skill / question / plan / notification) align their
-   content with the island tops */
-.cl-chat-reading .cl-turn-body {
-  padding: 12px 0 0;
-}
-/* the glass island — conversation turns only */
-.cl-chat-reading .cl-turn--user .cl-turn-body,
-.cl-chat-reading .cl-turn--claude .cl-turn-body,
-.cl-chat-reading .cl-turn--agent .cl-turn-body {
-  padding: 15px 20px 16px;
-  border-radius: 18px;
-  border: 1px solid var(--cl-glass-edge-top);
-  background: var(--cl-glass-bg);
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    var(--cl-glass-lift);
-  -webkit-backdrop-filter: blur(18px) saturate(1.7);
-  backdrop-filter: blur(18px) saturate(1.7);
-}
-/* assistant islands carry the soft accent aura in the top-right corner */
-.cl-chat-reading .cl-turn--claude .cl-turn-body,
-.cl-chat-reading .cl-turn--agent .cl-turn-body {
-  background:
-    radial-gradient(
-      55% 90% at 100% 0%,
-      color-mix(in oklch, var(--cl-accent-soft) 80%, transparent),
-      transparent 60%
-    ),
-    var(--cl-glass-bg);
-}
-/* header inside the island */
+
+/* ── header: quieter, wider-tracked speaker label ── */
 .cl-chat-reading .cl-turn-head {
   min-height: 0;
-  margin-bottom: 10px;
+  margin-bottom: 9px;
 }
 .cl-chat-reading .cl-turn-who {
-  font-size: 10.5px;
-  letter-spacing: 0.08em;
+  font-size: 10px;
+  letter-spacing: 0.16em;
 }
-/* CLAUDE wordmark — accent gradient text (agent turns keep their own tint) */
+/* Flat accent — the gradient wordmark was a card-era flourish. */
 .cl-chat-reading .cl-turn--claude .cl-turn-who {
-  background: linear-gradient(90deg, var(--cl-accent-ink), var(--cl-accent));
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  background: none;
+  -webkit-background-clip: border-box;
+  background-clip: border-box;
+  color: var(--cl-accent-ink);
 }
 /* timestamp rides the right edge of the header; the separator dots fall away */
 .cl-chat-reading .cl-turn-sep {
@@ -3008,12 +3039,93 @@ body {
 .cl-chat-reading .cl-turn-tool-count {
   margin-left: 0;
 }
-/* header pills go glassy inside the island */
 .cl-chat-reading .cl-turn-tools-hidden-badge {
-  background: var(--cl-glass-bg);
-  border-color: var(--cl-glass-edge-top);
+  background: transparent;
+  border-color: var(--cl-line);
 }
-/* file chips → small glass pills (the design's MD chips) */
+
+/* ── prose: a touch more leading, inline code without its pill ── */
+.cl-chat-reading .cl-message-text--assistant > .prose-lens {
+  line-height: 1.75;
+}
+.cl-chat-reading .cl-message-text--user {
+  line-height: 1.75;
+}
+.cl-chat-reading .cl-message-text--assistant .prose-lens :where(code):not(pre code) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ── thinking: no tinted slab, just a rule in the left margin ── */
+.cl-chat-reading .cl-thinking-body {
+  padding: 10px 0 10px 14px;
+  border-left: 1px solid var(--cl-line);
+  border-radius: 0;
+  background: transparent;
+}
+
+/* ── tools as inline chips ────────────────────────────────────────────
+   The stack becomes a wrapping row of pills (glyph + name + target). A chip
+   that opens — or one carrying a collapsed error strip — claims the full row
+   so its panel has a proper width to unfold into. */
+.cl-chat-reading .cl-tool-stack {
+  max-width: none;
+  margin-top: 12px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card {
+  min-width: 0;
+  max-width: 100%;
+  border-radius: 999px;
+  background: transparent;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-main {
+  grid-template-columns: 15px minmax(0, 1fr) auto;
+  gap: 7px;
+  padding: 5px 10px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-mono {
+  width: 15px;
+  height: 15px;
+  border-radius: 4px;
+  font-size: 8px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-id {
+  flex-direction: row;
+  align-items: baseline;
+  gap: 7px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-name {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-preview {
+  font-size: 10.5px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-status {
+  font-size: 10px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open,
+.cl-chat-reading .cl-tool-stack .cl-tool-card:has(.cl-tool-card-result) {
+  flex: 1 0 100%;
+  border-radius: 12px;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open {
+  background: color-mix(in oklch, var(--tint) 5%, var(--cl-paper));
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open .cl-tool-card-preview {
+  white-space: normal;
+}
+.cl-chat-reading .cl-tool-stack .cl-tool-card-result {
+  background: transparent;
+}
+
+/* file chips at the turn foot: outline, not glass */
 .cl-chat-reading .cl-turn-files {
   margin-top: 12px;
   gap: 6px;
@@ -3021,12 +3133,13 @@ body {
 .cl-chat-reading .cl-file-chip {
   gap: 4px;
   padding: 3px 8px;
-  background: var(--cl-glass-bg);
-  border: 1px solid var(--cl-glass-edge-top);
+  background: transparent;
+  border: 1px solid var(--cl-line);
 }
-/* standalone "tools hidden" rows align with the island column */
+/* standalone "tools hidden" rows align with the text column */
 .cl-chat-reading .cl-turn-tools-hidden {
-  margin: 0 0 18px 48px;
+  margin: 0 0 0 30px;
+  padding: 10px 0 18px;
 }
 
 /* left-edge turn navigator — the "TURNS" glass capsule (design 2a): rotated
@@ -3046,6 +3159,8 @@ body {
   pointer-events: none;
   z-index: 12;
 }
+/* Nastro: the floating furniture goes opaque + hairline instead of glass, so
+   the only translucency left on the surface is none at all. */
 .cl-turns-capsule {
   pointer-events: auto;
   display: flex;
@@ -3055,13 +3170,11 @@ body {
   max-height: 100%;
   padding: 14px 9px;
   border-radius: 999px;
-  background: var(--cl-glass-bg);
-  border: 1px solid var(--cl-glass-edge-top);
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    var(--cl-glass-lift);
-  -webkit-backdrop-filter: blur(20px) saturate(1.8);
-  backdrop-filter: blur(20px) saturate(1.8);
+  background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
+  -webkit-backdrop-filter: blur(20px);
+  backdrop-filter: blur(20px);
 }
 .cl-turns-cap-label {
   writing-mode: vertical-rl;
@@ -3836,19 +3949,18 @@ body {
 .cl-slash-menu button.is-active .cl-slash-name {
   color: var(--cl-accent);
 }
+/* Nastro: opaque paper + hairline, the soft lift is the only depth left. */
 .cl-pill {
   display: flex;
   align-items: center;
   gap: 8px;
   padding: 7px;
   border-radius: 999px;
-  background: var(--cl-glass-bg-strong);
-  border: 1px solid var(--cl-glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    var(--cl-glass-lift);
-  -webkit-backdrop-filter: blur(26px) saturate(1.8);
-  backdrop-filter: blur(26px) saturate(1.8);
+  background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
+  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(26px);
 }
 .cl-pill-div {
   width: 1px;
@@ -4909,12 +5021,6 @@ body {
   border-radius: 50%;
   background: var(--notif-orb, var(--cl-ink-3));
 }
-/* Lens (reading) mode: the orb is positioned absolute at left:0, so the card
-   must clear it — push the body right like the header padding does for prose. */
-.cl-chat-reading .cl-turn--notification .cl-turn-body {
-  padding-left: 28px;
-}
-
 .cl-notif-card {
   border: 1px solid var(--cl-line);
   border-radius: 8px;
