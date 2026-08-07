@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
 import { MinimapItem, TurnDescriptor, TurnVariant } from './utils';
 
-/** Turn navigator capsule (design "2a · Isole di vetro") — a vertical glass pill
+/** Turn navigator capsule (design "Lens variants · nastro") — a vertical pill
  *  floating at the LEFT edge of the reading column. Top-to-bottom: a rotated
  *  "TURNS" label, one tick bar per message turn (width/colour encode the turn
  *  kind: wide ink for prompts, slim for Claude, tinted for agents/skills/…),
