@@ -37,17 +37,24 @@ import type { ContextState } from './context-window';
  *
  * Not a flat tool feed (the TUI already prints every `⏺ Bash…` line — repeating
  * it would be a mirror), but the session's *meaningful units*, laid out as
- * floating **glass islands** (design: "Chat UI variants", 2a · Isole di vetro):
- * a borderless rail over a soft accent aura, with a pinned vitals band — the
- * CONTEXT WINDOW island ("how full is my context?", conic aura + big %) and one
- * vitals island pairing SPEND (cost + cache-savings ring) and TASKS (done/total
- * ring) — then a scrolling flow of TEAMS (project-wide agent teams, live-first,
- * rows click → team detail overlay), AGENTS (violet island, rows click → full
- * transcript), SKILLS (pills, click → output), file CHANGES **grouped by repo
+ * **container-less blocks** (design handoff "Lens variants" · nastro): flat
+ * paper, no cards and no glass — each block is separated from the one above by
+ * a single hairline (`railSection`) and emphasis is carried by the size of a
+ * number, not by a box. A pinned vitals band leads: the CONTEXT WINDOW block
+ * ("how full is my context?", 52px % over a 3px fill) and a SPEND/TASKS pair
+ * (the donut rings are gone with the cards — the ratios they encoded are spelled
+ * out in the captions). Then a scrolling flow of TEAMS (project-wide agent teams,
+ * live-first, rows click → team detail overlay), AGENTS (rows click → full
+ * transcript; violet now only where it encodes something — avatars, running dot,
+ * row status), SKILLS (pills, click → output), file CHANGES **grouped by repo
  * area** with proportional diff bars, the detailed TASKS list, and ENVIRONMENT
- * (a slim glass pill with the session's read-only setup from the SDK init —
+ * (a slim strip with the session's read-only setup from the SDK init —
  * permission mode + capability counts — plus any failed MCP). Empty sections
  * are dropped; if everything is empty the rail says so in one line.
+ *
+ * Note this rail is chrome shared with the Terminal view, not just the Lens —
+ * its look follows the chat's, so the two halves of Mission Control read as one
+ * surface whichever tab is up.
  *
  * All of it derives from data the watcher already refreshes
  * (`sessions:chat`, `sessions:subagents`, `tasks:project`, `sessions:project`),
@@ -164,16 +171,15 @@ function groupByArea(changes: FileChange[], realPath: string): AreaGroup[] {
 
 /* ── presentational atoms ─────────────────────────────────────────────── */
 
-/** One floating glass island (design 2a) — the rail's card primitive. */
-const islandCard: CSSProperties = {
+/** The rail's block primitive (design "Lens variants · nastro"): not a card at
+ *  all — a container-less section on paper, separated from the one above by a
+ *  single hairline. Blocks abut (the flow has no gap), so the rule *is* the
+ *  boundary; anything that needs to stand out does it with a number, not a box. */
+const railSection: CSSProperties = {
   position: 'relative',
-  border: '1px solid var(--cl-glass-edge-top)',
-  borderRadius: 20,
-  padding: '15px 19px',
-  background: 'var(--cl-glass-bg)',
-  boxShadow: 'inset 0 1px 0 var(--cl-glass-highlight), var(--cl-glass-lift)',
-  WebkitBackdropFilter: 'blur(20px) saturate(1.8)',
-  backdropFilter: 'blur(20px) saturate(1.8)',
+  borderTop: '1px solid var(--cl-line)',
+  padding: '18px 0',
+  background: 'none',
 };
 
 /** +N −N, tabular. */
@@ -256,10 +262,10 @@ function RailEyebrow({ label, n, extra }: { label: string; n?: ReactNode; extra?
     >
       <span
         style={{
-          fontSize: 9.5,
+          fontSize: 9,
           fontWeight: 600,
           letterSpacing: '0.2em',
-          color: 'var(--cl-ink-3)',
+          color: 'var(--cl-ink-4)',
           whiteSpace: 'nowrap',
         }}
       >
@@ -269,7 +275,7 @@ function RailEyebrow({ label, n, extra }: { label: string; n?: ReactNode; extra?
         <span
           style={{
             fontSize: 9.5,
-            color: 'var(--cl-accent-ink)',
+            color: 'var(--cl-ink-4)',
             fontWeight: 700,
             whiteSpace: 'nowrap',
           }}
@@ -319,19 +325,8 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
   ].filter(c => c.n > 0);
   return (
     <>
-      {/* slim env pill — permission mode + capability counts */}
-      <div
-        className="flex items-center"
-        style={{
-          gap: 10,
-          borderRadius: 999,
-          padding: '10px 16px',
-          background: 'var(--cl-glass-bg)',
-          border: '1px solid var(--cl-glass-edge-top)',
-          WebkitBackdropFilter: 'blur(18px) saturate(1.7)',
-          backdropFilter: 'blur(18px) saturate(1.7)',
-        }}
-      >
+      {/* slim env strip — permission mode + capability counts */}
+      <div className="flex items-center" style={{ ...railSection, gap: 10, padding: '13px 0' }}>
         <span
           className="font-mono"
           style={{
@@ -341,8 +336,8 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
             padding: '3px 8px',
             borderRadius: 999,
             color: danger ? 'var(--cl-on-accent)' : 'var(--cl-ink-2)',
-            background: danger ? 'var(--cl-danger)' : 'var(--cl-glass-bg-strong)',
-            border: `1px solid ${danger ? 'var(--cl-danger)' : 'var(--cl-glass-edge-top)'}`,
+            background: danger ? 'var(--cl-danger)' : 'transparent',
+            border: `1px solid ${danger ? 'var(--cl-danger)' : 'var(--cl-line)'}`,
           }}
           title="Resolved permission mode for this session"
         >
@@ -366,7 +361,7 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
       </div>
       {/* Only broken MCP connections earn a row — the one actionable MCP signal. */}
       {failedMcp.length > 0 && (
-        <div style={{ ...islandCard, padding: '8px 16px' }}>
+        <div style={{ ...railSection, padding: '12px 0' }}>
           {failedMcp.map(s => (
             <div
               key={s.name}
@@ -399,92 +394,21 @@ function EnvironmentSection({ init }: { init: InitInfo | null }) {
   );
 }
 
-/* ── Glass islands (variant 2a) ───────────────────────────────────────────
- * The rail's headline is a stack of floating glass islands from the "Chat UI
- * variants" design (2a · Isole di vetro): a full-width CONTEXT WINDOW island
- * with a conic aura, one vitals island pairing the SPEND and TASKS gauges,
- * then full-width AGENTS and SKILLS islands. The vitals are pinned (they stay
- * visible while the detail below scrolls); the AGENTS/SKILLS islands keep the
- * rail's interactivity (rows open a transcript / skill output). The
- * file-CHANGES and TASKS sections live in their own islands below. */
+/* ── Rail blocks (nastro) ─────────────────────────────────────────────────
+ * The rail's headline is a stack of container-less blocks: a full-width CONTEXT
+ * WINDOW block, one band pairing SPEND and TASKS, then full-width AGENTS and
+ * SKILLS. The vitals are pinned (they stay visible while the detail below
+ * scrolls); AGENTS/SKILLS keep the rail's interactivity (rows open a transcript
+ * / skill output). The file-CHANGES and TASKS sections follow below. */
 
-/** Ring gauge (the vitals island's spend/tasks donut). `pct` 0–100 fills the ring;
- *  `label` is the centred caption. r=19 → circumference ≈ 119.4. */
-function Donut({
-  pct,
-  color,
-  label,
-  labelSize = 11,
-}: {
-  pct: number;
-  color: string;
-  label: string;
-  labelSize?: number;
-}) {
-  const r = 19;
-  const circ = 2 * Math.PI * r;
-  const dash = (Math.max(0, Math.min(100, pct)) / 100) * circ;
-  return (
-    <svg viewBox="0 0 48 48" style={{ width: 46, height: 46, flexShrink: 0 }} aria-hidden>
-      <circle
-        cx="24"
-        cy="24"
-        r={r}
-        style={{ fill: 'none', stroke: 'var(--cl-paper-3)', strokeWidth: 6 }}
-      />
-      {pct > 0 && (
-        <circle
-          cx="24"
-          cy="24"
-          r={r}
-          style={{
-            fill: 'none',
-            stroke: color,
-            strokeWidth: 6,
-            strokeDasharray: `${dash} 999`,
-            strokeLinecap: 'round',
-            transform: 'rotate(-90deg)',
-            transformOrigin: '24px 24px',
-          }}
-        />
-      )}
-      <text
-        x="24"
-        y="27.5"
-        textAnchor="middle"
-        style={{ font: `600 ${labelSize}px var(--font-sans)`, fill: 'var(--cl-ink)' }}
-      >
-        {label}
-      </text>
-    </svg>
-  );
-}
-
-/** Full-width CONTEXT WINDOW island — conic aura, big %, glowing fill, and a
- *  "used · left · total" footer. */
+/** Full-width CONTEXT WINDOW block — the rail's headline number: a 52px %, a
+ *  3px flat fill, and a "used · left · total" footer. No aura, no glass: in this
+ *  variant the size of the number is the emphasis. */
 function ContextCard({ ctx }: { ctx: ContextState | null }) {
   const pct = ctx?.pct ?? 0;
   const danger = !!ctx && pct >= 90;
-  const barColor = danger ? 'var(--cl-danger)' : 'var(--cl-accent)';
   return (
-    <div style={{ ...islandCard, padding: '18px 19px', overflow: 'hidden' }}>
-      {/* conic aura bleeding in from the top-right corner */}
-      <div
-        aria-hidden
-        style={{
-          position: 'absolute',
-          top: -70,
-          right: -60,
-          width: 190,
-          height: 190,
-          borderRadius: '50%',
-          background:
-            'conic-gradient(from 0deg, transparent, color-mix(in oklch, var(--cl-accent) 30%, transparent), transparent 60%)',
-          filter: 'blur(18px)',
-          opacity: 0.8,
-          pointerEvents: 'none',
-        }}
-      />
+    <div style={{ ...railSection, overflow: 'hidden' }}>
       <div className="flex items-baseline justify-between" style={{ position: 'relative' }}>
         <span
           className="font-mono"
@@ -494,38 +418,33 @@ function ContextCard({ ctx }: { ctx: ContextState | null }) {
         </span>
         <span
           style={{
-            font: '700 40px/1 var(--font-sans)',
-            letterSpacing: '-0.035em',
+            font: '700 52px/0.9 var(--font-sans)',
+            letterSpacing: '-0.04em',
             fontVariantNumeric: 'tabular-nums',
             color: danger ? 'var(--cl-danger)' : 'var(--cl-ink)',
           }}
         >
           {ctx ? pct : '—'}
-          <span style={{ fontSize: 16, color: 'var(--cl-ink-3)' }}>%</span>
+          <span style={{ fontSize: 21, color: 'var(--cl-ink-3)' }}>%</span>
         </span>
       </div>
       <div
         style={{
           position: 'relative',
           marginTop: 12,
-          height: 12,
-          borderRadius: 999,
-          background: 'var(--cl-glass-bg-strong)',
-          border: '1px solid var(--cl-glass-edge-top)',
+          height: 3,
+          background: 'var(--cl-line-soft)',
           overflow: 'hidden',
-          boxShadow: 'inset 0 1px 2px var(--cl-glass-shadow)',
         }}
       >
         <div
           style={{
             width: `${pct}%`,
             height: '100%',
-            borderRadius: 999,
             transition: 'width 0.4s ease',
             background: danger
               ? 'var(--cl-danger)'
               : 'linear-gradient(90deg, color-mix(in oklch, var(--cl-accent) 70%, white), var(--cl-accent))',
-            boxShadow: `0 0 10px color-mix(in oklch, ${barColor} 60%, transparent)`,
           }}
         />
       </div>
@@ -555,10 +474,13 @@ function ContextCard({ ctx }: { ctx: ContextState | null }) {
   );
 }
 
-/** One half of the vitals island (SPEND / TASKS) — donut left, stacked caption
- *  right. `divided` adds the hairline that splits the island in two. */
+/** One half of the vitals band (SPEND / TASKS) — eyebrow, big number, caption.
+ *  `divided` adds the hairline that splits the band in two.
+ *
+ *  The donut rings this used to carry are gone with the cards: in this variant
+ *  the ratio they encoded is spelled out in the caption instead (cache-savings %
+ *  for SPEND, completion % for TASKS), so nothing the ring said is lost. */
 function GaugeCard({
-  donut,
   label,
   value,
   valueColor,
@@ -566,7 +488,6 @@ function GaugeCard({
   subColor,
   divided = false,
 }: {
-  donut: ReactNode;
   label: string;
   value: string;
   valueColor: string;
@@ -577,37 +498,29 @@ function GaugeCard({
   return (
     <div
       style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
         minWidth: 0,
         ...(divided ? { borderLeft: '1px solid var(--cl-line-soft)', paddingLeft: 16 } : {}),
       }}
     >
-      {donut}
-      <div className="min-w-0">
-        <div
-          className="font-mono"
-          style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)' }}
-        >
-          {label}
-        </div>
-        <div
-          style={{
-            font: '700 19px/1 var(--font-sans)',
-            fontVariantNumeric: 'tabular-nums',
-            color: valueColor,
-            marginTop: 4,
-          }}
-        >
-          {value}
-        </div>
-        <div
-          className="font-mono truncate"
-          style={{ fontSize: 8.5, color: subColor, marginTop: 4 }}
-        >
-          {sub}
-        </div>
+      <div
+        className="font-mono"
+        style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)' }}
+      >
+        {label}
+      </div>
+      <div
+        style={{
+          font: '700 22px/1 var(--font-sans)',
+          letterSpacing: '-0.03em',
+          fontVariantNumeric: 'tabular-nums',
+          color: valueColor,
+          marginTop: 6,
+        }}
+      >
+        {value}
+      </div>
+      <div className="font-mono truncate" style={{ fontSize: 8.5, color: subColor, marginTop: 5 }}>
+        {sub}
       </div>
     </div>
   );
@@ -626,7 +539,7 @@ function AgentAvatars({ n }: { n: number }) {
           style={{
             width: 24,
             height: 24,
-            borderRadius: 6,
+            borderRadius: '50%',
             background:
               i === 0 ? 'var(--cl-violet)' : 'color-mix(in oklch, var(--cl-violet) 70%, black)',
             color: '#fff',
@@ -841,7 +754,9 @@ function AgentRow({
   );
 }
 
-/** Full-width AGENTS island — violet-tinted glass, header cluster + interactive rows. */
+/** Full-width AGENTS block — header cluster + interactive rows. The violet that
+ *  used to tint the whole card now lives only where it encodes something: the
+ *  avatars, the running dot and the row status. */
 function AgentsCard({
   agents,
   agentDefOf,
@@ -855,27 +770,23 @@ function AgentsCard({
 }) {
   const runningCount = agents.filter(a => a.runState === 'running').length;
   return (
-    <div
-      style={{
-        ...islandCard,
-        padding: '14px 16px',
-        borderColor: 'color-mix(in oklch, var(--cl-violet-soft) 55%, var(--cl-glass-edge-top))',
-        background: 'color-mix(in oklch, var(--cl-violet-soft) 26%, var(--cl-glass-bg))',
-      }}
-    >
+    <div style={railSection}>
       <div className="flex items-center" style={{ gap: 10, marginBottom: 4 }}>
         <span
           className="font-mono"
           style={{
             fontSize: 9,
             fontWeight: 600,
-            letterSpacing: '0.18em',
-            color: 'var(--cl-violet-ink)',
+            letterSpacing: '0.2em',
+            color: 'var(--cl-ink-4)',
           }}
         >
           AGENTS
         </span>
-        <span style={{ font: '700 13px/1 var(--font-sans)', color: 'var(--cl-violet-ink)' }}>
+        <span
+          className="font-mono"
+          style={{ fontSize: 9.5, fontWeight: 700, color: 'var(--cl-ink-4)' }}
+        >
           {agents.length}
         </span>
         {runningCount > 0 && (
@@ -987,7 +898,7 @@ function SkillPill({
   );
 }
 
-/** Full-width SKILLS island — a wrap of pills. */
+/** Full-width SKILLS block — a wrap of pills. */
 function SkillsCard({
   skills,
   onOpenTool,
@@ -998,13 +909,12 @@ function SkillsCard({
   onOpenSkillDef: (skill: Skill) => void;
 }) {
   return (
-    <div style={{ ...islandCard, padding: '14px 16px' }}>
+    <div style={railSection}>
       <div
         className="font-mono"
-        style={{ fontSize: 9, letterSpacing: '0.18em', color: 'var(--cl-ink-4)', marginBottom: 11 }}
+        style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--cl-ink-4)', marginBottom: 11 }}
       >
-        SKILLS{' '}
-        <span style={{ color: 'var(--cl-accent-ink)', fontWeight: 700 }}>{skills.length}</span>
+        SKILLS <span style={{ fontWeight: 700 }}>{skills.length}</span>
       </div>
       <div className="flex flex-wrap" style={{ gap: 8 }}>
         {skills.map(s => (
@@ -1182,7 +1092,7 @@ function TeamsCard({
 }) {
   const liveCount = rows.filter(r => r.lead).length;
   return (
-    <section style={{ ...islandCard, padding: '14px 16px' }}>
+    <section style={railSection}>
       <RailEyebrow
         label="TEAMS"
         n={rows.length}
@@ -1429,14 +1339,14 @@ export function MissionRail({
     tasks.length === 0 &&
     projectTeamCount === 0;
 
-  // Borderless rail (design 2a): the islands float over a paper-2 canvas with a
-  // soft accent aura bleeding in from the top-right corner.
+  // Nastro: flat paper, no accent wash. With the cards gone the rail needs its
+  // own edge against the workspace, so it takes a hairline on the left.
   const railWrap: CSSProperties = {
     width,
     flexShrink: 0,
     position: 'relative',
-    background:
-      'radial-gradient(60% 34% at 85% 0%, color-mix(in oklch, var(--cl-accent-soft) 55%, transparent), transparent 70%), var(--cl-paper-2)',
+    background: 'var(--cl-paper)',
+    borderLeft: '1px solid var(--cl-line)',
     display: 'flex',
     flexDirection: 'column',
     minHeight: 0,
@@ -1556,7 +1466,7 @@ export function MissionRail({
       {/* fixed header — the live-status dot + label reflect THIS session's
           registry status (the only real-time "is it working now" signal): busy →
           violet working pulse, waiting → terracotta, idle → green, offline → grey. */}
-      <div className="shrink-0 flex items-center gap-2" style={{ padding: '16px 22px 12px' }}>
+      <div className="shrink-0 flex items-center gap-2" style={{ padding: '16px 20px 12px' }}>
         <span
           aria-hidden
           className={liveStatus === 'busy' ? 'cl-run-dot' : liveStatus ? 'cl-live-dot' : undefined}
@@ -1629,49 +1539,45 @@ export function MissionRail({
         </button>
       </div>
 
-      {/* pinned vitals — the CONTEXT island + one SPEND/TASKS island above the flow */}
+      {/* pinned vitals — the CONTEXT block + the SPEND/TASKS band above the flow.
+          `gap: 0` throughout: every block carries its own top rule, and a gap
+          would leave the rules floating instead of dividing. */}
       <div
         className="shrink-0"
         style={{
           display: 'grid',
-          gap: 12,
-          padding: '2px 20px 14px',
+          gap: 0,
+          padding: '0 20px',
         }}
       >
         <ContextCard ctx={ctx} />
         <div
           style={{
-            ...islandCard,
+            ...railSection,
             display: 'grid',
             gridTemplateColumns: '1fr 1fr',
             gap: 16,
           }}
         >
           <GaugeCard
-            donut={<Donut pct={savingsPct} color="var(--cl-ok)" label={`${savingsPct}%`} />}
             label="SPEND"
             value={summary ? fmtCost(summary.estimatedCost) : '—'}
             valueColor="var(--cl-accent-ink)"
-            sub={savings > 0 ? `cache −${fmtCost(savings)}` : 'cache savings'}
+            sub={savings > 0 ? `cache −${fmtCost(savings)} · ${savingsPct}%` : 'cache savings'}
             subColor="var(--cl-ok)"
           />
           <GaugeCard
-            donut={
-              <Donut
-                pct={tasks.length > 0 ? Math.round((doneTasks / tasks.length) * 100) : 0}
-                color="var(--cl-ink)"
-                label={tasks.length > 0 ? `${doneTasks}/${tasks.length}` : '—'}
-              />
-            }
             label="TASKS"
-            value={tasks.length > 0 ? `${Math.round((doneTasks / tasks.length) * 100)}%` : '—'}
+            value={tasks.length > 0 ? `${doneTasks}/${tasks.length}` : '—'}
             valueColor="var(--cl-ink)"
             sub={
-              runningTasks > 0
-                ? `${runningTasks} running`
-                : tasks.length > 0
-                  ? `${tasks.length - doneTasks} left`
-                  : 'no tasks yet'
+              tasks.length === 0
+                ? 'no tasks yet'
+                : `${Math.round((doneTasks / tasks.length) * 100)}% · ${
+                    runningTasks > 0
+                      ? `${runningTasks} running`
+                      : `${tasks.length - doneTasks} left`
+                  }`
             }
             subColor="var(--cl-ink-4)"
             divided
@@ -1679,16 +1585,16 @@ export function MissionRail({
         </div>
       </div>
 
-      {/* scrolling flow — a stack of islands */}
+      {/* scrolling flow — a stack of container-less blocks, divided by their rules */}
       <div
         style={{
           flex: 1,
           minHeight: 0,
           overflowY: 'auto',
-          padding: '0 20px 20px',
+          padding: '0 20px 22px',
           display: 'flex',
           flexDirection: 'column',
-          gap: 12,
+          gap: 0,
         }}
       >
         {!sessionId && (
@@ -1705,7 +1611,7 @@ export function MissionRail({
           </p>
         )}
 
-        {/* TEAMS — glass island, session-scoped, rows → team detail overlay */}
+        {/* TEAMS — session-scoped, session-scoped, rows → team detail overlay */}
         {sessionId && projectTeamCount > 0 && (
           <TeamsCard
             rows={teamRows}
@@ -1715,7 +1621,7 @@ export function MissionRail({
           />
         )}
 
-        {/* AGENTS — glass island, rows → transcript, trailing button → definition */}
+        {/* AGENTS — rows → transcript, trailing button → definition */}
         {agents.length > 0 && (
           <AgentsCard
             agents={agents}
@@ -1725,14 +1631,14 @@ export function MissionRail({
           />
         )}
 
-        {/* SKILLS — glass island, pills → output / definition / tool call */}
+        {/* SKILLS — pills → output / definition / tool call */}
         {skills.length > 0 && (
           <SkillsCard skills={skills} onOpenTool={onOpenTool} onOpenSkillDef={onOpenSkillDef} />
         )}
 
         {/* CHANGES island — grouped by repo area (comfortable) or a flat list (compact) */}
         {changes.length > 0 && (
-          <section style={{ ...islandCard, padding: '14px 16px' }}>
+          <section style={railSection}>
             <RailEyebrow
               label="CHANGES"
               n={changes.length}
@@ -1769,7 +1675,7 @@ export function MissionRail({
 
         {/* TASKS island */}
         {tasks.length > 0 && (
-          <section style={{ ...islandCard, padding: '14px 16px' }}>
+          <section style={railSection}>
             <RailEyebrow label="TASKS" n={`${doneTasks}/${tasks.length}`} />
             {tasks.map(t => {
               // Extra detail the dedicated Tasks page shows: live activeForm,
@@ -1910,7 +1816,7 @@ export function MissionRail({
           </section>
         )}
 
-        {/* ENVIRONMENT — slim glass pill with the read-only session setup */}
+        {/* ENVIRONMENT — slim strip with the read-only session setup */}
         <EnvironmentSection init={init} />
       </div>
     </aside>
