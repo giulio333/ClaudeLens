@@ -1,8 +1,8 @@
-import { existsSync } from 'fs';
 import { stat, open } from 'fs/promises';
 import { join, basename, dirname, resolve, sep } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
+import { listProjectSessionFiles } from './session-files';
 
 export interface UsageData {
   inputTokens: number;
@@ -564,15 +564,7 @@ const PARSE_CONCURRENCY = 8;
 // whose `sessions/` was emptied falls through to the root glob, and its stale
 // `sessions/` entries would otherwise never be revisited.
 async function findSessionFiles(projectPath: string): Promise<string[]> {
-  const sessionsDir = join(projectPath, 'sessions');
-  if (existsSync(sessionsDir)) {
-    const files = await glob('*.jsonl', { cwd: sessionsDir, absolute: true });
-    retainSessions(sessionsDir, files);
-    if (files.length > 0) return files;
-  }
-  const files = await glob('*.jsonl', { cwd: projectPath, absolute: true });
-  retainSessions(projectPath, files);
-  return files;
+  return listProjectSessionFiles(projectPath, retainSessions);
 }
 
 interface ProjectAggregate {
