@@ -26,6 +26,22 @@ describe('scopesForPath', () => {
     ]);
   });
 
+  // Unclassified used to mean `null`, i.e. "invalidate every query cache" — so
+  // saving one memory topic re-read skills, agents, plugins, MCP, config, teams,
+  // workflows and every project's sessions and cost. That is the exact cost the
+  // classifier exists to remove, on a path the app itself writes to.
+  it('maps a memory topic to the memory scope alone', () => {
+    expect(scopes(join(PROJECT, 'memory', 'topic.md'))).toEqual(['memory']);
+    expect(scopes(join(PROJECT, 'memory', 'MEMORY.md'))).toEqual(['memory']);
+  });
+
+  it('does not let a memory dir nested under subagents claim the scope', () => {
+    expect(scopes(join(PROJECT, 'abc-123', 'subagents', 'memory', 'notes.md'))).toEqual([
+      'sessions',
+      'teams',
+    ]);
+  });
+
   it('maps a sub-agent transcript to sessions and teams, never to cost or plans', () => {
     // cost-tracker and plans-reader glob `*.jsonl` non-recursively, so a sidecar
     // transcript cannot change either figure.

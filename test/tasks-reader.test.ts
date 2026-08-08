@@ -21,6 +21,13 @@ function session(id: string): void {
   writeFileSync(join(projectPath, `${id}.jsonl`), '{}\n');
 }
 
+/** The other native layout: `<hash>/sessions/<id>.jsonl`. */
+function sessionUnderSessionsDir(id: string): void {
+  const dir = join(projectPath, 'sessions');
+  mkdirSync(dir, { recursive: true });
+  writeFileSync(join(dir, `${id}.jsonl`), '{}\n');
+}
+
 function task(sessionId: string, name: string, body: Record<string, unknown>): void {
   const folder = join(tasksDir, sessionId);
   mkdirSync(folder, { recursive: true });
@@ -123,6 +130,31 @@ describe('getProjectTasks', () => {
     const groups = await getProjectTasks(projectPath, tasksDir);
     expect(groups).toHaveLength(1);
     expect(groups[0].sessionId).toBe(SESSION_A);
+  });
+
+  // Claude Code has two transcript layouts. Reading only `<hash>/*.jsonl` left
+  // every `sessions/`-layout project with no session id to intersect against the
+  // tasks dir, so `getProjectTasks` always returned [] — an empty Tasks subtab,
+  // a 0 badge and an empty Mission Control TASKS island, with a full
+  // `~/.claude/tasks/<id>/` on disk and no error anywhere.
+  it('finds tasks when transcripts live under sessions/', async () => {
+    sessionUnderSessionsDir(SESSION_A);
+    task(SESSION_A, '1.json', { id: '1', subject: 'in the sessions layout' });
+
+    const groups = await getProjectTasks(projectPath, tasksDir);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].sessionId).toBe(SESSION_A);
+    expect(groups[0].filename).toBe(`${SESSION_A}.jsonl`);
+    expect(groups[0].tasks.map(t => t.subject)).toEqual(['in the sessions layout']);
+  });
+
+  it('falls back to the project root when sessions/ exists but is empty', async () => {
+    mkdirSync(join(projectPath, 'sessions'), { recursive: true });
+    session(SESSION_A);
+    task(SESSION_A, '1.json', { id: '1', subject: 'at the root' });
+
+    const groups = await getProjectTasks(projectPath, tasksDir);
+    expect(groups.map(g => g.sessionId)).toEqual([SESSION_A]);
   });
 
   it('orders groups by task-folder mtime, most recent first', async () => {

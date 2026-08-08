@@ -1551,8 +1551,8 @@ const MOCK_EFFECTIVE_CONFIG = {
 // ─── Pricing metadata (Analytics) ──────────────────────────────────────────────
 
 const MOCK_PRICING_META = {
-  lastUpdated: '2026-06-01',
-  knownModels: ['claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
+  lastUpdated: '2026-08-08',
+  knownModels: ['claude-opus-5', 'claude-opus-4-8', 'claude-sonnet-4-6', 'claude-haiku-4-5'],
 };
 
 // ─── Progetti duplicati (vista Duplicates) ─────────────────────────────────────

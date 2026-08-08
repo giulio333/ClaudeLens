@@ -84,6 +84,7 @@ export function scopesForPath(path: string, claudeDir: string): DataScope[] | nu
  *  - `workflows/**`: Workflow tool run state JSON. A workflow sub-agent
  *    transcript (`subagents/workflows/<runId>/agent-*.jsonl`) sits in both
  *    branches and takes both scopes.
+ *  - `memory/**`: the project's memory topics and their `MEMORY.md` index.
  */
 function projectScopes(rest: string[]): DataScope[] | null {
   // rest = ['projects', hash, …]
@@ -97,6 +98,10 @@ function projectScopes(rest: string[]): DataScope[] | null {
     scopes.add('teams');
   }
   if (tail.includes('workflows')) scopes.add('workflows');
+  // The project's memory dir. Anchored to the FIRST segment, not `includes`: a
+  // `memory/` folder that happens to sit inside a sub-agent's working files is
+  // not this project's memory and must not claim the scope.
+  if (tail[0] === 'memory') scopes.add('memory');
   // Only top-level transcripts feed cost and plans: cost-tracker and plans-reader
   // glob `*.jsonl` non-recursively, never the sub-agent sidecars.
   if (!isSubagent && tail[tail.length - 1].endsWith('.jsonl')) {

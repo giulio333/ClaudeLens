@@ -16,6 +16,8 @@ import {
   parseAskUserQuestions,
   parseAnswersFromResultText,
   isQuestionDismissed,
+  isMemoryFile,
+  touchedFiles,
 } from '../src/components/project/chat/utils';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
 
@@ -855,5 +857,66 @@ describe('skillHasViewableOutput', () => {
   });
   it('is false when the run is still pending (no result)', () => {
     expect(skillHasViewableOutput(agenticSkillGroup('a:b', null))).toBe(false);
+  });
+});
+
+describe('isMemoryFile', () => {
+  it('recognises the project-level memory dir', () => {
+    expect(isMemoryFile({ file_path: '/Users/t/app/.claude/memory/decisions.md' })).toBe(true);
+  });
+
+  it('recognises the user-level memory dir under the project history folder', () => {
+    expect(isMemoryFile({ file_path: '/Users/t/.claude/projects/-Users-t-app/memory/x.md' })).toBe(
+      true
+    );
+  });
+
+  it('recognises a topic nested below the memory dir', () => {
+    expect(isMemoryFile({ file_path: '/Users/t/app/.claude/memory/sub/topic.md' })).toBe(true);
+  });
+
+  it('normalizes Windows separators', () => {
+    expect(isMemoryFile({ file_path: 'C:\\Users\\t\\app\\.claude\\memory\\notes.md' })).toBe(true);
+  });
+
+  // The old check was `includes('/.claude/') && includes('/memory/')`, so any
+  // path with a `memory` segment anywhere under `.claude` was dressed up as a
+  // memory operation — violet tint, M monogram, "Memory operation" subtitle.
+  it('rejects an unrelated .claude path that merely has a memory segment', () => {
+    expect(isMemoryFile({ file_path: '/Users/t/.claude/skills/memory/SKILL.md' })).toBe(false);
+    expect(isMemoryFile({ file_path: '/Users/t/.claude/agents/memory/keeper.md' })).toBe(false);
+  });
+
+  it('rejects a memory dir outside .claude, and an input with no path', () => {
+    expect(isMemoryFile({ file_path: '/Users/t/app/src/memory/store.ts' })).toBe(false);
+    expect(isMemoryFile({})).toBe(false);
+  });
+});
+
+describe('touchedFiles', () => {
+  const group = (name: string, input: Record<string, unknown>) => ({
+    use: { id: 't', name, input },
+    result: null,
+  });
+
+  it('collects the files of every file-oriented tool, deduped and in order', () => {
+    const files = touchedFiles([
+      group('Read', { file_path: '/a/one.ts' }),
+      group('Write', { file_path: '/a/two.tsx' }),
+      group('Read', { file_path: '/a/one.ts' }),
+      group('Bash', { command: 'ls' }),
+    ] as never);
+    expect(files.map(f => f.path)).toEqual(['/a/one.ts', '/a/two.tsx']);
+    expect(files.map(f => f.ext)).toEqual(['ts', 'tsx']);
+  });
+
+  // MultiEdit carries a file_path and mutates it (MissionRail counts it among
+  // EDIT_TOOLS), but it was missing here — so a turn made only of MultiEdits
+  // showed no file chips at all in the minimal turn footer.
+  it('counts MultiEdit as a file tool', () => {
+    const files = touchedFiles([
+      group('MultiEdit', { file_path: '/a/three.py', edits: [] }),
+    ] as never);
+    expect(files.map(f => f.path)).toEqual(['/a/three.py']);
   });
 });

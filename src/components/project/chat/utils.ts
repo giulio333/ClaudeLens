@@ -875,12 +875,24 @@ export function parseMemoryFrontmatter(content: string): ParsedMemory | null {
   return { name: get('name'), description: get('description'), type, body };
 }
 
+// The two directories Claude Code actually keeps memory topics in (see
+// `memory-reader.readMemory`): the project-level one committed to the repo, and
+// the user-level one under the project's ~/.claude history folder. Anchored
+// patterns rather than "contains /.claude/ AND contains /memory/", which also
+// swallowed unrelated paths that merely have a `memory` segment somewhere below
+// `.claude` — `~/.claude/skills/memory/SKILL.md` was being dressed up as a
+// memory operation, violet tint and all.
+const MEMORY_DIRS = [
+  /\/\.claude\/memory\//, //                  <repo>/.claude/memory/…
+  /\/\.claude\/projects\/[^/]+\/memory\//, // ~/.claude/projects/<hash>/memory/…
+];
+
 export function isMemoryFile(input: Record<string, unknown>): boolean {
   const path = input.file_path as string | undefined;
   if (!path) return false;
   // Normalize backslashes so the check works on Windows paths too
   const normalized = path.replace(/\\/g, '/');
-  return normalized.includes('/.claude/') && normalized.includes('/memory/');
+  return MEMORY_DIRS.some(re => re.test(normalized));
 }
 
 export function resolveToolIcon(name: string, input: Record<string, unknown>): string {
@@ -920,7 +932,10 @@ export function fileExt(path: string): string {
 
 // Tool che operano su un singolo file su disco: ne estraiamo il path per i chip
 // file mostrati nell'header minimal ("tools hidden" → quali file ha toccato).
-const FILE_PATH_TOOLS = new Set(['Read', 'Write', 'Edit', 'NotebookEdit']);
+// `MultiEdit` is in here for the same reason it is in MissionRail's EDIT_TOOLS:
+// it carries a `file_path` and mutates it, so a turn made only of MultiEdits
+// used to show no file chips at all.
+const FILE_PATH_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 
 /** Path del file su cui ha agito un tool, se è un tool file-oriented; altrimenti null. */
 export function toolFilePath(name: string, input: Record<string, unknown>): string | null {
