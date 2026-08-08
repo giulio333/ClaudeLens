@@ -1,6 +1,6 @@
 import { readdir, readFile, stat } from 'fs/promises';
 import { join, basename } from 'path';
-import { glob } from 'glob';
+import { listProjectSessionFiles } from './session-files';
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
@@ -93,10 +93,12 @@ async function taskFilesIn(taskFolder: string): Promise<string[]> {
 // con file JSON e li raggruppa. Restituisce solo i gruppi non vuoti, sessione più recente prima.
 export async function getProjectTasks(projectPath: string, tasksDir: string): Promise<TaskGroup[]> {
   try {
-    // Non-recursive: real session files are direct children. `**/*.jsonl` would
-    // also match `{sessionId}/subagents/**/agent-*.jsonl`, triggering an extra
-    // per-file glob for transcripts that never have a tasks folder (#95).
-    const sessionFiles = await glob('*.jsonl', { cwd: projectPath, absolute: false });
+    // Both native layouts (`<hash>/sessions/*.jsonl` and `<hash>/*.jsonl`), like
+    // every other project-transcript enumerator. Reading the root alone made this
+    // return [] for every `sessions/`-layout project — no session id to intersect
+    // with, so a full `~/.claude/tasks/<id>/` showed up as "no tasks" with no
+    // error anywhere.
+    const sessionFiles = await listProjectSessionFiles(projectPath);
     const withTasks = await sessionsWithTaskFolder(tasksDir);
     const groups: { group: TaskGroup; mtime: number }[] = [];
 

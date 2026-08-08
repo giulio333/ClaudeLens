@@ -1,8 +1,8 @@
 import { open, readFile, stat } from 'fs/promises';
-import { existsSync } from 'fs';
 import { basename, dirname, resolve, sep, join } from 'path';
 import { glob } from 'glob';
 import { CLAUDE_DIR } from '../utils';
+import { listProjectSessionFiles } from './session-files';
 
 // Plans are stored globally under ~/.claude/plans. The planFilePath we read comes
 // verbatim from transcript attachments, so a poisoned/shared .jsonl could point it
@@ -312,28 +312,15 @@ async function toPlan(ref: PlanRef): Promise<Plan> {
 }
 
 /** I transcript di sessione di un progetto, dalle DUE location che Claude Code
- *  usa: `<hash>/sessions/*.jsonl` quando esiste, altrimenti `<hash>/*.jsonl`.
- *  Stessa logica di `findSessionFiles` in cost-tracker: dev'essere la stessa
- *  qui, perché `getUnlinkedPlans` deriva "non referenziato" dalla lista dei
- *  transcript — mancarne una location farebbe passare per orfani tutti i piani
- *  di un progetto in layout `sessions/`.
- *
- *  Non ricorsiva: i file di sessione veri sono figli diretti. `**\/*.jsonl`
- *  matcherebbe anche `{sessionId}/subagents/**\/agent-*.jsonl`, raddoppiando
- *  l'I/O per rileggere ogni transcript di sub-agente (#95).
+ *  usa (`listProjectSessionFiles`). Dev'essere la stessa enumerazione di
+ *  cost-tracker, perché `getUnlinkedPlans` deriva "non referenziato" dalla lista
+ *  dei transcript — mancarne una location farebbe passare per orfani tutti i
+ *  piani di un progetto in layout `sessions/`.
  *
  *  Ogni glob è l'insieme vivo della sua directory: la passa a `retainSessions`
  *  per sfrattare le entry dei transcript spariti dopo il popolamento della cache. */
 async function sessionFilesIn(projectPath: string): Promise<string[]> {
-  const sessionsDir = join(projectPath, 'sessions');
-  if (existsSync(sessionsDir)) {
-    const files = await glob('*.jsonl', { cwd: sessionsDir, absolute: true });
-    retainSessions(sessionsDir, files);
-    if (files.length > 0) return files;
-  }
-  const files = await glob('*.jsonl', { cwd: projectPath, absolute: true });
-  retainSessions(projectPath, files);
-  return files;
+  return listProjectSessionFiles(projectPath, retainSessions);
 }
 
 // Per ogni sessione del progetto, raccoglie i piani referenziati negli attachment

@@ -406,7 +406,7 @@ export async function readSubagentTranscriptViaSdk(
   // An empty tree stamp is "no files under subagents/", which is presence
   // evidence of nothing — so it must not license trusting an empty scoped read.
   const presence = stamp ? stamp : null;
-  const key = `${sessionCacheKey(sessionId, source)} ${agentId}`;
+  const key = `${sessionCacheKey(sessionId, source)}\u0000${agentId}`;
   return subagentTranscriptCache.read(key, stamp, async () => {
     const sdk = await import('@anthropic-ai/claude-agent-sdk');
     if (source.cwd) {
