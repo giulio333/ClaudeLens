@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtDate } from '../src/components/project/utils';
+import { fmtDate, fmtModel, modelColor } from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
@@ -51,5 +51,45 @@ describe('createTimeScale — zero-width range guard (#99)', () => {
     const { scale, invert } = createTimeScale({ start: 0, end: 1000 }, { from: 0, to: 100 });
     expect(scale(500)).toBeCloseTo(50);
     expect(invert(50)).toBeCloseTo(500);
+  });
+});
+
+// `fmtModel` used to pull the version out with /(\d+[.-]\d+)/, which needs two
+// digit groups: every single-digit release lost its number, so `claude-opus-5`
+// printed as a bare "Opus" and Fable fell through to its raw id.
+describe('fmtModel — model id to display name', () => {
+  const cases: Array<[string, string]> = [
+    ['claude-opus-5', 'Opus 5'],
+    ['claude-sonnet-5', 'Sonnet 5'],
+    ['claude-fable-5', 'Fable 5'],
+    ['claude-mythos-5', 'Mythos 5'],
+    ['claude-opus-4-8', 'Opus 4.8'],
+    ['claude-sonnet-4-6', 'Sonnet 4.6'],
+    ['claude-haiku-4-5', 'Haiku 4.5'],
+    // an 8-digit release stamp is not part of the version
+    ['claude-haiku-4-5-20251001', 'Haiku 4.5'],
+    ['claude-3-5-sonnet-20241022', 'Sonnet 3.5'],
+    ['claude-3-5-haiku', 'Haiku 3.5'],
+  ];
+
+  it.each(cases)('renders %s as %s', (id, expected) => {
+    expect(fmtModel(id)).toBe(expected);
+  });
+
+  it('passes an unrecognised id through unchanged', () => {
+    expect(fmtModel('<synthetic>')).toBe('<synthetic>');
+  });
+});
+
+describe('modelColor — one colour per family', () => {
+  it('gives each family a distinct colour, Fable included', () => {
+    const colors = ['claude-haiku-4-5', 'claude-opus-5', 'claude-sonnet-5', 'claude-fable-5'].map(
+      modelColor
+    );
+    expect(new Set(colors).size).toBe(4);
+  });
+
+  it('falls back to the Sonnet colour for an unknown family', () => {
+    expect(modelColor('gpt-mystery')).toBe(modelColor('claude-sonnet-5'));
   });
 });

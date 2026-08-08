@@ -38,18 +38,32 @@ export function sessionTitle(
 }
 
 // Converte l'ID modello in nome leggibile: "claude-sonnet-4-6" → "Sonnet 4.6"
+//
+// The version comes from the numeric segments of the id, NOT from a
+// `\d+[.-]\d+` match: that pattern needs two digit groups, so every
+// single-digit release lost its number — `claude-opus-5` printed as a bare
+// "Opus". An 8-digit release stamp is dropped so `claude-haiku-4-5-20251001`
+// stays "Haiku 4.5" rather than "Haiku 4.5.20251001".
 export function fmtModel(m: string): string {
   const s = m.replace(/^claude-/, '');
-  const ver = s.match(/(\d+[.-]\d+)/)?.[1]?.replace('-', '.') ?? '';
+  const ver = s
+    .split('-')
+    .filter(part => /^\d+$/.test(part) && part.length !== 8)
+    .join('.');
   if (s.includes('haiku')) return `Haiku ${ver}`.trim();
   if (s.includes('sonnet')) return `Sonnet ${ver}`.trim();
   if (s.includes('opus')) return `Opus ${ver}`.trim();
+  if (s.includes('fable')) return `Fable ${ver}`.trim();
+  if (s.includes('mythos')) return `Mythos ${ver}`.trim();
   return s;
 }
 
-// Colore accent per famiglia modello
+// Colore accent per famiglia modello.
+// Data-encoding colours (which model produced this slice), not brand accents —
+// same category as the teammate palette in teams/utils.ts.
 export function modelColor(m: string): string {
   if (m.includes('haiku')) return '#0d9488'; // teal-600
   if (m.includes('opus')) return '#7c3aed'; // violet-600
+  if (m.includes('fable') || m.includes('mythos')) return '#be185d'; // rose-700
   return '#4f46e5'; // indigo-600 (sonnet + default)
 }
