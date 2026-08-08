@@ -39,10 +39,15 @@ export interface SessionSummary {
 }
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
-// Fonte: Anthropic pricing page (https://www.anthropic.com/pricing).
+// Source: the official pricing page, https://docs.claude.com/en/docs/about-claude/pricing
 // IMPORTANT: when updating the PRICING table below, bump PRICING_LAST_UPDATED so
 // the cost UI can show users how current these estimates are.
-export const PRICING_LAST_UPDATED = '2026-05-30';
+//
+// `cacheWrite` is the **5-minute** cache write rate (1.25x base input). The 1-hour
+// rate (2x) is deliberately not modelled: a transcript records a single
+// `cache_creation_input_tokens` figure and does not say which TTL produced it,
+// so picking the shorter — and far more common — one is the honest default.
+export const PRICING_LAST_UPDATED = '2026-08-08';
 
 interface ModelPricing {
   input: number;
@@ -52,34 +57,96 @@ interface ModelPricing {
 }
 
 const PRICING: Record<string, ModelPricing> = {
-  // Haiku 4.5
-  'claude-haiku-4-5': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
-  'claude-haiku-4-5-20251001': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
-  // Haiku 3.5
+  // Haiku 3.5 — retired except on Bedrock / Google Cloud
   'claude-3-5-haiku': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
   'claude-3-5-haiku-20241022': { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
-  // Sonnet 4.x
-  'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  // Sonnet 3.5
+  // Haiku 4.5 — NOT the same as Haiku 3.5, which is what this used to charge
+  'claude-haiku-4-5': { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
+  'claude-haiku-4-5-20251001': { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
+  // Sonnet 3.5 — no longer listed on the pricing page; kept for old transcripts
   'claude-3-5-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20240620': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  // Opus 4.x
+  // Sonnet 4.x  (Sonnet 5 is scheduled — see SCHEDULED below)
+  'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  // Opus 4 / 4.1 — retired, and the only Opus models still on the old rates
   'claude-opus-4': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
-  'claude-opus-4-5': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
-  'claude-opus-4-6': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
+  'claude-opus-4-1': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
+  // Opus 4.5 onwards — a 3x price cut this table used to miss entirely, charging
+  // every one of these at the retired Opus 4 rate.
+  'claude-opus-4-5': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  'claude-opus-4-6': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  'claude-opus-4-7': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  'claude-opus-4-8': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  'claude-opus-5': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  // Fable 5 / Mythos 5 — neither id contains a known family word, so both used to
+  // land on the conservative Sonnet default at a third of their real price.
+  'claude-fable-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
+  'claude-mythos-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
 };
 
-// Fallback: normalizza l'ID modello per trovare una corrispondenza parziale
-function getPricing(model: string | undefined): ModelPricing {
+/** A published rate that changes on a date. `from` is the first day (UTC,
+ *  inclusive) the prices apply; entries are ordered newest first. */
+interface PriceSchedule {
+  from: string;
+  prices: ModelPricing;
+}
+
+// Sonnet 5 launched on introductory pricing that expires. A single static rate
+// would misprice one side of the cutover, and this app reconstructs HISTORICAL
+// cost — so each session is priced at the rate in force when it ran.
+const SCHEDULED: Record<string, PriceSchedule[]> = {
+  'claude-sonnet-5': [
+    { from: '2026-09-01', prices: { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 } },
+    // Introductory pricing, in effect through 2026-08-31.
+    { from: '0000-01-01', prices: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 } },
+  ],
+};
+
+/** `claude-sonnet-4-5-20250929` → `claude-sonnet-4-5`. Claude Code records
+ *  resolved model ids that often carry a release date the table does not
+ *  enumerate; without this they all fell through to the fuzzy family match. */
+function withoutDateSuffix(model: string): string {
+  return model.replace(/-\d{8}$/, '');
+}
+
+/** The day used to resolve a scheduled rate: the session's own timestamp, or
+ *  today when it is missing (`date` can legitimately be ''). */
+function pricingDay(at: string | undefined): string {
+  const day = at?.slice(0, 10) ?? '';
+  return /^\d{4}-\d{2}-\d{2}$/.test(day) ? day : new Date().toISOString().slice(0, 10);
+}
+
+function scheduledPricing(key: string, at: string | undefined): ModelPricing | undefined {
+  const schedule = SCHEDULED[key];
+  if (!schedule) return undefined;
+  const day = pricingDay(at);
+  return (schedule.find(entry => entry.from <= day) ?? schedule[schedule.length - 1]).prices;
+}
+
+/**
+ * Prices for a model, at the time `at` (ISO timestamp of the session).
+ *
+ * Exact id → date-stripped id → fuzzy family match → conservative Sonnet default.
+ * The fuzzy anchors point at the CURRENT generation of each family: anchoring
+ * `opus` on a retired model is what made every unlisted Opus cost 3x too much.
+ */
+function getPricing(model: string | undefined, at?: string): ModelPricing {
   if (!model) return PRICING['claude-sonnet-4-6'];
-  if (PRICING[model]) return PRICING[model];
+
+  for (const key of [model, withoutDateSuffix(model)]) {
+    const scheduled = scheduledPricing(key, at);
+    if (scheduled) return scheduled;
+    if (PRICING[key]) return PRICING[key];
+  }
 
   const m = model.toLowerCase();
   if (m.includes('haiku')) return PRICING['claude-haiku-4-5'];
-  if (m.includes('opus')) return PRICING['claude-opus-4-6'];
+  if (m.includes('opus')) return PRICING['claude-opus-5'];
+  if (m.includes('fable')) return PRICING['claude-fable-5'];
+  if (m.includes('mythos')) return PRICING['claude-mythos-5'];
   if (m.includes('sonnet')) return PRICING['claude-sonnet-4-6'];
 
   // Default conservativo: Sonnet
@@ -95,26 +162,36 @@ export interface PricingMeta {
 
 /** Metadata for the cost UI: how current the table is and which models it prices exactly. */
 export function getPricingMeta(): PricingMeta {
-  return { lastUpdated: PRICING_LAST_UPDATED, knownModels: Object.keys(PRICING) };
+  return {
+    lastUpdated: PRICING_LAST_UPDATED,
+    knownModels: [...Object.keys(PRICING), ...Object.keys(SCHEDULED)].sort(),
+  };
 }
 
 /**
- * True only when the model has an exact pricing entry. Models priced via the
- * fuzzy family fallback (or the conservative Sonnet default) return false, so the
- * UI can flag their cost figures as estimates.
+ * True only when the model has an exact pricing entry (flat or scheduled).
+ * Models priced via the fuzzy family fallback (or the conservative Sonnet
+ * default) return false, so the UI can flag their cost figures as estimates.
+ *
+ * Deliberately exact on the id as written, with no date-suffix normalization:
+ * `getPricing` does normalize, so the worst this can do is call an exactly
+ * priced model an estimate — an honest understatement, never the reverse.
  */
 export function isModelPriced(model: string | undefined): boolean {
-  return !!model && model in PRICING;
+  return !!model && (model in PRICING || model in SCHEDULED);
 }
 
+/** `at`: ISO timestamp of the session, so a model whose published rate changed
+ *  is billed at the rate in force when it ran. */
 function calculateCost(
   inputTokens: number,
   outputTokens: number,
   cacheWriteTokens: number,
   cacheReadTokens: number,
-  model: string | undefined
+  model: string | undefined,
+  at?: string
 ): number {
-  const p = getPricing(model);
+  const p = getPricing(model, at);
   return (
     (inputTokens / 1_000_000) * p.input +
     (outputTokens / 1_000_000) * p.output +
@@ -128,8 +205,12 @@ function calculateCost(
  * rate for those tokens. Cache reads bill at ~10% of input, so this is the avoided
  * delta (`input − cacheRead`) — what the session would have cost extra with no cache.
  */
-export function calculateCacheSavings(cacheReadTokens: number, model: string | undefined): number {
-  const p = getPricing(model);
+export function calculateCacheSavings(
+  cacheReadTokens: number,
+  model: string | undefined,
+  at?: string
+): number {
+  const p = getPricing(model, at);
   return (cacheReadTokens / 1_000_000) * (p.input - p.cacheRead);
 }
 
@@ -604,7 +685,8 @@ async function aggregateProject(projectPath: string): Promise<ProjectAggregate> 
       s.outputTokens,
       s.cacheWriteTokens,
       s.cacheReadTokens,
-      s.model
+      s.model,
+      s.date
     );
   }
 
@@ -678,7 +760,8 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           s.outputTokens,
           s.cacheWriteTokens,
           s.cacheReadTokens,
-          s.model
+          s.model,
+          s.date
         );
 
         return {
@@ -690,7 +773,7 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           cacheReadTokens: s.cacheReadTokens,
           totalTokens,
           estimatedCost,
-          cacheSavings: calculateCacheSavings(s.cacheReadTokens, s.model),
+          cacheSavings: calculateCacheSavings(s.cacheReadTokens, s.model, s.date),
           messageCount: s.messageCount,
           model: s.model,
           models: s.models,

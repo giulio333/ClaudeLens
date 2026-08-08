@@ -15,10 +15,16 @@ import {
 
 // ─── Pricing constants (mirror of cost-tracker.ts PRICING table) ──────────────
 // Per-million-token prices used to derive expected costs in assertions.
+// Verified against https://docs.claude.com/en/docs/about-claude/pricing.
 const PRICE = {
   sonnet: { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  opus: { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
-  haiku: { input: 0.8, output: 4.0, cacheWrite: 1.0, cacheRead: 0.08 },
+  // Opus 4.5 and later. Opus 4 / 4.1 are retired and keep the old 15/75 rate.
+  opus: { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  opusLegacy: { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
+  haiku: { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
+  fable: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
+  // Sonnet 5 introductory pricing, in effect through 2026-08-31.
+  sonnet5Intro: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
 };
 
 function expectedCost(
@@ -217,7 +223,7 @@ describe('model pricing resolution / fuzzy fallback to Sonnet', () => {
       assistantLine({ model: 'claude-opus-4-6', input: 1_000_000, output: 0 }),
     ]);
     const { cost } = await getProjectUsage(tmp);
-    expect(cost).toBeCloseTo(PRICE.opus.input, 10); // 1M input tokens = exactly $15
+    expect(cost).toBeCloseTo(PRICE.opus.input, 10); // 1M input tokens = exactly $5
   });
 
   it('fuzzy-matches an unknown id containing "haiku" to Haiku pricing', async () => {
@@ -225,7 +231,7 @@ describe('model pricing resolution / fuzzy fallback to Sonnet', () => {
       assistantLine({ model: 'claude-haiku-9-9-future-build', input: 1_000_000, output: 0 }),
     ]);
     const { cost } = await getProjectUsage(tmp);
-    expect(cost).toBeCloseTo(PRICE.haiku.input, 10); // $0.80, NOT Sonnet's $3
+    expect(cost).toBeCloseTo(PRICE.haiku.input, 10); // $1.00, NOT Sonnet's $3
   });
 
   it('fuzzy-matches an unknown id containing "opus" to Opus pricing', async () => {
@@ -462,8 +468,10 @@ describe('calculateCacheSavings — avoided input cost from cache reads', () => 
   it('is the delta between full input price and the cache-read price', () => {
     // Sonnet: input $3.00, cacheRead $0.30 → saved $2.70 / 1M cached tokens.
     expect(calculateCacheSavings(1_000_000, 'claude-sonnet-4-6')).toBeCloseTo(2.7, 6);
-    // Opus: input $15.00, cacheRead $1.50 → saved $13.50 / 1M.
-    expect(calculateCacheSavings(1_000_000, 'claude-opus-4-6')).toBeCloseTo(13.5, 6);
+    // Opus 4.5+: input $5.00, cacheRead $0.50 → saved $4.50 / 1M.
+    expect(calculateCacheSavings(1_000_000, 'claude-opus-4-6')).toBeCloseTo(4.5, 6);
+    // Opus 4.1 is retired and keeps the old rate: $15.00 - $1.50 = $13.50 / 1M.
+    expect(calculateCacheSavings(1_000_000, 'claude-opus-4-1')).toBeCloseTo(13.5, 6);
   });
 
   it('is zero with no cache reads and uses the fuzzy/default model fallback', () => {
@@ -839,5 +847,86 @@ describe('parse cache — pruning of vanished transcripts', () => {
     expect(await getSessionList(tmp)).toEqual([]);
     expect(getParseStats().cachedFiles).toBe(0);
     expect(getParseStats().evictions).toBe(1);
+  });
+});
+
+// The table used to charge every Opus from 4.5 on at the retired Opus 4 rate
+// (3x too much) and Haiku 4.5 at Haiku 3.5's rate — while `isModelPriced`
+// reported both as exact, so the UI showed the wrong figure as a certainty.
+describe('pricing table — rates verified against the official pricing page', () => {
+  // A fresh filename per call: the parse cache assumes transcripts are
+  // append-only, so rewriting one file with different content would be folded
+  // as an append and keep the previous model's totals.
+  let n = 0;
+  const millionInput = async (model: string, timestamp?: string) => {
+    const dir = mkdtempSync(join(tmpdir(), `cl-price-${n++}-`));
+    try {
+      writeSession(dir, 'm.jsonl', [assistantLine({ model, input: 1_000_000, timestamp })]);
+      const { cost } = await getProjectUsage(dir);
+      return cost;
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  };
+
+  it('prices Opus 4.5 and later at the reduced rate, not the retired Opus 4 one', async () => {
+    expect(await millionInput('claude-opus-4-5')).toBeCloseTo(5, 10);
+    expect(await millionInput('claude-opus-4-6')).toBeCloseTo(5, 10);
+    expect(await millionInput('claude-opus-4-8')).toBeCloseTo(5, 10);
+    expect(await millionInput('claude-opus-5')).toBeCloseTo(5, 10);
+  });
+
+  it('keeps the retired Opus 4 / 4.1 models on their own, higher rate', async () => {
+    expect(await millionInput('claude-opus-4')).toBeCloseTo(15, 10);
+    expect(await millionInput('claude-opus-4-1')).toBeCloseTo(15, 10);
+  });
+
+  it('prices Haiku 4.5 at its own rate, not Haiku 3.5s', async () => {
+    expect(await millionInput('claude-haiku-4-5')).toBeCloseTo(1, 10);
+    expect(await millionInput('claude-3-5-haiku')).toBeCloseTo(0.8, 10);
+  });
+
+  it('prices Fable 5, which used to land on the Sonnet default at a third of its price', async () => {
+    expect(await millionInput('claude-fable-5')).toBeCloseTo(10, 10);
+    expect(await millionInput('claude-mythos-5')).toBeCloseTo(10, 10);
+  });
+
+  it('anchors the fuzzy family fallbacks on the current generation', async () => {
+    // An unlisted Opus must not inherit the retired model's rate.
+    expect(await millionInput('some-opus-vNext')).toBeCloseTo(PRICE.opus.input, 10);
+    expect(await millionInput('claude-fable-vNext')).toBeCloseTo(PRICE.fable.input, 10);
+  });
+
+  // Claude Code records resolved ids that carry a release date. Without
+  // normalization they missed the exact entry and took the family fallback —
+  // which for a retired Opus meant the NEW, cheaper rate.
+  it('resolves an id with a release-date suffix to its exact entry', async () => {
+    expect(await millionInput('claude-opus-4-1-20250805')).toBeCloseTo(15, 10);
+    expect(await millionInput('claude-sonnet-4-5-20250929')).toBeCloseTo(3, 10);
+  });
+
+  it('prices Sonnet 5 at the rate in force when the session ran', async () => {
+    // Introductory pricing through 2026-08-31, standard from 2026-09-01.
+    expect(await millionInput('claude-sonnet-5', '2026-08-15T10:00:00.000Z')).toBeCloseTo(2, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-09-01T00:00:00.000Z')).toBeCloseTo(3, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-12-01T10:00:00.000Z')).toBeCloseTo(3, 10);
+  });
+
+  it('applies the scheduled rate to cache savings too', () => {
+    // $2.00 input - $0.20 cache read = $1.80 / 1M during the introductory window.
+    expect(
+      calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-08-15T10:00:00.000Z')
+    ).toBeCloseTo(1.8, 6);
+    // $3.00 - $0.30 = $2.70 afterwards.
+    expect(
+      calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-10-01T10:00:00.000Z')
+    ).toBeCloseTo(2.7, 6);
+  });
+
+  it('reports scheduled models as exactly priced, not estimates', () => {
+    expect(isModelPriced('claude-sonnet-5')).toBe(true);
+    expect(isModelPriced('claude-opus-5')).toBe(true);
+    expect(isModelPriced('claude-fable-5')).toBe(true);
+    expect(getPricingMeta().knownModels).toContain('claude-sonnet-5');
   });
 });
