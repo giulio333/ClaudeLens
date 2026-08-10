@@ -70,6 +70,7 @@ import {
 import { GlobalHomeView } from '../components/project/overview/GlobalHomeView';
 import { DuplicateProjectsView } from '../components/project/overview/DuplicateProjectsNotice';
 import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs';
+import { provisionalProjectHash } from '../components/project/shared/projectHash';
 import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView';
 import { NotificationToaster } from '../components/NotificationToaster';
 
@@ -120,6 +121,17 @@ function sectionFromView(v: View): ProjectSection {
   }
 }
 
+// Re-point a view at the same project under its real identity. Views carry
+// their own copy of the project, so swapping only `selected` would leave a
+// subtab reading the provisional hash.
+function reprojectView(v: View, project: Project): View {
+  if (!('project' in v) || !v.project || v.project.realPath !== project.realPath) return v;
+  if (v.project.hash === project.hash) return v;
+  // Spreading a discriminated union widens `type` to the union of literals, so
+  // TS can't see this stays the same variant; the discriminant is untouched.
+  return { ...v, project } as View;
+}
+
 function viewForSection(section: ProjectSection, project: Project): View {
   switch (section) {
     case 'sessions':
@@ -150,10 +162,32 @@ function viewForSection(section: ProjectSection, project: Project): View {
 }
 
 export default function ProjectOverview() {
-  const [selected, setSelected] = useState<Project | null>(null);
+  const [selectedRaw, setSelected] = useState<Project | null>(null);
   const [scope, setScope] = useState<'global' | 'project'>('global');
-  const [view, setView] = useState<View>({ type: 'global-home' });
+  const [viewRaw, setView] = useState<View>({ type: 'global-home' });
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
+
+  const { data: projects } = useMemoryProjects();
+
+  // A project opened from a live session that had not written a transcript yet
+  // carries a provisional hash (see `provisionalProjectHash`). The moment
+  // Claude Code creates its folder, the watcher refreshes this list with the
+  // authoritative entry — matched by `realPath`, the field the registry gives
+  // us verbatim — so read through to it instead of staying pinned to a key that
+  // points nowhere. Derived rather than synced into state: the swap has to be
+  // visible on the render that first sees the real entry, and a setState in an
+  // effect would only re-render into it a beat later.
+  const selected = useMemo(() => {
+    if (!selectedRaw || !projects) return selectedRaw;
+    const real = projects.find(p => p.realPath === selectedRaw.realPath);
+    return real && real.hash !== selectedRaw.hash ? real : selectedRaw;
+  }, [selectedRaw, projects]);
+  // Views hold their own copy of the project, so the same swap has to reach the
+  // open subtab — otherwise it would keep querying the provisional hash.
+  const view = useMemo(
+    () => (selected ? reprojectView(viewRaw, selected) : viewRaw),
+    [viewRaw, selected]
+  );
 
   // Anonymous: report which section is opened (view type only — no project,
   // session, or path data). Deduped per app run inside reportViewOpened.
@@ -161,7 +195,6 @@ export default function ProjectOverview() {
     reportViewOpened(view.type);
   }, [view.type]);
 
-  const { data: projects } = useMemoryProjects();
   const { data: costSummary } = useCostSummary();
   const { data: globalSkills = [] } = useGlobalSkills();
   const { data: scopedSkills = [] } = useAllSkills(selected?.realPath ?? null);
@@ -325,12 +358,13 @@ export default function ProjectOverview() {
   // "Open session" from a notification toast: deep-link straight into the exact
   // session (the unified Terminal↔Lens view, defaulting to read-only Lens — the
   // same teleport as Mission Control), mirroring SearchPopover's onSelectSession.
-  // Resolve the project by its working dir; fall back to deriving the hash from
-  // the cwd (the `/`→`-` convention) when it isn't in the cache yet. Without a
-  // session id, fall back to the project's sessions list.
+  // Resolve the project by its working dir; fall back to a provisional hash
+  // when it isn't in the cache yet (the previous inline `/`→`-` replace left a
+  // Windows cwd full of backslashes, which the main process rejects outright).
+  // Without a session id, fall back to the project's sessions list.
   function openSessionFromNotification(cwd: string, sessionId: string) {
     const project = projects?.find(p => p.realPath === cwd) ?? {
-      hash: cwd.replace(/\//g, '-'),
+      hash: provisionalProjectHash(cwd),
       realPath: cwd,
     };
     setSelected(project);
