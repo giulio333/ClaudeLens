@@ -18,6 +18,7 @@ import { McpServerGrid } from '../mcp/McpServerGrid';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
 import { PinIcon } from '../shared/SearchPopover';
 import { projectDisplayName } from '../shared/projectName';
+import { provisionalProjectHash } from '../shared/projectHash';
 
 type Project = { hash: string; realPath: string };
 
@@ -173,13 +174,24 @@ export function GlobalHomeView({
               // Split on both separators so a Windows cwd (backslashes) yields the
               // folder name, not the whole path.
               const name = p.cwd.split(/[\\/]/).filter(Boolean).pop() ?? p.cwd;
-              const proj = projectByPath.get(p.cwd);
+              // A session opened in a fresh directory is registered as live
+              // before Claude Code writes anything under `~/.claude/projects/`,
+              // so the cwd has no entry here yet. Falling back to a provisional
+              // project keeps the row navigable — its `realPath` comes straight
+              // from the registry, so everything the project view reads off the
+              // real cwd works; the history-backed parts are simply empty until
+              // the first message. Without it the row was silently inert, which
+              // read as a dead click.
+              const proj = projectByPath.get(p.cwd) ?? {
+                hash: provisionalProjectHash(p.cwd),
+                realPath: p.cwd,
+              };
               return (
                 <button
                   key={p.pid}
                   type="button"
                   className="cl-proc"
-                  onClick={() => proj && onSelectProject(proj)}
+                  onClick={() => onSelectProject(proj)}
                 >
                   <span className="led" />
                   <span className="pid">PID {p.pid}</span>
