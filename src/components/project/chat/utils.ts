@@ -1,6 +1,7 @@
 import {
   ChatMessage,
   ChatContentBlock,
+  MemoryTopic,
   SubagentMeta,
   Skill,
   InstalledPlugin,
@@ -865,6 +866,24 @@ export const MEMORY_TYPE_STYLE: Record<MemoryType, { badge: string; label: strin
   },
 };
 
+/** Mono tag + data tint per memory type, for the dense surfaces (Mission
+ *  Control's MEMORY block) where the Tailwind badge above is too heavy. The
+ *  hues mirror `MEMORY_TYPE_STYLE` on the brand tokens — an encoding of a data
+ *  dimension, like `modelColor`, not a new accent. */
+export const MEMORY_TYPE_TAG: Record<MemoryType, string> = {
+  user: 'USER',
+  feedback: 'FDBK',
+  project: 'PROJ',
+  reference: 'REF',
+};
+
+export const MEMORY_TYPE_TINT: Record<MemoryType, string> = {
+  user: 'var(--cl-cyan)',
+  feedback: 'var(--cl-warn)',
+  project: 'var(--cl-ok)',
+  reference: 'var(--cl-violet)',
+};
+
 export function parseMemoryFrontmatter(content: string): ParsedMemory | null {
   const match = content.match(/^---\n([\s\S]*?)\n---\n?([\s\S]*)$/);
   if (!match) return null;
@@ -882,17 +901,178 @@ export function parseMemoryFrontmatter(content: string): ParsedMemory | null {
 // swallowed unrelated paths that merely have a `memory` segment somewhere below
 // `.claude` — `~/.claude/skills/memory/SKILL.md` was being dressed up as a
 // memory operation, violet tint and all.
-const MEMORY_DIRS = [
-  /\/\.claude\/memory\//, //                  <repo>/.claude/memory/…
-  /\/\.claude\/projects\/[^/]+\/memory\//, // ~/.claude/projects/<hash>/memory/…
+const MEMORY_DIRS: Array<[RegExp, MemoryScope]> = [
+  [/\/\.claude\/memory\//, 'project'], //                <repo>/.claude/memory/…
+  [/\/\.claude\/projects\/[^/]+\/memory\//, 'user'], // ~/.claude/projects/<hash>/memory/…
 ];
+
+/** Which of the two memory directories a path belongs to, or null if neither.
+ *  The distinction is worth keeping: a project-level topic is committed to the
+ *  repo, a user-level one lives only in this machine's history folder. */
+export function memoryScopeOf(path: string): MemoryScope | null {
+  // Normalize backslashes so the check works on Windows paths too
+  const normalized = path.replace(/\\/g, '/');
+  return MEMORY_DIRS.find(([re]) => re.test(normalized))?.[1] ?? null;
+}
 
 export function isMemoryFile(input: Record<string, unknown>): boolean {
   const path = input.file_path as string | undefined;
-  if (!path) return false;
-  // Normalize backslashes so the check works on Windows paths too
-  const normalized = path.replace(/\\/g, '/');
-  return MEMORY_DIRS.some(re => re.test(normalized));
+  return !!path && memoryScopeOf(path) !== null;
+}
+
+/* ── memory activity ──────────────────────────────────────────────────────
+ * A session's memory operations, read as *topics touched* rather than as files
+ * changed. The two are genuinely different units: on disk, remembering one fact
+ * is always a `Write` of `<slug>.md` plus an `Edit` of `MEMORY.md`, so a
+ * file-oriented reading reports two rows of bookkeeping and never says what was
+ * remembered. Reads count too — they are the only visible evidence of which
+ * memories informed the session.
+ *
+ * What this cannot see, by construction: memories recalled automatically (they
+ * arrive as a `<system-reminder>`, not a tool call) and topics deleted with
+ * `rm` (a `Bash` call carries no `file_path`).
+ */
+
+export type MemoryScope = 'user' | 'project';
+
+/** `read` < `wrote` < `revised` < `new` — the strongest one labels the row. */
+export type MemoryAction = 'read' | 'wrote' | 'revised' | 'new';
+
+const ACTION_RANK: Record<MemoryAction, number> = { read: 0, wrote: 1, revised: 2, new: 3 };
+
+export type MemoryTouch = {
+  /** Full path of the topic file — the row's stable identity. */
+  path: string;
+  /** Readable topic name: the frontmatter `name` when a write carried one, else
+   *  the on-disk index, else derived from the filename. */
+  title: string;
+  type: MemoryType;
+  scope: MemoryScope;
+  description: string;
+  /** Every operation on this topic, in transcript order. */
+  items: ToolGroup[];
+  reads: number;
+  writes: number;
+  action: MemoryAction;
+  hasError: boolean;
+};
+
+export type MemoryActivity = {
+  /** Topics touched, mutated ones first, each in order of first appearance. */
+  touches: MemoryTouch[];
+  /** Operations on the `MEMORY.md` index — bookkeeping, not a topic. */
+  indexOps: ToolGroup[];
+};
+
+/** Resolves a topic file to what the on-disk index knows about it — used as the
+ *  fallback for an `Edit`, whose input carries no frontmatter. */
+export type MemoryLookup = (
+  path: string
+) => Pick<MemoryTopic, 'name' | 'description' | 'type'> | undefined;
+
+const MEMORY_TOOLS = new Set(['Read', 'Write', 'Edit', 'MultiEdit']);
+const TYPE_PREFIX: Array<[string, MemoryType]> = [
+  ['feedback_', 'feedback'],
+  ['project_', 'project'],
+  ['reference_', 'reference'],
+];
+
+function basename(path: string): string {
+  return path.replace(/\\/g, '/').split('/').pop() ?? path;
+}
+
+/** `MEMORY.md` is the index, not a topic. */
+export function isMemoryIndex(path: string): boolean {
+  return basename(path) === 'MEMORY.md';
+}
+
+/** `feedback_no_manual_app_launch.md` → `feedback` (memory-reader's own rule:
+ *  the filename prefix is the type when frontmatter doesn't say). */
+export function memoryTypeFromFilename(path: string): MemoryType {
+  const name = basename(path);
+  return TYPE_PREFIX.find(([prefix]) => name.startsWith(prefix))?.[1] ?? 'user';
+}
+
+/** `feedback_no_manual_app_launch.md` → `no-manual-app-launch`, i.e. the slug
+ *  the topic's own frontmatter `name` would carry. */
+export function memoryTitleFromFilename(path: string): string {
+  const name = basename(path).replace(/\.md$/i, '');
+  const stripped = TYPE_PREFIX.reduce(
+    (acc, [prefix]) => (acc.startsWith(prefix) ? acc.slice(prefix.length) : acc),
+    name
+  );
+  return stripped.replace(/_/g, '-');
+}
+
+/** Whether a `Write` created the file or overwrote an existing one — read from
+ *  the tool result, the only place that says. `wrote` when it doesn't (no result
+ *  yet on a live turn, or unrecognised wording): claiming either would lie. */
+export function writeAction(result: string | null | undefined): MemoryAction {
+  if (!result) return 'wrote';
+  if (/file created successfully/i.test(result)) return 'new';
+  if (/has been updated/i.test(result)) return 'revised';
+  return 'wrote';
+}
+
+export function buildMemoryActivity(groups: ToolGroup[], lookup?: MemoryLookup): MemoryActivity {
+  const byPath = new Map<string, MemoryTouch>();
+  const indexOps: ToolGroup[] = [];
+
+  for (const g of groups) {
+    if (!MEMORY_TOOLS.has(g.use.name)) continue;
+    const input = g.use.input as Record<string, unknown>;
+    const path = input.file_path as string | undefined;
+    if (!path) continue;
+    const scope = memoryScopeOf(path);
+    if (!scope) continue;
+    if (isMemoryIndex(path)) {
+      indexOps.push(g);
+      continue;
+    }
+
+    let t = byPath.get(path);
+    if (!t) {
+      const known = lookup?.(path);
+      t = {
+        path,
+        title: known?.name || memoryTitleFromFilename(path),
+        type: known?.type ?? memoryTypeFromFilename(path),
+        scope,
+        description: known?.description ?? '',
+        items: [],
+        reads: 0,
+        writes: 0,
+        action: 'read',
+        hasError: false,
+      };
+      byPath.set(path, t);
+    }
+    t.items.push(g);
+    t.hasError ||= !!g.result?.isError;
+
+    if (g.use.name === 'Read') {
+      t.reads += 1;
+      continue;
+    }
+    t.writes += 1;
+    const action = g.use.name === 'Write' ? writeAction(g.result?.content) : 'revised';
+    if (ACTION_RANK[action] > ACTION_RANK[t.action]) t.action = action;
+
+    // A full `Write` carries the topic's frontmatter, which beats anything the
+    // filename or a stale index can tell us about this session's version.
+    const parsed = typeof input.content === 'string' ? parseMemoryFrontmatter(input.content) : null;
+    if (parsed) {
+      if (parsed.name) t.title = parsed.name;
+      if (parsed.description) t.description = parsed.description;
+      if (parsed.type) t.type = parsed.type;
+    }
+  }
+
+  const all = [...byPath.values()];
+  return {
+    touches: [...all.filter(t => t.writes > 0), ...all.filter(t => t.writes === 0)],
+    indexOps,
+  };
 }
 
 export function resolveToolIcon(name: string, input: Record<string, unknown>): string {
