@@ -72,6 +72,13 @@ jobs:
           else
             echo "signed=false" >> "$GITHUB_OUTPUT"
             echo "::warning title=Unsigned macOS build::No Apple signing secrets configured; users will need the quarantine workaround. See docs/macos-signing.md."
+            # A missing secret still defines its env var, as the empty string.
+            # electron-builder reads CSC_LINK with `chooseNotNull`, which only
+            # rejects null — so "" counts as "a certificate was provided", and it
+            # resolves the empty path against the project dir and dies with
+            # "<workspace> not a file" before packaging anything. Unset them so
+            # the unsigned path is the one it actually takes.
+            unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
             # Without this electron-builder would pick up any stray identity in
             # the runner keychain and sign with something we did not choose.
             CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish never
