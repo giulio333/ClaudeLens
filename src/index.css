@@ -186,6 +186,15 @@ body {
 .tmc-row:hover {
   background: var(--cl-paper-2);
 }
+/* A feed row whose subject is still running. The tint lives here rather than
+   inline so hover still reads on it — an inline background would win over
+   `.tmc-row:hover` and leave the live rows the only ones that never respond. */
+.tmc-row--live {
+  background: color-mix(in oklch, var(--cl-violet-soft) 40%, transparent);
+}
+.tmc-row--live:hover {
+  background: color-mix(in oklch, var(--cl-violet-soft) 75%, transparent);
+}
 /* v2 Outline column rows (the session navigator). */
 .cl-otrow {
   transition: background 140ms ease;
