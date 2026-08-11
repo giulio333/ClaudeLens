@@ -12677,6 +12677,67 @@ select.cl-opt-input {
   max-width: 56ch;
 }
 
+/* status tape (General) — the scan-level answer to "is my setup ok?": what
+   model runs, whether the installed CLI satisfies this build, which ClaudeLens
+   this is and whether a newer one exists. Same tape idiom as the entity views
+   (mono micro-label over a value, hairline-divided cells), sized for the
+   settings panel and on paper so it doesn't read as another .set-block. */
+.set-tape {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin-top: 24px;
+  border: 1px solid var(--cl-line);
+  border-radius: 14px;
+  background: var(--cl-paper);
+  overflow: hidden;
+}
+.set-tape .cell {
+  padding: 14px 18px;
+  border-left: 1px solid var(--cl-line);
+  min-width: 0;
+}
+.set-tape .cell:first-child {
+  border-left: none;
+}
+.set-tape .cell .l {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+}
+.set-tape .cell .v {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 13.5px;
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  line-height: 1.2;
+  color: var(--cl-ink);
+  min-width: 0;
+}
+.set-tape .cell .v .t {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* the trailing qualifier ("needs 2.1.227", "v2.2.6") — subordinate to the value */
+.set-tape .cell .v .q {
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--cl-ink-4);
+  white-space: nowrap;
+}
+.set-tape .cell .v .d {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
 /* sub-block — boxed card so each group of options reads as its own panel */
 .set-block {
   margin-top: 16px;
@@ -12708,6 +12769,20 @@ select.cl-opt-input {
   font-size: 11px;
   color: var(--cl-ink-4);
   letter-spacing: 0.02em;
+}
+/* "editable" marker — General mixes one writable block into a read-only
+   datasheet, so the writable one says so. Accent (= actionable), mirroring the
+   violet source stamp that marks a resolved, read-only value. */
+.set-block-head .ed {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+  border-radius: 4px;
+  padding: 2px 6px;
+  white-space: nowrap;
 }
 .set-block-hint {
   margin: 2px 0 6px;
@@ -12953,6 +13028,45 @@ select.cl-opt-input {
   background: var(--cl-accent-soft);
   color: var(--cl-accent-ink);
   font-weight: 600;
+}
+
+/* flat disclosure — for notes that matter once (the macOS quarantine command)
+   and would otherwise sit open in the panel forever. Deliberately not
+   .cl-wf-collapse: that one is a paper-2 card, invisible inside a .set-block. */
+.set-disc {
+  margin-top: 14px;
+}
+.set-disc > summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  transition: color 120ms;
+}
+.set-disc > summary::-webkit-details-marker {
+  display: none;
+}
+.set-disc > summary::before {
+  content: '';
+  width: 0;
+  height: 0;
+  border-left: 4.5px solid currentColor;
+  border-top: 3.5px solid transparent;
+  border-bottom: 3.5px solid transparent;
+  transition: transform 140ms;
+}
+.set-disc[open] > summary::before {
+  transform: rotate(90deg);
+}
+.set-disc > summary:hover {
+  color: var(--cl-ink-2);
 }
 
 /* ledger (privacy) */
