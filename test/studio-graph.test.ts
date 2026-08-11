@@ -299,7 +299,9 @@ describe('buildGraph — Canvas read-model', () => {
 
   it('falls back to the step id when the step binds no variable', () => {
     const bp = parsedNativeShape();
-    delete bp.phases[0].nodes[0].step!.resultVar;
+    const node = bp.phases[0].nodes[0];
+    if (node.kind !== 'step') throw new Error('fixture changed: first node is no longer a step');
+    delete node.step.resultVar;
     const g = buildGraph(bp);
     expect(byStep(g, 'pick-issue')!.produces).toEqual(['pick-issue']);
   });

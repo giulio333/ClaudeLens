@@ -21,17 +21,34 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, and the read
-cache's invalidation. UI/IPC behavior still needs manual validation against real `~/.claude/`
-data via `npm run dev`. CI (`.github/workflows/ci.yml`) runs format:check +
+cache's invalidation. CI (`.github/workflows/ci.yml`) runs format:check +
 typecheck + lint + test + build on every push/PR. The style gate is strict:
 Prettier formatting is enforced repo-wide and `lint` runs with
 `--max-warnings 0`, so a new warning fails the build — fix it or add an inline
-`eslint-disable` with a reason.
+`eslint-disable` with a reason. `typecheck` covers three projects: the renderer,
+the main process, and `tsconfig.test.json` for `test/` — the suite used to be the
+one part of the repo tsc never looked at.
+
+**Renderer tests** run in jsdom against a fake preload bridge
+(`test/helpers/fake-electron-api.ts`). `window.electronAPI` is the renderer's
+single seam to the main process, so replacing it makes hooks and components run
+unmodified with no Electron, no SDK and no `~/.claude` on disk: request/response
+methods are `vi.fn()`s returning the `{ data, error }` envelope, `on*` channels
+are `Channel`s a test emits on, and `Channel.listenerCount` catches
+subscriptions that outlive their component. Opt in per file with a
+`// @vitest-environment jsdom` docblock — the global environment stays `node` so
+the ~45 main-process test files keep their startup cost. Covered so far:
+`use-live-chat` (stream-envelope filtering, turn commit, permission queue,
+resume seed, teardown) and `use-data-changed-refetch` (debounce window, scope
+union, the widen-on-unknown-payload fallback). Extend the fake as tests reach
+further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
 nor the `run-app` skill / Playwright driver) — it doesn't work reliably in this
-setup and wastes time. Verify with `npm run typecheck` + `npm run lint`, and
-leave running the app to the user, who will check the UI manually.
+setup and wastes time. Verify with `npm run typecheck` + `npm run lint` + `npm
+test`, adding a renderer test when the change touches hook or stream state, and
+leave running the app to the user, who will check the UI manually. Visual and
+layout behavior still has no automated coverage.
 
 ## Release
 
