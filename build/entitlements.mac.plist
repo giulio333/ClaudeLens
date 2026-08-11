@@ -1,0 +1,39 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the signed macOS build (see docs/macos-signing.md).
+
+  Notarization requires the hardened runtime, which switches on protections that
+  a stock Electron app trips over — hence the four exceptions below. Each one is
+  a hole in that armour, so the list stays as short as the app can run with.
+
+  Deliberately NOT here: com.apple.security.app-sandbox. ClaudeLens reads
+  Claude Code's data straight out of ~/.claude, drives project directories
+  anywhere on disk, and spawns the `claude` CLI through a pty. The sandbox would
+  confine it to a container and break all three, so this is a hardened but
+  unsandboxed app — which is what Developer ID distribution outside the App Store
+  expects.
+-->
+<plist version="1.0">
+  <dict>
+    <!-- V8 compiles JavaScript at runtime; without JIT the renderer will not start. -->
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <!-- V8 also writes to pages it later executes, which the hardened runtime
+         blocks separately from the JIT entitlement above. -->
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <!-- Electron's helper processes are configured through DYLD_* variables,
+         which the hardened runtime strips by default. -->
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <!-- Native modules loaded from outside the asar (node-pty, the Agent SDK —
+         see `asarUnpack` in package.json) are not covered by the main bundle's
+         signature, so library validation has to allow them. -->
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>

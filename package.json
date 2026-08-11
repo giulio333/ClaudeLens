@@ -130,7 +130,13 @@
           ]
         }
       ],
-      "icon": "./assets/icon4.icns"
+      "icon": "./assets/icon4.icns",
+      "category": "public.app-category.developer-tools",
+      "hardenedRuntime": true,
+      "entitlements": "build/entitlements.mac.plist",
+      "entitlementsInherit": "build/entitlements.mac.inherit.plist",
+      "gatekeeperAssess": false,
+      "notarize": false
     },
     "linux": {
       "target": [

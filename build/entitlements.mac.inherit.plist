@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  Entitlements for the Electron helper processes (Renderer, GPU, Plugin), signed
+  separately from the main bundle.
+
+  They match the main app's list rather than inheriting it: `com.apple.security.inherit`
+  is a sandbox mechanism, and ClaudeLens is not sandboxed (see entitlements.mac.plist),
+  so each helper has to carry the exceptions it needs itself. The renderer helper is
+  the one actually running V8, so dropping the JIT entitlements here would break the
+  app even though the main bundle has them.
+-->
+<plist version="1.0">
+  <dict>
+    <key>com.apple.security.cs.allow-jit</key>
+    <true/>
+
+    <key>com.apple.security.cs.allow-unsigned-executable-memory</key>
+    <true/>
+
+    <key>com.apple.security.cs.allow-dyld-environment-variables</key>
+    <true/>
+
+    <key>com.apple.security.cs.disable-library-validation</key>
+    <true/>
+  </dict>
+</plist>
