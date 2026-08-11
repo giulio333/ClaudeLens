@@ -10,9 +10,12 @@ import {
   useGlobalMcp,
   type EffectiveConfig,
   type McpServer,
+  type UpdateInfo,
 } from '../../../hooks/useIPC';
 import { mcpStatusMeta } from '../mcp/McpServerCard';
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme';
+import { fmtModel } from '../utils';
+import { compareVersions } from '../../../../electron/shared/version-compare';
 import { version as appVersion, claudeCodeVersion } from '../../../../package.json';
 
 const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md';
@@ -55,9 +58,10 @@ const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string;
     ro: false,
   },
   general: {
-    eyebrow: 'Appearance & runtime',
+    eyebrow: 'App & runtime',
     title: 'General',
-    caption: 'How ClaudeLens looks, and the configuration Claude Code resolves for this scope.',
+    caption:
+      'Versions and updates, how ClaudeLens looks, and the configuration Claude Code resolves for this scope.',
     ro: true,
   },
   permissions: {
@@ -177,13 +181,12 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
               <PrivacyTab />
             ) : tab === 'notifications' ? (
               <NotificationsTab />
+            ) : tab === 'general' ? (
+              /* General composes its own order and gating — see GeneralPanel:
+                 part of it is ClaudeLens' own and must not wait on the SDK. */
+              <GeneralPanel cfg={data ?? null} isLoading={isLoading} error={error} q={ql} />
             ) : (
               <>
-                {/* Appearance + Updates live at the top of General (ClaudeLens
-                    preferences, shown immediately — they don't depend on the
-                    SDK config). */}
-                {tab === 'general' && <AppearanceTab />}
-                {tab === 'general' && <UpdatesBlock />}
                 {/* MCP reads `claude mcp list`, not the SDK config — so it must
                     not wait on (or be hidden by) that slower, fallible read. */}
                 {tab === 'mcp' && (
@@ -202,7 +205,6 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
                   </p>
                 ) : data ? (
                   <>
-                    {tab === 'general' && <GeneralTab cfg={data} q={ql} />}
                     {tab === 'permissions' && <PermissionsTab cfg={data} q={ql} />}
                     {tab === 'tools' && <ToolsTab cfg={data} q={ql} />}
                     {tab === 'extensions' && <ExtensionsTab cfg={data} q={ql} />}
@@ -260,6 +262,170 @@ function PanelHead({
   );
 }
 
+// ─── General panel ────────────────────────────────────────────────────────────
+// The one tab that mixes ClaudeLens' own preferences with the resolved Claude
+// Code config, so it composes its own order instead of the shared gate: the
+// status tape answers "is my setup ok?" before any reading, then Updates (which
+// version is this, which one shipped, and the button to re-ask) and Appearance
+// — both ClaudeLens' own, both shown immediately — and finally the read-only
+// datasheet, which waits on the SDK read and is closed by the read-only hint.
+// With Updates sitting right under the tape, the app version and its update
+// state are ONE tape cell, not two: the block 16px below already spells out
+// installed vs latest and carries the action, so a second cell restating it was
+// the same sentence three times in one screenful.
+
+function GeneralPanel({
+  cfg,
+  isLoading,
+  error,
+  q,
+}: {
+  cfg: EffectiveConfig | null;
+  isLoading: boolean;
+  error: unknown;
+  q: string;
+}) {
+  return (
+    <>
+      <StatusTape cfg={cfg} />
+      <UpdatesBlock />
+      <AppearanceTab />
+      {isLoading ? (
+        <p className="set-dim" style={{ marginTop: 32 }}>
+          Reading configuration via the Agent SDK…
+        </p>
+      ) : error ? (
+        <p className="set-dim" style={{ marginTop: 32 }}>
+          Couldn’t read configuration: {(error as Error).message}
+        </p>
+      ) : cfg ? (
+        <>
+          <GeneralTab cfg={cfg} q={q} />
+          <ReadOnlyHint />
+        </>
+      ) : null}
+    </>
+  );
+}
+
+// Shown as the tooltip of any cell the SDK handshake couldn't fill.
+const NO_INIT = 'Runtime info unavailable';
+
+/**
+ * Four cells: what Claude Code runs here (model, CLI version + whether it
+ * satisfies this build, how permissive the session starts) and which ClaudeLens
+ * this is (version + whether a newer one shipped). Tones are the existing state
+ * tokens — sage for fine, warn for a CLI behind the requirement or a permission
+ * mode that waives the prompts, accent for "an update is there to install" (an
+ * action, not a fault).
+ */
+function StatusTape({ cfg }: { cfg: EffectiveConfig | null }) {
+  const { data: update, isFetching, error } = useUpdateCheck();
+  const init = cfg?.init;
+  const cli = init ? cliStatus(init.claudeCodeVersion) : null;
+  const app = updateStatus(update ?? null, isFetching, !!error);
+  return (
+    <section className="set-tape">
+      <TapeCell
+        label="Model"
+        value={init ? fmtModel(init.model) : '—'}
+        title={init?.model ?? NO_INIT}
+      />
+      <TapeCell
+        label="Claude Code"
+        value={init?.claudeCodeVersion ?? '—'}
+        qualifier={cli?.qualifier}
+        dot={cli?.dot}
+        title={cli?.title ?? NO_INIT}
+      />
+      <TapeCell
+        label="Permission mode"
+        value={init?.permissionMode ?? '—'}
+        {...(init ? permissionStatus(init.permissionMode) : { title: NO_INIT })}
+      />
+      <TapeCell
+        label="ClaudeLens"
+        value={`v${appVersion}`}
+        qualifier={app.qualifier}
+        dot={app.dot}
+        title={app.title}
+      />
+    </section>
+  );
+}
+
+function TapeCell({
+  label,
+  value,
+  qualifier,
+  dot,
+  title,
+}: {
+  label: string;
+  value: string;
+  qualifier?: string;
+  dot?: string;
+  title?: string;
+}) {
+  return (
+    <div className="cell">
+      <div className="l">{label}</div>
+      {/* `title` only when it says more than the cell already shows — a tooltip
+          that repeats the visible text is noise on every hover. */}
+      <div className="v" title={title}>
+        {dot && <span className="d" style={{ background: dot }} />}
+        <span className="t">{value}</span>
+        {qualifier && <span className="q">{qualifier}</span>}
+      </div>
+    </div>
+  );
+}
+
+type CellTone = { qualifier?: string; dot?: string; title?: string };
+
+/** Installed Claude Code against the version this ClaudeLens build expects. */
+function cliStatus(installed: string): CellTone {
+  if (compareVersions(installed, claudeCodeVersion) < 0)
+    return {
+      qualifier: `needs ${claudeCodeVersion}`,
+      dot: 'var(--cl-warn)',
+      title: `Installed ${installed} is older than the ${claudeCodeVersion} this ClaudeLens expects`,
+    };
+  return {
+    dot: 'var(--cl-ok)',
+    title: `Meets the ${claudeCodeVersion} this ClaudeLens expects`,
+  };
+}
+
+// Modes that waive tool prompts. Deliberately not "anything but default":
+// `plan` is *more* restrictive than default, so flagging it would read as a
+// warning about the safest mode there is.
+const LOOSE_MODES = new Set(['bypassPermissions', 'acceptEdits']);
+
+/** The permission mode the session starts in, after the CLI trust filter. */
+function permissionStatus(mode: string): CellTone {
+  if (LOOSE_MODES.has(mode))
+    return {
+      dot: 'var(--cl-warn)',
+      title: `Tools run with fewer prompts in ${mode} — effective at startup, after the CLI trust filter`,
+    };
+  return { title: 'Effective at startup, after the CLI trust filter' };
+}
+
+/** The running app's own release state — qualifies the ClaudeLens version cell. */
+function updateStatus(update: UpdateInfo | null, isFetching: boolean, failed: boolean): CellTone {
+  if (isFetching) return { qualifier: 'checking…' };
+  if (failed || !update)
+    return { qualifier: 'update unknown', title: 'Couldn’t reach the GitHub releases API' };
+  if (update.updateAvailable)
+    return {
+      qualifier: `v${update.latestVersion} available`,
+      dot: 'var(--cl-accent)',
+      title: `A newer release (v${update.latestVersion}) is published on GitHub`,
+    };
+  return { qualifier: 'up to date', dot: 'var(--cl-ok)' };
+}
+
 // ─── Tab content renderers ────────────────────────────────────────────────────
 // `heading` makes a renderer print its own domain label — used by
 // ProjectConfigView, which stacks them all without a per-tab PanelHead.
@@ -291,20 +457,42 @@ export function GeneralTab({
         </Row>
         <Row k="Output style">{init ? <Val>{init.outputStyle || 'default'}</Val> : <Dim />}</Row>
         <Row k="API key source">{init ? <Val>{init.apiKeySource}</Val> : <Dim />}</Row>
-        <Row k="Claude Code version">{init ? <Val>{init.claudeCodeVersion}</Val> : <Dim />}</Row>
-        <Row k="Required version" hint="Minimum Claude Code for this ClaudeLens">
-          <Val>{claudeCodeVersion}</Val>
+        {/* One version row instead of installed + required side by side: the
+            requirement only matters as a verdict on what's installed, and two
+            bare numbers left the reader to compare them. */}
+        <Row k="Claude Code" hint={`This ClaudeLens expects ${claudeCodeVersion} or newer`}>
+          {init ? (
+            <>
+              <Val>{init.claudeCodeVersion}</Val>
+              {compareVersions(init.claudeCodeVersion, claudeCodeVersion) < 0 && (
+                <span className="set-chip warn">outdated</span>
+              )}
+            </>
+          ) : (
+            <Dim />
+          )}
         </Row>
         <Row k="Working directory" stack full>
           {init ? <Val sm>{init.cwd}</Val> : <Dim />}
         </Row>
       </Block>
 
-      <Block label="Preferences" grid>
-        <Row k="Theme" src={prov(cfg, 'theme')}>
+      <Block label="Claude Code preferences" grid>
+        {/* "CLI theme", not "Theme": this is the terminal's own theme from the
+            settings cascade, and the Appearance block above — ClaudeLens' theme
+            — was reading as the same setting under the same name. */}
+        <Row
+          k="CLI theme"
+          hint="Claude Code’s terminal theme, not the app’s"
+          src={prov(cfg, 'theme')}
+        >
           {val(s.theme) ?? <Dim>system default</Dim>}
         </Row>
-        <Row k="Configured model" src={prov(cfg, 'model')}>
+        <Row
+          k="Configured model"
+          hint="What settings ask for — Runtime shows what resolved"
+          src={prov(cfg, 'model')}
+        >
           {val(s.model) ?? <Dim>default</Dim>}
         </Row>
         <Row k="Language" src={prov(cfg, 'language')}>
@@ -517,7 +705,7 @@ const THEME_OPTIONS: { id: ThemePreference; label: string; icon: ReactNode; hint
 export function AppearanceTab() {
   const { preference, resolved, setPreference } = useTheme();
   return (
-    <Block label="Theme">
+    <Block label="Appearance" hint="Applies to ClaudeLens only." editable>
       <div className="set-seg">
         {THEME_OPTIONS.map(opt => (
           <button
@@ -615,15 +803,19 @@ function UpdatesBlock() {
         {isFetching ? 'Checking…' : 'Check now'}
       </button>
 
+      {/* Collapsed: it's a once-per-install command, and left open it was the
+          longest thing on the tab — now that Updates sits at the top, that
+          weight would push the rest of General below the fold. */}
       {IS_MAC && (
-        <>
-          <p className="set-block-hint" style={{ marginTop: 18 }}>
+        <details className="set-disc">
+          <summary>macOS: app can’t be opened after updating</summary>
+          <p className="set-block-hint" style={{ marginTop: 12 }}>
             ClaudeLens isn’t code-signed, so after installing an update macOS quarantines the new
             app (“can’t be opened”). Clear it once from Terminal:
           </p>
           <div
             className="flex items-center gap-2 rounded-lg px-3 py-2"
-            style={{ background: 'var(--cl-paper-2)', border: '1px solid var(--cl-line)' }}
+            style={{ background: 'var(--cl-paper)', border: '1px solid var(--cl-line)' }}
           >
             <code
               className="font-mono flex-1 min-w-0"
@@ -649,7 +841,7 @@ function UpdatesBlock() {
               {copied ? 'Copied' : 'Copy'}
             </button>
           </div>
-        </>
+        </details>
       )}
     </Block>
   );
@@ -917,6 +1109,7 @@ function Block({
   bare,
   grid,
   count,
+  editable,
   children,
 }: {
   label?: string;
@@ -924,6 +1117,8 @@ function Block({
   bare?: boolean;
   grid?: boolean;
   count?: number;
+  /** Marks a writable block inside an otherwise read-only datasheet. */
+  editable?: boolean;
   children: ReactNode;
 }) {
   return (
@@ -932,6 +1127,7 @@ function Block({
         <div className="set-block-head">
           <span className="lbl">{label}</span>
           {count != null && <span className="ct">{count}</span>}
+          {editable && <span className="ed">editable</span>}
         </div>
       )}
       {hint && <p className="set-block-hint">{hint}</p>}
