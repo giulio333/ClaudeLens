@@ -5,6 +5,7 @@ import {
   useChatSession,
   useEffectiveConfig,
   useGlobalAgents,
+  useMemoryProject,
   useProjectAgents,
   useProjectTasks,
   useProjectTeams,
@@ -12,16 +13,23 @@ import {
   useSessionList,
   useSessionSubagents,
 } from '../../../hooks/useIPC';
-import type { Agent, Skill } from '../../../hooks/useIPC';
+import type { Agent, MemoryTopic, Skill } from '../../../hooks/useIPC';
 import type { ActiveSession, InitInfo, TeamSummary } from '../../../types';
 import { fmtRelative, liveLeadSession, memberColor, minutesSince, teamLabel } from '../teams/utils';
 import {
+  buildMemoryActivity,
   buildProcessedMessages,
   correlateSessionAgents,
   correlateSessionSkills,
   fileExt,
+  isMemoryFile,
   skillHasViewableOutput,
   AGENT_TOOLS,
+  MEMORY_TYPE_TAG,
+  MEMORY_TYPE_TINT,
+  MemoryAction,
+  MemoryActivity,
+  MemoryTouch,
   ToolGroup,
   SessionAgent,
   SessionSkill,
@@ -925,6 +933,192 @@ function SkillsCard({
   );
 }
 
+/* ── MEMORY island ────────────────────────────────────────────────────── */
+
+const MEMORY_ACTION_LABEL: Record<MemoryAction, string> = {
+  new: 'NEW',
+  revised: 'REVISED',
+  wrote: 'WROTE',
+  read: 'READ',
+};
+
+/** A remembered fact is the rail's one durable outcome — it outlives the session
+ *  — so its label is the only one that takes the accent. A consultation is
+ *  context, not an outcome: muted. */
+const MEMORY_ACTION_TINT: Record<MemoryAction, string> = {
+  new: 'var(--cl-accent-ink)',
+  revised: 'var(--cl-ink-2)',
+  wrote: 'var(--cl-ink-2)',
+  read: 'var(--cl-ink-4)',
+};
+
+/** One topic row in the MEMORY block: a colour-coded type tag, the topic's own
+ *  name, and what happened to it — one line, no rule under it.
+ *
+ *  The description is deliberately NOT printed: a memory's `name` is often
+ *  already a sentence, so name-over-description printed the same fact twice and
+ *  made a two-topic block as tall as the AGENTS list. It rides the tooltip
+ *  instead, with the path. No diff bars either — +12/−0 on a memory file
+ *  measures nothing a reader cares about. */
+function MemoryRow({
+  touch,
+  compact,
+  onOpenTool,
+}: {
+  touch: MemoryTouch;
+  compact: boolean;
+  onOpenTool: (g: ToolGroup) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const many = touch.items.length > 1;
+  const count = touch.writes > 0 ? touch.writes : touch.reads;
+  const tint = MEMORY_TYPE_TINT[touch.type] ?? MEMORY_TYPE_TINT.user;
+
+  return (
+    <div>
+      <button
+        type="button"
+        className="tmc-row w-full text-left grid items-baseline"
+        title={[touch.title, touch.description, touch.path].filter(Boolean).join('\n')}
+        onClick={() => (many ? setOpen(v => !v) : onOpenTool(touch.items[0]))}
+        style={{
+          gridTemplateColumns: '34px minmax(0,1fr) auto',
+          gap: 9,
+          padding: `${compact ? 4 : 5}px 4px`,
+          margin: '0 -4px',
+          borderRadius: 6,
+          cursor: 'pointer',
+        }}
+      >
+        <span
+          className="font-mono"
+          style={{ fontSize: 8.5, fontWeight: 700, letterSpacing: '0.08em', color: tint }}
+        >
+          {MEMORY_TYPE_TAG[touch.type] ?? MEMORY_TYPE_TAG.user}
+        </span>
+        <span
+          className="truncate min-w-0"
+          style={{
+            fontSize: compact ? 11 : 11.5,
+            color: touch.hasError ? 'var(--cl-danger)' : 'var(--cl-ink-2)',
+          }}
+        >
+          {touch.title}
+          {touch.scope === 'project' && (
+            <span className="font-mono" style={{ fontSize: 8.5, color: 'var(--cl-ink-4)' }}>
+              {' '}
+              repo
+            </span>
+          )}
+          {many && <span style={{ color: 'var(--cl-ink-4)' }}> {open ? '▾' : '▸'}</span>}
+        </span>
+        <span
+          className="font-mono shrink-0"
+          style={{
+            fontSize: 8.5,
+            fontWeight: 700,
+            letterSpacing: '0.06em',
+            whiteSpace: 'nowrap',
+            color: touch.hasError ? 'var(--cl-danger)' : MEMORY_ACTION_TINT[touch.action],
+          }}
+        >
+          {touch.hasError ? 'FAILED' : MEMORY_ACTION_LABEL[touch.action]}
+          {count > 1 && <span style={{ fontWeight: 400 }}> ×{count}</span>}
+        </span>
+      </button>
+      {open &&
+        [...touch.items].reverse().map((g, i) => (
+          <button
+            key={g.use.id || i}
+            type="button"
+            className="tmc-row w-full text-left flex items-center gap-2"
+            onClick={() => onOpenTool(g)}
+            style={{ padding: '3px 4px 3px 43px', margin: '0 -4px', fontSize: 10.5 }}
+          >
+            <span style={{ color: 'var(--cl-ink-3)' }}>{g.use.name}</span>
+            {g.result?.isError && (
+              <span className="font-mono" style={{ fontSize: 9, color: 'var(--cl-danger)' }}>
+                ERROR
+              </span>
+            )}
+          </button>
+        ))}
+    </div>
+  );
+}
+
+/** Full-width MEMORY block — the session's memory activity, kept apart from
+ *  CHANGES. On disk a remembered fact is always a `Write` of `<slug>.md` plus an
+ *  `Edit` of `MEMORY.md`, so inside a file list it read as two rows of
+ *  bookkeeping (`feedback_no_manual_app_launch.md +12 −0`, `MEMORY.md +1 −1`)
+ *  that never said what was learned. Reads sit here too: they are the only
+ *  visible trace of which memories informed the session (an automatic recall
+ *  arrives as a `<system-reminder>` and passes through no tool at all). The
+ *  index edits degrade to one muted footnote. */
+function MemoryCard({
+  activity,
+  compact,
+  onOpenTool,
+}: {
+  activity: MemoryActivity;
+  compact: boolean;
+  onOpenTool: (g: ToolGroup) => void;
+}) {
+  const { touches, indexOps } = activity;
+  // Counted per topic, not per operation, so the caption matches the row badges:
+  // a topic both written and read counts once, under its write. Only worth
+  // printing once the rows outgrow a glance — beside two rows reading NEW and
+  // READ, "1 new · 1 read" is the same sentence twice.
+  const tally =
+    touches.length > 3
+      ? (['new', 'revised', 'wrote'] as MemoryAction[])
+          .map(a => ({ a, n: touches.filter(t => t.writes > 0 && t.action === a).length }))
+          .concat([{ a: 'read' as MemoryAction, n: touches.filter(t => t.writes === 0).length }])
+          .filter(x => x.n > 0)
+          .map(x => `${x.n} ${MEMORY_ACTION_LABEL[x.a].toLowerCase()}`)
+          .join(' · ')
+      : '';
+
+  return (
+    <section style={railSection}>
+      <RailEyebrow
+        label="MEMORY"
+        n={touches.length}
+        extra={
+          <span
+            className="font-mono shrink-0"
+            style={{ fontSize: 9, color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+          >
+            {tally}
+          </span>
+        }
+      />
+      {touches.map(t => (
+        <MemoryRow key={t.path} touch={t} compact={compact} onOpenTool={onOpenTool} />
+      ))}
+      {indexOps.length > 0 && (
+        <button
+          type="button"
+          className="tmc-row w-full text-left font-mono"
+          // Bookkeeping: one click opens the most recent index edit, which is the
+          // only one that reflects the index as it now stands.
+          onClick={() => onOpenTool(indexOps[indexOps.length - 1])}
+          title="MEMORY.md — the index Claude keeps in sync with the topics"
+          style={{
+            padding: '5px 4px 0 43px',
+            margin: '0 -4px',
+            fontSize: 8.5,
+            letterSpacing: '0.04em',
+            color: 'var(--cl-ink-4)',
+          }}
+        >
+          index MEMORY.md{indexOps.length > 1 ? ` ×${indexOps.length}` : ''}
+        </button>
+      )}
+    </section>
+  );
+}
+
 /* ── TEAMS island ─────────────────────────────────────────────────────── */
 
 type TeamRailRow = { team: TeamSummary; lead: ActiveSession | undefined };
@@ -1287,12 +1481,31 @@ export function MissionRail({
     () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []).reverse(),
     [processed, allSkills, plugins]
   );
+  const ownTools = useMemo(
+    () => processed.flatMap(p => p.toolGroups).filter(g => !AGENT_TOOLS.has(g.use.name)),
+    [processed]
+  );
+  // MEMORY — the session's memory activity, its own block (below). An `Edit` of a
+  // topic carries no frontmatter, so the on-disk index supplies the name and
+  // description; the query is already mounted by the memory views and the
+  // watcher keeps it fresh.
+  const { data: memory } = useMemoryProject(hash);
+  const memoryLookup = useMemo(() => {
+    const byFilename = new Map<string, MemoryTopic>();
+    for (const t of memory?.index ?? []) byFilename.set(t.filename, t);
+    for (const t of memory?.projectLevelIndex ?? []) byFilename.set(t.filename, t);
+    return (path: string) => byFilename.get(path.replace(/\\/g, '/').split('/').pop() ?? path);
+  }, [memory]);
+  const memoryActivity = useMemo(
+    () => buildMemoryActivity(ownTools, memoryLookup),
+    [ownTools, memoryLookup]
+  );
+  // CHANGES excludes the memory files: they are a topic each, not a diff, and
+  // reporting them twice would double-count the session's line totals.
   const changes = useMemo(
     () =>
-      buildFileChanges(
-        processed.flatMap(p => p.toolGroups).filter(g => !AGENT_TOOLS.has(g.use.name))
-      ),
-    [processed]
+      buildFileChanges(ownTools.filter(g => !isMemoryFile(g.use.input as Record<string, unknown>))),
+    [ownTools]
   );
   const areas = useMemo(() => groupByArea(changes, realPath), [changes, realPath]);
   const totals = useMemo(
@@ -1336,6 +1549,7 @@ export function MissionRail({
     agents.length === 0 &&
     skills.length === 0 &&
     changes.length === 0 &&
+    memoryActivity.touches.length === 0 &&
     tasks.length === 0 &&
     projectTeamCount === 0;
 
@@ -1634,6 +1848,12 @@ export function MissionRail({
         {/* SKILLS — pills → output / definition / tool call */}
         {skills.length > 0 && (
           <SkillsCard skills={skills} onOpenTool={onOpenTool} onOpenSkillDef={onOpenSkillDef} />
+        )}
+
+        {/* MEMORY island — topics read/created/revised, ahead of CHANGES: what the
+            session learned reads before what it touched */}
+        {memoryActivity.touches.length > 0 && (
+          <MemoryCard activity={memoryActivity} compact={compact} onOpenTool={onOpenTool} />
         )}
 
         {/* CHANGES island — grouped by repo area (comfortable) or a flat list (compact) */}

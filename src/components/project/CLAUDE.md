@@ -88,6 +88,14 @@ Formatter puri (nessuna dipendenza React):
 
 > La lista dei topic della vista `project-memory` è renderizzata da `ProjectView` (`overview/ProjectOverviewContent.tsx`, `section === 'memory'`) con `cl-tile-grid`/`cl-tile`, allineata a Skills/Agents.
 
+**Secondo ingresso — Mission Control:** il rail (`terminal/MissionRail.tsx`) ha un blocco **MEMORY** (`MemoryCard`/`MemoryRow`) che mostra l'**attività di memoria della sessione** — topic letti, creati, revisionati — **estratti da CHANGES**. Il modello dati è puro e unit-tested in `chat/utils.ts` (`buildMemoryActivity` → `MemoryTouch[]` + `indexOps`, con `memoryScopeOf`/`memoryTypeFromFilename`/`memoryTitleFromFilename`/`writeAction`; test in `test/chat-utils.test.ts`). Ragioni delle scelte, tutte verificate sui transcript reali:
+
+- **L'unità è il topic, non il file.** Su disco ricordare un fatto è sempre `Write` di `<slug>.md` **più** `Edit` di `MEMORY.md`: dentro una lista di file diventavano due righe di bookkeeping (`feedback_x.md +12 −0`, `MEMORY.md +1 −1`) che non dicevano mai _cosa_ è stato ricordato. Le operazioni sull'indice degradano a una nota `index MEMORY.md` in coda al blocco; i file di memoria sono esclusi da CHANGES (`isMemoryFile`) per non contarli due volte nei totali di riga
+- **Le letture stanno qui.** Un `Read` su un topic è l'unica traccia visibile di quali memorie hanno informato la sessione. Il recall automatico **non** è visibile: arriva come `<system-reminder>` e non passa da nessun tool (come una `rm` da `Bash`, che non porta `file_path`)
+- **`new` vs `revised` si legge dal tool result** (`File created successfully at:` vs `has been updated`), l'unico posto che lo dice; quando non lo dice l'azione resta `wrote` invece di mentire. Un `Write` batte un `Edit` successivo nel rank (`new > revised > wrote > read`), i topic mutati flottano sopra quelli solo letti
+- **Una riga per topic, niente description in riga.** Il `name` di una memoria è spesso già una frase: stampare nome + description raddoppiava lo stesso fatto e rendeva un blocco di due topic alto come la lista AGENTS. La description vive nel tooltip con il path; niente diff bar (`+12/−0` su una memoria non misura nulla di interessante); il tally nell'eyebrow appare solo oltre 3 topic. Per un `Edit` (che non porta frontmatter) nome/description/tipo arrivano dall'indice su disco via `useMemoryProject`, con fallback sul prefisso del filename — la regola di `memory-reader`
+- Il tag di tipo usa `MEMORY_TYPE_TAG`/`MEMORY_TYPE_TINT` (`chat/utils.ts`): le stesse tinte di `MEMORY_TYPE_STYLE` mappate sui token brand (`--cl-cyan`/`--cl-warn`/`--cl-ok`/`--cl-violet`), encoding di una dimensione dato come `modelColor`, non un accento nuovo
+
 ---
 
 ### `claudemd/`

@@ -17,6 +17,11 @@ import {
   parseAnswersFromResultText,
   isQuestionDismissed,
   isMemoryFile,
+  buildMemoryActivity,
+  memoryScopeOf,
+  memoryTypeFromFilename,
+  memoryTitleFromFilename,
+  writeAction,
   touchedFiles,
 } from '../src/components/project/chat/utils';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
@@ -918,5 +923,130 @@ describe('touchedFiles', () => {
       group('MultiEdit', { file_path: '/a/three.py', edits: [] }),
     ] as never);
     expect(files.map(f => f.path)).toEqual(['/a/three.py']);
+  });
+});
+
+describe('memory activity', () => {
+  const MEM = '/Users/t/.claude/projects/-Users-t-app/memory';
+  const op = (name: string, input: Record<string, unknown>, result?: string, isError = false) => ({
+    use: { id: `t-${name}-${input.file_path}`, name, input },
+    result:
+      result === undefined
+        ? null
+        : { type: 'tool_result', toolUseId: 't', content: result, isError },
+  });
+  const frontmatter = (name: string, description: string, type: string, body = 'the fact') =>
+    `---\nname: ${name}\ndescription: ${description}\nmetadata:\n  type: ${type}\n---\n\n${body}\n`;
+
+  it('reads scope from the two memory dirs and nothing else', () => {
+    expect(memoryScopeOf(`${MEM}/x.md`)).toBe('user');
+    expect(memoryScopeOf('/Users/t/app/.claude/memory/x.md')).toBe('project');
+    expect(memoryScopeOf('/Users/t/.claude/skills/memory/SKILL.md')).toBeNull();
+  });
+
+  it('derives type and title from the filename when frontmatter is absent', () => {
+    expect(memoryTypeFromFilename('feedback_no_manual_app_launch.md')).toBe('feedback');
+    expect(memoryTypeFromFilename('reference_icloud.md')).toBe('reference');
+    expect(memoryTypeFromFilename('project_x.md')).toBe('project');
+    expect(memoryTypeFromFilename('plain_note.md')).toBe('user');
+    expect(memoryTitleFromFilename(`${MEM}/feedback_no_manual_app_launch.md`)).toBe(
+      'no-manual-app-launch'
+    );
+  });
+
+  // The wording of the Write result is the only place that says whether the file
+  // existed; when it doesn't say, neither do we.
+  it('distinguishes a created topic from an overwritten one via the tool result', () => {
+    expect(writeAction(`File created successfully at: ${MEM}/x.md`)).toBe('new');
+    expect(writeAction(`The file ${MEM}/x.md has been updated successfully.`)).toBe('revised');
+    expect(writeAction(null)).toBe('wrote');
+    expect(writeAction('something else entirely')).toBe('wrote');
+  });
+
+  it('groups the Write + MEMORY.md Edit pair into one topic plus an index op', () => {
+    const { touches, indexOps } = buildMemoryActivity([
+      op(
+        'Write',
+        {
+          file_path: `${MEM}/feedback_no_manual_app_launch.md`,
+          content: frontmatter(
+            'no-manual-app-launch',
+            'Non lanciare l app manualmente',
+            'feedback'
+          ),
+        },
+        `File created successfully at: ${MEM}/feedback_no_manual_app_launch.md`
+      ),
+      op('Edit', { file_path: `${MEM}/MEMORY.md`, old_string: 'a', new_string: 'b' }, 'updated'),
+    ] as never);
+
+    expect(touches).toHaveLength(1);
+    expect(touches[0]).toMatchObject({
+      title: 'no-manual-app-launch',
+      type: 'feedback',
+      scope: 'user',
+      description: 'Non lanciare l app manualmente',
+      action: 'new',
+      writes: 1,
+      reads: 0,
+    });
+    expect(indexOps).toHaveLength(1);
+  });
+
+  it('keeps a read-only topic, and lets the on-disk index name an Edit', () => {
+    const lookup = (path: string) =>
+      path.endsWith('reference_icloud.md')
+        ? {
+            name: 'icloud-dataless-files',
+            description: 'File dataless stallano',
+            type: 'reference' as const,
+          }
+        : undefined;
+    const { touches } = buildMemoryActivity(
+      [
+        op('Read', { file_path: `${MEM}/project_x.md` }, 'body'),
+        op(
+          'Edit',
+          { file_path: `${MEM}/reference_icloud.md`, old_string: 'a', new_string: 'b' },
+          'ok'
+        ),
+        op(
+          'Edit',
+          { file_path: `${MEM}/reference_icloud.md`, old_string: 'c', new_string: 'd' },
+          'ok'
+        ),
+      ] as never,
+      lookup
+    );
+
+    // Mutated topics float first, read-only ones follow.
+    expect(touches.map(t => t.title)).toEqual(['icloud-dataless-files', 'x']);
+    expect(touches[0]).toMatchObject({
+      action: 'revised',
+      writes: 2,
+      description: 'File dataless stallano',
+    });
+    expect(touches[1]).toMatchObject({ action: 'read', reads: 1, writes: 0 });
+  });
+
+  it('ranks a create above later revisions of the same topic, and flags failures', () => {
+    const { touches } = buildMemoryActivity([
+      op(
+        'Write',
+        { file_path: `${MEM}/user_me.md`, content: 'no frontmatter' },
+        `File created successfully at: ${MEM}/user_me.md`
+      ),
+      op('Edit', { file_path: `${MEM}/user_me.md` }, 'String not found', true),
+    ] as never);
+    expect(touches[0]).toMatchObject({ action: 'new', writes: 2, hasError: true });
+  });
+
+  it('ignores tools outside the memory dirs and tools with no path', () => {
+    const { touches, indexOps } = buildMemoryActivity([
+      op('Write', { file_path: '/Users/t/app/src/index.ts', content: 'x' }, 'created'),
+      op('Bash', { command: `rm ${MEM}/user_me.md` }, ''),
+    ] as never);
+    expect(touches).toEqual([]);
+    expect(indexOps).toEqual([]);
   });
 });
