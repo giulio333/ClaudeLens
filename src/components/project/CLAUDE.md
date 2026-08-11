@@ -17,7 +17,7 @@ Tutti i componenti UI del progetto ClaudeLens, organizzati per dominio funzional
 Formatter puri (nessuna dipendenza React):
 
 - `fmt(n)` — numero con separatori migliaia
-- `fmtCost(n)` — costo in dollari (`$0.0042`)
+- `fmtCost(n)` — costo in dollari, max 2 decimali + separatore migliaia (`$1,234.56`); sotto il centesimo → `<$0.01` (mai `$0.00`)
 - `fmtDate(d)` — data localizzata `it-IT`
 - `fmtModel(m)` — ID modello → nome leggibile (`claude-sonnet-4-6` → `Sonnet 4.6`)
 - `modelColor(m)` — colore hex accent per famiglia modello
