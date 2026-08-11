@@ -65,8 +65,26 @@ This directory contains the Electron renderer process: a single-page React app t
 ## Testing
 
 Pure modules are covered by Vitest unit tests under `test/` (run `npm test`).
-UI/IPC behavior has no automated tests — validate against real `~/.claude/`
-data by running:
+
+**Stateful hooks** are covered too, in jsdom, against a fake preload bridge:
+
+```ts
+// @vitest-environment jsdom
+import { installFakeElectronAPI } from './helpers/fake-electron-api';
+
+const bridge = installFakeElectronAPI(); // stands in for window.electronAPI
+bridge.channels.chatChunk.emit({ sessionId, text: 'hi' }); // drive the renderer
+expect(bridge.api.sessions.sendMessage).toHaveBeenCalledWith(/* … */);
+```
+
+`window.electronAPI` is the renderer's only seam to the main process, so
+replacing it runs hooks and components unmodified with no Electron and no
+`~/.claude` on disk. The environment is opted into **per file** (`node` stays the
+default). See `test/use-live-chat.test.tsx` for the pattern; the fake's surface
+is partial by design — widen it as tests reach further.
+
+Anything below that — layout, styling, how a view actually looks — has no
+automated coverage. Validate it against real `~/.claude/` data by running:
 
 ```bash
 npm run dev

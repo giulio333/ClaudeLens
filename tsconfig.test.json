@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "target": "ES2020",
+    // Both worlds: the suite imports renderer modules (DOM) and main-process
+    // modules alike, and `ES2022.Error` is what lets `new Error(msg, { cause })`
+    // typecheck the way it does under tsconfig.electron.json.
+    "lib": ["ES2020", "ES2022.Error", "DOM", "DOM.Iterable"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "jsx": "react-jsx",
+    "strict": true,
+    "noEmit": true,
+    "skipLibCheck": true,
+    "esModuleInterop": true,
+    "resolveJsonModule": true,
+    // `prepare-release.test.ts` imports the plain-JS release script directly.
+    "allowJs": true,
+    "checkJs": false,
+    "types": ["node", "vitest/globals", "vite/client"]
+  },
+  "include": ["test"]
+}

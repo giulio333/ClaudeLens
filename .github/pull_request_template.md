@@ -13,7 +13,8 @@ Closes #
 
 <!--
 Steps a reviewer can follow against their own ~/.claude/ data.
-There are no automated UI tests, so UI changes need a manual pass.
+Hooks and pure modules are covered by `npm test`; layout and styling are not,
+so visual changes still need a manual pass.
 -->
 
 ## Checklist
@@ -22,8 +23,10 @@ There are no automated UI tests, so UI changes need a manual pass.
 - [ ] `npm run lint` passes
 - [ ] `npm test` passes
 - [ ] `npm run build` passes
-- [ ] UI changes validated manually with `npm run dev`
-- [ ] Tests added or updated for changed pure modules under `electron/modules/`
+- [ ] Visual changes validated manually with `npm run dev`
+- [ ] Tests added or updated — pure modules under `electron/modules/`, and
+      renderer hooks holding stream or cache state (see
+      `test/helpers/fake-electron-api.ts`)
 - [ ] `CLAUDE.md` updated if the architecture, an IPC namespace, or a convention changed
 
 ## Screenshots
