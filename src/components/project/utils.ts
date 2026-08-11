@@ -1,8 +1,19 @@
 export function fmt(n: number) {
   return n.toLocaleString('en-US');
 }
+// Dollar amount with at most 2 decimals and thousands separators ($1,234.56).
+// Sub-cent amounts collapse to "<$0.01": rounding them to "$0.00" would read as
+// "free", and a third decimal is exactly what made these figures look like
+// thousands instead of a fraction of a dollar.
 export function fmtCost(n: number) {
-  return '$' + n.toFixed(4);
+  if (!Number.isFinite(n)) return '$0.00';
+  const sign = n < 0 ? '-' : '';
+  const abs = Math.abs(n);
+  if (abs > 0 && abs < 0.005) return `${sign}<$0.01`;
+  return `${sign}$${abs.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 export function fmtDate(d: string) {
   const date = new Date(d);
