@@ -50,6 +50,18 @@ Release without overwriting its notes. Don't run `npm run electron:build` or
 attach assets by hand; just wait for the workflow and verify the assets landed
 (`gh release view vX.Y.Z --json assets`).
 
+**macOS signing is wired but conditional** (`docs/macos-signing.md`). The mac job
+signs with a Developer ID certificate and notarizes when the repo has the five
+Apple secrets, and falls back to the historical unsigned DMG when it doesn't —
+so forks and this repo pre-certificate keep releasing. The build config
+(`hardenedRuntime` + `build/entitlements.mac.*.plist`) is inert until an identity
+exists; the entitlements are the short list a hardened Electron app needs, and
+the app must stay **unsandboxed** (it reads `~/.claude`, drives arbitrary project
+dirs and spawns the `claude` CLI through a pty). When a signed build ships,
+three pieces of user-facing text about the quarantine workaround go stale —
+README, Settings → General (`QUARANTINE_CMD`) and `UpdateBanner.tsx` — and
+`electron-updater` becomes possible for the first time.
+
 ## Architecture
 
 ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claude/`.

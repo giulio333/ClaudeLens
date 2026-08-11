@@ -49,7 +49,60 @@ jobs:
       - name: Build renderer + electron
         run: npm run build
 
+      # macOS is packaged on its own path because it is the only platform with a
+      # signing story. It is deliberately conditional: with the Apple secrets
+      # configured the DMG is signed with the Developer ID certificate and
+      # notarized, and without them the job produces exactly the unsigned build
+      # it produced before — so forks, and this repo before the certificate
+      # exists, keep releasing. Setup: docs/macos-signing.md.
+      - name: Package mac (x64 + arm64)
+        id: package-mac
+        if: matrix.platform == 'mac'
+        env:
+          CSC_LINK: ${{ secrets.MACOS_CERTIFICATE }}
+          CSC_KEY_PASSWORD: ${{ secrets.MACOS_CERTIFICATE_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          set -euo pipefail
+          if [ -n "$CSC_LINK" ] && [ -n "$APPLE_ID" ] && [ -n "$APPLE_TEAM_ID" ]; then
+            echo "signed=true" >> "$GITHUB_OUTPUT"
+            npx electron-builder --mac --publish never -c.mac.notarize=true
+          else
+            echo "signed=false" >> "$GITHUB_OUTPUT"
+            echo "::warning title=Unsigned macOS build::No Apple signing secrets configured; users will need the quarantine workaround. See docs/macos-signing.md."
+            # Without this electron-builder would pick up any stray identity in
+            # the runner keychain and sign with something we did not choose.
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish never
+          fi
+
+      # A DMG that builds is not the same as a DMG Gatekeeper accepts, and the
+      # difference only surfaces on a user's Mac after the release is out. Assert
+      # it here: valid signature, accepted by policy, and a stapled notarization
+      # ticket (the last one is what makes a first launch work offline).
+      - name: Verify signature and notarization
+        if: steps.package-mac.outputs.signed == 'true'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(release/mac*/ClaudeLens.app)
+          # Without nullglob + this check a renamed output dir would surface as a
+          # confusing "codesign: no such file", indistinguishable from a real
+          # signing failure.
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "No packaged .app found under release/ — did electron-builder's output layout change?" >&2
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "── $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            spctl --assess --type execute --verbose=4 "$app"
+            xcrun stapler validate "$app"
+          done
+
       - name: Package ${{ matrix.platform }} (x64 + arm64)
+        if: matrix.platform != 'mac'
         run: npx electron-builder --${{ matrix.platform }} --publish never
 
       - name: Upload binaries
@@ -75,8 +128,9 @@ jobs:
           path: artifacts
           merge-multiple: true
 
-      # The builds are unsigned, so a checksum is the only way for someone to
-      # tell the download matches what CI produced. Shipped as a release asset.
+      # Checksums cover every platform, including the ones with no signing story
+      # at all (Linux, Windows), and stay useful for macOS as a cheap integrity
+      # check that needs no Apple tooling to verify. Shipped as a release asset.
       - name: Generate SHA-256 checksums
         working-directory: artifacts
         run: |
