@@ -112,6 +112,19 @@ export function invalidateCwdCache(hash?: string): void {
   else cwdCache.clear();
 }
 
+/**
+ * True quando il cwd autoritativo di `hash` è già stato letto da un transcript.
+ *
+ * La cache è popolata SOLO da una lettura riuscita: il fallback lossy di
+ * `hashToPath` non viene mai memorizzato, quindi "in cache" significa
+ * esattamente "risolto dal disco, non stimato dal nome cartella". È il segnale
+ * che serve a chi osserva il registry per capire se su un progetto c'è ancora
+ * qualcosa da imparare.
+ */
+export function hasResolvedCwd(hash: string): boolean {
+  return cwdCache.has(hash);
+}
+
 export function resolveRealPath(projectsDir: string, hash: string): string {
   const cached = cwdCache.get(hash);
   if (cached) return cached;

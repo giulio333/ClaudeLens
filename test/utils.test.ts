@@ -9,6 +9,7 @@ import {
   isValidSessionId,
   resolveRealPath,
   invalidateCwdCache,
+  hasResolvedCwd,
 } from '../electron/utils';
 
 describe('isAbsolutePath', () => {
@@ -172,5 +173,29 @@ describe('resolveRealPath (cwd extraction)', () => {
   it('falls back to the lossy hash inversion when no transcript carries a cwd', () => {
     const hash = project([`${PREAMBLE}\n`]);
     expect(resolveRealPath(root, hash)).toBe(`/${hash.replace(/^-/, '').replace(/-/g, '/')}`);
+  });
+
+  describe('hasResolvedCwd', () => {
+    it('turns true only once a cwd has been read off disk', () => {
+      const hash = project([`${JSON.stringify({ type: 'user', cwd: '/Users/foo/known' })}\n`]);
+      expect(hasResolvedCwd(hash)).toBe(false);
+      resolveRealPath(root, hash);
+      expect(hasResolvedCwd(hash)).toBe(true);
+    });
+
+    it('stays false when the resolve fell back to the lossy hash inversion', () => {
+      // Load-bearing for the registry watch-sync: an estimated path is not an
+      // answer, so the coordinator must keep listening for the real record.
+      const hash = project([`${PREAMBLE}\n`]);
+      resolveRealPath(root, hash);
+      expect(hasResolvedCwd(hash)).toBe(false);
+    });
+
+    it('goes back to false when the entry is invalidated (e.g. after a merge)', () => {
+      const hash = project([`${JSON.stringify({ type: 'user', cwd: '/Users/foo/merged' })}\n`]);
+      resolveRealPath(root, hash);
+      invalidateCwdCache(hash);
+      expect(hasResolvedCwd(hash)).toBe(false);
+    });
   });
 });

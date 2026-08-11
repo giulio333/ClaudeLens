@@ -100,6 +100,7 @@ import { executeMerge } from './modules/duplicate-merge-executor';
 import {
   resolveRealPath,
   invalidateCwdCache,
+  hasResolvedCwd,
   canonicalize,
   CLAUDE_DIR,
   isValidSessionId,
@@ -2022,9 +2023,16 @@ async function startWatcher() {
   // A transcript is often added before its first complete JSONL record. Treat
   // add/change/unlink as one debounced registry update so the authoritative cwd
   // replaces any temporary, lossy hash-derived workflow path.
+  //
+  // `isResolved` bounds that to the window where it is true. The sync ends in an
+  // unscoped `notify()` — every query cache — and a project's transcript path is
+  // shaped exactly like a new project's, so without it every append of every live
+  // session paid for the whole invalidation. `discoverKnownProjectPaths()` above
+  // has already resolved every project on disk, so in steady state this is silent.
   const studioWatchSync = createProjectWorkflowWatchSync({
     projectsDir: PROJECTS_DIR,
     invalidate: invalidateCwdCache,
+    isResolved: hasResolvedCwd,
     sync: () => {
       syncProjectWorkflowDirs();
       // The immediate event may have refetched through a temporary hash-derived
