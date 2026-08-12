@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { fmtDate, fmtModel, modelColor } from '../src/components/project/utils';
+import { fmtDate, fmtModel, modelColor, buildModelMix } from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
@@ -91,5 +91,52 @@ describe('modelColor — one colour per family', () => {
 
   it('falls back to the Sonnet colour for an unknown family', () => {
     expect(modelColor('gpt-mystery')).toBe(modelColor('claude-sonnet-5'));
+  });
+});
+
+// ── Model distribution (project hero band, design 5b) ─────────────────────────
+// The tri-colour bar is a part-of-whole over TOKENS, so the invariants that
+// matter are: percentages sum to 100, empty families never reach the bar, and a
+// window with no usage degrades to an empty state instead of a NaN-wide bar.
+describe('buildModelMix — project hero band', () => {
+  const s = (model: string | undefined, totalTokens: number) => ({ model, totalTokens });
+
+  it('splits by tokens, not by session count', () => {
+    const mix = buildModelMix([
+      s('claude-opus-5', 750),
+      s('claude-sonnet-4-6', 125),
+      s('claude-sonnet-4-6', 125),
+    ]);
+    expect(mix.map(m => m.key)).toEqual(['opus', 'sonnet']);
+    expect(mix.find(m => m.key === 'opus')?.pct).toBe(75);
+    // sonnet carries two sessions but only a quarter of the work
+    expect(mix.find(m => m.key === 'sonnet')).toMatchObject({ pct: 25, sessions: 2 });
+  });
+
+  it('keeps the families in a stable order and sums to 100%', () => {
+    const mix = buildModelMix([
+      s('claude-haiku-4-5-20251001', 100),
+      s('claude-sonnet-4-6', 100),
+      s('claude-opus-5', 100),
+      s(undefined, 100),
+    ]);
+    expect(mix.map(m => m.key)).toEqual(['opus', 'sonnet', 'haiku', 'other']);
+    expect(mix.reduce((n, m) => n + m.pct, 0)).toBeCloseTo(100, 10);
+  });
+
+  it('drops families with no tokens so the bar never carries a zero-width segment', () => {
+    const mix = buildModelMix([s('claude-opus-5', 500), s('claude-sonnet-4-6', 0)]);
+    expect(mix.map(m => m.key)).toEqual(['opus']);
+    expect(mix[0].pct).toBe(100);
+  });
+
+  it('returns nothing when the window recorded no tokens at all', () => {
+    expect(buildModelMix([])).toEqual([]);
+    expect(buildModelMix([s('claude-opus-5', 0), s(undefined, 0)])).toEqual([]);
+  });
+
+  it('files an unrecognised model id under "other" rather than guessing a family', () => {
+    const mix = buildModelMix([s('some-future-model', 10)]);
+    expect(mix).toEqual([{ key: 'other', label: 'Other', tokens: 10, sessions: 1, pct: 100 }]);
   });
 });
