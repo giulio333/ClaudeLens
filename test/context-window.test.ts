@@ -28,7 +28,33 @@ describe('Mission Control context window', () => {
       used: 49_061,
       max: 1_000_000,
       pct: 5,
+      cacheRead: 0,
+      freshInput: 2,
+      cacheWrite: 49_059,
+      model: 'claude-opus-5',
     });
+  });
+
+  it('carries the occupancy breakdown the hover card plots', () => {
+    const turn: ChatMessage = {
+      uuid: 'assistant',
+      role: 'assistant',
+      timestamp: '2026-07-29T00:00:00.000Z',
+      model: 'claude-sonnet-4-5',
+      content: [{ type: 'text', text: 'Done' }],
+      usage: {
+        inputTokens: 4_000,
+        outputTokens: 58,
+        cacheReadTokens: 90_000,
+        cacheWriteTokens: 6_000,
+      },
+    };
+    const ctx = deriveContext([turn], 'sonnet');
+    expect(ctx).toMatchObject({ cacheRead: 90_000, freshInput: 4_000, cacheWrite: 6_000 });
+    // The parts are a partition of `used` — the card's bars depend on it.
+    expect(ctx!.cacheRead + ctx!.freshInput + ctx!.cacheWrite).toBe(ctx!.used);
+    // Output tokens leave the window; they must not inflate the reading.
+    expect(ctx!.used).toBe(100_000);
   });
 
   it('preserves explicit 1M markers and the 200k fallback', () => {
@@ -39,10 +65,11 @@ describe('Mission Control context window', () => {
   });
 
   it('keeps unmarked models below 200k on the standard context window', () => {
-    expect(deriveContext([assistant('claude-haiku-4-5', 50_000)], 'haiku')).toEqual({
+    expect(deriveContext([assistant('claude-haiku-4-5', 50_000)], 'haiku')).toMatchObject({
       used: 50_000,
       max: 200_000,
       pct: 25,
+      model: 'claude-haiku-4-5',
     });
   });
 });

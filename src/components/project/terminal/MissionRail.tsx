@@ -40,6 +40,7 @@ import {
   FEED_KINDS,
 } from './mission-feed';
 import type { FeedEvent, FeedKind } from './mission-feed';
+import { ContextPopover, SpendPopover } from './VitalsPopover';
 
 /**
  * The Mission Control rail beside the unified Terminal/Lens view — design "1d ·
@@ -59,9 +60,13 @@ import type { FeedEvent, FeedKind } from './mission-feed';
  * Above the feed sits a single pinned band: a compact vitals line (context %,
  * spend, the session's net diff and file count) over a 2px context fill. The
  * old 52px CONTEXT number and the SPEND/TASKS gauges are gone — in a feed the
- * emphasis belongs to the events, and what the gauges encoded now rides the
- * line's tooltips (used/left/total, cache savings) and the TASKS pill, which
- * counts `done/total` instead of a bare number. The read-only session
+ * emphasis belongs to the events. What the gauges spelled out is not lost: the
+ * TASKS pill counts `done/total` instead of a bare number, and the two figures
+ * on the line **drop a hover card** (`VitalsPopover`) carrying the old block's
+ * used/left/total and cache-savings copy plus the composition behind each — the
+ * detail belongs to the second level, not to the always-on line. They were
+ * native `title` tooltips for one release, which is where the numbers
+ * effectively went missing: an unstyled OS rectangle a second late. The read-only session
  * ENVIRONMENT (permission mode, capability counts, failed MCP) is state, not an
  * event, so it holds a slim strip pinned at the bottom.
  *
@@ -84,12 +89,6 @@ import type { FeedEvent, FeedKind } from './mission-feed';
 
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
-
-/** Compact token count for the vitals line: 156_312 → "156k", 1_240_000 → "1.2M". */
-function kTok(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  return `${Math.round(n / 1000)}k`;
-}
 
 /**
  * A clock the feed can read during render.
@@ -515,6 +514,8 @@ export function MissionRail({
   }, [teams, activeSessions, sessionList, sessionId]);
 
   const [filter, setFilter] = useState<FeedKind | 'ALL'>('ALL');
+  /** Which vitals figure is showing its hover card (one at a time). */
+  const [vital, setVital] = useState<'ctx' | 'spend' | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
   const toggleExpanded = useCallback((id: string) => {
     setExpanded(prev => {
@@ -643,13 +644,6 @@ export function MissionRail({
     [feed, filter]
   );
 
-  // Cache savings as a share of the bill that would have been paid without cache.
-  const savings = summary?.cacheSavings ?? 0;
-  const savingsPct =
-    summary && summary.estimatedCost + savings > 0
-      ? Math.round((savings / (summary.estimatedCost + savings)) * 100)
-      : 0;
-
   const doneTasks = tasks.filter(t => t.status === 'completed').length;
   const pct = ctx?.pct ?? 0;
   const ctxDanger = !!ctx && pct >= 90;
@@ -731,7 +725,7 @@ export function MissionRail({
           session's registry status (the only real-time "is it working now"
           signal): busy → violet working pulse, waiting → terracotta, idle →
           green, offline → grey. */}
-      <div className="shrink-0" style={{ padding: '15px 20px 12px' }}>
+      <div className="shrink-0" style={{ padding: '15px 20px 12px', position: 'relative' }}>
         <div className="flex items-center" style={{ gap: 8 }}>
           <span
             aria-hidden
@@ -790,30 +784,45 @@ export function MissionRail({
         </div>
 
         {/* vitals — what the CONTEXT number and the SPEND/TASKS gauges used to
-            say, folded into one line so the events keep the emphasis. */}
+            say, folded into one line so the events keep the emphasis. The two
+            headline figures are hover targets: the detail the old blocks
+            printed permanently now drops as a card below the band. Focusable,
+            so the cards are reachable without a pointer. */}
         <div
           className="font-mono flex items-baseline"
           style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
         >
           <span
-            title={
-              ctx
-                ? `${kTok(ctx.used)} used · ${kTok(Math.max(0, ctx.max - ctx.used))} left · ${kTok(ctx.max)} total`
-                : 'waiting for the first turn…'
-            }
-            style={{
-              font: '700 21px/1 var(--font-sans)',
-              letterSpacing: '-0.03em',
-              color: ctxDanger ? 'var(--cl-danger)' : 'var(--cl-ink)',
-            }}
+            className="cl-vitals-trigger flex items-baseline"
+            style={{ gap: 9 }}
+            tabIndex={0}
+            aria-label="Context window detail"
+            onMouseEnter={() => setVital('ctx')}
+            onMouseLeave={() => setVital(null)}
+            onFocus={() => setVital('ctx')}
+            onBlur={() => setVital(null)}
           >
-            {ctx ? pct : '—'}
-            <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>
+            <span
+              style={{
+                font: '700 21px/1 var(--font-sans)',
+                letterSpacing: '-0.03em',
+                color: ctxDanger ? 'var(--cl-danger)' : 'var(--cl-ink)',
+              }}
+            >
+              {ctx ? pct : '—'}
+              <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>
+            </span>
+            <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
           </span>
-          <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
           <span style={{ fontSize: 9.5, color: 'var(--cl-line)' }}>·</span>
           <span
-            title={savings > 0 ? `cache −${fmtCost(savings)} · ${savingsPct}% saved` : undefined}
+            className="cl-vitals-trigger"
+            tabIndex={0}
+            aria-label="Session spend detail"
+            onMouseEnter={() => setVital('spend')}
+            onMouseLeave={() => setVital(null)}
+            onFocus={() => setVital('spend')}
+            onBlur={() => setVital(null)}
             style={{ font: '700 15px/1 var(--font-sans)', color: 'var(--cl-accent-ink)' }}
           >
             {summary ? fmtCost(summary.estimatedCost) : '—'}
@@ -825,6 +834,9 @@ export function MissionRail({
             {changes.length} {changes.length === 1 ? 'file' : 'files'}
           </span>
         </div>
+
+        {vital === 'ctx' && <ContextPopover ctx={ctx} />}
+        {vital === 'spend' && <SpendPopover summary={summary} />}
       </div>
 
       {/* the context fill, edge to edge — a 2px rule that doubles as a gauge */}

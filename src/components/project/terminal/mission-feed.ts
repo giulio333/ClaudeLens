@@ -442,6 +442,15 @@ export function countByKind(events: FeedEvent[]): Record<FeedKind, number> {
   return counts;
 }
 
+/** Compact token count for the vitals line and its hover cards: 156_312 →
+ *  "156k", 1_240_000 → "1.2M". Sub-1k counts keep their digits — rounding a
+ *  fresh-input of 420 tokens to "0k" would read as "nothing was sent". */
+export function kTok(n: number): string {
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n < 1000) return String(n);
+  return `${Math.round(n / 1000)}k`;
+}
+
 /** Compact age for the feed's time gutter: `now`, `7m`, `3h`, `2d`, `—`. */
 export function shortAgo(at: number, now: number, live = false): string {
   if (live) return 'now';
