@@ -1,4 +1,14 @@
-import { app, BrowserWindow, dialog, ipcMain, Menu, Notification, session, shell } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  dialog,
+  ipcMain,
+  Menu,
+  Notification,
+  session,
+  shell,
+} from 'electron';
 import { basename, delimiter, isAbsolute, join, sep } from 'path';
 import os from 'os';
 import { randomUUID } from 'crypto';
@@ -1857,6 +1867,28 @@ ipcMain.handle('terminal:resize', async (_event, id: string, cols: number, rows:
 ipcMain.handle('terminal:kill', async (_event, id: string) => {
   killTerminal(id);
   return ok(null);
+});
+
+// The terminal pane's clipboard, read/written through the main process rather
+// than `navigator.clipboard`: the packaged renderer is loaded from `file://`,
+// where the async Clipboard API's read path depends on a permission the app
+// never grants. Electron's own module has no such gate. Only the Windows/Linux
+// terminal uses these (macOS gets the native Cmd+V paste) — see TerminalPane.
+ipcMain.handle('clipboard:readText', async () => {
+  try {
+    return ok(clipboard.readText());
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('clipboard:writeText', async (_event, text: string) => {
+  try {
+    clipboard.writeText(text);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
 });
 
 // ─── Live Monitor IPC ─────────────────────────────────────────────────────────
