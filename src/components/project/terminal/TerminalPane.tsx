@@ -23,6 +23,11 @@ import { trackEvent } from '../../../lib/telemetry';
 
 export type TerminalStatus = 'starting' | 'running' | 'exited' | 'error';
 
+// Clipboard wiring is a Windows/Linux-only concern (see the mount effect): on
+// macOS xterm leaves a Cmd+V keydown alone and Chromium pastes into the helper
+// textarea by itself, so that path stays untouched.
+const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+
 const STATUS_LABEL: Record<TerminalStatus, string> = {
   starting: 'Starting…',
   running: 'Running',
@@ -191,6 +196,47 @@ export function TerminalPane({
       if (idRef.current) void window.electronAPI.terminal.write(idRef.current, data);
     });
 
+    // Copy/paste off macOS has to be wired by hand. xterm maps Ctrl+letter to its
+    // control char and cancels the keydown, so the DOM `paste` never fires and
+    // Ctrl+V reaches the PTY as a bare ^V; and there is no context menu to fall
+    // back on, since the app runs without a native menu bar on Windows/Linux
+    // (`Menu.setApplicationMenu(null)`). Bindings follow the terminal convention
+    // plus what users actually press: Ctrl+V and Ctrl+Shift+V paste, Ctrl+Shift+C
+    // copies (a bare Ctrl+C must stay the interrupt), right-click copies when
+    // there is a selection and pastes otherwise.
+    const pasteFromClipboard = async () => {
+      const res = await window.electronAPI.clipboard.readText();
+      // `paste()` rather than a raw `terminal:write`: it normalizes newlines and
+      // applies bracketed-paste mode when the TUI turned it on, so a multi-line
+      // paste lands in the prompt as one block instead of N submitted lines.
+      if (res.data) termRef.current?.paste(res.data);
+    };
+    const copySelection = () => {
+      const selection = term.getSelection();
+      if (!selection) return false;
+      void window.electronAPI.clipboard.writeText(selection);
+      term.clearSelection();
+      return true;
+    };
+    const onContextMenu = (e: MouseEvent) => {
+      e.preventDefault();
+      if (!copySelection()) void pasteFromClipboard();
+    };
+    if (!IS_MAC) {
+      term.attachCustomKeyEventHandler(e => {
+        if (e.type !== 'keydown' || !e.ctrlKey || e.altKey) return true;
+        const key = e.key.toLowerCase();
+        if (key === 'v') {
+          void pasteFromClipboard();
+          return false;
+        }
+        // Nothing selected → let xterm have the key rather than swallow it.
+        if (key === 'c' && e.shiftKey) return !copySelection();
+        return true;
+      });
+      el.addEventListener('contextmenu', onContextMenu);
+    }
+
     const disposeData = window.electronAPI.terminal.onData((id, data) => {
       if (idRef.current === null) {
         earlyRef.current.push({ id, data });
@@ -227,6 +273,7 @@ export function TerminalPane({
       // stale and kills its own PTY (see startSession), so none leaks.
       genRef.current += 1;
       ro.disconnect();
+      el.removeEventListener('contextmenu', onContextMenu);
       // Drop this pane's PTY IPC listeners so they stop writing into its
       // (now unmounted) refs. Each subscribe returned a disposer that removes only
       // its own handler — a parallel terminal pane keeps its listeners intact.
