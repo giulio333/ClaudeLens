@@ -69,6 +69,56 @@ export function fmtModel(m: string): string {
   return s;
 }
 
+// ── Model distribution (project hero band, design 5b) ───────────────────────
+// Share of a window's tokens per model family, for the tri-colour bar under the
+// project name. Tokens rather than session count: the cell sits next to the
+// token figure, and what the bar encodes is where the work went. Families with
+// no tokens are dropped so the bar never carries a zero-width segment; a window
+// with no usage at all returns [] and the caller shows an empty state.
+export type ModelMixSlice = {
+  key: ModelMixKey;
+  label: string;
+  tokens: number;
+  sessions: number;
+  pct: number;
+};
+
+export type ModelMixKey = 'opus' | 'sonnet' | 'haiku' | 'other';
+
+const MODEL_MIX_ORDER: { key: ModelMixKey; label: string }[] = [
+  { key: 'opus', label: 'Opus' },
+  { key: 'sonnet', label: 'Sonnet' },
+  { key: 'haiku', label: 'Haiku' },
+  { key: 'other', label: 'Other' },
+];
+
+export function modelMixKey(model?: string): ModelMixKey {
+  if (!model) return 'other';
+  if (model.includes('opus')) return 'opus';
+  if (model.includes('haiku')) return 'haiku';
+  if (model.includes('sonnet')) return 'sonnet';
+  return 'other';
+}
+
+export function buildModelMix(
+  sessions: { model?: string; totalTokens: number }[]
+): ModelMixSlice[] {
+  const acc = new Map<ModelMixKey, { tokens: number; sessions: number }>();
+  for (const s of sessions) {
+    const key = modelMixKey(s.model);
+    const cur = acc.get(key) ?? { tokens: 0, sessions: 0 };
+    cur.tokens += s.totalTokens;
+    cur.sessions += 1;
+    acc.set(key, cur);
+  }
+  const total = [...acc.values()].reduce((n, v) => n + v.tokens, 0);
+  if (total <= 0) return [];
+  return MODEL_MIX_ORDER.map(({ key, label }) => {
+    const v = acc.get(key) ?? { tokens: 0, sessions: 0 };
+    return { key, label, tokens: v.tokens, sessions: v.sessions, pct: (v.tokens / total) * 100 };
+  }).filter(slice => slice.tokens > 0);
+}
+
 // Colore accent per famiglia modello.
 // Data-encoding colours (which model produced this slice), not brand accents —
 // same category as the teammate palette in teams/utils.ts.

@@ -12,7 +12,7 @@ import {
   useActiveSessions,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
-import { fmt, fmtModel, sessionTitle, formatTokens } from '../utils';
+import { fmt, fmtModel, sessionTitle, formatTokens, buildModelMix } from '../utils';
 import type { SessionSummary, MemoryTopic } from '../../../types';
 import { Lens } from './Lens';
 import { McpServerGrid } from '../mcp/McpServerGrid';
@@ -289,33 +289,10 @@ export function ProjectView({
   const { data: cleanupDays = 30 } = useCleanupPeriodDays();
 
   // ── Live session (registry ~/.claude/sessions, push dal main) ──
+  // Only the hero's `is-live` treatment reads it here: the PID/uptime readout
+  // moved to the rail footer (design 5a), which owns the ticking clock.
   const { data: procs = [] } = useActiveSessions();
   const liveProc = procs.find(p => p.cwd === project.realPath);
-  const livePid = liveProc?.pid;
-  const liveStartedAt = liveProc?.startedAt;
-  // Live uptime in state, computed inside the interval callback (never during
-  // render) so the render stays pure. With a registry entry the base is the
-  // real session start; fallback entries reuse the old "first observed" base.
-  const [liveSec, setLiveSec] = useState(0);
-  useEffect(() => {
-    if (livePid === undefined) return;
-    let observedStart: number | null = null;
-    const update = () => {
-      if (observedStart === null) observedStart = Date.now();
-      const base = liveStartedAt ?? observedStart;
-      setLiveSec(Math.max(0, Math.floor((Date.now() - base) / 1000)));
-    };
-    const seed = setTimeout(update, 0);
-    const t = setInterval(update, 1000);
-    return () => {
-      clearTimeout(seed);
-      clearInterval(t);
-    };
-  }, [livePid, liveStartedAt]);
-  const liveUptime =
-    liveSec >= 3600
-      ? `${Math.floor(liveSec / 3600)}h ${Math.floor((liveSec % 3600) / 60)}m`
-      : `${Math.floor(liveSec / 60)}m ${liveSec % 60}s`;
 
   // Wall-clock for the retention window, kept in state so render never calls
   // Date.now() directly. Seeded right after mount and refreshed each minute;
@@ -349,19 +326,33 @@ export function ProjectView({
   const sessionCount = statsSessions.length;
   const totalTokens = statsSessions.reduce((s, x) => s + x.totalTokens, 0);
   const totalCost = statsSessions.reduce((s, x) => s + x.estimatedCost, 0);
+  const totalMessages = statsSessions.reduce((s, x) => s + x.messageCount, 0);
   const tokensFmt = formatTokens(totalTokens);
   const avgTokens =
     sessionCount > 0
       ? formatTokens(Math.round(totalTokens / sessionCount))
       : { value: '0', unit: '' };
+  const avgMessages = sessionCount > 0 ? Math.round(totalMessages / sessionCount) : 0;
   const allSessionCount = sessions.length;
   const olderSessionCount = Math.max(0, allSessionCount - sessionCount);
-  const retentionLabel = retentionDays === 1 ? 'last 24h' : `last ${retentionDays}d`;
   const lastActive = sessions[0]?.date;
   const statBuckets = useMemo(
     () => buildTimelineBuckets(statsSessions, retentionDays),
     [statsSessions, retentionDays]
   );
+  // Sessions in the window immediately before the retention one, so the hero
+  // band's session figure can carry an honest delta instead of a bare count.
+  const prevWindowSessions = useMemo(() => {
+    if (nowMs === 0) return 0;
+    const end = nowMs - retentionDays * DAY_MS;
+    const start = end - retentionDays * DAY_MS;
+    return sessions.filter(s => {
+      const t = new Date(s.date).getTime();
+      return !isNaN(t) && t >= start && t < end;
+    }).length;
+  }, [sessions, retentionDays, nowMs]);
+  const sessionDelta = sessionCount - prevWindowSessions;
+  const modelMix = useMemo(() => buildModelMix(statsSessions), [statsSessions]);
 
   const pinnedSessions = useMemo(
     () => sessions.filter(s => isSessionPinned(project.hash, s.filename)),
@@ -572,7 +563,7 @@ export function ProjectView({
       {/* ─── HERO ─────────────────────────────────────── */}
       <section
         className={`cl-hero${liveProc && !isTeamsSection ? ' is-live' : ''}${
-          isTeamsSection ? ' cl-hero--compact cl-hero--teams' : ''
+          isTeamsSection ? ' cl-hero--compact cl-hero--teams' : ' cl-hero--band'
         }`}
       >
         {!isTeamsSection && <Lens />}
@@ -624,88 +615,104 @@ export function ProjectView({
           <span className="chev">↓</span>
         </button>
 
-        <div className="cl-h-meta">
-          <span>
-            <b>{fmt(sessionCount)}</b> sessions / {retentionDays}d
-          </span>
-          {!isTeamsSection && (
-            <>
-              <span className="sep">·</span>
-              <span>
-                <b>
-                  {tokensFmt.value}
-                  {tokensFmt.unit}
-                </b>{' '}
-                tokens
-              </span>
-            </>
-          )}
-          {lastActive && (
-            <>
-              <span className="sep">·</span>
-              <span>
-                last active <b>{relIso(lastActive)} ago</b>
-              </span>
-            </>
-          )}
-        </div>
-      </section>
-
-      {/* ─── SECTION CONTENT ──────────────────────────── */}
-      {section === 'overview' && (
-        <>
-          <section className="cl-stats">
-            <div className="cl-stat">
-              <span className="lbl">Sessions</span>
-              <div className="num">{fmt(sessionCount)}</div>
+        {isTeamsSection ? (
+          <div className="cl-h-meta">
+            <span>
+              <b>{fmt(sessionCount)}</b> sessions / {retentionDays}d
+            </span>
+            {lastActive && (
+              <>
+                <span className="sep">·</span>
+                <span>
+                  last active <b>{relIso(lastActive)} ago</b>
+                </span>
+              </>
+            )}
+          </div>
+        ) : (
+          /* Metrics band (design 5b): the project's numbers read as a strip of
+             hairline-divided cells under the name, replacing both the old meta
+             line and the 4-cell stat strip that used to sit below the hero. The
+             timeline bars ride inside the first two cells so the retention
+             distribution survives the move. */
+          <div className="cl-hband">
+            <div className="cl-hcell">
+              <div className="lbl">
+                Sessions / {retentionDays}d
+                {lastActive && <span className="when">last {relIso(lastActive)} ago</span>}
+              </div>
+              <div className="num">
+                {fmt(sessionCount)}
+                {nowMs > 0 && sessionDelta !== 0 && (
+                  <span className={`delta${sessionDelta < 0 ? ' down' : ''}`}>
+                    {sessionDelta > 0 ? '+' : '−'}
+                    {Math.abs(sessionDelta)}
+                  </span>
+                )}
+              </div>
               <Bars buckets={statBuckets} metric="sessions" />
-              <div className="delta">
-                {retentionLabel}
-                {olderSessionCount > 0 ? ` · ${fmt(olderSessionCount)} older` : ' · full retention'}
+              <div className="sub">
+                {olderSessionCount > 0
+                  ? `${fmt(olderSessionCount)} older · ${fmt(allSessionCount)} total`
+                  : 'full retention'}
               </div>
             </div>
-            <div className="cl-stat">
-              <span className="lbl">Tokens</span>
+
+            <div className="cl-hcell">
+              <div className="lbl">Tokens</div>
               <div className="num">
                 {tokensFmt.value}
                 <small>{tokensFmt.unit}</small>
               </div>
               <Bars buckets={statBuckets} metric="tokens" />
-              <div className="delta">
-                est. ${totalCost.toFixed(2)} · {retentionLabel}
-              </div>
-            </div>
-            <div className="cl-stat">
-              <span className="lbl">Avg / session</span>
-              <div className="num">
+              <div className="sub">
                 {avgTokens.value}
-                <small>{avgTokens.unit || 'tok'}</small>
+                {avgTokens.unit || ' tok'} avg · est. ${totalCost.toFixed(2)}
               </div>
-              <Bars buckets={statBuckets} metric="avg" />
-              <div className="delta">across {fmt(sessionCount)} sessions</div>
             </div>
-            <div className="cl-stat live">
-              <span className="lbl">
-                <span className="pulse" /> Live
-              </span>
-              {liveProc ? (
-                <>
-                  <div className="pid">PID {liveProc.pid}</div>
-                  <div className="cmd">
-                    {liveProc.status === 'waiting'
-                      ? `waiting for ${liveProc.waitingFor ?? 'input'}`
-                      : liveProc.source === 'registry'
-                        ? liveProc.status
-                        : 'claude'}
-                  </div>
-                  <div className="uptime">↑ {liveUptime} · attached</div>
-                </>
+
+            <div className="cl-hcell">
+              <div className="lbl">Messages</div>
+              <div className="num">{fmt(totalMessages)}</div>
+              <div className="sub">{fmt(avgMessages)} avg / session</div>
+            </div>
+
+            <div className="cl-hcell cl-hcell--mix">
+              <div className="lbl">Model distribution</div>
+              {modelMix.length === 0 ? (
+                <div className="sub">No usage in this window</div>
               ) : (
-                <div className="idle">No live session</div>
+                <>
+                  <div className="cl-mixbar">
+                    {modelMix.map(slice => (
+                      <i
+                        key={slice.key}
+                        className={`seg ${slice.key}`}
+                        style={{ width: `${slice.pct}%` }}
+                        title={`${slice.label} · ${fmt(slice.tokens)} tok · ${slice.sessions} ${
+                          slice.sessions === 1 ? 'session' : 'sessions'
+                        }`}
+                      />
+                    ))}
+                  </div>
+                  <div className="cl-mixlegend">
+                    {modelMix.map(slice => (
+                      <span key={slice.key}>
+                        <i className={`dot ${slice.key}`} />
+                        {slice.label} {Math.round(slice.pct)}%
+                      </span>
+                    ))}
+                  </div>
+                </>
               )}
             </div>
-          </section>
+          </div>
+        )}
+      </section>
 
+      {/* ─── SECTION CONTENT ──────────────────────────── */}
+      {section === 'overview' && (
+        <>
           <PinnedSessionsSection
             sessions={pinnedSessions}
             projectHash={project.hash}
@@ -1509,11 +1516,14 @@ const SessionRow = memo(function SessionRow({
   onDelete,
 }: SessionRowProps) {
   const fam = modelFamily(s.model);
+  // No title of any kind on disk → sessionTitle() falls back to the placeholder,
+  // which the row prints in the muted italic of the mock.
+  const untitled = !(s.customTitle?.trim() || s.aiTitle?.trim() || s.firstUserMessage?.trim());
   return (
     <div
       role="button"
       tabIndex={0}
-      className={`cl-row has-pin${pinned ? ' is-pinned' : ''}`}
+      className={`cl-srow${pinned ? ' is-pinned' : ''}`}
       onClick={() => onOpen(s)}
       onKeyDown={e => {
         if (e.key === 'Enter' || e.key === ' ') {
@@ -1524,7 +1534,7 @@ const SessionRow = memo(function SessionRow({
     >
       <button
         type="button"
-        className={`cl-pin-row${pinned ? ' pinned' : ''}`}
+        className={`cl-srow-pin${pinned ? ' pinned' : ''}`}
         title={pinned ? 'Unpin session' : 'Pin session'}
         aria-label={pinned ? 'Unpin session' : 'Pin session'}
         onClick={e => {
@@ -1535,86 +1545,68 @@ const SessionRow = memo(function SessionRow({
         <PinIcon filled={pinned} />
       </button>
       <span className="idx">{String(rank).padStart(2, '0')}</span>
-      <div style={{ minWidth: 0 }}>
-        <div className="title cl-row-title">
-          <span className="cl-row-title-text">{sessionTitle(s)}</span>
-          {live && <LiveTag />}
-          <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
-        </div>
-        <div className="cl-row-meta">
-          <span className="cl-row-meta-stats">{fmt(s.messageCount)} msg</span>
-          {tags.length > 0 && (
-            <span className="cl-row-meta-sep" aria-hidden>
-              ·
-            </span>
-          )}
-          <span className="cl-row-tags" onClick={e => e.stopPropagation()}>
-            {tags.map((t, ti) => (
-              <span key={t} className="cl-row-tag-item">
-                {ti > 0 && (
-                  <span className="cl-row-meta-sep" aria-hidden>
-                    ·
-                  </span>
-                )}
-                <TagChip
-                  name={t}
-                  variant="plain"
-                  tone="soft"
-                  removable
-                  onRemove={() => onRemoveTag(s.filename, t)}
-                />
-              </span>
-            ))}
-          </span>
+      <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
+      {live && <LiveTag />}
+      <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
+      {/* rendered only when there are tags: an empty flex item would still take
+          the row's 12px gap and push the leader in */}
+      {tags.length > 0 && (
+        <span className="cl-srow-tags" onClick={e => e.stopPropagation()}>
+          {tags.map(t => (
+            <TagChip
+              key={t}
+              name={t}
+              variant="plain"
+              tone="soft"
+              removable
+              onRemove={() => onRemoveTag(s.filename, t)}
+            />
+          ))}
+        </span>
+      )}
+
+      {/* Leader dots (design 5b/4b) — the row's connective tissue. The row
+          actions ride at its right edge, absolutely positioned so revealing
+          them on hover never reflows the meta group. */}
+      <span className="lead">
+        <span className="cl-srow-actions" onClick={e => e.stopPropagation()}>
           <button
             type="button"
-            className="cl-row-tag-add"
             aria-label="Open in-app chat"
             title="Open as an in-app chat — runs through the Agent SDK, billed to SDK credits (separate from your subscription)"
-            onClick={e => {
-              e.stopPropagation();
-              onOpenChat(s);
-            }}
+            onClick={() => onOpenChat(s)}
           >
             Chat
           </button>
           <button
             type="button"
-            className="cl-row-tag-add"
             data-haspicker={pickerOpen}
             aria-label="Add tag"
             title="Add tag"
-            onClick={e => {
-              e.stopPropagation();
-              const rect = (e.currentTarget as HTMLElement).getBoundingClientRect();
-              onAddTag(s.filename, rect);
-            }}
+            onClick={e => onAddTag(s.filename, e.currentTarget.getBoundingClientRect())}
           >
             + tag
           </button>
           <button
             type="button"
-            className="cl-row-tag-add"
+            className="danger"
             aria-label="Delete session"
             title="Delete session"
-            style={{ color: 'var(--cl-danger)' }}
-            onClick={e => {
-              e.stopPropagation();
-              onDelete(s);
-            }}
+            onClick={() => onDelete(s)}
           >
             Delete
           </button>
-        </div>
-      </div>
-      <span className={`model ${fam}`}>
-        <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
+        </span>
       </span>
-      <span className="toks">
-        {fmt(s.totalTokens)}
-        <small>tok</small>
+
+      <span className="meta">
+        <span className="msg">{fmt(s.messageCount)} msg</span>
+        <span className={`model ${fam}`}>
+          <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
+        </span>
+        <span className="toks">{fmt(s.totalTokens)}</span>
+        <span className="when">{shortWhen(s.date)}</span>
       </span>
-      <span className="when">{shortWhen(s.date)}</span>
     </div>
   );
 }, sessionRowEqual);
@@ -1684,7 +1676,7 @@ function SessionRows({
   const remaining = sessions.length - visible.length;
 
   return (
-    <div>
+    <div className="cl-srows">
       {visible.map((s, i) => (
         <SessionRow
           key={s.filename}
@@ -1703,26 +1695,24 @@ function SessionRows({
           onDelete={handleDelete}
         />
       ))}
-      {remaining > 0 && (
-        <button
-          type="button"
-          className="cl-row-show-more"
-          onClick={() => setShown(n => n + (pageSize ?? sessions.length))}
-          style={{
-            width: '100%',
-            padding: '11px 12px',
-            marginTop: 4,
-            background: 'transparent',
-            border: '1px dashed var(--cl-line)',
-            borderRadius: 8,
-            color: 'var(--cl-ink-4)',
-            font: 'inherit',
-            fontSize: 13,
-            cursor: 'pointer',
-          }}
-        >
-          Show more · {remaining} remaining
-        </button>
+      {/* Footer in the 5b idiom: the range on the left, the progressive-load
+          control on the right where the mock puts its pager. Loading stays
+          progressive (mounted rows only) rather than paged. */}
+      {pageSize !== undefined && (
+        <div className="cl-srow-foot">
+          <span className="range">
+            <b>1–{visible.length}</b> of {sessions.length}
+          </span>
+          {remaining > 0 && (
+            <button
+              type="button"
+              className="cl-srow-more"
+              onClick={() => setShown(n => n + (pageSize ?? sessions.length))}
+            >
+              Show more · {remaining} remaining
+            </button>
+          )}
+        </div>
       )}
       {pickerFor && (
         <TagPicker
