@@ -21,6 +21,8 @@ Formatter puri (nessuna dipendenza React):
 - `fmtDate(d)` — data localizzata `it-IT`
 - `fmtModel(m)` — ID modello → nome leggibile (`claude-sonnet-4-6` → `Sonnet 4.6`)
 - `modelColor(m)` — colore hex accent per famiglia modello
+- `formatTokens(n)` — conteggio compatto `{value, unit}` (`2.3` + `m`)
+- `modelMixKey(m)` / `buildModelMix(sessions)` — distribuzione per famiglia modello della **fascia metriche** dell'hero progetto: quota sui **token** (non sulle sessioni), famiglie a zero token scartate (mai un segmento a larghezza nulla), finestra senza uso → `[]` e la cella mostra l'empty state. Un id sconosciuto finisce in `other` invece di essere indovinato. Unit-tested in `test/project-formatters.test.ts`
 
 ---
 
@@ -253,13 +255,60 @@ Subtab "Teams": mostra i **team di agenti** di Claude Code 2.x (teammate in-proc
 
 ### `overview/`
 
-| File                          | Esporta                                             | Descrizione                                                                                             |
-| ----------------------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------- |
-| `GlobalHomeView.tsx`          | `GlobalHomeView`                                    | Home globale: progetti, panoramica MCP, link a sezioni globali                                          |
-| `Lens.tsx`                    | `Lens`                                              | Componente "lente" usata per inquadrare le metriche/sezioni della overview                              |
-| `ProjectOverviewContent.tsx`  | `ProjectOverviewContent`                            | Vista overview di un progetto: header metriche + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp) |
-| `ProjectSubtabs.tsx`          | `ProjectSubtabs`                                    | Subtab di navigazione interna a un progetto                                                             |
-| `DuplicateProjectsNotice.tsx` | `DuplicateProjectsBadge`, `DuplicateProjectsNotice` | Notice/badge per progetti duplicati (cwd rewrite + merge)                                               |
+| File                          | Esporta                                             | Descrizione                                                                                                           |
+| ----------------------------- | --------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `GlobalHomeView.tsx`          | `GlobalHomeView`                                    | Home globale: progetti, panoramica MCP, link a sezioni globali                                                        |
+| `Lens.tsx`                    | `Lens`                                              | Componente "lente" usata per inquadrare le metriche/sezioni della overview                                            |
+| `ProjectOverviewContent.tsx`  | `ProjectOverviewContent`                            | Vista di un progetto: hero + **fascia metriche** + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp). Vedi sotto |
+| `ProjectRail.tsx`             | `ProjectRail`                                       | **Rail verticale** di navigazione del progetto (design 5a) — ha sostituito `ProjectSubtabs`. Vedi sotto               |
+| `DuplicateProjectsNotice.tsx` | `DuplicateProjectsBadge`, `DuplicateProjectsNotice` | Notice/badge per progetti duplicati (cwd rewrite + merge)                                                             |
+
+**Chrome del progetto — design handoff _Sessions Varianti_ (rail 5a + contenuto 5b).**
+La navigazione di progetto non è più una fascia orizzontale di subtab: è una
+**colonna di lavoro** a sinistra (`ProjectRail`, 220px, `--cl-paper-2`, hairline
+a destra) montata da `ProjectOverview` dentro `.cl-shell`, il wrapper flex-row
+che ora contiene rail + `.cl-main`. Il rail porta, dall'alto: **testata
+progetto** (tile monogramma + nome + path in `~` + `▾` → apre il popover
+progetti, lo stesso del nome nell'hero), le sezioni raggruppate in
+**Context / Execution / System** con tile monogramma e conteggio (sezione a 0 →
+tile tratteggiata e riga smorzata: "vuoto" e "non ancora letto" restano
+distinguibili), e un piede a una riga col **processo live** (pulse +
+`N processes running` + `PID · uptime`) e il **collapse come sola icona** da
+26px (⌘B nel tooltip). Collassato è una striscia di 64px di sole tile, con badge
+del conteggio sulla tile attiva; lo stato è persistito (`useRailCollapsed` →
+`cl-rail-collapsed`, chiave registrata in `prefsBackend`). Il ticker dell'uptime
+vive qui, non più in `ProjectView`: prima ri-renderizzava tutta la vista
+progetto una volta al secondo.
+**Niente riga di ricerca nel rail** (il mock 5a ne aveva una): l'app ha già un
+solo ingresso alla ricerca, la lente in alto a destra della top bar con `⌘F` —
+due trigger per lo stesso popover erano ridondanti. Per la stessa ragione il
+collapse ha perso label e chip `⌘B`: era l'elemento più pesante della colonna
+per un controllo che la scorciatoia già copre.
+
+Il contenuto segue **5b**: l'hero perde la meta-riga e guadagna una **fascia
+metriche** (`.cl-hband`) di celle divise da hairline — Sessions/{retention}d con
+delta sulla finestra precedente, Tokens, Messages, **distribuzione modelli** come
+barra part-of-whole + legenda (`buildModelMix` in `../utils.ts`, quota sui
+**token** e non sulle sessioni: la cella sta accanto alla cifra dei token e ciò
+che la barra codifica è dove è finito il lavoro; unit-tested). La fascia ha
+**assorbito la vecchia stat strip a 4 celle** della Overview: le sparkline del
+periodo di retention sono scese dentro le prime due celle, media/costo sono
+diventati la riga piccola, e la cella "live" è migrata nel piede del rail (era
+duplicata in due punti). Il nome display scende a `clamp(40px, 4.2vw, 72px)`
+perché una cifra da 26px sotto un titolo da 132px non è una gerarchia.
+Le sessioni sono **righe a leader dots** (`.cl-srow`): pin, indice, titolo, tag,
+filetto puntinato, e a destra il gruppo cifre `msg · modello · token · data`.
+Le azioni di riga (Chat / + tag / Delete) sono **posizionate in assoluto sul
+filetto**, che è spazio già occupato: comparire in hover non rifluisce nulla.
+Per questo il filetto ha un `min-width` pari alla larghezza del cluster (196px):
+i bottoni non partecipano al layout, quindi senza quello spazio riservato un
+titolo lungo si prendeva tutto il gap e in hover i bottoni finivano **sopra** il
+titolo. Il titolo tronca prima, il cluster non si sposta mai.
+La riga pinnata prende il wash accent + il filetto accent, e la lista si apre
+con il filetto d'inchiostro 1.5px. Il piede riporta il range (`1–N of M`) e il
+"Show more": il caricamento resta progressivo, prende solo l'idioma del pager
+del mock. La sezione **Teams** conserva l'hero compatto (`cl-hero--compact`) e la
+vecchia meta-riga: è una vista operativa, non una landing di progetto.
 
 ---
 

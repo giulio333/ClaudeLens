@@ -13345,3 +13345,878 @@ select.cl-opt-input {
 .cl-studio-canvas .react-flow__minimap svg {
   border-radius: 12px;
 }
+
+/* ════════════════════════════════════════════════════════════════════════
+   APP SHELL · rail + main
+   The project rail (design 5a) replaced the horizontal subtab bar, so the
+   body below the top bar is a row instead of a column.
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-shell {
+  flex: 1;
+  display: flex;
+  min-height: 0;
+  min-width: 0;
+}
+.cl-shell > .cl-main {
+  min-width: 0;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   PROJECT RAIL (design 5a — instrumental column)
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-rail {
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  background: var(--cl-paper-2);
+  border-right: 1px solid var(--cl-line);
+  z-index: 20;
+}
+.cl-rail.is-collapsed {
+  width: 64px;
+  align-items: center;
+  padding: 13px 0 12px;
+  gap: 2px;
+}
+
+/* ── Project header / switcher ── */
+.cl-rail-project {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 13px 12px;
+  border: none;
+  border-bottom: 1px solid var(--cl-line);
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  width: 100%;
+  flex-shrink: 0;
+  transition: background 120ms;
+}
+.cl-rail-project:hover {
+  background: var(--cl-glass-hover-bg);
+}
+.cl-rail-mark {
+  width: 26px;
+  height: 26px;
+  border-radius: 7px;
+  background: var(--cl-ink);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.cl-rail-mark i {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  display: block;
+}
+.cl-rail-project .txt {
+  min-width: 0;
+  flex: 1;
+}
+.cl-rail-project .name {
+  display: block;
+  font-size: 12.5px;
+  line-height: 1.25;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--cl-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-rail-project .path {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-rail-project .chev {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  color: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+
+/* ── Nav ── */
+.cl-rail-nav {
+  flex: 1;
+  min-height: 0;
+  padding-top: 4px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: var(--cl-scroll) transparent;
+  padding-bottom: 8px;
+}
+.cl-rail-group {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  padding: 15px 18px 7px;
+}
+.cl-rail-item {
+  display: grid;
+  grid-template-columns: 20px 1fr auto;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 16px);
+  margin: 0 8px;
+  padding: 7px 10px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  text-align: left;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+.cl-rail-item .mono {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 1px solid var(--cl-line);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  color: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+.cl-rail-item .lbl {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-rail-item .ct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-4);
+  font-variant-numeric: tabular-nums;
+}
+.cl-rail-item.is-empty {
+  color: var(--cl-ink-4);
+  opacity: 0.6;
+}
+.cl-rail-item.is-empty .mono {
+  border-style: dashed;
+}
+.cl-rail-item:hover {
+  background: var(--cl-glass-hover-bg);
+  color: var(--cl-ink);
+  opacity: 1;
+}
+.cl-rail-item.on {
+  font-weight: 500;
+  color: var(--cl-ink);
+  background: var(--cl-paper);
+  border-color: var(--cl-line);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.85),
+    0 1px 2px oklch(0 0 0 / 0.05);
+  opacity: 1;
+}
+.cl-rail-item.on .mono {
+  background: var(--cl-accent);
+  border-color: transparent;
+  color: var(--cl-on-accent);
+}
+.cl-rail-item.on .ct {
+  color: var(--cl-accent-ink);
+  font-weight: 500;
+}
+
+/* ── Footer: live process + collapse ── */
+.cl-rail-foot {
+  margin-top: auto;
+  flex-shrink: 0;
+  border-top: 1px solid var(--cl-line);
+  padding: 10px 12px 10px 14px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.cl-rail-live {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--cl-ink-3);
+  min-width: 0;
+}
+.cl-rail-live .txt {
+  min-width: 0;
+}
+.cl-rail-live .head {
+  display: block;
+  color: var(--cl-ink-2);
+}
+.cl-rail-live .sub {
+  display: block;
+  color: var(--cl-ink-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-rail-live.is-idle {
+  color: var(--cl-ink-4);
+}
+.cl-rail-live.is-idle .head {
+  color: var(--cl-ink-4);
+}
+.cl-rail-live .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-line);
+  flex-shrink: 0;
+}
+.cl-rail-pulse {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-ok);
+  flex-shrink: 0;
+  display: block;
+  animation: cl-rail-pulse 1.8s infinite;
+}
+@keyframes cl-rail-pulse {
+  0% {
+    box-shadow: 0 0 0 0 oklch(0.62 0.1 145 / 0.6);
+  }
+  70% {
+    box-shadow: 0 0 0 8px oklch(0.62 0.1 145 / 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 oklch(0.62 0.1 145 / 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-rail-pulse {
+    animation: none;
+  }
+}
+/* icon-only: a quiet 26px affordance, not a full-width block */
+.cl-rail-collapse {
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 7px;
+  border: 1px solid transparent;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+.cl-rail-collapse:hover {
+  background: var(--cl-glass-hover-bg);
+  border-color: color-mix(in oklch, var(--cl-accent) 30%, transparent);
+  color: var(--cl-accent-ink);
+}
+
+/* ── Collapsed strip ── */
+.cl-rail.is-collapsed .cl-rail-mark {
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
+  border: none;
+  cursor: pointer;
+  margin-bottom: 11px;
+  padding: 0;
+}
+.cl-rail.is-collapsed .cl-rail-mark i {
+  width: 9px;
+  height: 9px;
+}
+.cl-rail-tile {
+  width: 34px;
+  height: 34px;
+  border-radius: 9px;
+  border: 1px solid transparent;
+  background: transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  position: relative;
+  flex-shrink: 0;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+.cl-rail-tile:hover {
+  background: var(--cl-glass-hover-bg);
+  color: var(--cl-accent-ink);
+}
+.cl-rail-tile.is-empty {
+  opacity: 0.4;
+}
+.cl-rail-tile.on {
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  border-color: transparent;
+  box-shadow: 0 2px 8px -2px color-mix(in srgb, var(--cl-accent) 60%, transparent);
+  opacity: 1;
+}
+.cl-rail-tile .badge {
+  position: absolute;
+  top: -3px;
+  right: -5px;
+  font-family: var(--font-mono);
+  font-size: 8px;
+  font-style: normal;
+  font-weight: 500;
+  line-height: 1;
+  color: var(--cl-accent-ink);
+  background: var(--cl-paper-2);
+  border-radius: 4px;
+  padding: 1px 3px;
+}
+.cl-rail-tiles {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: none;
+}
+.cl-rail-tiles::-webkit-scrollbar {
+  display: none;
+}
+.cl-rail-tilesep {
+  width: 22px;
+  height: 1px;
+  background: var(--cl-line);
+  margin: 7px 0;
+  display: block;
+  flex-shrink: 0;
+}
+.cl-rail-tilefoot {
+  margin-top: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  padding-top: 12px;
+}
+.cl-rail-tile--toggle {
+  border-color: var(--cl-line);
+  background: oklch(1 0 0 / 0.45);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.7);
+  color: var(--cl-ink-3);
+  font-size: 13px;
+}
+
+/* dark theme: the white-alpha glass of the mock becomes a lift on the slab */
+:root[data-theme='dark'] .cl-rail-tile--toggle {
+  background: oklch(1 0 0 / 0.05);
+  border-color: oklch(1 0 0 / 0.14);
+  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
+}
+:root[data-theme='dark'] .cl-rail-item.on {
+  background: oklch(1 0 0 / 0.07);
+  border-color: oklch(1 0 0 / 0.12);
+  box-shadow: none;
+}
+
+@media (max-width: 980px) {
+  .cl-rail:not(.is-collapsed) {
+    width: 188px;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   HERO METRICS BAND (design 5b)
+   The band carries the project's figures, so the display name steps back from
+   the full editorial clamp to roughly the mock's name:figure proportion —
+   otherwise a 132px name would swamp a strip of 26px numbers.
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-hero--band {
+  padding-top: 34px;
+  padding-bottom: 28px;
+}
+.cl-hero--band .cl-hero-actions {
+  top: 34px;
+}
+.cl-hero--band .cl-h-name {
+  font-size: clamp(40px, 4.2vw, 72px);
+  gap: 14px;
+}
+.cl-hero--band .cl-h-name .chev {
+  width: 28px;
+  height: 28px;
+  font-size: 14px;
+  margin-bottom: 10px;
+  border-width: 1.5px;
+}
+.cl-hero--band .cl-lens {
+  width: 400px;
+  height: 400px;
+  right: -120px;
+  top: -90px;
+}
+.cl-hband {
+  display: flex;
+  align-items: stretch;
+  margin-top: 26px;
+  border-top: 1px solid var(--cl-line);
+  position: relative;
+  z-index: 2;
+  flex-wrap: wrap;
+}
+.cl-hcell {
+  padding: 14px 26px 0;
+  border-right: 1px solid var(--cl-line);
+  flex: 0 0 auto;
+  min-width: 0;
+  /* column so the small print bottom-aligns across cells of unequal height
+     (only two of them carry a sparkline) */
+  display: flex;
+  flex-direction: column;
+}
+.cl-hcell:first-child {
+  padding-left: 0;
+}
+.cl-hcell--mix {
+  flex: 1 1 260px;
+  border-right: none;
+  padding-right: 0;
+}
+.cl-hcell .lbl {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.cl-hcell .lbl .when {
+  letter-spacing: 0.06em;
+  text-transform: none;
+  opacity: 0.75;
+}
+.cl-hcell .num {
+  font-size: 26px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.03em;
+  color: var(--cl-ink);
+  margin-top: 9px;
+  font-variant-numeric: tabular-nums;
+}
+.cl-hcell .num small {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--cl-ink-4);
+}
+.cl-hcell .num .delta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--cl-ok);
+  margin-left: 8px;
+}
+.cl-hcell .num .delta.down {
+  color: var(--cl-ink-4);
+}
+.cl-hcell .sub {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.4;
+  color: var(--cl-ink-4);
+  margin-top: auto;
+  padding-top: 10px;
+}
+/* the retention sparkline rides inside the cell, compact */
+.cl-hcell .cl-bars {
+  margin-top: 11px;
+  height: 20px;
+  min-width: 140px;
+}
+.cl-hcell .cl-stat-bar {
+  height: 20px;
+}
+.cl-mixbar {
+  display: flex;
+  height: 8px;
+  border-radius: 999px;
+  overflow: hidden;
+  margin-top: 13px;
+  max-width: 420px;
+  background: var(--cl-line-soft);
+}
+.cl-mixbar .seg {
+  display: block;
+  background: var(--cl-accent);
+}
+.cl-mixbar .seg.opus {
+  background: var(--cl-violet);
+}
+.cl-mixbar .seg.haiku {
+  background: var(--cl-haiku);
+}
+.cl-mixbar .seg.other {
+  background: var(--cl-ink-4);
+}
+.cl-mixlegend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 16px;
+  margin-top: 9px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-4);
+}
+.cl-mixlegend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cl-mixlegend .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+}
+.cl-mixlegend .dot.opus {
+  background: var(--cl-violet);
+}
+.cl-mixlegend .dot.haiku {
+  background: var(--cl-haiku);
+}
+.cl-mixlegend .dot.other {
+  background: var(--cl-ink-4);
+}
+
+@media (max-width: 980px) {
+  .cl-hcell {
+    padding: 14px 18px 0;
+  }
+  .cl-hcell .cl-bars {
+    display: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   SESSION ROWS · leader dots (design 5b / 4b)
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-srows {
+  border-top: 1.5px solid var(--cl-ink);
+}
+.cl-srow {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 11px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  cursor: pointer;
+  position: relative;
+  transition: background 100ms;
+}
+.cl-srow:hover {
+  background: var(--cl-glass-hover-bg);
+  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
+}
+.cl-srow:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: -2px;
+}
+.cl-srow.is-pinned {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--cl-accent) 6%, transparent),
+    transparent 46%
+  );
+  box-shadow: inset 2px 0 0 var(--cl-accent);
+}
+.cl-srow.is-pinned:hover {
+  background: linear-gradient(
+    90deg,
+    color-mix(in srgb, var(--cl-accent) 10%, transparent),
+    transparent 46%
+  );
+}
+.cl-srow-pin {
+  width: 22px;
+  height: 22px;
+  flex-shrink: 0;
+  align-self: center;
+  border: none;
+  background: transparent;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition:
+    opacity 140ms,
+    color 140ms,
+    background 140ms;
+}
+.cl-srow-pin svg {
+  width: 12px;
+  height: 12px;
+}
+.cl-srow:hover .cl-srow-pin,
+.cl-srow:focus-within .cl-srow-pin,
+.cl-srow-pin.pinned {
+  opacity: 1;
+}
+.cl-srow-pin.pinned {
+  color: var(--cl-accent);
+}
+.cl-srow-pin:hover {
+  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-srow .idx {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  line-height: 1;
+  color: var(--cl-ink-4);
+  width: 20px;
+  flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
+}
+.cl-srow .title {
+  font-size: 16px;
+  line-height: 1.3;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  color: var(--cl-ink);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-srow .title.is-untitled {
+  font-weight: 400;
+  font-style: italic;
+  color: var(--cl-ink-4);
+}
+.cl-srow:hover .title {
+  color: var(--cl-accent-ink);
+}
+.cl-srow-tags {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+/* The dotted leader carrying the eye from title to figures. Its min-width is
+   the width of the action cluster that overlays it: the actions are absolutely
+   positioned (revealing them must not reflow the row), so the leader has to own
+   enough dead space for them up front — otherwise a long title eats the gap and
+   the buttons land on top of it. The title truncates instead. */
+.cl-srow .lead {
+  position: relative;
+  flex: 1 0 auto;
+  min-width: 196px;
+  align-self: center;
+  height: 1em;
+  border-bottom: 1px dotted var(--cl-line);
+  transform: translateY(-4px);
+}
+.cl-srow.is-pinned .lead {
+  border-bottom-color: color-mix(in srgb, var(--cl-accent) 40%, transparent);
+}
+/* centred on the dotted line (the leader's own bottom border) so revealing the
+   actions never moves anything: they sit in space the leader already owns */
+.cl-srow-actions {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  transform: translateY(50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding-left: 12px;
+  background: var(--cl-paper);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms;
+}
+.cl-srow:hover .cl-srow-actions,
+.cl-srow:focus-within .cl-srow-actions,
+.cl-srow-actions:has(button[data-haspicker='true']) {
+  opacity: 1;
+  pointer-events: auto;
+}
+/* while hovered the row is tinted, so the actions' backdrop has to be that same
+   tint composited over paper — bare paper would read as a white block */
+.cl-srow:hover .cl-srow-actions {
+  background: color-mix(in oklch, var(--cl-accent-soft) 78%, var(--cl-paper));
+}
+.cl-srow-actions button {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  line-height: 1.4;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  padding: 3px 6px;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    border-color 120ms,
+    background 120ms;
+}
+.cl-srow-actions button:hover {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  background: var(--cl-accent-soft);
+}
+.cl-srow-actions button.danger:hover {
+  color: var(--cl-danger);
+  border-color: color-mix(in oklch, var(--cl-danger) 45%, transparent);
+  background: var(--cl-danger-soft);
+}
+.cl-srow-actions button[data-haspicker='true'] {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+}
+.cl-srow .meta {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 20px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+.cl-srow .meta .msg {
+  font-variant-numeric: tabular-nums;
+}
+.cl-srow .meta .model {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cl-ink-2);
+  width: 92px;
+}
+.cl-srow .meta .model .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  flex-shrink: 0;
+}
+.cl-srow .meta .model.opus .dot {
+  background: var(--cl-violet);
+}
+.cl-srow .meta .model.haiku .dot {
+  background: var(--cl-haiku);
+}
+.cl-srow .meta .toks {
+  font-size: 13px;
+  color: var(--cl-ink);
+  width: 72px;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.cl-srow .meta .when {
+  width: 104px;
+  text-align: right;
+}
+.cl-srow-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding-top: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-3);
+}
+.cl-srow-foot .range {
+  font-variant-numeric: tabular-nums;
+}
+.cl-srow-foot .range b {
+  color: var(--cl-ink);
+  font-weight: 500;
+}
+.cl-srow-more {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-3);
+  background: transparent;
+  border: 1px dashed var(--cl-line);
+  border-radius: 8px;
+  padding: 7px 14px;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    border-color 120ms,
+    background 120ms;
+}
+.cl-srow-more:hover {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  background: var(--cl-accent-soft);
+}
+
+@media (max-width: 980px) {
+  .cl-srow .meta {
+    gap: 12px;
+  }
+  .cl-srow .meta .model {
+    width: auto;
+  }
+  .cl-srow .meta .when {
+    width: auto;
+  }
+}

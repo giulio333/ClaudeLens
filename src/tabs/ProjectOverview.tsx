@@ -69,7 +69,7 @@ import {
 } from '../components/project/overview/ProjectOverviewContent';
 import { GlobalHomeView } from '../components/project/overview/GlobalHomeView';
 import { DuplicateProjectsView } from '../components/project/overview/DuplicateProjectsNotice';
-import { ProjectSubtabs } from '../components/project/overview/ProjectSubtabs';
+import { ProjectRail } from '../components/project/overview/ProjectRail';
 import { provisionalProjectHash } from '../components/project/shared/projectHash';
 import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView';
 import { NotificationToaster } from '../components/NotificationToaster';
@@ -740,70 +740,79 @@ export default function ProjectOverview() {
         </div>
       </header>
 
-      {/* ─── Subtabs (project scope only) ────────────────── */}
-      {scope === 'project' && selected && (
-        <ProjectSubtabs project={selected} active={sectionFromView(view)} onNavigate={setView} />
-      )}
+      {/* ─── Shell: project rail + main ──────────────────── */}
+      {/* The rail (design 5a) replaced the horizontal subtab bar, so the app
+       * body below the top bar is a row: rail (project scope only) + the scroll
+       * area, which stays `.cl-main`. */}
+      <div className="cl-shell">
+        {scope === 'project' && selected && (
+          <ProjectRail
+            project={selected}
+            active={sectionFromView(view)}
+            onNavigate={setView}
+            onOpenProjectSearch={openProjectSearch}
+          />
+        )}
 
-      {/* ─── Main ────────────────────────────────────────── */}
-      {/* Spike B (motion.dev): crossfade between editorial-core views. The
-       * motion.div is keyed by the visible content (scope + project + section)
-       * so navigating Global ↔ Project ↔ Agent View, and switching project
-       * subtabs, fades the old surface out and the new one in. mode="wait"
-       * sequences exit→enter for a clean full-surface swap. */}
-      <div className="cl-main">
-        <AnimatePresence mode="wait" initial={false}>
-          <motion.div
-            key={mainKey}
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -8 }}
-            transition={{ duration: 0.16, ease: 'easeOut' }}
-            /* flex column so a child view can fill the scroll viewport via
-               flex-grow (e.g. the Agent View, whose dispatch bar pins to the
-               bottom); non-growing views stay content-height as before. */
-            style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}
-          >
-            <ErrorBoundary
-              key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}
+        {/* Spike B (motion.dev): crossfade between editorial-core views. The
+         * motion.div is keyed by the visible content (scope + project + section)
+         * so navigating Global ↔ Project ↔ Agent View, and switching project
+         * sections, fades the old surface out and the new one in. mode="wait"
+         * sequences exit→enter for a clean full-surface swap. */}
+        <div className="cl-main">
+          <AnimatePresence mode="wait" initial={false}>
+            <motion.div
+              key={mainKey}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -8 }}
+              transition={{ duration: 0.16, ease: 'easeOut' }}
+              /* flex column so a child view can fill the scroll viewport via
+                 flex-grow (e.g. the Agent View, whose dispatch bar pins to the
+                 bottom); non-growing views stay content-height as before. */
+              style={{ minHeight: '100%', display: 'flex', flexDirection: 'column' }}
             >
-              {isGlobalHome ? (
-                <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
-              ) : isGlobalLiveAgents ? (
-                <AgentsLiveView
-                  embedded
-                  onBack={goGlobal}
-                  onOpenSession={(project, session, bg) =>
-                    setView({
-                      type: 'terminal',
-                      project,
-                      resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
-                      attachJobId: bg?.alive ? bg.jobId : undefined,
-                      from: 'agents-live',
-                    })
-                  }
-                />
-              ) : isStudio ? (
-                <StudioLibraryView
-                  embedded
-                  onBack={goGlobal}
-                  onCreate={() => setView({ type: 'studio-create' })}
-                  onOpenBlueprint={(name, projectPath) =>
-                    setView({ type: 'studio-blueprint', name, projectPath })
-                  }
-                />
-              ) : selected ? (
-                <ProjectView
-                  key={selected.hash}
-                  project={selected}
-                  section={sectionFromView(view)}
-                  onNavigate={setView}
-                  onOpenProjectSearch={openProjectSearch}
-                />
-              ) : null}
-            </ErrorBoundary>
-          </motion.div>
-        </AnimatePresence>
+              <ErrorBoundary
+                key={scope === 'project' ? `project:${selected?.hash ?? 'none'}` : view.type}
+              >
+                {isGlobalHome ? (
+                  <GlobalHomeView onNavigate={setView} onSelectProject={selectProject} />
+                ) : isGlobalLiveAgents ? (
+                  <AgentsLiveView
+                    embedded
+                    onBack={goGlobal}
+                    onOpenSession={(project, session, bg) =>
+                      setView({
+                        type: 'terminal',
+                        project,
+                        resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
+                        attachJobId: bg?.alive ? bg.jobId : undefined,
+                        from: 'agents-live',
+                      })
+                    }
+                  />
+                ) : isStudio ? (
+                  <StudioLibraryView
+                    embedded
+                    onBack={goGlobal}
+                    onCreate={() => setView({ type: 'studio-create' })}
+                    onOpenBlueprint={(name, projectPath) =>
+                      setView({ type: 'studio-blueprint', name, projectPath })
+                    }
+                  />
+                ) : selected ? (
+                  <ProjectView
+                    key={selected.hash}
+                    project={selected}
+                    section={sectionFromView(view)}
+                    onNavigate={setView}
+                    onOpenProjectSearch={openProjectSearch}
+                  />
+                ) : null}
+              </ErrorBoundary>
+            </motion.div>
+          </AnimatePresence>
+        </div>
       </div>
 
       {projectToDelete && (
