@@ -108,6 +108,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     onData: (cb: (id: string, data: string) => void) => subscribe('terminal:data', cb),
     onExit: (cb: (id: string, exitCode: number) => void) => subscribe('terminal:exit', cb),
   },
+  clipboard: {
+    readText: () => ipcRenderer.invoke('clipboard:readText'),
+    writeText: (text: string) => ipcRenderer.invoke('clipboard:writeText', text),
+  },
   rules: {
     getByProject: (realPath: string) => ipcRenderer.invoke('rules:getByProject', realPath),
   },

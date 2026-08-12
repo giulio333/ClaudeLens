@@ -286,6 +286,10 @@ declare global {
         onData: (cb: (id: string, data: string) => void) => () => void;
         onExit: (cb: (id: string, exitCode: number) => void) => () => void;
       };
+      clipboard: {
+        readText: () => Promise<IpcResult<string>>;
+        writeText: (text: string) => Promise<IpcResult<null>>;
+      };
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>;
       };
