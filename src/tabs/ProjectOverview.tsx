@@ -24,6 +24,7 @@ import {
   type SearchMode,
   type SearchSession,
 } from '../components/project/shared/SearchPopover';
+import { searchTriggerProps } from '../components/project/shared/searchTrigger';
 import type { ProjectCost } from '../types';
 
 // ─── Shared
@@ -211,32 +212,43 @@ export default function ProjectOverview() {
   const [searchMode, setSearchMode] = useState<SearchMode>('global');
   const [searchAnchorAlign, setSearchAnchorAlign] = useState<SearchAnchorAlign>('right');
   const [anchorRect, setAnchorRect] = useState<DOMRect | null>(null);
+  // Which button the popover is currently anchored to, so a second click on
+  // that same trigger closes it while a click on another one re-anchors it
+  // (the rail header and the hero project name are both on screen at once).
+  const searchTriggerRef = useRef<HTMLElement | null>(null);
   const [searchSessions, setSearchSessions] = useState<SearchSession[]>([]);
   const [searchSessionsLoading, setSearchSessionsLoading] = useState(false);
   // Stable identities: the ⌘F/⌘P key handler below lists openGlobalSearch as a
   // dependency, so a fresh closure each render would re-bind the listener on
   // every render.
   const openSearch = useCallback(
-    (mode: SearchMode, rect: DOMRect | null, align: SearchAnchorAlign) => {
+    (mode: SearchMode, anchor: HTMLElement | null, align: SearchAnchorAlign) => {
+      searchTriggerRef.current = anchor;
       setSearchMode(mode);
       setSearchAnchorAlign(align);
-      setAnchorRect(rect);
+      setAnchorRect(anchor?.getBoundingClientRect() ?? null);
       setSearchOpen(true);
     },
     []
   );
   const openGlobalSearch = useCallback(() => {
-    openSearch('global', lensBtnRef.current?.getBoundingClientRect() ?? null, 'right');
+    openSearch('global', lensBtnRef.current, 'right');
   }, [openSearch]);
-  const openProjectSearch = useCallback(
-    (rect: DOMRect) => {
-      openSearch('projects', rect, 'left');
-    },
-    [openSearch]
-  );
   const closeSearch = useCallback(() => {
+    searchTriggerRef.current = null;
     setSearchOpen(false);
   }, []);
+  // Same trigger + same mode → close; anything else opens (or re-anchors).
+  const toggleProjectSearch = useCallback(
+    (anchor: HTMLElement) => {
+      if (searchOpen && searchMode === 'projects' && searchTriggerRef.current === anchor) {
+        closeSearch();
+        return;
+      }
+      openSearch('projects', anchor, 'left');
+    },
+    [closeSearch, openSearch, searchMode, searchOpen]
+  );
 
   const costByHash = useMemo(() => {
     const m = new Map<string, ProjectCost>();
@@ -719,6 +731,7 @@ export default function ProjectOverview() {
           <button
             ref={lensBtnRef}
             type="button"
+            {...searchTriggerProps}
             className={`cl-lens-btn${searchOpen && searchMode === 'global' ? ' on' : ''}`}
             onClick={() =>
               searchOpen && searchMode === 'global' ? closeSearch() : openGlobalSearch()
@@ -750,7 +763,7 @@ export default function ProjectOverview() {
             project={selected}
             active={sectionFromView(view)}
             onNavigate={setView}
-            onOpenProjectSearch={openProjectSearch}
+            onToggleProjectSearch={toggleProjectSearch}
           />
         )}
 
@@ -806,7 +819,7 @@ export default function ProjectOverview() {
                     project={selected}
                     section={sectionFromView(view)}
                     onNavigate={setView}
-                    onOpenProjectSearch={openProjectSearch}
+                    onToggleProjectSearch={toggleProjectSearch}
                   />
                 ) : null}
               </ErrorBoundary>
