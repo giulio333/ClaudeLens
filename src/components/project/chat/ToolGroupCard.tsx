@@ -2,6 +2,8 @@ import { useState } from 'react';
 import type { CSSProperties } from 'react';
 import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from './utils';
 import { ToolInput, ToolOutput } from './ToolDetailPanel';
+import { CommandSheet } from './CommandBlock';
+import { ownsToolBody, ownsOutputHead } from './shell';
 
 export function ToolGroupCard({
   group,
@@ -87,25 +89,42 @@ export function ToolGroupCard({
 
       {open && (
         <div className="cl-tool-card-expanded">
-          {showDetails && (
+          {/* A shell tool is one unit — command and its output in a single
+              section, no per-side heads (see `ownsToolBody`). */}
+          {ownsToolBody(use.name) ? (
             <div className="cl-tool-card-section">
-              <div className="cl-tool-card-section-title">Input</div>
-              <ToolInput name={use.name} input={use.input as Record<string, unknown>} />
-            </div>
-          )}
-          {result && (
-            <div className={`cl-tool-card-section ${result.isError ? 'is-error' : ''}`}>
-              <div
-                className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}
-              >
-                {result.isError ? 'Error' : 'Result'}
-              </div>
-              <ToolOutput
-                name={use.name}
+              <CommandSheet
                 input={use.input as Record<string, unknown>}
                 result={result}
+                showCommand={showDetails}
+                showDescription={false}
               />
             </div>
+          ) : (
+            <>
+              {showDetails && (
+                <div className="cl-tool-card-section">
+                  <div className="cl-tool-card-section-title">Input</div>
+                  <ToolInput name={use.name} input={use.input as Record<string, unknown>} inline />
+                </div>
+              )}
+              {result && (
+                <div className={`cl-tool-card-section ${result.isError ? 'is-error' : ''}`}>
+                  {!ownsOutputHead(use.name) && (
+                    <div
+                      className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}
+                    >
+                      {result.isError ? 'Error' : 'Result'}
+                    </div>
+                  )}
+                  <ToolOutput
+                    name={use.name}
+                    input={use.input as Record<string, unknown>}
+                    result={result}
+                  />
+                </div>
+              )}
+            </>
           )}
           {onViewDetail && (
             <div className="cl-tool-card-section cl-entity-link-row">
