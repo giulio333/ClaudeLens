@@ -194,6 +194,17 @@ Sezione **Agent Studio** (globale, tab primario nella barra superiore): editor v
 
 ---
 
+### `code-atlas/`
+
+| File                | Esporta         | Descrizione                                                                                                                                                                                                                                |
+| ------------------- | --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `CodeAtlasView.tsx` | `CodeAtlasView` | Vista read-only Graphify/Graft: proietta i grafi di simboli in moduli navigabili con React Flow, ricerca, filtri runtime/test/tooling e inspector dei collegamenti; il provider resta selezionabile senza incorporarne viewer o server MCP |
+| `layout.ts`         | `layoutAtlas`   | Layout ELK layered del grafo normalizzato, con fallback deterministico a griglia                                                                                                                                                           |
+
+Legge soltanto gli artefatti locali fissi `graphify-out/graph.json` e `graft/.graph/wiring.json` tramite `codeAtlas:get`; generazione e aggiornamento rimangono comandi espliciti dell'utente.
+
+---
+
 ### `ai-assistant/`
 
 | File                  | Esporta           | Descrizione                                                                                               |

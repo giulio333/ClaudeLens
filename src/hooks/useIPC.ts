@@ -65,6 +65,8 @@ import type {
   ChatDoneEvent,
   ChatErrorEvent,
   NotificationEvent,
+  CodeAtlasData,
+  CodeGraphProvider,
 } from '../types';
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -130,6 +132,8 @@ export type {
   ChatMessageEvent,
   ChatDoneEvent,
   ChatErrorEvent,
+  CodeAtlasData,
+  CodeGraphProvider,
 };
 
 type IpcResult<T> = { data: T | null; error: string | null };
@@ -292,6 +296,9 @@ declare global {
       };
       rules: {
         getByProject: (realPath: string) => Promise<IpcResult<RuleFile[]>>;
+      };
+      codeAtlas: {
+        get: (realPath: string, provider?: CodeGraphProvider) => Promise<IpcResult<CodeAtlasData>>;
       };
       tasks: {
         getByProject: (hash: string) => Promise<IpcResult<TaskGroup[]>>;
@@ -586,6 +593,15 @@ export function useProjectRules(realPath: string | null) {
     queryKey: ['rules:project', realPath],
     queryFn: () => unwrap(window.electronAPI.rules.getByProject(realPath!)),
     enabled: realPath !== null,
+  });
+}
+
+export function useCodeAtlas(realPath: string | null, provider: CodeGraphProvider | null = null) {
+  return useQuery({
+    queryKey: ['codeAtlas:project', realPath, provider],
+    queryFn: () => unwrap(window.electronAPI.codeAtlas.get(realPath!, provider ?? undefined)),
+    enabled: realPath !== null,
+    staleTime: 30_000,
   });
 }
 

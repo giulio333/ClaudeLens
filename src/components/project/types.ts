@@ -29,6 +29,7 @@ export type View =
   | { type: 'project-skills'; project: { hash: string; realPath: string } }
   | { type: 'project-agents'; project: { hash: string; realPath: string } }
   | { type: 'project-mcp'; project: { hash: string; realPath: string } }
+  | { type: 'project-code-atlas'; project: { hash: string; realPath: string } }
   | { type: 'project-tasks'; project: { hash: string; realPath: string } }
   | { type: 'project-config'; project: { hash: string; realPath: string } }
   | { type: 'project-plans'; project: { hash: string; realPath: string } }
