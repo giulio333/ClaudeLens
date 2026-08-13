@@ -63,6 +63,7 @@ import { TeamDetailView } from '../components/project/teams/TeamDetailView';
 // ─── Analytics / AI
 import { AnalyticsView } from '../components/project/analytics/AnalyticsView';
 import { AiAssistantView } from '../components/project/ai-assistant/AiAssistantView';
+import { CodeAtlasView } from '../components/project/code-atlas/CodeAtlasView';
 // ─── Editorial core
 import {
   ProjectView,
@@ -644,6 +645,10 @@ export default function ProjectOverview() {
               })
             }
           />
+        );
+      case 'project-code-atlas':
+        return (
+          <CodeAtlasView project={view.project} onBack={() => setView({ type: 'overview' })} />
         );
       case 'analytics':
         return (

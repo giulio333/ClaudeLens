@@ -36,3 +36,9 @@ docs/ClaudeLens_Architecture_Guide_IT.docx
 .idea/
 *.swp
 *.swo
+
+# graft's local graph cache — regenerable, not committed (run `graft build`).
+/graft/
+
+# Graphify's local graph export — regenerable, not committed (run `graphify extract`).
+/graphify-out/

@@ -115,6 +115,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   rules: {
     getByProject: (realPath: string) => ipcRenderer.invoke('rules:getByProject', realPath),
   },
+  codeAtlas: {
+    get: (realPath: string, provider?: 'graphify' | 'graft') =>
+      ipcRenderer.invoke('codeAtlas:get', realPath, provider),
+  },
   tasks: {
     getByProject: (hash: string) => ipcRenderer.invoke('tasks:getByProject', hash),
   },
