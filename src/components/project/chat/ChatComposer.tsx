@@ -276,131 +276,150 @@ export function ChatComposer({
           </div>
         )}
 
-        <div className="cl-composer-row">
-          {showSlash && (
-            <div
-              className="cl-slash-menu"
-              role="listbox"
-              aria-label="Slash commands"
-              ref={slashMenuRef}
-            >
-              <span className="cl-composer-menu-label">Slash commands</span>
-              {slashMatches.map((cmd, i) => (
-                <button
-                  key={cmd}
-                  type="button"
-                  role="option"
-                  aria-selected={i === activeSlash}
-                  className={i === activeSlash ? 'is-active' : ''}
-                  onMouseEnter={() => setSlashIndex(i)}
-                  // mousedown (not click) + preventDefault: pick before the
-                  // textarea loses focus, so the caret stays put.
-                  onMouseDown={e => {
+        <div className="cl-composer-sheet">
+          <div className="cl-composer-row">
+            {showSlash && (
+              <div
+                className="cl-slash-menu"
+                role="listbox"
+                aria-label="Slash commands"
+                ref={slashMenuRef}
+              >
+                <span className="cl-composer-menu-label">Slash commands</span>
+                {slashMatches.map((cmd, i) => (
+                  <button
+                    key={cmd}
+                    type="button"
+                    role="option"
+                    aria-selected={i === activeSlash}
+                    className={i === activeSlash ? 'is-active' : ''}
+                    onMouseEnter={() => setSlashIndex(i)}
+                    // mousedown (not click) + preventDefault: pick before the
+                    // textarea loses focus, so the caret stays put.
+                    onMouseDown={e => {
+                      e.preventDefault();
+                      applySlash(cmd);
+                    }}
+                  >
+                    <span className="cl-slash-name">/{cmd}</span>
+                  </button>
+                ))}
+              </div>
+            )}
+            <textarea
+              ref={textareaRef}
+              className="cl-composer-input"
+              value={draft}
+              onChange={e => {
+                setDraft(e.target.value);
+                setSlashDismissed(false);
+                setSlashIndex(0);
+              }}
+              onKeyDown={e => {
+                if (showSlash) {
+                  if (e.key === 'ArrowDown') {
                     e.preventDefault();
-                    applySlash(cmd);
-                  }}
-                >
-                  <span className="cl-slash-name">/{cmd}</span>
-                </button>
-              ))}
-            </div>
-          )}
-          <textarea
-            ref={textareaRef}
-            className="cl-composer-input"
-            value={draft}
-            onChange={e => {
-              setDraft(e.target.value);
-              setSlashDismissed(false);
-              setSlashIndex(0);
-            }}
-            onKeyDown={e => {
-              if (showSlash) {
-                if (e.key === 'ArrowDown') {
-                  e.preventDefault();
-                  setSlashIndex((activeSlash + 1) % slashMatches.length);
-                  return;
+                    setSlashIndex((activeSlash + 1) % slashMatches.length);
+                    return;
+                  }
+                  if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    setSlashIndex((activeSlash - 1 + slashMatches.length) % slashMatches.length);
+                    return;
+                  }
+                  if (e.key === 'Enter' || e.key === 'Tab') {
+                    e.preventDefault();
+                    applySlash(slashMatches[activeSlash]);
+                    return;
+                  }
+                  if (e.key === 'Escape') {
+                    e.preventDefault();
+                    setSlashDismissed(true);
+                    return;
+                  }
                 }
-                if (e.key === 'ArrowUp') {
+                if (e.key === 'Enter' && !e.shiftKey) {
                   e.preventDefault();
-                  setSlashIndex((activeSlash - 1 + slashMatches.length) % slashMatches.length);
-                  return;
+                  handleSend();
                 }
-                if (e.key === 'Enter' || e.key === 'Tab') {
-                  e.preventDefault();
-                  applySlash(slashMatches[activeSlash]);
-                  return;
-                }
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  setSlashDismissed(true);
-                  return;
-                }
+              }}
+              disabled={sending || !!lockNotice}
+              placeholder={
+                lockNotice
+                  ? 'This session is live in your terminal'
+                  : sessionId
+                    ? 'Continue this session…   ⏎ send · ⇧⏎ newline'
+                    : 'Start a new conversation…   ⏎ send · ⇧⏎ newline'
               }
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault();
-                handleSend();
-              }
-            }}
-            disabled={sending || !!lockNotice}
-            placeholder={
-              lockNotice
-                ? 'This session is live in your terminal'
-                : sessionId
-                  ? 'Continue this session…  (Enter to send · Shift+Enter for newline)'
-                  : 'Start a new conversation…  (Enter to send · Shift+Enter for newline)'
-            }
-            rows={1}
-          />
-          {sending ? (
-            <button type="button" className="cl-composer-btn is-stop" onClick={onStop}>
-              Stop
-            </button>
-          ) : (
-            <button
-              type="button"
-              className="cl-composer-btn"
-              onClick={handleSend}
-              disabled={!draft.trim() || !!lockNotice}
-            >
-              Send
-            </button>
-          )}
-        </div>
+              rows={1}
+            />
+            {sending ? (
+              <button type="button" className="cl-composer-btn is-stop" onClick={onStop}>
+                Stop
+              </button>
+            ) : (
+              <button
+                type="button"
+                className="cl-composer-btn"
+                onClick={handleSend}
+                disabled={!draft.trim() || !!lockNotice}
+              >
+                Send
+                <span className="arrow" aria-hidden>
+                  →
+                </span>
+              </button>
+            )}
+          </div>
 
-        <div className="cl-composer-meta">
-          <span>
-            {sessionId
-              ? 'Resumes this session · appends to the same transcript'
-              : 'Starts a new session · a fresh transcript in this project'}
-          </span>
-          <span className="cl-composer-meta-tags">
+          {/* control rail — inside the sheet, so the pickers read as settings of
+              this input rather than three loose badges under it */}
+          <div className="cl-composer-meta">
             <span
-              className="cl-composer-billing"
-              title="Replies here run through the Agent SDK and are billed to Agent SDK credits — separate from your subscription plan. Sessions in your terminal use the plan."
+              className="cl-composer-meta-note"
+              title={
+                sessionId
+                  ? 'Appends to the same transcript this session already has'
+                  : 'Starts a fresh transcript in this project'
+              }
             >
-              Agent SDK · credits
+              <span
+                className="cl-composer-billing"
+                title="Replies here run through the Agent SDK and are billed to Agent SDK credits — separate from your subscription plan. Sessions in your terminal use the plan."
+              >
+                <span className="dot" aria-hidden />
+                agent sdk credits
+              </span>
+              <span className="sep" aria-hidden>
+                ·
+              </span>
+              {sessionId ? 'resumes this session' : 'starts a new session'}
             </span>
-            <ComposerSelect
-              label="Model"
-              value={selectedModel}
-              options={modelOptions}
-              onChange={setChosenModel}
-              disabled={sending}
-            />
-            <ComposerSelect
-              label="Permission"
-              value={permission}
-              options={PERMISSION_OPTIONS.map(o => ({
-                value: o.value,
-                label: o.label,
-                danger: 'danger' in o ? o.danger : undefined,
-                hint: o.hint,
-              }))}
-              onChange={setPermission}
-              disabled={sending}
-            />
-          </span>
+            <span className="cl-composer-meta-tags">
+              <ComposerSelect
+                label="Model"
+                value={selectedModel}
+                options={modelOptions}
+                onChange={setChosenModel}
+                disabled={sending}
+              />
+              <span className="sep" aria-hidden>
+                ·
+              </span>
+              <ComposerSelect
+                label="Permission"
+                value={permission}
+                options={PERMISSION_OPTIONS.map(o => ({
+                  value: o.value,
+                  label: o.label,
+                  danger: 'danger' in o ? o.danger : undefined,
+                  hint: o.hint,
+                }))}
+                onChange={setPermission}
+                disabled={sending}
+              />
+            </span>
+          </div>
         </div>
       </div>
 
