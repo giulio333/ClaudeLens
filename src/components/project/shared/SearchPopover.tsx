@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Agent, McpServer, ProjectCost, SessionSummary, Skill } from '../../../types';
 import { fmtModel, sessionTitle } from '../utils';
 import { projectDisplayName } from './projectName';
+import { isSearchTrigger } from './searchTrigger';
 
 type Project = { hash: string; realPath: string };
 export type SearchMode = 'global' | 'projects';
@@ -224,6 +225,9 @@ export function SearchPopover({
     if (!open) return;
     function onDown(e: MouseEvent) {
       if (popRef.current?.contains(e.target as Node)) return;
+      // A trigger owns its own toggle: closing here would let the click that
+      // follows this mousedown reopen the popover, so it never shut.
+      if (isSearchTrigger(e.target)) return;
       onClose();
     }
     function onKey(e: KeyboardEvent) {

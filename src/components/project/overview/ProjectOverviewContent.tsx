@@ -28,6 +28,7 @@ import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { useMemoryTags } from '../../../hooks/useMemoryTags';
 import { PinIcon } from '../shared/SearchPopover';
+import { searchTriggerProps } from '../shared/searchTrigger';
 import { TagChip } from '../sessions/TagChip';
 import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
@@ -241,12 +242,12 @@ export function ProjectView({
   project,
   section,
   onNavigate,
-  onOpenProjectSearch,
+  onToggleProjectSearch,
 }: {
   project: Project;
   section: ProjectSection;
   onNavigate: (v: View) => void;
-  onOpenProjectSearch: (rect: DOMRect) => void;
+  onToggleProjectSearch: (anchor: HTMLElement) => void;
 }) {
   const { isPinned, togglePin } = usePinnedProjects();
   const pinnedNow = isPinned(project.hash);
@@ -607,7 +608,8 @@ export function ProjectView({
         <button
           className="cl-h-name"
           type="button"
-          onClick={e => onOpenProjectSearch(e.currentTarget.getBoundingClientRect())}
+          {...searchTriggerProps}
+          onClick={e => onToggleProjectSearch(e.currentTarget)}
           aria-haspopup="dialog"
         >
           <span className="label-name">{projectName}</span>

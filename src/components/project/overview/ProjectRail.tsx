@@ -17,6 +17,7 @@ import {
 import { useRailCollapsed } from '../../../hooks/useRailCollapsed';
 import { View } from '../types';
 import { projectDisplayName } from '../shared/projectName';
+import { searchTriggerProps } from '../shared/searchTrigger';
 import type { ProjectSection } from './ProjectOverviewContent';
 
 type Project = { hash: string; realPath: string };
@@ -57,12 +58,12 @@ export function ProjectRail({
   project,
   active,
   onNavigate,
-  onOpenProjectSearch,
+  onToggleProjectSearch,
 }: {
   project: Project;
   active: ProjectSection;
   onNavigate: (v: View) => void;
-  onOpenProjectSearch: (rect: DOMRect) => void;
+  onToggleProjectSearch: (anchor: HTMLElement) => void;
 }) {
   const { data: sessions = [] } = useSessionList(project.hash);
   const { data: memory } = useMemoryProject(project.hash);
@@ -243,10 +244,11 @@ export function ProjectRail({
       <aside className="cl-rail is-collapsed" aria-label="Project sections">
         <button
           type="button"
+          {...searchTriggerProps}
           className="cl-rail-mark"
           title={`${projectName} · switch project`}
           aria-label="Switch project"
-          onClick={e => onOpenProjectSearch(e.currentTarget.getBoundingClientRect())}
+          onClick={e => onToggleProjectSearch(e.currentTarget)}
         >
           <i />
         </button>
@@ -298,10 +300,11 @@ export function ProjectRail({
     <aside className="cl-rail" aria-label="Project sections">
       <button
         type="button"
+        {...searchTriggerProps}
         className="cl-rail-project"
         title={project.realPath}
         aria-haspopup="dialog"
-        onClick={e => onOpenProjectSearch(e.currentTarget.getBoundingClientRect())}
+        onClick={e => onToggleProjectSearch(e.currentTarget)}
       >
         <span className="cl-rail-mark" aria-hidden>
           <i />
