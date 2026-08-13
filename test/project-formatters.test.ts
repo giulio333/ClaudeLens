@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fmtDate, fmtModel, modelColor, buildModelMix } from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
+import { sharedPathPrefix } from '../src/components/project/shared/projectName';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
 // Robustness fixes from the #99 audit: pure date/scale formatters must not
@@ -138,5 +139,46 @@ describe('buildModelMix — project hero band', () => {
   it('files an unrecognised model id under "other" rather than guessing a family', () => {
     const mix = buildModelMix([s('some-future-model', 10)]);
     expect(mix).toEqual([{ key: 'other', label: 'Other', tokens: 10, sessions: 1, pct: 100 }]);
+  });
+});
+
+// The duplicates view mutes the part of the candidate paths that does not tell
+// them apart, so the eye lands on the segment that does. The caller slices the
+// returned prefix off each path, so it must be a literal prefix of every one.
+describe('sharedPathPrefix — the part of a duplicate group that carries no signal', () => {
+  it('mutes the shared head and keeps the segment that differs', () => {
+    const prefix = sharedPathPrefix([
+      '/Users/x/Projects/SARA2.0/sara-broker-cms/openshift',
+      '/Users/x/Projects/SARA2.0/sara-bridge-simulator/openshift',
+    ]);
+    expect(prefix).toBe('/Users/x/Projects/SARA2.0/');
+  });
+
+  it('is a literal prefix of every path it was given', () => {
+    const paths = ['/a/b/c/proj', '/a/b/d/proj', '/a/b/e/proj'];
+    const prefix = sharedPathPrefix(paths);
+    expect(prefix).toBe('/a/b/');
+    for (const p of paths) expect(p.startsWith(prefix)).toBe(true);
+  });
+
+  it('never consumes the last segment, so a path always keeps something to show', () => {
+    // identical parents: the only difference is the basename itself
+    expect(sharedPathPrefix(['/a/b/one', '/a/b/two'])).toBe('/a/b/');
+    // one path is the parent of the other — 'b' stays on both sides
+    expect(sharedPathPrefix(['/a/b', '/a/b/c'])).toBe('/a/');
+  });
+
+  it('returns nothing when the only shared segment is the root separator', () => {
+    expect(sharedPathPrefix(['/one/proj', '/two/proj'])).toBe('');
+  });
+
+  it('needs at least two paths to have anything shared', () => {
+    expect(sharedPathPrefix([])).toBe('');
+    expect(sharedPathPrefix(['/a/b/proj'])).toBe('');
+  });
+
+  it('handles Windows separators like projectDisplayName does', () => {
+    const prefix = sharedPathPrefix(['C:\\Users\\x\\one\\proj', 'C:\\Users\\x\\two\\proj']);
+    expect(prefix).toBe('C:\\Users\\x\\');
   });
 });

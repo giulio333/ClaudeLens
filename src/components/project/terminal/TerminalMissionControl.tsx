@@ -13,7 +13,7 @@ import { AgentDetailView } from '../agents/AgentDetailView';
 import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
 import type { SessionAgent, ToolGroup } from '../chat/utils';
-import { fmtCost, sessionTitle } from '../utils';
+import { sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
 import { SessionOutline } from './SessionOutline';
@@ -456,39 +456,27 @@ export function TerminalMissionControl({
           ...(title ? [{ label: title, accent: true }] : []),
         ]}
         right={
-          <div className="flex items-center" style={{ gap: 14 }}>
-            {terminalMounted && (
+          // No spend figure here: the vitals row of the Mission Control rail
+          // already carries it, and two copies of the same number a few
+          // hundred pixels apart read as two different readings.
+          terminalMounted ? (
+            <span
+              className="flex items-center font-mono uppercase"
+              style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
+            >
               <span
-                className="flex items-center font-mono uppercase"
-                style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
-              >
-                <span
-                  aria-hidden
-                  className={termStatus === 'running' ? 'cl-live-dot' : ''}
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
-                  }}
-                />
-                {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
-              </span>
-            )}
-            {summary && (
-              <span
-                className="font-mono"
+                aria-hidden
+                className={termStatus === 'running' ? 'cl-live-dot' : ''}
                 style={{
-                  fontSize: 11,
-                  fontWeight: 700,
-                  fontVariantNumeric: 'tabular-nums',
-                  color: 'var(--cl-accent-ink)',
+                  width: 7,
+                  height: 7,
+                  borderRadius: '50%',
+                  background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
                 }}
-              >
-                {fmtCost(summary.estimatedCost)}
-              </span>
-            )}
-          </div>
+              />
+              {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
+            </span>
+          ) : undefined
         }
       />
 

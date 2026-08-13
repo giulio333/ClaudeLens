@@ -887,47 +887,6 @@ body {
   transform: scale(1.08);
 }
 
-/* ── Projects section header: pinned toggle ── */
-.cl-pinfilter {
-  display: inline-flex;
-  align-items: center;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
-  gap: 6px;
-}
-.cl-pinfilter button {
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  padding: 2px 8px;
-  border-radius: 4px;
-  color: var(--cl-ink-4);
-  font: inherit;
-  letter-spacing: inherit;
-  text-transform: inherit;
-  transition:
-    color 120ms,
-    background 120ms;
-}
-.cl-pinfilter button:hover {
-  color: var(--cl-ink-2);
-}
-.cl-pinfilter button.on {
-  color: var(--cl-accent-ink);
-  background: oklch(0.95 0.04 40 / 0.45);
-}
-:root[data-theme='dark'] .cl-pinfilter button.on {
-  background: oklch(0.55 0.18 40 / 0.22);
-  color: var(--cl-ink);
-}
-.cl-pinfilter .sep {
-  color: var(--cl-ink-4);
-  opacity: 0.5;
-}
-
 /* ── Session tags — pill (filter/picker) + plain (inline meta) ─── */
 .cl-tag {
   display: inline-flex;
@@ -956,15 +915,18 @@ body {
     color 120ms;
 }
 
-/* ── Pill variant (used in TagBar + TagPicker) ── */
+/* ── Pill variant (tag picker rows, session/topic detail headers) ──
+   The fill mixes --cl-ink in oklch, not --cl-ink-3 in sRGB: the old one was a
+   neutral grey scrim on warm paper — the only thing in these rows that came
+   from a different palette — and the border is now the app's hairline token. */
 .cl-tag--pill {
   gap: 5px;
   font-size: 10.5px;
   padding: 4px 9px 4px 8px;
   border-radius: 999px;
-  background: color-mix(in srgb, var(--cl-ink-3) 10%, transparent);
+  background: color-mix(in oklch, var(--cl-ink) 6%, transparent);
   color: var(--cl-ink-3);
-  border: 1px solid color-mix(in srgb, var(--cl-ink-3) 14%, transparent);
+  border: 1px solid var(--cl-line);
 }
 .cl-tag--pill .hash {
   color: var(--cl-ink-4);
@@ -995,9 +957,9 @@ body {
   cursor: pointer;
 }
 .cl-tag--pill.is-interactive:hover {
-  background: color-mix(in srgb, var(--cl-ink-3) 18%, transparent);
+  background: color-mix(in oklch, var(--cl-ink) 10%, transparent);
   color: var(--cl-ink-2);
-  border-color: color-mix(in srgb, var(--cl-ink-3) 22%, transparent);
+  border-color: var(--cl-ink-4);
 }
 .cl-tag--pill.tone-soft,
 .cl-tag--pill.tone-on {
@@ -1057,6 +1019,52 @@ body {
   opacity: 1;
   color: var(--cl-danger);
   background: color-mix(in srgb, var(--cl-danger) 12%, transparent);
+}
+
+/* ── Filter variant (one option of a filter rail) ──
+   The language of the chat pill's filters (.cl-pill-filter): no border, no
+   fill, the count muted beside the name, and an accent wash on the one that is
+   on. A bordered chip per tag read as four competing buttons; these are one
+   radio group. */
+.cl-tag--filter {
+  gap: 4px;
+  font-size: 10.5px;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-ink-3);
+}
+.cl-tag--filter .hash {
+  color: var(--cl-ink-4);
+  opacity: 0.7;
+}
+.cl-tag--filter .count {
+  font-size: 9.5px;
+  color: var(--cl-ink-4);
+  margin-left: 2px;
+}
+.cl-tag--filter.is-interactive {
+  cursor: pointer;
+}
+.cl-tag--filter.is-interactive:hover {
+  color: var(--cl-ink);
+  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+}
+.cl-tag--filter.tone-on,
+.cl-tag--filter.tone-soft {
+  background: color-mix(in oklch, var(--cl-accent) 18%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-tag--filter.tone-on .hash,
+.cl-tag--filter.tone-on .count {
+  color: inherit;
+  opacity: 0.75;
+}
+:root[data-theme='dark'] .cl-tag--filter.tone-on,
+:root[data-theme='dark'] .cl-tag--filter.tone-soft {
+  background: oklch(0.55 0.18 40 / 0.26);
+  color: oklch(0.88 0.04 40);
 }
 
 /* ── Row layout helpers ── */
@@ -1171,59 +1179,68 @@ body {
   background: color-mix(in srgb, var(--cl-accent) 8%, transparent);
 }
 
+/* A rail of filter options, not a band: it rides the section head (sessions) or
+   a toolbar (memory), so it carries no padding, rule or margin of its own. As
+   its own band under the heading it cost a hairline and 28px of vertical space
+   to say "todo 1". */
 .cl-tagbar {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 2px;
   flex-wrap: wrap;
-  padding: 10px 0 18px;
-  border-bottom: 1px solid var(--cl-line-soft);
-  margin-bottom: 4px;
+  min-width: 0;
 }
+.cl-sec-head > .cl-tagbar {
+  margin-left: auto;
+  align-self: center;
+  justify-content: flex-end;
+}
+/* "all" is the first option of the same radio group as the tags — same size,
+   same weight, same wash when active. Lowercase because the options next to it
+   are user-typed tag names, which are printed verbatim. */
 .cl-tagbar-all {
   font-family: var(--font-mono);
+  font-weight: 500;
   font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--cl-ink-3);
   background: transparent;
   border: none;
   cursor: pointer;
   padding: 4px 8px;
-  border-radius: 4px;
+  border-radius: 6px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 4px;
   transition:
     color 120ms,
     background 120ms;
 }
 .cl-tagbar-all:hover {
-  color: var(--cl-ink-2);
+  color: var(--cl-ink);
+  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
 }
 .cl-tagbar-all.on {
   color: var(--cl-accent-ink);
-  background: var(--cl-accent-soft);
+  background: color-mix(in oklch, var(--cl-accent) 18%, transparent);
 }
 :root[data-theme='dark'] .cl-tagbar-all.on {
-  background: oklch(0.55 0.18 40 / 0.22);
-  color: var(--cl-ink);
+  background: oklch(0.55 0.18 40 / 0.26);
+  color: oklch(0.88 0.04 40);
 }
 .cl-tagbar-all .ct {
   font-size: 9.5px;
-  opacity: 0.65;
-  padding-left: 6px;
-  border-left: 1px solid color-mix(in srgb, currentColor 25%, transparent);
+  color: var(--cl-ink-4);
+  margin-left: 2px;
 }
-.cl-tagbar-sep {
-  width: 1px;
-  height: 16px;
-  background: var(--cl-line);
-  opacity: 0.6;
+.cl-tagbar-all.on .ct {
+  color: inherit;
+  opacity: 0.75;
 }
 .cl-tagbar-list {
   display: inline-flex;
-  gap: 6px;
+  gap: 2px;
   flex-wrap: wrap;
 }
 
@@ -3472,20 +3489,23 @@ body {
   background: var(--cl-ok);
   flex-shrink: 0;
 }
+/* The composer is one sheet of paper + hairline, not glass: the chat surface
+   left glass behind with the "Nastro" direction (cl-pill and cl-turns-capsule
+   went opaque too), and a blurred slab under an opaque transcript was the last
+   thing here that read as another app. Opaque --cl-paper rather than the pill's
+   92% mix — this one holds text being typed, which must stay crisp. */
+.cl-composer-sheet {
+  border: 1px solid var(--cl-line);
+  border-radius: 14px;
+  background: var(--cl-paper);
+  box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
+}
 .cl-composer-row {
   position: relative;
   display: flex;
   align-items: flex-end;
   gap: 9px;
   padding: 7px;
-  border-radius: 16px;
-  background: var(--cl-glass-bg-strong);
-  border: 1px solid var(--cl-glass-border);
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    var(--cl-glass-lift);
-  -webkit-backdrop-filter: blur(26px) saturate(1.8);
-  backdrop-filter: blur(26px) saturate(1.8);
 }
 .cl-composer-input {
   flex: 1;
@@ -3507,57 +3527,117 @@ body {
 .cl-composer-input:disabled {
   opacity: 0.55;
 }
+/* Send/Stop in the editorial idiom: mono, hairline, no fill. It carries accent
+   only once there is something to send — a filled accent slab that spends most
+   of its life at 40% opacity reads as broken, not as "waiting". */
 .cl-composer-btn {
   flex: 0 0 auto;
   align-self: stretch;
-  padding: 0 18px;
-  border: 0;
-  border-radius: 11px;
-  background: var(--cl-accent);
-  color: var(--cl-on-accent);
-  font: 600 12.5px/1 var(--font-sans);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 14px;
+  border: 1px solid var(--cl-line);
+  border-radius: 10px;
+  background: transparent;
+  color: var(--cl-ink-4);
+  font: 500 10.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
   cursor: pointer;
   transition:
-    opacity 0.15s,
+    color 0.15s,
+    border-color 0.15s,
     background 0.15s;
 }
+.cl-composer-btn:not(:disabled) {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, var(--cl-line));
+}
 .cl-composer-btn:hover:not(:disabled) {
-  opacity: 0.9;
+  background: var(--cl-accent-soft);
 }
 .cl-composer-btn:disabled {
-  opacity: 0.4;
   cursor: not-allowed;
 }
-.cl-composer-btn.is-stop {
-  background: var(--cl-danger);
+.cl-composer-btn .arrow {
+  font-size: 11px;
+  opacity: 0.8;
 }
+.cl-composer-btn.is-stop {
+  color: var(--cl-danger);
+  border-color: color-mix(in oklch, var(--cl-danger) 45%, var(--cl-line));
+}
+.cl-composer-btn.is-stop:hover {
+  background: var(--cl-danger-soft);
+}
+/* the control rail belongs to the sheet: divided by a hairline, not floating
+   loose under it */
 .cl-composer-meta {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 10px;
-  padding: 0 4px;
-  font: 400 10.5px/1 var(--font-mono);
+  gap: 12px;
+  padding: 7px 13px;
+  border-top: 1px solid var(--cl-line);
+  font: 400 10.5px/1.3 var(--font-mono);
   color: var(--cl-ink-4);
+}
+.cl-composer-meta-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+.cl-composer-meta-note .sep {
+  opacity: 0.45;
 }
 .cl-composer-meta-tags {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 7px;
+  flex: none;
 }
-/* static billing-channel badge: replies here spend Agent SDK credits, not the plan */
+.cl-composer-meta-tags .sep {
+  opacity: 0.45;
+}
+/* which wallet pays: a stated fact, so plain text with a dot — as a bordered
+   accent pill it was the loudest thing in a bar full of real controls */
 .cl-composer-billing {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  padding: 3px 8px;
-  border: 1px solid color-mix(in oklch, var(--cl-accent) 38%, var(--cl-line));
-  border-radius: 999px;
-  font: 500 10px/1 var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--cl-accent-ink);
+  flex: none;
+  color: var(--cl-ink-3);
   cursor: help;
+}
+.cl-composer-billing .dot {
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  flex: none;
+}
+/* Borderless in the composer rail only: AgentsLiveView reuses .cl-composer-chip
+   as a pill among its dispatch controls, where the pill idiom is the right one. */
+.cl-composer-meta .cl-composer-chip {
+  padding: 2px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--cl-ink-3);
+  letter-spacing: 0.02em;
+}
+.cl-composer-meta .cl-composer-chip:hover:not(:disabled) {
+  color: var(--cl-ink);
+}
+.cl-composer-meta .cl-composer-chip[data-on] {
+  background: transparent;
+  color: var(--cl-accent-ink);
+}
+.cl-composer-meta .cl-composer-chip[data-danger] {
+  background: transparent;
+  border: 0;
 }
 .cl-composer-select {
   position: relative;
@@ -7236,10 +7316,6 @@ body {
 }
 .cl-mem-toolbar > .cl-tagbar {
   flex: 1 1 auto;
-  min-width: 0;
-  padding: 0;
-  margin: 0;
-  border-bottom: none;
 }
 .cl-mem-toolbar .cl-mem-groupby {
   margin: 0 0 0 auto;
@@ -13474,6 +13550,9 @@ select.cl-opt-input {
   width: min(340px, calc(100vw - 36px));
   pointer-events: none;
 }
+/* The stripe-on-the-left card. Now the UpdateBanner's anatomy only (an app-level
+   notice with two actions and a footnote) — session notifications moved to the
+   feed-row form below. */
 .cl-toast {
   pointer-events: auto;
   position: relative;
@@ -13494,15 +13573,6 @@ select.cl-opt-input {
   bottom: 0;
   width: 4px;
   background: var(--cl-ink-4);
-}
-.cl-toast--needs-attention .cl-toast-stripe {
-  background: var(--cl-accent);
-}
-.cl-toast--completed .cl-toast-stripe {
-  background: var(--cl-ok);
-}
-.cl-toast--error .cl-toast-stripe {
-  background: var(--cl-danger);
 }
 .cl-toast-body {
   flex: 1;
@@ -13555,6 +13625,220 @@ select.cl-opt-input {
 .cl-toast-close:hover {
   background: var(--cl-line-soft);
   color: var(--cl-ink);
+}
+
+/* ─── Session notification (NotificationToaster.tsx) ──────────────────────
+   A notification IS a session event, and the app already has a language for
+   those: the Mission Control feed row (time gutter · state dot · subject ·
+   status tag). So the toast is one of those rows on paper, not a generic
+   stripe-on-the-left card — that stripe was library convention, and state here
+   is carried by a dot everywhere else in the app.
+   The subject line is the PROJECT (what the eye looks for when a corner of the
+   screen moves); the prose lives in the meta line and the state in the right
+   tag. Composed from `kind` + `cwd` + `body` rather than from the event's
+   `title`, which is written for the OS notification's conventions — that full
+   sentence stays available as the row's tooltip. */
+.cl-ntf {
+  pointer-events: auto;
+  position: relative;
+  display: grid;
+  grid-template-columns: 30px 14px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px 11px;
+  border-radius: 10px;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 12px 30px -14px oklch(0.2 0.02 60 / 0.34);
+  overflow: hidden;
+}
+.cl-ntf-when {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.06em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
+  align-self: start;
+  margin-top: 3px;
+}
+.cl-ntf-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+  align-self: start;
+  margin-top: 4px;
+  justify-self: center;
+}
+.cl-ntf--completed .cl-ntf-dot {
+  background: var(--cl-ok);
+}
+/* The one kind that is blocked on the user right now gets the pulse. Its own
+   keyframes, not .cl-live-dot: that halo is hardcoded to the green "ok" hue. */
+.cl-ntf--needs-attention .cl-ntf-dot {
+  background: var(--cl-accent);
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+@keyframes cl-ntf-pulse {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 6px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+.cl-ntf--error .cl-ntf-dot {
+  background: var(--cl-danger);
+}
+.cl-ntf-subject {
+  min-width: 0;
+}
+.cl-ntf-name {
+  display: block;
+  font: 500 12.5px/1.3 var(--font-sans);
+  color: var(--cl-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-ntf--error .cl-ntf-name {
+  color: var(--cl-danger);
+}
+.cl-ntf-meta {
+  margin-top: 2px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1.45;
+  color: var(--cl-ink-4);
+  /* an error body is the one that can run long: wrap it, capped at two lines
+     (a -webkit-box lays out as a block, so this is also the display) */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+.cl-ntf-state {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+  align-self: start;
+  margin-top: 3px;
+  color: var(--cl-ink-4);
+}
+.cl-ntf--completed .cl-ntf-state {
+  color: var(--cl-ok);
+}
+.cl-ntf--needs-attention .cl-ntf-state {
+  color: var(--cl-accent-ink);
+}
+.cl-ntf--error .cl-ntf-state {
+  color: var(--cl-danger);
+}
+/* actions sit in the subject column, so they line up under the text */
+.cl-ntf-foot {
+  grid-column: 3 / -1;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cl-ntf-open {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  background: transparent;
+  border: 1px solid var(--cl-line);
+  border-radius: 7px;
+  padding: 5px 9px;
+  cursor: pointer;
+  transition:
+    color 140ms,
+    border-color 140ms,
+    background 140ms;
+}
+.cl-ntf-open:hover {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  background: var(--cl-accent-soft);
+}
+.cl-ntf-close {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  color: var(--cl-ink-4);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 140ms,
+    background 140ms,
+    color 140ms;
+}
+.cl-ntf:hover .cl-ntf-close,
+.cl-ntf-close:focus-visible {
+  opacity: 1;
+}
+.cl-ntf-close:hover {
+  background: var(--cl-line-soft);
+  color: var(--cl-ink);
+}
+/* The auto-dismiss made visible: a hairline that retracts over the timer's own
+   duration (passed in from the component, so the two can't drift). Both this
+   and the JS timer pause on hover — a bar that keeps running while you read a
+   long error would be lying. */
+.cl-ntf-timer {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 1.5px;
+  background: color-mix(in oklch, var(--cl-ink) 22%, transparent);
+  transform-origin: left center;
+  animation: cl-ntf-retract linear forwards;
+}
+.cl-ntf--completed .cl-ntf-timer {
+  background: color-mix(in oklch, var(--cl-ok) 55%, transparent);
+}
+.cl-ntf--needs-attention .cl-ntf-timer {
+  background: color-mix(in oklch, var(--cl-accent) 55%, transparent);
+}
+.cl-ntf--error .cl-ntf-timer {
+  background: color-mix(in oklch, var(--cl-danger) 55%, transparent);
+}
+.cl-ntf.is-paused .cl-ntf-timer {
+  animation-play-state: paused;
+}
+@keyframes cl-ntf-retract {
+  from {
+    transform: scaleX(1);
+  }
+  to {
+    transform: scaleX(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-ntf-timer {
+    animation: none;
+    transform: scaleX(1);
+  }
+  .cl-ntf--needs-attention .cl-ntf-dot {
+    animation: none;
+  }
 }
 
 /* ─── Update notice (UpdateBanner.tsx) ────────────────────────────────────
@@ -14247,12 +14531,244 @@ select.cl-opt-input {
   background: var(--cl-ink-4);
 }
 
+/* the trailing cell closes the band — nothing sits to the right of it */
+.cl-hband > .cl-hcell:last-child {
+  border-right: none;
+}
+
 @media (max-width: 980px) {
   .cl-hcell {
     padding: 14px 18px 0;
   }
   .cl-hcell .cl-bars {
     display: none;
+  }
+}
+
+/* ════════════════════════════════════════════════════════════════════════
+   DUPLICATE FOLDERS · side-by-side comparison
+   The decision here is "which folder survives", so the two candidates are
+   laid out as a diff: primary left, duplicates right, merge direction in the
+   gutter between them. Panels are equal-width so the session/memory figures
+   line up and can be compared by eye.
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-dup-group + .cl-dup-group {
+  margin-top: 34px;
+}
+.cl-dup-head {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--cl-ink);
+  margin-bottom: 14px;
+}
+.cl-dup-head .nm {
+  font-family: var(--font-mono);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink);
+}
+.cl-dup-head .ct {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-dup-compare {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
+  align-items: stretch;
+}
+/* the duplicates column: one panel per candidate, stacked */
+.cl-dup-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+/* merge direction, drawn once between the columns */
+.cl-dup-gutter {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+.cl-dup-gutter::before {
+  content: '';
+  position: absolute;
+  top: 10px;
+  bottom: 10px;
+  left: 50%;
+  border-left: 1px dashed var(--cl-line);
+}
+.cl-dup-gutter .arrow {
+  position: relative;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1;
+  color: var(--cl-ink-4);
+  background: var(--cl-paper);
+  padding: 5px 0;
+}
+.cl-dup-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 14px 16px;
+  border: 1px solid var(--cl-line);
+  border-radius: 10px;
+  background: var(--cl-paper-2);
+}
+.cl-dup-panel.is-primary {
+  border-color: color-mix(in oklch, var(--cl-ok) 45%, var(--cl-line));
+  background: color-mix(in oklch, var(--cl-ok) 7%, var(--cl-paper-2));
+}
+.cl-dup-role {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.cl-dup-role .tag {
+  color: var(--cl-warn);
+}
+.cl-dup-panel.is-primary .cl-dup-role .tag {
+  color: var(--cl-ok);
+}
+.cl-dup-role .fate {
+  font-weight: 400;
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+/* the full path is the thing being decided on: it wraps instead of truncating */
+.cl-dup-path {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+}
+.cl-dup-path .dir {
+  color: var(--cl-ink-4);
+}
+.cl-dup-est {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-warn);
+}
+/* three figures per panel, same slots on both sides so they compare */
+.cl-dup-tape {
+  display: flex;
+  align-items: stretch;
+  margin-top: auto;
+  padding-top: 4px;
+}
+.cl-dup-tape .cell {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 12px;
+  border-right: 1px solid var(--cl-line);
+}
+.cl-dup-tape .cell:last-child {
+  border-right: none;
+  padding-right: 0;
+}
+.cl-dup-tape .cell + .cell {
+  padding-left: 12px;
+}
+.cl-dup-tape .k {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  line-height: 1;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-dup-tape .v {
+  font-size: 17px;
+  line-height: 1;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+  margin-top: 7px;
+  font-variant-numeric: tabular-nums;
+}
+.cl-dup-tape .v.date {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--cl-ink-2);
+}
+.cl-dup-tape .v small {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--cl-ink-4);
+  margin-left: 4px;
+}
+/* mirrors the session-row action idiom, one size up: this one is the panel's
+   purpose, not a hover affordance */
+.cl-dup-act {
+  display: flex;
+  justify-content: flex-end;
+  padding-top: 2px;
+}
+.cl-dup-act button {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cl-ink-3);
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  border-radius: 7px;
+  padding: 6px 11px;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    border-color 120ms,
+    background 120ms;
+}
+.cl-dup-act button:hover {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  background: var(--cl-accent-soft);
+}
+
+/* narrow window: the diff stops being readable side by side, so it stacks and
+   the gutter arrow turns to point down the flow */
+@media (max-width: 900px) {
+  .cl-dup-compare {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cl-dup-gutter {
+    height: 34px;
+  }
+  .cl-dup-gutter::before {
+    top: 50%;
+    bottom: auto;
+    left: 10px;
+    right: 10px;
+    border-left: none;
+    border-top: 1px dashed var(--cl-line);
+  }
+  .cl-dup-gutter .arrow {
+    padding: 0 7px;
+    transform: rotate(90deg);
   }
 }
 
@@ -14522,6 +15038,65 @@ select.cl-opt-input {
   color: var(--cl-accent-ink);
   border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
   background: var(--cl-accent-soft);
+}
+
+/* ── Recent strip (project landing) ──
+   The leader-dot language of .cl-srow at half the weight: title · live · leader
+   · when, and nothing else. It is a way into the history, not a second copy of
+   it — pins, tags, the figure cluster and the row actions all stay in the
+   Sessions subtab. */
+.cl-mrows {
+  border-top: 1px solid var(--cl-line);
+}
+.cl-mrow {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  padding: 8px 0;
+  border: 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  background: transparent;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.cl-mrow:hover {
+  background: var(--cl-glass-hover-bg);
+  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
+}
+.cl-mrow:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: -2px;
+}
+.cl-mrow .title {
+  font-size: 13px;
+  line-height: 1.35;
+  font-weight: 500;
+  color: var(--cl-ink);
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-mrow:hover .title {
+  color: var(--cl-accent-ink);
+}
+.cl-mrow .lead {
+  flex: 1 0 auto;
+  min-width: 40px;
+  align-self: center;
+  height: 1em;
+  border-bottom: 1px dotted var(--cl-line);
+  transform: translateY(-3px);
+}
+.cl-mrow .when {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-4);
+  font-variant-numeric: tabular-nums;
 }
 
 @media (max-width: 980px) {

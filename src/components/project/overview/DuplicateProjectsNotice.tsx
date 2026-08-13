@@ -8,9 +8,10 @@ import {
   type MergeResult,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
-import { BackButton } from '../shared/BackButton';
+import { TopBar } from '../shared/TopBar';
+import { Lens } from './Lens';
 import { MergeConfirmDialog } from '../shared/MergeConfirmDialog';
-import { projectDisplayName } from '../shared/projectName';
+import { projectDisplayName, sharedPathPrefix } from '../shared/projectName';
 
 function shortWhen(iso: string | null): string {
   if (!iso) return 'no sessions';
@@ -19,88 +20,64 @@ function shortWhen(iso: string | null): string {
   return d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: '2-digit' });
 }
 
-function FolderRow({
+/**
+ * One candidate folder, as a panel of the group's comparison. Both sides carry
+ * the same three figures in the same slots so sessions/memory/last activity can
+ * be compared by eye — that comparison *is* the decision on this page.
+ */
+function FolderPanel({
   folder,
   primary,
+  sharedPrefix,
   onMerge,
 }: {
   folder: DuplicateFolder;
   primary: boolean;
+  sharedPrefix: string;
   onMerge?: () => void;
 }) {
+  const tail = folder.realPath.startsWith(sharedPrefix)
+    ? folder.realPath.slice(sharedPrefix.length)
+    : folder.realPath;
+
   return (
-    <div
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 12,
-        padding: '10px 14px',
-        borderRadius: 8,
-        border: '1px solid var(--cl-line)',
-        background: primary ? 'var(--cl-ok-soft, transparent)' : 'transparent',
-      }}
-    >
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 10,
-          fontWeight: 700,
-          letterSpacing: '0.06em',
-          textTransform: 'uppercase',
-          color: primary ? 'var(--cl-ok)' : 'var(--cl-warn)',
-          minWidth: 84,
-        }}
-      >
-        {primary ? '● primary' : '○ duplicate'}
-      </span>
-      <div style={{ minWidth: 0, flex: 1 }}>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 12,
-            color: 'var(--cl-ink)',
-            overflow: 'hidden',
-            textOverflow: 'ellipsis',
-            whiteSpace: 'nowrap',
-          }}
-          title={folder.realPath}
-        >
-          {folder.realPath}
-          {!folder.realPathAuthoritative && (
-            <span style={{ color: 'var(--cl-warn)', marginLeft: 8 }}>· estimated path</span>
-          )}
+    <div className={`cl-dup-panel${primary ? ' is-primary' : ''}`}>
+      <div className="cl-dup-role">
+        <span className="tag">{primary ? '● primary' : '○ duplicate'}</span>
+        <span className="fate">{primary ? 'kept' : 'can be merged'}</span>
+      </div>
+
+      <div className="cl-dup-path" title={folder.realPath}>
+        {sharedPrefix && <span className="dir">{sharedPrefix}</span>}
+        {tail}
+      </div>
+
+      {!folder.realPathAuthoritative && <div className="cl-dup-est">· estimated path</div>}
+
+      <div className="cl-dup-tape">
+        <div className="cell">
+          <div className="k">Sessions</div>
+          <div className="v">{folder.sessionCount}</div>
         </div>
-        <div
-          style={{
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            color: 'var(--cl-ink-2, var(--cl-ink))',
-            opacity: 0.6,
-          }}
-        >
-          {folder.sessionCount} sessions · {folder.memoryTopicCount} memory
-          {folder.hasMemoryIndex ? ' (+index)' : ''} · last {shortWhen(folder.lastActivity)}
+        <div className="cell">
+          <div className="k">Memory</div>
+          <div className="v">
+            {folder.memoryTopicCount}
+            {folder.hasMemoryIndex && <small>+index</small>}
+          </div>
+        </div>
+        <div className="cell">
+          <div className="k">Last</div>
+          <div className="v date">{shortWhen(folder.lastActivity)}</div>
         </div>
       </div>
+
       {onMerge && (
-        <button
-          type="button"
-          onClick={onMerge}
-          style={{
-            flexShrink: 0,
-            fontFamily: 'var(--font-mono)',
-            fontSize: 11,
-            fontWeight: 600,
-            padding: '5px 10px',
-            borderRadius: 6,
-            border: '1px solid var(--cl-line)',
-            background: 'transparent',
-            color: 'var(--cl-ink)',
-            cursor: 'pointer',
-          }}
-        >
-          Merge into primary →
-        </button>
+        <div className="cl-dup-act">
+          <button type="button" onClick={onMerge}>
+            Merge into primary
+          </button>
+        </div>
       )}
     </div>
   );
@@ -199,90 +176,127 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
     }
   }
 
+  const folderCount = groups.reduce((s, g) => s + g.folders.length, 0);
+  // what a full clean-up would move: everything held by the non-primary folders
+  const dupFolders = groups.flatMap(g => g.folders.slice(1));
+  const sessionsToMove = dupFolders.reduce((s, f) => s + f.sessionCount, 0);
+  const memoryToMove = dupFolders.reduce((s, f) => s + f.memoryTopicCount, 0);
+
   return (
-    <div style={{ height: '100%', overflow: 'auto', padding: '20px 28px' }}>
-      <BackButton label="Global" onClick={onBack} />
+    <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
+      <TopBar onBack={onBack} backLabel="Global" crumbs={[{ label: 'Duplicates', accent: true }]} />
 
-      <div className="cl-sec-head" style={{ marginTop: 12 }}>
-        <h2>Possible duplicates</h2>
-        <span className="ct">
-          {groups.length} {groups.length === 1 ? 'project' : 'projects'} appear in multiple paths
-        </span>
-      </div>
+      <div className="flex-1 overflow-y-auto">
+        <section className="cl-hero">
+          <Lens />
+          <div className="cl-eyebrow">
+            <span className="pip" />
+            <span>Global · ~/.claude/projects</span>
+          </div>
+          <h1 className="cl-h-name static">
+            <span className="label-name">Duplicates</span>
+            <span className="glyph">.</span>
+          </h1>
 
-      <div
-        style={{
-          fontSize: 13,
-          lineHeight: 1.5,
-          color: 'var(--cl-ink)',
-          opacity: 0.8,
-          margin: '14px 0 22px',
-          padding: '12px 16px',
-          borderRadius: 8,
-          background: 'var(--cl-warn-soft)',
-          border: '1px solid var(--cl-line)',
-          maxWidth: 720,
-        }}
-      >
-        Claude Code identifies projects by <b>absolute path</b>: the same project opened from
-        different folders (e.g. moved from Desktop to Projects) produces separate histories. The old
-        folder often keeps only its <code style={{ fontFamily: 'var(--font-mono)' }}>memory/</code>,
-        because sessions get removed by Claude Code's retention. ClaudeLens <b>flags them</b> —
-        nothing is moved until you choose to merge a folder into the primary one.
-      </div>
-
-      {planError && (
-        <div
-          style={{
-            fontSize: 12,
-            color: 'var(--cl-danger)',
-            margin: '0 0 16px',
-            padding: '8px 12px',
-            borderRadius: 8,
-            border: '1px solid var(--cl-danger)',
-            background: 'var(--cl-danger-soft)',
-            maxWidth: 720,
-          }}
-        >
-          Failed to compute merge plan: {planError}
-        </div>
-      )}
-
-      {groups.length === 0 ? (
-        <div className="cl-empty">No duplicates detected.</div>
-      ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, maxWidth: 860 }}>
-          {groups.map(group => (
-            <div key={group.key}>
-              <div
-                style={{
-                  fontFamily: 'var(--font-mono)',
-                  fontSize: 12,
-                  fontWeight: 700,
-                  letterSpacing: '0.04em',
-                  color: 'var(--cl-ink)',
-                  marginBottom: 8,
-                }}
-              >
-                {group.name}{' '}
-                <span style={{ opacity: 0.5, fontWeight: 400 }}>
-                  · {group.folders.length} folders
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                {group.folders.map((folder, i) => (
-                  <FolderRow
-                    key={folder.hash}
-                    folder={folder}
-                    primary={i === 0}
-                    onMerge={i === 0 ? undefined : () => openMerge(folder, group.folders[0])}
-                  />
-                ))}
+          <div className="cl-hband">
+            <div className="cl-hcell">
+              <div className="lbl">Projects</div>
+              <div className="num">{groups.length}</div>
+              <div className="sub">in multiple paths</div>
+            </div>
+            <div className="cl-hcell">
+              <div className="lbl">Folders</div>
+              <div className="num">{folderCount}</div>
+              <div className="sub">
+                {groups.length} primary · {dupFolders.length} duplicate
               </div>
             </div>
-          ))}
-        </div>
-      )}
+            <div className="cl-hcell">
+              <div className="lbl">Sessions to move</div>
+              <div className="num">{sessionsToMove}</div>
+              <div className="sub">held by duplicate folders</div>
+            </div>
+            <div className="cl-hcell">
+              <div className="lbl">Memory to merge</div>
+              <div className="num">{memoryToMove}</div>
+              <div className="sub">topics in duplicate folders</div>
+            </div>
+          </div>
+
+          <details className="set-disc">
+            <summary>Why does this happen?</summary>
+            <div
+              style={{
+                fontSize: 13,
+                lineHeight: 1.55,
+                color: 'var(--cl-ink-2)',
+                marginTop: 10,
+                maxWidth: 760,
+              }}
+            >
+              Claude Code identifies projects by <b>absolute path</b>: the same project opened from
+              different folders (e.g. moved from Desktop to Projects) produces separate histories.
+              The old folder often keeps only its{' '}
+              <code style={{ fontFamily: 'var(--font-mono)' }}>memory/</code>, because sessions get
+              removed by Claude Code's retention. ClaudeLens <b>flags them</b> — nothing is moved
+              until you choose to merge a folder into the primary one.
+            </div>
+          </details>
+        </section>
+
+        <section className="cl-section">
+          {planError && (
+            <div
+              style={{
+                fontSize: 12,
+                color: 'var(--cl-danger)',
+                margin: '0 0 18px',
+                padding: '8px 12px',
+                borderRadius: 8,
+                border: '1px solid var(--cl-danger)',
+                background: 'var(--cl-danger-soft)',
+                maxWidth: 720,
+              }}
+            >
+              Failed to compute merge plan: {planError}
+            </div>
+          )}
+
+          {groups.length === 0 ? (
+            <div className="cl-empty">No duplicates detected.</div>
+          ) : (
+            groups.map(group => {
+              const [primary, ...dups] = group.folders;
+              const sharedPrefix = sharedPathPrefix(group.folders.map(f => f.realPath));
+              return (
+                <div key={group.key} className="cl-dup-group">
+                  <div className="cl-dup-head">
+                    <span className="nm">{group.name}</span>
+                    <span className="ct">{group.folders.length} folders</span>
+                  </div>
+                  <div className="cl-dup-compare">
+                    <FolderPanel folder={primary} primary sharedPrefix={sharedPrefix} />
+                    <div className="cl-dup-gutter" aria-hidden="true">
+                      <span className="arrow">←</span>
+                    </div>
+                    <div className="cl-dup-stack">
+                      {dups.map(folder => (
+                        <FolderPanel
+                          key={folder.hash}
+                          folder={folder}
+                          primary={false}
+                          sharedPrefix={sharedPrefix}
+                          onMerge={() => openMerge(folder, primary)}
+                        />
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            })
+          )}
+        </section>
+      </div>
 
       {dialog && (
         <MergeConfirmDialog
