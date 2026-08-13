@@ -23,14 +23,15 @@ export function TagBar({
   const manageable = !!(onRename || onDelete);
   return (
     <div className="cl-tagbar">
+      {/* "all" and every tag are one radio group, so they are one species with
+          no divider between them — the active wash says which one is on. */}
       <button
         type="button"
         className={`cl-tagbar-all${activeTag === null ? ' on' : ''}`}
         onClick={() => onSelect(null)}
       >
-        All <span className="ct">{totalCount}</span>
+        all <span className="ct">{totalCount}</span>
       </button>
-      <span className="cl-tagbar-sep" />
       <div className="cl-tagbar-list">
         {tags.map(t =>
           manageable ? (
@@ -41,6 +42,7 @@ export function TagBar({
               name={t.name}
               count={counts[t.name] ?? 0}
               active={activeTag === t.name}
+              variant="filter"
               onFilter={() => onSelect(activeTag === t.name ? null : t.name)}
               onRename={onRename}
               onDelete={onDelete ? () => onDelete(t.name) : undefined}
@@ -51,6 +53,7 @@ export function TagBar({
               name={t.name}
               count={counts[t.name] ?? 0}
               tone={activeTag === t.name ? 'on' : 'muted'}
+              variant="filter"
               onClick={() => onSelect(activeTag === t.name ? null : t.name)}
             />
           )

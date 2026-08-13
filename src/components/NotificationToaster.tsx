@@ -1,7 +1,8 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
-import type { NotificationEvent } from '../types';
+import type { NotificationEvent, NotificationKind } from '../types';
 import { trackEvent } from '../lib/telemetry';
+import { projectDisplayName } from './project/shared/projectName';
 
 // Transient in-app toasts for session-lifecycle notifications pushed from the
 // main process over `notifications:event` (see electron/modules/notifications/).
@@ -10,9 +11,29 @@ import { trackEvent } from '../lib/telemetry';
 //
 // Mounted inside ProjectOverview (not App) so `onOpenSession` has access to the
 // navigation state. Keeps its own small queue; auto-dismisses after a while.
+//
+// Each toast is rendered as one Mission Control feed row (time gutter · state
+// dot · subject · status tag): a notification is a session event, and that is
+// the language this app already uses for events.
 
 const AUTO_DISMISS_MS = 9000;
 const MAX_VISIBLE = 4;
+
+/** The right-hand status tag — the state, in the feed's vocabulary. */
+const STATE_TAG: Record<NotificationKind, string> = {
+  'needs-attention': 'WAITING',
+  completed: 'FINISHED',
+  error: 'ERROR',
+};
+
+/** Fallback for the meta line when the event carries no body of its own. The
+ *  event's `title` is a full sentence written for the OS notification; here the
+ *  layout wants a fragment, with that sentence kept as the row's tooltip. */
+const FALLBACK_META: Record<NotificationKind, string> = {
+  'needs-attention': 'waiting for you',
+  completed: 'your turn',
+  error: 'turn failed',
+};
 
 export interface NotificationToasterProps {
   /** Navigate to the session a notification is about. Omitted button when absent. */
@@ -63,37 +84,8 @@ export function NotificationToaster({ onOpenSession }: NotificationToasterProps)
             animate={{ opacity: 1, x: 0, scale: 1 }}
             exit={{ opacity: 0, x: 24, scale: 0.98 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
-            className={`cl-toast cl-toast--${t.kind}`}
           >
-            <span className="cl-toast-stripe" aria-hidden="true" />
-            <div className="cl-toast-body">
-              <div className="cl-toast-title">{t.title}</div>
-              {t.body && <div className="cl-toast-sub">{t.body}</div>}
-              {t.sessionId && (
-                <button type="button" className="cl-toast-action" onClick={() => act(t)}>
-                  Open session
-                </button>
-              )}
-            </div>
-            <button
-              type="button"
-              className="cl-toast-close"
-              aria-label="Dismiss"
-              onClick={() => dismiss(t.id)}
-            >
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2.4"
-                strokeLinecap="round"
-              >
-                <path d="M18 6 6 18M6 6l12 12" />
-              </svg>
-            </button>
-            <AutoDismiss id={t.id} onExpire={dismiss} />
+            <NotificationRow event={t} onOpen={() => act(t)} onDismiss={dismiss} />
           </motion.div>
         ))}
       </AnimatePresence>
@@ -101,12 +93,92 @@ export function NotificationToaster({ onOpenSession }: NotificationToasterProps)
   );
 }
 
-// One timer per toast; split out so each toast owns its own lifecycle and a
-// re-render of the list doesn't reset every timer.
-function AutoDismiss({ id, onExpire }: { id: string; onExpire: (id: string) => void }) {
+/** One feed row. Owns its own dismiss timer so a re-render of the list — or a
+ *  sibling arriving — never resets it, and so hovering pauses this row alone. */
+function NotificationRow({
+  event,
+  onOpen,
+  onDismiss,
+}: {
+  event: NotificationEvent;
+  onOpen: () => void;
+  /** Takes the id (rather than being pre-bound) so it stays referentially
+   *  stable: it is a dependency of the dismiss timer, and a fresh closure per
+   *  parent render would restart the clock on every re-render. */
+  onDismiss: (id: string) => void;
+}) {
+  const [paused, setPaused] = useState(false);
+  // Time left on this row's clock. Kept in a ref so pausing doesn't restart it.
+  const remainingRef = useRef(AUTO_DISMISS_MS);
+  const id = event.id;
+
   useEffect(() => {
-    const timer = setTimeout(() => onExpire(id), AUTO_DISMISS_MS);
-    return () => clearTimeout(timer);
-  }, [id, onExpire]);
-  return null;
+    if (paused) return;
+    const startedAt = Date.now();
+    const timer = setTimeout(() => onDismiss(id), remainingRef.current);
+    return () => {
+      clearTimeout(timer);
+      remainingRef.current = Math.max(0, remainingRef.current - (Date.now() - startedAt));
+    };
+  }, [paused, id, onDismiss]);
+
+  const project = projectDisplayName(event.cwd);
+  const detail = event.body?.trim() || FALLBACK_META[event.kind];
+  const shortId = event.sessionId ? event.sessionId.slice(0, 8) : '';
+
+  return (
+    <div
+      className={`cl-ntf cl-ntf--${event.kind}${paused ? ' is-paused' : ''}`}
+      // The full sentence the OS notification shows, kept reachable here.
+      title={event.title}
+      onMouseEnter={() => setPaused(true)}
+      onMouseLeave={() => setPaused(false)}
+      onFocus={() => setPaused(true)}
+      onBlur={() => setPaused(false)}
+    >
+      <span className="cl-ntf-when">now</span>
+      <span className="cl-ntf-dot" aria-hidden="true" />
+      <span className="cl-ntf-subject">
+        <span className="cl-ntf-name">{project || event.title}</span>
+        <span className="cl-ntf-meta">
+          {detail}
+          {shortId && ` · ${shortId}`}
+        </span>
+      </span>
+      <span className="cl-ntf-state">{STATE_TAG[event.kind]}</span>
+
+      {event.sessionId && (
+        <div className="cl-ntf-foot">
+          <button type="button" className="cl-ntf-open" onClick={onOpen}>
+            Open session →
+          </button>
+        </div>
+      )}
+
+      <button
+        type="button"
+        className="cl-ntf-close"
+        aria-label="Dismiss"
+        onClick={() => onDismiss(id)}
+      >
+        <svg
+          width="12"
+          height="12"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="2.4"
+          strokeLinecap="round"
+        >
+          <path d="M18 6 6 18M6 6l12 12" />
+        </svg>
+      </button>
+
+      <span
+        className="cl-ntf-timer"
+        aria-hidden="true"
+        style={{ animationDuration: `${AUTO_DISMISS_MS}ms` }}
+      />
+    </div>
+  );
 }

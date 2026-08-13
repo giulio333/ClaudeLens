@@ -24,14 +24,6 @@ type Project = { hash: string; realPath: string };
 
 const PROJECTS_PAGE_SIZE = 5;
 
-type SortKey = 'tokens' | 'cost' | 'sessions' | 'name';
-const SORT_OPTIONS: { key: SortKey; label: string }[] = [
-  { key: 'tokens', label: 'tokens' },
-  { key: 'cost', label: 'cost' },
-  { key: 'sessions', label: 'sessions' },
-  { key: 'name', label: 'name' },
-];
-
 function pageWindow(current: number, total: number): (number | 'gap')[] {
   if (total <= 7) return Array.from({ length: total }, (_, i) => i);
   const out: (number | 'gap')[] = [0];
@@ -61,10 +53,7 @@ export function GlobalHomeView({
 
   const { data: procs = [] } = useActiveSessions();
   const [projectsPage, setProjectsPage] = useState(0);
-  const [sortKey, setSortKey] = useState<SortKey>('tokens');
   const { pinned, isPinned, togglePin } = usePinnedProjects();
-  // 'pinned' default when any pin exists; user can switch to 'all'
-  const [projectsFilter, setProjectsFilter] = useState<'pinned' | 'all'>('pinned');
 
   const costByHash = useMemo(() => {
     const m = new Map<string, ProjectCost>();
@@ -72,44 +61,28 @@ export function GlobalHomeView({
     return m;
   }, [costSummary]);
 
-  const hasPinned = useMemo(() => allProjects.some(p => pinned.has(p.hash)), [allProjects, pinned]);
-  const effectiveFilter: 'pinned' | 'all' = hasPinned ? projectsFilter : 'all';
-
-  const sortedProjects = useMemo(() => {
-    const base =
-      effectiveFilter === 'pinned' ? allProjects.filter(p => pinned.has(p.hash)) : allProjects;
-    const arr = [...base];
+  // The home lists pinned projects only — the full list lives in the lens
+  // (⌘F). With nothing pinned there is no section at all, so this doubles as
+  // the section's mount guard.
+  //
+  // Always by name, with no sort control: this is a hand-picked shortlist, and
+  // the usage-based orders it used to offer reshuffled it as work happened —
+  // the one thing a shortlist you navigate by muscle memory must not do.
+  const pinnedProjects = useMemo(() => {
     const nameOf = (p: Project) => projectDisplayName(p.realPath).toLowerCase();
-    switch (sortKey) {
-      case 'cost':
-        return arr.sort(
-          (a, b) => (costByHash.get(b.hash)?.cost ?? 0) - (costByHash.get(a.hash)?.cost ?? 0)
-        );
-      case 'sessions':
-        return arr.sort(
-          (a, b) =>
-            (costByHash.get(b.hash)?.sessionsCount ?? 0) -
-            (costByHash.get(a.hash)?.sessionsCount ?? 0)
-        );
-      case 'name':
-        return arr.sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
-      case 'tokens':
-      default:
-        return arr.sort(
-          (a, b) =>
-            (costByHash.get(b.hash)?.totalTokens ?? 0) - (costByHash.get(a.hash)?.totalTokens ?? 0)
-        );
-    }
-  }, [allProjects, costByHash, sortKey, effectiveFilter, pinned]);
+    return allProjects
+      .filter(p => pinned.has(p.hash))
+      .sort((a, b) => nameOf(a).localeCompare(nameOf(b)));
+  }, [allProjects, pinned]);
 
-  const pageCount = Math.max(1, Math.ceil(sortedProjects.length / PROJECTS_PAGE_SIZE));
+  const pageCount = Math.max(1, Math.ceil(pinnedProjects.length / PROJECTS_PAGE_SIZE));
   const safePage = Math.min(projectsPage, pageCount - 1);
-  const pagedProjects = sortedProjects.slice(
+  const pagedProjects = pinnedProjects.slice(
     safePage * PROJECTS_PAGE_SIZE,
     (safePage + 1) * PROJECTS_PAGE_SIZE
   );
-  const rangeFrom = sortedProjects.length === 0 ? 0 : safePage * PROJECTS_PAGE_SIZE + 1;
-  const rangeTo = Math.min((safePage + 1) * PROJECTS_PAGE_SIZE, sortedProjects.length);
+  const rangeFrom = pinnedProjects.length === 0 ? 0 : safePage * PROJECTS_PAGE_SIZE + 1;
+  const rangeTo = Math.min((safePage + 1) * PROJECTS_PAGE_SIZE, pinnedProjects.length);
 
   const projectByPath = useMemo(() => {
     const m = new Map<string, Project>();
@@ -130,7 +103,7 @@ export function GlobalHomeView({
         <Lens />
         <div className="cl-eyebrow">
           <span className="pip" />
-          <span>Global · ~ · shared across all projects on this machine</span>
+          <span>Global · ~/.claude</span>
         </div>
         <h1 className="cl-h-name static">
           <span className="label-name">Global</span>
@@ -214,183 +187,130 @@ export function GlobalHomeView({
         </section>
       )}
 
-      {/* ─── PROJECTS ─────────────────────────────────── */}
-      <section className="cl-section">
-        <div className="cl-sec-head">
-          <h2>{effectiveFilter === 'pinned' ? 'Pinned projects' : 'Projects'}</h2>
-          <span className="ct">
-            {sortedProjects.length === 0
-              ? effectiveFilter === 'pinned'
-                ? '0 pinned · pin a project to surface it here'
-                : '0 total · sorted by token usage'
-              : `${rangeFrom}–${rangeTo} of ${sortedProjects.length} · sorted by ${SORT_OPTIONS.find(o => o.key === sortKey)?.label ?? 'tokens'}`}
-          </span>
-          {hasPinned && (
-            <span className="cl-pinfilter">
-              <button
-                type="button"
-                className={projectsFilter === 'pinned' ? 'on' : ''}
-                onClick={() => {
-                  setProjectsFilter('pinned');
-                  setProjectsPage(0);
-                }}
-              >
-                Pinned
-              </button>
-              <span className="sep">·</span>
-              <button
-                type="button"
-                className={projectsFilter === 'all' ? 'on' : ''}
-                onClick={() => {
-                  setProjectsFilter('all');
-                  setProjectsPage(0);
-                }}
-              >
-                All
-              </button>
+      {/* ─── PINNED PROJECTS ──────────────────────────── */}
+      {/* Nothing pinned = no section: an empty state inviting a pin would be a
+          permanent fixture for a one-off action the lens already offers. */}
+      {pinnedProjects.length > 0 && (
+        <section className="cl-section">
+          <div className="cl-sec-head">
+            <h2>Pinned projects</h2>
+            <span className="ct">
+              {pinnedProjects.length > PROJECTS_PAGE_SIZE
+                ? `${rangeFrom}–${rangeTo} of ${pinnedProjects.length}`
+                : `${pinnedProjects.length} pinned`}
             </span>
-          )}
-          {sortedProjects.length > 0 && (
-            <span className="cl-sortbar" style={{ marginLeft: 'auto' }}>
-              <span className="label">SORT BY</span>
-              {SORT_OPTIONS.map((o, i) => (
-                <span key={o.key} style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-                  {i > 0 && <span className="sep">·</span>}
-                  <button
-                    type="button"
-                    className={`opt${sortKey === o.key ? ' on' : ''}`}
-                    onClick={() => {
-                      setSortKey(o.key);
-                      setProjectsPage(0);
-                    }}
-                  >
-                    {o.label}
-                  </button>
-                </span>
-              ))}
-            </span>
-          )}
-        </div>
-        {sortedProjects.length === 0 ? (
-          <div className="cl-empty">
-            {effectiveFilter === 'pinned'
-              ? 'No pinned projects. Open the lens (top right) or hover a project to pin it.'
-              : 'No projects yet.'}
           </div>
-        ) : (
-          <>
-            <div>
-              {pagedProjects.map(p => {
-                const name = projectDisplayName(p.realPath);
-                const c = costByHash.get(p.hash);
-                const tokens = formatTokens(c?.totalTokens ?? 0);
-                const isLive = procs.some(pr => pr.cwd === p.realPath);
-                const pinnedNow = isPinned(p.hash);
-                return (
-                  <div
-                    key={p.hash}
-                    role="button"
-                    tabIndex={0}
-                    className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`}
-                    onClick={() => onSelectProject(p)}
-                    onKeyDown={e => {
-                      if (e.key === 'Enter' || e.key === ' ') {
-                        e.preventDefault();
-                        onSelectProject(p);
-                      }
+          <div>
+            {pagedProjects.map(p => {
+              const name = projectDisplayName(p.realPath);
+              const c = costByHash.get(p.hash);
+              const tokens = formatTokens(c?.totalTokens ?? 0);
+              const isLive = procs.some(pr => pr.cwd === p.realPath);
+              const pinnedNow = isPinned(p.hash);
+              return (
+                <div
+                  key={p.hash}
+                  role="button"
+                  tabIndex={0}
+                  className={`cl-row has-pin${pinnedNow ? ' is-pinned' : ''}`}
+                  onClick={() => onSelectProject(p)}
+                  onKeyDown={e => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      onSelectProject(p);
+                    }
+                  }}
+                >
+                  <button
+                    type="button"
+                    className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
+                    title={pinnedNow ? 'Unpin project' : 'Pin project'}
+                    aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
+                    onClick={e => {
+                      e.stopPropagation();
+                      togglePin(p.hash);
                     }}
                   >
-                    <button
-                      type="button"
-                      className={`cl-pin-row${pinnedNow ? ' pinned' : ''}`}
-                      title={pinnedNow ? 'Unpin project' : 'Pin project'}
-                      aria-label={pinnedNow ? 'Unpin project' : 'Pin project'}
-                      onClick={e => {
-                        e.stopPropagation();
-                        togglePin(p.hash);
-                      }}
-                    >
-                      <PinIcon filled={pinnedNow} />
-                    </button>
-                    <span className="idx">{(name[0] ?? '?').toUpperCase()}</span>
-                    <div style={{ minWidth: 0 }}>
-                      <div className="title">
-                        {name}
-                        {isLive && (
-                          <span
-                            style={{
-                              color: 'var(--cl-ok)',
-                              fontSize: 11,
-                              marginLeft: 10,
-                              fontFamily: 'var(--font-mono)',
-                            }}
-                          >
-                            ● live
-                          </span>
-                        )}
-                      </div>
-                      <div className="file">{p.realPath}</div>
-                    </div>
-                    <span className="when" style={{ textAlign: 'left' }}>
-                      {c?.sessionsCount ?? 0} sessions
-                    </span>
-                    <span className="toks">
-                      {tokens.value}
-                      {tokens.unit}
-                      <small>tok</small>
-                    </span>
-                    <span className="when">{c ? `$${c.cost.toFixed(2)}` : '—'}</span>
-                  </div>
-                );
-              })}
-            </div>
-            {pageCount > 1 && (
-              <div className="cl-pag">
-                <span className="cl-pag-meter">
-                  PAGE <b>{String(safePage + 1).padStart(2, '0')}</b> /{' '}
-                  {String(pageCount).padStart(2, '0')}
-                </span>
-                <div className="cl-pag-side">
-                  <button
-                    type="button"
-                    className="cl-pag-btn"
-                    disabled={safePage === 0}
-                    onClick={() => setProjectsPage(safePage - 1)}
-                  >
-                    <span className="arrow">←</span> PREV
+                    <PinIcon filled={pinnedNow} />
                   </button>
-                  <div className="cl-pag-nums">
-                    {pageWindow(safePage, pageCount).map((p, i) =>
-                      p === 'gap' ? (
-                        <span key={`gap-${i}`} className="cl-pag-ellipsis">
-                          …
-                        </span>
-                      ) : (
-                        <button
-                          key={p}
-                          type="button"
-                          className={`cl-pag-num${p === safePage ? ' on' : ''}`}
-                          onClick={() => setProjectsPage(p)}
+                  <span className="idx">{(name[0] ?? '?').toUpperCase()}</span>
+                  <div style={{ minWidth: 0 }}>
+                    <div className="title">
+                      {name}
+                      {isLive && (
+                        <span
+                          style={{
+                            color: 'var(--cl-ok)',
+                            fontSize: 11,
+                            marginLeft: 10,
+                            fontFamily: 'var(--font-mono)',
+                          }}
                         >
-                          {String(p + 1).padStart(2, '0')}
-                        </button>
-                      )
-                    )}
+                          ● live
+                        </span>
+                      )}
+                    </div>
+                    <div className="file">{p.realPath}</div>
                   </div>
-                  <button
-                    type="button"
-                    className="cl-pag-btn"
-                    disabled={safePage >= pageCount - 1}
-                    onClick={() => setProjectsPage(safePage + 1)}
-                  >
-                    NEXT <span className="arrow">→</span>
-                  </button>
+                  <span className="when" style={{ textAlign: 'left' }}>
+                    {c?.sessionsCount ?? 0} sessions
+                  </span>
+                  <span className="toks">
+                    {tokens.value}
+                    {tokens.unit}
+                    <small>tok</small>
+                  </span>
+                  <span className="when">{c ? `$${c.cost.toFixed(2)}` : '—'}</span>
                 </div>
+              );
+            })}
+          </div>
+          {pageCount > 1 && (
+            <div className="cl-pag">
+              <span className="cl-pag-meter">
+                PAGE <b>{String(safePage + 1).padStart(2, '0')}</b> /{' '}
+                {String(pageCount).padStart(2, '0')}
+              </span>
+              <div className="cl-pag-side">
+                <button
+                  type="button"
+                  className="cl-pag-btn"
+                  disabled={safePage === 0}
+                  onClick={() => setProjectsPage(safePage - 1)}
+                >
+                  <span className="arrow">←</span> PREV
+                </button>
+                <div className="cl-pag-nums">
+                  {pageWindow(safePage, pageCount).map((p, i) =>
+                    p === 'gap' ? (
+                      <span key={`gap-${i}`} className="cl-pag-ellipsis">
+                        …
+                      </span>
+                    ) : (
+                      <button
+                        key={p}
+                        type="button"
+                        className={`cl-pag-num${p === safePage ? ' on' : ''}`}
+                        onClick={() => setProjectsPage(p)}
+                      >
+                        {String(p + 1).padStart(2, '0')}
+                      </button>
+                    )
+                  )}
+                </div>
+                <button
+                  type="button"
+                  className="cl-pag-btn"
+                  disabled={safePage >= pageCount - 1}
+                  onClick={() => setProjectsPage(safePage + 1)}
+                >
+                  NEXT <span className="arrow">→</span>
+                </button>
               </div>
-            )}
-          </>
-        )}
-      </section>
+            </div>
+          )}
+        </section>
+      )}
 
       {/* ─── CONFIGURATION ────────────────────────────── */}
       <section className="cl-section">

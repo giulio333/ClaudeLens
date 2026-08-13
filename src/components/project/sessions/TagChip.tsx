@@ -1,7 +1,11 @@
 import { type CSSProperties, type MouseEvent } from 'react';
 
 export type TagChipTone = 'muted' | 'on' | 'soft';
-export type TagChipVariant = 'pill' | 'plain';
+/** `pill` = a bounded chip among other controls (picker rows, detail headers);
+ *  `plain` = an inline hashtag in a row's meta; `filter` = one option of a
+ *  filter rail, which in this app means no border and no fill — the active one
+ *  takes an accent wash (same language as the chat pill's filters). */
+export type TagChipVariant = 'pill' | 'plain' | 'filter';
 
 export function TagChip({
   name,

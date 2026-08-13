@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TagChip } from './TagChip';
+import { TagChip, type TagChipVariant } from './TagChip';
 
 // The single tag affordance used everywhere (overview filter bar, topic/session
 // sidebars). Clicking the chip opens ONE shared actions menu; the actions shown
@@ -11,6 +11,7 @@ export function ManagedTagChip({
   name,
   count,
   active = false,
+  variant,
   onFilter,
   onRemoveFromItem,
   removeLabel = 'Remove from item',
@@ -20,6 +21,8 @@ export function ManagedTagChip({
   name: string;
   count?: number;
   active?: boolean;
+  /** Passed through to `TagChip` — `filter` in a filter rail, `pill` elsewhere. */
+  variant?: TagChipVariant;
   onFilter?: () => void;
   onRemoveFromItem?: () => void;
   removeLabel?: string;
@@ -105,6 +108,7 @@ export function ManagedTagChip({
         name={name}
         count={count}
         tone={active ? 'on' : 'muted'}
+        variant={variant}
         onClick={e => setMenuRect((e.currentTarget as HTMLElement).getBoundingClientRect())}
         title={`Manage #${name}`}
       />

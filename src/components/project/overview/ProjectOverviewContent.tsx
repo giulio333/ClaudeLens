@@ -715,6 +715,7 @@ export function ProjectView({
       {/* ─── SECTION CONTENT ──────────────────────────── */}
       {section === 'overview' && (
         <>
+          {/* Nothing pinned = no section (PinnedSessionsSection returns null). */}
           <PinnedSessionsSection
             sessions={pinnedSessions}
             projectHash={project.hash}
@@ -724,28 +725,12 @@ export function ProjectView({
             rankOf={s => sessionRank.get(s.filename) ?? 0}
           />
 
-          <section className="cl-section">
-            <div className="cl-sec-head">
-              <h2>Sessions</h2>
-              <span className="ct">
-                {Math.min(5, unpinnedSessions.length)} of {unpinnedSessions.length}
-              </span>
-              <button
-                className="all"
-                type="button"
-                onClick={() => onNavigate({ type: 'sessions', project })}
-              >
-                View all
-              </button>
-            </div>
-            <SessionRows
-              sessions={unpinnedSessions.slice(0, 5)}
-              projectHash={project.hash}
-              cleanupDays={cleanupDays}
-              onOpen={openTerminal}
-              onOpenChat={openChat}
-            />
-          </section>
+          <RecentSessionsStrip
+            sessions={unpinnedSessions}
+            total={sessions.length}
+            onOpen={openTerminal}
+            onViewAll={() => onNavigate({ type: 'sessions', project })}
+          />
 
           <section className="cl-section">
             <div className="cl-sec-head">
@@ -880,24 +865,20 @@ export function ProjectView({
                   ? `${visibleSessions.length} tagged #${activeTag}`
                   : `${unpinnedSessions.length} total · sorted by last activity`}
               </span>
-              <button
-                className="all"
-                type="button"
-                title="In-app chat through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
-                onClick={() => onNavigate({ type: 'new-chat', project })}
-              >
-                SDK chat
-              </button>
+              {/* The tag filter rides the head, next to the count it filters —
+                  as its own band below it cost a hairline and 28px for two
+                  words. No "SDK chat" here either: the hero already carries it
+                  next to "Open in Claude Code". */}
+              <TagBar
+                tags={projectTags}
+                counts={tagCounts}
+                activeTag={activeTag}
+                totalCount={sessions.length}
+                onSelect={setTagFilter}
+                onRename={renameTag}
+                onDelete={deleteTag}
+              />
             </div>
-            <TagBar
-              tags={projectTags}
-              counts={tagCounts}
-              activeTag={activeTag}
-              totalCount={sessions.length}
-              onSelect={setTagFilter}
-              onRename={renameTag}
-              onDelete={deleteTag}
-            />
             {visibleSessions.length === 0 ? (
               <div className="cl-empty">
                 {activeTag ? `No sessions tagged #${activeTag}.` : 'No sessions yet.'}
@@ -1457,6 +1438,68 @@ function PinnedSessionsSection({
         onOpenChat={onOpenChat}
         rankOf={rankOf}
       />
+    </section>
+  );
+}
+
+/** The landing page's jumping-off point into the session history — deliberately
+ *  thinner than `SessionRows`. That row carries pin, index, tags, the figure
+ *  cluster and hover actions; repeating it here made the landing a shorter copy
+ *  of the Sessions subtab, which the rail is one click away from. What is left
+ *  is what you scan for on a landing page: which conversation, is it running,
+ *  when. Everything else stays one click deeper. */
+function RecentSessionsStrip({
+  sessions,
+  total,
+  count = 4,
+  onOpen,
+  onViewAll,
+}: {
+  sessions: SessionSummary[];
+  /** The whole history, for the "N of M" caption — `sessions` excludes pins. */
+  total: number;
+  count?: number;
+  onOpen: (s: SessionSummary) => void;
+  onViewAll: () => void;
+}) {
+  const { data: activeSessions = [] } = useActiveSessions();
+  const liveIds = useMemo(
+    () => new Set(activeSessions.map(a => a.sessionId).filter(Boolean)),
+    [activeSessions]
+  );
+  if (sessions.length === 0) return null;
+  const shown = sessions.slice(0, count);
+
+  return (
+    <section className="cl-section">
+      <div className="cl-sec-head">
+        <h2>Recent</h2>
+        <span className="ct">
+          {shown.length} of {total}
+        </span>
+        <button className="all" type="button" onClick={onViewAll}>
+          View all
+        </button>
+      </div>
+      <div className="cl-mrows">
+        {shown.map(s => {
+          const live = liveIds.has(s.filename.replace(/\.jsonl$/, ''));
+          return (
+            <button
+              key={s.filename}
+              type="button"
+              className="cl-mrow"
+              onClick={() => onOpen(s)}
+              title={sessionTitle(s)}
+            >
+              <span className="title">{sessionTitle(s)}</span>
+              {live && <LiveTag />}
+              <span className="lead" aria-hidden />
+              <span className="when">{relIso(s.date)} ago</span>
+            </button>
+          );
+        })}
+      </div>
     </section>
   );
 }
