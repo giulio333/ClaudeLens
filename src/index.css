@@ -5554,6 +5554,321 @@ body {
   color: var(--cl-danger);
 }
 
+/* ── shell run as a terminal window (Bash tool) ───────────────────────────
+   A recorded command and its output are one session, so they are drawn as the
+   thing they were: a terminal. Title bar (macOS lights + title + actions), the
+   prompt lines, the output right under them, a status strip. No COMMAND/OUTPUT
+   labels — a prompt glyph says it better, and the labels were what made two
+   halves of one run read as two unrelated blocks.
+
+   The surface is FIXED DARK in both themes, reusing the values of the chat's
+   markdown fences (`.prose-lens .cl-md-code`): code looks the same everywhere in
+   the app, and the highlight.js palette (github-dark-dimmed, imported globally)
+   is the one tuned for exactly this background — which is why these panes do NOT
+   carry `.cl-code-pre`, whose remap exists for adaptive paper surfaces.
+
+   Nothing wraps: a wrapped shell line reads as prose and loses its shape, a
+   wrapped log line loses its columns. The body scrolls sideways instead, command
+   and output on ONE scroller — a session scrolls as one, and a sticky prompt
+   column would float over the output while it does. */
+.cl-term {
+  --t-bg: oklch(0.205 0.022 45);
+  --t-bar: oklch(0.245 0.025 45);
+  --t-line: oklch(0.32 0.035 45);
+  --t-ink: oklch(0.88 0.01 80);
+  --t-dim: oklch(0.74 0.012 80);
+  --t-mute: oklch(0.62 0.03 50);
+  --t-prompt: oklch(0.76 0.12 145);
+  --t-accent: oklch(0.8 0.11 50);
+  --t-danger: oklch(0.76 0.14 25);
+
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border: 1px solid var(--t-line);
+  border-radius: 9px;
+  background: var(--t-bg);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.05),
+    0 10px 26px -20px oklch(0.15 0.02 45 / 0.55);
+}
+.cl-term.is-error {
+  border-color: color-mix(in oklch, var(--t-danger) 45%, var(--t-line));
+}
+
+/* ── title bar ── */
+.cl-term-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 28px;
+  padding: 0 8px 0 10px;
+  border-bottom: 1px solid var(--t-line);
+  background: var(--t-bar);
+}
+.cl-term-lights {
+  display: inline-flex;
+  gap: 6px;
+  flex: 0 0 auto;
+}
+.cl-term-lights i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  /* Decorative, hence `aria-hidden` on the group: they are the signature of the
+     window, not controls — the real actions sit at the other end of the bar. */
+  background: oklch(0.66 0.15 25);
+}
+.cl-term-lights .y {
+  background: oklch(0.82 0.12 85);
+}
+.cl-term-lights .g {
+  background: oklch(0.74 0.15 145);
+}
+/* Centred like a real window title, and absolutely positioned so the actions on
+   the right never shift it. */
+.cl-term-title {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  /* never collides with the lights or the actions, at any card width */
+  max-width: calc(100% - 160px);
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  white-space: nowrap;
+}
+.cl-term-title b {
+  min-width: 0;
+  overflow: hidden;
+  color: oklch(0.78 0.02 60);
+  font-weight: 600;
+  text-overflow: ellipsis;
+}
+.cl-term-title .sep,
+.cl-term-title .meta {
+  flex: 0 0 auto;
+}
+.cl-term-actions,
+.cl-term-foot-actions {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  flex: 0 0 auto;
+}
+.cl-term-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t-mute);
+  cursor: pointer;
+  transition:
+    color 140ms ease,
+    background 140ms ease;
+}
+.cl-term-btn:hover {
+  background: oklch(1 0 0 / 0.07);
+  color: var(--t-ink);
+}
+
+/* ── session body ── */
+.cl-term-body {
+  padding: 9px 0 10px;
+  overflow: auto;
+  overscroll-behavior-x: contain;
+}
+.cl-term-body::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+.cl-term-body::-webkit-scrollbar-thumb {
+  background: oklch(1 0 0 / 0.14);
+  border: 2px solid transparent;
+  background-clip: padding-box;
+  border-radius: 4px;
+}
+/* the clamp fades out instead of ending on a hard cut, so it reads as "there is
+   more" rather than as the end of the output */
+.cl-term-body.is-clamped {
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent 100%);
+}
+.cl-term-line {
+  display: grid;
+  /* wide enough for a two-character connective (`&&`), right-aligned, so `❯`,
+     `&&` and `|` share an edge and every command column starts at the same x */
+  grid-template-columns: 17px max-content;
+  gap: 7px;
+  align-items: start;
+  width: max-content;
+  min-width: 100%;
+  padding: 0 12px;
+}
+.cl-term-lead {
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.62;
+  text-align: right;
+  user-select: none;
+}
+/* the one real prompt of the run */
+.cl-term-lead.is-prompt {
+  color: var(--t-prompt);
+}
+/* `&&`/`||`: they decide whether the next line runs at all */
+.cl-term-lead.is-flow {
+  color: var(--t-accent);
+}
+.cl-term-lead.is-pipe {
+  color: color-mix(in oklch, var(--t-mute) 80%, var(--t-ink));
+}
+.cl-term-code {
+  color: var(--t-ink);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.62;
+  white-space: pre;
+}
+.cl-term-code code,
+.cl-term-code code.hljs {
+  padding: 0;
+  /* github-dark-dimmed paints `.hljs` with its own slab — same override the
+     markdown fences use. */
+  background: transparent !important;
+  color: inherit;
+  font: inherit;
+}
+.cl-term-op {
+  color: var(--t-accent);
+  font-weight: 700;
+}
+.cl-term-empty {
+  color: var(--t-mute);
+  font-style: italic;
+}
+/* Output starts at the prompt's own column, like a terminal: the answer is not
+   indented under the question. */
+.cl-term-out {
+  margin-top: 9px;
+  padding: 0 12px;
+  width: max-content;
+  min-width: 100%;
+}
+.cl-term-out code {
+  display: block;
+  color: var(--t-dim);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.6;
+  white-space: pre;
+}
+.cl-term.is-error .cl-term-out code {
+  color: var(--t-danger);
+}
+.cl-term-note {
+  padding: 2px 12px 0;
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-style: italic;
+}
+
+/* ── status strip ── */
+.cl-term-foot {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 25px;
+  padding: 0 8px 0 12px;
+  border-top: 1px solid var(--t-line);
+  background: color-mix(in oklch, var(--t-bar) 70%, var(--t-bg));
+}
+.cl-term-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cl-term-state i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--t-prompt);
+}
+.cl-term-state.is-error {
+  color: var(--t-danger);
+}
+.cl-term-state.is-error i {
+  background: var(--t-danger);
+}
+.cl-term-state.is-pending i {
+  background: oklch(0.82 0.12 85);
+}
+.cl-term-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--t-accent);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cl-term-link:hover {
+  text-decoration: underline;
+}
+
+/* ── fullscreen ──
+   Same window, all the room: the output stops being clamped and the body takes
+   the leftover height. Mirrors the `.cl-run-agent-*` modal conventions (blurred
+   backdrop, z-index 999) so overlays behave alike across the app. */
+.cl-term-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 28px;
+  background: color-mix(in oklch, var(--cl-ink) 32%, transparent);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+}
+/* Sized to the session, not to the viewport: a short run gets a compact window
+   (like a real one), a long one grows until it has to scroll. */
+.cl-term-modal-hold {
+  display: flex;
+  width: min(1180px, 96vw);
+  max-height: 92vh;
+}
+.cl-term.is-full {
+  flex: 1;
+  min-height: 0;
+  border-radius: 10px;
+  box-shadow: 0 30px 70px -34px oklch(0.1 0.02 45 / 0.7);
+}
+.cl-term.is-full .cl-term-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 @media (max-width: 980px) {
   .cl-focus-rail {
     display: none;

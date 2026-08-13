@@ -9,6 +9,8 @@ import {
   SKILL_TOOL,
 } from './utils';
 import { PathChip, SectionLabel, CodeBlock } from './atoms';
+import { CommandBlock, CommandOutput, CommandSheet } from './CommandBlock';
+import { ownsToolBody, ownsOutputHead } from './shell';
 
 function BackChevron() {
   return (
@@ -349,7 +351,17 @@ function AgentDetailBody({
   );
 }
 
-export function ToolInput({ name, input }: { name: string; input: Record<string, unknown> }) {
+export function ToolInput({
+  name,
+  input,
+  inline,
+}: {
+  name: string;
+  input: Record<string, unknown>;
+  /** Rendered inside a tool chip in the transcript, whose header already shows
+   *  the tool's description — so the body must not repeat it. */
+  inline?: boolean;
+}) {
   if (name === 'Read') {
     const fp = input.file_path as string;
     const ext = fileExt(fp);
@@ -396,25 +408,7 @@ export function ToolInput({ name, input }: { name: string; input: Record<string,
   }
 
   if (name === 'Bash') {
-    const cmd = input.command as string;
-    const desc = input.description as string | undefined;
-    return (
-      <div className="space-y-3">
-        {desc && <p className="text-[12px] text-[var(--cl-ink-3)] italic">{desc}</p>}
-        <div className="rounded-lg bg-[var(--cl-paper-2)] border border-[var(--cl-line)] overflow-hidden">
-          <div className="flex items-center gap-2 px-3 py-2 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)]">
-            <span className="w-2.5 h-2.5 rounded-full bg-[var(--cl-danger-soft)]/70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-yellow-500/70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-[var(--cl-ok)]" />
-            <span className="text-[10px] text-[var(--cl-ink-3)] ml-1">shell</span>
-          </div>
-          <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ok)] whitespace-pre-wrap break-words">
-            <span className="text-[var(--cl-ink-3)] select-none">$ </span>
-            {cmd}
-          </pre>
-        </div>
-      </div>
-    );
+    return <CommandBlock input={input} showDescription={!inline} />;
   }
 
   if (name === 'Grep') {
@@ -593,6 +587,10 @@ export function ToolOutput({
   input: Record<string, unknown>;
   result: ToolGroup['result'];
 }) {
+  // Shell output first: the block owns its own head, so it also has to own the
+  // pending / empty / error states the generic guards below would swallow.
+  if (ownsOutputHead(name)) return <CommandOutput result={result} />;
+
   if (!result)
     return <p className="text-[12px] text-[var(--cl-ink-3)] italic">No result available</p>;
 
@@ -623,19 +621,6 @@ export function ToolOutput({
           )}
         </div>
         <CodeBlock code={stripped} lang={ext} />
-      </div>
-    );
-  }
-
-  if (name === 'Bash') {
-    return (
-      <div className="rounded-lg bg-[var(--cl-paper-2)] border border-[var(--cl-line)] overflow-hidden">
-        <div className="px-3 py-1.5 bg-[var(--cl-paper-3)] border-b border-[var(--cl-line)] text-[10px] text-[var(--cl-ink-3)]">
-          output
-        </div>
-        <pre className="px-4 py-3 text-[12px] font-mono text-[var(--cl-ink-2)] whitespace-pre-wrap break-words leading-relaxed max-h-[400px] overflow-y-auto">
-          {raw || '(no output)'}
-        </pre>
       </div>
     );
   }
@@ -775,18 +760,29 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
         <AgentDetailBody name={name} input={input} result={result} onBack={onBack} />
       ) : (
         <div className="cl-tool-detail-grid">
-          <section className="cl-tool-detail-panel">
-            <SectionLabel label="Input" />
-            <ToolInput name={name} input={input} />
-          </section>
+          {ownsToolBody(name) ? (
+            // One panel: the command and what it printed are one reading unit.
+            <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+              <CommandSheet input={input} result={result} showCommand showDescription />
+            </section>
+          ) : (
+            <>
+              <section className="cl-tool-detail-panel">
+                <SectionLabel label="Input" />
+                <ToolInput name={name} input={input} />
+              </section>
 
-          <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
-            <SectionLabel
-              label={result?.isError ? 'Error' : 'Output'}
-              meta={result ? `${result.content.split('\n').length} lines` : undefined}
-            />
-            <ToolOutput name={name} input={input} result={result} />
-          </section>
+              <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+                {!ownsOutputHead(name) && (
+                  <SectionLabel
+                    label={result?.isError ? 'Error' : 'Output'}
+                    meta={result ? `${result.content.split('\n').length} lines` : undefined}
+                  />
+                )}
+                <ToolOutput name={name} input={input} result={result} />
+              </section>
+            </>
+          )}
         </div>
       )}
     </ToolDetailShell>
