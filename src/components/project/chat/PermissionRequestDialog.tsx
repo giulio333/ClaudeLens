@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC';
+import { CommandBlock } from './CommandBlock';
 
 /** Pretty-prints the most relevant slice of a tool input for the dialog body.
  *  Bash shows its `command`; file tools show their `file_path`/`path`; anything
@@ -196,7 +197,11 @@ export function PermissionRequestDialog({
   const heading = isQuestion
     ? 'Claude has a question'
     : request.title || `Allow ${request.displayName || request.toolName}?`;
-  const detail = isQuestion ? null : describeInput(request);
+  // A shell command is what the user actually has to read before approving it,
+  // so it gets the same step-per-statement sheet as the transcript instead of a
+  // one-paragraph `pre`.
+  const isShell = !isQuestion && request.toolName === 'Bash';
+  const detail = isQuestion || isShell ? null : describeInput(request);
   const canAlways = (request.suggestions?.length ?? 0) > 0;
 
   return (
@@ -214,6 +219,12 @@ export function PermissionRequestDialog({
 
         {request.description && (
           <p className="text-[13px] text-[var(--cl-ink-3)] mb-3">{request.description}</p>
+        )}
+
+        {isShell && (
+          <div className="mb-3">
+            <CommandBlock input={request.input ?? {}} showDescription={!request.description} />
+          </div>
         )}
 
         {detail && (
