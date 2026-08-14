@@ -178,8 +178,13 @@ delete), plus your app version, OS, and language. It **never** collects your
 sessions, prompts, files, paths, or identity. This helps us understand how
 ClaudeLens is used and on which platforms.
 
-Telemetry is on by default and can be turned off anytime in
-**Settings → Privacy**. Full details: **[PRIVACY.md](PRIVACY.md)**.
+When something breaks, the app also reports the **error itself** (type, message,
+stack trace) so crashes can be found and fixed. Every file path, username and
+project name is stripped out before the report is sent — a stack keeps only the
+frames inside the app bundle.
+
+Both are on by default and can be turned off anytime in **Settings → Privacy**
+(one toggle covers both). Full details: **[PRIVACY.md](PRIVACY.md)**.
 
 ---
 

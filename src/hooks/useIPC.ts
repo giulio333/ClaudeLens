@@ -412,6 +412,11 @@ declare global {
           name: string,
           props?: Record<string, string | number>
         ) => Promise<IpcResult<boolean>>;
+        trackError: (
+          error: { name?: string; message: string; stack?: string },
+          kind?: 'crash' | 'unhandled' | 'handled',
+          severity?: 'fatal' | 'error'
+        ) => Promise<IpcResult<boolean>>;
       };
       onDataChanged: (callback: (scopes?: string[] | null) => void) => () => void;
       live: {

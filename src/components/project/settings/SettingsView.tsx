@@ -854,6 +854,7 @@ const COLLECTED = [
   'Which sections you open, and a few feature actions (new chat, export, terminal, delete)',
   'App version, operating system, and language',
   'A rotating session id (not tied to your identity)',
+  'When the app breaks: the error type, message and stack trace — with every path, username and project name stripped out',
 ];
 const NOT_COLLECTED = [
   'Your Claude Code sessions, prompts, or responses',
@@ -869,8 +870,8 @@ function PrivacyTab() {
     <>
       <Block label="Usage analytics">
         <p className="set-block-hint">
-          Helps us understand how many people use ClaudeLens and on which platforms. Data is
-          anonymous, aggregate, and never identifies you.
+          Helps us understand how many people use ClaudeLens and on which platforms, and catch the
+          crashes nobody reports. Data is anonymous, aggregate, and never identifies you.
         </p>
         <div className="set-card">
           <div className="min-w-0">
@@ -879,7 +880,7 @@ function PrivacyTab() {
             </div>
             <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
               {on
-                ? 'On — anonymous usage events are sent via Aptabase (EU).'
+                ? 'On — anonymous usage events and error reports are sent via Aptabase (EU).'
                 : 'Off — nothing is sent.'}
             </div>
           </div>

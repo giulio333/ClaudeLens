@@ -219,6 +219,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setEnabled: (enabled: boolean) => ipcRenderer.invoke('telemetry:setEnabled', enabled),
     track: (name: string, props?: Record<string, string | number>) =>
       ipcRenderer.invoke('telemetry:track', name, props),
+    trackError: (
+      error: { name?: string; message: string; stack?: string },
+      kind?: 'crash' | 'unhandled' | 'handled',
+      severity?: 'fatal' | 'error'
+    ) => ipcRenderer.invoke('telemetry:trackError', error, kind, severity),
   },
   // `scopes` = the query namespaces the changed path can have touched (see
   // modules/data-change-scope.ts). `null`/absent means "invalidate everything".

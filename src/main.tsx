@@ -2,7 +2,10 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import App from './App';
+import { installErrorReporting } from './lib/telemetry';
 import './index.css';
+
+installErrorReporting();
 
 const queryClient = new QueryClient({
   defaultOptions: {
