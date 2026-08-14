@@ -34,9 +34,11 @@ import { deriveContext } from './context-window';
 import {
   buildFileChanges,
   buildMissionFeed,
+  buildWebActivity,
   countByKind,
   editStats,
   shortAgo,
+  webItemNote,
   FEED_KINDS,
 } from './mission-feed';
 import type { FeedEvent, FeedKind } from './mission-feed';
@@ -51,7 +53,8 @@ import { ContextPopover, SpendPopover } from './VitalsPopover';
  * Nothing arrived first, so answering "what needs me right now?" meant reading
  * the whole rail. This version drops the taxonomy for **one chronological
  * stream**: every meaningful unit of the session — a sub-agent, a team, a skill
- * run, a memory topic, a touched file, a task — is an event on the same feed,
+ * run, a memory topic, a page it read from the web, a touched file, a task — is
+ * an event on the same feed,
  * newest first, with anything still running floated to the top and tinted live.
  * The species survive as **filters** over that stream, not as sections, so they
  * no longer compete for the reader's attention; the filter pills double as the
@@ -73,9 +76,9 @@ import { ContextPopover, SpendPopover } from './VitalsPopover';
  * Rows are single click targets, as a feed should be: an agent opens its
  * transcript (falling back to its definition when no transcript exists yet), a
  * team opens the team detail, a skill routes output → definition → tool call, a
- * file or memory topic touched once opens that operation and touched many times
- * expands into its operations, a task expands into its live form / description /
- * dependencies.
+ * file, memory topic or web source touched once opens that operation and touched
+ * many times expands into its operations, a task expands into its live form /
+ * description / dependencies.
  *
  * All of it derives from data the watcher already refreshes (`sessions:chat`,
  * `sessions:subagents`, `tasks:project`, `sessions:project`, `teams:project`),
@@ -263,7 +266,7 @@ function FeedRow({
       type="button"
       className={`tmc-row${e.live ? ' tmc-row--live' : ''}`}
       onClick={onActivate}
-      title={[e.title, e.meta].filter(Boolean).join('\n')}
+      title={[e.title, e.meta, e.hint].filter(Boolean).join('\n')}
       style={{
         display: 'grid',
         gridTemplateColumns: '34px 20px minmax(0,1fr) auto',
@@ -344,15 +347,26 @@ function FeedOperations({
     <>
       {[...items].reverse().map((g, i) => {
         const stats = editStats(g);
+        // Two calls of one web source share the tool name and differ only in what
+        // they asked for — so the ask is what the line has to carry.
+        const note = webItemNote(g);
         return (
           <button
             key={g.use.id || i}
             type="button"
             className="tmc-row w-full text-left flex items-center gap-2"
             onClick={() => onOpenTool(g)}
+            title={note || undefined}
             style={{ padding: '3px 6px 3px 69px', margin: '0 -6px', fontSize: 10.5 }}
           >
-            <span style={{ color: 'var(--cl-ink-3)' }}>{g.use.name}</span>
+            <span className="shrink-0" style={{ color: 'var(--cl-ink-3)' }}>
+              {g.use.name}
+            </span>
+            {note && (
+              <span className="truncate" style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>
+                {note}
+              </span>
+            )}
             {g.result?.isError && (
               <span className="font-mono" style={{ fontSize: 9, color: 'var(--cl-danger)' }}>
                 ERROR
@@ -570,6 +584,10 @@ export function MissionRail({
     () => buildMemoryActivity(ownTools, memoryLookup),
     [ownTools, memoryLookup]
   );
+  // WEB — pages fetched and searches run, one row per source. Nothing else in
+  // the rail could see them: a research session's sources used to leave no trace
+  // at all, and a fetch that only got a redirect left even less.
+  const web = useMemo(() => buildWebActivity(ownTools), [ownTools]);
   // CHANGES excludes the memory files: they are a topic each, not a diff, and
   // reporting them twice would double-count the session's line totals.
   const changes = useMemo(
@@ -614,13 +632,26 @@ export function MissionRail({
         agents,
         skills,
         memory: memoryActivity,
+        web,
         changes,
         tasks,
         teams: teamRows,
         realPath,
         now,
       }),
-    [processed, ownTools, agents, skills, memoryActivity, changes, tasks, teamRows, realPath, now]
+    [
+      processed,
+      ownTools,
+      agents,
+      skills,
+      memoryActivity,
+      web,
+      changes,
+      tasks,
+      teamRows,
+      realPath,
+      now,
+    ]
   );
   const counts = useMemo(() => countByKind(feed), [feed]);
   const visible = useMemo(
@@ -687,7 +718,7 @@ export function MissionRail({
       if (skillHasViewableOutput(s.skill.group)) onOpenTool(s.skill.group!);
       else if (s.skill.skill) onOpenSkillDef(s.skill.skill);
       else if (s.skill.group) onOpenTool(s.skill.group);
-    } else if (s.kind === 'memory' || s.kind === 'change') {
+    } else if (s.kind === 'memory' || s.kind === 'change' || s.kind === 'web') {
       if (e.items.length > 0) onOpenTool(e.items[e.items.length - 1]);
     }
     // A task with no detail has nothing to open — its row is already the fact.

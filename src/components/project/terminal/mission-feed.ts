@@ -9,6 +9,18 @@ import type {
   SessionSkill,
   ToolGroup,
 } from '../chat/utils';
+import {
+  parseRedirectNotice,
+  parseWebSearchResult,
+  webCanonicalUrl,
+  webHost,
+  webOutcome,
+  webPageLabel,
+  WEB_FETCH,
+  WEB_SEARCH,
+  WEB_TOOLS,
+} from '../chat/web';
+import type { WebLink, WebRedirect } from '../chat/web';
 
 /**
  * The data model behind Mission Control's **event feed** (design "1d · Feed").
@@ -118,6 +130,130 @@ export function areaOf(path: string, realPath: string): string {
   return parts.length >= 2 ? parts[parts.length - 2] : 'external';
 }
 
+/* ── web activity ─────────────────────────────────────────────────────── */
+
+/**
+ * What the session read from outside the machine.
+ *
+ * The web tools were the one kind of work the feed never showed: a research
+ * session could pull ten pages and run five searches and the rail stayed empty
+ * except for the files it wrote afterwards — the sources of an answer were
+ * invisible, and a fetch that never landed (a redirect, a dead host) was
+ * invisible twice over.
+ *
+ * The unit is **the page, or the query** — one row per distinct URL and per
+ * distinct query, aggregating repeated calls the way `buildFileChanges`
+ * aggregates repeated edits of one file. Two fetches of the same URL are the
+ * same source read twice (usually asking it for something different), not two
+ * events; two different pages of one host are two sources, so they stay apart.
+ *
+ * What this cannot see, by construction: a **sub-agent's** fetches, which live
+ * in its own sidechain transcript (the AGENTS row is their entry point), and any
+ * page pulled through a shell command or an MCP browser tool — neither carries a
+ * `url` input this can read.
+ */
+
+export type WebVisitKind = 'fetch' | 'search';
+
+export type WebVisit = {
+  /** Stable row identity: the URL for a fetch, the query for a search. */
+  key: string;
+  kind: WebVisitKind;
+  /** Page label (fetch) or the query itself (search) — the row's title. */
+  title: string;
+  /** Empty for a search, which has no single source. */
+  url: string;
+  /** Host of the URL; empty for a search. */
+  host: string;
+  /** The extraction ask (fetch) or the domain restriction (search) — tooltip
+   *  material: it explains *why* the page was pulled. */
+  ask: string;
+  /** Every call on this source, in transcript order. */
+  items: ToolGroup[];
+  /** Sources a search returned, from the call that produced them. */
+  links: WebLink[];
+  /** Where a fetch was redirected — evidence kept even when a later call to the
+   *  same URL succeeded, so the row can decide which fact it reports. */
+  redirect: WebRedirect | null;
+  /** Calls that came back with actual content. */
+  reads: number;
+  hasError: boolean;
+  /** Why it failed, in the tool's own words (first line) — a network error for a
+   *  fetch, `unavailable` for a search that never ran. */
+  failure: string | null;
+};
+
+function str(input: Record<string, unknown>, key: string): string {
+  const v = input[key];
+  return typeof v === 'string' ? v : '';
+}
+
+export function buildWebActivity(groups: ToolGroup[]): WebVisit[] {
+  const byKey = new Map<string, WebVisit>();
+  for (const g of groups) {
+    const name = g.use.name;
+    if (!WEB_TOOLS.has(name)) continue;
+    const input = g.use.input as Record<string, unknown>;
+    const fetch = name === WEB_FETCH;
+    // A call whose defining input is missing can't be aggregated under any
+    // source — skipping it beats inventing a row titled "".
+    const rawSubject = fetch ? str(input, 'url') : str(input, 'query');
+    if (!rawSubject) continue;
+    // A fetch is grouped by the *document* it asked for, not by the exact string:
+    // two spellings of one page (an anchor, a trailing slash) are one source.
+    const subject = fetch ? webCanonicalUrl(rawSubject) : rawSubject;
+
+    const key = `${fetch ? 'fetch' : 'search'}:${subject}`;
+    let v = byKey.get(key);
+    if (!v) {
+      const domains = input.allowed_domains;
+      v = {
+        key,
+        kind: fetch ? 'fetch' : 'search',
+        title: fetch ? webPageLabel(subject) : subject,
+        url: fetch ? subject : '',
+        host: fetch ? webHost(subject) : '',
+        ask: fetch
+          ? str(input, 'prompt')
+          : Array.isArray(domains)
+            ? domains.filter(d => typeof d === 'string').join(', ')
+            : '',
+        items: [],
+        links: [],
+        redirect: null,
+        reads: 0,
+        hasError: false,
+        failure: null,
+      };
+      byKey.set(key, v);
+    }
+    v.items.push(g);
+
+    const raw = g.result?.content ?? '';
+    switch (webOutcome(name, g.result)) {
+      case 'read':
+        v.reads += 1;
+        if (name === WEB_SEARCH) {
+          const links = parseWebSearchResult(raw).links;
+          if (links.length > 0) v.links = links;
+        }
+        break;
+      case 'redirect':
+        v.redirect = parseRedirectNotice(raw);
+        break;
+      case 'failed':
+        v.hasError = true;
+        v.failure =
+          (name === WEB_SEARCH ? parseWebSearchResult(raw).error : raw.split('\n')[0]?.trim()) ||
+          null;
+        break;
+      case 'pending':
+        break;
+    }
+  }
+  return [...byKey.values()];
+}
+
 /* ── memory labels ────────────────────────────────────────────────────── */
 
 export const MEMORY_ACTION_LABEL: Record<MemoryAction, string> = {
@@ -139,16 +275,27 @@ export const MEMORY_ACTION_TINT: Record<MemoryAction, string> = {
 
 /* ── the feed ─────────────────────────────────────────────────────────── */
 
-export type FeedKind = 'AGENTS' | 'TEAMS' | 'SKILLS' | 'MEMORY' | 'CHANGES' | 'TASKS';
+export type FeedKind = 'AGENTS' | 'TEAMS' | 'SKILLS' | 'MEMORY' | 'WEB' | 'CHANGES' | 'TASKS';
 
-/** Every filter the rail can offer, in the order the pills are laid out. */
-export const FEED_KINDS: FeedKind[] = ['AGENTS', 'TEAMS', 'SKILLS', 'MEMORY', 'CHANGES', 'TASKS'];
+/** Every filter the rail can offer, in the order the pills are laid out: who did
+ *  the work, then what informed it (recalled, then read from outside), then what
+ *  it changed and what is still planned. */
+export const FEED_KINDS: FeedKind[] = [
+  'AGENTS',
+  'TEAMS',
+  'SKILLS',
+  'MEMORY',
+  'WEB',
+  'CHANGES',
+  'TASKS',
+];
 
 /** The domain object behind a row — the view routes the click from this. */
 export type FeedSource =
   | { kind: 'agent'; agent: SessionAgent }
   | { kind: 'skill'; skill: SessionSkill }
   | { kind: 'memory'; touch: MemoryTouch }
+  | { kind: 'web'; visit: WebVisit }
   | { kind: 'change'; change: FileChange }
   | { kind: 'task'; task: Task }
   | { kind: 'team'; team: TeamSummary };
@@ -168,6 +315,9 @@ export type FeedEvent = {
   ext?: string;
   title: string;
   meta: string;
+  /** Third tooltip line: the fact the row had to truncate — a page's full URL and
+   *  the ask behind it. Never something the row already prints. */
+  hint?: string;
   right: string;
   rightTint: string;
   /** CHANGES rows print a two-tone +N −N instead of a flat label. */
@@ -187,6 +337,8 @@ export type MissionFeedInput = {
   agents: SessionAgent[];
   skills: SessionSkill[];
   memory: MemoryActivity;
+  /** Pages fetched and searches run — `buildWebActivity(ownTools)`. */
+  web: WebVisit[];
   changes: FileChange[];
   tasks: Task[];
   /** Session-scoped teams, already resolved to a display title and liveness. */
@@ -360,6 +512,94 @@ function memoryEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
   });
 }
 
+/**
+ * What one call of a bundled web row asked for — the disclosure's differentiator.
+ *
+ * A row that groups two fetches of the same URL would otherwise list `WebFetch`
+ * twice, and the tool name is the one thing the two calls share; what differs is
+ * the ask (the same page read once for dates and once for its PDF links). Empty
+ * for every non-web tool, so the shared disclosure can call it blind.
+ */
+export function webItemNote(g: ToolGroup): string {
+  if (!WEB_TOOLS.has(g.use.name)) return '';
+  const input = g.use.input as Record<string, unknown>;
+  const text = g.use.name === WEB_FETCH ? str(input, 'prompt') : str(input, 'query');
+  return clip(text.split('\n')[0]?.trim() ?? '', 80);
+}
+
+/** Up to two distinct result hosts, `+N` for the rest: a search's meta answers
+ *  "where did this answer come from" with the sources themselves. */
+function linkHosts(links: WebLink[]): string {
+  const hosts: string[] = [];
+  for (const l of links) {
+    const h = webHost(l.url);
+    if (h && !hosts.includes(h)) hosts.push(h);
+  }
+  if (hosts.length === 0) return '';
+  const head = hosts.slice(0, 2).join(' · ');
+  return hosts.length > 2 ? `${head} · +${hosts.length - 2}` : head;
+}
+
+/** Native tooltips take whatever they're given; a 600-character extraction ask
+ *  is not a tooltip. */
+function clip(s: string, max = 240): string {
+  return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+}
+
+function webEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
+  return input.web.map(v => {
+    // Precedence follows the question the reader is asking: did the session end
+    // up with the page? A URL called twice — once redirected, once read — was
+    // read, and reporting REDIRECT there would be false.
+    const read = v.reads > 0;
+    const failed = !read && v.hasError;
+    const redirected = !read && !failed && !!v.redirect;
+    const pending = !read && !failed && !redirected;
+    const search = v.kind === 'search';
+    const source = search ? linkHosts(v.links) || 'web search' : v.host === v.title ? '' : v.host;
+    return {
+      id: `web:${v.key}`,
+      kind: 'WEB' as const,
+      at: latestOf(v.items, at),
+      live: false,
+      glyph: 'W',
+      // The hue the transcript already gives the web tools (`TOOL_TINT`), so a
+      // fetch reads the same in the rail and in the chat.
+      glyphTint: 'var(--cl-haiku)',
+      title: v.title,
+      meta: [
+        source,
+        failed ? v.failure : null,
+        redirected && v.redirect?.to ? `→ ${webHost(v.redirect.to)}` : null,
+        v.reads > 1 ? `×${v.reads}` : null,
+      ]
+        .filter(Boolean)
+        .join(' · '),
+      hint: search
+        ? v.ask
+          ? `restricted to ${v.ask}`
+          : undefined
+        : clip([v.url, v.ask].filter(Boolean).join('\n')),
+      right: failed
+        ? 'FAILED'
+        : redirected
+          ? 'REDIRECT'
+          : pending
+            ? 'PENDING'
+            : search
+              ? v.links.length > 0
+                ? `${v.links.length} LINKS`
+                : 'SEARCHED'
+              : 'FETCHED',
+      rightTint: failed ? 'var(--cl-danger)' : redirected ? 'var(--cl-warn)' : 'var(--cl-ink-4)',
+      danger: failed,
+      items: v.items,
+      expandable: v.items.length > 1,
+      source: { kind: 'web' as const, visit: v },
+    };
+  });
+}
+
 function changeEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
   return input.changes.map(fc => {
     const area = areaOf(fc.path, input.realPath);
@@ -428,6 +668,7 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
     ...teamEvents(input),
     ...skillEvents(input, turnAt),
     ...memoryEvents(input, at),
+    ...webEvents(input, at),
     ...changeEvents(input, at),
     ...taskEvents(input, at),
   ];
@@ -437,7 +678,7 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
 
 /** How many events each filter would show. */
 export function countByKind(events: FeedEvent[]): Record<FeedKind, number> {
-  const counts = { AGENTS: 0, TEAMS: 0, SKILLS: 0, MEMORY: 0, CHANGES: 0, TASKS: 0 };
+  const counts = { AGENTS: 0, TEAMS: 0, SKILLS: 0, MEMORY: 0, WEB: 0, CHANGES: 0, TASKS: 0 };
   for (const e of events) counts[e.kind]++;
   return counts;
 }

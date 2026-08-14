@@ -110,7 +110,7 @@ export function ToolGroupCard({
               )}
               {result && (
                 <div className={`cl-tool-card-section ${result.isError ? 'is-error' : ''}`}>
-                  {!ownsOutputHead(use.name) && (
+                  {(!ownsOutputHead(use.name) || result.isError) && (
                     <div
                       className={`cl-tool-card-section-title ${result.isError ? 'is-error' : 'is-ok'}`}
                     >

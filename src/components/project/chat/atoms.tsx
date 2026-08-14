@@ -104,6 +104,61 @@ export function PathChip({ path }: { path: string }) {
   );
 }
 
+/**
+ * A web source, in the shape `PathChip` gives a file: the host carries the
+ * emphasis (it is what a reader checks first) and the path trails it.
+ *
+ * It is a real link — clicking it opens the page in the **system browser**
+ * (`window.open` → the main process' `setWindowOpenHandler` → `shell.openExternal`),
+ * never inside the renderer. Only `http(s)` is honoured, so a malformed or
+ * `file:`/`javascript:` URL renders as text and does nothing.
+ */
+export function UrlChip({ url }: { url: string }) {
+  const external = /^https?:\/\//i.test(url);
+  let host = url;
+  let rest = '';
+  if (external) {
+    try {
+      const u = new URL(url);
+      host = u.host.replace(/^www\./, '');
+      rest = `${u.pathname === '/' ? '' : u.pathname}${u.search}${u.hash}`;
+    } catch {
+      // keep the raw string — an unreadable URL is still worth printing
+    }
+  }
+  const body = (
+    <>
+      <span className="text-[var(--cl-ink-2)] font-semibold shrink-0">{host}</span>
+      {rest && <span className="text-[var(--cl-ink-3)] truncate min-w-0">{rest}</span>}
+    </>
+  );
+  const shell =
+    'flex items-center gap-1.5 bg-[var(--cl-paper-3)] border border-[var(--cl-line)] px-3 py-2 text-[12px] font-mono min-w-0 overflow-hidden';
+  if (!external)
+    return (
+      <div className={shell} style={{ borderRadius: '2px' }}>
+        {body}
+      </div>
+    );
+  return (
+    <a
+      href={url}
+      title={`Open ${url} in your browser`}
+      onClick={e => {
+        e.preventDefault();
+        window.open(url, '_blank', 'noopener');
+      }}
+      className={`${shell} hover:border-[var(--cl-accent)] cursor-pointer no-underline`}
+      style={{ borderRadius: '2px' }}
+    >
+      {body}
+      <span aria-hidden className="ml-auto shrink-0 text-[10px] text-[var(--cl-accent-ink)]">
+        ↗
+      </span>
+    </a>
+  );
+}
+
 export function SectionLabel({ label, meta }: { label: string; meta?: string }) {
   return (
     <div className="flex items-center gap-2 mb-2">
