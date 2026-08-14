@@ -81,6 +81,9 @@ import {
   initTelemetry,
   track,
   trackExit,
+  trackError,
+  queueFatalError,
+  flushPendingError,
   isTelemetryEnabled,
   setTelemetryEnabled,
 } from './modules/telemetry';
@@ -859,6 +862,35 @@ ipcMain.handle('telemetry:track', async (_event, name: unknown, props: unknown) 
     return err(e);
   }
 });
+
+// Renderer-side crashes (React render errors, window `error`/`unhandledrejection`).
+// The renderer sends the three raw fields; the scrubbing that strips paths,
+// usernames and project names happens main-side in `trackError`, so it applies
+// no matter which side reported the error.
+ipcMain.handle(
+  'telemetry:trackError',
+  async (_event, payload: unknown, kind: unknown, severity: unknown) => {
+    try {
+      if (!payload || typeof payload !== 'object') return ok(false);
+      const p = payload as { name?: unknown; message?: unknown; stack?: unknown };
+      if (typeof p.message !== 'string') return ok(false);
+      void trackError(
+        {
+          name: typeof p.name === 'string' ? p.name : 'Error',
+          message: p.message,
+          stack: typeof p.stack === 'string' ? p.stack : undefined,
+        },
+        {
+          kind: kind === 'crash' || kind === 'unhandled' ? kind : 'handled',
+          severity: severity === 'fatal' ? 'fatal' : 'error',
+        }
+      );
+      return ok(true);
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
 
 // Update check against the GitHub releases API — see modules/update-checker.ts.
 // No auto-download/install (the app ships unsigned, macOS would quarantine a
@@ -2135,6 +2167,31 @@ async function startWatcher() {
   bgWatcher.on('unlink', pushBgSessions);
 }
 
+// Crash reporting, behind the same opt-out toggle as usage telemetry.
+//
+// `uncaughtExceptionMonitor` observes without swallowing: Node still applies its
+// default (print the stack, exit), so registering it changes nothing about how
+// the app behaves on a fatal error — it only gets a chance to record it before
+// the process dies. An unhandled promise rejection lands here too, because
+// Node's default (`--unhandled-rejections=throw`) re-raises it as an uncaught
+// exception when no `unhandledRejection` listener exists — which is exactly why
+// we don't register one: doing so would silently make rejections non-fatal.
+//
+// The report is written to disk synchronously (an async POST would never leave a
+// dying process) and sent on the next launch by `flushPendingError()`.
+process.on('uncaughtExceptionMonitor', error => queueFatalError(error));
+
+// The renderer died on its own (OOM, GPU fault, killed). The main process is
+// still alive here, so this one can go out immediately. `clean-exit` is the
+// normal window teardown, not a crash.
+app.on('render-process-gone', (_event, _contents, details) => {
+  if (details.reason === 'clean-exit') return;
+  void trackError(
+    new Error(`Renderer process gone: ${details.reason} (exit code ${details.exitCode})`),
+    { kind: 'crash' }
+  );
+});
+
 app.whenReady().then(() => {
   if (process.env.SCREENSHOT_MODE) {
     registerScreenshotHandlers(ipcMain);
@@ -2145,6 +2202,8 @@ app.whenReady().then(() => {
   // modules/telemetry.ts.
   initTelemetry();
   void track('app_started');
+  // Ship the crash report the previous run left behind, if any.
+  void flushPendingError();
   // Rimuove del tutto la menu bar nativa su Windows/Linux (incl. il toggle con Alt).
   // Su macOS la lasciamo: ospita l'app menu di sistema (Cmd+Q, copia/incolla, ecc.).
   if (process.platform !== 'darwin') Menu.setApplicationMenu(null);

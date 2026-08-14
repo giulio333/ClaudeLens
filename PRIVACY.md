@@ -1,26 +1,27 @@
 # Privacy Policy
 
-_Last updated: 2026-07-03_
+_Last updated: 2026-08-14_
 
 ClaudeLens is a local-first desktop application. It reads and manages the Claude
 Code data already on your computer (under `~/.claude/`). **That data never leaves
 your device** — it is not uploaded, synced, or sent to us or anyone else.
 
 The only information that leaves your computer is a small amount of **anonymous
-usage telemetry**, described in full below (you can turn it off at any time),
-plus a lightweight **update check**, described right after it.
+usage telemetry** and, when something breaks, an **error report** — both
+described in full below, both covered by the same one-click opt-out — plus a
+lightweight **update check**, described right after them.
 
 ---
 
 ## TL;DR
 
-|                           |                                                                                                                                           |
-| ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| **What we collect**       | A handful of anonymous events (app launch/exit, which sections you open, a few feature actions), plus your app version, OS, and language. |
-| **What we never collect** | Anything from your Claude Code sessions, files, prompts, paths, or identity.                                                              |
-| **Who processes it**      | [Aptabase](https://aptabase.com), EU data center. Anonymous by design.                                                                    |
-| **Why**                   | To estimate how many people use ClaudeLens and on which platforms.                                                                        |
-| **Can I opt out?**        | Yes — **Settings → Privacy → "Share anonymous usage data"**. Takes effect immediately.                                                    |
+|                           |                                                                                                                                                                                                                                |
+| ------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| **What we collect**       | A handful of anonymous events (app launch/exit, which sections you open, a few feature actions), plus your app version, OS, and language — and, when the app breaks, the error itself (with all paths and names stripped out). |
+| **What we never collect** | Anything from your Claude Code sessions, files, prompts, paths, or identity.                                                                                                                                                   |
+| **Who processes it**      | [Aptabase](https://aptabase.com), EU data center. Anonymous by design.                                                                                                                                                         |
+| **Why**                   | To estimate how many people use ClaudeLens and on which platforms, and to find the crashes nobody reports.                                                                                                                     |
+| **Can I opt out?**        | Yes — **Settings → Privacy → "Share anonymous usage data"**. Takes effect immediately.                                                                                                                                         |
 
 ---
 
@@ -74,6 +75,39 @@ ClaudeLens **never** sends, and Aptabase never receives, any of the following:
 
 In short: nothing that could identify you, and nothing about _what_ you do in
 Claude Code — only the fact that the app launched, and on what platform.
+
+## Error reports
+
+When ClaudeLens breaks — a crash, a screen that fails to render, an operation
+that throws — it sends the error to the same Aptabase account, so bugs can be
+found and fixed without waiting for someone to report them.
+
+An error report contains only:
+
+- The **error type** and **message** (e.g. `Error:ENOENT`, `no such file`)
+- The **stack trace**, i.e. which lines of ClaudeLens' own code were running
+- The same anonymous system properties as any other event (app version, OS,
+  language, rotating session id)
+
+**Every file path is removed before the report leaves your machine.** Error
+messages and stack traces are the one place where a path — and therefore a
+username or a project name — could slip in, so each report goes through a
+scrubbing step first:
+
+- Paths inside the ClaudeLens app itself are kept as `<app>/…` (that is our own
+  code, and it is what makes the report useful)
+- **Every other path** — your home directory, your projects, anything under
+  `~/.claude/` — is replaced with `<path>`
+- Your **username** is replaced with `<user>`, even when it appears outside a path
+
+We also never send the contents of a file, a prompt, or a session; only the
+error text produced by the code itself. When a report cannot be sent because the
+app is dying, it is stored on your disk (`~/.claudelens/pending-error.json`) and
+sent on the next launch — or discarded if you turned telemetry off in the
+meantime.
+
+Error reports follow the **same opt-out toggle** as usage telemetry: turning off
+"Share anonymous usage data" stops them too.
 
 ## Update check
 
