@@ -61,15 +61,21 @@ The file hosts a **second, quieter notice** in the same bottom-left anchor
 either knowing about the other): **the installed Claude Code CLI is older than
 the `claudeCodeVersion` this build was prepared against**. The installed
 version comes from `useClaudeCodeVersion()` (IPC `updates:claudeCodeVersion` →
-`claude --version` via `execClaude`, parsed by `parseClaudeCliVersion` in
-`update-checker.ts`), compared renderer-side with the shared `compareVersions`
+`readInstalledClaudeVersion` in `claude-cli.ts`, i.e. `claude --version` parsed
+by `parseClaudeCliVersion`), compared renderer-side with the shared `compareVersions`
 — the same verdict Settings → General already prints as the `outdated` chip,
 now surfaced at launch, where a stale CLI actually costs something (ClaudeLens
 reads what that CLI writes to `~/.claude`). Settings reads **this same hook**:
 it used to print the SDK handshake's `claude_code_version` instead, which is
 the CLI bundled in the Agent SDK this build ships and therefore stands still
 when the user updates their own — the two surfaces disagreed by whatever the
-user had installed since.
+user had installed since. That switch alone did **not** fix the number: the
+handler still passed `resolveClaudeExecutablePath()`, which in a packaged app is
+the asar-unpacked _SDK_ binary, so `claude --version` was asked of the same
+bundled CLI and answered 2.1.220 to a user on 2.1.232 (invisible in dev, where
+the resolver returns undefined and the PATH CLI answers). The read now lives in
+`readInstalledClaudeVersion(env)`, whose signature has no executable to pass —
+only the PATH `claudeEnv()` builds can answer this question.
 
 Deliberately minimal: **no stripe and no title** — nothing is broken, so it
 gets one sentence, the `claude update` command with a Copy button, and a

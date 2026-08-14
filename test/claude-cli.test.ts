@@ -1,8 +1,14 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, chmodSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync } from 'fs';
+import { execFileSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
-import { execClaude, spawnClaude, ExecClaudeError } from '../electron/modules/claude-cli';
+import {
+  execClaude,
+  spawnClaude,
+  readInstalledClaudeVersion,
+  ExecClaudeError,
+} from '../electron/modules/claude-cli';
 
 const E2E = process.env.CLAUDE_E2E === '1';
 
@@ -92,6 +98,64 @@ describe.skipIf(process.platform === 'win32')('claude-cli (fake CLI on PATH)', (
     const { stdout } = await execClaude(['world'], { env: { PATH: binDir }, timeout: 10_000 });
     expect(stdout.trim()).toBe('hello world');
   });
+
+  it('readInstalledClaudeVersion legge la versione dal `claude` sul PATH', async () => {
+    writeFileSync(join(binDir, 'claude'), '#!/bin/sh\necho "9.9.9 (Claude Code)"\n', 'utf-8');
+    chmodSync(join(binDir, 'claude'), 0o755);
+    await expect(readInstalledClaudeVersion({ PATH: binDir })).resolves.toBe('9.9.9');
+  });
+
+  it('readInstalledClaudeVersion dà null su output non parsabile, ENOENT se manca', async () => {
+    writeFileSync(join(binDir, 'claude'), '#!/bin/sh\necho "not a version"\n', 'utf-8');
+    chmodSync(join(binDir, 'claude'), 0o755);
+    // Illeggibile ≠ assente: la UI dice "unknown" in un caso e "not found" nell'altro,
+    // e in nessuno dei due ripiega sulla versione shippata (era il bug della #201).
+    await expect(readInstalledClaudeVersion({ PATH: binDir })).resolves.toBeNull();
+
+    const empty = mkdtempSync(join(tmpdir(), 'cl-empty-'));
+    try {
+      const e = (await readInstalledClaudeVersion({ PATH: empty }).catch(
+        err => err
+      )) as ExecClaudeError;
+      expect(e.code).toBe('ENOENT');
+    } finally {
+      rmSync(empty, { recursive: true, force: true });
+    }
+  });
+});
+
+// ── Il binario CLI che l'SDK si porta dentro (`@anthropic-ai/claude-agent-sdk-
+// {platform}-{arch}/claude`, quello che `resolveClaudeExecutablePath()` punta
+// nell'app pacchettizzata) è la versione che ClaudeLens *shippa*, non quella
+// installata dall'utente: interrogarlo faceva dire "2.1.220" (SDK 0.3.220) a chi
+// aveva 2.1.232. Quando le due divergono davvero su questa macchina, il test
+// prova che leggiamo quella dell'utente. Skippa quando coincidono o quando una
+// delle due non c'è (niente CLI nel PATH sui runner del job unit).
+describe('readInstalledClaudeVersion vs CLI shippata dall’SDK', () => {
+  const bundled = join(
+    process.cwd(),
+    'node_modules',
+    '@anthropic-ai',
+    `claude-agent-sdk-${process.platform}-${process.arch}`,
+    process.platform === 'win32' ? 'claude.exe' : 'claude'
+  );
+
+  const versionOf = (exe: string): string | null => {
+    try {
+      const out = execFileSync(exe, ['--version'], { encoding: 'utf-8', timeout: 20_000 });
+      return /(\d+\.\d+\.\d+)/.exec(out)?.[1] ?? null;
+    } catch {
+      return null;
+    }
+  };
+
+  it('riporta la versione installata, non quella dentro il bundle', async () => {
+    if (!existsSync(bundled)) return;
+    const bundledVersion = versionOf(bundled);
+    const installed = await readInstalledClaudeVersion(process.env).catch(() => null);
+    if (!bundledVersion || !installed || bundledVersion === installed) return;
+    expect(installed).not.toBe(bundledVersion);
+  }, 45_000);
 });
 
 // ── E2E (matrix win/linux/mac, vera CLI installata — vedi ci.yml

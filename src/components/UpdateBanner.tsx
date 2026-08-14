@@ -158,8 +158,12 @@ function ClaudeCodeNotice() {
         >
           <div className="cl-toast cl-toast--cli">
             <div className="cl-toast-body">
+              {/* "Your" carries weight here: this is the CLI on the user's PATH,
+                  not the one ClaudeLens bundles for its own chat (Settings →
+                  General prints both, one row apart). `claude update` moves this
+                  number and nothing else. */}
               <div className="cl-toast-sub">
-                Claude Code {installed} is older than the {requiredCliVersion} this ClaudeLens
+                Your Claude Code {installed} is older than the {requiredCliVersion} this ClaudeLens
                 expects.
               </div>
               <div className="cl-cli-cmd">

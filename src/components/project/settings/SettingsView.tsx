@@ -421,15 +421,24 @@ function cliStatus(installed: string | null, state: CliReadState): CellTone {
     };
   return {
     dot: 'var(--cl-ok)',
-    title: `Meets the ${claudeCodeVersion} this ClaudeLens expects`,
+    title: `Installed ${installed} meets the ${claudeCodeVersion} this ClaudeLens expects`,
   };
 }
 
-/** The "Claude Code" row of the Runtime datasheet — installed version + verdict. */
+/**
+ * The "Claude Code" row of the Runtime datasheet — installed version + verdict.
+ *
+ * "Installed" means the CLI on the user's PATH, the one their terminal runs and
+ * the only one the update prompt is ever about. The CLI ClaudeLens carries for
+ * its own chat is a different fact, printed one row below.
+ */
 function InstalledCliRow() {
   const { data, error } = useClaudeCodeVersion();
   return (
-    <Row k="Claude Code" hint={`This ClaudeLens expects ${claudeCodeVersion} or newer`}>
+    <Row
+      k="Claude Code"
+      hint={`On your PATH — this ClaudeLens expects ${claudeCodeVersion} or newer`}
+    >
       {error ? (
         <Dim title={CLI_UNREADABLE}>not found in PATH</Dim>
       ) : data?.version ? (
@@ -442,6 +451,30 @@ function InstalledCliRow() {
       ) : (
         <Dim />
       )}
+    </Row>
+  );
+}
+
+/**
+ * The Claude Code the Agent SDK inside ClaudeLens runs — `claude_code_version`
+ * from the `system/init` handshake, i.e. the CLI binary vendored in the
+ * `@anthropic-ai/claude-agent-sdk` this build ships.
+ *
+ * Stated as its own row because it is a real, separate fact: the in-app chat and
+ * the config reads run on THIS version, while the user's terminal runs the one
+ * above. Printing it as "installed" is what made Settings lie (2.1.220 to a user
+ * on 2.1.232), and hiding it left the app unable to say which Claude Code its
+ * own chat was speaking to. Divergence is normal, so there is no verdict here —
+ * no chip, no dot: updating your CLI cannot move this number, only a new
+ * ClaudeLens can.
+ */
+function BundledCliRow({ version }: { version: string | undefined }) {
+  return (
+    <Row
+      k="Bundled CLI"
+      hint="Ships inside ClaudeLens and runs the in-app chat — your terminal doesn’t use it"
+    >
+      {version ? <Val>{version}</Val> : <Dim />}
     </Row>
   );
 }
@@ -509,8 +542,15 @@ export function GeneralTab({
         {/* One version row instead of installed + required side by side: the
             requirement only matters as a verdict on what's installed, and two
             bare numbers left the reader to compare them. Asked to the CLI
-            itself, not to the handshake above — see cliStatus. */}
+            itself, not to the handshake above — see cliStatus.
+
+            The bundled row below is the handshake number, and the two rows are
+            adjacent on purpose: they are the same question asked of two
+            different installs ("what do you run in your terminal" vs "what does
+            ClaudeLens run for you"), and the whole bug was the app answering
+            one with the other. Only the first carries the verdict. */}
         <InstalledCliRow />
+        <BundledCliRow version={init?.claudeCodeVersion || undefined} />
         <Row k="Working directory" stack full>
           {init ? <Val sm>{init.cwd}</Val> : <Dim />}
         </Row>
