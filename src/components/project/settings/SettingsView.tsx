@@ -7,6 +7,7 @@ import {
   useNotifyPrefs,
   useSetNotifyPref,
   useUpdateCheck,
+  useClaudeCodeVersion,
   useGlobalMcp,
   type EffectiveConfig,
   type McpServer,
@@ -311,6 +312,19 @@ function GeneralPanel({
 // Shown as the tooltip of any cell the SDK handshake couldn't fill.
 const NO_INIT = 'Runtime info unavailable';
 
+// Shown when `claude --version` couldn't be read (not in PATH, timeout) or ran
+// but said nothing recognizable.
+const CLI_UNREADABLE = 'Couldn’t run `claude --version` — is the CLI in your PATH?';
+const CLI_UNKNOWN = '`claude --version` didn’t report a version';
+
+// The three answers the installed-CLI read can give. Kept apart because only
+// one of them is a fact about the user's install: 'pending' is us, not them.
+type CliReadState = 'pending' | 'failed' | 'read';
+
+function cliReadState(isPending: boolean, failed: boolean): CliReadState {
+  return failed ? 'failed' : isPending ? 'pending' : 'read';
+}
+
 /**
  * Four cells: what Claude Code runs here (model, CLI version + whether it
  * satisfies this build, how permissive the session starts) and which ClaudeLens
@@ -322,7 +336,8 @@ const NO_INIT = 'Runtime info unavailable';
 function StatusTape({ cfg }: { cfg: EffectiveConfig | null }) {
   const { data: update, isFetching, error } = useUpdateCheck();
   const init = cfg?.init;
-  const cli = init ? cliStatus(init.claudeCodeVersion) : null;
+  const { data: installedCli, error: cliError, isPending } = useClaudeCodeVersion();
+  const cli = cliStatus(installedCli?.version ?? null, cliReadState(isPending, !!cliError));
   const app = updateStatus(update ?? null, isFetching, !!error);
   return (
     <section className="set-tape">
@@ -333,10 +348,10 @@ function StatusTape({ cfg }: { cfg: EffectiveConfig | null }) {
       />
       <TapeCell
         label="Claude Code"
-        value={init?.claudeCodeVersion ?? '—'}
-        qualifier={cli?.qualifier}
-        dot={cli?.dot}
-        title={cli?.title ?? NO_INIT}
+        value={installedCli?.version ?? '—'}
+        qualifier={cli.qualifier}
+        dot={cli.dot}
+        title={cli.title}
       />
       <TapeCell
         label="Permission mode"
@@ -383,8 +398,21 @@ function TapeCell({
 
 type CellTone = { qualifier?: string; dot?: string; title?: string };
 
-/** Installed Claude Code against the version this ClaudeLens build expects. */
-function cliStatus(installed: string): CellTone {
+/**
+ * Installed Claude Code against the version this ClaudeLens build expects.
+ *
+ * `installed` is what `claude --version` answered — NOT the SDK handshake's
+ * `claude_code_version`, which reports the CLI bundled inside the
+ * `@anthropic-ai/claude-agent-sdk` this app ships with. Those two diverge as
+ * soon as the user updates their own CLI, and reading the handshake had the
+ * page printing the shipped version as if it were the installed one.
+ */
+function cliStatus(installed: string | null, state: CliReadState): CellTone {
+  // An unreadable version is stated as unknown, never filled in from the SDK:
+  // a wrong number here reads as a verdict on the user's install.
+  if (state === 'failed') return { qualifier: 'not found', title: CLI_UNREADABLE };
+  if (state === 'pending') return { qualifier: 'reading…' };
+  if (!installed) return { qualifier: 'unknown', title: CLI_UNKNOWN };
   if (compareVersions(installed, claudeCodeVersion) < 0)
     return {
       qualifier: `needs ${claudeCodeVersion}`,
@@ -395,6 +423,27 @@ function cliStatus(installed: string): CellTone {
     dot: 'var(--cl-ok)',
     title: `Meets the ${claudeCodeVersion} this ClaudeLens expects`,
   };
+}
+
+/** The "Claude Code" row of the Runtime datasheet — installed version + verdict. */
+function InstalledCliRow() {
+  const { data, error } = useClaudeCodeVersion();
+  return (
+    <Row k="Claude Code" hint={`This ClaudeLens expects ${claudeCodeVersion} or newer`}>
+      {error ? (
+        <Dim title={CLI_UNREADABLE}>not found in PATH</Dim>
+      ) : data?.version ? (
+        <>
+          <Val>{data.version}</Val>
+          {compareVersions(data.version, claudeCodeVersion) < 0 && (
+            <span className="set-chip warn">outdated</span>
+          )}
+        </>
+      ) : (
+        <Dim />
+      )}
+    </Row>
+  );
 }
 
 // Modes that waive tool prompts. Deliberately not "anything but default":
@@ -459,19 +508,9 @@ export function GeneralTab({
         <Row k="API key source">{init ? <Val>{init.apiKeySource}</Val> : <Dim />}</Row>
         {/* One version row instead of installed + required side by side: the
             requirement only matters as a verdict on what's installed, and two
-            bare numbers left the reader to compare them. */}
-        <Row k="Claude Code" hint={`This ClaudeLens expects ${claudeCodeVersion} or newer`}>
-          {init ? (
-            <>
-              <Val>{init.claudeCodeVersion}</Val>
-              {compareVersions(init.claudeCodeVersion, claudeCodeVersion) < 0 && (
-                <span className="set-chip warn">outdated</span>
-              )}
-            </>
-          ) : (
-            <Dim />
-          )}
-        </Row>
+            bare numbers left the reader to compare them. Asked to the CLI
+            itself, not to the handshake above — see cliStatus. */}
+        <InstalledCliRow />
         <Row k="Working directory" stack full>
           {init ? <Val sm>{init.cwd}</Val> : <Dim />}
         </Row>
@@ -1229,8 +1268,12 @@ function Pill({ children }: { children: ReactNode }) {
   return <span className="set-pill">{children}</span>;
 }
 
-function Dim({ children }: { children?: ReactNode }) {
-  return <span className="set-dim">{children ?? '—'}</span>;
+function Dim({ children, title }: { children?: ReactNode; title?: string }) {
+  return (
+    <span className="set-dim" title={title}>
+      {children ?? '—'}
+    </span>
+  );
 }
 
 function StatusDot({ status, color: given }: { status: string; color?: string }) {

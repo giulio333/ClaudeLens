@@ -119,9 +119,17 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     ),
   };
 
+  // `claudeCodeVersion` is `claude --version` asked to the CLI on PATH — NOT the
+  // SDK handshake's `claude_code_version`, which reports the CLI bundled with the
+  // shipped Agent SDK. Settings and the launch notice both read this one.
+  const updates = {
+    claudeCodeVersion: vi.fn(async () => ok<{ version: string | null }>({ version: null })),
+  };
+
   return {
     sessions,
     telemetry,
+    updates,
     onDataChanged: channels.dataChanged.subscribe,
   };
 }
