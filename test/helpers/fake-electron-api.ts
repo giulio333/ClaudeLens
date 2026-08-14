@@ -110,6 +110,13 @@ export function createFakeElectronAPI(channels: FakeChannels) {
 
   const telemetry = {
     track: vi.fn(async (_name: string, _props?: Record<string, string | number>) => ok(null)),
+    trackError: vi.fn(
+      async (
+        _error: { name?: string; message: string; stack?: string },
+        _kind?: 'crash' | 'unhandled' | 'handled',
+        _severity?: 'fatal' | 'error'
+      ) => ok(null)
+    ),
   };
 
   return {
