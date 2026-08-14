@@ -9,6 +9,7 @@
 // (che cross-spawn emula anche su Windows).
 import spawn from 'cross-spawn';
 import type { ChildProcess } from 'child_process';
+import { parseClaudeCliVersion } from './update-checker';
 
 export interface ClaudeSpawnOptions {
   cwd?: string;
@@ -93,4 +94,26 @@ export function execClaude(
       }
     });
   });
+}
+
+/**
+ * The Claude Code version the USER has installed, from `claude --version`.
+ *
+ * Takes an env (the caller prepends the install locations a GUI-launched app
+ * doesn't inherit) and deliberately **no** executable: the only correct answer
+ * comes from resolving `claude` on the PATH. Passing the packaged app's
+ * asar-unpacked SDK binary — which `resolveClaudeExecutablePath()` returns, and
+ * which the SDK genuinely needs — reports the version ClaudeLens *ships*
+ * (`@anthropic-ai/claude-agent-sdk` 0.3.220 → "2.1.220"), so a user who had
+ * updated to 2.1.232 was told they were on 2.1.220 and judged against the
+ * requirement on that basis. This signature is the guard: there is no parameter
+ * to hand it the wrong binary through.
+ *
+ * Rejects with `code: 'ENOENT'` when no `claude` is on the PATH; resolves to
+ * null when the CLI answered something unparseable. Both mean "unknown" — never
+ * fall back to the bundled version, which is what made the number wrong.
+ */
+export async function readInstalledClaudeVersion(env?: NodeJS.ProcessEnv): Promise<string | null> {
+  const { stdout } = await execClaude(['--version'], { env, timeout: 8000 });
+  return parseClaudeCliVersion(stdout);
 }
