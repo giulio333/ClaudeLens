@@ -250,13 +250,11 @@ function FeedGlyph({ e }: { e: FeedEvent }) {
 function FeedRow({
   e,
   now,
-  compact,
   open,
   onActivate,
 }: {
   e: FeedEvent;
   now: number;
-  compact: boolean;
   open: boolean;
   onActivate: () => void;
 }) {
@@ -273,7 +271,7 @@ function FeedRow({
         gap: 9,
         width: '100%',
         textAlign: 'left',
-        padding: `${compact ? 6 : 8}px 6px`,
+        padding: '6px',
         margin: '0 -6px',
         borderRadius: 6,
         border: 0,
@@ -297,7 +295,7 @@ function FeedRow({
           className="truncate"
           style={{
             display: 'block',
-            font: `500 ${compact ? 12 : 12.5}px/1.3 var(--font-sans)`,
+            font: '500 12px/1.3 var(--font-sans)',
             color: e.danger ? 'var(--cl-danger)' : 'var(--cl-ink)',
           }}
         >
@@ -373,13 +371,7 @@ function FeedOperations({
 }
 
 /** Disclosure under a task row — the detail the dedicated Tasks page shows. */
-function TaskDetail({
-  event,
-  fontSize,
-}: {
-  event: Extract<FeedEvent['source'], { kind: 'task' }>;
-  fontSize: number;
-}) {
+function TaskDetail({ event }: { event: Extract<FeedEvent['source'], { kind: 'task' }> }) {
   const t = event.task;
   const liveForm = t.status === 'in_progress' ? t.activeForm?.trim() : '';
   return (
@@ -392,12 +384,14 @@ function TaskDetail({
       }}
     >
       {liveForm && (
-        <span style={{ fontSize, lineHeight: 1.45, color: 'var(--cl-ok)', fontWeight: 600 }}>
+        <span style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--cl-ok)', fontWeight: 600 }}>
           ⟳ {liveForm}…
         </span>
       )}
       {t.description?.trim() && (
-        <span style={{ fontSize, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}>{t.description}</span>
+        <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}>
+          {t.description}
+        </span>
       )}
       {(t.blockedBy.length > 0 || t.blocks.length > 0) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
@@ -525,16 +519,6 @@ export function MissionRail({
       return next;
     });
   }, []);
-  const [compact, setCompact] = useState<boolean>(
-    () => localStorage.getItem('tmc-density') !== 'comfortable'
-  );
-  const toggleCompact = useCallback(() => {
-    setCompact(v => {
-      localStorage.setItem('tmc-density', v ? 'comfortable' : 'compact');
-      return !v;
-    });
-  }, []);
-
   const onResizeStart = useCallback(
     (e: React.PointerEvent<HTMLDivElement>) => {
       e.preventDefault();
@@ -884,21 +868,6 @@ export function MissionRail({
             </button>
           );
         })}
-        <button
-          type="button"
-          className="font-mono transition-colors"
-          onClick={toggleCompact}
-          aria-pressed={compact}
-          title="Toggle density"
-          style={{
-            marginLeft: 'auto',
-            fontSize: 9,
-            letterSpacing: '0.12em',
-            color: compact ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
-          }}
-        >
-          {compact ? 'COMPACT' : 'COMFY'}
-        </button>
       </div>
 
       {/* the stream */}
@@ -932,19 +901,11 @@ export function MissionRail({
           const open = expanded.has(e.id);
           return (
             <div key={e.id}>
-              <FeedRow
-                e={e}
-                now={now}
-                compact={compact}
-                open={open}
-                onActivate={() => activate(e)}
-              />
+              <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />
               {open && e.items.length > 0 && (
                 <FeedOperations items={e.items} onOpenTool={onOpenTool} />
               )}
-              {open && e.source.kind === 'task' && (
-                <TaskDetail event={e.source} fontSize={compact ? 11 : 11.5} />
-              )}
+              {open && e.source.kind === 'task' && <TaskDetail event={e.source} />}
             </div>
           );
         })}
