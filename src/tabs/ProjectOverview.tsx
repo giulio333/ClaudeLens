@@ -611,6 +611,9 @@ export default function ProjectOverview() {
                 ? session => setView({ type: 'chat', project: selected, session, from: 'sessions' })
                 : undefined
             }
+            onOpenTopic={(topic, content) =>
+              setView({ type: 'memory-topic', topic, content, hash: view.hash })
+            }
           />
         );
       case 'plan-detail':

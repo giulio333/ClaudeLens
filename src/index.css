@@ -7386,6 +7386,303 @@ body {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
+   MEMORY GRAPH — islands map + local orbit
+   Relations come from the [[wikilinks]] the memories already carry. Solid =
+   declared link, dashed = word affinity (a suggestion, never written back).
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-memgraph {
+  margin: 2px 0 30px;
+}
+.cl-memgraph-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 10px 0 12px;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-memgraph-stats {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-memgraph-stats b {
+  color: var(--cl-ink-2);
+  font-weight: 600;
+}
+.cl-memgraph-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  margin-top: 20px;
+  overflow: visible;
+}
+.cl-memgraph-island {
+  fill: none;
+  stroke: var(--cl-line);
+  stroke-dasharray: 3 5;
+}
+.cl-memgraph-island-title {
+  font-family: var(--font-ui);
+  font-size: 11.5px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  fill: var(--cl-ink-2);
+}
+.cl-memgraph-island-meta,
+.cl-memgraph-band-title {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  fill: var(--cl-ink-4);
+}
+.cl-memgraph-link {
+  fill: none;
+  stroke: var(--cl-accent);
+  stroke-width: 1.3;
+  opacity: 0.4;
+  transition:
+    opacity 0.14s ease,
+    stroke-width 0.14s ease;
+}
+.cl-memgraph-link.is-cross {
+  opacity: 0.16;
+  stroke-width: 1;
+}
+.cl-memgraph-link.is-lit,
+.cl-memgraph-link.is-cross.is-lit {
+  opacity: 0.95;
+  stroke-width: 2;
+}
+.cl-memgraph-affinity {
+  fill: none;
+  stroke: var(--cl-ink-4);
+  stroke-width: 1;
+  stroke-dasharray: 3 4;
+  opacity: 0.42;
+  transition: opacity 0.14s ease;
+}
+.cl-memgraph-affinity.is-lit {
+  opacity: 0.9;
+}
+.cl-memgraph-node {
+  cursor: pointer;
+}
+.cl-memgraph-node:focus {
+  outline: none;
+}
+.cl-memgraph-halo {
+  fill: transparent;
+  stroke: none;
+  transition: fill 0.14s ease;
+}
+.cl-memgraph-node:hover .cl-memgraph-halo,
+.cl-memgraph-node:focus-visible .cl-memgraph-halo {
+  fill: color-mix(in oklch, var(--cl-accent) 22%, transparent);
+}
+.cl-memgraph-label {
+  font-family: var(--font-mono);
+  font-size: 8.6px;
+  letter-spacing: 0.01em;
+  fill: var(--cl-ink-3);
+  pointer-events: none;
+}
+.cl-memgraph-label.is-hub {
+  font-size: 9.4px;
+  font-weight: 700;
+  fill: var(--cl-ink);
+}
+.cl-memgraph-node.is-hover .cl-memgraph-label {
+  fill: var(--cl-ink);
+}
+.cl-memgraph-legend {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  padding-top: 12px;
+  border-top: 1px solid var(--cl-line-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--cl-ink-4);
+}
+.cl-memgraph-legend .sw {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+.cl-memgraph-legend .sw.muted {
+  opacity: 0.75;
+  cursor: help;
+}
+.cl-memgraph-legend .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+}
+.cl-memgraph-legend .ln {
+  width: 20px;
+  border-top: 1.5px solid var(--cl-accent);
+}
+.cl-memgraph-legend .ln.dash {
+  border-top-style: dashed;
+  border-top-color: var(--cl-ink-4);
+}
+
+/* Hover card di un nodo. Pointer-transparent: non ha controlli, e catturare il
+   cursore impedirebbe di passare al nodo accanto in una mappa fitta. */
+.cl-mempeek {
+  position: fixed;
+  z-index: 60;
+  pointer-events: none;
+  padding: 12px 14px 13px;
+  border-radius: 11px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 12px 34px rgb(0 0 0 / 16%);
+  animation: cl-mempeek-in 0.13s ease-out;
+}
+/* Solo opacità: il `transform` è già occupato dal posizionamento sopra il nodo
+   (`translateY(-100%)`), e animarlo qui farebbe saltare la card fuori posto. */
+@keyframes cl-mempeek-in {
+  from {
+    opacity: 0;
+  }
+}
+.cl-mempeek-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 7px;
+}
+.cl-mempeek-head .type {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+}
+.cl-mempeek-head .dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+}
+.cl-mempeek-head .scope {
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  border: 1px solid var(--cl-line);
+  border-radius: 4px;
+  padding: 1px 5px;
+}
+.cl-mempeek-name {
+  font-family: var(--font-ui);
+  font-size: 13.5px;
+  font-weight: 600;
+  line-height: 1.34;
+  letter-spacing: -0.005em;
+  color: var(--cl-ink);
+}
+.cl-mempeek-desc {
+  margin: 6px 0 0;
+  font-family: var(--font-reading, inherit);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-mempeek-desc.is-empty {
+  color: var(--cl-ink-4);
+  font-style: italic;
+}
+.cl-mempeek-foot {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--cl-line-soft);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-mempeek-foot .sep {
+  opacity: 0.5;
+}
+.cl-mempeek-cluster {
+  color: var(--cl-ink-3);
+  max-width: 130px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-mempeek {
+    animation: none;
+  }
+}
+
+.cl-memorbit {
+  border: 1px solid var(--cl-line);
+  border-radius: 12px;
+  background: var(--cl-paper-2);
+  padding: 6px 10px;
+}
+.cl-memorbit svg {
+  display: block;
+  width: 100%;
+  height: auto;
+  overflow: visible;
+}
+.cl-memorbit-ring {
+  fill: none;
+  stroke: var(--cl-line);
+  stroke-dasharray: 2 5;
+}
+.cl-memorbit-link {
+  stroke: var(--cl-accent);
+  stroke-width: 1.2;
+  opacity: 0.45;
+}
+.cl-memorbit-arrowhead {
+  fill: var(--cl-accent);
+  opacity: 0.6;
+}
+.cl-memorbit-node {
+  cursor: pointer;
+}
+.cl-memorbit-node.is-focus {
+  cursor: default;
+}
+.cl-memorbit-node.is-focus .cl-memorbit-dot {
+  stroke: var(--cl-accent);
+  stroke-width: 3;
+}
+.cl-memorbit-node:hover .cl-memorbit-dot,
+.cl-memorbit-node:focus-visible .cl-memorbit-dot {
+  stroke: var(--cl-accent);
+  stroke-width: 2.5;
+}
+.cl-memorbit-node:focus {
+  outline: none;
+}
+
+/* ════════════════════════════════════════════════════════════════════════
    TASKS — grouped task list (rail + status pills)
    ════════════════════════════════════════════════════════════════════════ */
 :root {
