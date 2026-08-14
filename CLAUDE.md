@@ -40,8 +40,11 @@ subscriptions that outlive their component. Opt in per file with a
 the ~45 main-process test files keep their startup cost. Covered so far:
 `use-live-chat` (stream-envelope filtering, turn commit, permission queue,
 resume seed, teardown), `use-data-changed-refetch` (debounce window, scope
-union, the widen-on-unknown-payload fallback) and `telemetry-report-error` (what
-reaches `telemetry:trackError` and what the browser-noise filter drops first).
+union, the widen-on-unknown-payload fallback), `telemetry-report-error` (what
+reaches `telemetry:trackError` and what the browser-noise filter drops first)
+and `settings-cli-version` (Settings → General prints `claude --version`, never
+the SDK handshake's bundled `claude_code_version`, and says so when the read
+fails instead of falling back to it).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
