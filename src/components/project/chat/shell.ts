@@ -6,6 +6,8 @@
  *  unit tests (`test/shell.test.ts`), not a regex buried in JSX.
  */
 
+import { WEB_SEARCH } from './web';
+
 /** Operator that joins a step to the next one (`''` on the last step). */
 export type ShellOp = '' | ';' | '&&' | '||' | '&' | '|';
 
@@ -204,9 +206,18 @@ export function ownsToolBody(tool: string): boolean {
   return tool === 'Bash';
 }
 
-/** Tools whose *result* renderer draws its own labelled head — `BashOutput` (a
- *  background shell read) is plain shell output, but its input (`bash_id`) is
- *  nothing special, so only the result side is claimed. */
-export function ownsOutputHead(tool: string): boolean {
+/** Results rendered as shell output (`CommandOutput`): a `BashOutput` read is
+ *  plain shell output, but its input (`bash_id`) is nothing special, so only the
+ *  result side is claimed. */
+export function isShellOutput(tool: string): boolean {
   return tool === 'BashOutput' || ownsToolBody(tool);
+}
+
+/** Tools whose *result* renderer draws its own labelled head, so the host must
+ *  not print one above it. Shell output labels itself; a `WebSearch` opens with
+ *  its own SOURCES head, and an "Output · 47 lines" above that is a second title
+ *  for one block. Name-only, deliberately: a **failed** result still takes the
+ *  host's "Error" label, which no body draws for itself. */
+export function ownsOutputHead(tool: string): boolean {
+  return isShellOutput(tool) || tool === WEB_SEARCH;
 }
