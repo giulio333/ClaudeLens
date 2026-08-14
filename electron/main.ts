@@ -65,7 +65,7 @@ import { createSkill, SkillInput } from './modules/skills-writer';
 import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { buildDispatchBgArgs, buildAiRunArgs } from './modules/claude-cli-args';
-import { spawnClaude, execClaude } from './modules/claude-cli';
+import { spawnClaude, execClaude, readInstalledClaudeVersion } from './modules/claude-cli';
 import { readEffectiveConfig } from './modules/config-reader';
 import {
   ChatSession,
@@ -76,11 +76,7 @@ import {
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
-import {
-  checkForUpdates,
-  parseClaudeCliVersion,
-  RELEASES_PAGE_URL,
-} from './modules/update-checker';
+import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
 import {
   initTelemetry,
   track,
@@ -121,7 +117,6 @@ import {
   canonicalize,
   CLAUDE_DIR,
   isValidSessionId,
-  resolveClaudeExecutablePath,
 } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 
@@ -261,13 +256,16 @@ function err<T>(e: unknown): IpcResult<T> {
 
 // Build the env for spawning the `claude` CLI. A GUI-launched app may not inherit
 // the user's interactive-shell PATH, so we prepend common install locations using
-// the platform path delimiter (':' on Unix, ';' on Windows). On Windows the CLI
-// is on the user PATH as claude.cmd, so the Unix-only dirs are skipped.
+// the platform path delimiter (':' on Unix, ';' on Windows). `~/.claude/local` is
+// where the CLI's own `migrate-installer` puts it and is prepended everywhere;
+// the FHS-ish dirs are Unix-only (on Windows the CLI lands on the user PATH, as
+// `claude.cmd` from npm or `claude.exe` in `%USERPROFILE%\.local\bin`).
 function claudeEnv(): NodeJS.ProcessEnv {
-  const extra =
-    process.platform === 'win32'
-      ? []
-      : [join(os.homedir(), '.local', 'bin'), '/usr/local/bin', '/opt/homebrew/bin'];
+  const extra = [
+    join(os.homedir(), '.claude', 'local'),
+    join(os.homedir(), '.local', 'bin'),
+    ...(process.platform === 'win32' ? [] : ['/usr/local/bin', '/opt/homebrew/bin']),
+  ];
   const PATH = [...extra, process.env.PATH || ''].filter(Boolean).join(delimiter);
   return { ...process.env, PATH };
 }
@@ -927,15 +925,22 @@ ipcMain.handle('updates:check', async () => {
 // nothing). The comparison against the required version lives renderer-side —
 // the requirement is `claudeCodeVersion` in package.json, which the renderer
 // already imports for Settings → General.
+//
+// The read goes through `readInstalledClaudeVersion`, which takes no executable
+// on purpose: this handler used to pass `resolveClaudeExecutablePath()`, and in
+// a packaged app that resolver returns the CLI binary vendored inside
+// `@anthropic-ai/claude-agent-sdk-{platform}-{arch}` (asar-unpacked) — the
+// version THIS BUILD ships, so SDK 0.3.220 answers "2.1.220" whatever the user
+// installed. That binary exists for the SDK, which cannot spawn from inside the
+// asar (`chat-runner`, `config-reader`); asking it `--version` printed the exact
+// number the SDK handshake used to print, i.e. the bug that switching to the CLI
+// was meant to fix. A user on 2.1.232 was still told 2.1.220 on the packaged
+// Windows build, while in dev the resolver returns undefined, the PATH CLI
+// answered, and the bug stayed invisible.
 ipcMain.handle('updates:claudeCodeVersion', async () => {
   try {
     if (process.env.SCREENSHOT_MODE) return ok({ version: null });
-    const { stdout } = await execClaude(['--version'], {
-      env: claudeEnv(),
-      executable: resolveClaudeExecutablePath(),
-      timeout: 8000,
-    });
-    return ok({ version: parseClaudeCliVersion(stdout) });
+    return ok({ version: await readInstalledClaudeVersion(claudeEnv()) });
   } catch (e: any) {
     if (e?.code === 'ENOENT') return err(`'claude' CLI not found in PATH.`);
     return err(e?.stderr || e?.message || String(e));
