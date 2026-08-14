@@ -324,17 +324,47 @@ titolo. Il titolo tronca prima, il cluster non si sposta mai.
 La riga pinnata prende il wash accent + il filetto accent, e la lista si apre
 con il filetto d'inchiostro 1.5px. Il piede riporta il range (`1–N of M`) e il
 "Show more": il caricamento resta progressivo, prende solo l'idioma del pager
-del mock. Nella landing di progetto (`section === 'overview'`) le sessioni si dividono in
-due blocchi, entrambi che scompaiono da soli quando non hanno niente da dire:
-**Pinned sessions** (`PinnedSessionsSection`, righe `.cl-srow` piene — ritorna
-`null` a zero pin) e **Recent** (`RecentSessionsStrip`, `.cl-mrow`). Il secondo
-è volutamente **più leggero** delle righe della subtab: quelle portano pin,
-indice, tag, il cluster di cifre e le azioni in hover, e ripeterle qui rendeva
-la landing una copia più corta della subtab Sessions — che il rail ha a un click
-di distanza. Resta ciò che si cerca su una landing: **quale conversazione, se sta
-girando, quando** (titolo · LIVE · filetto puntinato · tempo relativo); tutto il
-resto sta un livello più in basso. Il caption conta sul totale della storia
-(`sessions.length`), non sulla lista senza pin da cui pesca.
+del mock.
+
+**Landing di progetto — design handoff _Overview Redesign_, opzione 1c**
+(`section === 'overview'`). Le sessioni sono **un blocco solo**, non due: la
+sezione **Pinned sessions** e la striscia **Recent** (`RecentSessionsStrip`,
+`.cl-mrow`, entrambe rimosse col loro CSS) erano la stessa lista letta due
+volte, e la seconda doveva rinunciare a pin, tag e cluster di cifre per
+giustificare di stare sotto una sezione che li portava. Ora: testata
+`Sessions · N pinned · M total · View all` e **tre righe `.cl-srow` piene**
+(`LANDING_SESSIONS`), **pinnate per prime** — non avendo più una sezione
+propria, è la testa della terna che tiene raggiungibile dalla landing una
+conversazione pinnata e quindi magari vecchia. Il `rankOf` resta l'indice vero
+nella storia completa, così i numeri di riga non mentono. Il caption conta sul
+totale della storia (`sessions.length`).
+
+La **memoria** è la sezione che 1c cambia di più, ed era la più penalizzata:
+una definition-list a 3 colonne (`.cl-mem`/`.cl-mem-row`, rimosse) dove un
+topic si leggeva come una riga di tabella — niente tipo, niente tag, niente
+gerarchia. Diventa una **griglia di index card** (`.cl-mem-cards`/`.cl-mcard`,
+`renderMemCard`): header con glifo iniziale + tipo + età relativa, nome come
+titolo, **tre righe di prosa** in `--font-reading` (`memPreview` accetta ora un
+`max`, qui `MEM_CARD_PREVIEW_MAX`) e i tag a piede card. La prima card prende
+il wash accent, come la prima tile di Skills/Agents. I tag sono **read-only**
+qui: aggiungerli/rimuoverli resta nella subtab Memory, che possiede la lista
+intera (e il `TagPicker`). Cap a `LANDING_MEM_CARDS` (due file da tre), con
+`View all` verso la subtab.
+Il caption è `N topics · <due tipi più frequenti>`: un breakdown completo
+sfora la testata su qualsiasi memoria vera, e i due tipi dominanti sono ciò che
+dice che cosa questo progetto ricorda. Il controllo **Newest / By type** è un
+`.cl-seg` nella variante **`--paper`** (il `.cl-seg` originale è vetro perché
+nasce nella pill della chat, che galleggia su un transcript; su una sezione
+editoriale deve essere la stessa carta di tutto il resto — la mossa che
+`.cl-pill` ha già fatto). Il suo stato (`memCardView`) è **tenuto separato** da
+`memSort`/`memGroupBy` della subtab: leggono gli stessi topic ma sono superfici
+diverse, e un toggle sulla landing che rimodella in silenzio la lista completa
+è il tipo di cross-talk che noti solo dopo che ti ha confuso.
+**Non implementata** di 1c: la card tratteggiata "New topic" — l'app non ha
+(ancora) nessun ingresso di creazione memoria, solo l'IPC `memory:createTopic`
+e l'hook `useCreateTopic` inutilizzato; sarebbe una feature, non un cambio di
+layout. Fuori scope anche la «context chain» che collassa CLAUDE.md sotto
+l'hero: la sezione CLAUDE.md resta la tile-grid attuale.
 La sezione **Teams** conserva l'hero compatto (`cl-hero--compact`) e la
 vecchia meta-riga: è una vista operativa, non una landing di progetto.
 Il **filtro per tag** (`sessions/TagBar`) non è più una banda sotto il titolo:
