@@ -393,6 +393,7 @@ declare global {
       };
       updates: {
         check: () => Promise<IpcResult<UpdateInfo>>;
+        claudeCodeVersion: () => Promise<IpcResult<{ version: string | null }>>;
       };
       config: {
         getEffective: (cwd?: string) => Promise<IpcResult<EffectiveConfig>>;
@@ -793,6 +794,48 @@ export function useSkipUpdateVersion() {
       unwrap(window.electronAPI.prefs.set(UPDATE_SKIPPED_KEY, version)),
     onSuccess: (_data, version) => {
       qc.setQueryData(['prefs:update-skipped'], version);
+    },
+  });
+}
+
+// Installed Claude Code CLI version (`claude --version`), read once per run.
+// Feeds the launch notice that suggests updating when the CLI is older than
+// the `claudeCodeVersion` this build expects. A failed read throws — the
+// notice stays silent rather than guessing.
+export function useClaudeCodeVersion() {
+  return useQuery({
+    queryKey: ['updates:claude-code-version'],
+    queryFn: () => unwrap(window.electronAPI.updates.claudeCodeVersion()),
+    staleTime: Infinity,
+    retry: false,
+    refetchOnWindowFocus: false,
+  });
+}
+
+// Per-version dismissal of that notice, same shape as the app-update skip:
+// dismissing pins the *required* version, so the notice comes back the next
+// time ClaudeLens raises the bar.
+const CLI_UPDATE_DISMISSED_KEY = 'cl-cli-update-dismissed-version';
+
+export function useDismissedCliUpdate() {
+  return useQuery({
+    queryKey: ['prefs:cli-update-dismissed'],
+    queryFn: async (): Promise<string | null> => {
+      const all = await unwrap(window.electronAPI.prefs.getAll());
+      const v = all[CLI_UPDATE_DISMISSED_KEY];
+      return typeof v === 'string' ? v : null;
+    },
+    staleTime: Infinity,
+  });
+}
+
+export function useDismissCliUpdate() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      unwrap(window.electronAPI.prefs.set(CLI_UPDATE_DISMISSED_KEY, version)),
+    onSuccess: (_data, version) => {
+      qc.setQueryData(['prefs:cli-update-dismissed'], version);
     },
   });
 }

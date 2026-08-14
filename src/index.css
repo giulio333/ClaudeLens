@@ -13918,19 +13918,63 @@ select.cl-opt-input {
   }
 }
 
-/* ─── Update notice (UpdateBanner.tsx) ────────────────────────────────────
-   Single passive toast anchored bottom-LEFT (the session toaster owns the
-   bottom-right corner), reusing the .cl-toast anatomy with an accent stripe
-   and a two-action row (View release / Skip this version). */
+/* ─── Update notices (UpdateBanner.tsx) ───────────────────────────────────
+   Passive toasts anchored bottom-LEFT (the session toaster owns the
+   bottom-right corner), reusing the .cl-toast anatomy: the ClaudeLens release
+   notice with an accent stripe and a two-action row (View release / Skip this
+   version), and — quieter, no stripe — the "your Claude Code CLI is behind"
+   notice. The anchor is a column stack so both can sit there at once. */
 .cl-update-anchor {
   position: fixed;
   left: 18px;
   bottom: 18px;
   z-index: 1190;
   width: min(360px, calc(100vw - 36px));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 .cl-toast--update .cl-toast-stripe {
   background: var(--cl-accent);
+}
+/* The CLI notice reports a mismatch, not a fault — it stays on plain paper
+   with no stripe, and the command is the only thing that carries weight. */
+.cl-toast--cli .cl-toast-sub {
+  margin-top: 0;
+}
+.cl-cli-cmd {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 9px;
+}
+.cl-cli-cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--cl-ink-2);
+  background: var(--cl-line-soft);
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  padding: 3px 7px;
+}
+.cl-cli-copy {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  padding: 2px 8px;
+  transition: color 0.15s ease;
+}
+.cl-cli-copy:hover {
+  color: var(--cl-accent);
 }
 .cl-toast-actions {
   display: flex;

@@ -202,6 +202,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   },
   updates: {
     check: () => ipcRenderer.invoke('updates:check'),
+    claudeCodeVersion: () => ipcRenderer.invoke('updates:claudeCodeVersion'),
   },
   config: {
     getEffective: (cwd?: string) => ipcRenderer.invoke('config:getEffective', cwd),

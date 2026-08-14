@@ -56,6 +56,28 @@ No auto-install by design — the app ships unsigned. It is now the **only** use
 of the `.cl-toast` stripe-card anatomy: session notifications moved to the
 feed-row form (below), so the two bottom corners no longer share one shape.
 
+The file hosts a **second, quieter notice** in the same bottom-left anchor
+(`.cl-update-anchor`, now a column stack so both can be on screen without
+either knowing about the other): **the installed Claude Code CLI is older than
+the `claudeCodeVersion` this build was prepared against**. The installed
+version comes from `useClaudeCodeVersion()` (IPC `updates:claudeCodeVersion` →
+`claude --version` via `execClaude`, parsed by `parseClaudeCliVersion` in
+`update-checker.ts`), compared renderer-side with the shared `compareVersions`
+— the same verdict Settings → General already prints as the `outdated` chip,
+now surfaced at launch, where a stale CLI actually costs something (ClaudeLens
+reads what that CLI writes to `~/.claude`).
+
+Deliberately minimal: **no stripe and no title** — nothing is broken, so it
+gets one sentence, the `claude update` command with a Copy button, and a
+"Don't remind me". The CLI check is asked to the CLI itself rather than to the
+Agent SDK handshake, which is slow and cwd-scoped (an untrusted dir answers
+nothing). A failed read (`claude` not in PATH, timeout) throws and the notice
+simply never appears — an unknown version is never treated as outdated.
+Dismissal pins the **required** version in prefs
+(`cl-cli-update-dismissed-version`), so raising the requirement in a later
+ClaudeLens brings the notice back; ✕ hides it for this run only. Silent in
+`SCREENSHOT_MODE` (the handler returns a null version).
+
 ### NotificationToaster.tsx
 
 Transient toasts for session-lifecycle events pushed over `notifications:event`

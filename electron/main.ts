@@ -76,7 +76,11 @@ import {
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
-import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
+import {
+  checkForUpdates,
+  parseClaudeCliVersion,
+  RELEASES_PAGE_URL,
+} from './modules/update-checker';
 import {
   initTelemetry,
   track,
@@ -117,6 +121,7 @@ import {
   canonicalize,
   CLAUDE_DIR,
   isValidSessionId,
+  resolveClaudeExecutablePath,
 } from './utils';
 import { registerScreenshotHandlers } from './screenshotFixtures';
 
@@ -912,6 +917,28 @@ ipcMain.handle('updates:check', async () => {
     return ok(await checkForUpdates(app.getVersion()));
   } catch (e) {
     return err(e);
+  }
+});
+
+// Which Claude Code the user actually has installed, asked straight to the CLI
+// (`claude --version`) rather than to the Agent SDK handshake: this runs at
+// launch to decide whether to show the "your CLI is behind this build" notice,
+// and the handshake is both slow and cwd-scoped (an untrusted dir answers
+// nothing). The comparison against the required version lives renderer-side —
+// the requirement is `claudeCodeVersion` in package.json, which the renderer
+// already imports for Settings → General.
+ipcMain.handle('updates:claudeCodeVersion', async () => {
+  try {
+    if (process.env.SCREENSHOT_MODE) return ok({ version: null });
+    const { stdout } = await execClaude(['--version'], {
+      env: claudeEnv(),
+      executable: resolveClaudeExecutablePath(),
+      timeout: 8000,
+    });
+    return ok({ version: parseClaudeCliVersion(stdout) });
+  } catch (e: any) {
+    if (e?.code === 'ENOENT') return err(`'claude' CLI not found in PATH.`);
+    return err(e?.stderr || e?.message || String(e));
   }
 });
 
