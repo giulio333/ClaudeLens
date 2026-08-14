@@ -1,6 +1,12 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MemoryTopic, SessionSummary, TopicInput } from '../../../hooks/useIPC';
-import { useUpdateTopic, useDeleteTopic, useSessionList } from '../../../hooks/useIPC';
+import {
+  useUpdateTopic,
+  useDeleteTopic,
+  useSessionList,
+  useMemoryProject,
+} from '../../../hooks/useIPC';
+import { MemoryOrbit } from './MemoryOrbit';
 import { EntityDetailView, EntityConfig } from '../shared/EntityDetailView';
 import {
   MEMORY_OPTION_DEFS,
@@ -209,16 +215,30 @@ export function MemoryTopicView({
   hash,
   onBack,
   onOpenSession,
+  onOpenTopic,
 }: {
   topic: MemoryTopic;
   content: string;
   hash: string;
   onBack: () => void;
   onOpenSession?: (session: SessionSummary) => void;
+  onOpenTopic?: (topic: MemoryTopic, content: string) => void;
 }) {
   const { body, wordCount, linkCount } = parseMemoryContent(content);
   const updateMut = useUpdateTopic(hash);
   const deleteMut = useDeleteTopic(hash);
+
+  // Le altre memorie del progetto: servono all'orbita per sapere chi cita
+  // questa. Stessa queryKey della lista, quindi già in cache — nessuna fetch.
+  const { data: memory } = useMemoryProject(hash);
+  const allTopics = useMemo(
+    () => [...(memory?.index ?? []), ...(memory?.projectLevelIndex ?? [])],
+    [memory]
+  );
+  const allContents = useMemo(
+    () => ({ ...(memory?.topics ?? {}), ...(memory?.projectLevelTopics ?? {}) }),
+    [memory]
+  );
 
   // Risolve la sessione che ha generato la memoria (originSessionId = UUID del
   // file .jsonl nello stesso progetto). La lista è già in cache (stessa
@@ -280,13 +300,23 @@ export function MemoryTopicView({
       </>
     ),
     viewExtras: (
-      <MemoryMetaPanel
-        topic={topic}
-        hash={hash}
-        originSession={originSession}
-        onOpenSession={onOpenSession}
-        readOnly={readOnly}
-      />
+      <>
+        {onOpenTopic && (
+          <MemoryOrbit
+            topic={topic}
+            topics={allTopics}
+            contents={allContents}
+            onOpenTopic={t => onOpenTopic(t, allContents[t.filename] ?? '')}
+          />
+        )}
+        <MemoryMetaPanel
+          topic={topic}
+          hash={hash}
+          originSession={originSession}
+          onOpenSession={onOpenSession}
+          readOnly={readOnly}
+        />
+      </>
     ),
   };
 

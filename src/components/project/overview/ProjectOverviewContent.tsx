@@ -22,6 +22,7 @@ import { projectDisplayName } from '../shared/projectName';
 import { PlansSection } from '../plans/PlansSection';
 import { WorkflowsSection } from '../workflows/WorkflowsSection';
 import { TeamsSection } from '../teams/TeamsSection';
+import { MemoryGraphView } from '../memory/MemoryGraphView';
 import { ProjectConfigView } from '../settings/ProjectConfigView';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
@@ -291,6 +292,9 @@ export function ProjectView({
   // surfaces, and a toggle on the landing silently reshaping the full list is
   // the kind of cross-talk you only notice after it has confused you.
   const [memCardView, setMemCardView] = useState<'newest' | 'type'>('newest');
+  // Memory subtab layout: the list (filters/sort/group-by apply) or the graph of
+  // the relations the topics declare between each other via [[wikilinks]].
+  const [memLayout, setMemLayout] = useState<'list' | 'graph'>('list');
   const { data: memory } = useMemoryProject(project.hash);
   const { data: sessions = [] } = useSessionList(project.hash);
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath);
@@ -419,6 +423,13 @@ export function ProjectView({
   );
   const topicContent = (filename: string) =>
     memory?.topics[filename] ?? memory?.projectLevelTopics[filename] ?? '';
+  // Bodies of every topic, keyed by filename — the memory graph reads the
+  // [[wikilinks]] out of them. Already in the IPC payload, so this is a merge,
+  // not a read; memoized because it's the input of the graph build.
+  const memoryContents = useMemo(
+    () => ({ ...(memory?.topics ?? {}), ...(memory?.projectLevelTopics ?? {}) }),
+    [memory]
+  );
   const activeMemTag =
     memTagFilter && memTags.some(t => t.name === memTagFilter) ? memTagFilter : null;
   // Set of types actually present among topics — used by the "Group by Type" option.
@@ -1040,7 +1051,7 @@ export function ProjectView({
             <span className="ct">
               MEMORY.md · {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
             </span>
-            {memTopics.length > 1 && (
+            {memTopics.length > 1 && memLayout === 'list' && (
               <button
                 type="button"
                 className="cl-sort-toggle"
@@ -1051,87 +1062,124 @@ export function ProjectView({
                 <span aria-hidden>⇅</span>
               </button>
             )}
+            {memTopics.length > 1 && (
+              <div className="cl-seg cl-seg--paper" style={{ marginLeft: 'auto' }}>
+                <button
+                  type="button"
+                  className={memLayout === 'list' ? 'on' : ''}
+                  onClick={() => setMemLayout('list')}
+                >
+                  List
+                </button>
+                <button
+                  type="button"
+                  className={memLayout === 'graph' ? 'on' : ''}
+                  onClick={() => setMemLayout('graph')}
+                  title="Relations declared between memories via [[wikilinks]]"
+                >
+                  Graph
+                </button>
+              </div>
+            )}
           </div>
-          {(() => {
-            const showGroupBy = (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
-            if (memTags.length === 0 && !showGroupBy) return null;
-            return (
-              <div className="cl-mem-toolbar">
-                {memTags.length > 0 ? (
-                  <TagBar
-                    tags={memTags}
-                    counts={memTagCounts}
-                    activeTag={activeMemTag}
-                    totalCount={memTopics.length}
-                    onSelect={setMemTagFilter}
-                    onRename={renameMemTag}
-                    onDelete={deleteMemTag}
-                  />
-                ) : (
-                  <span />
-                )}
-                {showGroupBy && (
-                  <div className="cl-mem-groupby">
-                    <span className="lbl">Group by</span>
-                    <button
-                      type="button"
-                      className={`cl-tagbar-all${activeMemGroup === 'none' ? ' on' : ''}`}
-                      onClick={() => setMemGroupBy('none')}
-                    >
-                      None
-                    </button>
-                    {canGroupByTag && (
-                      <button
-                        type="button"
-                        className={`cl-tagbar-all${activeMemGroup === 'tag' ? ' on' : ''}`}
-                        onClick={() => setMemGroupBy('tag')}
-                      >
-                        Tag
-                      </button>
+          {memLayout === 'graph' ? (
+            <MemoryGraphView
+              topics={memTopics}
+              contents={memoryContents}
+              onOpenTopic={t =>
+                onNavigate({
+                  type: 'memory-topic',
+                  topic: t,
+                  content: topicContent(t.filename),
+                  hash: project.hash,
+                })
+              }
+            />
+          ) : (
+            <>
+              {(() => {
+                const showGroupBy =
+                  (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
+                if (memTags.length === 0 && !showGroupBy) return null;
+                return (
+                  <div className="cl-mem-toolbar">
+                    {memTags.length > 0 ? (
+                      <TagBar
+                        tags={memTags}
+                        counts={memTagCounts}
+                        activeTag={activeMemTag}
+                        totalCount={memTopics.length}
+                        onSelect={setMemTagFilter}
+                        onRename={renameMemTag}
+                        onDelete={deleteMemTag}
+                      />
+                    ) : (
+                      <span />
                     )}
-                    {canGroupByType && (
-                      <button
-                        type="button"
-                        className={`cl-tagbar-all${activeMemGroup === 'type' ? ' on' : ''}`}
-                        onClick={() => setMemGroupBy('type')}
-                      >
-                        Type
-                      </button>
+                    {showGroupBy && (
+                      <div className="cl-mem-groupby">
+                        <span className="lbl">Group by</span>
+                        <button
+                          type="button"
+                          className={`cl-tagbar-all${activeMemGroup === 'none' ? ' on' : ''}`}
+                          onClick={() => setMemGroupBy('none')}
+                        >
+                          None
+                        </button>
+                        {canGroupByTag && (
+                          <button
+                            type="button"
+                            className={`cl-tagbar-all${activeMemGroup === 'tag' ? ' on' : ''}`}
+                            onClick={() => setMemGroupBy('tag')}
+                          >
+                            Tag
+                          </button>
+                        )}
+                        {canGroupByType && (
+                          <button
+                            type="button"
+                            className={`cl-tagbar-all${activeMemGroup === 'type' ? ' on' : ''}`}
+                            onClick={() => setMemGroupBy('type')}
+                          >
+                            Type
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
-                )}
-              </div>
-            );
-          })()}
-          {memTopics.length === 0 ? (
-            <div className="cl-empty">No memory topics yet.</div>
-          ) : visibleMemTopics.length === 0 ? (
-            <div className="cl-empty">No topics match these filters.</div>
-          ) : activeMemGroup === 'none' ? (
-            <div className="cl-tile-grid cl-tile-grid--list">
-              {visibleMemTopics.map((t, i) => renderMemTile(t, i === 0 && !activeMemTag))}
-            </div>
-          ) : (
-            memGroups.map(g => (
-              <div key={g.key} className="cl-mem-group">
-                <div className="cl-mem-group-head">
-                  <span className="lbl">{g.label}</span>
-                  <span className="ct">{g.topics.length}</span>
-                </div>
+                );
+              })()}
+              {memTopics.length === 0 ? (
+                <div className="cl-empty">No memory topics yet.</div>
+              ) : visibleMemTopics.length === 0 ? (
+                <div className="cl-empty">No topics match these filters.</div>
+              ) : activeMemGroup === 'none' ? (
                 <div className="cl-tile-grid cl-tile-grid--list">
-                  {g.topics.map(t => renderMemTile(t, false))}
+                  {visibleMemTopics.map((t, i) => renderMemTile(t, i === 0 && !activeMemTag))}
                 </div>
-              </div>
-            ))
-          )}
-          {memPickerFor && (
-            <TagPicker
-              anchorRect={memPickerFor.rect}
-              allTags={memTags}
-              selected={tagsForMemory(memPickerFor.filename)}
-              onToggle={name => toggleTagOnMemory(memPickerFor.filename, name)}
-              onClose={() => setMemPickerFor(null)}
-            />
+              ) : (
+                memGroups.map(g => (
+                  <div key={g.key} className="cl-mem-group">
+                    <div className="cl-mem-group-head">
+                      <span className="lbl">{g.label}</span>
+                      <span className="ct">{g.topics.length}</span>
+                    </div>
+                    <div className="cl-tile-grid cl-tile-grid--list">
+                      {g.topics.map(t => renderMemTile(t, false))}
+                    </div>
+                  </div>
+                ))
+              )}
+              {memPickerFor && (
+                <TagPicker
+                  anchorRect={memPickerFor.rect}
+                  allTags={memTags}
+                  selected={tagsForMemory(memPickerFor.filename)}
+                  onToggle={name => toggleTagOnMemory(memPickerFor.filename, name)}
+                  onClose={() => setMemPickerFor(null)}
+                />
+              )}
+            </>
           )}
         </section>
       )}
