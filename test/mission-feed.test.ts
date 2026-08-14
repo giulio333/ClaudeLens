@@ -4,9 +4,11 @@ import {
   buildMissionFeed,
   buildTaskTimes,
   buildToolTimes,
+  buildWebActivity,
   countByKind,
   editStats,
   shortAgo,
+  webItemNote,
 } from '../src/components/project/terminal/mission-feed';
 import type { MissionFeedInput } from '../src/components/project/terminal/mission-feed';
 import type {
@@ -91,6 +93,7 @@ function input(over: Partial<MissionFeedInput> = {}): MissionFeedInput {
     agents: [],
     skills: [],
     memory: EMPTY_MEMORY,
+    web: [],
     changes: [],
     tasks: [],
     teams: [],
@@ -315,6 +318,203 @@ describe('mission feed — row copy', () => {
   });
 });
 
+/* ── WEB ──────────────────────────────────────────────────────────────── */
+
+/** A web call with a real result body (the shared `group` helper leaves it empty,
+ *  and every web outcome is read *from* the body). */
+function webCall(
+  id: string,
+  name: string,
+  toolInput: Record<string, unknown>,
+  result?: { content?: string; isError?: boolean }
+): ToolGroup {
+  return {
+    use: { type: 'tool_use', id, name, input: toolInput },
+    result: result
+      ? {
+          type: 'tool_result',
+          tool_use_id: id,
+          content: result.content ?? '',
+          isError: !!result.isError,
+        }
+      : null,
+  } as unknown as ToolGroup;
+}
+
+const PAGE = 'https://inginformatica.uniroma2.it/laurea/sessioni-triennale/';
+const REDIRECT = `REDIRECT DETECTED: The URL redirects to a different host.
+
+Original URL: https://docs.claude.com/en/docs/claude-code/skills
+Redirect URL: https://code.claude.com/docs/en/skills
+Status: 301 Moved Permanently`;
+const SEARCH_OK = `Web search results for query: "ccnl confapi 2026"
+
+Links: [{"title":"A","url":"https://www.pmi.it/a"},{"title":"B","url":"https://www.uilmnazionale.it/b"},{"title":"C","url":"https://confapi.org/c"},{"title":"D","url":"https://www.pmi.it/d"}]
+
+Synthesis.`;
+
+describe('mission feed — web activity', () => {
+  it('groups repeated calls of one URL into a single source row', () => {
+    const first = webCall(
+      'f1',
+      'WebFetch',
+      { url: PAGE, prompt: 'Riporta le date' },
+      { content: '# Dates' }
+    );
+    const second = webCall(
+      'f2',
+      'WebFetch',
+      { url: PAGE, prompt: 'Elenca i PDF' },
+      { content: '# PDFs' }
+    );
+    const other = webCall(
+      'f3',
+      'WebFetch',
+      { url: 'https://inginformatica.uniroma2.it/uploads/ComLauree.pdf', prompt: 'x' },
+      { content: '# Notice' }
+    );
+    const visits = buildWebActivity([first, second, other]);
+    expect(visits).toHaveLength(2);
+
+    const feed = buildMissionFeed(
+      input({
+        processed: [turn(3, [first, second]), turn(9, [other])],
+        ownTools: [first, second, other],
+        web: visits,
+      })
+    );
+    const page = feed.find(e => e.title === 'sessioni-triennale')!;
+    expect(page).toMatchObject({
+      kind: 'WEB',
+      right: 'FETCHED',
+      meta: 'inginformatica.uniroma2.it · ×2',
+      expandable: true,
+      danger: false,
+      at: T0 + 3 * 60_000,
+    });
+    // The full URL and the ask are the tooltip's job — the row can't hold them.
+    expect(page.hint).toContain('inginformatica.uniroma2.it/laurea/sessioni-triennale');
+    expect(page.hint).toContain('Riporta le date');
+    // Two calls of one source differ only in what they asked for, so the
+    // disclosure carries the ask, not the tool name twice.
+    expect(page.items.map(webItemNote)).toEqual(['Riporta le date', 'Elenca i PDF']);
+    // A second page of the same host is a second source, never a second call.
+    expect(feed.find(e => e.title === 'ComLauree.pdf')!.meta).toBe('inginformatica.uniroma2.it');
+  });
+
+  it('keeps one row for one page fetched under two spellings', () => {
+    // Verified on a real session: `…/settings` and `…/settings#plugin-settings`
+    // produced two rows the reader could not tell apart.
+    const plain = webCall(
+      'a1',
+      'WebFetch',
+      { url: 'https://code.claude.com/docs/en/settings', prompt: 'The whole page' },
+      { content: '# Settings' }
+    );
+    const anchored = webCall(
+      'a2',
+      'WebFetch',
+      { url: 'https://code.claude.com/docs/en/settings#plugin-settings', prompt: 'Just plugins' },
+      { content: '# Plugin settings' }
+    );
+    const feed = buildMissionFeed(
+      input({
+        processed: [turn(6, [plain, anchored])],
+        ownTools: [plain, anchored],
+        web: buildWebActivity([plain, anchored]),
+      })
+    );
+    expect(feed).toHaveLength(1);
+    expect(feed[0]).toMatchObject({ title: 'settings', meta: 'code.claude.com · ×2' });
+  });
+
+  it('says REDIRECT when nothing was read, and names where it was sent', () => {
+    const call = webCall(
+      'r1',
+      'WebFetch',
+      { url: 'https://docs.claude.com/en/docs/claude-code/skills', prompt: 'x' },
+      { content: REDIRECT }
+    );
+    const [event] = buildMissionFeed(
+      input({ processed: [turn(2, [call])], ownTools: [call], web: buildWebActivity([call]) })
+    );
+    expect(event).toMatchObject({ right: 'REDIRECT', rightTint: 'var(--cl-warn)', danger: false });
+    expect(event.meta).toBe('docs.claude.com · → code.claude.com');
+  });
+
+  it('reports a URL that redirected once and was read after as read', () => {
+    const bounced = webCall('r1', 'WebFetch', { url: PAGE, prompt: 'x' }, { content: REDIRECT });
+    const got = webCall('r2', 'WebFetch', { url: PAGE, prompt: 'x' }, { content: '# Page' });
+    const [event] = buildMissionFeed(
+      input({
+        processed: [turn(2, [bounced, got])],
+        ownTools: [bounced, got],
+        web: buildWebActivity([bounced, got]),
+      })
+    );
+    expect(event.right).toBe('FETCHED');
+    expect(event.meta).not.toContain('→');
+  });
+
+  it('carries a search by its query, its result count and its sources', () => {
+    const call = webCall('s1', 'WebSearch', { query: 'ccnl confapi 2026' }, { content: SEARCH_OK });
+    const [event] = buildMissionFeed(
+      input({ processed: [turn(4, [call])], ownTools: [call], web: buildWebActivity([call]) })
+    );
+    expect(event).toMatchObject({
+      kind: 'WEB',
+      title: 'ccnl confapi 2026',
+      right: '4 LINKS',
+      // Distinct hosts, two of them, `+N` for the rest — pmi.it appears twice.
+      meta: 'pmi.it · uilmnazionale.it · +1',
+      expandable: false,
+    });
+  });
+
+  it('marks the failures the is_error flag misses, and the calls still in flight', () => {
+    const dead = webCall(
+      'e1',
+      'WebSearch',
+      { query: 'jolokia cors' },
+      { content: 'Web search results for query: "jolokia cors"\n\nWeb search error: unavailable' }
+    );
+    const inFlight = webCall('p1', 'WebFetch', { url: 'https://x.it/slow', prompt: 'x' });
+    const feed = buildMissionFeed(
+      input({
+        processed: [turn(5, [dead, inFlight])],
+        ownTools: [dead, inFlight],
+        web: buildWebActivity([dead, inFlight]),
+      })
+    );
+    const search = feed.find(e => e.title === 'jolokia cors')!;
+    expect(search).toMatchObject({ right: 'FAILED', danger: true });
+    expect(search.meta).toBe('web search · unavailable');
+    expect(feed.find(e => e.title === 'slow')!.right).toBe('PENDING');
+  });
+
+  it('titles a root URL with its host and does not repeat it in the meta', () => {
+    const call = webCall(
+      'h1',
+      'WebFetch',
+      { url: 'https://www.githubstatus.com', prompt: 'Is GitHub up?' },
+      { content: 'All systems operational' }
+    );
+    const [event] = buildMissionFeed(
+      input({ processed: [turn(1, [call])], ownTools: [call], web: buildWebActivity([call]) })
+    );
+    expect(event.title).toBe('githubstatus.com');
+    expect(event.meta).toBe('');
+  });
+
+  it('ignores a web call whose defining input is missing, and every other tool', () => {
+    expect(buildWebActivity([webCall('x1', 'WebFetch', {}, { content: 'x' })])).toEqual([]);
+    expect(
+      buildWebActivity([webCall('x2', 'Read', { file_path: '/a' }, { content: 'x' })])
+    ).toEqual([]);
+    expect(webItemNote(webCall('x3', 'Read', { file_path: '/a' }))).toBe('');
+  });
+});
+
 describe('mission feed — filters', () => {
   it('counts every species so the pills can carry the old eyebrow numbers', () => {
     const write = group('w', 'Write', { file_path: '/Users/dev/proj/a.ts', content: 'x' });
@@ -332,6 +532,7 @@ describe('mission feed — filters', () => {
       TEAMS: 1,
       SKILLS: 0,
       MEMORY: 0,
+      WEB: 0,
       CHANGES: 1,
       TASKS: 1,
     });
