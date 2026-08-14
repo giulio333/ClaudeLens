@@ -52,6 +52,18 @@
   /* shared editorial gutter (hero / section horizontal padding) */
   --cl-gutter: clamp(32px, 5.5vw, 80px);
 
+  /* Radii, as the design system declares them. These were referenced before
+     they were ever defined (.cl-plan-card and .cl-ask-card ask for
+     --cl-r-card), and an undefined var makes the whole declaration invalid at
+     computed-value time — so those cards have been rendering square, not
+     rounded. Declaring them here fixes those two and gives the card surfaces
+     a token instead of a repeated literal. */
+  --cl-r-pill: 999px;
+  --cl-r-btn: 12px;
+  --cl-r-card: 16px;
+  --cl-r-popover: 12px;
+  --cl-r-tile: 8px;
+
   /* legacy tokens kept for the not-yet-migrated dark "deep" views (chat,
      detail, modals) and prose-lens — do not remove until those migrate. */
   --bg-deep: #0d0f14;
@@ -421,11 +433,17 @@ body {
   gap: 12px;
 }
 
-/* ── LENS · search trigger button (top right) ── */
+/* ── LENS · search trigger (top right) ──────────────────────────────────
+   A pill that names itself (design 1a): lens + placeholder + the ⌘F chip.
+   It stays the app's ONE search entry — 1a draws it inside the hero, but the
+   mock has no top bar, and a second trigger for the same popover is exactly
+   what was removed from the project rail. Below 1080px the label and the chip
+   drop and it collapses back to the 28px lens: the pill would otherwise eat
+   the nav's breathing room in a narrow window. */
 .cl-lens-btn {
-  width: 28px;
   height: 28px;
-  border-radius: 50%;
+  padding: 0 8px 0 11px;
+  border-radius: var(--cl-r-pill);
   border: 1px solid oklch(1 0 0 / 0.35);
   background: oklch(1 0 0 / 0.18);
   -webkit-backdrop-filter: blur(18px) saturate(1.8);
@@ -433,6 +451,7 @@ body {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  gap: 8px;
   color: var(--cl-ink-3);
   cursor: pointer;
   transition:
@@ -447,19 +466,59 @@ body {
 .cl-lens-btn svg {
   width: 14px;
   height: 14px;
+  flex: none;
+}
+.cl-lens-btn .ph {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1;
+  color: var(--cl-ink-3);
+  white-space: nowrap;
+}
+.cl-lens-btn .kbd {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-4);
+  padding: 3px 5px;
+  border: 1px solid var(--cl-line);
+  border-radius: 5px;
+  flex: none;
 }
 .cl-lens-btn:hover {
   color: var(--cl-accent-ink);
   background: oklch(0.95 0.04 40 / 0.55);
   border-color: oklch(0.55 0.18 40 / 0.4);
 }
+.cl-lens-btn:hover .ph {
+  color: var(--cl-accent-ink);
+}
+/* Open state tints rather than fills: a solid terracotta bar 230px wide would
+   be the loudest thing in the chrome, and the popover under it already says
+   the search is open. */
 .cl-lens-btn.on {
-  color: var(--cl-on-accent);
-  background: linear-gradient(180deg, oklch(0.62 0.22 40), oklch(0.48 0.22 40));
-  border-color: oklch(0.46 0.22 40);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.45),
-    0 4px 10px -3px oklch(0.45 0.2 40 / 0.45);
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+  border-color: var(--cl-accent);
+}
+.cl-lens-btn.on .ph {
+  color: var(--cl-accent-ink);
+}
+.cl-lens-btn.on .kbd {
+  border-color: var(--cl-accent);
+  color: var(--cl-accent-ink);
+}
+@media (max-width: 1080px) {
+  .cl-lens-btn {
+    width: 28px;
+    padding: 0;
+    border-radius: 50%;
+  }
+  .cl-lens-btn .ph,
+  .cl-lens-btn .kbd {
+    display: none;
+  }
 }
 :root[data-theme='dark'] .cl-lens-btn {
   background: oklch(1 0 0 / 0.08);
@@ -7246,6 +7305,90 @@ body {
   letter-spacing: 0.02em;
 }
 
+/* ── Global home variant (design 1a) ──────────────────────────────────────
+   The figure leads and the label sits under it. Elsewhere the strip labels
+   a list that follows it, so the label goes first; here the four numbers ARE
+   the statement, and putting them on one line of digits lets the row be read
+   across before it is read down. The qualifiers ($, the unit, the cents) are
+   the same display face at half height instead of the mono footnote used by
+   the label-first strips — flush against the figure, so "$99.78" stays one
+   number rather than three tokens. */
+.cl-stats--home .cl-stat .num {
+  margin-top: 0;
+}
+.cl-stats--home .cl-stat .lbl {
+  display: flex;
+  margin-top: 10px;
+  font-size: 10.5px;
+  letter-spacing: 0.2em;
+  color: var(--cl-ink-4);
+}
+.cl-stats--home .cl-stat:last-child .lbl {
+  color: oklch(0.72 0.006 80);
+}
+.cl-stats--home .cl-stat .num small {
+  font-family: var(--font-sans);
+  font-size: 26px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink-3);
+  margin-left: 0;
+}
+.cl-stats--home .cl-stat--live .num {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+}
+.cl-stats--home .cl-stat--live .dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--cl-ok);
+  flex: none;
+}
+
+@media (max-width: 980px) {
+  .cl-stats--home .cl-stat {
+    padding: 20px 18px 22px;
+  }
+  .cl-stats--home .cl-stat .num {
+    font-size: 36px;
+  }
+  .cl-stats--home .cl-stat .num small {
+    font-size: 18px;
+  }
+}
+
+/* ── Global home section rhythm (design 1a) ───────────────────────────────
+   The rule belongs to the heading, not to the list. Everywhere else in the
+   app the ink rule sits on top of the list (.cl-proc-list / .cl-tile-grid /
+   .cl-row), which the shared .cl-sec-head's 24px gap detaches from the title
+   it is supposed to underline; 1a hugs it at 12px so head + rule read as one
+   masthead per block. With that rule carrying the separation, .cl-section's
+   closing hairline becomes a third line between two blocks, and the strip's
+   own bottom rule a fourth — both come off. Rows close with a hairline
+   instead of opening with one, so the last row is still shut before the
+   pager. All of it is scoped to the home: the rest of the app keeps the
+   list-top rule it was drawn with. */
+.cl-ghome .cl-sec-head {
+  border-bottom: 1.5px solid var(--cl-ink);
+  padding-bottom: 12px;
+  margin-bottom: 20px;
+}
+.cl-ghome .cl-section {
+  border-bottom: none;
+}
+.cl-ghome .cl-stats {
+  border-bottom: none;
+}
+.cl-ghome .cl-proc-list {
+  border-top: none;
+}
+.cl-ghome .cl-row {
+  border-top: none;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+
 /* ════════════════════════════════════════════════════════════════════════
    SECTION (generic editorial)
    ════════════════════════════════════════════════════════════════════════ */
@@ -10630,6 +10773,93 @@ button.cl-sw-member:focus-visible,
 }
 .cl-tile-grid--list {
   grid-template-columns: 1fr;
+}
+/* ── Card variant (design 1a, the global home's Configuration) ────────────
+   Bordered rounded cards on a 3-up grid instead of the hairline-divided
+   two-column list. The meta leaves the third column and sits under the
+   description: on a card the figure belongs to the thing it describes, while
+   as a right-hand column it read as a table cell. The description drops the
+   mono face for the same reason — a card is a small piece of prose, and mono
+   was the list's device for keeping two columns of text aligned. */
+.cl-tile-grid--cards {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 14px;
+  border-top: none;
+  border-bottom: none;
+}
+.cl-tile-grid--cards .cl-tile,
+.cl-tile-grid--cards .cl-tile:nth-child(odd),
+.cl-tile-grid--cards .cl-tile:nth-child(even) {
+  grid-template-columns: 36px 1fr;
+  gap: 14px;
+  padding: 18px;
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-card);
+  background: var(--cl-paper);
+}
+.cl-tile-grid--cards .cl-tile.accent,
+.cl-tile-grid--cards .cl-tile.accent:nth-child(odd) {
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
+}
+/* Hover lifts the edge, it does not wash the surface: the shared .cl-tile
+   hover is an accent tint, and on this grid that made a hovered neutral card
+   read as the accent card. Here the accent fill means "this one is different",
+   so hover has to say something else. */
+.cl-tile-grid--cards .cl-tile:hover {
+  background: var(--cl-paper);
+  border-color: var(--cl-accent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  box-shadow: 0 6px 18px -10px oklch(0.2 0.015 60 / 0.35);
+}
+.cl-tile-grid--cards .cl-tile.accent:hover {
+  background: var(--cl-accent-soft);
+  border-color: var(--cl-accent-ink);
+  box-shadow:
+    inset 0 1px 0 var(--cl-glass-highlight),
+    0 6px 18px -10px oklch(0.2 0.015 60 / 0.35);
+}
+.cl-tile-grid--cards .cl-tile .glyph {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--cl-r-tile);
+  border: 1px solid var(--cl-line);
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--cl-ink-2);
+}
+.cl-tile-grid--cards .cl-tile.accent .glyph {
+  border-color: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+.cl-tile-grid--cards .cl-tile .t-name {
+  font-size: 17px;
+}
+.cl-tile-grid--cards .cl-tile .t-desc {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  line-height: 1.6;
+}
+.cl-tile-grid--cards .cl-tile .t-meta {
+  display: block;
+  margin-top: 10px;
+  white-space: normal;
+}
+.cl-tile-grid--cards .cl-tile.accent .t-meta,
+.cl-tile-grid--cards .cl-tile.accent .t-meta b {
+  color: var(--cl-accent-ink);
+}
+@media (max-width: 1180px) {
+  .cl-tile-grid--cards {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+@media (max-width: 760px) {
+  .cl-tile-grid--cards {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 .cl-tile-grid--list .cl-tile {
   padding: 22px 0;

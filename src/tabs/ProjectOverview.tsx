@@ -743,6 +743,8 @@ export default function ProjectOverview() {
             title="Search"
           >
             <LensTriggerIcon />
+            <span className="ph">Search projects, sessions…</span>
+            <span className="kbd">⌘F</span>
           </button>
           <button
             className="cl-theme-toggle"
