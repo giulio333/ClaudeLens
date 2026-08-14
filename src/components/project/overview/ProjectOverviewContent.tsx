@@ -215,6 +215,13 @@ function Bars({ buckets, metric }: { buckets: TimelineBucket[]; metric: StatMetr
 }
 
 const MEM_PREVIEW_MAX = 70;
+// The landing's index cards give the preview three lines of prose instead of a
+// single mono line, so they get a longer slice of the same cleaned text.
+const MEM_CARD_PREVIEW_MAX = 190;
+/** How many sessions and memory topics the project landing shows before
+ *  handing over to the subtab (design 1c: three rows, two rows of cards). */
+const LANDING_SESSIONS = 3;
+const LANDING_MEM_CARDS = 6;
 
 const CLAUDE_MD_SCOPE_LABEL: Record<'global' | 'project' | 'local' | 'subdir', string> = {
   project: 'Project',
@@ -223,8 +230,8 @@ const CLAUDE_MD_SCOPE_LABEL: Record<'global' | 'project' | 'local' | 'subdir', s
   global: 'Global',
 };
 
-// Ripulisce la sintassi markdown e tronca per un'anteprima pulita su una riga.
-function memPreview(raw: string): string {
+// Ripulisce la sintassi markdown e tronca per un'anteprima pulita.
+function memPreview(raw: string, max: number = MEM_PREVIEW_MAX): string {
   const clean = raw
     .replace(/```[\s\S]*?```/g, ' ') // blocchi di codice
     .replace(/`([^`]+)`/g, '$1') // codice inline
@@ -235,7 +242,7 @@ function memPreview(raw: string): string {
     .replace(/[*_~>#]/g, '') // enfasi e marcatori
     .replace(/\s+/g, ' ') // collassa whitespace
     .trim();
-  return clean.length > MEM_PREVIEW_MAX ? clean.slice(0, MEM_PREVIEW_MAX).trimEnd() + '…' : clean;
+  return clean.length > max ? clean.slice(0, max).trimEnd() + '…' : clean;
 }
 
 export function ProjectView({
@@ -279,6 +286,11 @@ export function ProjectView({
   const [memPickerFor, setMemPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(
     null
   );
+  // The landing's card grid has its own two-state view control, kept apart from
+  // the subtab's sort + group-by: they read the same topics but are different
+  // surfaces, and a toggle on the landing silently reshaping the full list is
+  // the kind of cross-talk you only notice after it has confused you.
+  const [memCardView, setMemCardView] = useState<'newest' | 'type'>('newest');
   const { data: memory } = useMemoryProject(project.hash);
   const { data: sessions = [] } = useSessionList(project.hash);
   const { data: claudeMd } = useClaudeMdHierarchy(project.realPath);
@@ -529,6 +541,88 @@ export function ProjectView({
     );
   };
 
+  // ── Project landing (design 1c) ──
+  // One session list, pins first: they no longer have a section of their own,
+  // so putting them at the head of the three is what keeps a pinned — and
+  // therefore possibly old — conversation reachable from the landing.
+  const landingSessions = useMemo(
+    () => [...pinnedSessions, ...unpinnedSessions].slice(0, LANDING_SESSIONS),
+    [pinnedSessions, unpinnedSessions]
+  );
+  const landingMemTopics = useMemo(
+    () =>
+      [...memTopics]
+        .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
+        .slice(0, LANDING_MEM_CARDS),
+    [memTopics]
+  );
+  const landingMemGroups = useMemo(() => {
+    if (memCardView !== 'type') return [];
+    return (['project', 'reference', 'feedback', 'user'] as const)
+      .map(ty => ({ key: ty, label: ty, topics: landingMemTopics.filter(t => t.type === ty) }))
+      .filter(g => g.topics.length > 0);
+  }, [memCardView, landingMemTopics]);
+  // "12 topics · 5 reference · 4 feedback" — the total, then the two commonest
+  // kinds. A full breakdown runs past the section head on any real memory, and
+  // the two that dominate are what says what this project remembers.
+  const memTypeBreakdown = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const t of memTopics) counts.set(t.type, (counts.get(t.type) ?? 0) + 1);
+    return [...counts.entries()]
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 2)
+      .map(([type, n]) => `${n} ${type}`);
+  }, [memTopics]);
+  const renderMemCard = (t: MemoryTopic, accent: boolean) => {
+    const tTags = tagsForMemory(t.filename);
+    const open = () =>
+      onNavigate({
+        type: 'memory-topic',
+        topic: t,
+        content: topicContent(t.filename),
+        hash: project.hash,
+      });
+    return (
+      <div
+        key={t.filename}
+        role="button"
+        tabIndex={0}
+        className={`cl-mcard${accent ? ' accent' : ''}`}
+        title={t.description || t.name}
+        onClick={open}
+        onKeyDown={e => {
+          if (e.key === 'Enter' || e.key === ' ') {
+            e.preventDefault();
+            open();
+          }
+        }}
+      >
+        <div className="head">
+          <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
+          <span className="kind">{t.type}</span>
+          {t.createdAt && <span className="when">{relIso(t.createdAt)}</span>}
+        </div>
+        <div className="name">{t.name}</div>
+        <p className="preview">
+          {t.description ? memPreview(t.description, MEM_CARD_PREVIEW_MAX) : '—'}
+        </p>
+        {tTags.length > 0 && (
+          <div className="tags">
+            {tTags.map(name => (
+              <TagChip
+                key={name}
+                name={name}
+                tone="soft"
+                variant="plain"
+                style={{ fontSize: 10, height: 18 }}
+              />
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const enabledMcp = useMemo(() => {
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])];
     return all.filter(s => !s.disabledProjectPaths.includes(project.realPath));
@@ -715,29 +809,64 @@ export function ProjectView({
       {/* ─── SECTION CONTENT ──────────────────────────── */}
       {section === 'overview' && (
         <>
-          {/* Nothing pinned = no section (PinnedSessionsSection returns null). */}
-          <PinnedSessionsSection
-            sessions={pinnedSessions}
-            projectHash={project.hash}
-            cleanupDays={cleanupDays}
-            onOpen={openTerminal}
-            onOpenChat={openChat}
-            rankOf={s => sessionRank.get(s.filename) ?? 0}
-          />
-
-          <RecentSessionsStrip
-            sessions={unpinnedSessions}
-            total={sessions.length}
-            onOpen={openTerminal}
-            onViewAll={() => onNavigate({ type: 'sessions', project })}
-          />
+          {/* One session block, not two (design 1c): the pinned section and the
+              thinner "Recent" strip were the same list read twice, and the strip
+              had to drop pins, tags and the figure cluster to justify sitting
+              under a section that carried them. Three full rows instead, pins
+              first, with the caption saying how many pins the history holds. */}
+          <section className="cl-section">
+            <div className="cl-sec-head">
+              <h2>Sessions</h2>
+              <span className="ct">
+                {hasPinnedSession ? `${pinnedSessions.length} pinned · ` : ''}
+                {fmt(sessions.length)} total
+              </span>
+              <button
+                className="all"
+                type="button"
+                onClick={() => onNavigate({ type: 'sessions', project })}
+              >
+                View all
+              </button>
+            </div>
+            {/* SessionRows prints its own "No sessions yet." empty state. */}
+            <SessionRows
+              sessions={landingSessions}
+              projectHash={project.hash}
+              cleanupDays={cleanupDays}
+              onOpen={openTerminal}
+              onOpenChat={openChat}
+              rankOf={s => sessionRank.get(s.filename) ?? 0}
+            />
+          </section>
 
           <section className="cl-section">
             <div className="cl-sec-head">
               <h2>Memory</h2>
               <span className="ct">
-                {Math.min(4, memTopics.length)} of {memoryCount}
+                {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
+                {memTypeBreakdown.length > 0 && ` · ${memTypeBreakdown.join(' · ')}`}
               </span>
+              {memTopics.length > 1 && (
+                <div className="cl-seg cl-seg--paper" role="group" aria-label="Memory view">
+                  <button
+                    type="button"
+                    className={memCardView === 'newest' ? 'on' : ''}
+                    aria-pressed={memCardView === 'newest'}
+                    onClick={() => setMemCardView('newest')}
+                  >
+                    Newest
+                  </button>
+                  <button
+                    type="button"
+                    className={memCardView === 'type' ? 'on' : ''}
+                    aria-pressed={memCardView === 'type'}
+                    onClick={() => setMemCardView('type')}
+                  >
+                    By type
+                  </button>
+                </div>
+              )}
               <button
                 className="all"
                 type="button"
@@ -746,17 +875,23 @@ export function ProjectView({
                 View all
               </button>
             </div>
-            <MemoryRows
-              topics={memTopics.slice(0, 4)}
-              onOpen={t =>
-                onNavigate({
-                  type: 'memory-topic',
-                  topic: t,
-                  content: topicContent(t.filename),
-                  hash: project.hash,
-                })
-              }
-            />
+            {landingMemTopics.length === 0 ? (
+              <div className="cl-empty">No memory topics yet.</div>
+            ) : memCardView === 'newest' ? (
+              <div className="cl-mem-cards">
+                {landingMemTopics.map((t, i) => renderMemCard(t, i === 0))}
+              </div>
+            ) : (
+              landingMemGroups.map(g => (
+                <div key={g.key} className="cl-mem-group">
+                  <div className="cl-mem-group-head">
+                    <span className="lbl">{g.label}</span>
+                    <span className="ct">{g.topics.length}</span>
+                  </div>
+                  <div className="cl-mem-cards">{g.topics.map(t => renderMemCard(t, false))}</div>
+                </div>
+              ))
+            )}
           </section>
 
           <section className="cl-section">
@@ -1442,68 +1577,6 @@ function PinnedSessionsSection({
   );
 }
 
-/** The landing page's jumping-off point into the session history — deliberately
- *  thinner than `SessionRows`. That row carries pin, index, tags, the figure
- *  cluster and hover actions; repeating it here made the landing a shorter copy
- *  of the Sessions subtab, which the rail is one click away from. What is left
- *  is what you scan for on a landing page: which conversation, is it running,
- *  when. Everything else stays one click deeper. */
-function RecentSessionsStrip({
-  sessions,
-  total,
-  count = 4,
-  onOpen,
-  onViewAll,
-}: {
-  sessions: SessionSummary[];
-  /** The whole history, for the "N of M" caption — `sessions` excludes pins. */
-  total: number;
-  count?: number;
-  onOpen: (s: SessionSummary) => void;
-  onViewAll: () => void;
-}) {
-  const { data: activeSessions = [] } = useActiveSessions();
-  const liveIds = useMemo(
-    () => new Set(activeSessions.map(a => a.sessionId).filter(Boolean)),
-    [activeSessions]
-  );
-  if (sessions.length === 0) return null;
-  const shown = sessions.slice(0, count);
-
-  return (
-    <section className="cl-section">
-      <div className="cl-sec-head">
-        <h2>Recent</h2>
-        <span className="ct">
-          {shown.length} of {total}
-        </span>
-        <button className="all" type="button" onClick={onViewAll}>
-          View all
-        </button>
-      </div>
-      <div className="cl-mrows">
-        {shown.map(s => {
-          const live = liveIds.has(s.filename.replace(/\.jsonl$/, ''));
-          return (
-            <button
-              key={s.filename}
-              type="button"
-              className="cl-mrow"
-              onClick={() => onOpen(s)}
-              title={sessionTitle(s)}
-            >
-              <span className="title">{sessionTitle(s)}</span>
-              {live && <LiveTag />}
-              <span className="lead" aria-hidden />
-              <span className="when">{relIso(s.date)} ago</span>
-            </button>
-          );
-        })}
-      </div>
-    </section>
-  );
-}
-
 type SessionRowProps = {
   session: SessionSummary;
   rank: number;
@@ -1777,33 +1850,6 @@ function SessionRows({
           onDeleted={() => setDeleteFor(null)}
         />
       )}
-    </div>
-  );
-}
-
-function MemoryRows({
-  topics,
-  onOpen,
-}: {
-  topics: {
-    name: string;
-    description: string;
-    type: string;
-    filename: string;
-    updatedAt: string;
-  }[];
-  onOpen: (t: any) => void;
-}) {
-  if (topics.length === 0) return <div className="cl-empty">No memory topics yet.</div>;
-  return (
-    <div className="cl-mem">
-      {topics.map(t => (
-        <div key={t.filename} className="cl-mem-row" onClick={() => onOpen(t)}>
-          <div className="key">{t.name}</div>
-          <div className="val">{t.description ? memPreview(t.description) : '—'}</div>
-          <div className="when">{relIso(t.updatedAt)}</div>
-        </div>
-      ))}
     </div>
   );
 }
