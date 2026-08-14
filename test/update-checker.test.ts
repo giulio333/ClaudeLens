@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   compareVersions,
+  parseClaudeCliVersion,
   parseLatestRelease,
   RELEASES_PAGE_URL,
 } from '../electron/modules/update-checker';
@@ -78,5 +79,26 @@ describe('parseLatestRelease', () => {
   it('normalizes a blank release name to null', () => {
     const info = parseLatestRelease({ tag_name: 'v2.2.0', name: '  ' }, '2.1.5');
     expect(info!.releaseName).toBeNull();
+  });
+});
+
+describe('parseClaudeCliVersion', () => {
+  it('reads the version out of `claude --version`', () => {
+    expect(parseClaudeCliVersion('2.1.232 (Claude Code)\n')).toBe('2.1.232');
+    expect(parseClaudeCliVersion('  2.1.232 (Claude Code)  ')).toBe('2.1.232');
+    expect(parseClaudeCliVersion('2.2.0-beta.1 (Claude Code)')).toBe('2.2.0-beta.1');
+  });
+
+  it('returns null when the output carries no version', () => {
+    expect(parseClaudeCliVersion('')).toBeNull();
+    expect(parseClaudeCliVersion('command not found: claude')).toBeNull();
+  });
+
+  it('feeds a comparison that flags an outdated CLI', () => {
+    const installed = parseClaudeCliVersion('2.1.190 (Claude Code)')!;
+    expect(compareVersions(installed, '2.1.232')).toBeLessThan(0);
+    expect(
+      compareVersions(parseClaudeCliVersion('2.2.0 (Claude Code)')!, '2.1.232')
+    ).toBeGreaterThan(0);
   });
 });

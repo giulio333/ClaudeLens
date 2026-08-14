@@ -79,6 +79,17 @@ export function checkForUpdates(currentVersion: string): Promise<UpdateInfo> {
   });
 }
 
+/**
+ * Pull the version out of `claude --version`, whose output is a single line
+ * like `2.1.232 (Claude Code)`. Parsed defensively (the format is the CLI's,
+ * not a contract): anything that doesn't start with a `x.y` number returns
+ * null, so the caller says "unknown" instead of comparing against garbage.
+ */
+export function parseClaudeCliVersion(stdout: string): string | null {
+  const m = /(\d+\.\d+(?:\.\d+)?(?:-[0-9A-Za-z.-]+)?)/.exec((stdout || '').trim());
+  return m ? m[1] : null;
+}
+
 function fetchLatestRelease(): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const req = https.request(
