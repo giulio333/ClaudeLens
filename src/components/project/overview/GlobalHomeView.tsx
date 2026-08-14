@@ -61,6 +61,26 @@ export function GlobalHomeView({
     return m;
   }, [costSummary]);
 
+  // The figures strip totals the whole install, not the pinned shortlist below
+  // it: it answers "how much has all of this cost", which is the one question
+  // the home could not answer before.
+  const totals = useMemo(() => {
+    let tokens = 0;
+    let cost = 0;
+    for (const c of (costSummary as ProjectCost[] | undefined) ?? []) {
+      tokens += c.totalTokens;
+      cost += c.cost;
+    }
+    // Split on the rounded string so the dollars and the cents can never
+    // disagree (0.999 must not print as "$0" + ".00").
+    const [whole, cents] = cost.toFixed(2).split('.');
+    return {
+      tokens: formatTokens(tokens),
+      spendWhole: Number(whole).toLocaleString('en-US'),
+      spendCents: `.${cents}`,
+    };
+  }, [costSummary]);
+
   // The home lists pinned projects only — the full list lives in the lens
   // (⌘F). With nothing pinned there is no section at all, so this doubles as
   // the section's mount guard.
@@ -97,7 +117,7 @@ export function GlobalHomeView({
   const claudeMdLines = (globalClaudeMd ?? '').split('\n').length;
 
   return (
-    <div style={{ position: 'relative' }}>
+    <div className="cl-ghome" style={{ position: 'relative' }}>
       {/* ─── HERO ─────────────────────────────────────── */}
       <section className="cl-hero">
         <Lens />
@@ -131,6 +151,38 @@ export function GlobalHomeView({
           </span>
         </div>
       </section>
+
+      {/* ─── FIGURES STRIP ────────────────────────────── */}
+      <div className="cl-stats cl-stats--home">
+        <div className="cl-stat">
+          <div className="num">{allProjects.length}</div>
+          <div className="lbl">Projects</div>
+        </div>
+        <div className="cl-stat">
+          <div className="num">
+            {totals.tokens.value}
+            {totals.tokens.unit && <small>{totals.tokens.unit}</small>}
+          </div>
+          <div className="lbl">Tokens</div>
+        </div>
+        <div className="cl-stat">
+          <div className="num">
+            <small>$</small>
+            {totals.spendWhole}
+            <small>{totals.spendCents}</small>
+          </div>
+          <div className="lbl">Spend</div>
+        </div>
+        <div className="cl-stat cl-stat--live">
+          <div className="num">
+            <span>{procs.length}</span>
+            {/* No pulse with nothing running — a halo around a zero would be
+                the loudest thing on the strip and it would mean nothing. */}
+            {procs.length > 0 && <span className="dot cl-live-dot" />}
+          </div>
+          <div className="lbl">Live now</div>
+        </div>
+      </div>
 
       {/* ─── DUPLICATE PROJECTS (segnale compatto) ────── */}
       <DuplicateProjectsBadge onNavigate={onNavigate} />
@@ -318,7 +370,10 @@ export function GlobalHomeView({
           <h2>Configuration</h2>
           <span className="ct">shared across all projects</span>
         </div>
-        <div className="cl-tile-grid">
+        {/* Cards, not the hairline list: on a card the count belongs under the
+            sentence it qualifies, so `.t-meta` moves inside the text column
+            instead of standing as a right-hand table cell. */}
+        <div className="cl-tile-grid cl-tile-grid--cards">
           <button
             type="button"
             className="cl-tile accent"
@@ -330,16 +385,16 @@ export function GlobalHomeView({
               <div className="t-desc">
                 Global instructions injected into every Claude Code session.
               </div>
+              <span className="t-meta">
+                {globalClaudeMd ? (
+                  <>
+                    <b>{claudeMdLines}</b> lines
+                  </>
+                ) : (
+                  'not set'
+                )}
+              </span>
             </div>
-            <span className="t-meta">
-              {globalClaudeMd ? (
-                <>
-                  <b>{claudeMdLines}</b> lines
-                </>
-              ) : (
-                'not set'
-              )}
-            </span>
           </button>
           <button
             type="button"
@@ -352,10 +407,10 @@ export function GlobalHomeView({
               <div className="t-desc">
                 Reusable, invocable behaviors available to every project.
               </div>
+              <span className="t-meta">
+                <b>{skills.length}</b> skills
+              </span>
             </div>
-            <span className="t-meta">
-              <b>{skills.length}</b> skills
-            </span>
           </button>
           <button
             type="button"
@@ -366,10 +421,10 @@ export function GlobalHomeView({
             <div>
               <div className="t-name">Agents</div>
               <div className="t-desc">Specialized sub-agents available to delegate to.</div>
+              <span className="t-meta">
+                <b>{agents.length}</b> agents
+              </span>
             </div>
-            <span className="t-meta">
-              <b>{agents.length}</b> agents
-            </span>
           </button>
           <button
             type="button"
@@ -382,20 +437,20 @@ export function GlobalHomeView({
               <div className="t-desc">
                 Model Context Protocol integrations, shared across projects.
               </div>
+              <span className="t-meta">
+                <b>{mcpServers.length}</b> servers
+              </span>
             </div>
-            <span className="t-meta">
-              <b>{mcpServers.length}</b> servers
-            </span>
           </button>
           <button type="button" className="cl-tile" onClick={() => onNavigate({ type: 'plugins' })}>
             <span className="glyph">P</span>
             <div>
               <div className="t-name">Plugins</div>
               <div className="t-desc">Skills, agents & commands installed from marketplaces.</div>
+              <span className="t-meta">
+                <b>{plugins.length}</b> plugins
+              </span>
             </div>
-            <span className="t-meta">
-              <b>{plugins.length}</b> plugins
-            </span>
           </button>
         </div>
       </section>

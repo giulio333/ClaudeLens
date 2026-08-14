@@ -299,6 +299,62 @@ c'è più di una pagina. Nota per gli screenshot: `screenshotFixtures.ts` semina
 già un pin (`cl-pinned-projects`), quindi SCREENSHOT_MODE continua a mostrare la
 sezione.
 
+**Fascia cifre sotto l'hero — design handoff _Global Home varianti_, opzione 1a.**
+Tra l'hero e la prima sezione c'è una striscia di 4 celle
+(`.cl-stats.cl-stats--home`): Projects · Tokens · Spend · **Live now**, con
+l'ultima cella come **slab scuro fisso in entrambi i temi** (il trattamento che
+`.cl-stat:last-child` già portava) e il dot sage `.cl-live-dot` a fianco della
+cifra. Riusa l'anatomia `.cl-stats`/`.cl-stat` che vive in `index.css` da
+Studio/Agents Live; il modificatore `--home` cambia una cosa sola: la **cifra
+viene prima e la label sotto**, perché qui i quattro numeri _sono_ l'affermazione
+e vanno letti prima per riga e poi per colonna, mentre le altre strisce
+etichettano una lista che le segue. I qualificatori (`$`, l'unità, i centesimi)
+sono lo stesso display face a metà altezza e **a filo** della cifra, così
+`$99.78` resta un numero e non tre token — la nota mono di `.cl-stat .num small`
+li avrebbe staccati.
+I totali sono su **tutto l'install** (somma di `cost:getSummary`), non sulla
+shortlist pinnata sotto: Tokens e Spend sono la sola risposta della home a
+"quanto è costato tutto questo", che prima non stava da nessuna parte. Projects
+e Live now ripetono di proposito due cifre della meta-riga dell'hero — è il
+ritmo editoriale del mock (frase d'inventario → strato numerico), non una svista.
+Con nessun processo vivo il dot **non pulsa**: un alone attorno a uno zero
+sarebbe l'elemento più urlato della striscia senza significare nulla.
+
+**Configuration a card + ritmo delle sezioni.** Sempre da 1a, la sezione
+Configuration non è più la lista a due colonne divisa da hairline: è una
+**griglia 3-up di card bordate** (`.cl-tile-grid--cards`, un modificatore di
+`.cl-tile-grid` — la lista resta il default per Skills, Plugins, memoria,
+CLAUDE.md e tutti gli altri usi). Sulla card il conteggio **scende sotto la
+descrizione** invece di stare nella terza colonna: appartiene alla frase che
+qualifica, e da colonna destra leggeva come una cella di tabella. Per la stessa
+ragione la descrizione perde il mono — quello era il device della lista per
+tenere allineate due colonne di testo, su una card è solo prosa breve. Glifo:
+tile arrotondata `--cl-r-tile`, piena accent sulla prima card.
+Il resto del corpo home è scopato sotto **`.cl-ghome`**: il filetto d'inchiostro
+**risale sotto la testata** (1.5px, 12px sotto il titolo) invece di stare in
+cima alla lista, dove i 24px di `.cl-sec-head` lo staccavano dal titolo che
+dovrebbe sottolineare. Con quel filetto a portare la separazione, la hairline di
+chiusura di `.cl-section` e quella della striscia cifre diventano una terza e
+una quarta riga fra due blocchi e vengono spente; le righe pinnate passano da
+`border-top` a `border-bottom` così l'ultima resta chiusa prima del pager.
+Nessuna di queste regole esce dalla home.
+**Attenzione ai token di raggio**: `--cl-r-card`/`--cl-r-tile` erano _usati_ da
+`.cl-plan-card` e `.cl-ask-card` ma **mai dichiarati** in `index.css` (vivono
+nel design system), e una var non definita invalida l'intera dichiarazione a
+computed-value time — quelle due card rendevano squadrate, e le card della
+Configuration hanno fatto lo stesso finché i token non sono stati dichiarati in
+`:root`. Le elevazioni (`--cl-elev-card`) restano non dichiarate di proposito:
+lì i call site passano un fallback esplicito.
+
+**Trigger di ricerca — pill nella top bar.** `.cl-lens-btn` non è più il tondo
+da 28px: è il pill di 1a (lente + `Search projects, sessions…` + chip `⌘F`).
+Il mock lo disegna dentro l'hero, ma il mock non ha la top bar dell'app e un
+secondo trigger per lo stesso popover è esattamente ciò che era stato tolto dal
+rail progetto — quindi resta uno solo, dov'era, e vale su ogni vista. Sotto i
+1080px label e chip spariscono e torna il tondo. Lo stato aperto **tinge invece
+di riempire**: un pieno terracotta largo 230px sarebbe l'elemento più urlato
+della chrome, e il popover sotto dice già che la ricerca è aperta.
+
 **Chrome del progetto — design handoff _Sessions Varianti_ (rail 5a + contenuto 5b).**
 La navigazione di progetto non è più una fascia orizzontale di subtab: è una
 **colonna di lavoro** a sinistra (`ProjectRail`, 220px, `--cl-paper-2`, hairline
