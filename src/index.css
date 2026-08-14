@@ -2857,6 +2857,94 @@ body {
 .cl-tool-detail-panel.is-error {
   border-color: color-mix(in oklch, var(--cl-danger) 38%, var(--cl-line));
 }
+
+/* ──────────────────────────────────────────────────────────
+   WEB SEARCH SOURCES — the leader-dot bibliography
+   ──────────────────────────────────────────────────────────
+   A search's result list *is* a bibliography, so it takes the device this app
+   already uses for "label … value" (Settings readout rows, session rows) rather
+   than a stack of bordered result cards: ordinal · title · dotted leader · host.
+
+   **One line per source, title truncated.** Letting the title wrap to two lines
+   was tried first and looks broken: a flex leader starts after the title's
+   *box*, not after its last line, so a wrapped row leaves the dots floating in
+   the middle of the gap with nothing on their left. On one line the leader
+   always connects the two things it exists to connect, every host lands in the
+   same column, and the full title stays a hover away in the native tooltip.
+   The title is capped at 62% so a short host still leaves a legible run of dots
+   instead of a two-pixel stub.
+
+   The `↗` is hidden until hover but keeps its box, so revealing it never
+   reflows the row — the same rule the session rows follow for their actions. */
+.cl-src-list {
+  display: flex;
+  flex-direction: column;
+}
+.cl-src {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 8px 6px 6px;
+  margin: 0 -6px;
+  border-radius: 4px;
+  text-decoration: none;
+  color: inherit;
+  transition: background-color 0.12s ease;
+}
+.cl-src:hover {
+  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
+}
+.cl-src .n {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  line-height: 1.45;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
+}
+.cl-src .t {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  font-family: var(--font-reading);
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: var(--cl-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-src:hover .t {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cl-src .leader {
+  flex: 1 1 auto;
+  min-width: 24px;
+  align-self: stretch;
+  border-bottom: 1.5px dotted var(--cl-line);
+  transform: translateY(-4px);
+}
+.cl-src .h {
+  flex: 0 0 auto;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-3);
+}
+.cl-src .go {
+  flex: 0 0 auto;
+  font-size: 10px;
+  color: var(--cl-ink-4);
+  opacity: 0;
+  transition: opacity 0.12s ease;
+}
+.cl-src:hover .h {
+  color: var(--cl-accent-ink);
+}
+.cl-src:hover .go {
+  opacity: 1;
+  color: var(--cl-accent-ink);
+}
 /* ──────────────────────────────────────────────────────────
    CHAT — workspace shell + ambient background
    ────────────────────────────────────────────────────────── */

@@ -6,6 +6,7 @@ import {
   promptRows,
   ownsToolBody,
   ownsOutputHead,
+  isShellOutput,
 } from '../src/components/project/chat/shell';
 
 /** Convenience: the statement texts of a parsed one-liner. */
@@ -192,5 +193,10 @@ describe('section ownership', () => {
     expect(ownsOutputHead('Bash')).toBe(true);
     expect(ownsToolBody('Read')).toBe(false);
     expect(ownsOutputHead('Read')).toBe(false);
+    // A WebSearch result opens with its own SOURCES head, so the host's "Output"
+    // would be a second title for one block — but it is not shell output.
+    expect(ownsOutputHead('WebSearch')).toBe(true);
+    expect(isShellOutput('WebSearch')).toBe(false);
+    expect(isShellOutput('BashOutput')).toBe(true);
   });
 });
