@@ -18,11 +18,14 @@ export function SkillDetailView({
   project,
   onBack,
   readOnly = false,
+  chromeless,
 }: {
   skill: Skill;
   project?: { hash: string; realPath: string };
   onBack: () => void;
   readOnly?: boolean;
+  /** Hosted in a frame that already carries the crumb and the way back. */
+  chromeless?: boolean;
 }) {
   const write = useWriteMarkdownFile(['skills:global', 'skills:all']);
   const del = useDeleteMarkdownFile(['skills:global', 'skills:all']);
@@ -101,6 +104,7 @@ export function SkillDetailView({
   return (
     <EntityDetailView
       config={config}
+      chromeless={chromeless}
       onBack={back}
       onSave={
         readOnly

@@ -1075,6 +1075,20 @@ export function buildMemoryActivity(groups: ToolGroup[], lookup?: MemoryLookup):
   };
 }
 
+/** How a tool call ended, and the chip class that says so. Pure and shared
+ *  because two surfaces need the same verdict from the same `result`: the detail
+ *  panel, and the frame hosting it when the panel is chromeless (the status chip
+ *  then rides the frame's control row — see `TerminalMissionControl`). */
+export function toolRunStatus(result: ToolGroup['result']): {
+  label: 'Complete' | 'Error' | 'Pending';
+  tone: 'is-ok' | 'is-error' | 'is-pending';
+} {
+  if (!result) return { label: 'Pending', tone: 'is-pending' };
+  return result.isError
+    ? { label: 'Error', tone: 'is-error' }
+    : { label: 'Complete', tone: 'is-ok' };
+}
+
 export function resolveToolIcon(name: string, input: Record<string, unknown>): string {
   if ((name === 'Write' || name === 'Edit' || name === 'Read') && isMemoryFile(input)) return '🧠';
   return TOOL_ICON[name] ?? '🔧';

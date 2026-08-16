@@ -17,6 +17,7 @@ export function AgentDetailView({
   onBack,
   onNavigateLive,
   readOnly = false,
+  chromeless,
 }: {
   agent: Agent;
   project?: { hash: string; realPath: string };
@@ -25,6 +26,8 @@ export function AgentDetailView({
   onNavigateLive?: () => void;
   /** Plugin agents are read-only (managed by the plugin manager). */
   readOnly?: boolean;
+  /** Hosted in a frame that already carries the crumb and the way back. */
+  chromeless?: boolean;
 }) {
   const write = useWriteMarkdownFile(['agents:global', 'agents:project']);
   const del = useDeleteMarkdownFile(['agents:global', 'agents:project']);
@@ -111,6 +114,7 @@ export function AgentDetailView({
   return (
     <EntityDetailView
       config={config}
+      chromeless={chromeless}
       onBack={onBack}
       onSave={
         readOnly

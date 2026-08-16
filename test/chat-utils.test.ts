@@ -23,6 +23,7 @@ import {
   memoryTitleFromFilename,
   writeAction,
   touchedFiles,
+  toolRunStatus,
 } from '../src/components/project/chat/utils';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
 
@@ -1048,5 +1049,26 @@ describe('memory activity', () => {
     ] as never);
     expect(touches).toEqual([]);
     expect(indexOps).toEqual([]);
+  });
+});
+
+describe('toolRunStatus', () => {
+  // Two surfaces read this verdict from the same result — the detail panel and,
+  // when the panel is chromeless, the frame's control row. They must agree.
+  it('reads a missing result as pending, not as success', () => {
+    // `result: null` is how a tool_use with no tool_result reaches the UI — a
+    // call still in flight, or one the transcript never recorded an answer for.
+    expect(toolRunStatus(null)).toEqual({ label: 'Pending', tone: 'is-pending' });
+  });
+
+  it('separates a failed call from a completed one', () => {
+    expect(toolRunStatus({ content: 'boom', isError: true } as never)).toEqual({
+      label: 'Error',
+      tone: 'is-error',
+    });
+    expect(toolRunStatus({ content: 'ok' } as never)).toEqual({
+      label: 'Complete',
+      tone: 'is-ok',
+    });
   });
 });

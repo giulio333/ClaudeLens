@@ -133,6 +133,16 @@ function parseAgentResult(content: string) {
   };
 }
 
+/** Does this label say anything the breadcrumb's tool name doesn't? `Web search`
+ *  under a bar that already reads `WEBSEARCH` is the same word twice; `Tool
+ *  execution` under `EDIT` is not. Compared without spaces or case because the
+ *  bar upper-cases the name and the subtitle is written in prose. */
+function addsToName(label: string | undefined, name: string): boolean {
+  if (!label) return false;
+  const flat = (s: string) => s.replace(/[\s_:-]+/g, '').toLowerCase();
+  return flat(label) !== flat(name);
+}
+
 function ToolDetailShell({
   icon,
   name,
@@ -160,6 +170,14 @@ function ToolDetailShell({
 }) {
   const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending';
   const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending';
+  // The hero exists to carry a title the breadcrumb can't: a search query, a
+  // fetched page, an agent's description. For `Edit` / `Read` / `Bash` the title
+  // *is* the tool name, so the page said the same word four times — bar, kicker,
+  // heading, subtitle — over ~110px before the first real line. There the bar is
+  // the heading. The status badge moves into it either way: it belongs next to
+  // what it qualifies, and the hero was holding a whole row for one chip.
+  const showHero = !noHero && addsToName(title, name);
+  const showSubtitle = addsToName(subtitle, name);
 
   return (
     <div className={`cl-tool-detail${variant === 'agent' ? ' cl-tool-detail--agent' : ''}`}>
@@ -172,21 +190,18 @@ function ToolDetailShell({
           <span className="cl-tool-detail-sep">/</span>
           <span className="cl-tool-detail-mini-icon">{icon}</span>
           <span className="cl-tool-detail-mini-title">{name}</span>
+          {showSubtitle && <span className="cl-tool-detail-bar-sub">{subtitle}</span>}
+          <div className="cl-tool-detail-badges">
+            <span className={`cl-tool-status ${statusClass}`}>{status}</span>
+            {isMemory && <span className="cl-tool-status is-memory">Memory</span>}
+          </div>
         </div>
       )}
 
       <div className="cl-tool-detail-scroll">
-        {!noHero && (
+        {showHero && (
           <header className="cl-tool-detail-hero">
-            <div className="cl-tool-detail-title">
-              <span className="cl-tool-detail-kicker">Tool detail</span>
-              <h2>{title}</h2>
-              {subtitle && <p>{subtitle}</p>}
-            </div>
-            <div className="cl-tool-detail-badges">
-              <span className={`cl-tool-status ${statusClass}`}>{status}</span>
-              {isMemory && <span className="cl-tool-status is-memory">Memory</span>}
-            </div>
+            <h2>{title}</h2>
           </header>
         )}
         {children}
@@ -222,11 +237,14 @@ function AgentDetailBody({
   input,
   result,
   onBack,
+  chromeless,
 }: {
   name: string;
   input: Record<string, unknown>;
   result: ToolGroup['result'];
   onBack: () => void;
+  /** The host frame carries the crumb and the way back — drop the local one. */
+  chromeless?: boolean;
 }) {
   const subtype =
     (input.subagent_type as string | undefined) || (name === 'Task' ? 'task' : 'general-purpose');
@@ -246,16 +264,18 @@ function AgentDetailBody({
 
   return (
     <div className="cl-agent-v1">
-      <nav className="cl-agent-v1-subbread">
-        <button type="button" onClick={onBack} className="cl-agent-v1-back-pill">
-          <span className="ico">
-            <BackChevron />
-          </span>
-          Back to chat
-        </button>
-        <span className="sep">/</span>
-        <span>Agent · Tool detail</span>
-      </nav>
+      {!chromeless && (
+        <nav className="cl-agent-v1-subbread">
+          <button type="button" onClick={onBack} className="cl-agent-v1-back-pill">
+            <span className="ico">
+              <BackChevron />
+            </span>
+            Back to chat
+          </button>
+          <span className="sep">/</span>
+          <span>Agent · Tool detail</span>
+        </nav>
+      )}
 
       <section className="cl-agent-v1-hero">
         <div className={`cl-agent-v1-orb ${statusClass}`}>{glyph}</div>
@@ -892,7 +912,18 @@ export function ToolOutput({
   return <CodeBlock code={raw} />;
 }
 
-export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: () => void }) {
+export function ToolDetailPanel({
+  group,
+  onBack,
+  chromeless,
+}: {
+  group: ToolGroup;
+  onBack: () => void;
+  /** Mounted inside a frame whose own top bar carries the tool's crumb and the
+   *  way back (`TerminalMissionControl`, `ChatView`): the panel then draws no
+   *  breadcrumb of its own, which is what put two "Back" one under the other. */
+  chromeless?: boolean;
+}) {
   const { use, result } = group;
   const icon = resolveToolIcon(use.name, use.input as Record<string, unknown>);
   const isMemory = isMemoryFile(use.input as Record<string, unknown>);
@@ -931,10 +962,16 @@ export function ToolDetailPanel({ group, onBack }: { group: ToolGroup; onBack: (
       onBack={onBack}
       variant={isAgent ? 'agent' : 'default'}
       noHero={isAgent}
-      noBar={isAgent}
+      noBar={isAgent || chromeless}
     >
       {isAgent ? (
-        <AgentDetailBody name={name} input={input} result={result} onBack={onBack} />
+        <AgentDetailBody
+          name={name}
+          input={input}
+          result={result}
+          onBack={onBack}
+          chromeless={chromeless}
+        />
       ) : (
         <div className="cl-tool-detail-grid">
           {ownsToolBody(name) ? (

@@ -16,6 +16,7 @@ export function SubagentTranscriptPanel({
   description,
   prompt,
   onBack,
+  chromeless,
 }: {
   hash: string;
   sessionFilename: string;
@@ -25,6 +26,9 @@ export function SubagentTranscriptPanel({
   /** The dispatch prompt shown above the transcript for context (may be truncated). */
   prompt?: string;
   onBack: () => void;
+  /** Hosted in a frame that carries the agent's crumb and the way back in its
+   *  own top bar: drop the local back button, keep the identity line. */
+  chromeless?: boolean;
 }) {
   const {
     data: messages,
@@ -43,15 +47,17 @@ export function SubagentTranscriptPanel({
   return (
     <div className="cl-subagent-panel">
       <header className="cl-subagent-panel-head">
-        <button
-          type="button"
-          className="cl-subagent-back"
-          onClick={onBack}
-          aria-label="Back to chat"
-        >
-          <span aria-hidden>←</span>
-          <span>Back</span>
-        </button>
+        {!chromeless && (
+          <button
+            type="button"
+            className="cl-subagent-back"
+            onClick={onBack}
+            aria-label="Back to chat"
+          >
+            <span aria-hidden>←</span>
+            <span>Back</span>
+          </button>
+        )}
         <div className="cl-subagent-head-id">
           <span className="ic" aria-hidden>
             A
