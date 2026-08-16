@@ -63,6 +63,22 @@ function findAllClaudeMd(dir: string, maxDepth: number = 5, currentDepth: number
   return claudeMdFiles;
 }
 
+/**
+ * The single CLAUDE.md a project description can be derived from: the project
+ * root, else the `.claude/` one. Deliberately NOT `getClaudeMdHierarchy`, which
+ * walks the whole source tree to depth 5 — this read is mounted by the project
+ * hero, where that scan would be paid on every open.
+ */
+export async function readProjectClaudeMd(
+  realPath: string
+): Promise<{ content: string; filePath: string } | null> {
+  for (const filePath of [join(realPath, 'CLAUDE.md'), join(realPath, '.claude', 'CLAUDE.md')]) {
+    const content = await tryRead(filePath);
+    if (content !== undefined && content.trim()) return { content, filePath };
+  }
+  return null;
+}
+
 export function writeClaudeMdFile(filePath: string, content: string): void {
   const allowedBasenames = new Set(['CLAUDE.md', 'CLAUDE.local.md']);
   const base = basename(filePath);

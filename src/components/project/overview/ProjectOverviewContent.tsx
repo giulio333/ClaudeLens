@@ -25,6 +25,7 @@ import { View } from '../types';
 import { fmt, fmtCost, fmtModel, sessionTitle, formatTokens, buildModelMix } from '../utils';
 import type { SessionSummary, MemoryTopic } from '../../../types';
 import { Lens } from './Lens';
+import { ProjectDescription } from './ProjectDescription';
 import { McpServerGrid } from '../mcp/McpServerGrid';
 import { AgentsLiveView } from '../agents-live/AgentsLiveView';
 import { TasksSection } from '../tasks/TasksSection';
@@ -824,6 +825,12 @@ export function ProjectView({
           <span className="glyph">.</span>
           <span className="chev">↓</span>
         </button>
+
+        {/* What the project is, in one line — derived from its CLAUDE.md and
+            editable in place (the edit is stored in ClaudeLens' prefs, never
+            written back to the file). The Teams hero is a compact operational
+            header, so it keeps its meta line instead. */}
+        {!isTeamsSection && <ProjectDescription hash={project.hash} realPath={project.realPath} />}
 
         {isTeamsSection ? (
           <div className="cl-h-meta">
