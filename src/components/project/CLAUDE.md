@@ -547,14 +547,14 @@ intera (e il `TagPicker`). Cap a `LANDING_MEM_CARDS` (due file da tre), con
 `View all` verso la subtab.
 Il caption è `N topics · <due tipi più frequenti>`: un breakdown completo
 sfora la testata su qualsiasi memoria vera, e i due tipi dominanti sono ciò che
-dice che cosa questo progetto ricorda. Il controllo **Newest / By type** è un
-`.cl-seg` nella variante **`--paper`** (il `.cl-seg` originale è vetro perché
-nasce nella pill della chat, che galleggia su un transcript; su una sezione
-editoriale deve essere la stessa carta di tutto il resto — la mossa che
-`.cl-pill` ha già fatto). Il suo stato (`memCardView`) è **tenuto separato** da
-`memSort`/`memGroupBy` della subtab: leggono gli stessi topic ma sono superfici
-diverse, e un toggle sulla landing che rimodella in silenzio la lista completa
-è il tipo di cross-talk che noti solo dopo che ti ha confuso.
+dice che cosa questo progetto ricorda. **Una sola visualizzazione, newest
+first**: il segmented `Newest / By type` (stato locale `memCardView`, con il suo
+`landingMemGroups`) è stato **rimosso**. La landing mostra sei card di una
+storia che ne conta decine — a quella taglia il raggruppamento per tipo era un
+controllo su un campione, e la subtab a cui `View all` porta possiede la lista
+intera con l'ordinamento e il group-by che le appartengono
+(`memSort`/`memGroupBy`, tuttora suoi). La variante `.cl-seg--paper` **resta**:
+la usa la toolbar della subtab.
 **Non implementata** di 1c: la card tratteggiata "New topic" — l'app non ha
 (ancora) nessun ingresso di creazione memoria, solo l'IPC `memory:createTopic`
 e l'hook `useCreateTopic` inutilizzato; sarebbe una feature, non un cambio di
