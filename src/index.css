@@ -10773,12 +10773,18 @@ button.cl-sw-member:focus-visible,
   font-size: 9.5px;
   color: var(--cl-ink-4);
 }
+/* Memory names are slugs, and `feedback_no_manual_app_launch` is ONE word to a
+   line breaker: underscores are not break opportunities, so a snake_case title
+   ran straight out of its card while its kebab-case neighbours wrapped fine.
+   `<wbr>` after each underscore (see `SlugName`) gives it a decent break; this
+   is the net under it, for a name that has no separator at all. */
 .cl-mcard .name {
   font-size: 16px;
   font-weight: 600;
   line-height: 1.25;
   letter-spacing: -0.015em;
   color: var(--cl-ink);
+  overflow-wrap: anywhere;
 }
 .cl-mcard .preview {
   margin: 0;
@@ -11000,11 +11006,14 @@ button.cl-sw-member:focus-visible,
   border-color: var(--cl-accent);
   color: var(--cl-on-accent);
 }
+/* Same exposure as `.cl-mcard .name`: the tiles carry the very same slugs in
+   the Memory subtab, and skills/agents names are free text. */
 .cl-tile .t-name {
   font-size: 16px;
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--cl-ink);
+  overflow-wrap: anywhere;
 }
 .cl-tile .t-desc {
   font-family: var(--font-mono);
