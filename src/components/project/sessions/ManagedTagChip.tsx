@@ -180,13 +180,13 @@ function TagActionsMenu({
   return createPortal(
     <div
       id="cl-tag-menu-root"
-      className="cl-tag-menu"
+      className="cl-menu"
       style={{ position: 'fixed', top, left, zIndex: 1000 }}
       onMouseDown={e => e.stopPropagation()}
     >
-      <div className="cl-tag-menu-head">#{name}</div>
+      <div className="cl-menu-head">#{name}</div>
       {onFilter && (
-        <button type="button" className="cl-tag-menu-item" onClick={run(onFilter)}>
+        <button type="button" className="cl-menu-item" onClick={run(onFilter)}>
           <span className="ic" aria-hidden>
             {active ? '✕' : '⦿'}
           </span>
@@ -194,7 +194,7 @@ function TagActionsMenu({
         </button>
       )}
       {onRemoveFromItem && (
-        <button type="button" className="cl-tag-menu-item" onClick={run(onRemoveFromItem)}>
+        <button type="button" className="cl-menu-item" onClick={run(onRemoveFromItem)}>
           <span className="ic" aria-hidden>
             ✕
           </span>
@@ -202,7 +202,7 @@ function TagActionsMenu({
         </button>
       )}
       {onRename && (
-        <button type="button" className="cl-tag-menu-item" onClick={run(onRename)}>
+        <button type="button" className="cl-menu-item" onClick={run(onRename)}>
           <span className="ic" aria-hidden>
             ✎
           </span>
@@ -211,13 +211,13 @@ function TagActionsMenu({
       )}
       {onDelete &&
         (confirmDelete ? (
-          <button type="button" className="cl-tag-menu-item danger confirm" onClick={run(onDelete)}>
+          <button type="button" className="cl-menu-item danger confirm" onClick={run(onDelete)}>
             Delete tag everywhere?
           </button>
         ) : (
           <button
             type="button"
-            className="cl-tag-menu-item danger"
+            className="cl-menu-item danger"
             onClick={() => setConfirmDelete(true)}
           >
             <span className="ic" aria-hidden>

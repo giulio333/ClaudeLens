@@ -1336,9 +1336,13 @@ body {
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--cl-danger) 14%, transparent);
 }
 
-/* ── Shared tag actions menu (portal) ── */
-.cl-tag-menu {
+/* ── Shared row actions menu (portal) ──
+   One anatomy — head + items + a danger item — for every "what can I do with
+   this?" popover: tag chips (ManagedTagChip) and session rows (SessionRowMenu).
+   It was `.cl-tag-menu` while tags were its only caller. */
+.cl-menu {
   min-width: 184px;
+  max-width: 280px;
   background: var(--cl-paper);
   border: 1px solid var(--cl-line);
   border-radius: 10px;
@@ -1348,12 +1352,14 @@ body {
   padding: 4px;
   font-family: var(--font-sans);
 }
-:root[data-theme='dark'] .cl-tag-menu {
+:root[data-theme='dark'] .cl-menu {
   background: var(--cl-paper-2);
   border-color: color-mix(in srgb, var(--cl-ink-2) 30%, transparent);
   box-shadow: 0 8px 28px oklch(0 0 0 / 0.45);
 }
-.cl-tag-menu-head {
+/* Names what the menu acts on — a tag, or a session title, which is prose and
+   can run long: it truncates rather than widening the menu past its max. */
+.cl-menu-head {
   padding: 5px 10px 6px;
   margin-bottom: 2px;
   border-bottom: 1px solid var(--cl-line-soft);
@@ -1361,8 +1367,11 @@ body {
   font-size: 11px;
   font-weight: 600;
   color: var(--cl-ink-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cl-tag-menu-item {
+.cl-menu-item {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1380,29 +1389,37 @@ body {
     background 100ms,
     color 100ms;
 }
-.cl-tag-menu-item .ic {
+.cl-menu-item .ic {
   width: 14px;
   display: inline-flex;
+  align-items: center;
   justify-content: center;
   font-size: 12px;
   color: var(--cl-ink-4);
+  flex-shrink: 0;
 }
-.cl-tag-menu-item:hover {
+/* Glyphs come in two forms: a text character (tag menu) or an inline SVG that
+   takes its size from here (session menu). */
+.cl-menu-item .ic svg {
+  width: 13px;
+  height: 13px;
+}
+.cl-menu-item:hover {
   background: var(--cl-paper-2);
 }
-:root[data-theme='dark'] .cl-tag-menu-item:hover {
+:root[data-theme='dark'] .cl-menu-item:hover {
   background: oklch(0.3 0.012 70 / 0.45);
 }
-.cl-tag-menu-item.danger {
+.cl-menu-item.danger {
   color: var(--cl-danger);
 }
-.cl-tag-menu-item.danger .ic {
+.cl-menu-item.danger .ic {
   color: var(--cl-danger);
 }
-.cl-tag-menu-item.danger:hover {
+.cl-menu-item.danger:hover {
   background: color-mix(in srgb, var(--cl-danger) 12%, transparent);
 }
-.cl-tag-menu-item.confirm {
+.cl-menu-item.confirm {
   justify-content: center;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -15590,20 +15607,16 @@ select.cl-opt-input {
   outline: 2px solid var(--cl-accent);
   outline-offset: -2px;
 }
-.cl-srow.is-pinned {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--cl-accent) 6%, transparent),
-    transparent 46%
-  );
-  box-shadow: inset 2px 0 0 var(--cl-accent);
-}
-.cl-srow.is-pinned:hover {
-  background: linear-gradient(
-    90deg,
-    color-mix(in srgb, var(--cl-accent) 10%, transparent),
-    transparent 46%
-  );
+/* Pinned rows carry NO surface treatment: no wash, no edge rule. Both were
+   tried and both were the loudest thing in a list whose whole language is
+   hairlines — the gradient wash read as a brown smear in dark mode and fought
+   the row's own hover tint, and the 2px accent bar left a hard terracotta stripe
+   down the left margin. What says "pinned" is typography: the pin glyph at the
+   head of the row, filled and permanently visible (below), and the row's ordinal
+   in accent. Same idiom as the pinned projects of GlobalHomeView, which have
+   never had anything but their pin. */
+.cl-srow.is-pinned .idx {
+  color: var(--cl-accent-ink);
 }
 .cl-srow-pin {
   width: 22px;
@@ -15676,81 +15689,15 @@ select.cl-opt-input {
   gap: 6px;
   flex-shrink: 0;
 }
-/* The dotted leader carrying the eye from title to figures. Its min-width is
-   the width of the action cluster that overlays it: the actions are absolutely
-   positioned (revealing them must not reflow the row), so the leader has to own
-   enough dead space for them up front — otherwise a long title eats the gap and
-   the buttons land on top of it. The title truncates instead. */
-.cl-srow .lead {
-  position: relative;
-  flex: 1 0 auto;
-  min-width: 196px;
-  align-self: center;
-  height: 1em;
-  border-bottom: 1px dotted var(--cl-line);
-  transform: translateY(-4px);
-}
-.cl-srow.is-pinned .lead {
-  border-bottom-color: color-mix(in srgb, var(--cl-accent) 40%, transparent);
-}
-/* centred on the dotted line (the leader's own bottom border) so revealing the
-   actions never moves anything: they sit in space the leader already owns */
-.cl-srow-actions {
-  position: absolute;
-  right: 0;
-  bottom: 0;
-  transform: translateY(50%);
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding-left: 12px;
-  background: var(--cl-paper);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms;
-}
-.cl-srow:hover .cl-srow-actions,
-.cl-srow:focus-within .cl-srow-actions,
-.cl-srow-actions:has(button[data-haspicker='true']) {
-  opacity: 1;
-  pointer-events: auto;
-}
-/* while hovered the row is tinted, so the actions' backdrop has to be that same
-   tint composited over paper — bare paper would read as a white block */
-.cl-srow:hover .cl-srow-actions {
-  background: color-mix(in oklch, var(--cl-accent-soft) 78%, var(--cl-paper));
-}
-.cl-srow-actions button {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  line-height: 1.4;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-  color: var(--cl-ink-4);
-  background: var(--cl-paper);
-  border: 1px solid var(--cl-line);
-  border-radius: 6px;
-  padding: 3px 6px;
-  cursor: pointer;
-  transition:
-    color 120ms,
-    border-color 120ms,
-    background 120ms;
-}
-.cl-srow-actions button:hover {
-  color: var(--cl-accent-ink);
-  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
-  background: var(--cl-accent-soft);
-}
-.cl-srow-actions button.danger:hover {
-  color: var(--cl-danger);
-  border-color: color-mix(in oklch, var(--cl-danger) 45%, transparent);
-  background: var(--cl-danger-soft);
-}
-.cl-srow-actions button[data-haspicker='true'] {
-  color: var(--cl-accent-ink);
-  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+/* The space between the title cluster and the figures. It used to be a dotted
+   leader with the three row actions absolutely positioned on top of it (hence a
+   196px min-width of reserved dead space, and an opaque backdrop under the
+   buttons to keep them legible over the tinted row). With the actions collapsed
+   into one kebab that sits in the flow, the leader connects nothing and is left
+   empty — the figures' fixed column widths are what aligns the list. */
+.cl-srow-gap {
+  flex: 1 1 24px;
+  min-width: 24px;
 }
 .cl-srow .meta {
   display: inline-flex;
@@ -15794,6 +15741,44 @@ select.cl-opt-input {
 .cl-srow .meta .when {
   width: 104px;
   text-align: right;
+}
+/* "More actions" trigger — same weight and reveal as the pin at the other end
+   of the row, so the two affordances read as a pair. It always occupies its
+   column: fading it in on hover can never reflow the figures next to it. */
+.cl-srow-menu {
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  background: transparent;
+  border-radius: 7px;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 140ms,
+    color 140ms,
+    background 140ms;
+}
+.cl-srow:hover .cl-srow-menu,
+.cl-srow:focus-within .cl-srow-menu,
+.cl-srow-menu.is-open {
+  opacity: 1;
+}
+.cl-srow-menu:hover,
+.cl-srow-menu.is-open {
+  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-srow-menu:focus-visible {
+  opacity: 1;
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 1px;
 }
 .cl-srow-foot {
   display: flex;
