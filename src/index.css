@@ -346,16 +346,8 @@ body {
 .cl-brand-mark {
   width: 18px;
   height: 18px;
-  border-radius: 50%;
-  background: var(--cl-ink);
-  position: relative;
-}
-.cl-brand-mark::after {
-  content: '';
-  position: absolute;
-  inset: 4.5px;
-  border-radius: 50%;
-  background: var(--cl-accent);
+  object-fit: contain;
+  flex-shrink: 0;
 }
 .cl-scope {
   display: inline-flex;
