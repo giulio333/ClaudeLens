@@ -699,7 +699,7 @@ export default function ProjectOverview() {
           onClick={goGlobal}
           style={{ background: 'none', border: 'none', cursor: 'pointer', padding: 0 }}
         >
-          <span className="cl-brand-mark" />
+          <img className="cl-brand-mark" src="./brand-mark.png" alt="" />
           <span>
             Claude<span style={{ opacity: 0.55 }}>Lens</span>
           </span>
