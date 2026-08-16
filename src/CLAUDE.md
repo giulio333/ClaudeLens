@@ -13,7 +13,7 @@ This directory contains the Electron renderer process: a single-page React app t
 **ProjectOverview.tsx** (`tabs/ProjectOverview.tsx`) — Root navigation shell
 
 - Manages all UI state in a single `View` discriminated union (no router)
-- Views (~30 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `studio` | `studio-create` | `studio-blueprint` | `project-skills` | `project-agents` | `project-mcp` | `project-tasks` | `project-plans` | `plan-detail` | `project-workflows` | `workflow-detail` | `project-teams` | `team-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates` | `settings` | `project-config`
+- Views (~30 cases, see `components/project/types.ts`): `global-home` | `overview` | `global-claudemd` | `global-skills` | `skill-detail` | `skill-create` | `global-agents` | `agent-detail` | `agent-create` | `global-mcp` | `mcp-detail` | `studio` | `studio-create` | `studio-blueprint` | `project-skills` | `project-agents` | `project-mcp` | `project-code-atlas` | `project-tasks` | `project-plans` | `plan-detail` | `project-workflows` | `workflow-detail` | `project-teams` | `team-detail` | `project-claudemd` | `project-memory` | `sessions` | `analytics` | `chat` | `memory-topic` | `ai-assistant` | `live-monitor` | `agents-live` | `duplicates` | `settings` | `project-config`
 - Thin shell: top bar + `.cl-shell` (project rail + `.cl-main` scroll area) + `switch(view.type)` → delegates to feature components. The rail (`overview/ProjectRail`, design 5a) replaced the horizontal subtab bar, so the body below the top bar is a **row**, not a column; it mounts in project scope only
 - All feature components live in `components/project/`
 
@@ -39,6 +39,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/agents-live/` — `AgentsLiveView` (background/live agent sessions)
 - `project/mcp/` — `GlobalMcpView`, `McpServerCard`, `McpServerDetailView`
 - `project/analytics/` — `AnalyticsView`
+- `project/code-atlas/` — `CodeAtlasView`, a native React Flow/ELK projection of local Graphify or Graft artifacts
 - `project/ai-assistant/` — `AiAssistantView`
 - `project/sessions/` — `TagBar`, `TagChip`, `TagPicker` (session tagging)
 - `project/tasks/` — `TasksSection`

@@ -45,6 +45,7 @@ import { scopesForPath, type DataScope } from './modules/data-change-scope';
 import { getGlobalSkills, getAllSkills } from './modules/skills-reader';
 import { getGlobalAgents, getProjectAgents } from './modules/agents-reader';
 import { getInstalledPlugins } from './modules/plugins-reader';
+import { getCodeAtlas } from './modules/code-atlas-reader';
 import {
   getStudioLibrary,
   getBlueprintDetail,
@@ -1155,6 +1156,17 @@ ipcMain.handle('rules:getByProject', async (_event, realPath: string) => {
     return err(e);
   }
 });
+
+ipcMain.handle(
+  'codeAtlas:get',
+  async (_event, realPath: string, provider?: 'graphify' | 'graft') => {
+    try {
+      return ok(await getCodeAtlas(realPath, provider));
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
 
 ipcMain.handle('skills:getGlobal', async () => {
   try {

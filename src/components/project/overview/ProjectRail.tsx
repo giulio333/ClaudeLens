@@ -23,7 +23,7 @@ import type { ProjectSection } from './ProjectOverviewContent';
 type Project = { hash: string; realPath: string };
 
 type RailEntry = {
-  key: ProjectSection;
+  key: ProjectSection | 'code-atlas';
   label: string;
   // Monogram shown in the 20px tile (and alone when the rail is collapsed).
   mono: string;
@@ -151,6 +151,12 @@ export function ProjectRail({
       label: 'Context',
       items: [
         { key: 'overview', label: 'Overview', mono: 'O', count: null, view: { type: 'overview' } },
+        {
+          key: 'code-atlas',
+          label: 'Code Atlas',
+          mono: 'G',
+          view: { type: 'project-code-atlas', project },
+        },
         {
           key: 'sessions',
           label: 'Sessions',
