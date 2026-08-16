@@ -723,6 +723,7 @@ export function EntityDetailView({
   onDelete,
   onDuplicate,
   renderRunOverlay,
+  chromeless,
 }: {
   config: EntityConfig;
   onBack: () => void;
@@ -731,6 +732,10 @@ export function EntityDetailView({
   onDuplicate?: () => void;
   /** Overlay agent-specifico (Run dialog). Riceve open/onClose. */
   renderRunOverlay?: (args: { onClose: () => void }) => ReactNode;
+  /** Montata dentro un frame che porta già il proprio crumb e il ritorno nella
+   *  sua top bar (l'overlay di Mission Control): la vista non disegna la sua.
+   *  Ammesso solo in read-only — in edit la TopBar porta Save/Discard/Delete. */
+  chromeless?: boolean;
 }) {
   const [mode, setMode] = useState<'view' | 'edit'>('view');
   const [saving, setSaving] = useState(false);
@@ -777,6 +782,12 @@ export function EntityDetailView({
   const editable =
     config.editable && typeof onSave === 'function' && typeof config.serialize === 'function';
   const canRun = config.runnable && !!renderRunOverlay && mode === 'view';
+  const barHasActions =
+    mode === 'edit' ||
+    editable ||
+    canRun ||
+    (config.deletable && !!onDelete) ||
+    (config.duplicable && !!onDuplicate);
 
   async function handleSave() {
     if (!dirty || saving || !onSave || !config.serialize) return;
@@ -953,12 +964,17 @@ export function EntityDetailView({
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar
-        onBack={onBack}
-        backLabel={config.backLabel}
-        crumbs={config.crumbs}
-        right={topbarRight}
-      />
+      {/* Chromeless is honoured only while the bar carries nothing but
+          navigation: Save/Discard/Delete/Duplicate/Run all live in its right
+          slot, and dropping the bar would drop them with it. */}
+      {(!chromeless || barHasActions) && (
+        <TopBar
+          onBack={onBack}
+          backLabel={config.backLabel}
+          crumbs={config.crumbs}
+          right={topbarRight}
+        />
+      )}
 
       <ValidationNotice validation={config.validation} />
 

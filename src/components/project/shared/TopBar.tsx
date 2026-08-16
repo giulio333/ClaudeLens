@@ -1,6 +1,9 @@
 import { Fragment, ReactNode } from 'react';
 
-export type Crumb = { label: ReactNode; accent?: boolean };
+/** A crumb with `onClick` is a step you can walk back to: it renders as a button
+ *  and the bar becomes the one place a nested view is dismissed from, instead of
+ *  each panel growing a "Back" of its own under the bar's own one. */
+export type Crumb = { label: ReactNode; accent?: boolean; onClick?: () => void; title?: string };
 
 /**
  * Editorial top bar shared by every full-screen "deep" view.
@@ -56,9 +59,21 @@ export function TopBar({
           >
             /
           </span>
-          <span className="font-mono truncate min-w-0" style={crumbStyle(c.accent)}>
-            {c.label}
-          </span>
+          {c.onClick ? (
+            <button
+              type="button"
+              onClick={c.onClick}
+              title={c.title}
+              className="font-mono truncate min-w-0 transition-colors hover:text-[var(--cl-accent)]"
+              style={{ WebkitAppRegion: 'no-drag', ...crumbStyle(c.accent) } as React.CSSProperties}
+            >
+              {c.label}
+            </button>
+          ) : (
+            <span className="font-mono truncate min-w-0" style={crumbStyle(c.accent)}>
+              {c.label}
+            </span>
+          )}
         </Fragment>
       ))}
 

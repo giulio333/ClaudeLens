@@ -25,6 +25,8 @@ import {
   ToolGroup,
   TurnDescriptor,
   TurnFilter,
+  resolveToolIcon,
+  toolRunStatus,
 } from './utils';
 import { LiveInTerminalBadge } from './atoms';
 import { buildChatExportDocument, ChatExportFormat, ChatExportPreset } from './export';
@@ -37,6 +39,7 @@ import { ChatControlPill } from './ChatControlPill';
 import { FocusMinimap } from './FocusMinimap';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
+import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
@@ -65,6 +68,7 @@ export function ChatView({
   onBack,
   onOpenSkill,
   onOpenAgent,
+  onOpenTool,
   embedded = false,
   jumpToTurnRef,
 }: {
@@ -75,6 +79,11 @@ export function ChatView({
   onOpenSkill?: (skill: Skill) => void;
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Hand a tool detail to the host frame instead of opening it here. Set by the
+   *  unified Terminal/Lens view, whose own top bar carries the crumb and the way
+   *  back: opened locally, the panel would sit under a bar that doesn't know it
+   *  exists. Unset (standalone ChatView) the panel opens in place. */
+  onOpenTool?: (group: ToolGroup) => void;
   /** Imperative handle exposed to an outside navigator (the v2 Outline column):
    *  set to this view's `jumpToTurn` so a session-outline row can scroll the
    *  embedded transcript to a turn. Null while unmounted / Terminal mode. */
@@ -129,6 +138,9 @@ export function ChatView({
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);
+  // One entry point for every "open this tool" in the view — inline card, session
+  // graph, skill output. The host frame takes it when it owns the chrome.
+  const openTool = useMemo(() => onOpenTool ?? setSelectedTool, [onOpenTool]);
   const [transcriptAgent, setTranscriptAgent] = useState<SessionAgent | null>(null);
   const [exportPreset, setExportPreset] = useState<ChatExportPreset>('message');
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null);
@@ -407,6 +419,20 @@ export function ChatView({
     };
   }, [jumpToTurnRef, jumpToTurn]);
 
+  // Esc closes whatever covers the transcript — the keyboard half of the crumb
+  // and the ✕ in the top bar, now that the panels carry no back button of their
+  // own. Embedded, the frame owns both the panels and its Esc: stay out of it.
+  useEffect(() => {
+    if (embedded) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (selectedTool) setSelectedTool(null);
+      else if (transcriptAgent?.agentId) setTranscriptAgent(null);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [embedded, selectedTool, transcriptAgent]);
+
   // The rail's "active" agent = the latest dispatch at or above the current
   // scroll position. As you scroll past one agent's card toward the next, the
   // highlight advances — the recorded-session echo of Claude Code's live pill.
@@ -433,6 +459,14 @@ export function ChatView({
   }, [skills, activeTurn]);
 
   const title = sessionTitle(session);
+  // The detail covering the transcript, if any, and the one step back out of it.
+  // The top bar's arrow, the session crumb and Esc all walk this — the panels
+  // themselves draw no back button when this view owns the chrome.
+  const detailBack = selectedTool
+    ? () => setSelectedTool(null)
+    : transcriptAgent?.agentId
+      ? () => setTranscriptAgent(null)
+      : null;
   // Whether an overlay / alternate mode is covering the chat workspace. The
   // workspace is then hidden (display:none) but never unmounted — see the
   // comment at the render site.
@@ -537,7 +571,7 @@ export function ChatView({
       <MessageBubble
         processed={p}
         detailsFilter={detailsFilter}
-        onOpenToolDetail={setSelectedTool}
+        onOpenToolDetail={openTool}
         agentColorOf={agentColorOf}
         skillOf={skillOf}
         onOpenSkill={onOpenSkill}
@@ -602,7 +636,7 @@ export function ChatView({
       skills={skills}
       activeSkillKey={activeSkillKey}
       onOpenSkill={skill => onOpenSkill?.(skill)}
-      onOpenSkillOutput={setSelectedTool}
+      onOpenSkillOutput={openTool}
       onLocateSkill={jumpToTurn}
     />
   );
@@ -611,64 +645,121 @@ export function ChatView({
     <div className="cl-chat">
       {!embedded && (
         <TopBar
-          onBack={onBack}
-          backLabel="Sessions"
-          crumbs={[{ label: title, accent: true }]}
+          // Same stack rule as the unified frame: with a detail open the arrow
+          // returns to the transcript, and only from the transcript does it go
+          // back to Sessions — a lone back arrow has to go back one step.
+          onBack={detailBack ?? onBack}
+          backLabel={detailBack ? 'Back to chat' : 'Sessions'}
+          crumbs={[
+            // The session title is the same step back for the hand already up
+            // here; the detail takes the "you are here" accent.
+            {
+              label: title,
+              accent: !detailBack,
+              onClick: detailBack ?? undefined,
+              title: detailBack ? 'Back to chat (Esc)' : undefined,
+            },
+            ...(selectedTool
+              ? [
+                  {
+                    accent: true,
+                    label: (
+                      <span className="inline-flex items-center" style={{ gap: 6 }}>
+                        <span aria-hidden>
+                          {resolveToolIcon(
+                            selectedTool.use.name,
+                            selectedTool.use.input as Record<string, unknown>
+                          )}
+                        </span>
+                        <span style={{ letterSpacing: '0.1em' }}>
+                          {selectedTool.use.name.toUpperCase()}
+                        </span>
+                      </span>
+                    ),
+                  },
+                ]
+              : transcriptAgent?.agentId
+                ? [
+                    {
+                      accent: true,
+                      label: (
+                        <span style={{ letterSpacing: '0.1em' }}>
+                          <span style={{ color: 'var(--cl-ink-4)' }}>AGENT · </span>
+                          {transcriptAgent.subagentType}
+                        </span>
+                      ),
+                    },
+                  ]
+                : []),
+          ]}
           right={
-            <>
-              {liveInTerminal && <LiveInTerminalBadge />}
-              <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
-                {sessionTags.map(name => (
-                  <ManagedTagChip
-                    key={name}
-                    name={name}
-                    onRemoveFromItem={() => removeTagFromSession(session.filename, name)}
-                    removeLabel="Remove from this session"
-                    onRename={renameTag}
-                    onDelete={() => deleteTag(name)}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className="cl-chat-tag-add"
-                  aria-label="Add tag"
-                  title="Add tag"
-                  data-haspicker={!!tagPickerAnchor}
-                  onClick={e => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTagPickerAnchor(prev => (prev ? null : rect));
-                  }}
-                >
-                  + tag
-                </button>
-                {tagPickerAnchor && (
-                  <TagPicker
-                    anchorRect={tagPickerAnchor}
-                    allTags={allTags}
-                    selected={sessionTags}
-                    onToggle={name => toggleTagOnSession(session.filename, name)}
-                    onClose={() => setTagPickerAnchor(null)}
-                  />
+            detailBack ? (
+              // The detail owns the bar while it is open: the session's own
+              // controls (tags, Chat/Timeline) act on what is behind it.
+              <>
+                {selectedTool && (
+                  <span className={`cl-tool-status ${toolRunStatus(selectedTool.result).tone}`}>
+                    {toolRunStatus(selectedTool.result).label}
+                  </span>
                 )}
-              </div>
-              <div className="cl-view-mode" aria-label="View mode">
-                {(['chat', 'timeline'] as ViewMode[]).map(v => (
+                <CloseOverlayButton label="Back to chat" onClose={detailBack} />
+              </>
+            ) : (
+              <>
+                {liveInTerminal && <LiveInTerminalBadge />}
+                <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
+                  {sessionTags.map(name => (
+                    <ManagedTagChip
+                      key={name}
+                      name={name}
+                      onRemoveFromItem={() => removeTagFromSession(session.filename, name)}
+                      removeLabel="Remove from this session"
+                      onRename={renameTag}
+                      onDelete={() => deleteTag(name)}
+                    />
+                  ))}
                   <button
-                    key={v}
                     type="button"
-                    className={viewMode === v ? 'on' : ''}
-                    onClick={() => setViewMode(v)}
-                    title={
-                      v === 'timeline'
-                        ? 'Session timeline (swimlanes by file/tool)'
-                        : 'Linear transcript'
-                    }
+                    className="cl-chat-tag-add"
+                    aria-label="Add tag"
+                    title="Add tag"
+                    data-haspicker={!!tagPickerAnchor}
+                    onClick={e => {
+                      const rect = e.currentTarget.getBoundingClientRect();
+                      setTagPickerAnchor(prev => (prev ? null : rect));
+                    }}
                   >
-                    {v === 'chat' ? 'Chat' : 'Timeline'}
+                    + tag
                   </button>
-                ))}
-              </div>
-            </>
+                  {tagPickerAnchor && (
+                    <TagPicker
+                      anchorRect={tagPickerAnchor}
+                      allTags={allTags}
+                      selected={sessionTags}
+                      onToggle={name => toggleTagOnSession(session.filename, name)}
+                      onClose={() => setTagPickerAnchor(null)}
+                    />
+                  )}
+                </div>
+                <div className="cl-view-mode" aria-label="View mode">
+                  {(['chat', 'timeline'] as ViewMode[]).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={viewMode === v ? 'on' : ''}
+                      onClick={() => setViewMode(v)}
+                      title={
+                        v === 'timeline'
+                          ? 'Session timeline (swimlanes by file/tool)'
+                          : 'Linear transcript'
+                      }
+                    >
+                      {v === 'chat' ? 'Chat' : 'Timeline'}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )
           }
         />
       )}
@@ -691,7 +782,15 @@ export function ChatView({
           scroll position, highlight layer and scroll-spy state survive being
           covered and don't reset when the overlay closes. */}
       {selectedTool ? (
-        <ToolDetailPanel group={selectedTool} onBack={() => setSelectedTool(null)} />
+        // Chromeless when this view draws its own bar (the crumb + ✕ up there are
+        // the way back); embedded, the frame above owns the chrome instead — and
+        // there `openTool` has already handed the tool to it, so this branch is
+        // only reached standalone.
+        <ToolDetailPanel
+          group={selectedTool}
+          onBack={() => setSelectedTool(null)}
+          chromeless={!embedded}
+        />
       ) : transcriptAgent && transcriptAgent.agentId ? (
         <SubagentTranscriptPanel
           hash={project.hash}
@@ -700,6 +799,11 @@ export function ChatView({
           subagentType={transcriptAgent.subagentType}
           description={transcriptAgent.description}
           onBack={() => setTranscriptAgent(null)}
+          // Same rule as the tool panel: chromeless while this view's own bar
+          // carries the crumb and the way back. Embedded it keeps its button —
+          // an agent transcript opened from the embedded transcript is NOT
+          // hoisted to the frame (only tools are), so nothing above knows it.
+          chromeless={!embedded}
         />
       ) : isError ? (
         <div className="cl-chat-workspace">
@@ -710,7 +814,7 @@ export function ChatView({
           {isLoading ? (
             <p className="cl-transcript-state">Loading transcript…</p>
           ) : (
-            <SessionGraphView processed={processed} onSelectTool={setSelectedTool} />
+            <SessionGraphView processed={processed} onSelectTool={openTool} />
           )}
           {controlPill(false)}
         </div>

@@ -55,6 +55,7 @@ export function TeamDetailView({
   onBack,
   backLabel = 'Teams',
   onOpenChat,
+  chromeless,
 }: {
   project: Project;
   teamName: string;
@@ -62,6 +63,10 @@ export function TeamDetailView({
   /** Back-button label — 'Close' when hosted in the Mission Control overlay. */
   backLabel?: string;
   onOpenChat: (session: SessionSummary) => void;
+  /** Hosted in a frame that carries the team's crumb and the way back: drop the
+   *  local top bar, but keep the Overview/Swimlanes switch — it is the view's
+   *  own control, not navigation, so it moves into the body instead. */
+  chromeless?: boolean;
 }) {
   const { data: team, isLoading, isError, error, refetch } = useTeamDetail(project.hash, teamName);
   const { data: sessions = [] } = useSessionList(project.hash);
@@ -102,34 +107,43 @@ export function TeamDetailView({
     );
   }
 
+  const modeSwitch =
+    team && team.members.length > 0 ? (
+      <div className="cl-view-mode" aria-label="Team view mode">
+        {(['overview', 'lanes'] as const).map(v => (
+          <button
+            key={v}
+            type="button"
+            className={mode === v ? 'on' : ''}
+            onClick={() => setMode(v)}
+            title={
+              v === 'lanes'
+                ? 'Conversation plotted across member lanes'
+                : 'Constellation, member dossiers and activity'
+            }
+          >
+            {v === 'overview' ? 'Overview' : 'Swimlanes'}
+          </button>
+        ))}
+      </div>
+    ) : undefined;
+
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar
-        onBack={onBack}
-        backLabel={backLabel}
-        crumbs={[{ label: title, accent: true }]}
-        right={
-          team && team.members.length > 0 ? (
-            <div className="cl-view-mode" aria-label="Team view mode">
-              {(['overview', 'lanes'] as const).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  className={mode === v ? 'on' : ''}
-                  onClick={() => setMode(v)}
-                  title={
-                    v === 'lanes'
-                      ? 'Conversation plotted across member lanes'
-                      : 'Constellation, member dossiers and activity'
-                  }
-                >
-                  {v === 'overview' ? 'Overview' : 'Swimlanes'}
-                </button>
-              ))}
-            </div>
-          ) : undefined
-        }
-      />
+      {chromeless ? (
+        modeSwitch && (
+          <div className="shrink-0 flex justify-end" style={{ padding: '12px 32px 0' }}>
+            {modeSwitch}
+          </div>
+        )
+      ) : (
+        <TopBar
+          onBack={onBack}
+          backLabel={backLabel}
+          crumbs={[{ label: title, accent: true }]}
+          right={modeSwitch}
+        />
+      )}
       <div className="flex-1 overflow-y-auto">
         {isError ? (
           <div className="cl-section" style={{ paddingTop: 32 }}>

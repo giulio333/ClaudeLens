@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useActiveSessions, useSessionList } from '../../../hooks/useIPC';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
@@ -6,13 +6,14 @@ import { TagPicker } from '../sessions/TagPicker';
 import { useTheme } from '../../../hooks/useTheme';
 import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
+import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
 import { SkillDetailView } from '../skills/SkillDetailView';
 import { AgentDetailView } from '../agents/AgentDetailView';
 import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
-import type { SessionAgent, ToolGroup } from '../chat/utils';
+import { resolveToolIcon, toolRunStatus, type SessionAgent, type ToolGroup } from '../chat/utils';
 import { sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
@@ -68,55 +69,89 @@ type Overlay =
 
 /** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
  *  focus (center) column, replacing the glass segmented pill (design 02 · Outline
- *  + Focus). The active tab carries an accent bottom border. */
-function ViewTabs({ view, setView }: { view: View; setView: (v: View) => void }) {
+ *  + Focus). The active tab carries an accent bottom border.
+ *
+ *  It is also the frame's only control row: the session tags and the two column
+ *  toggles ride in its `right` slot instead of a strip of their own above it.
+ *  That strip cost 46px of vertical chrome — on a tool detail opened from the
+ *  rail there were four stacked bars before the first line of content — to hold
+ *  three controls that fit at the end of this one. A 3-column grid keeps the
+ *  tabs centered on the column while the right cluster stays flush right: with a
+ *  plain flex row a long tag list would push them off center. */
+function ViewTabs({
+  view,
+  setView,
+  right,
+}: {
+  view: View;
+  setView: (v: View) => void;
+  right?: ReactNode;
+}) {
   const opts: Array<{ id: View; label: string; glyph: string }> = [
     { id: 'terminal', label: 'TERMINAL', glyph: '❯_' },
     { id: 'lens', label: 'LENS', glyph: '◎' },
   ];
   return (
     <div
-      className="shrink-0 flex items-center justify-center"
-      style={{ gap: 30, padding: '0 26px', borderBottom: '1px solid var(--cl-line)' }}
+      className="shrink-0"
+      style={{
+        display: 'grid',
+        gridTemplateColumns: 'minmax(0, 1fr) auto minmax(0, 1fr)',
+        alignItems: 'center',
+        padding: '0 26px',
+        borderBottom: '1px solid var(--cl-line)',
+      }}
     >
-      {opts.map(o => {
-        const on = view === o.id;
-        return (
-          <button
-            key={o.id}
-            type="button"
-            onClick={() => setView(o.id)}
-            className="inline-flex items-center transition-colors"
-            style={{
-              gap: 7,
-              padding: '14px 4px 12px',
-              borderBottom: `2px solid ${on ? 'var(--cl-accent)' : 'transparent'}`,
-            }}
-          >
-            <span
-              className="font-mono"
+      <span />
+      <div className="flex items-center justify-center" style={{ gap: 30 }}>
+        {opts.map(o => {
+          const on = view === o.id;
+          return (
+            <button
+              key={o.id}
+              type="button"
+              onClick={() => setView(o.id)}
+              className="inline-flex items-center transition-colors"
               style={{
-                fontSize: 10,
-                fontWeight: 700,
-                color: on ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
+                gap: 7,
+                padding: '14px 4px 12px',
+                borderBottom: `2px solid ${on ? 'var(--cl-accent)' : 'transparent'}`,
               }}
             >
-              {o.glyph}
-            </span>
-            <span
-              className="font-mono"
-              style={{
-                fontSize: 10,
-                letterSpacing: '0.14em',
-                fontWeight: on ? 700 : 500,
-                color: on ? 'var(--cl-ink)' : 'var(--cl-ink-4)',
-              }}
-            >
-              {o.label}
-            </span>
-          </button>
-        );
-      })}
+              <span
+                className="font-mono"
+                style={{
+                  fontSize: 10,
+                  fontWeight: 700,
+                  color: on ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
+                }}
+              >
+                {o.glyph}
+              </span>
+              <span
+                className="font-mono"
+                style={{
+                  fontSize: 10,
+                  letterSpacing: '0.14em',
+                  fontWeight: on ? 700 : 500,
+                  color: on ? 'var(--cl-ink)' : 'var(--cl-ink-4)',
+                }}
+              >
+                {o.label}
+              </span>
+            </button>
+          );
+        })}
+      </div>
+      {/* Flush right and clipped: with more tags than fit, the overflow falls off
+          the *start* of the cluster (justify-end), so the toggles and `+ tag`
+          survive and the row never grows a second line. */}
+      <div
+        className="flex items-center justify-end"
+        style={{ gap: 14, minWidth: 0, overflow: 'hidden' }}
+      >
+        {right}
+      </div>
     </div>
   );
 }
@@ -329,6 +364,33 @@ export function TerminalMissionControl({
     return () => window.removeEventListener('keydown', onKey);
   }, [overlay, closeOverlay]);
 
+  /** What the open overlay is called in the top bar, and what dismissing it is
+   *  called. The detail views themselves no longer say it: they render
+   *  `chromeless` here, so this crumb is the only place the frame states which
+   *  of the session's units is on screen. */
+  const overlayCrumb = useMemo((): { icon?: string; kind: string; label: string } | null => {
+    if (!overlay) return null;
+    switch (overlay.kind) {
+      case 'tool':
+        return {
+          icon: resolveToolIcon(
+            overlay.group.use.name,
+            overlay.group.use.input as Record<string, unknown>
+          ),
+          kind: 'tool',
+          label: overlay.group.use.name,
+        };
+      case 'agent':
+        return { kind: 'agent', label: overlay.agent.subagentType || 'agent' };
+      case 'skill-def':
+        return { kind: 'skill', label: overlay.skill.name };
+      case 'agent-def':
+        return { kind: 'agent', label: overlay.agent.name };
+      case 'team':
+        return { kind: 'team', label: overlay.teamName };
+    }
+  }, [overlay]);
+
   // The CLI registers itself in `~/.claude/sessions/<pid>.json` a few seconds
   // after boot; matching by the PTY's pid pins down *this* terminal's session.
   // Until then (or on CLI < 2.x) fall back to the resumed id. The registry wins
@@ -450,10 +512,51 @@ export function TerminalMissionControl({
       style={{ background: view === 'terminal' ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)' }}
     >
       <TopBar
-        onBack={onBack}
+        // The back arrow walks the stack: with a detail open it returns to the
+        // session, and only from the session does it leave for the project. It
+        // used to leave the session either way — defensible while each panel drew
+        // its own "Back to chat" underneath, wrong the moment this became the only
+        // arrow on screen, because the one thing a lone back arrow must do is go
+        // back one step. The label says which step, so it never has to be guessed.
+        onBack={overlay ? closeOverlay : onBack}
+        backLabel={overlay ? 'Back to session' : 'Back'}
         crumbs={[
           { label: projectName.toUpperCase() },
-          ...(title ? [{ label: title, accent: true }] : []),
+          // With a detail open the session crumb is the same step back, for the
+          // hand that is already up here; the accent ("you are here") moves to
+          // the detail's own crumb.
+          ...(title
+            ? [
+                {
+                  label: title,
+                  accent: !overlayCrumb,
+                  onClick: overlayCrumb ? closeOverlay : undefined,
+                  title: overlayCrumb ? 'Back to session (Esc)' : undefined,
+                },
+              ]
+            : []),
+          ...(overlayCrumb
+            ? [
+                {
+                  accent: true,
+                  label: (
+                    <span className="inline-flex items-center" style={{ gap: 6 }}>
+                      {overlayCrumb.icon && <span aria-hidden>{overlayCrumb.icon}</span>}
+                      <span style={{ letterSpacing: '0.1em' }}>
+                        {overlayCrumb.kind !== 'tool' && (
+                          <span style={{ color: 'var(--cl-ink-4)' }}>
+                            {overlayCrumb.kind.toUpperCase()} ·{' '}
+                          </span>
+                        )}
+                        {overlayCrumb.kind === 'tool'
+                          ? overlayCrumb.label.toUpperCase()
+                          : overlayCrumb.label}
+                      </span>
+                    </span>
+                  ),
+                },
+              ]
+            : []),
         ]}
         right={
           // No spend figure here: the vitals row of the Mission Control rail
@@ -497,51 +600,68 @@ export function TerminalMissionControl({
 
         {/* main column */}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* frame above the console: session tags + outline/rail toggles */}
-          <div className="shrink-0 flex items-center" style={{ gap: 14, padding: '14px 26px 0' }}>
-            <span style={{ flex: 1 }} />
-            {sessionFilename && (
-              <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
-                {sessionTags.map(name => (
-                  <ManagedTagChip
-                    key={name}
-                    name={name}
-                    onRemoveFromItem={() => removeTagFromSession(sessionFilename, name)}
-                    removeLabel="Remove from this session"
-                    onRename={renameTag}
-                    onDelete={() => deleteTag(name)}
-                  />
-                ))}
-                <button
-                  type="button"
-                  className="cl-chat-tag-add"
-                  aria-label="Add tag"
-                  title="Add tag"
-                  data-haspicker={!!tagPickerAnchor}
-                  onClick={e => {
-                    const rect = e.currentTarget.getBoundingClientRect();
-                    setTagPickerAnchor(prev => (prev ? null : rect));
-                  }}
-                >
-                  + tag
-                </button>
-                {tagPickerAnchor && (
-                  <TagPicker
-                    anchorRect={tagPickerAnchor}
-                    allTags={allTags}
-                    selected={sessionTags}
-                    onToggle={name => toggleTagOnSession(sessionFilename, name)}
-                    onClose={() => setTagPickerAnchor(null)}
-                  />
+          {/* v2: the Terminal/Lens switch heads the focus column as centered tabs,
+              carrying the session tags and the column toggles at its right end —
+              one control row instead of two stacked ones. */}
+          <ViewTabs
+            view={view}
+            setView={setView}
+            right={
+              <>
+                {/* Tags belong to the session, not to the unit on screen: with a
+                    detail open they are noise in the row that now carries that
+                    detail's status and its ✕. */}
+                {sessionFilename && !overlay && (
+                  <div
+                    className="cl-chat-tags"
+                    style={{ flexWrap: 'nowrap' }}
+                    onClick={e => e.stopPropagation()}
+                  >
+                    {sessionTags.map(name => (
+                      <ManagedTagChip
+                        key={name}
+                        name={name}
+                        onRemoveFromItem={() => removeTagFromSession(sessionFilename, name)}
+                        removeLabel="Remove from this session"
+                        onRename={renameTag}
+                        onDelete={() => deleteTag(name)}
+                      />
+                    ))}
+                    <button
+                      type="button"
+                      className="cl-chat-tag-add"
+                      aria-label="Add tag"
+                      title="Add tag"
+                      data-haspicker={!!tagPickerAnchor}
+                      onClick={e => {
+                        const rect = e.currentTarget.getBoundingClientRect();
+                        setTagPickerAnchor(prev => (prev ? null : rect));
+                      }}
+                    >
+                      + tag
+                    </button>
+                    {tagPickerAnchor && (
+                      <TagPicker
+                        anchorRect={tagPickerAnchor}
+                        allTags={allTags}
+                        selected={sessionTags}
+                        onToggle={name => toggleTagOnSession(sessionFilename, name)}
+                        onClose={() => setTagPickerAnchor(null)}
+                      />
+                    )}
+                  </div>
                 )}
-              </div>
-            )}
-            <OutlineToggle collapsed={outlineCollapsed} onToggle={toggleOutline} />
-            <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
-          </div>
-
-          {/* v2: the Terminal/Lens switch heads the focus column as centered tabs */}
-          <ViewTabs view={view} setView={setView} />
+                <OutlineToggle collapsed={outlineCollapsed} onToggle={toggleOutline} />
+                <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
+                {overlay?.kind === 'tool' && (
+                  <span className={`cl-tool-status ${toolRunStatus(overlay.group.result).tone}`}>
+                    {toolRunStatus(overlay.group.result).label}
+                  </span>
+                )}
+                {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
+              </>
+            }
+          />
 
           {/* the view: dark TUI slab or the embedded Lens chat (both kept mounted).
               Relative so a rail-opened detail overlay anchors to the content area
@@ -584,6 +704,11 @@ export function TerminalMissionControl({
                   onBack={onBack}
                   onOpenSkill={skill => setOverlay({ kind: 'skill-def', skill })}
                   onOpenAgent={agent => setOverlay({ kind: 'agent-def', agent })}
+                  // A tool opened from the embedded transcript is hoisted to this
+                  // frame's overlay — the same one the rail opens. Otherwise it
+                  // would mount inside a ChatView whose top bar isn't on screen,
+                  // and this bar would have no idea a tool is open to crumb it.
+                  onOpenTool={group => setOverlay({ kind: 'tool', group })}
                   jumpToTurnRef={jumpToTurnRef}
                 />
               </div>
@@ -597,14 +722,18 @@ export function TerminalMissionControl({
                 className="absolute z-20 flex flex-col overflow-hidden"
                 style={{ top: 12, right: 26, bottom: 22, left: 26, background: 'var(--cl-paper)' }}
               >
+                {/* Every panel here is `chromeless`: the crumb in the top bar,
+                    the ✕ in the tab row and Esc are the frame's, so a panel
+                    drawing its own bar would only repeat them one line lower. */}
                 {overlay.kind === 'tool' ? (
-                  <ToolDetailPanel group={overlay.group} onBack={closeOverlay} />
+                  <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
                 ) : overlay.kind === 'skill-def' ? (
                   <SkillDetailView
                     skill={overlay.skill}
                     project={project}
                     onBack={closeOverlay}
                     readOnly
+                    chromeless
                   />
                 ) : overlay.kind === 'agent-def' ? (
                   <AgentDetailView
@@ -612,6 +741,7 @@ export function TerminalMissionControl({
                     project={project}
                     onBack={closeOverlay}
                     readOnly
+                    chromeless
                   />
                 ) : overlay.kind === 'team' ? (
                   <TeamDetailView
@@ -620,6 +750,7 @@ export function TerminalMissionControl({
                     onBack={closeOverlay}
                     backLabel="Close"
                     onOpenChat={openSessionFromOverlay}
+                    chromeless
                   />
                 ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
                   <SubagentTranscriptPanel
@@ -629,6 +760,7 @@ export function TerminalMissionControl({
                     subagentType={overlay.agent.subagentType}
                     description={overlay.agent.description}
                     onBack={closeOverlay}
+                    chromeless
                   />
                 ) : null}
               </div>
