@@ -10,6 +10,7 @@ import type {
   ToolGroup,
 } from '../chat/utils';
 import {
+  parseHttpFailure,
   parseRedirectNotice,
   parseWebSearchResult,
   webCanonicalUrl,
@@ -244,8 +245,13 @@ export function buildWebActivity(groups: ToolGroup[]): WebVisit[] {
       case 'failed':
         v.hasError = true;
         v.failure =
-          (name === WEB_SEARCH ? parseWebSearchResult(raw).error : raw.split('\n')[0]?.trim()) ||
-          null;
+          (name === WEB_SEARCH
+            ? parseWebSearchResult(raw).error
+            : // `HTTP 404 Not Found` reads as a row's meta; the sentence it opens
+              // ("The server returned …", plus advice about authenticated tools)
+              // does not. A transport error has no such shape, so it keeps its
+              // first line.
+              (parseHttpFailure(raw) ?? raw.split('\n')[0]?.trim())) || null;
         break;
       case 'pending':
         break;
