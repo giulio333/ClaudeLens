@@ -32,12 +32,23 @@ import type {
   ChatToolActivityEvent,
   PermissionRequest,
 } from '../../electron/shared/chat-types';
+import type { ActiveSession, PurgePlan } from '../../src/types';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
 type IpcResult<T> = { data: T | null; error: string | null };
 
 export const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 export const fail = <T = never>(error: string): IpcResult<T> => ({ data: null, error });
+
+/** A purge plan with nothing in it — the default answer, overridden per test. */
+export const emptyPurgePlan = (over: Partial<PurgePlan> = {}): PurgePlan => ({
+  projectPath: null,
+  items: [],
+  notes: [],
+  totalItems: null,
+  raw: '',
+  ...over,
+});
 
 /** One `on*` channel: subscribe returns a disposer, like the preload bridge. */
 export class Channel<T> {
@@ -74,6 +85,8 @@ export function createChannels() {
     permissionRequest: new Channel<PermissionRequest>(),
     /** `data:changed` — the watcher event, payload = affected scopes (or null). */
     dataChanged: new Channel<unknown>(),
+    /** `live:activeSessions` — the session registry, pushed on status transitions. */
+    activeSessions: new Channel<ActiveSession[]>(),
   };
 }
 
@@ -126,10 +139,24 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     claudeCodeVersion: vi.fn(async () => ok<{ version: string | null }>({ version: null })),
   };
 
+  // Project deletion is delegated to `claude project purge`: `planPurge` is the
+  // `--dry-run` plan the confirmation dialog shows, `purge` the execution.
+  const projects = {
+    planPurge: vi.fn(async (_hash: string) => ok(emptyPurgePlan())),
+    purge: vi.fn(async (_hash: string) => ok({ output: '' })),
+  };
+
+  const live = {
+    getActiveSessions: vi.fn(async () => ok<ActiveSession[]>([])),
+    onActiveSessionsChanged: channels.activeSessions.subscribe,
+  };
+
   return {
     sessions,
     telemetry,
     updates,
+    projects,
+    live,
     onDataChanged: channels.dataChanged.subscribe,
   };
 }

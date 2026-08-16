@@ -9,7 +9,13 @@ import { GeneralTab, PermissionsTab, ToolsTab, McpTab, ExtensionsTab } from './S
 
 type Project = { hash: string; realPath: string };
 
-export function ProjectConfigView({ project }: { project: Project }) {
+export function ProjectConfigView({
+  project,
+  onDeleteProject,
+}: {
+  project: Project;
+  onDeleteProject: () => void;
+}) {
   const { data, isLoading, error, refetch, isFetching } = useEffectiveConfig(project.realPath);
 
   return (
@@ -39,6 +45,28 @@ export function ProjectConfigView({ project }: { project: Project }) {
               on the global Settings page. */}
         </div>
       ) : null}
+
+      {/* The only visible way to delete a project. It used to be a "Remove
+          current" button in the search popover's status bar — findable only by
+          someone who already knew it was there. */}
+      <div style={{ maxWidth: 660, marginTop: 44 }}>
+        <div className="set-block-head">
+          <span className="lbl">Danger zone</span>
+        </div>
+        <div className="cl-danger-zone">
+          <div className="cl-danger-zone-body">
+            <strong>Delete this project&rsquo;s Claude Code state</strong>
+            <span>
+              Transcripts, tasks, file history and its entry in{' '}
+              <span className="font-mono">~/.claude.json</span>. Your source files are never
+              touched. You&rsquo;ll see exactly what goes before confirming.
+            </span>
+          </div>
+          <button type="button" className="cl-danger-zone-btn" onClick={onDeleteProject}>
+            Delete state…
+          </button>
+        </div>
+      </div>
     </section>
   );
 }
