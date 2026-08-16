@@ -12,6 +12,7 @@ import { PathChip, SectionLabel, CodeBlock, UrlChip } from './atoms';
 import { CommandBlock, CommandOutput, CommandSheet } from './CommandBlock';
 import { ownsToolBody, ownsOutputHead, isShellOutput } from './shell';
 import {
+  parseHttpFailure,
   parseRedirectNotice,
   parseWebSearchResult,
   webHost,
@@ -767,6 +768,23 @@ export function ToolOutput({
   // as markdown (it was a mono `CodeBlock` before — the one output in the app
   // that is prose by construction, printed as if it were source).
   if (name === WEB_FETCH) {
+    // …but a refusal is not an extraction. The server's answer is a sentence
+    // with `is_error` unset, so rendering it as markdown printed "403 Forbidden"
+    // in the place where the page should be, under a `Complete` status.
+    const httpFailure = parseHttpFailure(raw);
+    if (httpFailure) {
+      return (
+        <div className="rounded-lg bg-[var(--cl-danger-soft)] border border-[var(--cl-danger)] px-4 py-3 space-y-2">
+          <p className="text-[10px] font-bold uppercase tracking-widest text-[var(--cl-danger)]">
+            {httpFailure} — page not read
+          </p>
+          <p className="text-[12px] leading-relaxed text-[var(--cl-ink-2)]">
+            The server answered, but returned no page body. A URL behind authentication needs a tool
+            that can carry credentials.
+          </p>
+        </div>
+      );
+    }
     const redirect = parseRedirectNotice(raw);
     if (redirect) {
       return (

@@ -1,4 +1,5 @@
 import {
+  parseHttpFailure,
   parseRedirectNotice,
   parseWebSearchResult,
   webCanonicalUrl,
@@ -25,6 +26,22 @@ Redirect URL: https://www.schemastore.org/claude-code-settings.json
 Status: 301 Moved Permanently
 
 To complete your request, I need to fetch content from the redirected URL.`;
+
+/** The same notice as a current CLI writes it: the target line carries a
+ *  parenthetical before its colon. Both spellings live in the transcripts. */
+const REDIRECT_RESULT_QUALIFIED = `REDIRECT DETECTED: The URL redirects to a location that was not fetched automatically.
+
+Original URL: https://www.ingesw.com/
+Redirect URL (from the server's Location header — server-supplied, not verified): http://www.ingesw.com/ingesw
+Status: 301 Moved Permanently
+
+To complete your request, I need to fetch content from the redirected URL.`;
+
+/** Verbatim: a fetch the server refused. `is_error` is unset and the whole
+ *  result is this sentence — no page came back. */
+const HTTP_403_RESULT = `The server returned HTTP 403 Forbidden.
+
+The response body was not retrieved. If this URL requires authentication, use an authenticated tool (e.g. \`gh\` for GitHub, or an MCP-provided fetch tool) instead of WebFetch.`;
 
 function webGroup(
   name: string,
@@ -131,6 +148,24 @@ describe('web — redirects and outcomes', () => {
     expect(parseRedirectNotice('# A real page about redirects\n\nRedirect URL: nope')).toBeNull();
   });
 
+  it('reads the redirect target through the qualifier a current CLI adds', () => {
+    expect(parseRedirectNotice(REDIRECT_RESULT_QUALIFIED)).toEqual({
+      from: 'https://www.ingesw.com/',
+      to: 'http://www.ingesw.com/ingesw',
+      status: '301 Moved Permanently',
+    });
+  });
+
+  it('reads an HTTP refusal, which is prose with is_error unset', () => {
+    expect(parseHttpFailure(HTTP_403_RESULT)).toBe('HTTP 403 Forbidden');
+    expect(parseHttpFailure('The server returned HTTP 404 Not Found.\n\nThe response body…')).toBe(
+      'HTTP 404 Not Found'
+    );
+    // A page that merely talks about status codes is still a page.
+    expect(parseHttpFailure('# Errors\n\nThe server returned HTTP 403 Forbidden.')).toBeNull();
+    expect(parseHttpFailure('')).toBeNull();
+  });
+
   it('grades each call: read, redirect, failed, pending', () => {
     const read = webGroup('WebFetch', { url: 'https://x.it/a' }, { content: '# Page\n\ntext' });
     const redirected = webGroup(
@@ -148,5 +183,10 @@ describe('web — redirects and outcomes', () => {
     expect(webOutcome('WebFetch', redirected.result)).toBe('redirect');
     expect(webOutcome('WebFetch', failed.result)).toBe('failed');
     expect(webOutcome('WebFetch', pending.result)).toBe('pending');
+  });
+
+  it('never grades an HTTP refusal as a page that was read', () => {
+    const refused = webGroup('WebFetch', { url: 'https://x.it/a' }, { content: HTTP_403_RESULT });
+    expect(webOutcome('WebFetch', refused.result)).toBe('failed');
   });
 });
