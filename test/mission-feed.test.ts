@@ -456,6 +456,31 @@ describe('mission feed — web activity', () => {
     expect(event.meta).not.toContain('→');
   });
 
+  it('says FAILED when the server refused, not FETCHED', () => {
+    // Verified on a real session: 4 of 14 fetches came back like this and the
+    // rail called every one of them FETCHED. `is_error` is unset — the tool
+    // reports the status in prose — so the body is the only evidence.
+    const refused = webCall(
+      'h403',
+      'WebFetch',
+      { url: 'https://www.registry.example/1564/acme-srl', prompt: 'Estrai i dati' },
+      {
+        content:
+          'The server returned HTTP 403 Forbidden.\n\nThe response body was not retrieved. If this URL requires authentication, use an authenticated tool instead of WebFetch.',
+      }
+    );
+    const [event] = buildMissionFeed(
+      input({
+        processed: [turn(2, [refused])],
+        ownTools: [refused],
+        web: buildWebActivity([refused]),
+      })
+    );
+    expect(event).toMatchObject({ right: 'FAILED', rightTint: 'var(--cl-danger)', danger: true });
+    // The status is the meta; the sentence it opens (and its advice) is not.
+    expect(event.meta).toBe('registry.example · HTTP 403 Forbidden');
+  });
+
   it('carries a search by its query, its result count and its sources', () => {
     const call = webCall('s1', 'WebSearch', { query: 'guide migration 2026' }, { content: SEARCH_OK });
     const [event] = buildMissionFeed(
