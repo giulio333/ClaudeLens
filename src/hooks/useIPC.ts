@@ -65,6 +65,7 @@ import type {
   ChatDoneEvent,
   ChatErrorEvent,
   NotificationEvent,
+  PurgePlan,
 } from '../types';
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -205,7 +206,8 @@ declare global {
         deleteTopic: (hash: string, filename: string) => Promise<IpcResult<null>>;
       };
       projects: {
-        delete: (hash: string) => Promise<IpcResult<null>>;
+        planPurge: (hash: string) => Promise<IpcResult<PurgePlan>>;
+        purge: (hash: string) => Promise<IpcResult<{ output: string }>>;
         detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>;
         planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>;
         executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>;
@@ -1267,11 +1269,29 @@ export function useAttachBackgroundAgent() {
   });
 }
 
-export function useDeleteProject() {
+/**
+ * The deletion plan, produced by `claude project purge --dry-run`.
+ * `staleTime: 0` and no retry: this is the estimate the user is about to
+ * approve, so it must be a fresh read of the disk, never a cached one.
+ */
+export function useProjectPurgePlan(hash: string | null) {
+  return useQuery({
+    queryKey: ['projects:purgePlan', hash],
+    queryFn: () => unwrap(window.electronAPI.projects.planPurge(hash!)),
+    enabled: !!hash,
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+  });
+}
+
+export function usePurgeProject() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (hash: string) => unwrap(window.electronAPI.projects.delete(hash)),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:projects'] }),
+    mutationFn: (hash: string) => unwrap(window.electronAPI.projects.purge(hash)),
+    // The purge clears `~/.claude` of everything about this project: every query
+    // that read it has just stopped having an answer.
+    onSuccess: () => qc.invalidateQueries(),
   });
 }
 

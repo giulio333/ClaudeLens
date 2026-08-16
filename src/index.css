@@ -15768,3 +15768,58 @@ select.cl-opt-input {
     width: auto;
   }
 }
+
+/* ── Danger zone (Project → Config) ─────────────────────────────
+   The visible entry point for deleting a project's Claude Code state.
+   Reads as a row of the same datasheet above it — hairline, label, value —
+   not as a warning box: the confirmation dialog is where the weight belongs,
+   and a red panel sitting permanently under a read-only page would be the
+   loudest thing on it. Only the button carries the danger tint. */
+.cl-danger-zone {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 0 0;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-danger-zone-body {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  min-width: 0;
+}
+.cl-danger-zone-body strong {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--cl-ink);
+}
+.cl-danger-zone-body span {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+}
+.cl-danger-zone-btn {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border: 1px solid var(--cl-danger);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--cl-danger);
+  font-size: 12.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+.cl-danger-zone-btn:hover {
+  background: var(--cl-danger);
+  color: #fff;
+}
+@media (max-width: 720px) {
+  .cl-danger-zone {
+    flex-direction: column;
+    gap: 12px;
+  }
+}

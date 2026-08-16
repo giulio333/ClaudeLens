@@ -110,6 +110,7 @@ import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
+import { planProjectPurge, runProjectPurge } from './modules/project-purger';
 import {
   resolveRealPath,
   invalidateCwdCache,
@@ -1387,14 +1388,45 @@ async function runClaudeCommand(args: string[]): Promise<IpcResult<string>> {
   }
 }
 
-ipcMain.handle('projects:delete', async (_event, hash: string) => {
+// Purging a project is delegated to the CLI (`claude project purge`), the only
+// one that can enumerate its own state: beyond `projects/<hash>/` it touches
+// tasks, file-history, the `~/.claude.json` entry and the filter over
+// `history.jsonl`. See `modules/project-purger.ts`.
+//
+// The renderer passes a hash, never a path: the real path is resolved here from
+// the registry, so no arbitrary path can reach the command. What the dialog
+// displays is in any case the path the CLI itself declares in the plan.
+function purgeTargetPath(hash: string): string {
+  assertValidHash(hash);
+  return resolveRealPath(PROJECTS_DIR, hash);
+}
+
+function purgeError(e: any): IpcResult<never> {
+  if (e?.code === 'ENOENT') {
+    return err(
+      `'claude' CLI not found in PATH. ClaudeLens delegates project deletion to \`claude project purge\`.`
+    );
+  }
+  return err(e?.stderr || e?.message || String(e));
+}
+
+ipcMain.handle('projects:planPurge', async (_event, hash: string) => {
   try {
-    const projectPath = projectDir(hash);
-    const { rmSync } = await import('fs');
-    rmSync(projectPath, { recursive: true, force: true });
-    return ok(null);
+    return ok(await planProjectPurge(purgeTargetPath(hash), { env: claudeEnv() }));
   } catch (e) {
-    return err(e);
+    return purgeError(e);
+  }
+});
+
+ipcMain.handle('projects:purge', async (_event, hash: string) => {
+  try {
+    const result = await runProjectPurge(purgeTargetPath(hash), { env: claudeEnv() });
+    // The project folder is gone: the cwd resolved for that hash is now a cache
+    // entry no read can confirm any more.
+    invalidateCwdCache(hash);
+    return ok(result);
+  } catch (e) {
+    return purgeError(e);
   }
 });
 
