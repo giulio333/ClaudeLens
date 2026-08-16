@@ -33,6 +33,7 @@ import type {
   PermissionRequest,
 } from '../../electron/shared/chat-types';
 import type { ActiveSession, PurgePlan } from '../../src/types';
+import type { DerivedDescription } from '../../src/hooks/useIPC';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
 type IpcResult<T> = { data: T | null; error: string | null };
@@ -141,9 +142,18 @@ export function createFakeElectronAPI(channels: FakeChannels) {
 
   // Project deletion is delegated to `claude project purge`: `planPurge` is the
   // `--dry-run` plan the confirmation dialog shows, `purge` the execution.
+  // `getDescription` is the read-only derivation from the project's CLAUDE.md —
+  // there is no writer counterpart on purpose: an edited description is stored
+  // in the prefs, never back into that file.
   const projects = {
+    getDescription: vi.fn(async (_realPath: string) => ok<DerivedDescription | null>(null)),
     planPurge: vi.fn(async (_hash: string) => ok(emptyPurgePlan())),
     purge: vi.fn(async (_hash: string) => ok({ output: '' })),
+  };
+
+  const prefs = {
+    getAll: vi.fn(async () => ok<Record<string, unknown>>({})),
+    set: vi.fn(async (_key: string, _value: unknown) => ok(null)),
   };
 
   const live = {
@@ -156,6 +166,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     telemetry,
     updates,
     projects,
+    prefs,
     live,
     onDataChanged: channels.dataChanged.subscribe,
   };

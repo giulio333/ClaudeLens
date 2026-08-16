@@ -27,7 +27,9 @@ import {
   readGlobalClaudeMd,
   getClaudeMdHierarchy,
   writeClaudeMdFile,
+  readProjectClaudeMd,
 } from './modules/claude-md-reader';
+import { deriveProjectDescription } from './modules/project-description';
 import { readProjectRules } from './modules/rules-reader';
 import { readTextFile } from './modules/safe-fs';
 import {
@@ -1427,6 +1429,25 @@ ipcMain.handle('projects:purge', async (_event, hash: string) => {
     return ok(result);
   } catch (e) {
     return purgeError(e);
+  }
+});
+
+// The one-line description shown under the project name. Derived from the
+// project's CLAUDE.md, which is read as a source only — the user's own wording
+// is stored renderer-side in the prefs store and never written back here.
+ipcMain.handle('projects:getDescription', async (_event, realPath: string) => {
+  try {
+    if (typeof realPath !== 'string' || !isAbsolute(realPath)) {
+      return err('A project path is required');
+    }
+    const source = await readProjectClaudeMd(realPath);
+    if (!source) return ok(null);
+    const derived = deriveProjectDescription(source.content, {
+      projectName: basename(realPath),
+    });
+    return ok(derived ? { ...derived, filePath: source.filePath } : null);
+  } catch (e) {
+    return err(e);
   }
 });
 
