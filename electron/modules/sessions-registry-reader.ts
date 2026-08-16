@@ -2,7 +2,7 @@ import { readdir, readFile } from 'fs/promises';
 import { join } from 'path';
 import { execFile } from 'child_process';
 import { promisify } from 'util';
-import { findClaudeProcesses } from './process-scanner';
+import { findClaudeProcesses, isClaudeCliCommand } from './process-scanner';
 import { CLAUDE_DIR } from '../utils';
 
 const execFileAsync = promisify(execFile);
@@ -111,16 +111,6 @@ async function readPidCommands(pids: number[]): Promise<Map<number, string> | nu
     if (m) commands.set(parseInt(m[1], 10), m[2].trim());
   }
   return commands;
-}
-
-/** True when a command line looks like an interactive claude CLI — same
- *  include/exclude shape as the process-scanner grep: not the Claude desktop
- *  app, not ClaudeLens itself, and not the CLI's background pty helpers. */
-function isClaudeCliCommand(cmd: string): boolean {
-  return (
-    /\bclaude\b/i.test(cmd) &&
-    !/Applications\/Claude\.app|claudelens|esbuild|--bg-pty-host|--bg-spare|--bg-pty\b/i.test(cmd)
-  );
 }
 
 export interface ReadActiveSessionsOptions {

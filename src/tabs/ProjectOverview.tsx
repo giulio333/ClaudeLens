@@ -4,7 +4,6 @@ import LiveMonitor from './LiveMonitor';
 import {
   useAllSkills,
   useCostSummary,
-  useDeleteProject,
   useGlobalAgents,
   useGlobalMcp,
   useGlobalSkills,
@@ -202,7 +201,6 @@ export default function ProjectOverview() {
   const { data: globalAgents = [] } = useGlobalAgents();
   const { data: projectAgents = [] } = useProjectAgents(selected?.realPath ?? null);
   const { data: mcpData } = useGlobalMcp();
-  const deleteProjectMutation = useDeleteProject();
   const { pinned, togglePin } = usePinnedProjects();
   const { isPinned: isSessionPinned, togglePin: toggleSessionPin } = usePinnedSessions();
 
@@ -388,16 +386,14 @@ export default function ProjectOverview() {
     );
   }
 
-  async function handleConfirmDelete(p: Project) {
-    try {
-      await deleteProjectMutation.mutateAsync(p.hash);
-      if (selected?.hash === p.hash) {
-        setSelected(null);
-        goGlobal();
-      }
-    } finally {
-      setProjectToDelete(null);
+  // The dialog runs the purge (it owns the plan the user approves); what is left
+  // here is leaving a project that no longer has any state to show.
+  function handleDeleted(p: Project) {
+    if (selected?.hash === p.hash) {
+      setSelected(null);
+      goGlobal();
     }
+    setProjectToDelete(null);
   }
 
   const isGlobalHome = view.type === 'global-home';
@@ -680,8 +676,7 @@ export default function ProjectOverview() {
         {projectToDelete && (
           <DeleteProjectDialog
             project={projectToDelete}
-            isLoading={deleteProjectMutation.isPending}
-            onConfirm={() => handleConfirmDelete(projectToDelete)}
+            onConfirm={() => handleDeleted(projectToDelete)}
             onCancel={() => setProjectToDelete(null)}
           />
         )}
@@ -825,6 +820,7 @@ export default function ProjectOverview() {
                     section={sectionFromView(view)}
                     onNavigate={setView}
                     onToggleProjectSearch={toggleProjectSearch}
+                    onDeleteProject={setProjectToDelete}
                   />
                 ) : null}
               </ErrorBoundary>
@@ -836,8 +832,7 @@ export default function ProjectOverview() {
       {projectToDelete && (
         <DeleteProjectDialog
           project={projectToDelete}
-          isLoading={deleteProjectMutation.isPending}
-          onConfirm={() => handleConfirmDelete(projectToDelete)}
+          onConfirm={() => handleDeleted(projectToDelete)}
           onCancel={() => setProjectToDelete(null)}
         />
       )}

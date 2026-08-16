@@ -1962,7 +1962,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'agents:getGlobal',
     'agents:getByProject',
     'agents:create',
-    'projects:delete',
+    'projects:planPurge',
+    'projects:purge',
     'mcp:getGlobal',
     'ai:run',
     'ai:stop',
@@ -2051,7 +2052,31 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     ok({ filePath: '/Users/alice/.claude/agents/new-agent.md' })
   );
 
-  ipcMain.handle('projects:delete', () => ok(null));
+  ipcMain.handle('projects:planPurge', () =>
+    ok({
+      projectPath: '/Users/alice/Projects/acme',
+      items: [
+        {
+          kind: 'dir',
+          target: '/Users/alice/.claude/projects/-Users-alice-Projects-acme',
+          detail: 'project transcripts (.jsonl) and memory/',
+          count: 1,
+          targets: ['/Users/alice/.claude/projects/-Users-alice-Projects-acme'],
+        },
+        {
+          kind: 'config',
+          target: 'projects["/Users/alice/Projects/acme"]',
+          detail: 'project entry in ~/.claude.json (trust, history, MCP servers)',
+          count: 1,
+          targets: ['projects["/Users/alice/Projects/acme"]'],
+        },
+      ],
+      notes: ['shell-snapshots/ are not project-scoped and will not be touched'],
+      totalItems: 2,
+      raw: '',
+    })
+  );
+  ipcMain.handle('projects:purge', () => ok({ output: 'Purged 2 item(s).' }));
 
   ipcMain.handle('mcp:getGlobal', () => ok(MOCK_MCP));
 
