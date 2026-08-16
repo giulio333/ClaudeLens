@@ -2752,36 +2752,34 @@ body {
   text-transform: uppercase;
   white-space: nowrap;
 }
+/* The tool's own qualifier ("Tool execution", "Memory operation"), riding the
+   breadcrumb next to the name it qualifies instead of a line under the heading. */
+.cl-tool-detail-bar-sub {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--cl-ink-4);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cl-tool-detail-scroll {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 30px 36px 56px;
+  padding: 22px 36px 56px;
 }
+/* Heading only — the kicker is gone (the bar already names the tool) and the
+   status badges moved into the bar. What is left is the one thing the
+   breadcrumb cannot say: a query, a page, a description. Same cap as the panels
+   below it so the rule under the title ends where their borders do. */
 .cl-tool-detail-hero {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  align-items: start;
-  gap: 24px;
   max-width: 1180px;
-  margin: 0 auto 20px;
-  padding-bottom: 20px;
+  margin: 0 auto 18px;
+  padding-bottom: 16px;
   border-bottom: 1.5px solid var(--cl-ink);
 }
-.cl-tool-detail-title {
-  min-width: 0;
-}
-.cl-tool-detail-kicker {
-  display: block;
-  margin-bottom: 9px;
-  color: var(--cl-accent-ink);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.2em;
-  text-transform: uppercase;
-}
-.cl-tool-detail-title h2 {
+.cl-tool-detail-hero h2 {
   margin: 0;
   color: var(--cl-ink);
   font-size: 28px;
@@ -2789,18 +2787,13 @@ body {
   line-height: 1.12;
   letter-spacing: 0;
 }
-.cl-tool-detail-title p {
-  margin: 10px 0 0;
-  color: var(--cl-ink-3);
-  font-family: var(--font-mono);
-  font-size: 11px;
-}
 .cl-tool-detail-badges {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: 8px;
-  flex-wrap: wrap;
+  flex-shrink: 0;
+  margin-left: auto;
 }
 .cl-tool-status {
   display: inline-flex;
@@ -2831,10 +2824,12 @@ body {
   background: color-mix(in oklch, var(--cl-accent-soft) 48%, var(--cl-paper));
   color: var(--cl-accent-ink);
 }
+/* One cap for the page: the hero used to sit at 1180 over panels capped at 980,
+   so the rule under the title overhung the borders below it by 100px a side. */
 .cl-tool-detail-grid {
   display: grid;
   gap: 14px;
-  max-width: 980px;
+  max-width: 1180px;
   margin: 0 auto;
 }
 .cl-tool-detail-panel,
@@ -6123,7 +6118,7 @@ body {
     font-size: 9px;
   }
   .cl-tool-detail-scroll {
-    padding: 24px 26px 46px;
+    padding: 20px 26px 46px;
   }
   .cl-agent-detail-layout {
     grid-template-columns: 1fr;
@@ -6184,20 +6179,19 @@ body {
   }
   .cl-tool-detail-bar {
     padding: 0 18px;
+    gap: 8px;
+  }
+  .cl-tool-detail-bar-sub {
+    display: none;
   }
   .cl-tool-detail-scroll {
-    padding: 22px 16px 40px;
+    padding: 18px 16px 40px;
   }
   .cl-tool-detail-hero {
-    grid-template-columns: 1fr;
-    gap: 14px;
-    margin-bottom: 16px;
+    margin-bottom: 14px;
   }
-  .cl-tool-detail-title h2 {
+  .cl-tool-detail-hero h2 {
     font-size: 22px;
-  }
-  .cl-tool-detail-badges {
-    justify-content: flex-start;
   }
 }
 
@@ -6546,34 +6540,29 @@ body {
   );
   pointer-events: none;
 }
+/* No spine here. The 88px gutter and the hairline at 56px were an echo of the
+   transcript's thread (`.cl-transcript-inner::before`), but a tool detail is an
+   overlay with no transcript under it — the rhyme aligned with nothing and cost
+   a fifth of the column: inside Mission Control the centre pane is ~900px wide
+   and 114px of it (26 inset + 88 gutter) was empty paper. */
 .cl-tool-detail {
-  background:
-    linear-gradient(
-      90deg,
-      transparent 0,
-      transparent 55px,
-      var(--cl-line-soft) 56px,
-      transparent 57px
-    ),
-    var(--cl-paper);
+  background: var(--cl-paper);
 }
 .cl-tool-detail-bar {
-  padding-left: 88px;
+  padding-left: 44px;
   background: transparent;
 }
 .cl-tool-detail-mini-icon {
   border-radius: 6px;
 }
 .cl-tool-detail-scroll {
-  padding: 30px 42px 64px 88px;
+  padding: 22px 44px 64px;
 }
 .cl-tool-detail-hero {
-  max-width: 1180px;
-  margin-bottom: 18px;
-  padding-bottom: 18px;
-  border-bottom: 1.5px solid var(--cl-ink);
+  margin-bottom: 16px;
+  padding-bottom: 15px;
 }
-.cl-tool-detail-title h2 {
+.cl-tool-detail-hero h2 {
   font-size: 27px;
 }
 .cl-tool-status {
