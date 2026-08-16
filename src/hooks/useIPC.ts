@@ -178,6 +178,14 @@ export interface MergeResult {
   warnings: string[];
 }
 
+/** A project description read out of the project's CLAUDE.md (never written back). */
+export interface DerivedDescription {
+  text: string;
+  source: 'lead' | 'section' | 'prose' | 'title';
+  heading?: string;
+  filePath: string;
+}
+
 export interface MergePlan {
   source: { hash: string; realPath: string; authoritative: boolean };
   dest: { hash: string; realPath: string; authoritative: boolean };
@@ -206,6 +214,7 @@ declare global {
         deleteTopic: (hash: string, filename: string) => Promise<IpcResult<null>>;
       };
       projects: {
+        getDescription: (realPath: string) => Promise<IpcResult<DerivedDescription | null>>;
         planPurge: (hash: string) => Promise<IpcResult<PurgePlan>>;
         purge: (hash: string) => Promise<IpcResult<{ output: string }>>;
         detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>;
@@ -1266,6 +1275,20 @@ export function useAttachBackgroundAgent() {
   return useMutation({
     mutationFn: ({ cwd, id }: { cwd: string; id: string }) =>
       unwrap(window.electronAPI.agents.attachBg(cwd, id)),
+  });
+}
+
+/**
+ * The description derived from the project's CLAUDE.md. That file lives in the
+ * source tree, which no watcher covers, so there is no `data:changed` to react
+ * to: it is re-read when a project view mounts and then left alone.
+ */
+export function useProjectDescription(realPath: string | null) {
+  return useQuery({
+    queryKey: ['projects:description', realPath],
+    queryFn: () => unwrap(window.electronAPI.projects.getDescription(realPath!)),
+    enabled: !!realPath,
+    staleTime: 5 * 60 * 1000,
   });
 }
 

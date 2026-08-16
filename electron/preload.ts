@@ -184,6 +184,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   projects: {
     planPurge: (hash: string) => ipcRenderer.invoke('projects:planPurge', hash),
     purge: (hash: string) => ipcRenderer.invoke('projects:purge', hash),
+    getDescription: (realPath: string) => ipcRenderer.invoke('projects:getDescription', realPath),
     detectDuplicates: () => ipcRenderer.invoke('projects:detectDuplicates'),
     planMerge: (sourceHash: string, destHash: string) =>
       ipcRenderer.invoke('projects:planMerge', sourceHash, destHash),
