@@ -149,6 +149,23 @@ export interface DeleteSessionResult {
   warnings: string[];
 }
 
+/** The plan from `claude project purge --dry-run` — see `electron/modules/project-purger.ts`. */
+export interface PurgePlanItem {
+  kind: string;
+  target: string;
+  detail: string;
+  count: number;
+  targets: string[];
+}
+
+export interface PurgePlan {
+  projectPath: string | null;
+  items: PurgePlanItem[];
+  notes: string[];
+  totalItems: number | null;
+  raw: string;
+}
+
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
 export interface Task {

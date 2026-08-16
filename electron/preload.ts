@@ -182,7 +182,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ) => ipcRenderer.invoke('studio:writeScript', fileName, content, projectPath, expectedSource),
   },
   projects: {
-    delete: (hash: string) => ipcRenderer.invoke('projects:delete', hash),
+    planPurge: (hash: string) => ipcRenderer.invoke('projects:planPurge', hash),
+    purge: (hash: string) => ipcRenderer.invoke('projects:purge', hash),
     detectDuplicates: () => ipcRenderer.invoke('projects:detectDuplicates'),
     planMerge: (sourceHash: string, destHash: string) =>
       ipcRenderer.invoke('projects:planMerge', sourceHash, destHash),

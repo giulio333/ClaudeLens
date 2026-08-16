@@ -251,11 +251,13 @@ export function ProjectView({
   section,
   onNavigate,
   onToggleProjectSearch,
+  onDeleteProject,
 }: {
   project: Project;
   section: ProjectSection;
   onNavigate: (v: View) => void;
   onToggleProjectSearch: (anchor: HTMLElement) => void;
+  onDeleteProject: (project: Project) => void;
 }) {
   const { isPinned, togglePin } = usePinnedProjects();
   const pinnedNow = isPinned(project.hash);
@@ -1496,7 +1498,9 @@ export function ProjectView({
         />
       )}
 
-      {section === 'config' && <ProjectConfigView project={project} />}
+      {section === 'config' && (
+        <ProjectConfigView project={project} onDeleteProject={() => onDeleteProject(project)} />
+      )}
     </div>
   );
 }
