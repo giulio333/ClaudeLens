@@ -1,4 +1,5 @@
-import { memo, useCallback, useEffect, useMemo, useState, type CSSProperties } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import { createPortal } from 'react-dom';
 import {
   useMemoryProject,
   useSessionList,
@@ -12,13 +13,16 @@ import {
   useActiveSessions,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
-import { fmt, fmtModel, sessionTitle, formatTokens, buildModelMix } from '../utils';
+import { fmt, fmtCost, fmtModel, sessionTitle, formatTokens, buildModelMix } from '../utils';
 import type { SessionSummary, MemoryTopic } from '../../../types';
 import { Lens } from './Lens';
 import { McpServerGrid } from '../mcp/McpServerGrid';
 import { AgentsLiveView } from '../agents-live/AgentsLiveView';
 import { TasksSection } from '../tasks/TasksSection';
 import { projectDisplayName } from '../shared/projectName';
+import { ReadoutShell, ReadoutCell, ReadoutPart, ReadoutRule } from '../shared/ReadoutCard';
+import { READOUT_RAMP } from '../shared/readout';
+import { kTok } from '../terminal/mission-feed';
 import { PlansSection } from '../plans/PlansSection';
 import { WorkflowsSection } from '../workflows/WorkflowsSection';
 import { TeamsSection } from '../teams/TeamsSection';
@@ -118,8 +122,10 @@ function normalizeRetentionDays(days: number): number {
   return Number.isFinite(days) && days > 0 ? Math.max(1, Math.round(days)) : DEFAULT_RETENTION_DAYS;
 }
 
+// en-US, not it-IT: the UI is english-only, and an it-IT month abbreviation
+// ("ago", "set") is the only italian word in the band's tooltips.
 function fmtBucketDate(ms: number): string {
-  return new Date(ms).toLocaleDateString('it-IT', { day: '2-digit', month: 'short' });
+  return new Date(ms).toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
 }
 
 function bucketLabel(startMs: number, endMs: number): string {
@@ -128,32 +134,57 @@ function bucketLabel(startMs: number, endMs: number): string {
   return start === end ? start : `${start} - ${end}`;
 }
 
-function buildTimelineBuckets(sessions: SessionSummary[], days: number): TimelineBucket[] {
-  const bucketCount = Math.min(MAX_STAT_BARS, Math.max(1, Math.ceil(days)));
-  const now = Date.now();
-  const windowMs = days * DAY_MS;
-  const startMs = now - windowMs;
-  const bucketMs = windowMs / bucketCount;
-  const buckets = Array.from({ length: bucketCount }, (_, i) => {
-    const from = startMs + i * bucketMs;
-    const to = i === bucketCount - 1 ? now : startMs + (i + 1) * bucketMs;
-    return {
-      key: `${Math.round(from)}-${Math.round(to)}`,
-      label: bucketLabel(from, to),
-      sessions: 0,
-      tokens: 0,
-    };
-  });
+/** Local midnight, `offsetDays` away from the day `ms` falls in. Going through
+ *  `setDate` rather than adding `DAY_MS` keeps every boundary on a true
+ *  midnight across a DST change, where a day is 23 or 25 hours long. */
+function dayStart(ms: number, offsetDays = 0): number {
+  const d = new Date(ms);
+  d.setHours(0, 0, 0, 0);
+  d.setDate(d.getDate() + offsetDays);
+  return d.getTime();
+}
+
+// Buckets span whole days, aligned to local midnight. Slicing the window into
+// exactly MAX_STAT_BARS parts made 30 days into 2.5-day buckets cut at noon, so
+// two adjacent bars both printed the day they shared ("14 Aug - 16 Aug" next to
+// "16 Aug - 19 Aug") — the one thing a reader uses the label to rule out.
+function buildTimelineBuckets(
+  sessions: SessionSummary[],
+  days: number,
+  nowMs: number
+): TimelineBucket[] {
+  const daysPerBucket = Math.max(1, Math.ceil(days / MAX_STAT_BARS));
+  const bucketCount = Math.max(1, Math.ceil(days / daysPerBucket));
+  // Boundaries are computed, not derived by division: with DST in the window
+  // they are not equally spaced in milliseconds.
+  const edges = Array.from({ length: bucketCount + 1 }, (_, k) =>
+    dayStart(nowMs, 1 - (bucketCount - k) * daysPerBucket)
+  );
+  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
+    key: `${edges[i]}-${edges[i + 1]}`,
+    label: bucketLabel(edges[i], edges[i + 1]),
+    sessions: 0,
+    tokens: 0,
+  }));
 
   for (const s of sessions) {
     const t = new Date(s.date).getTime();
-    if (isNaN(t) || t < startMs || t > now) continue;
-    const idx = Math.min(bucketCount - 1, Math.max(0, Math.floor((t - startMs) / bucketMs)));
+    if (isNaN(t) || t < edges[0] || t >= edges[bucketCount]) continue;
+    let idx = bucketCount - 1;
+    while (idx > 0 && t < edges[idx]) idx -= 1;
     buckets[idx].sessions += 1;
     buckets[idx].tokens += s.totalTokens;
   }
 
   return buckets;
+}
+
+/** Width of the token breakdown card — needed both to draw it and to clamp it
+ *  inside the window before it is drawn. */
+const PEEK_W = 300;
+
+function pctOf(part: number, whole: number): number {
+  return whole > 0 ? (part / whole) * 100 : 0;
 }
 
 function bucketValue(bucket: TimelineBucket, metric: StatMetric): number {
@@ -314,17 +345,41 @@ export function ProjectView({
   const liveProc = procs.find(p => p.cwd === project.realPath);
 
   // Wall-clock for the retention window, kept in state so render never calls
-  // Date.now() directly. Seeded right after mount and refreshed each minute;
-  // 0 until the first tick (statsSessions falls back to all sessions then).
-  const [nowMs, setNowMs] = useState(0);
+  // Date.now() directly. The lazy initialiser runs once at mount, so the window
+  // is correct on the FIRST render: seeding it from an effect left one frame
+  // where `statsSessions` fell back to the whole history under a "/ 30d" label,
+  // i.e. the band briefly printed project-wide totals as if they were the month's.
+  // Hover/focus state of the token figure's breakdown card. The card is
+  // portalled (the hero clips its children), so what is stored is where to pin
+  // it in viewport coordinates, measured from the figure it explains.
+  const tokenNumRef = useRef<HTMLDivElement>(null);
+  const [tokenPeek, setTokenPeek] = useState<{ top: number; left: number } | null>(null);
+  const openTokenPeek = useCallback(() => {
+    const r = tokenNumRef.current?.getBoundingClientRect();
+    if (!r) return;
+    setTokenPeek({
+      top: r.bottom + 8,
+      // Clamped so the card never hangs off the right edge on a narrow window.
+      left: Math.max(12, Math.min(r.left, window.innerWidth - PEEK_W - 12)),
+    });
+  }, []);
+  const closeTokenPeek = useCallback(() => setTokenPeek(null), []);
+  // A fixed card measured once would drift away from its figure on scroll, and
+  // the pointer may never leave the cell while the page moves under it.
   useEffect(() => {
-    const tick = () => setNowMs(Date.now());
-    const seed = setTimeout(tick, 0);
-    const t = setInterval(tick, 60_000);
+    if (!tokenPeek) return;
+    const drop = () => setTokenPeek(null);
+    window.addEventListener('scroll', drop, true);
+    window.addEventListener('resize', drop);
     return () => {
-      clearTimeout(seed);
-      clearInterval(t);
+      window.removeEventListener('scroll', drop, true);
+      window.removeEventListener('resize', drop);
     };
+  }, [tokenPeek]);
+  const [nowMs, setNowMs] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNowMs(Date.now()), 60_000);
+    return () => clearInterval(t);
   }, []);
 
   // ── Derived ──
@@ -335,7 +390,6 @@ export function ProjectView({
   const isTeamsSection = section === 'teams';
   const retentionDays = normalizeRetentionDays(cleanupDays);
   const statsSessions = useMemo(() => {
-    if (nowMs === 0) return sessions;
     const cutoff = nowMs - retentionDays * DAY_MS;
     return sessions.filter(s => {
       const t = new Date(s.date).getTime();
@@ -347,22 +401,36 @@ export function ProjectView({
   const totalCost = statsSessions.reduce((s, x) => s + x.estimatedCost, 0);
   const totalMessages = statsSessions.reduce((s, x) => s + x.messageCount, 0);
   const tokensFmt = formatTokens(totalTokens);
-  const avgTokens =
-    sessionCount > 0
-      ? formatTokens(Math.round(totalTokens / sessionCount))
-      : { value: '0', unit: '' };
   const avgMessages = sessionCount > 0 ? Math.round(totalMessages / sessionCount) : 0;
+  // What the token figure is made of. `totalTokens` sums cache reads at full
+  // weight even though they bill at a tenth of input, so on a long project the
+  // headline number mostly measures re-read context — the composition is what
+  // makes it honest, and it rides in the hover card rather than in the band.
+  const tokenParts = useMemo(() => {
+    const sum = (pick: (s: SessionSummary) => number) =>
+      statsSessions.reduce((n, s) => n + pick(s), 0);
+    const fresh = sum(s => s.inputTokens) + sum(s => s.outputTokens);
+    const cacheRead = sum(s => s.cacheReadTokens);
+    const cacheWrite = sum(s => s.cacheWriteTokens);
+    const total = fresh + cacheRead + cacheWrite;
+    return {
+      fresh,
+      cacheRead,
+      cacheWrite,
+      cacheSavings: sum(s => s.cacheSavings),
+      cacheShare: total > 0 ? (cacheRead / total) * 100 : 0,
+    };
+  }, [statsSessions]);
   const allSessionCount = sessions.length;
   const olderSessionCount = Math.max(0, allSessionCount - sessionCount);
   const lastActive = sessions[0]?.date;
   const statBuckets = useMemo(
-    () => buildTimelineBuckets(statsSessions, retentionDays),
-    [statsSessions, retentionDays]
+    () => buildTimelineBuckets(statsSessions, retentionDays, nowMs),
+    [statsSessions, retentionDays, nowMs]
   );
   // Sessions in the window immediately before the retention one, so the hero
   // band's session figure can carry an honest delta instead of a bare count.
   const prevWindowSessions = useMemo(() => {
-    if (nowMs === 0) return 0;
     const end = nowMs - retentionDays * DAY_MS;
     const start = end - retentionDays * DAY_MS;
     return sessions.filter(s => {
@@ -752,42 +820,117 @@ export function ProjectView({
               </div>
               <div className="num">
                 {fmt(sessionCount)}
-                {nowMs > 0 && sessionDelta !== 0 && (
-                  <span className={`delta${sessionDelta < 0 ? ' down' : ''}`}>
+                {sessionDelta !== 0 && (
+                  /* The delta is against the window immediately before this one.
+                     It carried no reference at all, and a green "+3" also read as
+                     a verdict the data does not hold — more sessions is not
+                     better — so it states its baseline and stays neutral. */
+                  <span
+                    className="delta"
+                    title={`${fmt(prevWindowSessions)} in the previous ${retentionDays} days`}
+                  >
                     {sessionDelta > 0 ? '+' : '−'}
                     {Math.abs(sessionDelta)}
                   </span>
                 )}
               </div>
+              {/* The only sparkline left: sessions and tokens trace nearly the
+                  same curve, so a second one spent a quarter of the band
+                  re-drawing this one. */}
               <Bars buckets={statBuckets} metric="sessions" />
               <div className="sub">
                 {olderSessionCount > 0
                   ? `${fmt(olderSessionCount)} older · ${fmt(allSessionCount)} total`
-                  : 'full retention'}
+                  : `all ${fmt(allSessionCount)} in window`}
               </div>
             </div>
 
-            <div className="cl-hcell">
-              <div className="lbl">Tokens</div>
-              <div className="num">
+            <div
+              className="cl-hcell cl-hcell--hover"
+              onMouseEnter={openTokenPeek}
+              onMouseLeave={closeTokenPeek}
+            >
+              <div className="lbl">Tokens / {retentionDays}d</div>
+              <div
+                className="num"
+                ref={tokenNumRef}
+                tabIndex={0}
+                onFocus={openTokenPeek}
+                onBlur={closeTokenPeek}
+              >
                 {tokensFmt.value}
                 <small>{tokensFmt.unit}</small>
               </div>
-              <Bars buckets={statBuckets} metric="tokens" />
               <div className="sub">
-                {avgTokens.value}
-                {avgTokens.unit || ' tok'} avg · est. ${totalCost.toFixed(2)}
+                {Math.round(tokenParts.cacheShare)}% cache read
+                <span className="cl-hpeek-hint"> · hover</span>
+              </div>
+              {/* Portalled to <body> on purpose: `.cl-hero` clips its children
+                  (`overflow: hidden` keeps the Lens, which overhangs by 120px,
+                  inside), so a card anchored inside the cell was cut off at the
+                  hero's bottom edge. Same move MemoryPeekCard makes. */}
+              {tokenPeek &&
+                totalTokens > 0 &&
+                createPortal(
+                  <ReadoutShell
+                    title="TOKENS"
+                    meta={`${retentionDays}d`}
+                    style={{
+                      position: 'fixed',
+                      top: tokenPeek.top,
+                      left: tokenPeek.left,
+                      width: PEEK_W,
+                    }}
+                  >
+                    <div className="flex" style={{ gap: 12, marginTop: 11 }}>
+                      <ReadoutCell label="TOTAL" value={kTok(totalTokens)} />
+                      <ReadoutCell
+                        label="CACHE READ"
+                        value={`${Math.round(tokenParts.cacheShare)}%`}
+                      />
+                      <ReadoutCell
+                        label="SAVED"
+                        value={fmtCost(tokenParts.cacheSavings)}
+                        color="var(--cl-ok)"
+                      />
+                    </div>
+                    <ReadoutRule />
+                    <ReadoutPart
+                      label="fresh in/out"
+                      value={kTok(tokenParts.fresh)}
+                      share={pctOf(tokenParts.fresh, totalTokens)}
+                      color={READOUT_RAMP.soft}
+                    />
+                    <ReadoutPart
+                      label="cache read"
+                      value={kTok(tokenParts.cacheRead)}
+                      share={pctOf(tokenParts.cacheRead, totalTokens)}
+                      color={READOUT_RAMP.full}
+                    />
+                    <ReadoutPart
+                      label="cache write"
+                      value={kTok(tokenParts.cacheWrite)}
+                      share={pctOf(tokenParts.cacheWrite, totalTokens)}
+                      color={READOUT_RAMP.mid}
+                    />
+                  </ReadoutShell>,
+                  document.body
+                )}
+            </div>
+
+            {/* Spend takes the cell Messages held: it is the question an
+                overview gets asked, and it used to be the smallest line of the
+                band. Messages survives as the qualifier it always was. */}
+            <div className="cl-hcell">
+              <div className="lbl">Spend / {retentionDays}d</div>
+              <div className="num">{fmtCost(totalCost)}</div>
+              <div className="sub">
+                {fmt(avgMessages)} msg avg · {fmt(totalMessages)} total
               </div>
             </div>
 
-            <div className="cl-hcell">
-              <div className="lbl">Messages</div>
-              <div className="num">{fmt(totalMessages)}</div>
-              <div className="sub">{fmt(avgMessages)} avg / session</div>
-            </div>
-
             <div className="cl-hcell cl-hcell--mix">
-              <div className="lbl">Model distribution</div>
+              <div className="lbl">Model mix / {retentionDays}d</div>
               {modelMix.length === 0 ? (
                 <div className="sub">No usage in this window</div>
               ) : (
@@ -804,11 +947,13 @@ export function ProjectView({
                       />
                     ))}
                   </div>
+                  {/* One line, dot-separated: bar plus a stacked legend was the
+                      same share encoded twice, over two rows. */}
                   <div className="cl-mixlegend">
                     {modelMix.map(slice => (
                       <span key={slice.key}>
                         <i className={`dot ${slice.key}`} />
-                        {slice.label} {Math.round(slice.pct)}%
+                        {slice.label} {slice.pctLabel}%
                       </span>
                     ))}
                   </div>
