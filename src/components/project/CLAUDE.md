@@ -317,11 +317,17 @@ Sezione **Agent Studio** (globale, tab primario nella barra superiore): editor v
 
 ### `sessions/`
 
-| File            | Esporta     | Descrizione                                    |
-| --------------- | ----------- | ---------------------------------------------- |
-| `TagBar.tsx`    | `TagBar`    | Barra dei tag di una sessione (lista + add)    |
-| `TagChip.tsx`   | `TagChip`   | Chip singolo tag (colore + remove)             |
-| `TagPicker.tsx` | `TagPicker` | Picker per assegnare/creare tag a una sessione |
+| File                 | Esporta          | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| -------------------- | ---------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `TagBar.tsx`         | `TagBar`         | Barra dei tag di una sessione (lista + add)                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
+| `TagChip.tsx`        | `TagChip`        | Chip singolo tag (colore + remove)                                                                                                                                                                                                                                                                                                                                                                                                                                                                         |
+| `TagPicker.tsx`      | `TagPicker`      | Picker per assegnare/creare tag a una sessione                                                                                                                                                                                                                                                                                                                                                                                                                                                             |
+| `ManagedTagChip.tsx` | `ManagedTagChip` | Chip tag + il suo menu azioni (filtra / rimuovi / rinomina / elimina ovunque)                                                                                                                                                                                                                                                                                                                                                                                                                              |
+| `SessionRowMenu.tsx` | `SessionRowMenu` | Il kebab "⋯" in coda a una riga sessione e il suo menu portal (Open in chat · Add tag… · Pin/Unpin · Delete). Stato locale al bottone: il rect del trigger è misurato all'apertura e serve sia a posizionare il menu (right-aligned, ribaltato sopra se la riga sta troppo in basso) sia ad ancorare il `TagPicker` che "Add tag" apre. Chiude su Esc, mousedown fuori (il trigger escluso, così il secondo click chiude invece di riaprire) e **scroll** — è `position: fixed` sopra una lista che scorre |
+
+L'anatomia del popover (`.cl-menu` / `-head` / `-item` / `-item.danger`) è
+**condivisa** con `ManagedTagChip`: si chiamava `.cl-tag-menu` finché i tag erano
+l'unico chiamante. Una sola forma per ogni "cosa posso fare con questo?".
 
 ---
 
@@ -508,18 +514,44 @@ periodo di retention sono scese dentro le prime due celle, media/costo sono
 diventati la riga piccola, e la cella "live" è migrata nel piede del rail (era
 duplicata in due punti). Il nome display scende a `clamp(40px, 4.2vw, 72px)`
 perché una cifra da 26px sotto un titolo da 132px non è una gerarchia.
-Le sessioni sono **righe a leader dots** (`.cl-srow`): pin, indice, titolo, tag,
-filetto puntinato, e a destra il gruppo cifre `msg · modello · token · data`.
-Le azioni di riga (Chat / + tag / Delete) sono **posizionate in assoluto sul
-filetto**, che è spazio già occupato: comparire in hover non rifluisce nulla.
-Per questo il filetto ha un `min-width` pari alla larghezza del cluster (196px):
-i bottoni non partecipano al layout, quindi senza quello spazio riservato un
-titolo lungo si prendeva tutto il gap e in hover i bottoni finivano **sopra** il
-titolo. Il titolo tronca prima, il cluster non si sposta mai.
-La riga pinnata prende il wash accent + il filetto accent, e la lista si apre
-con il filetto d'inchiostro 1.5px. Il piede riporta il range (`1–N of M`) e il
-"Show more": il caricamento resta progressivo, prende solo l'idioma del pager
-del mock.
+Le sessioni sono **righe** (`.cl-srow`): pin, indice, titolo, tag, spazio
+elastico, il gruppo cifre `msg · modello · token · data` e in coda il **kebab
+delle azioni**. Due elementi di 5b sono caduti qui, per la stessa ragione:
+
+- **il filetto puntinato** che portava l'occhio dal titolo alle cifre. Esisteva
+  anche come spazio morto riservato (`min-width: 196px`) sotto le azioni, che
+  gli galleggiavano sopra in assoluto; senza quel cluster non connette più
+  nulla, e una colonna di puntini grigi ripetuta su ogni riga si leggeva come
+  decorazione. Resta uno `.cl-srow-gap` vuoto: ciò che allinea davvero la lista
+  sono le **larghezze fisse delle colonne di cifre** (`model` 92px, `toks` 72px,
+  `when` 104px), non i puntini;
+- **i tre bottoni etichettati** (Chat / + tag / Delete), sostituiti da un solo
+  `SessionRowMenu` (`.cl-srow-menu`, il tondo da 24px con i tre puntini — stesso
+  peso e stessa comparsa in hover del pin all'altro capo della riga, così i due
+  affordance si leggono come una coppia). Erano un cluster pieno che, stando
+  **sopra** la riga tinta dell'hover, aveva bisogno di un fondo opaco proprio
+  (`--cl-paper` composito) per restare leggibile — in dark mode un blocco grigio
+  — e che cresceva di un bottone per ogni azione nuova. Il menu (`.cl-menu`,
+  portal) porta Open in chat · Add tag… · Pin/Unpin · Delete e può crescere
+  senza toccare il layout della riga. La `+ tag` non anchora più il `TagPicker`
+  a sé: l'ancora è il kebab, misurato all'apertura.
+
+La riga pinnata **non ha alcun trattamento di superficie**. Due sono stati
+provati e **bocciati entrambi**, per lo stesso motivo: erano la cosa più urlata
+di una lista il cui linguaggio è fatto di hairline. Il **wash terracotta a
+gradiente** (fino a metà riga) in dark leggeva come una macchia marrone e
+collideva con la tinta dell'hover — una riga pinnata sotto il cursore mostrava
+due fondi insieme, quindi l'hover smetteva di dire "questa"; il **filetto accent
+da 2px** sul bordo sinistro lasciava una striscia dura lungo tutto il margine.
+Quel che dice "pinnata" è tipografia: il **pin** in testa alla riga, pieno e
+permanentemente visibile (per le altre righe compare solo in hover), e
+l'**indice mono in accent** (`--cl-accent-ink`, la variante leggibile: `--cl-accent`
+puro a 10.5px su carta bianca non tiene il contrasto). È lo stesso idioma dei
+progetti pinnati di `GlobalHomeView`, che non hanno mai avuto altro che il loro
+pin. La lista si apre con il filetto d'inchiostro 1.5px. Il piede riporta il range (`1–N of M`) e il "Show more": il
+caricamento resta progressivo, prende solo l'idioma del pager del mock.
+La data della riga è formattata **en-US** come il resto dell'app: era l'ultimo
+`it-IT` rimasto in una UI english-only (`10 ago` accanto a colonne inglesi).
 
 **Landing di progetto — design handoff _Overview Redesign_, opzione 1c**
 (`section === 'overview'`). Le sessioni sono **un blocco solo**, non due: la
