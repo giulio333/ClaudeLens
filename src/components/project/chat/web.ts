@@ -7,10 +7,15 @@ import type { ToolGroup } from './utils';
  * Everything here follows what the transcripts actually carry (verified across
  * 75 real calls): a `WebFetch` input is always `{ url, prompt }` and a
  * `WebSearch` always `{ query }` plus an occasional `allowed_domains`. The
- * results are the interesting part, because **failure has three shapes and only
+ * results are the interesting part, because **failure has four shapes and only
  * one of them sets `is_error`**:
  *
  *  - `is_error` — the fetch itself broke (network error, unreachable host).
+ *  - a `The server returned HTTP <code> …` line — the request reached the server
+ *    and came back refused (403) or empty (404). The tool says so in prose, with
+ *    `is_error` unset, and hands back ~200 bytes of advice instead of a page.
+ *    Verified on 7 of 73 real fetches (403 ×4, 404 ×3): read as a success, those
+ *    rows claimed a page that was never retrieved.
  *  - a `REDIRECT DETECTED:` notice — a 3xx to a different host. The tool returns
  *    **no page content**: it hands back the redirect target and asks to be
  *    called again. Reading that as a success would claim the page was read when
@@ -161,15 +166,30 @@ export function parseWebSearchResult(raw: string | null | undefined): WebSearchR
 
 export type WebRedirect = { from: string | null; to: string | null; status: string | null };
 
-/** A `WebFetch` that returned a redirect notice instead of a page. */
+/** A `WebFetch` that returned a redirect notice instead of a page.
+ *
+ *  The target line is matched **through an optional parenthetical**: newer CLIs
+ *  qualify it (`Redirect URL (from the server's Location header — server-supplied,
+ *  not verified): …`) and both spellings sit in the transcripts side by side, so
+ *  the label is read up to the colon that actually introduces the URL. Anchoring
+ *  on the bare `Redirect URL:` left `to` null on every recent redirect — the row
+ *  said REDIRECT without saying where, which is half the fact. */
 export function parseRedirectNotice(raw: string | null | undefined): WebRedirect | null {
   const text = raw ?? '';
   if (!/^\s*REDIRECT DETECTED\b/.test(text)) return null;
   return {
     from: /^Original URL:\s*(\S+)/m.exec(text)?.[1] ?? null,
-    to: /^Redirect URL:\s*(\S+)/m.exec(text)?.[1] ?? null,
+    to: /^Redirect URL(?:\s*\([^)]*\))?:\s*(\S+)/m.exec(text)?.[1] ?? null,
     status: /^Status:\s*(.+)$/m.exec(text)?.[1]?.trim() ?? null,
   };
+}
+
+/** The `HTTP <code> <reason>` a fetch reports in prose, `is_error` unset — the
+ *  page did not come back. Returned as text so the row can name the reason. */
+const HTTP_STATUS_RE = /^The server returned (HTTP \d{3}[^.\n]*)/;
+
+export function parseHttpFailure(raw: string | null | undefined): string | null {
+  return HTTP_STATUS_RE.exec((raw ?? '').trimStart())?.[1]?.trim() ?? null;
 }
 
 /** What actually came back from one web call. `pending` is a call with no
@@ -180,7 +200,10 @@ export function webOutcome(name: string, result: ToolGroup['result']): WebOutcom
   if (!result) return 'pending';
   if (result.isError) return 'failed';
   const raw = result.content ?? '';
-  if (name === WEB_FETCH) return parseRedirectNotice(raw) ? 'redirect' : 'read';
+  if (name === WEB_FETCH) {
+    if (parseHttpFailure(raw)) return 'failed';
+    return parseRedirectNotice(raw) ? 'redirect' : 'read';
+  }
   if (name === WEB_SEARCH && parseWebSearchResult(raw).error) return 'failed';
   return 'read';
 }
