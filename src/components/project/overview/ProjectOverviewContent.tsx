@@ -1,4 +1,13 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  Fragment,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import { createPortal } from 'react-dom';
 import {
   useMemoryProject,
@@ -183,6 +192,32 @@ function buildTimelineBuckets(
  *  inside the window before it is drawn. */
 const PEEK_W = 300;
 
+/**
+ * A slug title with a break opportunity after each underscore.
+ *
+ * A line breaker treats `_` as an ordinary character, so
+ * `feedback_no_manual_app_launch` is a single unbreakable word and overflowed
+ * its card, while the kebab-case names beside it wrapped on their hyphens. The
+ * `<wbr>` marks where a break is allowed without putting any character into
+ * the text — the name still copies out verbatim — and it breaks after the
+ * separator, where the eye expects it, rather than mid-word as the CSS
+ * fallback would.
+ */
+function SlugName({ text }: { text: string }) {
+  const parts = text.split('_');
+  return (
+    <>
+      {parts.map((part, i) => (
+        <Fragment key={i}>
+          {i > 0 && '_'}
+          {i > 0 && <wbr />}
+          {part}
+        </Fragment>
+      ))}
+    </>
+  );
+}
+
 function pctOf(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
 }
@@ -320,11 +355,6 @@ export function ProjectView({
   const [memPickerFor, setMemPickerFor] = useState<{ filename: string; rect: DOMRect } | null>(
     null
   );
-  // The landing's card grid has its own two-state view control, kept apart from
-  // the subtab's sort + group-by: they read the same topics but are different
-  // surfaces, and a toggle on the landing silently reshaping the full list is
-  // the kind of cross-talk you only notice after it has confused you.
-  const [memCardView, setMemCardView] = useState<'newest' | 'type'>('newest');
   // Memory subtab layout: the list (filters/sort/group-by apply) or the graph of
   // the relations the topics declare between each other via [[wikilinks]].
   const [memLayout, setMemLayout] = useState<'list' | 'graph'>('list');
@@ -574,7 +604,9 @@ export function ProjectView({
       >
         <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
         <div style={{ minWidth: 0 }}>
-          <div className="t-name">{t.name}</div>
+          <div className="t-name">
+            <SlugName text={t.name} />
+          </div>
           <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
           <div
             className="cl-tile-tags"
@@ -637,12 +669,6 @@ export function ProjectView({
         .slice(0, LANDING_MEM_CARDS),
     [memTopics]
   );
-  const landingMemGroups = useMemo(() => {
-    if (memCardView !== 'type') return [];
-    return (['project', 'reference', 'feedback', 'user'] as const)
-      .map(ty => ({ key: ty, label: ty, topics: landingMemTopics.filter(t => t.type === ty) }))
-      .filter(g => g.topics.length > 0);
-  }, [memCardView, landingMemTopics]);
   // "12 topics · 5 reference · 4 feedback" — the total, then the two commonest
   // kinds. A full breakdown runs past the section head on any real memory, and
   // the two that dominate are what says what this project remembers.
@@ -683,7 +709,9 @@ export function ProjectView({
           <span className="kind">{t.type}</span>
           {t.createdAt && <span className="when">{relIso(t.createdAt)}</span>}
         </div>
-        <div className="name">{t.name}</div>
+        <div className="name">
+          <SlugName text={t.name} />
+        </div>
         <p className="preview">
           {t.description ? memPreview(t.description, MEM_CARD_PREVIEW_MAX) : '—'}
         </p>
@@ -1005,26 +1033,6 @@ export function ProjectView({
                 {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
                 {memTypeBreakdown.length > 0 && ` · ${memTypeBreakdown.join(' · ')}`}
               </span>
-              {memTopics.length > 1 && (
-                <div className="cl-seg cl-seg--paper" role="group" aria-label="Memory view">
-                  <button
-                    type="button"
-                    className={memCardView === 'newest' ? 'on' : ''}
-                    aria-pressed={memCardView === 'newest'}
-                    onClick={() => setMemCardView('newest')}
-                  >
-                    Newest
-                  </button>
-                  <button
-                    type="button"
-                    className={memCardView === 'type' ? 'on' : ''}
-                    aria-pressed={memCardView === 'type'}
-                    onClick={() => setMemCardView('type')}
-                  >
-                    By type
-                  </button>
-                </div>
-              )}
               <button
                 className="all"
                 type="button"
@@ -1033,22 +1041,16 @@ export function ProjectView({
                 View all
               </button>
             </div>
+            {/* One view, newest first. The landing shows six cards out of a
+                history that runs to dozens: at that size grouping by type was a
+                control over a sample, and the subtab it links to owns the
+                complete list with the sorting and grouping that belong there. */}
             {landingMemTopics.length === 0 ? (
               <div className="cl-empty">No memory topics yet.</div>
-            ) : memCardView === 'newest' ? (
+            ) : (
               <div className="cl-mem-cards">
                 {landingMemTopics.map((t, i) => renderMemCard(t, i === 0))}
               </div>
-            ) : (
-              landingMemGroups.map(g => (
-                <div key={g.key} className="cl-mem-group">
-                  <div className="cl-mem-group-head">
-                    <span className="lbl">{g.label}</span>
-                    <span className="ct">{g.topics.length}</span>
-                  </div>
-                  <div className="cl-mem-cards">{g.topics.map(t => renderMemCard(t, false))}</div>
-                </div>
-              ))
             )}
           </section>
 
