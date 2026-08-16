@@ -3,6 +3,14 @@ import type { SessionSummary } from '../../../types';
 import { fmtCost, fmtModel } from '../utils';
 import type { ContextState } from './context-window';
 import { kTok } from './mission-feed';
+import {
+  ReadoutShell,
+  ReadoutFill,
+  ReadoutCell,
+  ReadoutPart,
+  ReadoutRule,
+} from '../shared/ReadoutCard';
+import { READOUT_RAMP } from '../shared/readout';
 
 /**
  * The hover cards behind Mission Control's vitals line.
@@ -22,132 +30,22 @@ import { kTok } from './mission-feed';
 
 /** Accent ramp for a part-of-whole. Same hue, three weights — mixing against
  *  `--cl-paper` (not white) so the ramp flips correctly in the dark theme. */
-const RAMP = {
-  soft: 'color-mix(in oklch, var(--cl-accent) 32%, var(--cl-paper))',
-  mid: 'color-mix(in oklch, var(--cl-accent) 62%, var(--cl-paper))',
-  full: 'var(--cl-accent)',
-};
+const RAMP = READOUT_RAMP;
 
-const card: CSSProperties = {
-  position: 'absolute',
-  top: 'calc(100% + 8px)',
-  left: 20,
-  right: 20,
-  zIndex: 30,
-  pointerEvents: 'none',
-  padding: '13px 15px 15px',
-  borderRadius: 10,
-  background: 'var(--cl-paper)',
-  border: '1px solid var(--cl-line)',
-  boxShadow: '0 10px 30px rgba(0, 0, 0, 0.14)',
-};
+/** Mission Control pins the card across the rail; the surface itself is shared. */
+const card: CSSProperties = { position: 'absolute', top: 'calc(100% + 8px)', left: 20, right: 20 };
 
 function Shell({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
   return (
-    <div role="tooltip" className="cl-vitals-pop" style={card}>
-      <div className="font-mono flex items-baseline" style={{ gap: 8 }}>
-        <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--cl-ink-4)' }}>
-          {title}
-        </span>
-        <span style={{ flex: 1 }} />
-        {meta && (
-          <span style={{ fontSize: 9, letterSpacing: '0.06em', color: 'var(--cl-ink-4)' }}>
-            {meta}
-          </span>
-        )}
-      </div>
+    <ReadoutShell title={title} meta={meta} style={card}>
       {children}
-    </div>
+    </ReadoutShell>
   );
 }
-
-/** A flat fill rule — the same gauge idiom as the rail's 2px context line. */
-function Fill({ pct, color, height = 4 }: { pct: number; color: string; height?: number }) {
-  return (
-    <span
-      style={{
-        flex: 1,
-        height,
-        borderRadius: 999,
-        background: 'var(--cl-line-soft)',
-        overflow: 'hidden',
-      }}
-    >
-      <span
-        style={{
-          display: 'block',
-          // A part that exists but rounds to nothing still gets a sliver: the
-          // reader should see there IS a fresh-input segment, not infer it.
-          width: pct > 0 ? `max(2px, ${Math.min(100, pct)}%)` : 0,
-          height: '100%',
-          background: color,
-          transition: 'width 0.3s ease',
-        }}
-      />
-    </span>
-  );
-}
-
-/** One of the three headline figures (USED / LEFT / TOTAL, BILLED / SAVED / …). */
-function Cell({ label, value, color }: { label: string; value: string; color?: string }) {
-  return (
-    <div style={{ flex: 1, minWidth: 0 }}>
-      <div
-        className="font-mono truncate"
-        style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--cl-ink-4)' }}
-      >
-        {label}
-      </div>
-      <div
-        className="font-mono"
-        style={{
-          marginTop: 3,
-          fontSize: 13,
-          fontWeight: 600,
-          fontVariantNumeric: 'tabular-nums',
-          color: color ?? 'var(--cl-ink)',
-        }}
-      >
-        {value}
-      </div>
-    </div>
-  );
-}
-
-/** A composition row: what the headline number is made of. */
-function Part({
-  label,
-  value,
-  share,
-  color,
-}: {
-  label: string;
-  value: string;
-  share: number;
-  color: string;
-}) {
-  return (
-    <div className="font-mono flex items-center" style={{ gap: 9, marginTop: 6 }}>
-      <span style={{ width: 74, fontSize: 9.5, color: 'var(--cl-ink-3)' }}>{label}</span>
-      <span
-        style={{
-          width: 42,
-          textAlign: 'right',
-          fontSize: 10,
-          fontVariantNumeric: 'tabular-nums',
-          color: 'var(--cl-ink-2)',
-        }}
-      >
-        {value}
-      </span>
-      <Fill pct={share} color={color} />
-    </div>
-  );
-}
-
-function Rule() {
-  return <div style={{ height: 1, background: 'var(--cl-line)', margin: '13px 0 3px' }} />;
-}
+const Fill = ReadoutFill;
+const Cell = ReadoutCell;
+const Part = ReadoutPart;
+const Rule = ReadoutRule;
 
 function Waiting({ text }: { text: string }) {
   return (

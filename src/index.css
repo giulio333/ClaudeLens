@@ -15149,9 +15149,11 @@ select.cl-opt-input {
 }
 .cl-hcell .lbl {
   font-family: var(--font-mono);
-  font-size: 9px;
+  /* 9px at .2em tracking was at the practical floor for a label that has to be
+     read, not just recognised; 10px at .14em costs the same width. */
+  font-size: 10px;
   line-height: 1;
-  letter-spacing: 0.2em;
+  letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--cl-ink-4);
   display: flex;
@@ -15179,16 +15181,15 @@ select.cl-opt-input {
   letter-spacing: 0;
   color: var(--cl-ink-4);
 }
+/* Neutral in both directions: green on "+3 sessions" encoded a verdict the
+   figure does not carry. The sign already says which way it went. */
 .cl-hcell .num .delta {
   font-family: var(--font-mono);
   font-size: 11px;
   font-weight: 400;
   letter-spacing: 0;
-  color: var(--cl-ok);
-  margin-left: 8px;
-}
-.cl-hcell .num .delta.down {
   color: var(--cl-ink-4);
+  margin-left: 8px;
 }
 .cl-hcell .sub {
   font-family: var(--font-mono);
@@ -15229,19 +15230,24 @@ select.cl-opt-input {
 .cl-mixbar .seg.other {
   background: var(--cl-ink-4);
 }
+/* One row, not a stack: the bar above already encodes the shares, so a legend
+   that wrapped to two lines was the same fact drawn twice at double height. */
 .cl-mixlegend {
   display: flex;
-  flex-wrap: wrap;
-  gap: 6px 16px;
+  flex-wrap: nowrap;
+  overflow: hidden;
+  gap: 14px;
   margin-top: 9px;
   font-family: var(--font-mono);
   font-size: 10px;
+  font-variant-numeric: tabular-nums;
   color: var(--cl-ink-4);
 }
 .cl-mixlegend span {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
 }
 .cl-mixlegend .dot {
   width: 6px;
@@ -15264,12 +15270,63 @@ select.cl-opt-input {
   border-right: none;
 }
 
+/* The cell whose figure opens a breakdown card: it anchors the card and says so
+   with a hint that only shows on approach. */
+.cl-hcell--hover {
+  position: relative;
+}
+.cl-hcell--hover .num {
+  outline: none;
+  cursor: default;
+  width: max-content;
+  border-bottom: 1px dotted var(--cl-line);
+}
+.cl-hcell--hover:hover .num,
+.cl-hcell--hover .num:focus-visible {
+  border-bottom-color: var(--cl-accent);
+}
+.cl-hpeek-hint {
+  opacity: 0;
+  transition: opacity 120ms ease;
+}
+.cl-hcell--hover:hover .cl-hpeek-hint,
+.cl-hcell--hover:focus-within .cl-hpeek-hint {
+  opacity: 1;
+}
+
 @media (max-width: 980px) {
   .cl-hcell {
     padding: 14px 18px 0;
   }
   .cl-hcell .cl-bars {
     display: none;
+  }
+}
+
+/* Below this the four cells cannot sit on one line. Free wrapping left the
+   cell that happened to end the first row carrying a vertical hairline against
+   the container edge, and the two rows touching with nothing between them — so
+   the band becomes an explicit 2×2 where every rule is placed on purpose. */
+@media (max-width: 760px) {
+  .cl-hband {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+  }
+  .cl-hcell,
+  .cl-hcell--mix {
+    padding: 14px 18px;
+    border-right: 1px solid var(--cl-line);
+  }
+  .cl-hcell:nth-child(2n),
+  .cl-hband > .cl-hcell:last-child {
+    border-right: none;
+    padding-right: 0;
+  }
+  .cl-hcell:nth-child(2n + 1) {
+    padding-left: 0;
+  }
+  .cl-hcell:nth-child(n + 3) {
+    border-top: 1px solid var(--cl-line);
   }
 }
 

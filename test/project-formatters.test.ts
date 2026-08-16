@@ -138,7 +138,46 @@ describe('buildModelMix — project hero band', () => {
 
   it('files an unrecognised model id under "other" rather than guessing a family', () => {
     const mix = buildModelMix([s('some-future-model', 10)]);
-    expect(mix).toEqual([{ key: 'other', label: 'Other', tokens: 10, sessions: 1, pct: 100 }]);
+    expect(mix).toEqual([
+      { key: 'other', label: 'Other', tokens: 10, sessions: 1, pct: 100, pctLabel: '100' },
+    ]);
+  });
+
+  // A session that switched model mid-way used to be filed entirely under its
+  // dominant one, which hid the switch. `models` (messages per model id) splits
+  // its tokens across the families instead.
+  it('splits a session across the families it actually used', () => {
+    const mix = buildModelMix([
+      {
+        model: 'claude-opus-5',
+        models: { 'claude-opus-5': 3, 'claude-sonnet-4-6': 1 },
+        totalTokens: 400,
+      },
+    ]);
+    expect(mix.map(m => m.key)).toEqual(['opus', 'sonnet']);
+    expect(mix.find(m => m.key === 'opus')).toMatchObject({ tokens: 300, pct: 75 });
+    expect(mix.find(m => m.key === 'sonnet')).toMatchObject({ tokens: 100, pct: 25 });
+  });
+
+  it('falls back to the dominant model when no per-model counts were recorded', () => {
+    const mix = buildModelMix([{ model: 'claude-opus-5', models: {}, totalTokens: 100 }]);
+    expect(mix).toMatchObject([{ key: 'opus', tokens: 100 }]);
+  });
+
+  // The legend prints whole numbers, and a reader checks whether they add up.
+  it('rounds the legend so the shares sum to exactly 100', () => {
+    const mix = buildModelMix([
+      s('claude-opus-5', 1),
+      s('claude-sonnet-4-6', 1),
+      s('claude-haiku-4-5', 1),
+    ]);
+    expect(mix.reduce((n, m) => n + Number(m.pctLabel), 0)).toBe(100);
+  });
+
+  it('prints "<1" for a family too small to round up, never "0"', () => {
+    const mix = buildModelMix([s('claude-opus-5', 10_000), s('claude-haiku-4-5', 20)]);
+    expect(mix.find(m => m.key === 'haiku')?.pctLabel).toBe('<1');
+    expect(mix.find(m => m.key === 'opus')?.pctLabel).toBe('100');
   });
 });
 
