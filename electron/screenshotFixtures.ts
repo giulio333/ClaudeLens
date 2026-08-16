@@ -26,6 +26,20 @@ const MOCK_PROJECTS = [
   { hash: '-Users-alice-side-blog', realPath: '/Users/alice/side/blog' },
 ];
 
+// Le descrizioni che l'hero mostra sotto il nome (in un build vero sono
+// derivate dal CLAUDE.md del progetto — vedi project-description.ts).
+const PROJECT_DESCRIPTIONS: Record<string, string> = {
+  '/Users/alice/projects/webapp':
+    'Customer-facing React storefront, deployed on Vercel behind the marketing site.',
+  '/Users/alice/projects/api-server':
+    'Node service that fronts the catalog and billing databases for the storefront.',
+  '/Users/alice/work/data-pipeline':
+    'Nightly ETL that loads order events into the warehouse and rebuilds the reporting views.',
+  '/Users/alice/experiments/llm-playground':
+    'Scratch space for prompt and agent experiments — nothing here ships.',
+  '/Users/alice/side/blog': 'Static blog built with Astro, published from main on every push.',
+};
+
 // ─── Numero di sessioni per progetto ──────────────────────────────────────────
 // Unica fonte del conteggio: la lista sessioni e il sommario costi derivano
 // entrambi da qui, così Global → Projects e il tab Sessions sono coerenti.
@@ -1962,6 +1976,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'agents:getGlobal',
     'agents:getByProject',
     'agents:create',
+    'projects:getDescription',
     'projects:planPurge',
     'projects:purge',
     'mcp:getGlobal',
@@ -2051,6 +2066,14 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('agents:create', () =>
     ok({ filePath: '/Users/alice/.claude/agents/new-agent.md' })
   );
+
+  // The line under the project name in the hero. Real builds derive it from the
+  // project's CLAUDE.md; here it is seeded per project so the hero is never
+  // caught in its "+ Add a description" empty state in a screenshot.
+  ipcMain.handle('projects:getDescription', (_e: unknown, realPath: string) => {
+    const text = PROJECT_DESCRIPTIONS[realPath];
+    return ok(text ? { text, source: 'lead' as const, filePath: `${realPath}/CLAUDE.md` } : null);
+  });
 
   ipcMain.handle('projects:planPurge', () =>
     ok({

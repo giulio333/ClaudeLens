@@ -2125,6 +2125,123 @@ body {
   color: var(--cl-paper);
 }
 
+/* Project description — the one prose line under the display name (source:
+   the project's CLAUDE.md, overridable in place). Reading face, not mono: it is
+   a sentence, while everything else in the hero is a measurement. It is kept to
+   a reading measure so it never runs the full width of the hero.
+
+   The sentence is the control: clicking it opens the editor. No edit button and
+   no `from CLAUDE.md` tag ride beside it — both spent hero room to say what the
+   click and the tooltip already say. Hover is the only affordance, in the same
+   register as the rest of the hero (a tint, not a box). */
+.cl-h-desc {
+  position: relative;
+  z-index: 2;
+  margin-top: 14px;
+  max-width: 62ch;
+  display: block;
+  font-family: var(--font-reading);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  text-align: left;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: text;
+  transition: color 120ms;
+}
+.cl-h-desc:hover,
+.cl-h-desc:focus-visible {
+  color: var(--cl-ink);
+}
+/* Nothing to show yet: a quiet invitation, not a permanent empty state. */
+.cl-h-desc-add {
+  position: relative;
+  z-index: 2;
+  margin-top: 14px;
+  display: inline-flex;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  opacity: 0.7;
+  transition:
+    color 120ms,
+    opacity 120ms;
+}
+.cl-h-desc-add:hover {
+  color: var(--cl-accent-ink);
+  opacity: 1;
+}
+.cl-h-desc-edit {
+  position: relative;
+  z-index: 3;
+  margin-top: 14px;
+  max-width: 62ch;
+}
+.cl-h-desc-input {
+  width: 100%;
+  resize: none;
+  font-family: var(--font-reading);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--cl-ink);
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  padding: 8px 10px;
+}
+.cl-h-desc-input:focus {
+  outline: none;
+  border-color: var(--cl-accent);
+}
+.cl-h-desc-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 6px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-4);
+}
+.cl-h-desc-actions .grow {
+  flex: 1;
+}
+.cl-h-desc-actions .hint {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-h-desc-btn {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  background: none;
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  padding: 4px 9px;
+  cursor: pointer;
+  transition:
+    color 120ms,
+    border-color 120ms;
+}
+.cl-h-desc-btn:hover {
+  color: var(--cl-ink);
+  border-color: var(--cl-ink-4);
+}
+.cl-h-desc-btn.is-primary {
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+}
+
 .cl-h-meta {
   margin-top: 28px;
   display: flex;
