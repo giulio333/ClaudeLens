@@ -7457,6 +7457,17 @@ body {
   border-top: none;
   border-bottom: 1px solid var(--cl-line-soft);
 }
+/* The three list openers that draw their own ink rule further down the file:
+   .cl-row:first-child, .cl-tile-grid and .cl-mcp-row. The first two match the
+   rule above at equal specificity and simply win by order, so the head's rule
+   and the list's rule stack as two black lines 20px apart under the title —
+   which is what the home was redesigned to remove. Beat them here (one class
+   deeper) rather than reordering rules the rest of the app depends on. */
+.cl-ghome .cl-row:first-child,
+.cl-ghome .cl-tile-grid,
+.cl-ghome .cl-sec-head + .cl-mcp-row {
+  border-top: none;
+}
 
 /* ════════════════════════════════════════════════════════════════════════
    SECTION (generic editorial)
