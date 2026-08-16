@@ -46,6 +46,7 @@ import { searchTriggerProps } from '../shared/searchTrigger';
 import { TagChip } from '../sessions/TagChip';
 import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
+import { SessionRowMenu } from '../sessions/SessionRowMenu';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
 
 function ChatGlyph() {
@@ -99,11 +100,15 @@ function tileDate(iso: string): string {
 function shortWhen(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleString('it-IT', {
+  // en-US, like every other date in the app: the UI is English-only, and the
+  // it-IT month abbreviations this used to print ("10 ago") read as a bug next
+  // to English column labels.
+  return d.toLocaleString('en-US', {
     day: '2-digit',
     month: 'short',
     hour: '2-digit',
     minute: '2-digit',
+    hour12: false,
   });
 }
 
@@ -1858,6 +1863,7 @@ const SessionRow = memo(function SessionRow({
           e.stopPropagation();
           onTogglePin(s.filename);
         }}
+        onKeyDown={e => e.stopPropagation()}
       >
         <PinIcon filled={pinned} />
       </button>
@@ -1866,7 +1872,7 @@ const SessionRow = memo(function SessionRow({
       {live && <LiveTag />}
       <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
       {/* rendered only when there are tags: an empty flex item would still take
-          the row's 12px gap and push the leader in */}
+          the row's 12px gap and eat into the space before the figures */}
       {tags.length > 0 && (
         <span className="cl-srow-tags" onClick={e => e.stopPropagation()}>
           {tags.map(t => (
@@ -1882,39 +1888,13 @@ const SessionRow = memo(function SessionRow({
         </span>
       )}
 
-      {/* Leader dots (design 5b/4b) — the row's connective tissue. The row
-          actions ride at its right edge, absolutely positioned so revealing
-          them on hover never reflows the meta group. */}
-      <span className="lead">
-        <span className="cl-srow-actions" onClick={e => e.stopPropagation()}>
-          <button
-            type="button"
-            aria-label="Open in-app chat"
-            title="Open as an in-app chat — runs through the Agent SDK, billed to SDK credits (separate from your subscription)"
-            onClick={() => onOpenChat(s)}
-          >
-            Chat
-          </button>
-          <button
-            type="button"
-            data-haspicker={pickerOpen}
-            aria-label="Add tag"
-            title="Add tag"
-            onClick={e => onAddTag(s.filename, e.currentTarget.getBoundingClientRect())}
-          >
-            + tag
-          </button>
-          <button
-            type="button"
-            className="danger"
-            aria-label="Delete session"
-            title="Delete session"
-            onClick={() => onDelete(s)}
-          >
-            Delete
-          </button>
-        </span>
-      </span>
+      {/* Plain empty space between the title cluster and the figures. It carried a
+          dotted leader (design 5b/4b) with the row actions floating on it: with
+          the actions collapsed into one kebab there is nothing left for the
+          leader to connect, and a run of grey dots down every row was reading as
+          decoration. The figures keep their fixed column widths — that is what
+          actually aligns the list. */}
+      <span className="cl-srow-gap" aria-hidden />
 
       <span className="meta">
         <span className="msg">{fmt(s.messageCount)} msg</span>
@@ -1924,6 +1904,16 @@ const SessionRow = memo(function SessionRow({
         <span className="toks">{fmt(s.totalTokens)}</span>
         <span className="when">{shortWhen(s.date)}</span>
       </span>
+
+      <SessionRowMenu
+        title={sessionTitle(s)}
+        pinned={pinned}
+        pickerOpen={pickerOpen}
+        onOpenChat={() => onOpenChat(s)}
+        onAddTag={rect => onAddTag(s.filename, rect)}
+        onTogglePin={() => onTogglePin(s.filename)}
+        onDelete={() => onDelete(s)}
+      />
     </div>
   );
 }, sessionRowEqual);
