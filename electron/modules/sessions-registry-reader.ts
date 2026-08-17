@@ -25,6 +25,12 @@ export interface ActiveSession {
   /** Empty when the entry comes from the process-scanner fallback. */
   sessionId: string;
   cwd: string;
+  /** Human-readable session name the CLI derives (e.g. "claudelens-b4"). The
+   *  Monitor titles its rows with this instead of a truncated UUID. Absent on
+   *  fallback entries and on CLIs that predate the field. */
+  name?: string;
+  /** 'interactive' for a terminal session; other values exist for non-tty runs. */
+  kind?: string;
   /** Epoch ms; undefined when unknown (fallback entries). */
   startedAt?: number;
   /** Known values: 'busy', 'waiting', 'idle'. 'unknown' for fallback entries. */
@@ -36,6 +42,10 @@ export interface ActiveSession {
   /** Epoch ms of the last registry write (status transitions — NOT a periodic
    *  heartbeat: a busy or waiting session can leave this untouched for hours). */
   updatedAt?: number;
+  /** Epoch ms of the last status transition. Same caveat as `updatedAt`: it
+   *  dates the transition INTO the current status, so it answers "waiting since
+   *  when", never "still alive as of when". */
+  statusUpdatedAt?: number;
   source: 'registry' | 'process-scan';
 }
 
@@ -76,11 +86,14 @@ export function parseRegistryEntry(raw: unknown): ActiveSession | null {
     pid: r.pid,
     sessionId: r.sessionId,
     cwd: r.cwd,
+    name: typeof r.name === 'string' && r.name ? r.name : undefined,
+    kind: typeof r.kind === 'string' && r.kind ? r.kind : undefined,
     startedAt: typeof r.startedAt === 'number' ? r.startedAt : undefined,
     status: typeof r.status === 'string' && r.status ? r.status : 'unknown',
     waitingFor: typeof r.waitingFor === 'string' ? r.waitingFor : undefined,
     version: typeof r.version === 'string' ? r.version : undefined,
     updatedAt: typeof r.updatedAt === 'number' ? r.updatedAt : undefined,
+    statusUpdatedAt: typeof r.statusUpdatedAt === 'number' ? r.statusUpdatedAt : undefined,
     source: 'registry',
   };
 }

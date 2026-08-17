@@ -68,5 +68,8 @@ export type View =
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }
   | { type: 'agents-live'; project?: { hash: string; realPath: string } }
+  /** Global "what is running right now": live CLI sessions across every project
+   *  plus the background agents that are actually alive. */
+  | { type: 'monitor' }
   | { type: 'duplicates' }
   | { type: 'settings' };

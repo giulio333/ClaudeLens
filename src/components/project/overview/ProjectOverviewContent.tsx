@@ -22,7 +22,15 @@ import {
   useActiveSessions,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
-import { fmt, fmtCost, fmtModel, sessionTitle, formatTokens, buildModelMix } from '../utils';
+import {
+  fmt,
+  fmtCost,
+  fmtModel,
+  modelFamily,
+  sessionTitle,
+  formatTokens,
+  buildModelMix,
+} from '../utils';
 import type { SessionSummary, MemoryTopic } from '../../../types';
 import { Lens } from './Lens';
 import { ProjectDescription } from './ProjectDescription';
@@ -111,13 +119,6 @@ function shortWhen(iso: string): string {
     minute: '2-digit',
     hour12: false,
   });
-}
-
-function modelFamily(m?: string): '' | 'opus' | 'haiku' {
-  if (!m) return '';
-  if (m.includes('opus')) return 'opus';
-  if (m.includes('haiku')) return 'haiku';
-  return '';
 }
 
 const DAY_MS = 86_400_000;

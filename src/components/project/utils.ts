@@ -69,6 +69,15 @@ export function fmtModel(m: string): string {
   return s;
 }
 
+/** Family modifier for the `.model` cell of a row: the dot takes its hue from a
+ *  class, and only Opus and Haiku differ from the accent default. */
+export function modelFamily(m?: string | null): '' | 'opus' | 'haiku' {
+  if (!m) return '';
+  if (m.includes('opus')) return 'opus';
+  if (m.includes('haiku')) return 'haiku';
+  return '';
+}
+
 // ── Model distribution (project hero band, design 5b) ───────────────────────
 // Share of a window's tokens per model family, for the tri-colour bar under the
 // project name. Tokens rather than session count: the cell sits next to the
