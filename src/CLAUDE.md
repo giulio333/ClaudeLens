@@ -37,7 +37,7 @@ This directory contains the Electron renderer process: a single-page React app t
 - `project/skills/` — `GlobalSkillsView`, `SkillDetailView`, `CreateSkillPage`
 - `project/agents/` — `GlobalAgentsView`, `AgentDetailView`, `RunAgentDialog`, `CreateAgentPage`
 - `project/agents-live/` — `AgentsLiveView` (background/live agent sessions)
-- `project/monitor/` — `MonitorView` (global "what is running right now": one orbit cell per live process)
+- `project/monitor/` — `MonitorView` (global "what is running right now": one board, one lane per live process, one shared time axis)
 - `project/mcp/` — `GlobalMcpView`, `McpServerCard`, `McpServerDetailView`
 - `project/analytics/` — `AnalyticsView`
 - `project/ai-assistant/` — `AiAssistantView`

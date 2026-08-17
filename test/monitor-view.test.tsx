@@ -18,7 +18,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 
 import { MonitorView } from '../src/components/project/monitor/MonitorView';
-import { buildTrace } from '../src/components/project/monitor/trace';
+import { buildTape } from '../src/components/project/monitor/trace';
 import { installFakeElectronAPI, ok, type FakeBridge } from './helpers/fake-electron-api';
 import type { ActiveSession, SessionActivity, BgSession } from '../src/types';
 
@@ -52,6 +52,10 @@ function activity(over: Partial<SessionActivity> = {}): SessionActivity {
     toolCount: 3,
     errorCount: 0,
     model: 'claude-opus-5',
+    context: null,
+    spend: null,
+    spendEstimated: false,
+    tokens: 0,
     endedAt: null,
     ...over,
   };
@@ -125,8 +129,9 @@ describe('MonitorView', () => {
     // random characters, so beside the project it said nothing.
     expect(await screen.findByText('acme')).toBeTruthy();
     expect(screen.queryByText('acme-7c')).toBeNull();
-    // The pid is what tells two sessions of one project apart.
-    expect(screen.getByText(/pid 4242/)).toBeTruthy();
+    // The pid has a field of its own in the machine row — it is what you need to
+    // `kill`, and nothing there truncates it.
+    expect(screen.getByText('pid 4242')).toBeTruthy();
     expect(screen.getByText('Bash')).toBeTruthy();
     expect(screen.getByText('npm test')).toBeTruthy();
     expect(view.container.querySelector('[data-state="working"]')).toBeTruthy();
@@ -135,7 +140,7 @@ describe('MonitorView', () => {
   // Three sessions of one project used to read `ClaudeLens · pid 63833` three
   // times over, and a user reported on the wrong card. The conversation title
   // Claude writes into the transcript is the name a person recognises; the
-  // registry's derived `name` still is not, and the pid is now only a fallback.
+  // registry's derived `name` still is not, and the pid lives in its own field.
   it('tells two sessions of one project apart by their titles', async () => {
     bridge.api.live.getActiveSessions.mockResolvedValue(
       ok([
@@ -149,23 +154,35 @@ describe('MonitorView', () => {
         activity({ sessionId: 'sess-2', title: 'Monitor rewrite' }),
       ])
     );
-    mount();
+    const view = mount();
+    await screen.findByText('Monitor rewrite');
 
-    // The title is the whole ident; the pid is not carried alongside it.
-    // The ident span also holds the model, so match within it.
-    expect(await screen.findByText(/Sessione di test/)).toBeTruthy();
-    expect(screen.getByText(/Monitor rewrite/)).toBeTruthy();
-    expect(screen.queryByText(/pid 111/)).toBeNull();
+    // The title is the whole ident: nothing is glued to it, because a title long
+    // enough to need the CSS ellipsis ate whatever followed. The pid and the
+    // model are their own fields, one row down.
+    const idents = [...view.container.querySelectorAll('.cl-mx-who .ident')].map(
+      n => n.textContent
+    );
+    expect(idents).toEqual(['Sessione di test', 'Monitor rewrite']);
+    expect(screen.getByText('pid 111')).toBeTruthy();
+    expect(screen.getByText('pid 222')).toBeTruthy();
     expect(screen.queryByText('acme-7c')).toBeNull();
   });
 
-  it('falls back to the pid when no title has been seen', async () => {
+  // The pid used to be the fallback ident. It cannot be any more: it now has a
+  // permanent field of its own, so printing it here too said the same thing
+  // twice on every session Claude has not named yet. The honest fallback is to
+  // report the absence.
+  it('reports a session with no title as unnamed rather than repeating its pid', async () => {
     bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
     bridge.api.live.getActivity.mockResolvedValue(ok([activity({ title: null })]));
-    mount();
+    const view = mount();
 
-    const ident = await screen.findByText(/pid 4242/);
-    expect(ident.textContent).toBe('pid 4242 · Opus 5');
+    expect(await screen.findByText('not named yet')).toBeTruthy();
+    expect(view.container.querySelectorAll('.cl-mx-who .ident')).toHaveLength(1);
+    // …and it is still one pid on the lane, in the machine row.
+    expect(screen.getByText('pid 4242')).toBeTruthy();
+    expect(screen.getByText('Opus 5')).toBeTruthy();
   });
 
   // A title is a sentence Claude wrote, so the 380px row clips it: the tooltip is
@@ -227,7 +244,7 @@ describe('MonitorView', () => {
     const view = mount();
     await screen.findByText('beta');
 
-    const names = [...view.container.querySelectorAll('.cl-mx-head h3')].map(n => n.textContent);
+    const names = [...view.container.querySelectorAll('.cl-mx-who h3')].map(n => n.textContent);
     expect(names).toEqual(['beta', 'acme']);
   });
 
@@ -422,6 +439,268 @@ describe('MonitorView', () => {
     ).toBeTruthy();
   });
 
+  // The header carries the whole machine in one sentence — it replaced a 132px
+  // page title on the one page that is about the next ninety seconds. What it
+  // must never get wrong is the clause that asks for something.
+  it('leads the header with the count that is waiting on you', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'a', pid: 1 }),
+        activeSession({ sessionId: 'b', pid: 2, status: 'waiting', waitingFor: 'a prompt' }),
+        activeSession({ sessionId: 'c', pid: 3 }),
+      ])
+    );
+    const view = mount();
+    await screen.findByText('a prompt');
+
+    const say = view.container.querySelector('.cl-mxtop-say');
+    expect(say?.textContent).toBe('1 waiting on you, 2 working');
+    // Only that clause is coloured: it is the only figure on the page asking for
+    // anything.
+    expect(view.container.querySelector('.cl-mxtop-say .alert')?.textContent).toBe(
+      '1 waiting on you'
+    );
+  });
+
+  it('says nothing is running in the header too, not only in the body', async () => {
+    const view = mount();
+    await screen.findByText(/Nothing is running\./);
+    expect(view.container.querySelector('.cl-mxtop-say')?.textContent).toBe('Nothing is running');
+  });
+
+  // The machine row is why the pid came back and why the lane is wide: four
+  // facts that a 320px card had no room for, each in a field of its own.
+  it('prints the machine facts as their own fields', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([activeSession({ startedAt: Date.now() - 7_620_000 })])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(ok([activity()]));
+    const view = mount();
+    await screen.findByText('acme');
+
+    const machine = view.container.querySelector('.cl-mx-who .machine');
+    expect(machine?.textContent).toBe('pid 4242·Opus 5·up 2h07');
+  });
+
+  // `projectForCwd` deliberately maps a monorepo subdirectory to the repo, so
+  // the lane title says `acme` for a session started in `packages/api`. Without
+  // this field two lanes of one repo would look like the same shell — and at the
+  // repo root the same field would only repeat the title, so it is not printed.
+  it('locates a session started below the project root, and only then', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'root', pid: 1, startedAt: undefined }),
+        activeSession({
+          sessionId: 'sub',
+          pid: 2,
+          cwd: PROJECT.realPath + '/packages/api',
+          startedAt: undefined,
+        }),
+      ])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(ok([]));
+    const view = mount();
+    await waitFor(() =>
+      expect(view.container.querySelectorAll('.cl-mx-who .machine')).toHaveLength(2)
+    );
+
+    const rows = [...view.container.querySelectorAll('.cl-mx-who .machine')].map(
+      n => n.textContent
+    );
+    expect(rows).toContain('pid 2·./packages/api');
+    expect(rows).toContain('pid 1');
+  });
+
+  // The figure under the strip's newest end says what the flat run there means.
+  it('spells out the silence the strip draws, once it is worth saying', async () => {
+    const now = Date.now();
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'quiet', pid: 1 }),
+        activeSession({ sessionId: 'busy', pid: 2 }),
+      ])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({ sessionId: 'quiet', lastActivityAt: now - 245_000 }),
+        activity({ sessionId: 'busy', lastActivityAt: now - 2_000 }),
+      ])
+    );
+    mount();
+
+    expect(await screen.findByText('quiet 4m')).toBeTruthy();
+    // Two seconds of silence is the gap between two tool calls, not a signal.
+    expect(screen.queryByText('quiet 2s')).toBeNull();
+  });
+
+  // And when a sub-agent is running, the silence is explained rather than
+  // reported: the parent transcript is quiet BECAUSE the work moved to a sidecar
+  // this tail cannot see.
+  it('lets a running sub-agent take the slot the silence would have had', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession({ status: 'busy' })]));
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({
+          activity: 'idle',
+          lastTool: null,
+          lastActivityAt: Date.now() - 148_000,
+          delegates: [{ id: 'toolu_1', name: 'Explore', at: Date.now() - 148_000 }],
+        }),
+      ])
+    );
+    mount();
+
+    expect(await screen.findByText('2m in flight')).toBeTruthy();
+    expect(screen.queryByText('quiet 2m')).toBeNull();
+  });
+
+  // A background agent's work lives in the roster, not in a transcript this page
+  // can tail. Drawing 42 empty buckets for it would read as a hung session.
+  it('says a background agent has no strip instead of drawing an empty one', async () => {
+    bridge.api.live.getSessions.mockResolvedValue(ok([bgSession()]));
+    const view = mount();
+    await screen.findByText('agent docs-sweeper');
+
+    expect(screen.getByText('no transcript to tail')).toBeTruthy();
+    expect(screen.getByText('open in Agent View ↗')).toBeTruthy();
+    expect(view.container.querySelector('.cl-mx-trace i')).toBeNull();
+  });
+
+  // The card's body says what the session DID, with the subject of each action —
+  // the reason this form is not empty. The in-flight call is the `now` row and
+  // must not be repeated at the top of the history below it.
+  it('prints the tape of what it did, with subjects, and never twice', async () => {
+    const now = Date.now();
+    bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({
+          lastTool: { name: 'Bash', arg: 'npm test' },
+          recent: [
+            { at: now - 50_000, kind: 'tool', tool: 'Read', arg: 'src/index.css' },
+            { at: now - 40_000, kind: 'tool', tool: 'Edit', arg: 'trace.ts' },
+            {
+              at: now - 30_000,
+              kind: 'tool',
+              tool: 'Bash',
+              arg: 'npm run typecheck',
+              failed: true,
+            },
+            { at: now - 2_000, kind: 'tool', tool: 'Bash', arg: 'npm test' },
+          ],
+        }),
+      ])
+    );
+    const view = mount();
+    await screen.findByText('acme');
+
+    const rows = [...view.container.querySelectorAll('.cl-mx-tape li')].map(n =>
+      [...n.querySelectorAll('b, .arg')].map(c => c.textContent).join(' ')
+    );
+    // `now` first, then history newest-first — and `Bash npm test` appears once.
+    expect(rows).toEqual([
+      'Bash npm test',
+      'Bash npm run typecheck',
+      'Edit trace.ts',
+      'Read src/index.css',
+    ]);
+    // Only the call whose result came back an error.
+    expect(view.container.querySelectorAll('.cl-mx-tape li.failed')).toHaveLength(1);
+  });
+
+  // CONTEXT is the one fact on this page you can only act on while the session
+  // runs: past ~90% it is about to compact and lose fidelity. Three bands,
+  // because the question is "how worried", not "how full".
+  it('escalates the context gauge only when the window starts to matter', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'calm', pid: 1 }),
+        activeSession({ sessionId: 'tight', pid: 2 }),
+        activeSession({ sessionId: 'full', pid: 3 }),
+      ])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({ sessionId: 'calm', context: { used: 60_000, max: 200_000 } }),
+        activity({ sessionId: 'tight', context: { used: 160_000, max: 200_000 } }),
+        activity({ sessionId: 'full', context: { used: 190_000, max: 200_000 } }),
+      ])
+    );
+    const view = mount();
+    await waitFor(() =>
+      expect(view.container.querySelectorAll('.cl-mx-vitals .ctx')).toHaveLength(3)
+    );
+
+    const loads = [...view.container.querySelectorAll('.cl-mx-vitals .ctx')].map(n => [
+      n.getAttribute('data-load'),
+      n.querySelector('.v')?.textContent,
+    ]);
+    expect(loads).toEqual([
+      ['ok', '30%'],
+      ['high', '80%'],
+      ['critical', '95%'],
+    ]);
+  });
+
+  it('names the window in the gauge tooltip, since the bar only shows the share', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([activity({ context: { used: 278_231, max: 1_000_000 } })])
+    );
+    const view = mount();
+    await screen.findByText('28%');
+    expect(view.container.querySelector('.cl-mx-vitals .ctx')?.getAttribute('title')).toBe(
+      'Context window: 278,231 of 1,000,000 tokens'
+    );
+  });
+
+  it('prints what the session has spent, and says when the price is a guess', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'exact', pid: 1 }),
+        activeSession({ sessionId: 'guess', pid: 2 }),
+      ])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({ sessionId: 'exact', spend: 1.239, tokens: 412_000 }),
+        activity({ sessionId: 'guess', spend: 4.07, tokens: 1_200_000, spendEstimated: true }),
+      ])
+    );
+    mount();
+
+    expect(await screen.findByText('$1.24')).toBeTruthy();
+    // A figure the pricing table cannot stand behind is marked, not quoted flat.
+    expect(screen.getByText('~$4.07')).toBeTruthy();
+    // The token tally is deliberately NOT on the card: it is the same fact in a
+    // unit nobody budgets in, competing with the one figure that means something.
+    expect(screen.queryByText(/412k/)).toBeNull();
+  });
+
+  // Absent, not zero. `$0.00` next to a worker burning tokens would be the one
+  // wrong figure on the board, and the roster carries no usage at all.
+  it('leaves the vitals of a background agent empty rather than inventing them', async () => {
+    bridge.api.live.getSessions.mockResolvedValue(ok([bgSession()]));
+    const view = mount();
+    await screen.findByText('agent docs-sweeper');
+
+    expect(view.container.querySelector('.cl-mx-vitals .ctx.is-none')).toBeTruthy();
+    expect(view.container.querySelector('.cl-mx-vitals .money')).toBeNull();
+    expect(screen.queryByText('$0.00')).toBeNull();
+  });
+
+  // A session that has not had a turn yet has no reading, and saying 0% would
+  // claim the window is empty when the truth is that nobody has looked.
+  it('shows no context reading before the first turn', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
+    bridge.api.live.getActivity.mockResolvedValue(ok([activity({ context: null })]));
+    const view = mount();
+    await screen.findByText('acme');
+
+    expect(view.container.querySelector('.cl-mx-vitals .ctx.is-none')).toBeTruthy();
+    expect(screen.queryByText('0%')).toBeNull();
+  });
+
   it('unsubscribes from both live channels when it unmounts', async () => {
     bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
     const view = mount();
@@ -437,60 +716,91 @@ describe('MonitorView', () => {
   });
 });
 
-// The pulse strip is what separates a session mid-tool from a hung one, so its
-// bucketing is worth pinning: marks land where their timestamp says, silence is
-// silence, and the run AFTER the last mark is the part a blocked card paints in
-// the accent.
-describe('buildTrace', () => {
+// The tape is the card's body and the reason the form is not empty: it says what
+// the session DID, with the subject of each action. Worth pinning: what counts as
+// one step, which end survives the cap, and that the in-flight call is never
+// printed twice.
+describe('buildTape', () => {
   const NOW = 1_800_000_000_000;
+  const mark = (secondsAgo: number, tool: string, arg = '', failed = false) => ({
+    at: NOW - secondsAgo * 1000,
+    kind: 'tool' as const,
+    tool,
+    arg,
+    ...(failed ? { failed } : {}),
+  });
 
-  it('drops a mark into the bucket its timestamp falls in', () => {
-    const bars = buildTrace([{ at: NOW - 1_000, kind: 'tool' }], NOW);
-    expect(bars).toHaveLength(42);
-    // Newest marks sit at the right edge: the strip ends at now.
-    expect(bars[41].quiet).toBe(false);
-    expect(bars[0].quiet).toBe(true);
+  it('reads newest first, with the subject of each action', () => {
+    const tape = buildTape([mark(40, 'Read', 'src/index.css'), mark(10, 'Edit', 'trace.ts')], NOW);
+    expect(tape.map(s => [s.tool, s.arg])).toEqual([
+      ['Edit', 'trace.ts'],
+      ['Read', 'src/index.css'],
+    ]);
+  });
+
+  // The newest mark IS the call the card is already printing as its `now` row.
+  // Without this the card shows the same action twice, once as "now" and once as
+  // the top of its own history.
+  it('drops the in-flight call when the card is already printing it', () => {
+    const marks = [mark(30, 'Read', 'a.ts'), mark(2, 'Bash', 'npm test')];
+    expect(buildTape(marks, NOW, { dropNewest: true }).map(s => s.tool)).toEqual(['Read']);
+    expect(buildTape(marks, NOW).map(s => s.tool)).toEqual(['Bash', 'Read']);
+  });
+
+  // A retry loop is one thing happening three times, not three pieces of work.
+  it('collapses an exact repeat and dates the row by its oldest call', () => {
+    const tape = buildTape(
+      [mark(30, 'Bash', 'npm test'), mark(20, 'Bash', 'npm test'), mark(10, 'Bash', 'npm test')],
+      NOW
+    );
+    expect(tape).toHaveLength(1);
+    expect(tape[0].count).toBe(3);
+    // The row says when the loop started, not when it last spun.
+    expect(tape[0].at).toBe(NOW - 30_000);
+  });
+
+  it('keeps two different subjects apart even for the same tool', () => {
+    const tape = buildTape([mark(20, 'Edit', 'a.ts'), mark(10, 'Edit', 'b.ts')], NOW);
+    expect(tape.map(s => s.arg)).toEqual(['b.ts', 'a.ts']);
+  });
+
+  it('carries a failure onto its row', () => {
+    const tape = buildTape([mark(10, 'Bash', 'npm test', true)], NOW);
+    expect(tape[0].failed).toBe(true);
+  });
+
+  // Prose marks the trace but is not a step of the story: a `text` mark between
+  // two edits would break the sequence in half without adding anything to act on.
+  it('leaves prose off the tape', () => {
+    const tape = buildTape(
+      [
+        mark(30, 'Edit', 'a.ts'),
+        { at: NOW - 20_000, kind: 'text' as const },
+        mark(10, 'Edit', 'b.ts'),
+      ],
+      NOW
+    );
+    expect(tape.map(s => s.tool)).toEqual(['Edit', 'Edit']);
   });
 
   it('ignores marks outside the window instead of clamping them into it', () => {
-    const bars = buildTrace(
-      [
-        { at: NOW - 500_000, kind: 'tool' }, // long before the strip starts
-        { at: NOW + 5_000, kind: 'tool' }, // clock skew, in the future
-      ],
-      NOW
-    );
-    expect(bars.every(b => b.quiet)).toBe(true);
+    expect(
+      buildTape(
+        [
+          mark(9_000, 'Read', 'old.ts'), // long before the window starts
+          { at: NOW + 5_000, kind: 'tool' as const, tool: 'Bash' }, // clock skew
+        ],
+        NOW
+      )
+    ).toEqual([]);
   });
 
-  it('stacks marks in one bucket and flags a failure', () => {
-    const busy = buildTrace(
-      [
-        { at: NOW - 1_000, kind: 'tool' },
-        { at: NOW - 900, kind: 'tool' },
-        { at: NOW - 800, kind: 'tool' },
-      ],
-      NOW
-    );
-    expect(busy[41].h).toBeCloseTo(1);
-    expect(busy[41].failed).toBe(false);
-
-    const failed = buildTrace([{ at: NOW - 1_000, kind: 'error' }], NOW);
-    expect(failed[41].failed).toBe(true);
-  });
-
-  it('weighs an answer lighter than a tool call', () => {
-    const talking = buildTrace([{ at: NOW - 1_000, kind: 'text' }], NOW);
-    const working = buildTrace([{ at: NOW - 1_000, kind: 'tool' }], NOW);
-    expect(talking[41].h).toBeLessThan(working[41].h);
-  });
-
-  it('leaves the run after the last mark quiet — the silence a blocked card paints', () => {
-    // One action 60s ago, nothing since: two thirds of the strip is the wait.
-    const bars = buildTrace([{ at: NOW - 60_000, kind: 'tool' }], NOW);
-    const lastLoud = bars.reduce((last, bar, i) => (bar.quiet ? last : i), -1);
-    expect(lastLoud).toBeGreaterThan(0);
-    expect(bars.slice(lastLoud + 1).every(b => b.quiet)).toBe(true);
-    expect(bars.length - lastLoud - 1).toBeGreaterThan(20);
+  // What a session just did explains it better than what it started with.
+  it('keeps the newest rows when there are more than fit', () => {
+    const marks = Array.from({ length: 10 }, (_, i) => mark(90 - i * 5, 'Edit', `f${i}.ts`));
+    const tape = buildTape(marks, NOW);
+    expect(tape).toHaveLength(6);
+    expect(tape[0].arg).toBe('f9.ts');
+    expect(tape[5].arg).toBe('f4.ts');
   });
 });

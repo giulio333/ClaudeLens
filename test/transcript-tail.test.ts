@@ -1,4 +1,9 @@
-import { readAppend, parseJsonlLine, readSessionTitle } from '../electron/modules/transcript-tail';
+import {
+  readAppend,
+  parseJsonlLine,
+  parseTurnUsage,
+  readSessionTitle,
+} from '../electron/modules/transcript-tail';
 import { mkdtempSync, rmSync, writeFileSync, appendFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -226,6 +231,109 @@ describe('parseJsonlLine', () => {
       message: { role: 'user', content: 'read the docs please' },
     });
     expect(events.find(e => e.type === 'user_message')?.toolUseId).toBeUndefined();
+  });
+});
+
+// The usage block: the one part of an assistant line the tail used to read past.
+// It is what tells the Monitor how full a session's context window is and what
+// the session has cost — the two facts that only mean anything while it runs.
+describe('parseTurnUsage', () => {
+  const withUsage = (usage: unknown, extra: Record<string, unknown> = {}) =>
+    JSON.parse(
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-08-16T10:00:00.000Z',
+        message: { role: 'assistant', model: 'claude-opus-5', content: [], usage },
+        ...extra,
+      })
+    ) as Record<string, unknown>;
+
+  it('reads all four billed kinds off the line', () => {
+    expect(
+      parseTurnUsage(
+        withUsage({
+          input_tokens: 2,
+          cache_creation_input_tokens: 277,
+          cache_read_input_tokens: 277_604,
+          output_tokens: 139,
+        })
+      )
+    ).toEqual({
+      at: Date.parse('2026-08-16T10:00:00.000Z'),
+      model: 'claude-opus-5',
+      inputTokens: 2,
+      outputTokens: 139,
+      cacheWriteTokens: 277,
+      cacheReadTokens: 277_604,
+    });
+  });
+
+  // The same rule that keeps a sub-agent's tool tally out of its parent's, and it
+  // matters more here: a sub-agent's prompt added to the parent's would report a
+  // window fuller than it is and predict a compaction that is not coming.
+  it("never bills a sub-agent's tokens to the session that dispatched it", () => {
+    const usage = { input_tokens: 5, output_tokens: 900, cache_read_input_tokens: 50_000 };
+    expect(parseTurnUsage(withUsage(usage, { isSidechain: true }))).toBeNull();
+    expect(parseTurnUsage(withUsage(usage, { isMeta: true }))).toBeNull();
+    expect(parseTurnUsage(withUsage(usage))).not.toBeNull();
+  });
+
+  it('ignores a line that carries no usage, and a usage block that is all zeros', () => {
+    const bare = JSON.parse(assistant([{ type: 'text', text: 'hi' }])) as Record<string, unknown>;
+    expect(parseTurnUsage(bare)).toBeNull();
+    expect(parseTurnUsage(withUsage({}))).toBeNull();
+    expect(parseTurnUsage(withUsage({ input_tokens: 0, output_tokens: 0 }))).toBeNull();
+    expect(parseTurnUsage({ type: 'user', message: { usage: { input_tokens: 5 } } })).toBeNull();
+  });
+
+  // Undocumented internal format: a key that changed type must cost a zero, never
+  // a NaN travelling into a dollar figure on screen.
+  it('reads a malformed field as zero rather than letting NaN out', () => {
+    const turn = parseTurnUsage(
+      withUsage({ input_tokens: '12', output_tokens: 7, cache_read_input_tokens: -3 })
+    );
+    expect(turn).toEqual({
+      at: Date.parse('2026-08-16T10:00:00.000Z'),
+      model: 'claude-opus-5',
+      inputTokens: 0,
+      outputTokens: 7,
+      cacheWriteTokens: 0,
+      cacheReadTokens: 0,
+    });
+  });
+
+  it('collects one entry per assistant line of an append, in file order', () => {
+    writeFileSync(file, '');
+    appendFileSync(
+      file,
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-08-16T10:00:00.000Z',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-5',
+          content: [],
+          usage: { output_tokens: 1 },
+        },
+      }) + '\n'
+    );
+    appendFileSync(file, assistant([{ type: 'text', text: 'no usage here' }]));
+    appendFileSync(
+      file,
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-08-16T10:00:09.000Z',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-5',
+          content: [],
+          usage: { output_tokens: 2 },
+        },
+      }) + '\n'
+    );
+
+    const read = readAppend(file, 0);
+    expect(read.turns.map(t => t.outputTokens)).toEqual([1, 2]);
   });
 });
 
