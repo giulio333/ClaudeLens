@@ -201,6 +201,59 @@ function calculateCost(
 }
 
 /**
+ * Dollars for one turn's usage, at the rate its model had when it ran.
+ *
+ * Exported for the **Monitor's tail** (`session-tails.ts`), which prices each
+ * assistant line as it appends: a live session's spend cannot come from
+ * `calculateCostSummary`, whose unit is a whole project. Same pricing table and
+ * the same `at` resolution as every other figure in the app, so the Monitor and
+ * the project views can never quote two different prices for one turn.
+ */
+export function costOfUsage(
+  usage: {
+    inputTokens: number;
+    outputTokens: number;
+    cacheWriteTokens: number;
+    cacheReadTokens: number;
+  },
+  model: string | undefined,
+  at?: string
+): number {
+  return calculateCost(
+    usage.inputTokens,
+    usage.outputTokens,
+    usage.cacheWriteTokens,
+    usage.cacheReadTokens,
+    model,
+    at
+  );
+}
+
+/**
+ * What one transcript has spent so far, and on how many tokens.
+ *
+ * The Monitor's tail starts at EOF — it reports what happens from now on — so a
+ * session that was already running when ClaudeLens opened would report the cost
+ * of the last few turns as if it were the session's total. A money figure that
+ * is silently partial is worse than none, so the cursor seeds itself from here
+ * once, and the tail keeps it current afterwards.
+ *
+ * Cheap because it is the same cached `parseSession` the project views use: an
+ * unchanged transcript costs one `stat`, a grown one only its tail.
+ */
+export async function readSessionSpend(
+  filePath: string
+): Promise<{ costUsd: number; tokens: number; model: string | undefined }> {
+  const parsed = await parseSession(filePath);
+  return {
+    costUsd: costOfUsage(parsed, parsed.model, parsed.date),
+    tokens:
+      parsed.inputTokens + parsed.outputTokens + parsed.cacheWriteTokens + parsed.cacheReadTokens,
+    model: parsed.model,
+  };
+}
+
+/**
  * Dollars saved by reading from the prompt cache instead of paying the full input
  * rate for those tokens. Cache reads bill at ~10% of input, so this is the avoided
  * delta (`input − cacheRead`) — what the session would have cost extra with no cache.
