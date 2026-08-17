@@ -2,7 +2,9 @@ import { basename, join } from 'path';
 import { statSync } from 'fs';
 import { glob } from 'glob';
 import { CLAUDE_DIR } from '../utils';
-import { readAppend, readSessionTitle, type LiveEvent } from './transcript-tail';
+import { readAppend, readSessionTitle, type LiveEvent, type TurnUsage } from './transcript-tail';
+import { costOfUsage, isModelPriced, readSessionSpend } from './cost-tracker';
+import { contextWindowFor } from '../shared/context-window';
 import type { ActiveSession } from './sessions-registry-reader';
 
 // What every live session is doing right now, for the Monitor.
@@ -32,14 +34,32 @@ export interface ToolRef {
   arg: string;
 }
 
-/** One mark on a session's activity trace. Non-error tool RESULTS are
- *  deliberately not marked: they pair with the call that already has a mark and
- *  would double every action on the strip. */
-export type TraceKind = 'tool' | 'error' | 'text';
+/** One mark on a session's activity trace. Tool RESULTS are deliberately not
+ *  marked: they pair with the call that already has a mark and would double
+ *  every action on the track. */
+export type TraceKind = 'tool' | 'text';
 
 export interface TraceMark {
   at: number;
   kind: TraceKind;
+  /** The tool this mark is, and the one-line subject it acted on — the same pair
+   *  `lastTool` carries, kept for every action instead of only the current one.
+   *  It is what lets the Monitor print what a session DID (`Edit
+   *  MonitorView.tsx`, `Bash npm run typecheck`) rather than a row of anonymous
+   *  bars. Both absent on a `text` mark: prose has no name and no subject. */
+  tool?: string;
+  arg?: string;
+  /** The call's `tool_use` id. Carried only so its result can find it again (see
+   *  `failed`); nothing renders it. */
+  id?: string;
+  /** Set when this call's result came back an error.
+   *
+   *  A failure is an attribute of the call, not a second event: marking the
+   *  result too drew two ticks for one action and overstated the rhythm — the
+   *  one thing the track exists to measure. The cost of that choice is explicit:
+   *  a call whose result arrives after it has aged out of the window cannot be
+   *  flagged, and only `errorCount` still knows about it. */
+  failed?: boolean;
 }
 
 /** A sub-agent this session dispatched and has not seen finish.
@@ -128,6 +148,25 @@ export interface SessionActivity {
   toolCount: number;
   errorCount: number;
   model: string | null;
+  /** How full the context window is, from the newest assistant turn's prompt.
+   *
+   *  A LEVEL, not a total: only the latest reading means anything, which is why
+   *  it is one object replaced each turn rather than something accumulated. It is
+   *  the one fact on this page that is only actionable while the session runs —
+   *  a session at 94% is about to compact, and afterwards nobody can tell it
+   *  ever was. Null until an assistant turn with usage has been read. */
+  context: { used: number; max: number } | null;
+  /** Dollars this session has billed. Seeded once from a full (cached) parse of
+   *  the transcript, because the tail starts at EOF and a money figure that
+   *  silently covers only the last few turns is worse than none. Null until
+   *  either the seed or the first priced turn lands. */
+  spend: number | null;
+  /** True when `spend` was priced through the fuzzy family fallback rather than
+   *  an exact table entry — the UI marks those as approximate instead of
+   *  quoting a figure it cannot stand behind. */
+  spendEstimated: boolean;
+  /** Every token this session has billed, all four kinds. */
+  tokens: number;
   /** Epoch ms at which the session left the registry; null while it is live.
    *  Retained briefly so the Monitor can show what just finished — a session
    *  that ends the moment you look away would otherwise leave no trace. */
@@ -136,6 +175,10 @@ export interface SessionActivity {
 
 interface Cursor extends SessionActivity {
   offset: number;
+  /** This cursor started at EOF, so the transcript's existing spend is still
+   *  behind it — see `seedSpend`. Cursor-only state, stripped before the digest
+   *  leaves for the renderer. */
+  needsSeed: boolean;
 }
 
 const cursors = new Map<string, Cursor>(); // keyed by sessionId
@@ -171,8 +214,13 @@ function emptyActivity(sessionId: string): Cursor {
     toolCount: 0,
     errorCount: 0,
     model: null,
+    context: null,
+    spend: null,
+    spendEstimated: false,
+    tokens: 0,
     endedAt: null,
     offset: 0,
+    needsSeed: false,
   };
 }
 
@@ -202,19 +250,65 @@ export function toolArg(input: Record<string, unknown> | undefined): string {
 }
 
 /**
+ * Fold one append's assistant turns into the digest's two derived figures.
+ *
+ * They are different KINDS of quantity and are treated as such: the context is a
+ * level, so only the newest turn's prompt counts and each reading replaces the
+ * last; the spend and the token tally are totals, so every turn adds to them.
+ * Reading the prompt as a total (or the bill as a level) is the mistake this
+ * split exists to make impossible.
+ *
+ * Each turn is priced with ITS OWN model and timestamp, not the session's: a
+ * `/model` switch mid-session is real, and so is a model whose published rate
+ * changed on a date the session straddles.
+ */
+function foldTurns(prev: SessionActivity, turns: TurnUsage[]): SessionActivity {
+  if (!turns.length) return prev;
+
+  let spend = prev.spend ?? 0;
+  let tokens = prev.tokens;
+  let estimated = prev.spendEstimated;
+
+  for (const turn of turns) {
+    const model = turn.model ?? prev.model ?? undefined;
+    spend += costOfUsage(turn, model, turn.at ? new Date(turn.at).toISOString() : undefined);
+    tokens += turn.inputTokens + turn.outputTokens + turn.cacheWriteTokens + turn.cacheReadTokens;
+    if (!isModelPriced(model)) estimated = true;
+  }
+
+  const last = turns[turns.length - 1];
+  const used = last.inputTokens + last.cacheReadTokens + last.cacheWriteTokens;
+  return {
+    ...prev,
+    spend,
+    tokens,
+    spendEstimated: estimated,
+    context: { used, max: contextWindowFor(last.model ?? prev.model ?? undefined, used) },
+  };
+}
+
+/**
  * Fold tail events into the running digest. Pure: the caller owns the state.
  *
  * Order matters — a batch usually ends with the event that best describes the
  * session (the tool it just started), so later events win over earlier ones.
  */
-export function foldEvents(prev: SessionActivity, events: LiveEvent[]): SessionActivity {
-  let next = prev;
+export function foldEvents(
+  prev: SessionActivity,
+  events: LiveEvent[],
+  turns: TurnUsage[] = []
+): SessionActivity {
+  let next = foldTurns(prev, turns);
   const marks = [...prev.recent];
 
   for (const event of events) {
     const stamp = Date.parse(event.timestamp);
     const at = Number.isNaN(stamp) ? next.lastActivityAt : stamp;
     next = { ...next, lastActivityAt: at, model: event.model ?? next.model };
+
+    // Computed once per event and shared by `lastTool` and the mark below: the
+    // two used to derive the same string twice from the same input.
+    const arg = event.type === 'tool_use' ? toolArg(event.toolInput) : '';
 
     switch (event.type) {
       case 'status_change':
@@ -230,12 +324,22 @@ export function foldEvents(prev: SessionActivity, events: LiveEvent[]): SessionA
           ...next,
           activity: 'busy',
           toolCount: next.toolCount + 1,
-          lastTool: { name: event.toolName ?? 'unknown', arg: toolArg(event.toolInput) },
+          lastTool: { name: event.toolName ?? 'unknown', arg },
           delegates: AGENT_TOOLS.has(event.toolName ?? '')
             ? openDelegate(next.delegates, event, at)
             : next.delegates,
         };
-        if (at) marks.push({ at, kind: 'tool' });
+        // Name and subject ride on the mark: it is what lets the Monitor print
+        // the session's last actions as a readable tape instead of a row of
+        // anonymous bars.
+        if (at)
+          marks.push({
+            at,
+            kind: 'tool',
+            tool: event.toolName ?? 'unknown',
+            ...(arg ? { arg } : {}),
+            id: event.toolUseId,
+          });
         break;
       case 'tool_result':
         // The tool that just finished stops being what the session is doing;
@@ -250,9 +354,13 @@ export function foldEvents(prev: SessionActivity, events: LiveEvent[]): SessionA
             ? next.delegates
             : closeDelegate(next.delegates, event.toolUseId),
         };
-        // Only failures are marked: a successful result pairs with the call
-        // that is already on the strip.
-        if (at && event.isError) marks.push({ at, kind: 'error' });
+        // A failure is not an event of its own — it is a verdict on the call
+        // that is already on the track. Paired by id rather than by "the last
+        // tool", which parallel calls make wrong.
+        if (event.isError && event.toolUseId) {
+          const i = marks.findIndex(m => m.id === event.toolUseId);
+          if (i !== -1) marks[i] = { ...marks[i], failed: true };
+        }
         break;
       // Text and thinking do NOT set the activity. `parseJsonlLine` emits a
       // line's `status_change` BEFORE that line's content blocks, so an
@@ -317,6 +425,37 @@ async function findTranscript(sessionId: string): Promise<string | null> {
 }
 
 /**
+ * Everything this session had already billed before the cursor existed.
+ *
+ * The cursor starts at EOF — the Monitor reports what happens from now on — so
+ * without this a session that was already running would report the cost of its
+ * last few turns as its total. A money figure that is silently partial is worse
+ * than none, so it is read once from `readSessionSpend` (the same cached
+ * `parseSession` the project views use: an unchanged transcript costs one
+ * `stat`) and the tail adds every turn after it.
+ *
+ * `needsSeed` gates it for two reasons. It must happen exactly once — a second
+ * seed would double the whole history — and it must not happen at all for a
+ * cursor adopted at offset 0, which reads the file itself. It also survives a
+ * failed read, so the next sync tries again instead of leaving the session
+ * without a figure for the rest of its life.
+ */
+async function seedSpend(cursor: Cursor): Promise<void> {
+  if (!cursor.needsSeed || !cursor.transcriptPath) return;
+  try {
+    const seed = await readSessionSpend(cursor.transcriptPath);
+    cursor.spend = seed.costUsd;
+    cursor.tokens = seed.tokens;
+    cursor.spendEstimated = !isModelPriced(seed.model);
+    cursor.model = cursor.model ?? seed.model ?? null;
+    cursor.needsSeed = false;
+  } catch {
+    // Unreadable right now: `needsSeed` stays set, so the next sync retries and
+    // until then the lane prints no figure rather than a partial one.
+  }
+}
+
+/**
  * Reconcile the tracked cursors with the live registry: open one for each new
  * session, drop the ones whose session is gone.
  *
@@ -361,6 +500,11 @@ export async function syncSessionTails(
       // A revived cursor kept its path but lost its mapping when it ended:
       // without this the file would be watched and never read again.
       byPath.set(cursor.transcriptPath, session.sessionId);
+      // The seed is retried here, not only where the path is first found: this
+      // branch is the one every later sync takes, so a read that failed once
+      // would otherwise leave the session without a spend figure for its whole
+      // life.
+      await seedSpend(cursor);
       continue;
     }
 
@@ -376,6 +520,12 @@ export async function syncSessionTails(
     // here, or a session already running when the Monitor opened stays nameless
     // until its next turn. Appends keep it current from now on.
     cursor.title = cursor.title ?? readSessionTitle(path);
+    // Same reasoning, with money at stake — see `seedSpend`. Only a cursor that
+    // starts at EOF has a history behind it to seed; one adopted at offset 0
+    // reads the whole file itself and must NOT be seeded, or every turn would be
+    // billed twice.
+    cursor.needsSeed = true;
+    await seedSpend(cursor);
     byPath.set(path, session.sessionId);
   }
 }
@@ -408,8 +558,12 @@ export function onTranscriptChanged(path: string): boolean {
   try {
     const read = readAppend(cursor.transcriptPath, cursor.offset);
     cursor.offset = read.offset;
-    if (read.events.length === 0) return read.reset;
-    Object.assign(cursor, foldEvents(cursor, read.events));
+    // A `turns`-only append is real: the assistant line that closes a turn can
+    // carry usage without producing an event the digest keeps (its status change
+    // repeats the current one). Returning early on `events` alone would drop the
+    // context reading and the turn's cost.
+    if (read.events.length === 0 && read.turns.length === 0) return read.reset;
+    Object.assign(cursor, foldEvents(cursor, read.events, read.turns));
     return true;
   } catch {
     // Deleted or unreadable mid-read: keep the cursor, the next append retries.
@@ -420,7 +574,11 @@ export function onTranscriptChanged(path: string): boolean {
 /** Current digest for every tracked session, live ones first, plus the ones
  *  that ended inside the retention window (`endedAt` set). */
 export function getSessionActivity(): SessionActivity[] {
-  const strip = ({ offset: _offset, ...activity }: Cursor): SessionActivity => activity;
+  const strip = ({
+    offset: _offset,
+    needsSeed: _needsSeed,
+    ...activity
+  }: Cursor): SessionActivity => activity;
   return [...[...cursors.values()].map(strip), ...[...ended.values()].map(strip)];
 }
 

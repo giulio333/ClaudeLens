@@ -32,8 +32,35 @@ export interface LiveEvent {
   toolUseId?: string;
 }
 
+/**
+ * One assistant turn's billed usage, as the transcript records it.
+ *
+ * Kept OFF `LiveEvent` deliberately. A single assistant line yields several
+ * events (a status change, its text, each tool call), so hanging the usage on
+ * them would either double-count it or force every consumer of the union — the
+ * Live view included — to learn a new event type it has no use for. It is an
+ * attribute of the line, so it rides alongside the events, one entry per line
+ * that carried one, in file order.
+ *
+ * Two readings come out of it, and they are not the same quantity: the PROMPT
+ * (input + both cache figures) is what occupies the context window and is a
+ * level — only the newest line's value means anything. Everything billed,
+ * output included, is a total and accumulates.
+ */
+export interface TurnUsage {
+  /** Epoch ms of the line; 0 when it carried no parsable timestamp. */
+  at: number;
+  model?: string;
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+}
+
 export interface AppendRead {
   events: LiveEvent[];
+  /** Billed usage of each assistant line in this append, in file order. */
+  turns: TurnUsage[];
   /** New absolute cursor: bytes up to and including the last complete line. */
   offset: number;
   /** Malformed or oversized lines skipped in this read. */
@@ -65,6 +92,7 @@ const MAX_LINE_BYTES = 16 * 1024 * 1024; // 16 MB
  */
 export function readAppend(filePath: string, from: number, chunkSize = MAX_READ_BYTES): AppendRead {
   const events: LiveEvent[] = [];
+  const turns: TurnUsage[] = [];
   let dropped = 0;
   let reset = false;
 
@@ -76,7 +104,7 @@ export function readAppend(filePath: string, from: number, chunkSize = MAX_READ_
       start = 0;
       reset = true;
     }
-    if (size <= start) return { events, offset: start, dropped, reset };
+    if (size <= start) return { events, turns, offset: start, dropped, reset };
 
     let offset = start;
     let consumed = start; // bytes up to and including the last newline
@@ -86,7 +114,10 @@ export function readAppend(filePath: string, from: number, chunkSize = MAX_READ_
       const line = lineBuf.toString('utf-8').trim();
       if (!line) return;
       try {
-        events.push(...parseJsonlLine(JSON.parse(line) as Record<string, unknown>));
+        const json = JSON.parse(line) as Record<string, unknown>;
+        events.push(...parseJsonlLine(json));
+        const usage = parseTurnUsage(json);
+        if (usage) turns.push(usage);
       } catch {
         dropped++;
       }
@@ -116,10 +147,54 @@ export function readAppend(filePath: string, from: number, chunkSize = MAX_READ_
       }
     }
 
-    return { events, offset: consumed, dropped, reset };
+    return { events, turns, offset: consumed, dropped, reset };
   } finally {
     closeSync(fd);
   }
+}
+
+/**
+ * The billed usage of one transcript line, or null when it carries none.
+ *
+ * Sidechain lines are skipped for the same reason the digest keeps no counters
+ * for a sub-agent: those tokens are the sub-agent's, and folding them into the
+ * parent would make one session's context reading and one session's bill answer
+ * for two. (A sub-agent's prompt is its own — adding it to the parent's would
+ * report a window fuller than it is and could invent a compaction that is not
+ * coming.)
+ *
+ * Every field is read defensively: this is an undocumented internal format, and
+ * a usage block that gained or lost a key must cost us a zero, never a NaN
+ * propagating into a dollar figure.
+ */
+export function parseTurnUsage(json: Record<string, unknown>): TurnUsage | null {
+  if (json.type !== 'assistant') return null;
+  if (json.isMeta === true || json.isSidechain === true) return null;
+
+  const msg = json.message as Record<string, unknown> | undefined;
+  const usage = msg?.usage as Record<string, unknown> | undefined;
+  if (!usage) return null;
+
+  const num = (value: unknown): number =>
+    typeof value === 'number' && Number.isFinite(value) && value >= 0 ? value : 0;
+
+  const inputTokens = num(usage.input_tokens);
+  const outputTokens = num(usage.output_tokens);
+  const cacheWriteTokens = num(usage.cache_creation_input_tokens);
+  const cacheReadTokens = num(usage.cache_read_input_tokens);
+  // A line whose usage block is present but empty is not a turn: counting it
+  // would stamp the session's activity without any work having happened.
+  if (!inputTokens && !outputTokens && !cacheWriteTokens && !cacheReadTokens) return null;
+
+  const stamp = Date.parse(String(json.timestamp ?? ''));
+  return {
+    at: Number.isNaN(stamp) ? 0 : stamp,
+    model: typeof msg?.model === 'string' ? msg.model : undefined,
+    inputTokens,
+    outputTokens,
+    cacheWriteTokens,
+    cacheReadTokens,
+  };
 }
 
 /** Translate one transcript line into the flat events the Live views render. */

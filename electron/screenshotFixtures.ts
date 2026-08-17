@@ -619,13 +619,16 @@ const MOCK_ACTIVE_SESSIONS = [
   },
 ];
 
-// Marks for a Monitor pulse strip: `offsets` are seconds into a 100s-ago window,
-// `failedAt` (an offset) marks the one that errored.
-function traceMarks(offsets: number[], failedAt: number | null) {
+// Marks for a Monitor turn track: `steps` are `[secondsIntoA100sWindow, tool]`
+// pairs, and `failedAt` (an offset) is the call whose result came back an error.
+// A `null` tool is prose — it marks the track but stays off the trail.
+function traceMarks(steps: [number, string | null][], failedAt: number | null) {
   const base = Date.now() - 100_000;
-  return offsets.map(o => ({
+  return steps.map(([o, tool]) => ({
     at: base + o * 1000,
-    kind: (o === failedAt ? 'error' : o % 3 === 0 ? 'text' : 'tool') as 'error' | 'text' | 'tool',
+    kind: (tool ? 'tool' : 'text') as 'tool' | 'text',
+    ...(tool ? { tool, id: `toolu_${o}` } : {}),
+    ...(o === failedAt ? { failed: true } : {}),
   }));
 }
 
@@ -636,8 +639,28 @@ const MOCK_SESSION_ACTIVITY = [
     sessionId: 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10',
     cwd: '/Users/alice/projects/webapp',
     title: 'Checkout flow regression',
-    // A busy rhythm: tool calls every few seconds, one of them failed.
-    recent: traceMarks([2, 9, 15, 16, 24, 31, 38, 39, 47, 55, 61, 68, 74, 81, 88], 12),
+    // A busy rhythm that tells a story: it searched, read, edited, ran the tests,
+    // they failed, and it has been editing since.
+    recent: traceMarks(
+      [
+        [2, 'Grep'],
+        [9, 'Read'],
+        [15, 'Read'],
+        [16, 'Read'],
+        [24, null],
+        [31, 'Edit'],
+        [38, 'Edit'],
+        [39, 'Bash'],
+        [47, 'Read'],
+        [55, 'Edit'],
+        [61, 'Bash'],
+        [68, 'Edit'],
+        [74, 'Edit'],
+        [81, 'Read'],
+        [88, 'Bash'],
+      ],
+      61
+    ),
     transcriptPath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/a3f8c2e1.jsonl',
     activity: 'busy',
     lastTool: { name: 'Bash', arg: 'npm test -- --run' },
@@ -646,14 +669,26 @@ const MOCK_SESSION_ACTIVITY = [
     toolCount: 34,
     errorCount: 1,
     model: 'claude-opus-5',
+    context: { used: 278_231, max: 1_000_000 },
+    spend: 1.24,
+    spendEstimated: false,
+    tokens: 412_000,
     endedAt: null,
   },
   {
     sessionId: 'b7d1e9f4-2a8c-4f6b-8e3d-1c9a5f7e4b22',
     cwd: '/Users/alice/experiments/llm-playground',
     title: 'Prompt tuning for the planner',
-    // Went quiet 95s ago — the flatline the accent draws on a blocked card.
-    recent: traceMarks([2, 8, 14, 21], null),
+    // Went quiet 95s ago — the flatline the accent draws on a blocked lane.
+    recent: traceMarks(
+      [
+        [2, 'Read'],
+        [8, 'Edit'],
+        [14, null],
+        [21, 'Edit'],
+      ],
+      null
+    ),
     transcriptPath:
       '/Users/alice/.claude/projects/-Users-alice-experiments-llm-playground/b7d1e9f4.jsonl',
     activity: 'busy',
@@ -663,6 +698,12 @@ const MOCK_SESSION_ACTIVITY = [
     toolCount: 8,
     errorCount: 0,
     model: 'claude-sonnet-5',
+    // Deep into a 200k window: the gauge's `high` band, which is what a long
+    // turn at risk of compaction looks like before it becomes critical.
+    context: { used: 163_400, max: 200_000 },
+    spend: 4.07,
+    spendEstimated: false,
+    tokens: 1_240_000,
     endedAt: null,
   },
 ];
