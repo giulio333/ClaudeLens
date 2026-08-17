@@ -32,7 +32,7 @@ import type {
   ChatToolActivityEvent,
   PermissionRequest,
 } from '../../electron/shared/chat-types';
-import type { ActiveSession, PurgePlan } from '../../src/types';
+import type { ActiveSession, BgSession, SessionActivity, PurgePlan } from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
@@ -88,6 +88,10 @@ export function createChannels() {
     dataChanged: new Channel<unknown>(),
     /** `live:activeSessions` — the session registry, pushed on status transitions. */
     activeSessions: new Channel<ActiveSession[]>(),
+    /** `live:sessionActivity` — the Monitor's tail digests, pushed per append burst. */
+    sessionActivity: new Channel<SessionActivity[]>(),
+    /** `live:bgSessions` — background agents (jobs + daemon roster). */
+    bgSessions: new Channel<BgSession[]>(),
   };
 }
 
@@ -156,9 +160,20 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     set: vi.fn(async (_key: string, _value: unknown) => ok(null)),
   };
 
+  // The Monitor joins two of these by sessionId: the registry says busy/waiting,
+  // `getActivity` says at what. They are separate channels in the real bridge for
+  // the same reason they are separate here — neither is derived from the other.
   const live = {
     getActiveSessions: vi.fn(async () => ok<ActiveSession[]>([])),
     onActiveSessionsChanged: channels.activeSessions.subscribe,
+    getActivity: vi.fn(async () => ok<SessionActivity[]>([])),
+    onSessionActivityChanged: channels.sessionActivity.subscribe,
+    getSessions: vi.fn(async () => ok<BgSession[]>([])),
+    onBgSessionsChanged: channels.bgSessions.subscribe,
+  };
+
+  const memory = {
+    listProjects: vi.fn(async () => ok<Array<{ hash: string; realPath: string }>>([])),
   };
 
   return {
@@ -168,6 +183,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     projects,
     prefs,
     live,
+    memory,
     onDataChanged: channels.dataChanged.subscribe,
   };
 }

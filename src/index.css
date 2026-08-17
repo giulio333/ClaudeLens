@@ -15948,6 +15948,327 @@ select.cl-opt-input {
   }
 }
 
+/* ── Monitor · the instrument rack ──────────────────────────────
+   A running process is machine state, and this app already draws machine state
+   as the thing it is: a shell run is a FIXED DARK terminal in both themes
+   (`.cl-term`), because that is what it was. Same argument here — these cards
+   are instruments watching live processes, so they reuse that surface's exact
+   values instead of being paper cards that happen to hold numbers. On the warm
+   paper of the page they read as a rack; the sage and terracotta of the traces
+   only glow on a dark ground.
+
+   Colour is spent on state alone: sage = working, terracotta = waiting on you,
+   dim ink = ended. No hue outside the palette, no decoration that encodes
+   nothing. */
+.cl-mx-rack {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  padding-top: 6px;
+}
+
+.cl-mx {
+  /* Same tokens as `.cl-term` — one dark surface in the whole app. */
+  --t-bg: oklch(0.205 0.022 45);
+  --t-line: oklch(0.32 0.035 45);
+  --t-ink: oklch(0.88 0.01 80);
+  --t-dim: oklch(0.74 0.012 80);
+  --t-mute: oklch(0.62 0.03 50);
+  --t-ok: oklch(0.76 0.12 145);
+  --t-accent: oklch(0.8 0.11 50);
+  --t-danger: oklch(0.76 0.14 25);
+  /* The card's own state hue: every accent inside it reads from this, so a card
+     changes personality by changing one value. */
+  --mx: var(--t-ok);
+
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px 18px 14px;
+  border: 1px solid var(--t-line);
+  border-radius: 10px;
+  background: var(--t-bg);
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.05),
+    0 10px 26px -20px oklch(0.15 0.02 45 / 0.55);
+  transition:
+    border-color 160ms,
+    transform 160ms;
+}
+.cl-mx[role='button'] {
+  cursor: pointer;
+}
+.cl-mx[role='button']:hover {
+  border-color: color-mix(in oklch, var(--mx) 45%, var(--t-line));
+  transform: translateY(-1px);
+}
+.cl-mx[role='button']:focus-visible {
+  outline: 2px solid var(--mx);
+  outline-offset: 2px;
+}
+.cl-mx[data-state='blocked'] {
+  --mx: var(--t-accent);
+  /* The one card that wants something gets the only lit edge in the rack. */
+  border-color: color-mix(in oklch, var(--t-accent) 40%, var(--t-line));
+}
+/* Alive, turn finished. Not muted like an ended card — it is still a process you
+   can talk to — but it does not get the working hue either, because it is not
+   working. */
+.cl-mx[data-state='ready'] {
+  --mx: var(--t-dim);
+}
+.cl-mx[data-state='ended'] {
+  --mx: var(--t-mute);
+  opacity: 0.72;
+}
+
+/* ── Head: who, and for how long ── */
+.cl-mx-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+}
+.cl-mx-head .who {
+  min-width: 0;
+}
+.cl-mx-head h3 {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+  color: var(--t-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-mx-head .ident {
+  display: block;
+  margin-top: 3px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--t-mute);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-mx-head .when {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
+  flex-shrink: 0;
+}
+/* The clock is the anchor of the card: the one figure that moves every second,
+   and the one that answers "has this gone on too long?". */
+.cl-mx-head .clk {
+  font-family: var(--font-mono);
+  font-size: 22px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+  color: var(--t-ink);
+}
+.cl-mx[data-state='blocked'] .clk {
+  color: var(--t-accent);
+}
+.cl-mx[data-state='ready'] .clk,
+.cl-mx[data-state='ended'] .clk {
+  color: var(--t-mute);
+}
+.cl-mx-head .tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  color: var(--mx);
+}
+.cl-mx-head .tag i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--mx);
+}
+/* Only what is blocked pulses. A working session is expected to be working; a
+   halo around every card would make the rack loud and say nothing. */
+.cl-mx[data-state='blocked'] .tag i {
+  animation: cl-mx-beat 2.2s ease-out infinite;
+}
+@keyframes cl-mx-beat {
+  0% {
+    box-shadow: 0 0 0 0 color-mix(in oklch, var(--t-accent) 55%, transparent);
+  }
+  70% {
+    box-shadow: 0 0 0 7px transparent;
+  }
+  100% {
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
+/* ── The pulse strip: the last 90 seconds of the transcript ──
+   Bars are actions, the right edge is now. The bars are anchored to the BASELINE
+   (align-items: flex-end) because a strip that grows from a centre line reads as
+   a waveform — something oscillating around a zero — and this is a count, which
+   only goes up from nothing. */
+.cl-mx-trace {
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 34px;
+  padding-bottom: 1px;
+  border-bottom: 1px solid color-mix(in oklch, var(--t-line) 70%, transparent);
+}
+.cl-mx-trace i {
+  flex: 1 1 0;
+  min-width: 0;
+  border-radius: 1px;
+  background: var(--mx);
+  /* A bar that appears at full height every second would strobe; growing from
+     the baseline reads as the strip advancing. */
+  animation: cl-mx-rise 320ms ease-out;
+}
+.cl-mx-trace i.failed {
+  background: var(--t-danger);
+}
+/* Silence. A quiet bucket is a hairline on the baseline, not an absence — the
+   strip has to stay a continuous line for the eye to follow it. */
+.cl-mx-trace i.q {
+  height: 1px;
+  background: color-mix(in oklch, var(--t-line) 85%, transparent);
+  animation: none;
+}
+/* …and the silence SINCE the last action, on a card that is waiting for you, is
+   the accent. That run growing left to right is how long you have been the
+   bottleneck — the graphic and the fact are the same object. */
+.cl-mx[data-state='blocked'] .cl-mx-trace i.q.since {
+  height: 2px;
+  background: var(--t-accent);
+}
+@keyframes cl-mx-rise {
+  from {
+    transform: scaleY(0.2);
+    transform-origin: bottom;
+  }
+}
+
+/* ── What it is doing ── */
+.cl-mx-doing {
+  display: flex;
+  align-items: baseline;
+  gap: 7px;
+  min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.35;
+}
+.cl-mx-doing .caret {
+  color: var(--t-ok);
+  flex-shrink: 0;
+}
+.cl-mx[data-state='blocked'] .cl-mx-doing .caret {
+  color: var(--t-accent);
+}
+.cl-mx[data-state='ready'] .cl-mx-doing .caret,
+.cl-mx[data-state='ended'] .cl-mx-doing .caret {
+  color: var(--t-mute);
+}
+.cl-mx-doing b {
+  color: var(--t-ink);
+  font-weight: 500;
+  flex-shrink: 0;
+}
+/* The argument is the only free-form string in the card and the one that
+   changes most: it truncates rather than wrapping, so a tool with a long path
+   can never push the footer of one card out of line with its neighbours. */
+.cl-mx-doing .arg {
+  color: var(--t-dim);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ── Foot: volume ── */
+.cl-mx-foot {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--t-mute);
+}
+.cl-mx-foot .ago {
+  flex-shrink: 0;
+}
+
+/* Count of blocked processes in the hero meta — the only figure on the page
+   that is not neutral, because it is the only one that asks for something. */
+.cl-mx-alert {
+  color: var(--cl-accent-ink);
+}
+
+/* ── Legend ── */
+.cl-mx-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 16px;
+  margin-top: 22px;
+  padding-top: 13px;
+  border-top: 1px solid var(--cl-line-soft);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.05em;
+  color: var(--cl-ink-4);
+}
+.cl-mx-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.cl-mx-legend .k {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+}
+.cl-mx-legend .k.working {
+  background: var(--cl-ok);
+}
+.cl-mx-legend .k.blocked {
+  background: var(--cl-accent);
+}
+.cl-mx-legend .k.ready {
+  background: var(--cl-ink-3);
+}
+.cl-mx-legend .rule {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 1px;
+  background: var(--cl-line-soft);
+}
+.cl-mx-legend .how {
+  color: var(--cl-ink-3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-mx-trace i,
+  .cl-mx[data-state='blocked'] .tag i {
+    animation: none;
+  }
+  .cl-mx[role='button']:hover {
+    transform: none;
+  }
+}
+
 /* ── Danger zone (Project → Config) ─────────────────────────────
    The visible entry point for deleting a project's Claude Code state.
    Reads as a row of the same datasheet above it — hairline, label, value —
