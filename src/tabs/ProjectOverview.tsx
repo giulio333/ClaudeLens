@@ -50,6 +50,7 @@ import { CreateBlueprintPage } from '../components/project/studio/CreateBlueprin
 import { BlueprintEditorView } from '../components/project/studio/BlueprintEditorView';
 // ─── Agents Live
 import { AgentsLiveView } from '../components/project/agents-live/AgentsLiveView';
+import { MonitorView } from '../components/project/monitor/MonitorView';
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView';
 import { LiveChatView } from '../components/project/chat/LiveChatView';
@@ -360,6 +361,11 @@ export default function ProjectOverview() {
     setView({ type: 'agents-live' });
   }
 
+  function goMonitor() {
+    setScope('global');
+    setView({ type: 'monitor' });
+  }
+
   function goStudio() {
     setScope('global');
     setView({ type: 'studio' });
@@ -400,7 +406,9 @@ export default function ProjectOverview() {
   const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type);
   const isGlobalLiveAgents = view.type === 'agents-live' && !view.project;
   const isStudio = STUDIO_ENABLED && view.type === 'studio';
-  const isEditorialCore = isGlobalHome || isCoreProject || isGlobalLiveAgents || isStudio;
+  const isMonitor = view.type === 'monitor';
+  const isEditorialCore =
+    isGlobalHome || isCoreProject || isGlobalLiveAgents || isStudio || isMonitor;
 
   // Spike B (motion.dev): identity of the currently-visible editorial-core
   // surface — drives the AnimatePresence crossfade keying below. Changes only on
@@ -412,11 +420,13 @@ export default function ProjectOverview() {
     ? 'global-home'
     : isGlobalLiveAgents
       ? 'global-live-agents'
-      : isStudio
-        ? 'studio'
-        : selected
-          ? `project:${selected.hash}`
-          : 'empty';
+      : isMonitor
+        ? 'monitor'
+        : isStudio
+          ? 'studio'
+          : selected
+            ? `project:${selected.hash}`
+            : 'empty';
 
   // ─── Deep views (full-screen, not yet migrated to the editorial theme) ───
   function renderDeepView() {
@@ -716,6 +726,9 @@ export default function ProjectOverview() {
           >
             Agent View
           </button>
+          <button className={isMonitor ? 'on' : ''} onClick={goMonitor}>
+            Monitor
+          </button>
           {STUDIO_ENABLED && (
             <button className={isStudio ? 'on' : ''} onClick={goStudio}>
               Agent Studio
@@ -803,6 +816,15 @@ export default function ProjectOverview() {
                         from: 'agents-live',
                       })
                     }
+                  />
+                ) : isMonitor ? (
+                  <MonitorView
+                    embedded
+                    onBack={goGlobal}
+                    onOpenSession={(project, sessionId) =>
+                      setView({ type: 'terminal', project, resumeSessionId: sessionId })
+                    }
+                    onOpenAgents={goLiveAgents}
                   />
                 ) : isStudio ? (
                   <StudioLibraryView

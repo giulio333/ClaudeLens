@@ -597,6 +597,8 @@ const MOCK_ACTIVE_SESSIONS = [
     pid: 18423,
     sessionId: 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10',
     cwd: '/Users/alice/projects/webapp',
+    name: 'webapp-7c',
+    kind: 'interactive',
     startedAt: Date.now() - 25 * 60_000,
     status: 'busy',
     version: '2.1.191',
@@ -606,11 +608,62 @@ const MOCK_ACTIVE_SESSIONS = [
     pid: 19871,
     sessionId: 'b7d1e9f4-2a8c-4f6b-8e3d-1c9a5f7e4b22',
     cwd: '/Users/alice/experiments/llm-playground',
+    name: 'llm-playground-e2',
+    kind: 'interactive',
     startedAt: Date.now() - 4 * 60_000,
     status: 'waiting',
     waitingFor: 'permission prompt',
+    statusUpdatedAt: Date.now() - 90_000,
     version: '2.1.191',
     source: 'registry' as const,
+  },
+];
+
+// Marks for a Monitor pulse strip: `offsets` are seconds into a 100s-ago window,
+// `failedAt` (an offset) marks the one that errored.
+function traceMarks(offsets: number[], failedAt: number | null) {
+  const base = Date.now() - 100_000;
+  return offsets.map(o => ({
+    at: base + o * 1000,
+    kind: (o === failedAt ? 'error' : o % 3 === 0 ? 'text' : 'tool') as 'error' | 'text' | 'tool',
+  }));
+}
+
+// Monitor: the tail digest of the two sessions above. Mirrors what
+// `session-tails.ts` folds — one busy on a tool, one parked on a prompt.
+const MOCK_SESSION_ACTIVITY = [
+  {
+    sessionId: 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10',
+    cwd: '/Users/alice/projects/webapp',
+    title: 'Checkout flow regression',
+    // A busy rhythm: tool calls every few seconds, one of them failed.
+    recent: traceMarks([2, 9, 15, 16, 24, 31, 38, 39, 47, 55, 61, 68, 74, 81, 88], 12),
+    transcriptPath: '/Users/alice/.claude/projects/-Users-alice-projects-webapp/a3f8c2e1.jsonl',
+    activity: 'busy',
+    lastTool: { name: 'Bash', arg: 'npm test -- --run' },
+    delegates: [],
+    lastActivityAt: Date.now() - 12_000,
+    toolCount: 34,
+    errorCount: 1,
+    model: 'claude-opus-5',
+    endedAt: null,
+  },
+  {
+    sessionId: 'b7d1e9f4-2a8c-4f6b-8e3d-1c9a5f7e4b22',
+    cwd: '/Users/alice/experiments/llm-playground',
+    title: 'Prompt tuning for the planner',
+    // Went quiet 95s ago — the flatline the accent draws on a blocked card.
+    recent: traceMarks([2, 8, 14, 21], null),
+    transcriptPath:
+      '/Users/alice/.claude/projects/-Users-alice-experiments-llm-playground/b7d1e9f4.jsonl',
+    activity: 'busy',
+    lastTool: { name: 'Edit', arg: '…/src/prompts.ts' },
+    delegates: [],
+    lastActivityAt: Date.now() - 95_000,
+    toolCount: 8,
+    errorCount: 0,
+    model: 'claude-sonnet-5',
+    endedAt: null,
   },
 ];
 
@@ -1984,6 +2037,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'ai:stop',
     'live:getActiveSessions',
     'live:getSessions',
+    'live:getActivity',
     'live:startWatch',
     'live:stopWatch',
     'tasks:getByProject',
@@ -2128,6 +2182,7 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
 
   ipcMain.handle('live:getActiveSessions', () => ok(MOCK_ACTIVE_SESSIONS));
   ipcMain.handle('live:getSessions', () => ok(MOCK_BG_SESSIONS));
+  ipcMain.handle('live:getActivity', () => ok(MOCK_SESSION_ACTIVITY));
   ipcMain.handle('live:startWatch', () => ok({ started: true }));
   ipcMain.handle('live:stopWatch', () => ok(null));
 

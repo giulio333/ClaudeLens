@@ -35,6 +35,8 @@ import type {
   McpData,
   LiveEvent,
   ActiveSession,
+  SessionActivity,
+  TraceMark,
   BgSession,
   Task,
   TaskStatus,
@@ -102,6 +104,8 @@ export type {
   McpData,
   LiveEvent,
   ActiveSession,
+  SessionActivity,
+  TraceMark,
   BgSession,
   Task,
   TaskStatus,
@@ -436,6 +440,8 @@ declare global {
         onActiveSessionsChanged: (cb: (sessions: ActiveSession[]) => void) => () => void;
         getSessions: () => Promise<IpcResult<BgSession[]>>;
         onBgSessionsChanged: (cb: (sessions: BgSession[]) => void) => () => void;
+        getActivity: () => Promise<IpcResult<SessionActivity[]>>;
+        onSessionActivityChanged: (cb: (activity: SessionActivity[]) => void) => () => void;
         startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>;
         stopWatch: () => Promise<IpcResult<null>>;
         onEvent: (cb: (event: unknown) => void) => () => void;
@@ -1002,6 +1008,26 @@ export function useActiveSessions() {
   return useQuery({
     queryKey: ['live:activeSessions'],
     queryFn: () => unwrap(window.electronAPI.live.getActiveSessions()),
+    refetchInterval: 15000,
+  });
+}
+
+// What each live session is doing, folded from its transcript tail by the main
+// process. Pushed on its own channel (never `data:changed`, which would
+// invalidate every query cache on every tool call of every session); the slow
+// refetch only covers a lost push.
+export function useSessionActivity() {
+  const qc = useQueryClient();
+  useEffect(
+    () =>
+      window.electronAPI.live.onSessionActivityChanged(activity =>
+        qc.setQueryData(['live:sessionActivity'], activity)
+      ),
+    [qc]
+  );
+  return useQuery({
+    queryKey: ['live:sessionActivity'],
+    queryFn: () => unwrap(window.electronAPI.live.getActivity()),
     refetchInterval: 15000,
   });
 }

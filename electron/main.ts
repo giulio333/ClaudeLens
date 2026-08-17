@@ -109,6 +109,7 @@ import {
 } from './modules/notifications/types';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
+import { syncSessionTails, onTranscriptChanged, getSessionActivity } from './modules/session-tails';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
 import { computeMergePlan } from './modules/duplicate-merger';
 import { executeMerge } from './modules/duplicate-merge-executor';
@@ -2026,6 +2027,18 @@ ipcMain.handle('live:getSessions', async () => {
   }
 });
 
+// What each live session is doing right now (Monitor). Deliberately NOT joined
+// with the registry here: the renderer already receives `ActiveSession[]` on its
+// own push channel, and shipping a second copy of it would make two channels
+// disagree about the same session for one debounce window.
+ipcMain.handle('live:getActivity', async () => {
+  try {
+    return ok(getSessionActivity());
+  } catch (e) {
+    return err(e);
+  }
+});
+
 ipcMain.handle('live:startWatch', async (event, hash: string, sessionId?: string) => {
   try {
     const projectPath = projectDir(hash);
@@ -2191,8 +2204,22 @@ async function startWatcher() {
     },
   });
 
+  // Monitor: fold this append into the digest of the session that owns it, if
+  // any. `onTranscriptChanged` starts with a Map lookup, so an append belonging
+  // to no live session costs one miss — that is why the Monitor needs no
+  // watcher of its own on top of this one.
+  let activityTimer: NodeJS.Timeout | null = null;
+  const pushSessionActivity = () => {
+    if (activityTimer) return; // debounce: one push per burst
+    activityTimer = setTimeout(() => {
+      activityTimer = null;
+      safeSend('live:sessionActivity', getSessionActivity());
+    }, 250);
+  };
+
   const notifyAndRefreshStudioWatches = (path: string) => {
     studioWatchSync.onEvent(path);
+    if (onTranscriptChanged(path)) pushSessionActivity();
     notify(scopesForPath(path, CLAUDE_DIR));
   };
 
@@ -2217,6 +2244,10 @@ async function startWatcher() {
         safeSend('live:activeSessions', sessions);
         // Same fresh snapshot also feeds the notification diff (transitions only).
         notifyFromRegistry(sessions);
+        // ...and reconciles the Monitor's tail cursors: a session that just
+        // started gets one, a session that just ended loses its.
+        await syncSessionTails(sessions);
+        safeSend('live:sessionActivity', getSessionActivity());
       } catch {
         /* lettura fallita: il refetch periodico del renderer copre il buco */
       }
@@ -2225,6 +2256,16 @@ async function startWatcher() {
   sessionsWatcher.on('add', pushActiveSessions);
   sessionsWatcher.on('change', pushActiveSessions);
   sessionsWatcher.on('unlink', pushActiveSessions);
+
+  // Seed the tail cursors with whatever is already running. The watchers above
+  // only report changes, so without this the Monitor would stay blank until the
+  // first status transition — which for a session parked in `waiting` (exactly
+  // the one worth surfacing) may never come.
+  try {
+    await syncSessionTails(await readActiveSessions());
+  } catch {
+    /* read failed: the next registry event re-syncs */
+  }
 
   // Background agents (~/.claude/jobs/<id>/state.json + daemon/roster.json):
   // push the fresh BgSession[] on its own channel so the Agent View updates
