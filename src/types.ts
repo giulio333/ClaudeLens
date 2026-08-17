@@ -609,12 +609,22 @@ export interface McpData {
 export interface LiveEvent {
   id: string;
   timestamp: string;
-  type: 'tool_use' | 'tool_result' | 'text' | 'thinking' | 'user_message' | 'status_change';
+  type:
+    | 'tool_use'
+    | 'tool_result'
+    | 'text'
+    | 'thinking'
+    | 'user_message'
+    | 'status_change'
+    | 'session_title';
   toolName?: string;
   toolInput?: Record<string, unknown>;
   content?: string;
   isError?: boolean;
   model?: string;
+  /** The `tool_use` block id, carried on the call, its result and the
+   *  `<task-notification>` of a finished async agent. */
+  toolUseId?: string;
 }
 
 // Mirrors electron/modules/sessions-registry-reader.ts ActiveSession.
@@ -623,13 +633,65 @@ export interface ActiveSession {
   /** Empty when the entry comes from the process-scanner fallback. */
   sessionId: string;
   cwd: string;
+  /** Human-readable name the CLI derives (e.g. "claudelens-b4"). */
+  name?: string;
+  /** 'interactive' for a terminal session. */
+  kind?: string;
   startedAt?: number;
   /** Known values: 'busy', 'waiting', 'idle'. 'unknown' for fallback entries. */
   status: string;
   waitingFor?: string;
   version?: string;
   updatedAt?: number;
+  /** Epoch ms of the last status transition (dates the transition INTO the
+   *  current status — never proof the session is still alive). */
+  statusUpdatedAt?: number;
   source: 'registry' | 'process-scan';
+}
+
+/** One mark on a session's activity trace (`electron/modules/session-tails.ts`).
+ *  A successful tool result carries no mark: it would double the call that is
+ *  already on the strip. */
+export type TraceKind = 'tool' | 'error' | 'text';
+
+export interface TraceMark {
+  at: number;
+  kind: TraceKind;
+}
+
+/** What a live session is doing right now, folded from its transcript tail
+ *  (`electron/modules/session-tails.ts`). Joined to `ActiveSession` by
+ *  `sessionId` in the renderer: the registry says busy/waiting, this says at what. */
+export interface SessionActivity {
+  sessionId: string;
+  /** The title Claude wrote for this conversation (`ai-title` in the transcript);
+   *  null until one has been seen. The only human name a session has — the
+   *  registry's `name` is the project plus two random characters. */
+  title: string | null;
+  transcriptPath: string | null;
+  /** 'thinking' | 'busy' | 'idle'; null when nothing has been read yet. */
+  activity: string | null;
+  lastTool: { name: string; arg: string } | null;
+  /** Sub-agents dispatched and not yet seen finishing. A delegating session
+   *  writes nothing to its own transcript while the agent works (that goes to a
+   *  sidecar the tail skips) and an async dispatch even closes the turn with
+   *  `end_turn`, so without this the tail concludes "idle" about a session that
+   *  is working. Names come from the dispatch's `subagent_type`. */
+  delegates: { id: string; name: string; at: number }[];
+  lastActivityAt: number | null;
+  toolCount: number;
+  errorCount: number;
+  model: string | null;
+  /** Session cwd, copied from the registry while live and retained after it
+   *  ends (the registry file is gone by then), so a finished card can still say
+   *  which project it belonged to. */
+  cwd: string | null;
+  /** Stamped marks of recent activity — the data behind the Monitor's pulse
+   *  strip, and the only field that says at what RHYTHM a session works. */
+  recent: TraceMark[];
+  /** Epoch ms at which the session left the registry; null while live. Kept for
+   *  a short window so a run that just finished is still visible. */
+  endedAt: number | null;
 }
 
 export interface BgSession {

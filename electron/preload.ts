@@ -248,6 +248,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('live:bgSessions', handler);
       return () => ipcRenderer.removeListener('live:bgSessions', handler);
     },
+    getActivity: () => ipcRenderer.invoke('live:getActivity'),
+    onSessionActivityChanged: (callback: (activity: unknown) => void) => {
+      const handler = (_event: unknown, data: unknown) => callback(data);
+      ipcRenderer.on('live:sessionActivity', handler);
+      return () => ipcRenderer.removeListener('live:sessionActivity', handler);
+    },
     startWatch: (hash: string, sessionId?: string) =>
       ipcRenderer.invoke('live:startWatch', hash, sessionId),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),

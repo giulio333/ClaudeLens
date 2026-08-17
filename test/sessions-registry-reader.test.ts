@@ -39,6 +39,7 @@ describe('parseRegistryEntry', () => {
       pid: 12345,
       sessionId: '2bcf43d9-7d4b-4a89-b776-848b91103a67',
       cwd: '/Users/foo/proj',
+      kind: 'interactive',
       startedAt: 1781201550683,
       status: 'waiting',
       waitingFor: 'permission prompt',
@@ -46,6 +47,38 @@ describe('parseRegistryEntry', () => {
       updatedAt: 1781201817044,
       source: 'registry',
     });
+  });
+
+  // Real 2.1.233 entries carry a derived session name and a separate stamp for
+  // the last status transition; both were dropped on the floor before the
+  // Monitor needed them (a row titled `claudelens-b4` beats one titled `2bcf43d9`).
+  it('reads the derived name and statusUpdatedAt when present', () => {
+    const parsed = parseRegistryEntry({
+      ...ENTRY,
+      name: 'claudelens-b4',
+      nameSource: 'derived',
+      statusUpdatedAt: 1781201817044,
+    });
+    expect(parsed?.name).toBe('claudelens-b4');
+    expect(parsed?.statusUpdatedAt).toBe(1781201817044);
+  });
+
+  it('leaves name/kind/statusUpdatedAt undefined rather than inventing them', () => {
+    const parsed = parseRegistryEntry({
+      pid: 1,
+      sessionId: 'abc',
+      cwd: '/Users/foo/proj',
+      status: 'busy',
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.name).toBeUndefined();
+    expect(parsed?.kind).toBeUndefined();
+    expect(parsed?.statusUpdatedAt).toBeUndefined();
+    // An empty string is not a name.
+    expect(parseRegistryEntry({ ...ENTRY, name: '' })?.name).toBeUndefined();
+    expect(
+      parseRegistryEntry({ ...ENTRY, statusUpdatedAt: 'soon' })?.statusUpdatedAt
+    ).toBeUndefined();
   });
 
   it('rejects entries missing pid, sessionId or cwd', () => {
