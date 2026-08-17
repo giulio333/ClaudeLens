@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import {
   useActiveSessions,
   useSessionActivity,
@@ -6,14 +6,14 @@ import {
   useMemoryProjects,
 } from '../../../hooks/useIPC';
 import type { ActiveSession, SessionActivity, BgSession, TraceMark } from '../../../types';
-import { Lens } from '../overview/Lens';
 import { TopBar } from '../shared/TopBar';
-import { fmtModel } from '../utils';
+import { fmt, fmtCost, fmtModel } from '../utils';
 import { projectDisplayName } from '../shared/projectName';
-import { buildTrace, lastLoudBucket } from './trace';
+import { TOOL_TINT } from '../chat/utils';
+import { buildTape, TAPE_SPAN_MS } from './trace';
 
-// The Monitor: every Claude process running on this machine, as a rack of
-// instruments.
+// The Monitor: every Claude process running on this machine, as one index card
+// per process.
 //
 // Deliberately NOT a second Agent View. That page is a ROSTER — everything you
 // dispatched, most of it finished or asleep, with the controls to act on it.
@@ -26,23 +26,31 @@ import { buildTrace, lastLoudBucket } from './trace';
 // waiting (`useActiveSessions`), the transcript tail says at what
 // (`useSessionActivity`). Neither is derived from the other.
 //
-// ── The pulse strip ──────────────────────────────────────────────────────────
-// The signature of this page, and the reason it is worth having: a session's
-// STATE ("busy") is nearly useless on its own, because a session mid-tool and a
-// session hung look identical from the registry. Its RHYTHM is what separates
-// them, so each card draws the last 90 seconds of its own transcript — one mark
-// per action, right edge is now.
+// ── Why a card, and why its body is a tape ───────────────────────────────────
+// Two earlier forms were rejected as bare: a grid of dark cards, then a dark
+// board of full-width lanes. Both failed for the same structural reason — a wide
+// dark surface holding five short strings is mostly empty by construction, and
+// on this app's warm paper a black slab also reads as a foreign object. Nothing
+// about a process makes it a terminal; that analogy was borrowed, and it cost
+// the page twice.
 //
-// The device that makes the page readable in one glance: on a session waiting
-// for you, the silence since it stopped is drawn IN THE ACCENT and grows in
-// front of you. The information and the graphic are the same object — a long
-// terracotta flatline is literally how long you have been the bottleneck.
+// So the card is the app's own index card, and its body is the TAPE: what the
+// session actually did, newest first, each action with the subject it acted on
+// (`Edit MonitorView.tsx`, `Bash npm run typecheck ✕`). A card whose body is
+// real text cannot look empty.
+//
+// The pulse strip went with the board. What it answered — "is this hung?" — the
+// tape answers in words: a top row that says `4m` is a session that has done
+// nothing for four minutes. A session's STATE ("busy") never answered that on
+// its own, because a session mid-tool and a session hung are identical from the
+// registry; what separates them is when it last did something, which is now
+// printed rather than drawn.
 
 type Project = { hash: string; realPath: string };
 
 // `ready` is a session that is alive but has finished its turn — observed, not
 // guessed. Worth its own state because "alive" and "working" are not the same
-// claim, and a rack that calls every live session WORKING is lying about most of
+// claim, and a page that calls every live session WORKING is lying about most of
 // them most of the time. It takes BOTH sources to assert (see `isReady`): the
 // transcript's `end_turn` alone called a session ready while an async sub-agent
 // worked on for minutes.
@@ -55,15 +63,36 @@ interface Card {
   title: string;
   /** What distinguishes this process from a sibling in the same project. */
   ident: string;
+  /** The machine facts, in their own row: pid, model, uptime, subdirectory.
+   *  Each is a field of its own — never a suffix glued to `ident`, which is
+   *  where a long conversation title used to eat the pid off the end. */
+  machine: string[];
   /** What it is doing, or what it is waiting on. */
   doing: string;
   /** The tool name, printed ahead of `doing` at full strength. */
   tool: string | null;
-  model: string | null;
   /** Epoch ms the state clock counts from; null when unknown. */
   since: number | null;
   counts: string;
+  /** Epoch ms of the last transcript append — how long the session has been
+   *  silent, said in the vitals row. Null when nothing has been read yet. */
+  lastAppendAt: number | null;
+  /** Set while a sub-agent is running: it explains the silence, so it takes the
+   *  slot `quiet` would have had. */
+  delegateSince: number | null;
+  /** How full the window is. The one measure on the card with a real
+   *  denominator, and therefore the only one drawn as a gauge. */
+  context: { used: number; max: number } | null;
+  /** Dollars, and whether the price had to be estimated. */
+  spend: number | null;
+  spendEstimated: boolean;
+  tokens: number;
   trace: TraceMark[];
+  /** A background agent has no transcript of its own to tail, so it has no
+   *  tape. Saying so beats printing an empty body. */
+  noTrace: boolean;
+  /** Printed where the silence figure goes, for a card that only routes. */
+  routeNote: string | null;
   onOpen: (() => void) | null;
 }
 
@@ -75,6 +104,46 @@ const STATE_LABEL: Record<State, string> = {
   ended: 'ENDED',
 };
 
+/** Silence shorter than this is just the gap between two tool calls, and saying
+ *  `quiet 2s` about a session hammering the filesystem is noise. */
+const QUIET_FLOOR_MS = 10_000;
+
+const ESTIMATE_NOTE =
+  'Approximate: this model has no exact entry in the pricing table, so it is priced by family.';
+
+/** The dot that opens a tape row. It carries `TOOL_TINT` — the transcript's own
+ *  tool encoding, reused verbatim now that the card is on paper and needs no
+ *  dark-lift variants. The colour sits on a 5px swatch rather than on the tool's
+ *  name: colouring text you have to read is worse than colouring a marker beside
+ *  it, and the swatches line up into a column that gives each card the signature
+ *  of the kind of work it is doing — a run of cyan is a session reading, violet
+ *  a session editing. */
+function toolTint(tool: string | null): string {
+  if (!tool) return 'var(--cl-ink-4)';
+  return TOOL_TINT[tool] ?? 'var(--cl-ink-3)';
+}
+
+function contextPct(context: { used: number; max: number }): number {
+  return Math.min(100, Math.round((context.used / context.max) * 100));
+}
+
+/** Three bands, because the question is not "how full" but "how worried".
+ *  Under 75% the window is a non-issue and the gauge stays neutral; `high` is
+ *  where a long turn starts being at risk; `critical` is a session about to
+ *  compact, which loses fidelity — the only thing on this page you can still
+ *  act on by intervening now. */
+function contextLoad(context: { used: number; max: number }): 'ok' | 'high' | 'critical' {
+  const pct = contextPct(context);
+  if (pct >= 90) return 'critical';
+  return pct >= 75 ? 'high' : 'ok';
+}
+
+/** Note: the token tally is deliberately NOT on the card. The dollars answer the
+ *  question a person actually has ("what is this costing me"), and the token
+ *  count is the same fact in a unit nobody budgets in — on a card this dense it
+ *  was a second figure competing with the one that means something. It stays in
+ *  the digest for whoever needs it. */
+
 function clock(ms: number | null): string {
   if (ms === null || ms < 0) return '—';
   const total = Math.floor(ms / 1000);
@@ -85,13 +154,24 @@ function clock(ms: number | null): string {
   return `${m}:${String(s).padStart(2, '0')}`;
 }
 
-function shortAge(ms: number | null): string {
+/** A single-unit duration, for the figures that are context rather than the
+ *  anchor: uptime and silence. Never two units — nobody reads `14m 03s` of
+ *  uptime, and the clock beside it is already the precise one.
+ *
+ *  Seconds run to 120 rather than 60 on purpose. This is the unit that spells
+ *  out the accent flatline on a blocked lane, and it rounds DOWN: cutting over
+ *  at a minute reported a 119-second wait as `1m`, understating the one figure on
+ *  the page that says how long you have been the bottleneck. `95s` reads fine;
+ *  past two minutes the minute is the honest grain. */
+function span(ms: number | null): string {
   if (ms === null || ms < 0) return '';
-  const m = Math.floor(ms / 60_000);
-  if (m < 1) return 'just now';
+  const s = Math.floor(ms / 1000);
+  if (s < 120) return `${s}s`;
+  const m = Math.floor(s / 60);
   if (m < 60) return `${m}m`;
   const h = Math.floor(m / 60);
-  return h < 24 ? `${h}h` : `${Math.floor(h / 24)}d`;
+  if (h < 24) return `${h}h${String(m % 60).padStart(2, '0')}`;
+  return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, '0')}`;
 }
 
 /** The project a cwd belongs to. Exact match first, then the longest known
@@ -107,6 +187,20 @@ function projectForCwd(cwd: string | null, projects: Project[]): Project | null 
     }
   }
   return best;
+}
+
+/** Where in the project this process was started, printed only when that adds
+ *  something. The lane's title is already the project, so a cwd equal to the
+ *  project root would repeat it; a cwd BELOW the root is the case the title
+ *  cannot show — `projectForCwd` deliberately maps a monorepo subdirectory to
+ *  the repo, so without this two lanes of one repo look like the same shell. A
+ *  cwd in no known project keeps its full path: there the title is only its
+ *  basename, so the rest is the only thing that locates it. */
+function cwdNote(cwd: string | null, project: Project | null): string | null {
+  if (!cwd) return null;
+  if (!project) return cwd;
+  if (cwd === project.realPath) return null;
+  return './' + cwd.slice(project.realPath.length + 1);
 }
 
 /** What a session is doing, from the tail digest. Never invents a state: a
@@ -130,13 +224,18 @@ function doingOf(activity: SessionActivity | undefined, status: string): string 
 }
 
 /** What tells two sessions of one project apart: the title Claude wrote for the
- *  conversation. The pid is only the fallback for a session not named yet —
- *  carried as a permanent suffix it was noise on every card, and a title long
- *  enough to need the CSS ellipsis cut the pid off the end anyway, losing the
- *  one part that could not be guessed. The untruncated line lives in the
- *  tooltip. */
-function identOf(title: string | null | undefined, pid: number): string {
-  return title?.trim() || `pid ${pid}`;
+ *  conversation. The pid is not carried inside it — a title long enough to need
+ *  the CSS ellipsis cut it off the end, losing the one part that could not be
+ *  guessed — but it is not dropped either: it has its own field in the machine
+ *  row below, where nothing truncates it and it is what you need to `kill`. The
+ *  untruncated title lives in the tooltip.
+ *
+ *  Which is also why the missing-title fallback is no longer the pid: with the
+ *  pid a permanent field, printing it here too said the same thing twice on
+ *  every session Claude has not named yet. The honest fallback is the absence. */
+const UNNAMED = 'not named yet';
+function identOf(title: string | null | undefined): string {
+  return title?.trim() || UNNAMED;
 }
 
 /** The agents a session is waiting on, named by their `subagent_type`. */
@@ -187,6 +286,7 @@ function sessionCards(
     // and the only work the tail cannot see (it runs in a sidecar transcript).
     // With a tool in flight the session's own action wins — it is more current.
     const delegating = delegates.length > 0 && !activity?.lastTool;
+    const sub = cwdNote(s.cwd, project);
     return {
       key: `session:${s.pid}:${s.sessionId}`,
       state: blocked
@@ -198,10 +298,15 @@ function sessionCards(
       // What distinguishes two sessions of ONE project: the title Claude wrote
       // for the conversation. The CLI's derived registry `name` stays dropped —
       // it is the project plus two random characters, so beside the project it
-      // said nothing — and the pid is now only the fallback for a session not
-      // named yet. With three sessions of the same project on screen, three
+      // said nothing. With three sessions of the same project on screen, three
       // cards read `ClaudeLens · pid 63833` and a user reported on the wrong one.
-      ident: identOf(activity?.title, s.pid),
+      ident: identOf(activity?.title),
+      machine: [
+        `pid ${s.pid}`,
+        activity?.model ? fmtModel(activity.model) : null,
+        s.startedAt ? `up ${span(Date.now() - s.startedAt)}` : null,
+        sub,
+      ].filter((f): f is string => !!f),
       doing: blocked
         ? s.waitingFor || 'a prompt in the terminal'
         : delegating
@@ -217,18 +322,24 @@ function sessionCards(
         : delegating
           ? delegateLabel(delegates)
           : (activity?.lastTool?.name ?? null),
-      model: activity?.model ?? null,
       // One meaning in every state: how long it has been IN this state. The
       // registry stamps the transition into it, which is the only source that
       // answers that — the tail's last-append stamp was measuring the SILENCE
       // since the last action, so a working card's clock reset at every tool and
       // never answered "is this turn taking too long?". Silence is what the
-      // pulse strip draws; making the clock say it too spent the card's biggest
-      // number on a duplicate. Fallbacks cover a registry entry written before
-      // its first transition.
+      // tape shows and what the vitals row spells out. Fallbacks cover a
+      // registry entry written before its first transition.
       since: s.statusUpdatedAt ?? s.updatedAt ?? activity?.lastActivityAt ?? s.startedAt ?? null,
       counts: countsOf(activity),
+      lastAppendAt: activity?.lastActivityAt ?? null,
+      delegateSince: delegating ? delegates[0].at : null,
+      context: activity?.context ?? null,
+      spend: activity?.spend ?? null,
+      spendEstimated: activity?.spendEstimated ?? false,
+      tokens: activity?.tokens ?? 0,
       trace: activity?.recent ?? [],
+      noTrace: false,
+      routeNote: null,
       onOpen: project && s.sessionId ? () => onOpenSession(project, s.sessionId) : null,
     };
   });
@@ -246,13 +357,27 @@ function endedCards(
       key: `ended:${a.sessionId}`,
       state: 'ended',
       title: a.cwd ? projectDisplayName(a.cwd) : 'Unknown project',
-      ident: a.sessionId.slice(0, 8),
+      ident: identOf(a.title),
+      machine: [
+        `session ${a.sessionId.slice(0, 8)}`,
+        a.model ? fmtModel(a.model) : null,
+        cwdNote(a.cwd, project),
+      ].filter((f): f is string => !!f),
       doing: a.errorCount > 0 ? `finished with ${a.errorCount} failed` : 'finished',
       tool: null,
-      model: a.model,
       since: a.endedAt,
       counts: countsOf(a),
+      lastAppendAt: a.lastActivityAt,
+      delegateSince: null,
+      // A finished session's last reading is still the truth about it: what it
+      // ended up costing, and how full it got.
+      context: a.context,
+      spend: a.spend,
+      spendEstimated: a.spendEstimated,
+      tokens: a.tokens,
       trace: a.recent,
+      noTrace: false,
+      routeNote: null,
       onOpen: project ? () => onOpenSession(project, a.sessionId) : null,
     };
   });
@@ -265,26 +390,43 @@ function agentCards(agents: BgSession[], onOpenAgents: () => void): Card[] {
     .filter(a => a.alive)
     .map(a => {
       const blocked = !!a.hasPendingQuestion || !!a.needs || a.state === 'blocked';
+      const started = Date.parse(a.createdAt);
       return {
         key: `agent:${a.id}`,
         state: (blocked ? 'blocked' : 'working') as State,
         title: a.projectName || projectDisplayName(a.cwd),
         ident: `agent ${a.name || a.id}`,
+        machine: [
+          a.pid ? `pid ${a.pid}` : null,
+          Number.isFinite(started) ? `up ${span(Date.now() - started)}` : null,
+          a.template ? `${a.template} worker` : null,
+        ].filter((f): f is string => !!f),
         doing: blocked ? a.needs || 'a question' : a.detail || a.intent || 'running',
         tool: null,
-        model: null,
         since: Date.parse(a.updatedAt) || null,
         counts: a.inFlightTasks > 0 ? `${a.inFlightTasks} in flight` : '',
+        lastAppendAt: null,
+        delegateSince: null,
+        // The roster carries neither usage nor a bill, and the sidecar transcript
+        // it writes is not this page's to read. Absent, not zero: `$0.00` on a
+        // worker burning tokens would be the one wrong figure on the board.
+        context: null,
+        spend: null,
+        spendEstimated: false,
+        tokens: 0,
         // The roster carries no transcript stamps, so an agent has no strip.
         trace: [],
+        noTrace: true,
         // Routing, not acting: stop, respawn and attach live in Agent View.
+        routeNote: 'open in Agent View ↗',
         onOpen: onOpenAgents,
       };
     });
 }
 
-/** A clock the rack re-reads once a second — only while something is live, so
- *  an idle Monitor is not a page that re-renders forever in the background. */
+/** A clock the page re-reads once a second — only while it has something to
+ *  count, so an empty Monitor is not a page that re-renders forever in the
+ *  background. An ended card counts too: its figure is "how long ago". */
 function useTick(active: boolean): number {
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -293,6 +435,60 @@ function useTick(active: boolean): number {
     return () => clearInterval(id);
   }, [active]);
   return now;
+}
+
+/** The header's one sentence, and the only thing on this page that is about the
+ *  whole machine rather than one process. Deliberately prose with figures in it
+ *  rather than a band of stat tiles: the tiles were removed once already because
+ *  they printed the same numbers the cards carry, and the count that matters is
+ *  the one asking for something — so that clause leads, in the accent. */
+function census(blocked: number, working: number, ready: number, ended: number): ReactNode {
+  const parts: { key: string; node: ReactNode }[] = [];
+  if (blocked)
+    parts.push({
+      key: 'blocked',
+      node: (
+        <span className="alert">
+          <b>{blocked}</b> waiting on you
+        </span>
+      ),
+    });
+  if (working)
+    parts.push({
+      key: 'working',
+      node: (
+        <span>
+          <b>{working}</b> working
+        </span>
+      ),
+    });
+  if (ready)
+    parts.push({
+      key: 'ready',
+      node: (
+        <span>
+          <b>{ready}</b> ready for a prompt
+        </span>
+      ),
+    });
+  if (!parts.length && ended)
+    parts.push({
+      key: 'ended',
+      node: (
+        <span>
+          <b>{ended}</b> just ended
+        </span>
+      ),
+    });
+  if (!parts.length) return <span className="hush">Nothing is running</span>;
+  return parts.map((p, i) => (
+    <span key={p.key}>
+      {/* A plain space: a sentence of three clauses has to be allowed to wrap
+          after a comma, which is exactly where a non-breaking one would not. */}
+      {i > 0 && <i className="sep">{', '}</i>}
+      {p.node}
+    </span>
+  ));
 }
 
 export function MonitorView({
@@ -337,8 +533,9 @@ export function MonitorView({
   const blocked = cards.filter(c => c.state === 'blocked').length;
   const working = cards.filter(c => c.state === 'working').length;
   const ready = cards.filter(c => c.state === 'ready').length;
+  const ended = cards.filter(c => c.state === 'ended').length;
   const live = blocked + working + ready;
-  const now = useTick(live > 0);
+  const now = useTick(cards.length > 0);
 
   return (
     <div
@@ -348,39 +545,17 @@ export function MonitorView({
       {!embedded && <TopBar onBack={onBack} backLabel="Back" crumbs={[{ label: 'MONITOR' }]} />}
 
       <div className={embedded ? 'flex-1' : 'flex-1 overflow-y-auto'}>
-        <section className={`cl-hero${live > 0 ? ' is-live' : ''}`}>
-          {live > 0 && <span className="cl-live-bar" aria-hidden />}
-          <Lens />
+        {/* The console header. It replaces the page-name hero on purpose: a
+            132px word "Monitor" was ~300px of the one page whose whole subject
+            is the next 90 seconds, and the reader already knows where they are.
+            What earns that space is the census, which changes. */}
+        <header className="cl-mxtop">
           <div className="cl-eyebrow">
-            <span className="pip" />
-            <span>Global · running processes</span>
+            <span className={`pip${live > 0 ? ' live' : ''}`} />
+            <span>Monitor · this machine</span>
           </div>
-          <h1 className="cl-h-name static">
-            <span className="label-name">Monitor</span>
-            <span className="glyph">.</span>
-          </h1>
-          <div className="cl-h-meta">
-            <span>
-              <b>{live}</b> live
-            </span>
-            {working > 0 && (
-              <>
-                <span className="sep">·</span>
-                <span>
-                  <b>{working}</b> working
-                </span>
-              </>
-            )}
-            {blocked > 0 && (
-              <>
-                <span className="sep">·</span>
-                <span className="cl-mx-alert">
-                  <b>{blocked}</b> waiting on you
-                </span>
-              </>
-            )}
-          </div>
-        </section>
+          <p className="cl-mxtop-say">{census(blocked, working, ready, ended)}</p>
+        </header>
 
         {isLoading ? (
           <section className="cl-section">
@@ -395,28 +570,10 @@ export function MonitorView({
           </section>
         ) : (
           <section className="cl-section">
-            <div className="cl-mx-rack">
+            <div className="cl-mx-grid">
               {cards.map(card => (
                 <ProcessCard key={card.key} card={card} now={now} />
               ))}
-            </div>
-            <div className="cl-mx-legend">
-              <span>
-                <i className="k working" /> working
-              </span>
-              <span>
-                <i className="k blocked" /> waiting on you
-              </span>
-              <span>
-                <i className="k ready" /> ready
-              </span>
-              <span>
-                <i className="k ended" /> ended
-              </span>
-              <span className="rule" aria-hidden />
-              <span className="how">
-                each strip is the last 90 seconds of that transcript — flat means silence
-              </span>
             </div>
           </section>
         )}
@@ -425,13 +582,37 @@ export function MonitorView({
   );
 }
 
+/**
+ * One live process, as an index card.
+ *
+ * The form is the memory index card (`.cl-mcard`) rather than a dark instrument
+ * lane, and the reason is the same one that made two earlier attempts read as
+ * bare: a wide dark band holding five short strings is mostly empty by
+ * construction, and on this app's warm paper it also reads as a foreign object.
+ * A portrait card whose body is six lines of what the session actually did
+ * cannot be empty — the content fills it.
+ *
+ * The one bold thing on the page is the border: only the card that wants
+ * something from you has a heavy edge. Everything else is hairlines.
+ */
 function ProcessCard({ card, now }: { card: Card; now: number }) {
   const elapsed = card.since === null ? null : Math.max(0, now - card.since);
-  const bars = buildTrace(card.trace, now);
-  // Where the silence starts: everything after the last mark. On a blocked card
-  // that run is drawn in the accent, so the wait is the graphic.
-  const lastLoud = lastLoudBucket(bars);
+  // The in-flight call is already printed as the `now` row, and the newest mark
+  // IS that call: without this the card would show the same action twice.
+  const tape = buildTape(card.trace, now, { dropNewest: !!card.tool });
   const open = card.onOpen;
+
+  // What the silence since the last action means. A running sub-agent takes the
+  // slot: it is the explanation, and the one thing the tail cannot see for
+  // itself. Below the floor nothing is said — a gap of two seconds between two
+  // tool calls is not a signal.
+  const quiet = card.routeNote
+    ? card.routeNote
+    : card.delegateSince !== null
+      ? `${span(now - card.delegateSince)} in flight`
+      : card.lastAppendAt !== null && now - card.lastAppendAt >= QUIET_FLOOR_MS
+        ? `quiet ${span(now - card.lastAppendAt)}`
+        : '';
 
   return (
     <article
@@ -448,51 +629,101 @@ function ProcessCard({ card, now }: { card: Card; now: number }) {
       }}
     >
       <div className="cl-mx-head">
-        <div className="who">
-          <h3>{card.title}</h3>
-          {/* A conversation title is a sentence, so the row will often clip it:
-              the tooltip keeps the whole of it one hover away. */}
-          <span className="ident" title={card.ident}>
-            {card.ident}
-            {card.model ? ` · ${fmtModel(card.model)}` : ''}
-          </span>
-        </div>
-        <div className="when">
-          <span className="clk">{clock(elapsed)}</span>
-          <span className="tag">
-            <i aria-hidden />
-            {STATE_LABEL[card.state]}
-          </span>
-        </div>
+        <span className="tag">
+          <i aria-hidden />
+          {STATE_LABEL[card.state]}
+        </span>
+        {/* The clock is the card's one large figure and answers one question in
+            every state: how long it has been in THIS state. */}
+        <span
+          className="clk"
+          title={
+            card.state === 'ended' ? 'How long ago it ended' : 'How long it has been in this state'
+          }
+        >
+          {clock(elapsed)}
+          {card.state === 'ended' && <i className="ago">ago</i>}
+        </span>
       </div>
 
-      <div
-        className="cl-mx-trace"
-        aria-hidden
-        title={card.trace.length ? undefined : 'No transcript activity in the last 90 seconds'}
-      >
-        {bars.map((bar, i) => (
-          <i
-            key={i}
-            className={bar.quiet ? (i > lastLoud ? 'q since' : 'q') : bar.failed ? 'b failed' : 'b'}
-            style={bar.quiet ? undefined : { height: `${Math.max(12, bar.h * 100)}%` }}
-          />
+      <div className="cl-mx-who">
+        <h3>{card.title}</h3>
+        {/* A conversation title is a sentence, so the line will often clip it:
+            the tooltip keeps the whole of it one hover away. */}
+        <span className={card.ident === UNNAMED ? 'ident is-unnamed' : 'ident'} title={card.ident}>
+          {card.ident}
+        </span>
+        <span className="machine">
+          {card.machine.map((f, i) => (
+            <span key={f}>
+              {i > 0 && <i className="sep">·</i>}
+              {f}
+            </span>
+          ))}
+        </span>
+      </div>
+
+      {/* The tape. Its first row is NOW — what the session is doing this second,
+          which is the only row that is not history — and the rest is what it
+          did, newest first, each with the subject it acted on. */}
+      <ol className="cl-mx-tape">
+        <li className="now">
+          <span className="when">now</span>
+          <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
+          {card.tool && <b>{card.tool}</b>}
+          <span className="arg">{card.doing}</span>
+        </li>
+        {tape.map((step, i) => (
+          <li key={`${step.at}-${i}`} className={step.failed ? 'failed' : undefined}>
+            <span className="when">{span(now - step.at) || 'now'}</span>
+            <i className="dot" style={{ background: toolTint(step.tool) }} aria-hidden />
+            <b>{step.tool}</b>
+            <span className="arg">{step.arg}</span>
+            {step.count > 1 && <span className="times">×{step.count}</span>}
+            {step.failed && (
+              <span className="x" title="This call came back an error">
+                ✕
+              </span>
+            )}
+          </li>
         ))}
-      </div>
+        {!card.noTrace && tape.length === 0 && (
+          <li className="none">nothing else in the last {Math.round(TAPE_SPAN_MS / 60_000)} min</li>
+        )}
+        {card.noTrace && <li className="none">no transcript to tail</li>}
+      </ol>
 
-      <div className="cl-mx-doing">
-        <span className="caret" aria-hidden>
-          ❯
-        </span>
-        {card.tool && <b>{card.tool}</b>}
-        <span className="arg">{card.doing}</span>
-      </div>
-
-      <div className="cl-mx-foot">
-        <span>{card.counts || '—'}</span>
-        <span className="ago">
-          {card.state === 'ended' ? `ended ${shortAge(elapsed)} ago` : 'in this state'}
-        </span>
+      {/* Vitals. The context is the only measure here with a real denominator, so
+          it is the only one drawn as a gauge; spend has no ceiling and stays a
+          figure — a bar against an invented ceiling would be decoration
+          pretending to be a measurement. */}
+      <div className="cl-mx-vitals">
+        {card.context ? (
+          <span
+            className="ctx"
+            data-load={contextLoad(card.context)}
+            title={`Context window: ${fmt(card.context.used)} of ${fmt(card.context.max)} tokens`}
+          >
+            <span className="k">ctx</span>
+            <span className="bar">
+              <i style={{ width: `${contextPct(card.context)}%` }} />
+            </span>
+            <span className="v">{contextPct(card.context)}%</span>
+          </span>
+        ) : (
+          <span className="ctx is-none">
+            <span className="k">ctx</span>
+            <span className="v">—</span>
+          </span>
+        )}
+        {card.spend !== null && (
+          <span className="money" title={card.spendEstimated ? ESTIMATE_NOTE : undefined}>
+            {card.spendEstimated && '~'}
+            {fmtCost(card.spend)}
+          </span>
+        )}
+        {quiet && <span className="quiet">{quiet}</span>}
+        {card.counts && <span className="vol">{card.counts}</span>}
       </div>
     </article>
   );

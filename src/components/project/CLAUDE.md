@@ -322,104 +322,147 @@ secondo Agent View, e la distinzione è nel modello dati prima che nella UI: Age
 View legge il **roster dei job** (`~/.claude/jobs` + `daemon/roster.json`), cioè
 tutto ciò che hai dispatchato — per la maggior parte finito o addormentato — con i
 controlli per agirci; il Monitor legge il **registro dei processi**
-(`~/.claude/sessions/<pid>.json`), un file per pid vivo, cancellato quando il
-processo muore. Roster contro stato macchina: due domande diverse, due sorgenti
-diverse, due canali IPC già separati. Un background agent **vivo** compare anche
-qui (è un processo claude che consuma token), ma come card che **instrada** ad
-Agent View: dispatch/stop/respawn restano in un posto solo — il Monitor osserva.
+(`~/.claude/sessions/<pid>.json`) più il **tail dei transcript**. Un background
+agent **vivo** compare anche qui (è un processo claude che consuma token), ma come
+card che **instrada** ad Agent View: dispatch/stop/respawn restano in un posto
+solo — il Monitor osserva.
 
-| File              | Esporta                                    | Descrizione                                                                                                                                                                                                                       |
-| ----------------- | ------------------------------------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MonitorView.tsx` | `MonitorView`                              | Il rack: una card-strumento per processo. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: tool corrente, traccia, conteggi, modello) |
-| `trace.ts`        | `buildTrace`, `lastLoudBucket`, `TraceBar` | Modulo puro della pulse strip: bucketing dei `TraceMark` in 42 barre su una finestra di 90s, più l'indice dell'ultima barra con qualcosa dentro. Unit-tested in `test/monitor-view.test.tsx`                                      |
+| File              | Esporta                                 | Descrizione                                                                                                                                                                                                                   |
+| ----------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MonitorView.tsx` | `MonitorView`                           | Una index card per processo. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: azione corrente, nastro, contesto, spesa, conteggi) |
+| `trace.ts`        | `buildTape`, `TAPE_SPAN_MS`, `TAPE_MAX` | Modulo puro del nastro: dai `TraceMark` ricava le ultime azioni dalla più recente, collassa i ripetuti esatti in `×N`, scarta la prosa e sa saltare la chiamata in volo. Unit-tested in `test/monitor-view.test.tsx`          |
 
-**La firma della pagina è la pulse strip, e nasce da un limite del dato.** Lo
-stato che il registro dà ("busy") non distingue una sessione a metà di un tool da
-una piantata: sono identiche da fuori. A distinguerle è il **ritmo**, quindi ogni
-card disegna gli ultimi 90 secondi del proprio transcript — una barra per azione,
-bordo destro = adesso. Il colpo che rende la pagina leggibile in un'occhiata: su
-una sessione che aspetta te, **il silenzio dall'ultima azione è disegnato in
-accento e cresce sotto gli occhi**. Il grafico e il fatto sono lo stesso oggetto:
-quella linea piatta terracotta è letteralmente da quanto il collo di bottiglia sei
-tu. Il dato arriva dal buffer `recent` di `session-tails.ts`; un tool result
-riuscito **non** lascia un segno (raddoppierebbe la chiamata che c'è già), e un
-`text` pesa meno di un `tool` (chi scrive prosa lavora, ma non deve disegnare come
-chi martella il filesystem).
+**Tre forme, e le prime due sono l'argomento per la terza.** Sono state bocciate
+una griglia di card **scure** e poi una **lavagna** scura di corsie a tutta
+larghezza, per la stessa ragione strutturale: una superficie scura larga che
+regge cinque stringhe corte è vuota per costruzione, e sulla carta calda di
+questa app una lastra nera legge anche come corpo estraneo. Niente in un processo
+lo rende un terminale — quell'analogia era presa in prestito ed è costata due
+iterazioni. Ora la card è la **index card della memoria** (`.cl-mcard`), su carta,
+nella lingua dell'app.
+
+**Il corpo della card è il nastro, ed è il motivo per cui non può leggersi
+vuota.** I `TraceMark` portano il nome del tool **e il suo argomento**
+(`toolArg`, lo stesso che il digest già calcolava per `lastTool`), quindi la card
+stampa quello che la sessione ha fatto davvero: `Edit MonitorView.tsx`, `Bash npm
+run typecheck ✕`. Decisioni:
+
+- **La prima riga è NOW** — l'azione in corso, l'unica che non è storia, a piena
+  forza; sotto, la storia dalla più recente. `buildTape(..., {dropNewest})`
+  **scarta il mark più nuovo** quando la card sta già stampando quella chiamata
+  come riga NOW: senza, la card mostrerebbe la stessa azione due volte.
+- **Un ripetuto esatto (stesso tool, stesso argomento) collassa in `×N`** e la
+  riga è datata dalla sua chiamata **più vecchia**: un retry loop è una cosa che
+  succede tre volte, non tre lavori diversi, e la riga deve dire da quando va
+  avanti. Due Edit di due file diversi restano due righe.
+- **La prosa marca la traccia ma non entra nel nastro**: un mark `text` fra due
+  Edit spezzerebbe la sequenza a metà senza aggiungere niente su cui agire.
+- **La colonna dei pallini è la texture della card.** La tinta è `TOOL_TINT` — la
+  codifica dei tool che il transcript già usa, riusata verbatim ora che siamo su
+  carta — su uno swatch da 5px e **non** sul nome del tool: colorare testo che
+  devi leggere è peggio che colorare un marcatore di fianco, e i pallini in
+  colonna danno a ogni card la firma del tipo di lavoro (una fila di ciano è una
+  sessione che legge, viola una che edita).
+- **La pulse strip è sparita con la lavagna.** Quello a cui rispondeva — "è
+  piantata?" — il nastro lo dice a parole: una riga in cima che segna `4m` è una
+  sessione che non fa niente da quattro minuti. Lo stato del registro ("busy") non
+  ha mai risposto da solo, perché una sessione a metà di un tool e una piantata
+  sono identiche da lì.
+
+**I vitals: le due cose azionabili solo mentre gira.** Il tail leggeva ogni riga
+assistant e **scartava `usage`**. Ora il digest porta:
+
+- **CONTEXT** — quanto è pieno il context window, dal prompt del turno più
+  recente. È un **livello**, non un totale (ogni lettura sostituisce la
+  precedente; sommare i prompt fra turni riporterebbe una finestra parecchie
+  volte più piena, dato che il prompt di ogni turno contiene già quello prima). È
+  l'unica misura della card con un **denominatore vero**, quindi l'unica disegnata
+  come gauge — una barra contro un tetto inventato sarebbe decorazione travestita
+  da misura. Tre bande perché la domanda non è "quanto piena" ma "quanto
+  preoccupato": neutra sotto il 75%, `warn` fino al 90%, `danger` sopra — una
+  sessione al 94% sta per compattare e perdere fedeltà, ed è l'unica cosa in
+  pagina che puoi ancora prevenire adesso.
+- **SPEND** — dollari. Nessun tetto, quindi cifra e non barra. `~` davanti quando
+  il modello non ha una voce esatta nella tabella prezzi (`spendEstimated`). La
+  spesa è **seedata** una volta lato main da un parse completo (cached) del
+  transcript, perché il cursore parte da EOF: senza seed una sessione già in corso
+  avrebbe riportato il costo degli ultimi turni come totale, e una cifra in denaro
+  silenziosamente parziale è peggio di nessuna cifra. Seed fallito → `spend: null`
+  → la card non stampa niente.
+- **Il conteggio dei token non è sulla card**: i dollari rispondono alla domanda
+  che uno si fa davvero, e i token sono lo stesso fatto in un'unità in cui nessuno
+  fa budget — su una card densa era una seconda cifra in competizione con quella
+  che significa qualcosa. Resta nel digest.
+- Un **background agent non ha vitals né nastro**: il roster non porta né usage né
+  conto, e il transcript sidecar che scrive non è di questa pagina. Assenti, non
+  zero — `$0.00` accanto a un worker che brucia token sarebbe l'unica cifra
+  sbagliata della pagina.
+
+**Al posto dell'hero, un header da console.** `Monitor.` a
+`clamp(64px, 9vw, 132px)` erano ~300px verticali sull'unica pagina il cui
+soggetto sono i prossimi minuti — e chi è lì ha appena cliccato "Monitor". Al suo
+posto (`.cl-mxtop`) un eyebrow + **una frase che cambia**: `1 waiting on you, 2
+working`, con le cifre in inchiostro pieno e la clausola che **chiede qualcosa**
+in testa e in accento. Prosa con numeri dentro, non una fascia di stat tile:
+quella fascia è già stata rimossa una volta da questa pagina perché stampava gli
+stessi numeri che le card portano.
+
+L'anatomia della card, dall'alto: **tag di stato + orologio**, poi **identità**
+(progetto in display, titolo della conversazione, riga macchina), poi il
+**nastro**, poi i **vitals** divisi da hairline.
 
 Altre decisioni:
 
-- **La superficie è dark fissa in entrambi i temi**, con gli stessi valori di
-  `.cl-term`. È lo stesso argomento già accettato per le run di shell: una run era
-  un terminale e viene disegnata come tale; queste sono strumenti che guardano
-  processi vivi. Sulla carta calda della pagina leggono come un rack, e sage e
-  terracotta delle tracce brillano solo su fondo scuro.
-- **Un sub-agente in volo è nominato, e vale come lavoro.** È il caso in cui il
-  rack mentiva: il tool `Agent` è **asincrono** — ack immediato, poi
-  `stop_reason: end_turn` — e il lavoro dell'agente vive in un transcript sidecar
-  che il tail salta. Misurato dal vivo su 2.1.233: **148 s** senza un solo append
-  nel transcript principale mentre il sidecar accumulava **31 tool call**. La card
-  diceva `READY · waiting for your next prompt`, cioè invitava a scrivere a una
-  sessione che stava lavorando, con la strip prima piatta e poi (oltre i 90 s di
-  finestra) del tutto vuota. Ora il digest porta `delegates` e la card stampa il
-  **nome dell'agente** (`subagent_type`, es. `Explore`, con `+N` se più di uno)
-  nello slot del tool e `sub-agent running` come riga di stato. **Niente conteggio
-  dei suoi tool**: quelle chiamate sono dell'agente, e sommarle a `13 tools`
-  farebbe rispondere una sessione per due. Un tool proprio in volo **vince** sul
-  delegato — è più attuale; il delegato spiega il silenzio, non lo scavalca.
-- **`ready` è un'affermazione su DUE sorgenti** (`isReady`), perché ognuna è cieca
-  su un caso: il registry è l'unico che sa che una sessione lavora ancora quando
-  il suo transcript tace (il dispatch async di cui sopra), il tail è l'unico che
-  sa che un turno è finito quando il registry non è stato riscritto da allora
-  (`updatedAt` non è un heartbeat — verificato: fermo per 148 s). Lo stesso
-  incrocio copre `status: 'unknown'`, cioè il file di registry scritto **prima**
-  del suo primo stato (osservato su una sessione vissuta 2,4 s): letto come
-  "working" metteva una card che non aveva mai fatto nulla sopra quelle che
-  stavano davvero girando.
+- **L'audacia si spende in un posto solo**: solo la card che ti aspetta ha il
+  bordo pesante (1.5px accent + il wash che le index card della memoria usano per
+  la prima tile) ed è l'unica che pulsa. Tutto il resto sono hairline. Una
+  sessione che lavora sta lavorando, è il caso normale.
+- **La griglia è `align-items: start`**: una card con due azioni è più corta di
+  una con sei, e stirarla per pareggiare rimetterebbe esattamente il vuoto che
+  questa forma serve a togliere. Il bordo inferiore frastagliato è la forma
+  onesta.
+- **Il pid ha un campo suo** nella riga macchina (`pid · modello · up 2h07 ·
+./sottocartella`): come suffisso dell'ident era rumore e un titolo lungo se lo
+  mangiava dalla coda con l'ellissi, ma è ciò che serve per fare `kill`.
+  Conseguenza: il fallback quando Claude non ha ancora nominato la sessione **non
+  è più il pid** (l'avrebbe detto due volte) ma `not named yet`. Il sottopath si
+  stampa **solo se aggiunge qualcosa** (`cwdNote`).
+- **L'orologio conta dalla transizione di stato** (`statusUpdatedAt`), con
+  semantica unica in ogni stato: **da quanto è in questo stato**. Contava
+  dall'ultimo append e si azzerava a ogni tool, quindi non rispondeva mai a
+  "questo turno sta durando troppo?". Una card `ended` aggiunge `ago`.
+- **Un sub-agente in volo è nominato, e vale come lavoro.** Il tool `Agent` è
+  **asincrono** — ack immediato, poi `stop_reason: end_turn` — e il lavoro
+  dell'agente vive in un transcript sidecar che il tail salta. Misurato dal vivo
+  su 2.1.233: **148 s** senza un append nel transcript principale mentre il
+  sidecar accumulava **31 tool call**. La card diceva `READY · waiting for your
+next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
+  dell'agente** (`subagent_type`) e i vitals la sua età (`2m in flight`) al posto
+  del silenzio. **Niente conteggio dei suoi tool** — e per la stessa ragione
+  **niente suoi token**: `parseTurnUsage` scarta le righe sidechain, altrimenti il
+  prompt del sub-agente gonfierebbe la lettura del contesto del padre e
+  predirebbe una compattazione che non arriva.
+- **`ready` è un'affermazione su DUE sorgenti** (`isReady`): il registry è l'unico
+  che sa che una sessione lavora ancora quando il suo transcript tace, il tail è
+  l'unico che sa che un turno è finito quando il registry non è stato riscritto da
+  allora (`updatedAt` non è un heartbeat). Lo stesso incrocio copre
+  `status: 'unknown'` (registry scritto **prima** del primo stato).
 - **Il nome del processo non si mostra, il titolo della conversazione sì.** Il
-  `name` del registry (`claudelens-b4`) è il nome del progetto più due caratteri
-  casuali: accanto al progetto non aggiunge niente, e resta escluso. Ma con **tre
-  sessioni dello stesso progetto** a schermo le card leggevano tutte
-  `ClaudeLens · pid 63833` e un utente ha riferito guardando quella sbagliata: il
-  pid è unico ma non si riconosce. Il discriminante è il titolo che Claude scrive
-  nel transcript (`{"type":"ai-title","aiTitle":"…"}`, riscritto a ogni turno) —
-  l'unico nome umano che una sessione ha, ed **è** l'ident. Il **pid resta solo
-  come fallback** per una sessione non ancora nominata: come suffisso fisso era
-  rumore su ogni card, e un titolo lungo abbastanza da attivare l'ellissi CSS se
-  lo mangiava comunque dalla coda — perdendo l'unica parte non indovinabile. Il
-  titolo intero resta nel tooltip della riga. Il titolo di una sessione già
-  in corso quando il Monitor si apre viene da una lettura mirata della **testa**
-  del file (`readSessionTitle`, 256 KB): il cursore parte da EOF, quindi quel
-  record è già dietro. (`SessionActivity` porta `title`, non `name`.)
-- **L'orologio conta dalla transizione di stato, non dall'ultimo append.** È la
-  cifra più grande della card e ora ha davvero una semantica sola — "da quanto è
-  in questo stato" — presa da `statusUpdatedAt` del registry per ogni stato, non
-  solo per `blocked`. Prima, su una sessione al lavoro, contava da
-  `lastActivityAt`: si azzerava a ogni tool, quindi non rispondeva mai a "questo
-  turno sta durando troppo?" e misurava invece il **silenzio**, che è esattamente
-  ciò che la pulse strip disegna: la cifra più vistosa della card spesa a
-  duplicare il grafico che le sta sopra, invece di completarlo.
-- **L'orologio è l'ancora della card**: mono grande, tabulare, l'unica cifra che si
-  muove ogni secondo, e risponde alla domanda "sta durando troppo?". Semantica
-  unica per tutti gli stati: **da quanto è in questo stato**.
-- **Pulsa solo ciò che è bloccato**, e solo la card bloccata ha il bordo acceso: un
-  alone su ogni card renderebbe il rack chiassoso senza dire niente. Una sessione
-  che lavora sta lavorando, è il caso normale.
+  `name` del registry (`claudelens-b4`) è il progetto più due caratteri casuali.
+  Il titolo viene da `{"type":"ai-title"}` nel transcript, letto una volta dalla
+  **testa** del file (`readSessionTitle`) perché il cursore parte da EOF.
 - **Ordine**: prima chi ti aspetta, poi chi lavora, poi chi ha finito; a parità di
-  stato guida chi è in quello stato da più tempo. Niente sezioni per stato — la
-  card lo dichiara già, e tre intestazioni sopra il rack sarebbero chrome che
-  ripete ciò che il colore dice meglio.
-- **Le sessioni finite restano** (`endedAt` dal digest ritenuto 10 minuti lato
-  main): una run che finisce mentre guardavi altrove non lascerebbe traccia. La
-  ritenzione vive nel main perché sopravviva allo smontaggio della vista.
-- **Niente fascia di riquadri sopra il rack** (rimossa): erano gli stessi numeri
-  che le card già mostrano, e la tile "Needs input" ripeteva alla lettera il titolo
-  di una corsia. Nell'hero resta il solo conteggio dei bloccati in accento —
-  l'unica cifra della pagina che chiede qualcosa.
-- Il ticker da 1s gira **solo se c'è qualcosa di vivo**: un Monitor fermo non è una
-  pagina che si ri-renderizza per sempre in background.
+  stato guida chi è in quello stato da più tempo.
+- **Le sessioni finite restano** 10 minuti (`endedAt`), coi loro vitali finali:
+  quanto è costata e quanto si era riempita restano la verità su di lei.
+- Il silenzio sotto i 10s non si stampa (`QUIET_FLOOR_MS`): è l'intervallo fra due
+  tool call, non un segnale.
+- Il ticker da 1s gira **solo se c'è qualcosa da contare** (`cards.length > 0`).
 
 Coperta da `test/monitor-view.test.tsx` (join, stato, ordinamento, ritenzione,
-routing degli agent, teardown delle subscription, bucketing della traccia).
+routing degli agent, riga macchina, sottopath, nastro e non-duplicazione della
+riga NOW, bande del gauge di contesto, spesa e stima, frase dell'header,
+teardown, modello del nastro).
 
 ---
 

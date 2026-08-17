@@ -650,13 +650,22 @@ export interface ActiveSession {
 }
 
 /** One mark on a session's activity trace (`electron/modules/session-tails.ts`).
- *  A successful tool result carries no mark: it would double the call that is
- *  already on the strip. */
-export type TraceKind = 'tool' | 'error' | 'text';
+ *  A tool result carries no mark of its own: it would double the call that is
+ *  already on the track. */
+export type TraceKind = 'tool' | 'text';
 
 export interface TraceMark {
   at: number;
   kind: TraceKind;
+  /** Which tool this was, and the one-line subject it acted on — what lets the
+   *  Monitor print `Edit MonitorView.tsx` instead of an anonymous bar. Both
+   *  absent on a `text` mark: prose has no name and no subject. */
+  tool?: string;
+  arg?: string;
+  /** The call's `tool_use` id, carried only so its result can find it again. */
+  id?: string;
+  /** Its result came back an error. A verdict on the call, not a second event. */
+  failed?: boolean;
 }
 
 /** What a live session is doing right now, folded from its transcript tail
@@ -682,6 +691,18 @@ export interface SessionActivity {
   toolCount: number;
   errorCount: number;
   model: string | null;
+  /** How full the context window is, from the newest assistant turn's prompt.
+   *  A LEVEL, not a total — each turn replaces the reading. The one fact here
+   *  that is only actionable while the session runs: a session at 94% is about
+   *  to compact. Null until a turn with usage has been read. */
+  context: { used: number; max: number } | null;
+  /** Dollars this session has billed, seeded from a full parse so the figure is
+   *  the session's total and not "since ClaudeLens opened". Null when unknown. */
+  spend: number | null;
+  /** `spend` was priced by family fallback, not an exact table entry. */
+  spendEstimated: boolean;
+  /** Every token this session has billed, all four kinds. */
+  tokens: number;
   /** Session cwd, copied from the registry while live and retained after it
    *  ends (the registry file is gone by then), so a finished card can still say
    *  which project it belonged to. */

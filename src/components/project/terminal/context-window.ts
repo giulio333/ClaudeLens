@@ -1,4 +1,15 @@
 import type { ChatMessage } from '../../../types';
+import {
+  LARGE_CONTEXT_WINDOW,
+  contextWindowFor,
+  isOneMillion,
+} from '../../../../electron/shared/context-window';
+
+// The window-sizing rule itself lives in `electron/shared/` and is re-exported
+// here: the Monitor's tail asks the same question of every live session from the
+// main process, and two surfaces disagreeing about how full a window is would be
+// worse than either being wrong alone. (Same arrangement as `compareVersions`.)
+export { isOneMillion };
 
 export type ContextState = {
   used: number;
@@ -16,16 +27,6 @@ export type ContextState = {
   model?: string;
 };
 
-const ONE_MILLION_DEFAULT_MODELS = [/^claude-opus-5(?:$|-)/i];
-
-/** Whether a resolved model id or raw model setting selects a 1M context window. */
-export function isOneMillion(model: string | undefined): boolean {
-  if (!model) return false;
-  return (
-    /\[1m\]|\b1m\b/i.test(model) || ONE_MILLION_DEFAULT_MODELS.some(pattern => pattern.test(model))
-  );
-}
-
 /** CONTEXT occupancy from the latest assistant turn's prompt usage. */
 export function deriveContext(
   messages: ChatMessage[] | undefined,
@@ -37,8 +38,11 @@ export function deriveContext(
     if (message.role !== 'assistant' || !message.usage) continue;
     const used =
       message.usage.inputTokens + message.usage.cacheReadTokens + message.usage.cacheWriteTokens;
-    const oneMillion = isOneMillion(message.model) || isOneMillion(rawModel) || used > 200_000;
-    const max = oneMillion ? 1_000_000 : 200_000;
+    // The raw setting is consulted on top of the shared rule: this surface knows
+    // the configured model, which a transcript line does not always record.
+    const max = isOneMillion(rawModel)
+      ? LARGE_CONTEXT_WINDOW
+      : contextWindowFor(message.model, used);
     return {
       used,
       max,
