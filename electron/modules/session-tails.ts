@@ -190,6 +190,23 @@ const ended = new Map<string, Cursor>(); // recently gone, pruned by age
  *  keeps meaning "now". */
 export const RECENT_WINDOW_MS = 10 * 60_000;
 
+/**
+ * Forget the finished sessions that have aged out of the retention window.
+ *
+ * Called from the READ and not only from `syncSessionTails`, because that sync
+ * runs on a registry event and the registry has no heartbeat: it is rewritten on
+ * status transitions only. When the last session ends — or the ones left are all
+ * parked in `waiting` — no further event arrives, so an expiry that waits for one
+ * never happens, and the Monitor keeps a card reading "3h ago" on a page whose
+ * whole subject is the last few minutes. Pruning where the digest is read makes
+ * the window hold whatever wakes the module.
+ */
+function pruneEnded(now: number): void {
+  for (const [sessionId, cursor] of ended) {
+    if (now - (cursor.endedAt ?? 0) > RECENT_WINDOW_MS) ended.delete(sessionId);
+  }
+}
+
 function projectsDir(): string {
   return join(CLAUDE_DIR, 'projects');
 }
@@ -478,9 +495,7 @@ export async function syncSessionTails(
     ended.set(sessionId, { ...cursor, endedAt: now });
   }
 
-  for (const [sessionId, cursor] of ended) {
-    if (now - (cursor.endedAt ?? 0) > RECENT_WINDOW_MS) ended.delete(sessionId);
-  }
+  pruneEnded(now);
 
   for (const session of sessions) {
     if (!session.sessionId) continue; // process-scan fallback entries carry none
@@ -572,8 +587,15 @@ export function onTranscriptChanged(path: string): boolean {
 }
 
 /** Current digest for every tracked session, live ones first, plus the ones
- *  that ended inside the retention window (`endedAt` set). */
-export function getSessionActivity(): SessionActivity[] {
+ *  that ended inside the retention window (`endedAt` set).
+ *
+ *  This is the one place every delivery route passes through — the `live:getActivity`
+ *  handler and both push sites — which is why the retention is enforced here (see
+ *  `pruneEnded`) rather than only where a session is seen to end. `now` is a
+ *  parameter for the same reason it is one on `syncSessionTails`: the tests drive
+ *  the clock explicitly. */
+export function getSessionActivity(now: number = Date.now()): SessionActivity[] {
+  pruneEnded(now);
   const strip = ({
     offset: _offset,
     needsSeed: _needsSeed,

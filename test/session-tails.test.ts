@@ -511,7 +511,10 @@ describe('syncSessionTails / onTranscriptChanged', () => {
 
     await syncSessionTails([], 2_000);
     // Still listed, but marked as finished — that IS the "recently ended" lane.
-    expect(getSessionActivity()).toMatchObject([{ sessionId: 's1', endedAt: 2_000 }]);
+    // The read takes the clock because it enforces the retention window itself:
+    // left to the real `Date.now()` it would judge a digest stamped 2_000 to be
+    // decades old and drop it.
+    expect(getSessionActivity(2_000)).toMatchObject([{ sessionId: 's1', endedAt: 2_000 }]);
     // The path mapping went with it: a later append is nobody's business.
     appendFileSync(file, line([{ type: 'text', text: 'after death' }]));
     expect(onTranscriptChanged(file)).toBe(false);
@@ -520,10 +523,30 @@ describe('syncSessionTails / onTranscriptChanged', () => {
   it('forgets an ended session once the retention window passes', async () => {
     await syncSessionTails([session('s1')], 1_000);
     await syncSessionTails([], 2_000);
-    expect(getSessionActivity()).toHaveLength(1);
+    expect(getSessionActivity(2_000)).toHaveLength(1);
 
     await syncSessionTails([], 2_000 + RECENT_WINDOW_MS + 1);
-    expect(getSessionActivity()).toHaveLength(0);
+    expect(getSessionActivity(2_000 + RECENT_WINDOW_MS + 1)).toHaveLength(0);
+  });
+
+  // The case above only expires because a second sync arrives — and in the app
+  // that sync rides a registry event, which is exactly what stops coming once
+  // the last session ends. So the window has to hold on the read too, or the
+  // Monitor keeps a card saying "just ended" for hours.
+  it('forgets an ended session even when no further sync ever arrives', async () => {
+    await syncSessionTails([session('s1')], 1_000);
+    await syncSessionTails([], 2_000);
+
+    expect(getSessionActivity(2_000 + RECENT_WINDOW_MS)).toHaveLength(1);
+    expect(getSessionActivity(2_000 + RECENT_WINDOW_MS + 1)).toHaveLength(0);
+  });
+
+  it('never expires a live session on a read, however late the clock', async () => {
+    await syncSessionTails([session('s1')], 1_000);
+
+    expect(getSessionActivity(1_000 + RECENT_WINDOW_MS * 10)).toMatchObject([
+      { sessionId: 's1', endedAt: null },
+    ]);
   });
 
   it('revives a returning session id with its counters and its cursor', async () => {
