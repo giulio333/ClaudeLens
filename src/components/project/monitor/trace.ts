@@ -11,20 +11,29 @@ import type { TraceMark } from '../../../types';
 // says `4m` is a session that has done nothing for four minutes, which is the
 // question the strip existed to answer, asked in words.
 //
+// This returns the WHOLE story in the window and caps nothing. The card's slot
+// is what decides how many rows are printed (`TAPE_ROWS`), and it needs the full
+// count to say how much it is leaving out — `+3` at the end of the last row.
+// A cap here would hide that figure from the one surface that has to state it.
+// The window itself is the bound, and the digest ships at most 160 marks.
+//
 // Pure and separate from the view for two reasons: the repo's fast-refresh rule
 // (a component file exports only components), and because this is the part worth
 // pinning down in tests — what counts as one step, and which end of the history
-// survives the cap.
+// survives.
 
 /** How far back the tape reaches. The digest keeps a wider window than this
  *  (`TRACE_WINDOW_MS`), so the cap is what a card can show, not what is known. */
 export const TAPE_SPAN_MS = 150_000;
 
-/** Rows a card prints. Six is about what fits under the identity block without
- *  the card growing taller than its neighbours in the grid, and the newest are
- *  the ones kept: what a session just did explains it better than what it
- *  started with. */
-export const TAPE_MAX = 6;
+/** Rows the card's slot holds — and it holds them whether or not there is
+ *  anything to put in them. That is the whole point of the fixed form: the slot
+ *  is drawn either way, so a session that has done six things and one that has
+ *  done none are the same size, and the grid finally has a baseline. Three is
+ *  what fits under the identity block and the NOW line at this card height.
+ *  The newest rows are the ones kept: what a session just did explains it
+ *  better than what it started with. */
+export const TAPE_ROWS = 3;
 
 export interface TapeStep {
   /** Epoch ms of the (first) call. */
@@ -54,9 +63,9 @@ export interface TapeStep {
 export function buildTape(
   marks: TraceMark[],
   now: number,
-  options: { dropNewest?: boolean; max?: number } = {}
+  options: { dropNewest?: boolean } = {}
 ): TapeStep[] {
-  const { dropNewest = false, max = TAPE_MAX } = options;
+  const { dropNewest = false } = options;
   const start = now - TAPE_SPAN_MS;
 
   // Prose marks the trace but is not a step of the story: "wrote some text"
@@ -81,7 +90,6 @@ export function buildTape(
       previous.at = mark.at;
       continue;
     }
-    if (steps.length === max) break;
     steps.push({ at: mark.at, tool, arg, failed: !!mark.failed, count: 1 });
   }
   return steps;

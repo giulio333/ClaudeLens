@@ -327,10 +327,10 @@ agent **vivo** compare anche qui (è un processo claude che consuma token), ma c
 card che **instrada** ad Agent View: dispatch/stop/respawn restano in un posto
 solo — il Monitor osserva.
 
-| File              | Esporta                                 | Descrizione                                                                                                                                                                                                                   |
-| ----------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MonitorView.tsx` | `MonitorView`                           | Una index card per processo. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: azione corrente, nastro, contesto, spesa, conteggi) |
-| `trace.ts`        | `buildTape`, `TAPE_SPAN_MS`, `TAPE_MAX` | Modulo puro del nastro: dai `TraceMark` ricava le ultime azioni dalla più recente, collassa i ripetuti esatti in `×N`, scarta la prosa e sa saltare la chiamata in volo. Unit-tested in `test/monitor-view.test.tsx`          |
+| File              | Esporta                                  | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                          |
+| ----------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MonitorView.tsx` | `MonitorView`                            | Una index card per processo. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: azione corrente, nastro, contesto, spesa, conteggi)                                                                                                                                                                                        |
+| `trace.ts`        | `buildTape`, `TAPE_SPAN_MS`, `TAPE_ROWS` | Modulo puro del nastro: dai `TraceMark` ricava le ultime azioni dalla più recente, collassa i ripetuti esatti in `×N`, scarta la prosa e sa saltare la chiamata in volo. **Non tronca**: restituisce tutta la finestra, perché è lo slot della card (`TAPE_ROWS = 3`) a decidere quante righe stampa e gli serve il conto intero per dire quante ne lascia fuori (`+3`). Unit-tested in `test/monitor-view.test.tsx` |
 
 **Tre forme, e le prime due sono l'argomento per la terza.** Sono state bocciate
 una griglia di card **scure** e poi una **lavagna** scura di corsie a tutta
@@ -341,16 +341,39 @@ lo rende un terminale — quell'analogia era presa in prestito ed è costata due
 iterazioni. Ora la card è la **index card della memoria** (`.cl-mcard`), su carta,
 nella lingua dell'app.
 
-**Il corpo della card è il nastro, ed è il motivo per cui non può leggersi
-vuota.** I `TraceMark` portano il nome del tool **e il suo argomento**
-(`toolArg`, lo stesso che il digest già calcolava per `lastTool`), quindi la card
-stampa quello che la sessione ha fatto davvero: `Edit MonitorView.tsx`, `Bash npm
-run typecheck ✕`. Decisioni:
+**Quarta forma: l'anatomia della card è FISSA.** Lasciare che il corpo fosse il
+nastro dava a ogni card un'altezza diversa — una sessione che aveva lanciato sei
+tool stava un terzo più alta di una che non ne aveva lanciato nessuno — e un rack
+così non ha una linea di base da leggere in orizzontale: il bordo inferiore
+frastagliato era la prima cosa che l'occhio doveva decifrare, e le stesse
+grandezze (orologio, gauge, conto) cadevano ad altezze diverse su card vicine.
+Ora ogni card è **gli stessi cinque blocchi alla stessa altezza** (`height: 260px`,
+`grid-template-rows: auto auto auto 1fr auto`): stato+orologio, identità, riga
+NOW, slot da tre righe, vitals. Varia **cosa** ci sta stampato, mai **dove**.
+Costo dichiarato: qualche millimetro rigato su una card tranquilla. In cambio si
+può scandire la pagina per colonne.
 
-- **La prima riga è NOW** — l'azione in corso, l'unica che non è storia, a piena
-  forza; sotto, la storia dalla più recente. `buildTape(..., {dropNewest})`
-  **scarta il mark più nuovo** quando la card sta già stampando quella chiamata
-  come riga NOW: senza, la card mostrerebbe la stessa azione due volte.
+**Il nastro dice cosa la sessione ha fatto davvero.** I `TraceMark` portano il
+nome del tool **e il suo argomento** (`toolArg`, lo stesso che il digest già
+calcolava per `lastTool`): `Edit MonitorView.tsx`, `Bash npm run typecheck ✕`.
+Decisioni:
+
+- **NOW ha un blocco suo** (`.cl-mx-now`, inset su `paper-2`), non è più la prima
+  riga della lista. Quello che un processo sta facendo adesso e quello che ha
+  fatto sono due affermazioni di specie diversa, e stamparle come una lista sola
+  faceva leggere la riga più nuova come storia capitata in cima.
+  `buildTape(..., {dropNewest})` **scarta il mark più nuovo** quando la card sta
+  già stampando quella chiamata come riga NOW: senza, la stessa azione comparirebbe
+  due volte.
+- **Lo slot è tre righe, sempre** (`.cl-mx-slot`). Le righe senza niente da dire
+  restano **rigate** (tratteggio) invece di essere omesse: è ciò che rende ogni
+  card della stessa altezza, ed è anche ciò che una riga vuota dice sulla carta a
+  righe — non "qui è finito", ma "qui non è ancora stato scritto". Chi ha fatto
+  di più non cresce: lo dice con `+8` sull'ultima riga. Tre righe di undici azioni
+  stampate in silenzio si leggerebbero come una sessione tranquilla.
+- **`no transcript to tail` occupa una riga dello slot** (un background agent),
+  perché "non c'è transcript" non è la stessa affermazione di "non ha fatto
+  niente" e solo una delle due si risolve aspettando.
 - **Un ripetuto esatto (stesso tool, stesso argomento) collassa in `×N`** e la
   riga è datata dalla sua chiamata **più vecchia**: un retry loop è una cosa che
   succede tre volte, non tre lavori diversi, e la riga deve dire da quando va
@@ -417,10 +440,16 @@ Altre decisioni:
   bordo pesante (1.5px accent + il wash che le index card della memoria usano per
   la prima tile) ed è l'unica che pulsa. Tutto il resto sono hairline. Una
   sessione che lavora sta lavorando, è il caso normale.
-- **La griglia è `align-items: start`**: una card con due azioni è più corta di
-  una con sei, e stirarla per pareggiare rimetterebbe esattamente il vuoto che
-  questa forma serve a togliere. Il bordo inferiore frastagliato è la forma
-  onesta.
+- **La griglia è una griglia vera**: card di altezza fissa, quindi niente
+  `align-items: start` (serviva solo a non stirare le card corte, che è un altro
+  modo di dire che il rack non aveva una linea di base). Lo slot prende l'`1fr`,
+  così l'eventuale gioco — una riga di vitals andata a capo su una card stretta —
+  viene assorbito **sotto** le righe rigate: testa, identità e vitals restano
+  dove sono su ogni card. `overflow: hidden` è la garanzia, non il layout.
+- **Il gauge del contesto ha perso l'etichetta `ctx`**: una barra con una
+  percentuale accanto dice già cos'è, e su una card più stretta quei tre caratteri
+  servivano alle cifre che l'unità la devono dichiarare. Resta nel caso `is-none`,
+  dove un trattino da solo non nominerebbe niente.
 - **Il pid ha un campo suo** nella riga macchina (`pid · modello · up 2h07 ·
 ./sottocartella`): come suffisso dell'ident era rumore e un titolo lungo se lo
   mangiava dalla coda con l'ellissi, ma è ciò che serve per fare `kill`.
@@ -461,8 +490,9 @@ next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
 
 Coperta da `test/monitor-view.test.tsx` (join, stato, ordinamento, ritenzione,
 routing degli agent, riga macchina, sottopath, nastro e non-duplicazione della
-riga NOW, bande del gauge di contesto, spesa e stima, frase dell'header,
-teardown, modello del nastro).
+riga NOW, **slot a tre righe qualunque cosa la sessione abbia fatto** e `+N` per
+quelle non stampate, bande del gauge di contesto, spesa e stima, frase
+dell'header, teardown, modello del nastro).
 
 ---
 
