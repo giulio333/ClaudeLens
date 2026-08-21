@@ -1,6 +1,9 @@
-// Pure diff over successive snapshots of the live-session registry. The registry
-// has NO events — it heartbeats a full snapshot every few seconds — so to avoid a
-// notification storm we emit only on *state transitions*, not on every read.
+// Pure diff over successive snapshots of the live-session registry. What arrives
+// is a full SNAPSHOT of who is live, never an event about one session — the CLI
+// rewrites `~/.claude/sessions/<pid>.json` on a status change and the watcher
+// hands us the whole re-read — so a transition exists only as the difference
+// between two snapshots, which is why we emit on *state transitions* and not on
+// every read.
 //
 // Two transitions matter:
 //   - any -> `waiting`: the session is blocked on the user (e.g. a permission
