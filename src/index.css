@@ -16026,24 +16026,32 @@ select.cl-opt-input {
 }
 
 /* ── The grid ──
-   `align-items: start` on purpose: a card with two actions is shorter than one
-   with six, and stretching it to match would put back exactly the empty space
-   this form exists to remove. A ragged bottom edge is the honest shape. */
+   Every card is the same height, so this is a real grid: rows line up, and the
+   clock, the gauge and the bill of any two cards sit on the same line of the
+   page. The earlier form let the body set the height and needed
+   `align-items: start` to avoid stretching short cards — which is another way of
+   saying the rack had no baseline at all. */
 .cl-mx-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  align-items: start;
   gap: 18px;
   padding-top: 4px;
 }
 
-/* ── The card ── */
+/* ── The card ──
+   FIXED ANATOMY: five rows, one height, whatever the session has been up to.
+   The slot takes the `1fr`, so any slack (a vitals line that wrapped, a card
+   with fewer machine facts) is absorbed BELOW the ruled rows — the head, the
+   identity block and the vitals stay where they are on every card in the rack.
+   `overflow: hidden` is the guarantee, not the layout: nothing inside is allowed
+   to grow the frame, and everything that could is already ellipsized. */
 .cl-mx {
   --mx: var(--cl-ok);
-  display: flex;
-  flex-direction: column;
-  gap: 13px;
-  padding: 16px 18px 14px;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr auto;
+  height: 260px;
+  padding: 14px 16px 12px;
+  overflow: hidden;
   border: 1px solid var(--cl-line);
   border-radius: 14px;
   background: var(--cl-paper);
@@ -16146,7 +16154,7 @@ select.cl-opt-input {
   align-items: baseline;
   gap: 5px;
   font-family: var(--font-mono);
-  font-size: 21px;
+  font-size: 19px;
   line-height: 1;
   letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
@@ -16170,10 +16178,13 @@ select.cl-opt-input {
 }
 
 /* ── Who ── */
+.cl-mx-who {
+  margin-top: 11px;
+}
 .cl-mx-who h3 {
   margin: 0;
   font-family: var(--font-sans);
-  font-size: 17px;
+  font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.02em;
   line-height: 1.2;
@@ -16184,9 +16195,9 @@ select.cl-opt-input {
 }
 .cl-mx-who .ident {
   display: block;
-  margin-top: 3px;
+  margin-top: 2px;
   font-family: var(--font-mono);
-  font-size: 11px;
+  font-size: 10.5px;
   color: var(--cl-ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -16203,9 +16214,9 @@ select.cl-opt-input {
    one part of the line that could not be guessed. */
 .cl-mx-who .machine {
   display: block;
-  margin-top: 6px;
+  margin-top: 4px;
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   letter-spacing: 0.03em;
   color: var(--cl-ink-4);
   overflow: hidden;
@@ -16218,30 +16229,79 @@ select.cl-opt-input {
   opacity: 0.55;
 }
 
-/* ── The tape: what it did, newest first ──
-   The body of the card, and the reason this form is not empty. Fixed columns so
-   the ages line up down the left and the tool names down the middle: a tape you
-   can scan by column is the difference between a log and a list of sentences. */
-.cl-mx-tape {
-  margin: 0;
-  padding: 11px 0 0;
-  list-style: none;
-  border-top: 1px solid var(--cl-line-soft);
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.45;
-}
-.cl-mx-tape li {
-  display: grid;
-  grid-template-columns: 30px 5px auto minmax(0, 1fr) auto;
+/* ── NOW: what it is doing this second ──
+   Its own inset block, not the first row of the list below it. What a process is
+   doing right now and what it did are different kinds of claim, and printing
+   them as one list made the newest row look like history that happened to be at
+   the top. One line, ellipsized: the subject is the freest string on the card
+   and must never be the reason a card is taller than its neighbour. */
+.cl-mx-now {
+  display: flex;
   align-items: baseline;
-  gap: 0 8px;
-  padding: 1.5px 0;
+  gap: 8px;
+  margin-top: 11px;
+  padding: 8px 10px;
+  border-radius: 9px;
+  background: var(--cl-paper-2);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.35;
+  color: var(--cl-ink-2);
+}
+.cl-mx-now .dot {
+  align-self: center;
+  flex: 0 0 auto;
+  width: 5px;
+  height: 5px;
+  border-radius: 1.5px;
+}
+.cl-mx-now b {
+  font-weight: 600;
+  white-space: nowrap;
+  color: var(--cl-ink);
+}
+.cl-mx-now .arg {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* An ended card is already on paper-2: the inset needs the other surface or it
+   disappears into its own background. */
+.cl-mx[data-state='ended'] .cl-mx-now {
+  background: var(--cl-paper);
+}
+.cl-mx[data-state='blocked'] .cl-mx-now {
+  background: color-mix(in oklch, var(--cl-accent) 9%, var(--cl-paper));
+}
+.cl-mx[data-state='blocked'] .cl-mx-now b {
+  color: var(--cl-accent-ink);
+}
+
+/* ── The slot: what it did, newest first ──
+   THREE ROWS, ALWAYS. A row with nothing to say is drawn as a rule rather than
+   left out, which is what makes every card the same height — the one thing the
+   previous form could not do, since its body grew a line per tool call. Fixed
+   columns so the ages line up down the left and the tool names down the middle:
+   a tape you can scan by column is the difference between a log and a list of
+   sentences. */
+.cl-mx-slot {
+  margin: 10px 0 0;
+  padding: 0;
+  list-style: none;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.cl-mx-slot li {
+  display: grid;
+  grid-template-columns: 26px 5px auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 0 7px;
+  height: 18px;
   color: var(--cl-ink-3);
 }
-.cl-mx-tape .when {
+.cl-mx-slot .when {
   text-align: right;
-  font-size: 9.5px;
+  font-size: 9px;
   letter-spacing: 0.02em;
   color: var(--cl-ink-4);
   font-variant-numeric: tabular-nums;
@@ -16251,60 +16311,64 @@ select.cl-opt-input {
    worse than colouring a marker beside it, and the swatches stack into a column
    that gives each card the signature of the kind of work it is doing. A run of
    cyan is a session reading, violet a session editing. */
-.cl-mx-tape .dot {
-  align-self: center;
+.cl-mx-slot .dot {
   width: 5px;
   height: 5px;
   border-radius: 1.5px;
-  background: var(--cl-ink-4);
 }
-.cl-mx-tape b {
+.cl-mx-slot b {
   font-weight: 500;
   color: var(--cl-ink-2);
   white-space: nowrap;
 }
-/* The subject is the only free-form string on the card and the one that changes
-   most: it truncates rather than wrapping, so a long path can never make one
-   card taller than the work it describes deserves. */
-.cl-mx-tape .arg {
+/* The subject truncates rather than wrapping: inside a fixed row it is the one
+   string that could otherwise push the card past its frame. */
+.cl-mx-slot .arg {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cl-mx-tape .times {
+/* One trailing cell for every verdict a row can carry — `×3`, `✕`, `+2` — so two
+   of them never fight over the same column. */
+.cl-mx-slot .mark {
   grid-column: 5;
-  font-size: 9.5px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-style: normal;
+}
+.cl-mx-slot .times,
+.cl-mx-slot .more {
+  font-style: normal;
+  font-size: 9px;
   color: var(--cl-ink-4);
 }
-.cl-mx-tape .x {
-  grid-column: 5;
-  color: var(--cl-danger);
-  font-size: 10px;
-}
-.cl-mx-tape li.failed b {
+.cl-mx-slot .x {
+  font-style: normal;
+  font-size: 9.5px;
   color: var(--cl-danger);
 }
-/* NOW — the only row that is not history. It reads at full strength; everything
-   below it is dimmer by one step, which is what makes the card scan from the top
-   without any rule or background to say so. */
-.cl-mx-tape li.now {
-  color: var(--cl-ink-2);
-  padding-bottom: 4px;
+.cl-mx-slot li.failed b {
+  color: var(--cl-danger);
 }
-.cl-mx-tape li.now .when {
-  color: var(--mx);
-}
-.cl-mx-tape li.now b {
-  color: var(--cl-ink);
-  font-weight: 600;
-}
-.cl-mx-tape li.now .arg {
-  color: var(--cl-ink-2);
-}
-.cl-mx-tape li.none {
+/* The ruled empty row. It is deliberately visible: a blank gap would read as the
+   card having ended early, where a rule reads as a line nothing has been written
+   on yet — the same thing ruled paper says. */
+.cl-mx-slot li.rule {
   display: block;
-  padding-left: 43px;
-  font-size: 10px;
+}
+.cl-mx-slot li.rule i {
+  display: block;
+  margin: 8px 0 0 33px;
+  border-top: 1px dotted var(--cl-line);
+}
+/* An agent's note: "no transcript to tail" is not the same claim as "it did
+   nothing", and only one of the two can be fixed by waiting. */
+.cl-mx-slot li.none {
+  display: block;
+  padding-left: 33px;
+  font-size: 9.5px;
+  line-height: 18px;
   font-style: italic;
   color: var(--cl-ink-4);
 }
@@ -16318,9 +16382,8 @@ select.cl-opt-input {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 6px 14px;
-  margin-top: auto;
-  padding-top: 11px;
+  gap: 5px 12px;
+  padding-top: 10px;
   border-top: 1px solid var(--cl-line-soft);
   font-family: var(--font-mono);
   font-size: 10px;
@@ -16331,7 +16394,9 @@ select.cl-opt-input {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  min-width: 118px;
+  min-width: 84px;
+  flex: 1 1 84px;
+  max-width: 132px;
 }
 .cl-mx-vitals .ctx .k {
   font-size: 9px;
@@ -16383,8 +16448,12 @@ select.cl-opt-input {
   font-variant-numeric: tabular-nums;
   color: var(--cl-ink);
 }
+/* No `margin-left: auto` here any more: on a card this narrow the row can take a
+   second line, and an item pushed to the right edge of a wrapped line reads as
+   belonging to nothing. Left to right, in the order they were decided: the
+   measures first, then what they mean. */
 .cl-mx-vitals .quiet {
-  margin-left: auto;
+  white-space: nowrap;
 }
 .cl-mx[data-state='blocked'] .cl-mx-vitals .quiet {
   color: var(--cl-accent-ink);

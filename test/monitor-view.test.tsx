@@ -563,12 +563,14 @@ describe('MonitorView', () => {
 
     expect(screen.getByText('no transcript to tail')).toBeTruthy();
     expect(screen.getByText('open in Agent View ↗')).toBeTruthy();
-    expect(view.container.querySelector('.cl-mx-trace i')).toBeNull();
+    // The note takes a slot row; the rest stay ruled, so the card is the same
+    // height as one that has a transcript to show.
+    expect(view.container.querySelectorAll('.cl-mx-slot li')).toHaveLength(3);
+    expect(view.container.querySelectorAll('.cl-mx-slot li.rule')).toHaveLength(2);
   });
 
-  // The card's body says what the session DID, with the subject of each action —
-  // the reason this form is not empty. The in-flight call is the `now` row and
-  // must not be repeated at the top of the history below it.
+  // The card says what the session is doing NOW in its own block, and what it
+  // did in the slot below it. The in-flight call must never appear in both.
   it('prints the tape of what it did, with subjects, and never twice', async () => {
     const now = Date.now();
     bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
@@ -594,18 +596,83 @@ describe('MonitorView', () => {
     const view = mount();
     await screen.findByText('acme');
 
-    const rows = [...view.container.querySelectorAll('.cl-mx-tape li')].map(n =>
-      [...n.querySelectorAll('b, .arg')].map(c => c.textContent).join(' ')
-    );
-    // `now` first, then history newest-first — and `Bash npm test` appears once.
-    expect(rows).toEqual([
-      'Bash npm test',
+    const label = (n: Element) =>
+      [...n.querySelectorAll('b, .arg')].map(c => c.textContent).join(' ');
+    // NOW is its own block, not the first row of the history.
+    expect(label(view.container.querySelector('.cl-mx-now')!)).toBe('Bash npm test');
+    // The history, newest first — and `Bash npm test` is not repeated in it.
+    expect([...view.container.querySelectorAll('.cl-mx-slot li:not(.rule)')].map(label)).toEqual([
       'Bash npm run typecheck',
       'Edit trace.ts',
       'Read src/index.css',
     ]);
     // Only the call whose result came back an error.
-    expect(view.container.querySelectorAll('.cl-mx-tape li.failed')).toHaveLength(1);
+    expect(view.container.querySelectorAll('.cl-mx-slot li.failed')).toHaveLength(1);
+  });
+
+  // The whole point of the fixed form. A session that has run ten tools and one
+  // that has run one are the same size on the page: the slot is three rows
+  // either way, and the empty ones are ruled rather than left out.
+  it('draws the same three rows whether the session did ten things or one', async () => {
+    const now = Date.now();
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([
+        activeSession({ sessionId: 'busy', pid: 1 }),
+        activeSession({ sessionId: 'calm', pid: 2 }),
+      ])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({
+          sessionId: 'busy',
+          lastTool: null,
+          recent: Array.from({ length: 10 }, (_, i) => ({
+            at: now - (10 - i) * 5_000,
+            kind: 'tool' as const,
+            tool: 'Edit',
+            arg: `f${i}.ts`,
+          })),
+        }),
+        activity({
+          sessionId: 'calm',
+          lastTool: null,
+          recent: [{ at: now - 4_000, kind: 'tool', tool: 'Read', arg: 'a.ts' }],
+        }),
+      ])
+    );
+    const view = mount();
+    await screen.findAllByText('acme');
+
+    const slots = [...view.container.querySelectorAll('.cl-mx-slot')];
+    expect(slots.map(slot => slot.querySelectorAll('li').length)).toEqual([3, 3]);
+    // The busy one fills its three; the calm one rules the two it cannot fill.
+    expect(slots.map(slot => slot.querySelectorAll('li.rule').length)).toEqual([0, 2]);
+  });
+
+  // Three of eleven actions, printed silently, would read as a calm session.
+  it('says how many actions it is not showing', async () => {
+    const now = Date.now();
+    bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({
+          lastTool: null,
+          recent: Array.from({ length: 11 }, (_, i) => ({
+            at: now - (11 - i) * 5_000,
+            kind: 'tool' as const,
+            tool: 'Edit',
+            arg: `f${i}.ts`,
+          })),
+        }),
+      ])
+    );
+    const view = mount();
+    await screen.findByText('acme');
+
+    expect(screen.getByText('+8')).toBeTruthy();
+    // On the last row, where it reads as the end of the list — not the top.
+    const rows = [...view.container.querySelectorAll('.cl-mx-slot li')];
+    expect(rows[2].querySelector('.more')?.textContent).toBe('+8');
   });
 
   // CONTEXT is the one fact on this page you can only act on while the session
@@ -795,12 +862,14 @@ describe('buildTape', () => {
     ).toEqual([]);
   });
 
-  // What a session just did explains it better than what it started with.
-  it('keeps the newest rows when there are more than fit', () => {
+  // The cap lives on the card, not here: the slot prints three and has to say
+  // how many it is leaving out, which it can only do if this hands over the
+  // whole story. Newest first, so the rows the card keeps are the newest.
+  it('returns the whole window, newest first, and caps nothing', () => {
     const marks = Array.from({ length: 10 }, (_, i) => mark(90 - i * 5, 'Edit', `f${i}.ts`));
     const tape = buildTape(marks, NOW);
-    expect(tape).toHaveLength(6);
+    expect(tape).toHaveLength(10);
     expect(tape[0].arg).toBe('f9.ts');
-    expect(tape[5].arg).toBe('f4.ts');
+    expect(tape[9].arg).toBe('f0.ts');
   });
 });

@@ -10,7 +10,7 @@ import { TopBar } from '../shared/TopBar';
 import { fmt, fmtCost, fmtModel } from '../utils';
 import { projectDisplayName } from '../shared/projectName';
 import { TOOL_TINT } from '../chat/utils';
-import { buildTape, TAPE_SPAN_MS } from './trace';
+import { buildTape, TAPE_ROWS, TAPE_SPAN_MS } from './trace';
 
 // The Monitor: every Claude process running on this machine, as one index card
 // per process.
@@ -107,6 +107,9 @@ const STATE_LABEL: Record<State, string> = {
 /** Silence shorter than this is just the gap between two tool calls, and saying
  *  `quiet 2s` about a session hammering the filesystem is noise. */
 const QUIET_FLOOR_MS = 10_000;
+
+/** The tape's window, in the unit the tooltip says it in. */
+const TAPE_MINUTES = Math.round(TAPE_SPAN_MS / 60_000);
 
 const ESTIMATE_NOTE =
   'Approximate: this model has no exact entry in the pricing table, so it is priced by family.';
@@ -589,17 +592,36 @@ export function MonitorView({
  * lane, and the reason is the same one that made two earlier attempts read as
  * bare: a wide dark band holding five short strings is mostly empty by
  * construction, and on this app's warm paper it also reads as a foreign object.
- * A portrait card whose body is six lines of what the session actually did
- * cannot be empty — the content fills it.
+ *
+ * The card's ANATOMY IS FIXED, and that is the fourth form. Letting the body be
+ * the tape made every card a different height — a session that had run six tools
+ * stood a third taller than one that had run none — so a rack of them had no
+ * baseline to read across and the ragged bottom edge was the first thing the eye
+ * had to parse. Now every card is the same five blocks at the same height: state
+ * and clock, who, the NOW line, a three-row slot, vitals. What varies is what is
+ * printed IN them, never where they are: the slot is drawn whether or not there
+ * is anything to put in it (empty rows stay ruled), and a busier session says so
+ * with `+3` on its last row rather than by growing. The cost is honest — a few
+ * ruled millimetres on a quiet card — and it buys a grid you can scan by column:
+ * every clock, every gauge, every bill at the same height on the page.
  *
  * The one bold thing on the page is the border: only the card that wants
  * something from you has a heavy edge. Everything else is hairlines.
  */
 function ProcessCard({ card, now }: { card: Card; now: number }) {
   const elapsed = card.since === null ? null : Math.max(0, now - card.since);
-  // The in-flight call is already printed as the `now` row, and the newest mark
+  // The in-flight call is already printed as the NOW line, and the newest mark
   // IS that call: without this the card would show the same action twice.
   const tape = buildTape(card.trace, now, { dropNewest: !!card.tool });
+  // The slot prints the newest rows and says how many it is not printing. A
+  // card that quietly showed three of eleven actions would read as a calm
+  // session; `+8` is the difference between a summary and a lie by omission.
+  const rows = tape.slice(0, TAPE_ROWS);
+  const more = tape.length - rows.length;
+  // Whatever the slot has left over stays ruled. An agent's note takes one of
+  // those lines, since "there is no transcript" is not the same claim as "it did
+  // nothing" and only one of the two can be fixed by waiting.
+  const rules = TAPE_ROWS - rows.length - (card.noTrace ? 1 : 0);
   const open = card.onOpen;
 
   // What the silence since the last action means. A running sub-agent takes the
@@ -663,34 +685,48 @@ function ProcessCard({ card, now }: { card: Card; now: number }) {
         </span>
       </div>
 
-      {/* The tape. Its first row is NOW — what the session is doing this second,
-          which is the only row that is not history — and the rest is what it
-          did, newest first, each with the subject it acted on. */}
-      <ol className="cl-mx-tape">
-        <li className="now">
-          <span className="when">now</span>
-          <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
-          {card.tool && <b>{card.tool}</b>}
-          <span className="arg">{card.doing}</span>
-        </li>
-        {tape.map((step, i) => (
+      {/* NOW — what the session is doing this second, and the only line on the
+          card that is not history. It has its own inset block rather than being
+          the tape's first row: what a process is doing right now is a different
+          kind of claim from what it did, and the row it used to sit in made the
+          two look like one list. */}
+      <div className="cl-mx-now">
+        <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
+        {card.tool && <b>{card.tool}</b>}
+        <span className="arg">{card.doing}</span>
+      </div>
+
+      {/* The slot: three rows, always. What it did, newest first, each with the
+          subject it acted on. Rows with nothing to say stay ruled — the card is
+          the same height either way, which is the point of the form. */}
+      <ol className="cl-mx-slot">
+        {card.noTrace && <li className="none">no transcript to tail</li>}
+        {rows.map((step, i) => (
           <li key={`${step.at}-${i}`} className={step.failed ? 'failed' : undefined}>
             <span className="when">{span(now - step.at) || 'now'}</span>
             <i className="dot" style={{ background: toolTint(step.tool) }} aria-hidden />
             <b>{step.tool}</b>
             <span className="arg">{step.arg}</span>
-            {step.count > 1 && <span className="times">×{step.count}</span>}
-            {step.failed && (
-              <span className="x" title="This call came back an error">
-                ✕
-              </span>
-            )}
+            <span className="mark">
+              {step.count > 1 && <i className="times">×{step.count}</i>}
+              {step.failed && (
+                <i className="x" title="This call came back an error">
+                  ✕
+                </i>
+              )}
+              {i === rows.length - 1 && more > 0 && (
+                <i className="more" title={`${more} more in the last ${TAPE_MINUTES} min`}>
+                  +{more}
+                </i>
+              )}
+            </span>
           </li>
         ))}
-        {!card.noTrace && tape.length === 0 && (
-          <li className="none">nothing else in the last {Math.round(TAPE_SPAN_MS / 60_000)} min</li>
-        )}
-        {card.noTrace && <li className="none">no transcript to tail</li>}
+        {Array.from({ length: Math.max(0, rules) }, (_, i) => (
+          <li key={`rule-${i}`} className="rule" aria-hidden>
+            <i />
+          </li>
+        ))}
       </ol>
 
       {/* Vitals. The context is the only measure here with a real denominator, so
@@ -699,18 +735,21 @@ function ProcessCard({ card, now }: { card: Card; now: number }) {
           pretending to be a measurement. */}
       <div className="cl-mx-vitals">
         {card.context ? (
+          // No `ctx` label on the gauge: a bar with a percentage beside it says
+          // what it is, and on a card this narrow those three characters were
+          // taken from the figures that do need their unit spelled out.
           <span
             className="ctx"
             data-load={contextLoad(card.context)}
             title={`Context window: ${fmt(card.context.used)} of ${fmt(card.context.max)} tokens`}
           >
-            <span className="k">ctx</span>
             <span className="bar">
               <i style={{ width: `${contextPct(card.context)}%` }} />
             </span>
             <span className="v">{contextPct(card.context)}%</span>
           </span>
         ) : (
+          // The label survives here: a lone dash names nothing.
           <span className="ctx is-none">
             <span className="k">ctx</span>
             <span className="v">—</span>
