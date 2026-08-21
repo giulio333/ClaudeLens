@@ -2230,9 +2230,11 @@ async function startWatcher() {
   watcher.on('unlinkDir', notifyAndRefreshStudioWatches);
 
   // Registro sessioni vive (~/.claude/sessions/<pid>.json): push dedicato al
-  // renderer invece del polling. Il file heartbeat-a ogni pochi secondi, quindi
-  // l'evento NON passa per data:changed (invaliderebbe tutte le query React
-  // Query di continuo) ma viaggia su un canale suo con il payload già letto.
+  // renderer invece del polling. Il file NON heartbeat-a — la CLI lo riscrive
+  // solo sui cambi di stato (vedi sessions-registry-reader.ts) — ma quei cambi
+  // sono almeno uno per turno per ogni sessione viva, quindi l'evento NON passa
+  // per data:changed (invaliderebbe tutte le query React Query a ogni turno) e
+  // viaggia su un canale suo con il payload già letto.
   const sessionsWatcher = watch(defaultSessionsDir(), { ignoreInitial: true, depth: 0 });
   let pushTimer: NodeJS.Timeout | null = null;
   const pushActiveSessions = () => {
