@@ -7,26 +7,26 @@ import {
 } from '../../../hooks/useIPC';
 import type { ActiveSession, SessionActivity, BgSession, TraceMark } from '../../../types';
 import { TopBar } from '../shared/TopBar';
-import { fmt, fmtCost, fmtModel } from '../utils';
+import { fmt, fmtCost, fmtModel, formatTokens } from '../utils';
 import { projectDisplayName } from '../shared/projectName';
 import { TOOL_TINT } from '../chat/utils';
-import { buildTape, TAPE_ROWS, TAPE_SPAN_MS } from './trace';
+import { buildRibbon, RIBBON_WINDOW } from './trace';
 
-// The Monitor: every Claude process running on this machine, as one index card
-// per process.
+// The Monitor: every Claude process running on this machine — what is blocked on
+// you as a band, everything else as one cell of a hairline grid.
 //
 // Deliberately NOT a second Agent View. That page is a ROSTER — everything you
 // dispatched, most of it finished or asleep, with the controls to act on it.
 // This one is machine state: what has a pid right now, across every project. A
 // background agent that is actually running shows up here too (it is a claude
-// process burning tokens), but as a card that ROUTES to Agent View — the
+// process burning tokens), but as a cell that ROUTES to Agent View — the
 // dispatch/stop/respawn controls stay in one place.
 //
 // Two sources, joined by sessionId: the registry says a session is busy or
 // waiting (`useActiveSessions`), the transcript tail says at what
 // (`useSessionActivity`). Neither is derived from the other.
 //
-// ── Why a card, and why its body is a tape ───────────────────────────────────
+// ── Why a band and a grid, and not a rack of cards ───────────────────────────
 // Two earlier forms were rejected as bare: a grid of dark cards, then a dark
 // board of full-width lanes. Both failed for the same structural reason — a wide
 // dark surface holding five short strings is mostly empty by construction, and
@@ -34,17 +34,25 @@ import { buildTape, TAPE_ROWS, TAPE_SPAN_MS } from './trace';
 // about a process makes it a terminal; that analogy was borrowed, and it cost
 // the page twice.
 //
-// So the card is the app's own index card, and its body is the TAPE: what the
-// session actually did, newest first, each action with the subject it acted on
-// (`Edit MonitorView.tsx`, `Bash npm run typecheck ✕`). A card whose body is
-// real text cannot look empty.
+// The third form put every process on an identical index card. It fixed the
+// ragged rack, but it also said that a session waiting on YOU and a session
+// quietly editing a file are the same size of news — which is the one thing this
+// page exists to deny. So the fourth form (design handoff *Monitor Variants*,
+// option 2b) tiers by state instead of by uniformity:
 //
-// The pulse strip went with the board. What it answered — "is this hung?" — the
-// tape answers in words: a top row that says `4m` is a session that has done
-// nothing for four minutes. A session's STATE ("busy") never answered that on
-// its own, because a session mid-tool and a session hung are identical from the
-// registry; what separates them is when it last did something, which is now
-// printed rather than drawn.
+//   - whatever is BLOCKED becomes a full-bleed dark band, edge to edge, with the
+//     question it is waiting on set at display size and the clock counting how
+//     long you have been the bottleneck. It is the only dark surface on the page
+//     and the only one that pulses;
+//   - everything else is a hairline grid with NO card borders at all: three
+//     columns divided by rules, the same anatomy in each cell, nothing raised.
+//
+// The construction carries the triage, so no cell has to shout to be read in
+// order. What a session is doing right now stays in words (the NOW line); what
+// it did compresses into the RIBBON — runs of tool-tinted blocks on a 2.5-minute
+// axis (`trace.ts`). A lane whose right-hand end is empty is a session that has
+// done nothing for that long, which is the "is this hung?" question the three
+// printed rows used to answer in prose and the strip answers in shape.
 
 type Project = { hash: string; realPath: string };
 
@@ -80,8 +88,8 @@ interface Card {
   /** Set while a sub-agent is running: it explains the silence, so it takes the
    *  slot `quiet` would have had. */
   delegateSince: number | null;
-  /** How full the window is. The one measure on the card with a real
-   *  denominator, and therefore the only one drawn as a gauge. */
+  /** How full the window is. The one measure here with a real denominator, and
+   *  therefore the only one drawn as a gauge. */
   context: { used: number; max: number } | null;
   /** Dollars, and whether the price had to be estimated. */
   spend: number | null;
@@ -89,9 +97,9 @@ interface Card {
   tokens: number;
   trace: TraceMark[];
   /** A background agent has no transcript of its own to tail, so it has no
-   *  tape. Saying so beats printing an empty body. */
+   *  ribbon. Saying so beats drawing an empty lane. */
   noTrace: boolean;
-  /** Printed where the silence figure goes, for a card that only routes. */
+  /** Printed where the silence figure goes, for a cell that only routes. */
   routeNote: string | null;
   onOpen: (() => void) | null;
 }
@@ -108,14 +116,11 @@ const STATE_LABEL: Record<State, string> = {
  *  `quiet 2s` about a session hammering the filesystem is noise. */
 const QUIET_FLOOR_MS = 10_000;
 
-/** The tape's window, in the unit the tooltip says it in. */
-const TAPE_MINUTES = Math.round(TAPE_SPAN_MS / 60_000);
-
 const ESTIMATE_NOTE =
   'Approximate: this model has no exact entry in the pricing table, so it is priced by family.';
 
 /** The dot that opens a tape row. It carries `TOOL_TINT` — the transcript's own
- *  tool encoding, reused verbatim now that the card is on paper and needs no
+ *  tool encoding, reused verbatim now that the page is on paper and needs no
  *  dark-lift variants. The colour sits on a 5px swatch rather than on the tool's
  *  name: colouring text you have to read is worse than colouring a marker beside
  *  it, and the swatches line up into a column that gives each card the signature
@@ -141,11 +146,11 @@ function contextLoad(context: { used: number; max: number }): 'ok' | 'high' | 'c
   return pct >= 75 ? 'high' : 'ok';
 }
 
-/** Note: the token tally is deliberately NOT on the card. The dollars answer the
+/** Note: the token tally is deliberately NOT on a cell. The dollars answer the
  *  question a person actually has ("what is this costing me"), and the token
- *  count is the same fact in a unit nobody budgets in — on a card this dense it
- *  was a second figure competing with the one that means something. It stays in
- *  the digest for whoever needs it. */
+ *  count is the same fact in a unit nobody budgets in — in a cell this dense it
+ *  was a second figure competing with the one that means something. It survives
+ *  once, as a machine-wide total in the header, where it is a different claim. */
 
 function clock(ms: number | null): string {
   if (ms === null || ms < 0) return '—';
@@ -533,12 +538,18 @@ export function MonitorView({
     );
   }, [sessions, activity, agents, projects, onOpenSession, onOpenAgents]);
 
-  const blocked = cards.filter(c => c.state === 'blocked').length;
+  // The two tiers of the page. Blocked is not "the first card": it is a
+  // different surface, so the split happens here rather than inside a loop.
+  const bands = cards.filter(c => c.state === 'blocked');
+  const cells = cards.filter(c => c.state !== 'blocked');
+
+  const blocked = bands.length;
   const working = cards.filter(c => c.state === 'working').length;
   const ready = cards.filter(c => c.state === 'ready').length;
   const ended = cards.filter(c => c.state === 'ended').length;
   const live = blocked + working + ready;
   const now = useTick(cards.length > 0);
+  const totals = machineTotals(cards);
 
   return (
     <div
@@ -553,11 +564,19 @@ export function MonitorView({
             is the next 90 seconds, and the reader already knows where they are.
             What earns that space is the census, which changes. */}
         <header className="cl-mxtop">
-          <div className="cl-eyebrow">
-            <span className={`pip${live > 0 ? ' live' : ''}`} />
-            <span>Monitor · this machine</span>
+          <div className="cl-mxtop-say-wrap">
+            <div className="cl-eyebrow">
+              <span className={`pip${live > 0 ? ' live' : ''}`} />
+              <span>Monitor · this machine</span>
+            </div>
+            <p className="cl-mxtop-say">{census(blocked, working, ready, ended)}</p>
           </div>
-          <p className="cl-mxtop-say">{census(blocked, working, ready, ended)}</p>
+          {/* The one figure the cells do not carry: what the whole machine is
+              burning. A per-cell token count was dropped as a unit nobody
+              budgets in, but summed over every live process it stops being a
+              second copy of the bill and becomes the only reading of scale on
+              the page. */}
+          {totals && <span className="cl-mxtop-tot">{totals}</span>}
         </header>
 
         {isLoading ? (
@@ -572,73 +591,211 @@ export function MonitorView({
             </div>
           </section>
         ) : (
-          <section className="cl-section">
-            <div className="cl-mx-grid">
-              {cards.map(card => (
-                <ProcessCard key={card.key} card={card} now={now} />
-              ))}
-            </div>
-          </section>
+          <>
+            {bands.map(card => (
+              <BlockedBand key={card.key} card={card} now={now} />
+            ))}
+            {cells.length > 0 && (
+              <div className="cl-mx-grid">
+                {cells.map(card => (
+                  <ProcessCell key={card.key} card={card} now={now} />
+                ))}
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>
   );
 }
 
+/** What the silence since the last action means. A running sub-agent takes the
+ *  slot: it is the explanation, and the one thing the tail cannot see for
+ *  itself. Below the floor nothing is said — a gap of two seconds between two
+ *  tool calls is not a signal. */
+function quietNote(card: Card, now: number): string {
+  if (card.routeNote) return card.routeNote;
+  if (card.delegateSince !== null) return `${span(now - card.delegateSince)} in flight`;
+  if (card.lastAppendAt !== null && now - card.lastAppendAt >= QUIET_FLOOR_MS) {
+    return `quiet ${span(now - card.lastAppendAt)}`;
+  }
+  return '';
+}
+
+/** The header's right-hand figure: what every live process on this machine has
+ *  cost and burned, together. Both halves are omitted when nothing has reported
+ *  them — a `$0.00 · 0 tokens` beside a rack of running sessions would be the
+ *  one wrong reading on the page, for the same reason a background agent's
+ *  vitals stay blank.
+ *
+ *  Ended sessions are left out even though their cells are still on screen: the
+ *  header says what this machine is doing, and a session that finished is not
+ *  burning anything. Its own final figures stay on its cell, where they are a
+ *  claim about it rather than about the machine. */
+function machineTotals(all: Card[]): string | null {
+  const cards = all.filter(c => c.state !== 'ended');
+  const parts: string[] = [];
+  if (cards.some(c => c.spend !== null)) {
+    parts.push(fmtCost(cards.reduce((sum, c) => sum + (c.spend ?? 0), 0)));
+  }
+  const tokens = cards.reduce((sum, c) => sum + c.tokens, 0);
+  if (tokens > 0) {
+    const { value, unit } = formatTokens(tokens);
+    parts.push(`${value}${unit} tokens`);
+  }
+  return parts.length ? parts.join(' · ') : null;
+}
+
+/** The tool-tinted lane of what a session did in the last couple of minutes, or
+ *  the one sentence that says why there is no lane to draw. Shared shape between
+ *  the band and a cell: the ribbon is the same claim at both sizes, and only its
+ *  height differs. */
+function Ribbon({ card, now }: { card: Card; now: number }) {
+  const runs = buildRibbon(card.trace, now);
+  if (card.noTrace) {
+    return (
+      <div className="cl-mx-ribbon">
+        <span className="none">no transcript to tail</span>
+      </div>
+    );
+  }
+  return (
+    <div className="cl-mx-ribbon" title={`Tool calls in the last ${RIBBON_WINDOW}`}>
+      {runs.map(run => (
+        <i
+          key={`${run.tool}-${run.left}`}
+          className={run.failed ? 'failed' : undefined}
+          style={{
+            left: `${run.left}%`,
+            width: `${run.width}%`,
+            background: run.failed ? 'var(--cl-danger)' : toolTint(run.tool),
+          }}
+          title={run.failed ? `${run.tool} — came back an error` : run.tool}
+        />
+      ))}
+      {runs.length === 0 && <span className="none">nothing in the last {RIBBON_WINDOW}</span>}
+    </div>
+  );
+}
+
+/** The vitals row, identical in the band and in a cell: the context gauge, the
+ *  bill, the silence and the tally. The context is the only measure here with a
+ *  real denominator, so it is the only one drawn as a gauge; spend has no
+ *  ceiling and stays a figure — a bar against an invented ceiling would be
+ *  decoration pretending to be a measurement. */
+function Vitals({ card, quiet }: { card: Card; quiet: string }) {
+  return (
+    <div className="cl-mx-vitals">
+      {card.context ? (
+        // No `ctx` label on the gauge: a bar with a percentage beside it says
+        // what it is, and in a cell this narrow those three characters were
+        // taken from the figures that do need their unit spelled out.
+        <span
+          className="ctx"
+          data-load={contextLoad(card.context)}
+          title={`Context window: ${fmt(card.context.used)} of ${fmt(card.context.max)} tokens`}
+        >
+          <span className="bar">
+            <i style={{ width: `${contextPct(card.context)}%` }} />
+          </span>
+          <span className="v">{contextPct(card.context)}%</span>
+        </span>
+      ) : (
+        // The label survives here: a lone dash names nothing.
+        <span className="ctx is-none">
+          <span className="k">ctx</span>
+          <span className="v">—</span>
+        </span>
+      )}
+      {card.spend !== null && (
+        <span className="money" title={card.spendEstimated ? ESTIMATE_NOTE : undefined}>
+          {card.spendEstimated && '~'}
+          {fmtCost(card.spend)}
+        </span>
+      )}
+      {quiet && <span className="quiet">{quiet}</span>}
+      {card.counts && <span className="vol">{card.counts}</span>}
+    </div>
+  );
+}
+
 /**
- * One live process, as an index card.
+ * A process that is blocked on you, as a full-bleed dark band.
  *
- * The form is the memory index card (`.cl-mcard`) rather than a dark instrument
- * lane, and the reason is the same one that made two earlier attempts read as
- * bare: a wide dark band holding five short strings is mostly empty by
- * construction, and on this app's warm paper it also reads as a foreign object.
+ * It is the only dark surface on the page, and that is the whole argument for
+ * it: two earlier forms failed by making a dark slab the DEFAULT, where a wide
+ * dark band holding five short strings is mostly empty by construction. Here it
+ * is the exception, it runs edge to edge, and what fills it is the one string on
+ * this page long enough to earn display size — the question the session is
+ * waiting on.
  *
- * The card's ANATOMY IS FIXED, and that is the fourth form. Letting the body be
- * the tape made every card a different height — a session that had run six tools
- * stood a third taller than one that had run none — so a rack of them had no
- * baseline to read across and the ragged bottom edge was the first thing the eye
- * had to parse. Now every card is the same five blocks at the same height: state
- * and clock, who, the NOW line, a three-row slot, vitals. What varies is what is
- * printed IN them, never where they are: the slot is drawn whether or not there
- * is anything to put in it (empty rows stay ruled), and a busier session says so
- * with `+3` on its last row rather than by growing. The cost is honest — a few
- * ruled millimetres on a quiet card — and it buys a grid you can scan by column:
- * every clock, every gauge, every bill at the same height on the page.
- *
- * The one bold thing on the page is the border: only the card that wants
- * something from you has a heavy edge. Everything else is hairlines.
+ * What leads is therefore the QUESTION, not the project: the identity drops to
+ * one mono line under it (project · title · pid · model · uptime), because you
+ * already know which of your projects you are looking at by the time you read
+ * what it wants. The clock is the second big figure and it counts the one thing
+ * only this state can measure: how long you have been the bottleneck.
  */
-function ProcessCard({ card, now }: { card: Card; now: number }) {
+function BlockedBand({ card, now }: { card: Card; now: number }) {
   const elapsed = card.since === null ? null : Math.max(0, now - card.since);
-  // The in-flight call is already printed as the NOW line, and the newest mark
-  // IS that call: without this the card would show the same action twice.
-  const tape = buildTape(card.trace, now, { dropNewest: !!card.tool });
-  // The slot prints the newest rows and says how many it is not printing. A
-  // card that quietly showed three of eleven actions would read as a calm
-  // session; `+8` is the difference between a summary and a lie by omission.
-  const rows = tape.slice(0, TAPE_ROWS);
-  const more = tape.length - rows.length;
-  // Whatever the slot has left over stays ruled. An agent's note takes one of
-  // those lines, since "there is no transcript" is not the same claim as "it did
-  // nothing" and only one of the two can be fixed by waiting.
-  const rules = TAPE_ROWS - rows.length - (card.noTrace ? 1 : 0);
+  const quiet = quietNote(card, now);
   const open = card.onOpen;
 
-  // What the silence since the last action means. A running sub-agent takes the
-  // slot: it is the explanation, and the one thing the tail cannot see for
-  // itself. Below the floor nothing is said — a gap of two seconds between two
-  // tool calls is not a signal.
-  const quiet = card.routeNote
-    ? card.routeNote
-    : card.delegateSince !== null
-      ? `${span(now - card.delegateSince)} in flight`
-      : card.lastAppendAt !== null && now - card.lastAppendAt >= QUIET_FLOOR_MS
-        ? `quiet ${span(now - card.lastAppendAt)}`
-        : '';
+  return (
+    <section className="cl-mxband" data-state={card.state}>
+      <div className="cl-mxband-say">
+        <div className="cl-eyebrow">
+          <span className="pip" />
+          <span>Needs you{quiet && ` · ${quiet}`}</span>
+        </div>
+        <p className="ask">{card.doing}</p>
+        <div className="meta">
+          <b className="proj">{card.title}</b>
+          <i className="sep">·</i>
+          <span className={card.ident === UNNAMED ? 'is-unnamed' : undefined}>{card.ident}</span>
+          {card.machine.map(f => (
+            <span key={f}>
+              <i className="sep">·</i>
+              {f}
+            </span>
+          ))}
+        </div>
+        <Ribbon card={card} now={now} />
+        <Vitals card={card} quiet="" />
+      </div>
+
+      <div className="cl-mxband-act">
+        <div className="clk">{clock(elapsed)}</div>
+        <div className="lbl">blocked for</div>
+        {open && (
+          // Deliberately not "Reply in terminal": the prompt is waiting in the
+          // user's own shell and nothing here can answer it. The button says
+          // what it does — open this session in ClaudeLens.
+          <button type="button" onClick={open}>
+            {card.routeNote ? 'Open in Agent View ↗' : 'Open session ↗'}
+          </button>
+        )}
+      </div>
+    </section>
+  );
+}
+
+/**
+ * Every other live process, as one cell of a hairline grid.
+ *
+ * NO BORDER, NO RADIUS, NO SURFACE: a cell is defined by the rules between it
+ * and its neighbours, which is what lets the band above be the only raised thing
+ * on the page. The anatomy stays fixed across cells — state and clock, who, the
+ * NOW line, the ribbon, vitals — so the grid can be scanned by column: every
+ * clock, every gauge, every bill on the same line of the page.
+ */
+function ProcessCell({ card, now }: { card: Card; now: number }) {
+  const elapsed = card.since === null ? null : Math.max(0, now - card.since);
+  const quiet = quietNote(card, now);
+  const open = card.onOpen;
 
   return (
     <article
-      className="cl-mx"
+      className="cl-mxcell"
       data-state={card.state}
       role={open ? 'button' : undefined}
       tabIndex={open ? 0 : undefined}
@@ -651,12 +808,35 @@ function ProcessCard({ card, now }: { card: Card; now: number }) {
       }}
     >
       <div className="cl-mx-head">
-        <span className="tag">
-          <i aria-hidden />
-          {STATE_LABEL[card.state]}
-        </span>
-        {/* The clock is the card's one large figure and answers one question in
-            every state: how long it has been in THIS state. */}
+        <div className="cl-mx-who">
+          <span className="tag">
+            <i aria-hidden />
+            {STATE_LABEL[card.state]}
+          </span>
+          <h3>{card.title}</h3>
+          {/* A conversation title is a sentence, so the line will often clip it:
+              the tooltip keeps the whole of it one hover away. */}
+          <span
+            className={card.ident === UNNAMED ? 'ident is-unnamed' : 'ident'}
+            title={card.ident}
+          >
+            {card.ident}
+          </span>
+          {/* The machine facts stay on the cell even though the design keeps
+              them for the band alone: the pid is what you need to `kill`, and a
+              fact that only exists in the one state you are already acting on is
+              a fact you cannot use. */}
+          <span className="machine">
+            {card.machine.map((f, i) => (
+              <span key={f}>
+                {i > 0 && <i className="sep">·</i>}
+                {f}
+              </span>
+            ))}
+          </span>
+        </div>
+        {/* The cell's one large figure, and it answers one question in every
+            state: how long it has been in THIS state. */}
         <span
           className="clk"
           title={
@@ -668,102 +848,17 @@ function ProcessCard({ card, now }: { card: Card; now: number }) {
         </span>
       </div>
 
-      <div className="cl-mx-who">
-        <h3>{card.title}</h3>
-        {/* A conversation title is a sentence, so the line will often clip it:
-            the tooltip keeps the whole of it one hover away. */}
-        <span className={card.ident === UNNAMED ? 'ident is-unnamed' : 'ident'} title={card.ident}>
-          {card.ident}
-        </span>
-        <span className="machine">
-          {card.machine.map((f, i) => (
-            <span key={f}>
-              {i > 0 && <i className="sep">·</i>}
-              {f}
-            </span>
-          ))}
-        </span>
-      </div>
-
-      {/* NOW — what the session is doing this second, and the only line on the
-          card that is not history. It has its own inset block rather than being
-          the tape's first row: what a process is doing right now is a different
-          kind of claim from what it did, and the row it used to sit in made the
-          two look like one list. */}
+      {/* NOW — what the session is doing this second, and the only line here
+          that is not history. Its own inset block, because what a process is
+          doing right now is a different kind of claim from what it did. */}
       <div className="cl-mx-now">
         <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
         {card.tool && <b>{card.tool}</b>}
         <span className="arg">{card.doing}</span>
       </div>
 
-      {/* The slot: three rows, always. What it did, newest first, each with the
-          subject it acted on. Rows with nothing to say stay ruled — the card is
-          the same height either way, which is the point of the form. */}
-      <ol className="cl-mx-slot">
-        {card.noTrace && <li className="none">no transcript to tail</li>}
-        {rows.map((step, i) => (
-          <li key={`${step.at}-${i}`} className={step.failed ? 'failed' : undefined}>
-            <span className="when">{span(now - step.at) || 'now'}</span>
-            <i className="dot" style={{ background: toolTint(step.tool) }} aria-hidden />
-            <b>{step.tool}</b>
-            <span className="arg">{step.arg}</span>
-            <span className="mark">
-              {step.count > 1 && <i className="times">×{step.count}</i>}
-              {step.failed && (
-                <i className="x" title="This call came back an error">
-                  ✕
-                </i>
-              )}
-              {i === rows.length - 1 && more > 0 && (
-                <i className="more" title={`${more} more in the last ${TAPE_MINUTES} min`}>
-                  +{more}
-                </i>
-              )}
-            </span>
-          </li>
-        ))}
-        {Array.from({ length: Math.max(0, rules) }, (_, i) => (
-          <li key={`rule-${i}`} className="rule" aria-hidden>
-            <i />
-          </li>
-        ))}
-      </ol>
-
-      {/* Vitals. The context is the only measure here with a real denominator, so
-          it is the only one drawn as a gauge; spend has no ceiling and stays a
-          figure — a bar against an invented ceiling would be decoration
-          pretending to be a measurement. */}
-      <div className="cl-mx-vitals">
-        {card.context ? (
-          // No `ctx` label on the gauge: a bar with a percentage beside it says
-          // what it is, and on a card this narrow those three characters were
-          // taken from the figures that do need their unit spelled out.
-          <span
-            className="ctx"
-            data-load={contextLoad(card.context)}
-            title={`Context window: ${fmt(card.context.used)} of ${fmt(card.context.max)} tokens`}
-          >
-            <span className="bar">
-              <i style={{ width: `${contextPct(card.context)}%` }} />
-            </span>
-            <span className="v">{contextPct(card.context)}%</span>
-          </span>
-        ) : (
-          // The label survives here: a lone dash names nothing.
-          <span className="ctx is-none">
-            <span className="k">ctx</span>
-            <span className="v">—</span>
-          </span>
-        )}
-        {card.spend !== null && (
-          <span className="money" title={card.spendEstimated ? ESTIMATE_NOTE : undefined}>
-            {card.spendEstimated && '~'}
-            {fmtCost(card.spend)}
-          </span>
-        )}
-        {quiet && <span className="quiet">{quiet}</span>}
-        {card.counts && <span className="vol">{card.counts}</span>}
-      </div>
+      <Ribbon card={card} now={now} />
+      <Vitals card={card} quiet={quiet} />
     </article>
   );
 }

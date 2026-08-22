@@ -18,7 +18,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { render, screen, cleanup, waitFor, fireEvent } from '@testing-library/react';
 
 import { MonitorView } from '../src/components/project/monitor/MonitorView';
-import { buildTape } from '../src/components/project/monitor/trace';
+import { buildRibbon, RIBBON_CELLS } from '../src/components/project/monitor/trace';
 import { installFakeElectronAPI, ok, type FakeBridge } from './helpers/fake-electron-api';
 import type { ActiveSession, SessionActivity, BgSession } from '../src/types';
 
@@ -223,9 +223,27 @@ describe('MonitorView', () => {
     const view = mount();
 
     expect(await screen.findByText('permission prompt')).toBeTruthy();
-    expect(screen.getByText('NEEDS YOU')).toBeTruthy();
-    expect(view.container.querySelector('[data-state="blocked"]')).toBeTruthy();
+    // It is not a cell of the grid at all: what is blocked gets the band.
+    expect(view.container.querySelector('.cl-mxband[data-state="blocked"]')).toBeTruthy();
+    expect(view.container.querySelector('.cl-mxcell')).toBeNull();
+    expect(screen.getByText(/Needs you/)).toBeTruthy();
     expect(view.container.querySelector('[data-state="working"]')).toBeNull();
+  });
+
+  // The band's one action. Deliberately not labelled "Reply in terminal": the
+  // prompt is waiting in the user's own shell, and nothing in this app can
+  // answer it — the button says what it actually does.
+  it('routes from the band to the blocked session, saying only what it does', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([activeSession({ status: 'waiting', waitingFor: 'permission prompt' })])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(ok([activity()]));
+    mount();
+
+    fireEvent.click(await screen.findByText('Open session ↗'));
+
+    expect(onOpenSession).toHaveBeenCalledWith(PROJECT, 'sess-1');
+    expect(screen.queryByText(/Reply in terminal/)).toBeNull();
   });
 
   it('sorts what needs you ahead of what is merely running', async () => {
@@ -244,7 +262,11 @@ describe('MonitorView', () => {
     const view = mount();
     await screen.findByText('beta');
 
-    const names = [...view.container.querySelectorAll('.cl-mx-who h3')].map(n => n.textContent);
+    // Document order across both tiers: the band comes before the grid, so the
+    // blocked project leads whatever the sort does inside the cells.
+    const names = [...view.container.querySelectorAll('.cl-mxband .proj, .cl-mxcell h3')].map(
+      n => n.textContent
+    );
     expect(names).toEqual(['beta', 'acme']);
   });
 
@@ -563,15 +585,16 @@ describe('MonitorView', () => {
 
     expect(screen.getByText('no transcript to tail')).toBeTruthy();
     expect(screen.getByText('open in Agent View ↗')).toBeTruthy();
-    // The note takes a slot row; the rest stay ruled, so the card is the same
-    // height as one that has a transcript to show.
-    expect(view.container.querySelectorAll('.cl-mx-slot li')).toHaveLength(3);
-    expect(view.container.querySelectorAll('.cl-mx-slot li.rule')).toHaveLength(2);
+    // The note takes the lane's place; no blocks are drawn, because an empty
+    // lane would say "did nothing" about work this page simply cannot see.
+    expect(view.container.querySelectorAll('.cl-mx-ribbon i')).toHaveLength(0);
+    expect(screen.queryByText(/nothing in the last/)).toBeNull();
   });
 
-  // The card says what the session is doing NOW in its own block, and what it
-  // did in the slot below it. The in-flight call must never appear in both.
-  it('prints the tape of what it did, with subjects, and never twice', async () => {
+  // The cell says what the session is doing NOW in words, and what it did as
+  // shape. The two claims must not be confused: the ribbon has no names in it,
+  // so the NOW line is the only place a tool is ever spelled out.
+  it('draws what the session did as a lane of tool-tinted blocks', async () => {
     const now = Date.now();
     bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
     bridge.api.live.getActivity.mockResolvedValue(
@@ -596,83 +619,63 @@ describe('MonitorView', () => {
     const view = mount();
     await screen.findByText('acme');
 
-    const label = (n: Element) =>
-      [...n.querySelectorAll('b, .arg')].map(c => c.textContent).join(' ');
-    // NOW is its own block, not the first row of the history.
-    expect(label(view.container.querySelector('.cl-mx-now')!)).toBe('Bash npm test');
-    // The history, newest first — and `Bash npm test` is not repeated in it.
-    expect([...view.container.querySelectorAll('.cl-mx-slot li:not(.rule)')].map(label)).toEqual([
-      'Bash npm run typecheck',
-      'Edit trace.ts',
-      'Read src/index.css',
+    // NOW is words, in its own block.
+    const nowBlock = view.container.querySelector('.cl-mx-now')!;
+    expect([...nowBlock.querySelectorAll('b, .arg')].map(n => n.textContent)).toEqual([
+      'Bash',
+      'npm test',
     ]);
-    // Only the call whose result came back an error.
-    expect(view.container.querySelectorAll('.cl-mx-slot li.failed')).toHaveLength(1);
+    // Four calls at four moments, so four blocks — left to right, oldest first.
+    const blocks = [...view.container.querySelectorAll('.cl-mx-ribbon i')];
+    expect(blocks).toHaveLength(4);
+    const lefts = blocks.map(b => parseFloat((b as HTMLElement).style.left));
+    expect([...lefts].sort((a, b) => a - b)).toEqual(lefts);
+    // Only the call whose result came back an error is marked, and it takes the
+    // danger hue instead of its tool's.
+    const failed = blocks.filter(b => b.classList.contains('failed'));
+    expect(failed).toHaveLength(1);
+    expect((failed[0] as HTMLElement).style.background).toContain('--cl-danger');
   });
 
-  // The whole point of the fixed form. A session that has run ten tools and one
-  // that has run one are the same size on the page: the slot is three rows
-  // either way, and the empty ones are ruled rather than left out.
-  it('draws the same three rows whether the session did ten things or one', async () => {
-    const now = Date.now();
-    bridge.api.live.getActiveSessions.mockResolvedValue(
-      ok([
-        activeSession({ sessionId: 'busy', pid: 1 }),
-        activeSession({ sessionId: 'calm', pid: 2 }),
-      ])
-    );
-    bridge.api.live.getActivity.mockResolvedValue(
-      ok([
-        activity({
-          sessionId: 'busy',
-          lastTool: null,
-          recent: Array.from({ length: 10 }, (_, i) => ({
-            at: now - (10 - i) * 5_000,
-            kind: 'tool' as const,
-            tool: 'Edit',
-            arg: `f${i}.ts`,
-          })),
-        }),
-        activity({
-          sessionId: 'calm',
-          lastTool: null,
-          recent: [{ at: now - 4_000, kind: 'tool', tool: 'Read', arg: 'a.ts' }],
-        }),
-      ])
-    );
-    const view = mount();
-    await screen.findAllByText('acme');
-
-    const slots = [...view.container.querySelectorAll('.cl-mx-slot')];
-    expect(slots.map(slot => slot.querySelectorAll('li').length)).toEqual([3, 3]);
-    // The busy one fills its three; the calm one rules the two it cannot fill.
-    expect(slots.map(slot => slot.querySelectorAll('li.rule').length)).toEqual([0, 2]);
-  });
-
-  // Three of eleven actions, printed silently, would read as a calm session.
-  it('says how many actions it is not showing', async () => {
-    const now = Date.now();
+  // A lane with nothing in it and a lane that cannot exist are different
+  // claims, and only one of the two is fixed by waiting.
+  it('says the last two minutes were empty rather than drawing a blank lane', async () => {
     bridge.api.live.getActiveSessions.mockResolvedValue(ok([activeSession()]));
-    bridge.api.live.getActivity.mockResolvedValue(
-      ok([
-        activity({
-          lastTool: null,
-          recent: Array.from({ length: 11 }, (_, i) => ({
-            at: now - (11 - i) * 5_000,
-            kind: 'tool' as const,
-            tool: 'Edit',
-            arg: `f${i}.ts`,
-          })),
-        }),
-      ])
-    );
+    bridge.api.live.getActivity.mockResolvedValue(ok([activity({ recent: [] })]));
     const view = mount();
     await screen.findByText('acme');
 
-    expect(screen.getByText('+8')).toBeTruthy();
-    // On the last row, where it reads as the end of the list — not the top.
-    const rows = [...view.container.querySelectorAll('.cl-mx-slot li')];
-    expect(rows[2].querySelector('.more')?.textContent).toBe('+8');
+    expect(screen.getByText(/nothing in the last 2.5 min/)).toBeTruthy();
+    expect(view.container.querySelectorAll('.cl-mx-ribbon i')).toHaveLength(0);
+  });
+
+  // The one figure no cell carries any more: what the machine as a whole is
+  // burning. Per session the token count was a second figure competing with the
+  // bill; summed over every live process it is the only reading of scale.
+  it('totals the whole machine in the header, and only what was reported', async () => {
+    bridge.api.live.getActiveSessions.mockResolvedValue(
+      ok([activeSession({ sessionId: 'a', pid: 1 }), activeSession({ sessionId: 'b', pid: 2 })])
+    );
+    bridge.api.live.getActivity.mockResolvedValue(
+      ok([
+        activity({ sessionId: 'a', spend: 1.2, tokens: 400_000 }),
+        activity({ sessionId: 'b', spend: 3.3, tokens: 840_000 }),
+      ])
+    );
+    const view = mount();
+    await waitFor(() =>
+      expect(view.container.querySelector('.cl-mxtop-tot')?.textContent).toBe('$4.50 · 1.2m tokens')
+    );
+  });
+
+  it('prints no machine total when nothing has reported one', async () => {
+    bridge.api.live.getSessions.mockResolvedValue(ok([bgSession()]));
+    const view = mount();
+    await screen.findByText('agent docs-sweeper');
+
+    // A background agent carries neither usage nor a bill, and `$0.00 · 0
+    // tokens` beside a worker burning tokens would be the one wrong figure here.
+    expect(view.container.querySelector('.cl-mxtop-tot')).toBeNull();
   });
 
   // CONTEXT is the one fact on this page you can only act on while the session
@@ -783,78 +786,77 @@ describe('MonitorView', () => {
   });
 });
 
-// The tape is the card's body and the reason the form is not empty: it says what
-// the session DID, with the subject of each action. Worth pinning: what counts as
-// one step, which end survives the cap, and that the in-flight call is never
-// printed twice.
-describe('buildTape', () => {
+// The ribbon is what a cell says about the past, and it says it in shape rather
+// than words. Worth pinning: where a mark lands on the axis, what counts as one
+// block, and what falls outside the window entirely.
+describe('buildRibbon', () => {
   const NOW = 1_800_000_000_000;
-  const mark = (secondsAgo: number, tool: string, arg = '', failed = false) => ({
+  const CELL_MS = 150_000 / RIBBON_CELLS;
+  const mark = (secondsAgo: number, tool: string, failed = false) => ({
     at: NOW - secondsAgo * 1000,
     kind: 'tool' as const,
     tool,
-    arg,
+    arg: '',
     ...(failed ? { failed } : {}),
   });
 
-  it('reads newest first, with the subject of each action', () => {
-    const tape = buildTape([mark(40, 'Read', 'src/index.css'), mark(10, 'Edit', 'trace.ts')], NOW);
-    expect(tape.map(s => [s.tool, s.arg])).toEqual([
-      ['Edit', 'trace.ts'],
-      ['Read', 'src/index.css'],
-    ]);
+  it('lays the window out oldest to newest, left to right', () => {
+    const runs = buildRibbon([mark(140, 'Read'), mark(10, 'Edit')], NOW);
+    expect(runs.map(r => r.tool)).toEqual(['Read', 'Edit']);
+    expect(runs[0].left).toBeLessThan(runs[1].left);
+    // The oldest call sits near the left edge, the newest near the right.
+    expect(runs[0].left).toBeLessThan(10);
+    expect(runs[1].left).toBeGreaterThan(90);
   });
 
-  // The newest mark IS the call the card is already printing as its `now` row.
-  // Without this the card shows the same action twice, once as "now" and once as
-  // the top of its own history.
-  it('drops the in-flight call when the card is already printing it', () => {
-    const marks = [mark(30, 'Read', 'a.ts'), mark(2, 'Bash', 'npm test')];
-    expect(buildTape(marks, NOW, { dropNewest: true }).map(s => s.tool)).toEqual(['Read']);
-    expect(buildTape(marks, NOW).map(s => s.tool)).toEqual(['Bash', 'Read']);
+  // A retry loop is one stretch of work, not three marks: contiguous cells of
+  // one tool are a single block, and its width is how long it went on.
+  it('collapses a contiguous run of one tool into a single block', () => {
+    const at = (cell: number) => ({
+      at: NOW - 150_000 + cell * CELL_MS + CELL_MS / 2,
+      kind: 'tool' as const,
+      tool: 'Bash',
+      arg: '',
+    });
+    const runs = buildRibbon([at(10), at(11), at(12)], NOW);
+    expect(runs).toHaveLength(1);
+    expect(runs[0].width).toBeGreaterThan((1 / RIBBON_CELLS) * 100);
   });
 
-  // A retry loop is one thing happening three times, not three pieces of work.
-  it('collapses an exact repeat and dates the row by its oldest call', () => {
-    const tape = buildTape(
-      [mark(30, 'Bash', 'npm test'), mark(20, 'Bash', 'npm test'), mark(10, 'Bash', 'npm test')],
+  it('keeps two different tools apart, with a gap between them', () => {
+    const at = (cell: number, tool: string) => ({
+      at: NOW - 150_000 + cell * CELL_MS + CELL_MS / 2,
+      kind: 'tool' as const,
+      tool,
+      arg: '',
+    });
+    const runs = buildRibbon([at(20, 'Read'), at(21, 'Edit')], NOW);
+    expect(runs.map(r => r.tool)).toEqual(['Read', 'Edit']);
+    expect(runs[0].left + runs[0].width).toBeLessThan(runs[1].left);
+  });
+
+  // A verdict on the run, so a lane whose blocks are all one tint still shows
+  // where it went wrong.
+  it('carries a failure onto its block', () => {
+    const runs = buildRibbon([mark(10, 'Bash', true)], NOW);
+    expect(runs[0].failed).toBe(true);
+  });
+
+  // Prose has no tool, so it has no tint: a grey block between two edits would
+  // read as a tool nobody can name.
+  it('leaves prose off the lane', () => {
+    const runs = buildRibbon(
+      [mark(100, 'Edit'), { at: NOW - 50_000, kind: 'text' as const }, mark(10, 'Edit')],
       NOW
     );
-    expect(tape).toHaveLength(1);
-    expect(tape[0].count).toBe(3);
-    // The row says when the loop started, not when it last spun.
-    expect(tape[0].at).toBe(NOW - 30_000);
-  });
-
-  it('keeps two different subjects apart even for the same tool', () => {
-    const tape = buildTape([mark(20, 'Edit', 'a.ts'), mark(10, 'Edit', 'b.ts')], NOW);
-    expect(tape.map(s => s.arg)).toEqual(['b.ts', 'a.ts']);
-  });
-
-  it('carries a failure onto its row', () => {
-    const tape = buildTape([mark(10, 'Bash', 'npm test', true)], NOW);
-    expect(tape[0].failed).toBe(true);
-  });
-
-  // Prose marks the trace but is not a step of the story: a `text` mark between
-  // two edits would break the sequence in half without adding anything to act on.
-  it('leaves prose off the tape', () => {
-    const tape = buildTape(
-      [
-        mark(30, 'Edit', 'a.ts'),
-        { at: NOW - 20_000, kind: 'text' as const },
-        mark(10, 'Edit', 'b.ts'),
-      ],
-      NOW
-    );
-    expect(tape.map(s => s.tool)).toEqual(['Edit', 'Edit']);
+    expect(runs.map(r => r.tool)).toEqual(['Edit', 'Edit']);
   });
 
   it('ignores marks outside the window instead of clamping them into it', () => {
     expect(
-      buildTape(
+      buildRibbon(
         [
-          mark(9_000, 'Read', 'old.ts'), // long before the window starts
+          mark(9_000, 'Read'), // long before the window starts
           { at: NOW + 5_000, kind: 'tool' as const, tool: 'Bash' }, // clock skew
         ],
         NOW
@@ -862,14 +864,10 @@ describe('buildTape', () => {
     ).toEqual([]);
   });
 
-  // The cap lives on the card, not here: the slot prints three and has to say
-  // how many it is leaving out, which it can only do if this hands over the
-  // whole story. Newest first, so the rows the card keeps are the newest.
-  it('returns the whole window, newest first, and caps nothing', () => {
-    const marks = Array.from({ length: 10 }, (_, i) => mark(90 - i * 5, 'Edit', `f${i}.ts`));
-    const tape = buildTape(marks, NOW);
-    expect(tape).toHaveLength(10);
-    expect(tape[0].arg).toBe('f9.ts');
-    expect(tape[9].arg).toBe('f0.ts');
+  // Two blocks a hairline wide are a rendering artefact, not a reading.
+  it('never draws a block thinner than it can be seen', () => {
+    for (const run of buildRibbon([mark(75, 'Read')], NOW)) {
+      expect(run.width).toBeGreaterThanOrEqual(0.9);
+    }
   });
 });

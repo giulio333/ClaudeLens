@@ -324,73 +324,87 @@ tutto ciò che hai dispatchato — per la maggior parte finito o addormentato �
 controlli per agirci; il Monitor legge il **registro dei processi**
 (`~/.claude/sessions/<pid>.json`) più il **tail dei transcript**. Un background
 agent **vivo** compare anche qui (è un processo claude che consuma token), ma come
-card che **instrada** ad Agent View: dispatch/stop/respawn restano in un posto
+cella che **instrada** ad Agent View: dispatch/stop/respawn restano in un posto
 solo — il Monitor osserva.
 
-| File              | Esporta                                  | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                          |
-| ----------------- | ---------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `MonitorView.tsx` | `MonitorView`                            | Una index card per processo. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: azione corrente, nastro, contesto, spesa, conteggi)                                                                                                                                                                                        |
-| `trace.ts`        | `buildTape`, `TAPE_SPAN_MS`, `TAPE_ROWS` | Modulo puro del nastro: dai `TraceMark` ricava le ultime azioni dalla più recente, collassa i ripetuti esatti in `×N`, scarta la prosa e sa saltare la chiamata in volo. **Non tronca**: restituisce tutta la finestra, perché è lo slot della card (`TAPE_ROWS = 3`) a decidere quante righe stampa e gli serve il conto intero per dire quante ne lascia fuori (`+3`). Unit-tested in `test/monitor-view.test.tsx` |
+| File              | Esporta                                                          | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                                                                                      |
+| ----------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `MonitorView.tsx` | `MonitorView`                                                    | Due livelli: una **band a tutta larghezza** per ogni processo bloccato, una **griglia a hairline** (`.cl-mxcell`) per tutti gli altri. Join di due hook per `sessionId`: `useActiveSessions` (il registro: busy/waiting + `waitingFor`) e `useSessionActivity` (il digest del tail: azione corrente, nastro, contesto, spesa, conteggi)                                                                                                                                          |
+| `trace.ts`        | `buildRibbon`, `RIBBON_SPAN_MS`, `RIBBON_CELLS`, `RIBBON_WINDOW` | Modulo puro del **ribbon**: dai `TraceMark` ricava le corse di blocchi tinti per tool su un asse di 2,5 minuti. La finestra è tagliata in `RIBBON_CELLS` celle, ogni mark cade nella cella del suo `at` e le celle contigue dello stesso tool collassano in **un** blocco (un retry loop = un blocco lungo). Scarta la prosa (niente tool → niente tinta), scarta i mark fuori finestra invece di clamparli (incluso lo skew di clock) e non disegna mai un blocco sotto lo 0,9% |
 
-**Tre forme, e le prime due sono l'argomento per la terza.** Sono state bocciate
-una griglia di card **scure** e poi una **lavagna** scura di corsie a tutta
-larghezza, per la stessa ragione strutturale: una superficie scura larga che
-regge cinque stringhe corte è vuota per costruzione, e sulla carta calda di
+**Cinque forme, e le prime quattro sono l'argomento per la quinta.** Sono state
+bocciate una griglia di card **scure** e poi una **lavagna** scura di corsie a
+tutta larghezza, per la stessa ragione strutturale: una superficie scura larga
+che regge cinque stringhe corte è vuota per costruzione, e sulla carta calda di
 questa app una lastra nera legge anche come corpo estraneo. Niente in un processo
 lo rende un terminale — quell'analogia era presa in prestito ed è costata due
-iterazioni. Ora la card è la **index card della memoria** (`.cl-mcard`), su carta,
-nella lingua dell'app.
+iterazioni. La terza forma è stata la **index card della memoria** (`.cl-mcard`)
+su carta; la quarta ne ha reso **fissa l'anatomia** (stessa altezza per tutte, il
+rack finalmente con una linea di base).
 
-**Quarta forma: l'anatomia della card è FISSA.** Lasciare che il corpo fosse il
-nastro dava a ogni card un'altezza diversa — una sessione che aveva lanciato sei
-tool stava un terzo più alta di una che non ne aveva lanciato nessuno — e un rack
-così non ha una linea di base da leggere in orizzontale: il bordo inferiore
-frastagliato era la prima cosa che l'occhio doveva decifrare, e le stesse
-grandezze (orologio, gauge, conto) cadevano ad altezze diverse su card vicine.
-Ora ogni card è **gli stessi cinque blocchi alla stessa altezza** (`height: 260px`,
-`grid-template-rows: auto auto auto 1fr auto`): stato+orologio, identità, riga
-NOW, slot da tre righe, vitals. Varia **cosa** ci sta stampato, mai **dove**.
-Costo dichiarato: qualche millimetro rigato su una card tranquilla. In cambio si
-può scandire la pagina per colonne.
+**Quinta forma — design handoff _Monitor Variants_, opzione 2b: il livello lo dà
+la costruzione, non il bordo.** La card uniforme aveva risolto il rack ma
+affermava anche che una sessione che **aspetta te** e una che sta editando un
+file sono la stessa taglia di notizia — cioè l'unica cosa che questa pagina
+esiste per negare, e per questo la card bloccata aveva bisogno di un bordo accent
+da 1.5px per farsi leggere per prima. Ora:
 
-**Il nastro dice cosa la sessione ha fatto davvero.** I `TraceMark` portano il
-nome del tool **e il suo argomento** (`toolArg`, lo stesso che il digest già
-calcolava per `lastTool`): `Edit MonitorView.tsx`, `Bash npm run typecheck ✕`.
-Decisioni:
+- **chi è bloccato è una band scura a tutta larghezza** (`.cl-mxband`, `oklch(0.205
+0.008 75)` **fissa in entrambi i temi**, come la cella live della stat strip):
+  eyebrow accent pulsante `Needs you · quiet 4m`, **la domanda in display**
+  (clamp 19→27px), identità demolita a una riga mono (`progetto · titolo · pid ·
+modello · uptime`), e a destra l'**orologio accent** (fino a 52px) sotto
+  `BLOCKED FOR` con il bottone d'uscita. È la terza volta che si prova una
+  superficie scura ed è la prima che funziona, perché le due che hanno fallito
+  l'avevano resa il **default**: qui è l'eccezione, corre da bordo a bordo, e a
+  riempirla c'è l'unica stringa della pagina abbastanza lunga da meritare il
+  display — la domanda su cui la sessione è ferma. È anche l'unica cosa che pulsa;
+- **tutto il resto è una griglia a hairline senza alcun bordo di card**
+  (`.cl-mx-grid` a 3 colonne fisse → 2 → 1; `.cl-mxcell` senza raggio né
+  superficie, definita solo dai filetti verso i vicini). Colonne **fisse** e non
+  `auto-fill` perché la prima e l'ultima portano il **gutter di pagina**: con
+  `auto-fill` non c'è modo di dire "la cella al bordo" e la griglia partirebbe 32px
+  dentro rispetto a una testata che parte dal gutter. Il filetto è `border-bottom`
+  e non `border-top` — la testata si chiude già con la sua riga d'inchiostro da
+  1.5px, e un hairline subito sotto la farebbe leggere sfrangiata; rigare verso il
+  basso chiude anche l'ultima riga.
 
-- **NOW ha un blocco suo** (`.cl-mx-now`, inset su `paper-2`), non è più la prima
-  riga della lista. Quello che un processo sta facendo adesso e quello che ha
-  fatto sono due affermazioni di specie diversa, e stamparle come una lista sola
-  faceva leggere la riga più nuova come storia capitata in cima.
-  `buildTape(..., {dropNewest})` **scarta il mark più nuovo** quando la card sta
-  già stampando quella chiamata come riga NOW: senza, la stessa azione comparirebbe
-  due volte.
-- **Lo slot è tre righe, sempre** (`.cl-mx-slot`). Le righe senza niente da dire
-  restano **rigate** (tratteggio) invece di essere omesse: è ciò che rende ogni
-  card della stessa altezza, ed è anche ciò che una riga vuota dice sulla carta a
-  righe — non "qui è finito", ma "qui non è ancora stato scritto". Chi ha fatto
-  di più non cresce: lo dice con `+8` sull'ultima riga. Tre righe di undici azioni
-  stampate in silenzio si leggerebbero come una sessione tranquilla.
-- **`no transcript to tail` occupa una riga dello slot** (un background agent),
+**Il bottone della band dice cosa fa.** Il mock lo etichetta `Reply in terminal
+↗`: sarebbe una bugia, perché il prompt aspetta nella shell dell'utente e niente
+in questa app può rispondergli. Il bottone apre la sessione (`Open session ↗`) o
+instrada ad Agent View per un background agent — la stessa destinazione del click
+sulla cella.
+
+**Il nastro testuale è stato sostituito dal ribbon.** La tape a tre righe diceva
+cosa la sessione aveva fatto **a parole** (`Edit MonitorView.tsx`, `Bash npm run
+typecheck ✕`) e costava alla card quattro righe fisse: sono i 260px d'altezza che
+obbligavano il rack a colonne da 340px. 2b spende quell'altezza sulla band e dà a
+tutto il resto tre colonne, quindi la storia si comprime in una **corsia**
+(`.cl-mx-ribbon`). Decisioni:
+
+- **NOW resta a parole** (`.cl-mx-now`, inset su `paper-2`): è l'unica
+  affermazione che il ribbon non può fare — ha forma, non nomi — e resta l'unico
+  posto della cella dove un tool è scritto per esteso.
+- **La corsia è letta da timestamp veri**, non da una stringa rasterizzata:
+  posizione = quando, larghezza = quanto è durata quella corsa di lavoro. Un
+  **estremo destro vuoto** è una sessione che non fa niente da quel tanto — la
+  domanda "è piantata?" che le tre righe dicevano a parole, detta in forma.
+- **La tinta è `TOOL_TINT`**, la codifica dei tool che il transcript già usa: una
+  corsia ciano è una sessione che legge, viola una che edita.
+- **Una chiamata fallita prende la tinta `danger` invece di quella del suo tool**:
+  la tinta risponde a "che tipo di lavoro", e un errore batte quella domanda.
+- **La hairline sotto la corsia è ciò che la rende una corsia**: senza, una
+  sessione con due chiamate in due minuti non ha niente contro cui essere rada, e
+  il vuoto a destra legge come pagina bianca invece che come silenzio.
+- **`no transcript to tail` prende il posto della corsia** (background agent),
   perché "non c'è transcript" non è la stessa affermazione di "non ha fatto
-  niente" e solo una delle due si risolve aspettando.
-- **Un ripetuto esatto (stesso tool, stesso argomento) collassa in `×N`** e la
-  riga è datata dalla sua chiamata **più vecchia**: un retry loop è una cosa che
-  succede tre volte, non tre lavori diversi, e la riga deve dire da quando va
-  avanti. Due Edit di due file diversi restano due righe.
-- **La prosa marca la traccia ma non entra nel nastro**: un mark `text` fra due
-  Edit spezzerebbe la sequenza a metà senza aggiungere niente su cui agire.
-- **La colonna dei pallini è la texture della card.** La tinta è `TOOL_TINT` — la
-  codifica dei tool che il transcript già usa, riusata verbatim ora che siamo su
-  carta — su uno swatch da 5px e **non** sul nome del tool: colorare testo che
-  devi leggere è peggio che colorare un marcatore di fianco, e i pallini in
-  colonna danno a ogni card la firma del tipo di lavoro (una fila di ciano è una
-  sessione che legge, viola una che edita).
-- **La pulse strip è sparita con la lavagna.** Quello a cui rispondeva — "è
-  piantata?" — il nastro lo dice a parole: una riga in cima che segna `4m` è una
-  sessione che non fa niente da quattro minuti. Lo stato del registro ("busy") non
-  ha mai risposto da solo, perché una sessione a metà di un tool e una piantata
-  sono identiche da lì.
+  niente" e solo una delle due si risolve aspettando. Una corsia **vuota** dice
+  invece l'altra cosa (`nothing in the last 2.5 min`).
+- **La prosa non entra nel ribbon**: un mark `text` non ha tool, quindi non ha
+  tinta, e un blocco grigio fra due Edit leggerebbe come un tool senza nome.
+- Il costo dichiarato: **la storia a parole non c'è più**. Il design stesso la
+  offre come passo successivo ("aggiungi il tape di 1e nelle card"), e riportarla
+  è aggiungere un blocco alla cella, non rifare la pagina.
 
 **I vitals: le due cose azionabili solo mentre gira.** Il tail leggeva ogni riga
 assistant e **scartava `usage`**. Ora il digest porta:
@@ -399,72 +413,72 @@ assistant e **scartava `usage`**. Ora il digest porta:
   recente. È un **livello**, non un totale (ogni lettura sostituisce la
   precedente; sommare i prompt fra turni riporterebbe una finestra parecchie
   volte più piena, dato che il prompt di ogni turno contiene già quello prima). È
-  l'unica misura della card con un **denominatore vero**, quindi l'unica disegnata
-  come gauge — una barra contro un tetto inventato sarebbe decorazione travestita
-  da misura. Tre bande perché la domanda non è "quanto piena" ma "quanto
-  preoccupato": neutra sotto il 75%, `warn` fino al 90%, `danger` sopra — una
-  sessione al 94% sta per compattare e perdere fedeltà, ed è l'unica cosa in
-  pagina che puoi ancora prevenire adesso.
+  l'unica misura con un **denominatore vero**, quindi l'unica disegnata come gauge
+  — una barra contro un tetto inventato sarebbe decorazione travestita da misura.
+  Tre bande perché la domanda non è "quanto piena" ma "quanto preoccupato":
+  neutra sotto il 75%, `warn` fino al 90%, `danger` sopra — una sessione al 94%
+  sta per compattare e perdere fedeltà, ed è l'unica cosa in pagina che puoi
+  ancora prevenire adesso.
 - **SPEND** — dollari. Nessun tetto, quindi cifra e non barra. `~` davanti quando
   il modello non ha una voce esatta nella tabella prezzi (`spendEstimated`). La
   spesa è **seedata** una volta lato main da un parse completo (cached) del
   transcript, perché il cursore parte da EOF: senza seed una sessione già in corso
   avrebbe riportato il costo degli ultimi turni come totale, e una cifra in denaro
   silenziosamente parziale è peggio di nessuna cifra. Seed fallito → `spend: null`
-  → la card non stampa niente.
-- **Il conteggio dei token non è sulla card**: i dollari rispondono alla domanda
+  → non si stampa niente.
+- **Il conteggio dei token non è sulla cella**: i dollari rispondono alla domanda
   che uno si fa davvero, e i token sono lo stesso fatto in un'unità in cui nessuno
-  fa budget — su una card densa era una seconda cifra in competizione con quella
-  che significa qualcosa. Resta nel digest.
-- Un **background agent non ha vitals né nastro**: il roster non porta né usage né
+  fa budget. Sopravvive **una volta sola**, come totale di macchina in testata
+  (`.cl-mxtop-tot`, `$4.50 · 1.2m tokens`), dove smette di essere una seconda copia
+  del conto e diventa l'unica lettura di scala della pagina. Entrambe le metà
+  spariscono se nessuno le ha riportate — `$0.00 · 0 tokens` accanto a processi
+  vivi sarebbe l'unica cifra sbagliata a schermo.
+- **La band porta ribbon e vitals anche se il mock non li dà alla sua band**: la
+  sessione che stai per sbloccare è proprio quella in cui "quanto è piena la
+  finestra" e "quanto è costata" cambiano cosa fai, e la corsia piatta a destra è
+  la figura di ciò che `blocked for` dice in cifre.
+- Un **background agent non ha vitals né corsia**: il roster non porta né usage né
   conto, e il transcript sidecar che scrive non è di questa pagina. Assenti, non
-  zero — `$0.00` accanto a un worker che brucia token sarebbe l'unica cifra
-  sbagliata della pagina.
+  zero.
 
 **Al posto dell'hero, un header da console.** `Monitor.` a
 `clamp(64px, 9vw, 132px)` erano ~300px verticali sull'unica pagina il cui
 soggetto sono i prossimi minuti — e chi è lì ha appena cliccato "Monitor". Al suo
 posto (`.cl-mxtop`) un eyebrow + **una frase che cambia**: `1 waiting on you, 2
 working`, con le cifre in inchiostro pieno e la clausola che **chiede qualcosa**
-in testa e in accento. Prosa con numeri dentro, non una fascia di stat tile:
-quella fascia è già stata rimossa una volta da questa pagina perché stampava gli
-stessi numeri che le card portano.
+in testa e in accento, e all'angolo opposto il totale di macchina. Prosa con
+numeri dentro, non una fascia di stat tile: quella fascia è già stata rimossa una
+volta da questa pagina perché stampava gli stessi numeri che le celle portano.
 
-L'anatomia della card, dall'alto: **tag di stato + orologio**, poi **identità**
-(progetto in display, titolo della conversazione, riga macchina), poi il
-**nastro**, poi i **vitals** divisi da hairline.
+L'anatomia della cella, dall'alto: **identità + orologio** (tag di stato,
+progetto in display, titolo della conversazione, riga macchina | orologio a
+26px), poi la riga **NOW**, poi il **ribbon**, poi i **vitals** divisi da
+hairline e ancorati in fondo (`align-self: end`, così i gauge di due vicini
+restano sulla stessa linea di pagina).
 
 Altre decisioni:
 
-- **L'audacia si spende in un posto solo**: solo la card che ti aspetta ha il
-  bordo pesante (1.5px accent + il wash che le index card della memoria usano per
-  la prima tile) ed è l'unica che pulsa. Tutto il resto sono hairline. Una
-  sessione che lavora sta lavorando, è il caso normale.
-- **La griglia è una griglia vera**: card di altezza fissa, quindi niente
-  `align-items: start` (serviva solo a non stirare le card corte, che è un altro
-  modo di dire che il rack non aveva una linea di base). Lo slot prende l'`1fr`,
-  così l'eventuale gioco — una riga di vitals andata a capo su una card stretta —
-  viene assorbito **sotto** le righe rigate: testa, identità e vitals restano
-  dove sono su ogni card. `overflow: hidden` è la garanzia, non il layout.
+- **La riga macchina resta sulla cella** anche se il design la tiene per la sola
+  band: il pid è ciò che serve per fare `kill`, e un fatto che esiste solo nello
+  stato in cui stai già agendo è un fatto che non puoi usare.
 - **Il gauge del contesto ha perso l'etichetta `ctx`**: una barra con una
-  percentuale accanto dice già cos'è, e su una card più stretta quei tre caratteri
-  servivano alle cifre che l'unità la devono dichiarare. Resta nel caso `is-none`,
-  dove un trattino da solo non nominerebbe niente.
+  percentuale accanto dice già cos'è. Resta nel caso `is-none`, dove un trattino
+  da solo non nominerebbe niente.
 - **Il pid ha un campo suo** nella riga macchina (`pid · modello · up 2h07 ·
 ./sottocartella`): come suffisso dell'ident era rumore e un titolo lungo se lo
-  mangiava dalla coda con l'ellissi, ma è ciò che serve per fare `kill`.
-  Conseguenza: il fallback quando Claude non ha ancora nominato la sessione **non
-  è più il pid** (l'avrebbe detto due volte) ma `not named yet`. Il sottopath si
-  stampa **solo se aggiunge qualcosa** (`cwdNote`).
+  mangiava dalla coda con l'ellissi. Conseguenza: il fallback quando Claude non ha
+  ancora nominato la sessione **non è più il pid** (l'avrebbe detto due volte) ma
+  `not named yet`. Il sottopath si stampa **solo se aggiunge qualcosa**
+  (`cwdNote`).
 - **L'orologio conta dalla transizione di stato** (`statusUpdatedAt`), con
   semantica unica in ogni stato: **da quanto è in questo stato**. Contava
   dall'ultimo append e si azzerava a ogni tool, quindi non rispondeva mai a
-  "questo turno sta durando troppo?". Una card `ended` aggiunge `ago`.
+  "questo turno sta durando troppo?". Una cella `ended` aggiunge `ago`.
 - **Un sub-agente in volo è nominato, e vale come lavoro.** Il tool `Agent` è
   **asincrono** — ack immediato, poi `stop_reason: end_turn` — e il lavoro
   dell'agente vive in un transcript sidecar che il tail salta. Misurato dal vivo
   su 2.1.233: **148 s** senza un append nel transcript principale mentre il
-  sidecar accumulava **31 tool call**. La card diceva `READY · waiting for your
+  sidecar accumulava **31 tool call**. La cella diceva `READY · waiting for your
 next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
   dell'agente** (`subagent_type`) e i vitals la sua età (`2m in flight`) al posto
   del silenzio. **Niente conteggio dei suoi tool** — e per la stessa ragione
@@ -480,19 +494,22 @@ next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
   `name` del registry (`claudelens-b4`) è il progetto più due caratteri casuali.
   Il titolo viene da `{"type":"ai-title"}` nel transcript, letto una volta dalla
   **testa** del file (`readSessionTitle`) perché il cursore parte da EOF.
-- **Ordine**: prima chi ti aspetta, poi chi lavora, poi chi ha finito; a parità di
+- **Ordine**: la band viene prima della griglia per costruzione; dentro la
+  griglia, prima chi lavora, poi chi è pronto, poi chi ha finito, e a parità di
   stato guida chi è in quello stato da più tempo.
 - **Le sessioni finite restano** 10 minuti (`endedAt`), coi loro vitali finali:
   quanto è costata e quanto si era riempita restano la verità su di lei.
 - Il silenzio sotto i 10s non si stampa (`QUIET_FLOOR_MS`): è l'intervallo fra due
-  tool call, non un segnale.
+  tool call, non un segnale. Per una sessione bloccata è detto **nell'eyebrow
+  della band**, non nei vitals: quanto tempo è ferma sulla tua risposta non è una
+  nota a piè di pagina in grigio da 10px.
 - Il ticker da 1s gira **solo se c'è qualcosa da contare** (`cards.length > 0`).
 
 Coperta da `test/monitor-view.test.tsx` (join, stato, ordinamento, ritenzione,
-routing degli agent, riga macchina, sottopath, nastro e non-duplicazione della
-riga NOW, **slot a tre righe qualunque cosa la sessione abbia fatto** e `+N` per
-quelle non stampate, bande del gauge di contesto, spesa e stima, frase
-dell'header, teardown, modello del nastro).
+routing degli agent — band inclusa —, riga macchina, sottopath, ribbon e sua
+separazione dalla riga NOW, corsia vuota vs assente, totale di macchina in
+testata, bande del gauge di contesto, spesa e stima, frase dell'header,
+teardown, modello del ribbon).
 
 ---
 
