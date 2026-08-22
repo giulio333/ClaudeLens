@@ -1,7 +1,8 @@
 // Whether the project-purge entry points are reachable in the UI.
 //
 // **Off since v2.2.13, and it must stay off until both halves below are fixed.**
-// Turning it on again means uncommenting nothing: flip this to `true`.
+// Turning it on again means uncommenting nothing: flip this to `true`. Tracked as
+// issue #224, which carries the sandbox repro and the checklist for re-enabling.
 //
 // What happened: purging a project deleted the Claude Code state of projects the
 // user never selected — transcripts, memories, `file-history/`, task files, and
