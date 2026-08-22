@@ -32,7 +32,13 @@ import type {
   ChatToolActivityEvent,
   PermissionRequest,
 } from '../../electron/shared/chat-types';
-import type { ActiveSession, BgSession, SessionActivity, PurgePlan } from '../../src/types';
+import type {
+  ActiveSession,
+  BgSession,
+  EffectiveConfig,
+  SessionActivity,
+  PurgePlan,
+} from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
@@ -155,6 +161,13 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     purge: vi.fn(async (_hash: string) => ok({ output: '' })),
   };
 
+  // The effective config, resolved through the Agent SDK. `null` data is a real
+  // answer, not a test shortcut — the SDK may not be reachable — and every view
+  // that reads it renders around that case.
+  const config = {
+    getEffective: vi.fn(async (_cwd?: string) => ok<EffectiveConfig | null>(null)),
+  };
+
   const prefs = {
     getAll: vi.fn(async () => ok<Record<string, unknown>>({})),
     set: vi.fn(async (_key: string, _value: unknown) => ok(null)),
@@ -181,6 +194,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     telemetry,
     updates,
     projects,
+    config,
     prefs,
     live,
     memory,
