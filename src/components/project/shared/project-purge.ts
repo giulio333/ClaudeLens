@@ -30,9 +30,24 @@
 //     rendered three doomed projects as a single `×3` row headed by the one the
 //     user had asked to delete. The plan was correct; the plan on screen was not.
 //
+//  3. OURS, and the one that shaped the damage — a partial purge reported as a
+//     plain failure. The plan is a flat, arbitrarily ordered list and the purge
+//     walks it deleting one entry at a time; a nested project is not a child at
+//     delete time, just another row. Hitting an entry it cannot remove, the CLI
+//     **hangs** instead of erroring, `runProjectPurge` caps it at 120s and
+//     `execClaude` answers the cap with `proc.kill()` and an `ETIMEDOUT`
+//     rejection. So everything before the stall is gone, the stall point and
+//     everything after it survives, and the dialog shows a red timeout banner
+//     over an irreversible deletion that half succeeded. Reproduced: plan order
+//     `h, A, D, C, B` with `C` obstructed, killed at 25s — `h, A, D` deleted,
+//     `C, B` intact. An unobstructed purge of the same layout finishes in under
+//     a second, so reaching the cap *means* a partial deletion happened.
+//
 // A fix has to make the projects being deleted individually visible (never
-// grouped by a detail that omits the subject) and refuse — or at least escalate
-// hard — a target that contains other known projects.
+// grouped by a detail that omits the subject), refuse — or at least escalate
+// hard — a target that contains other known projects, and never let a timeout
+// kill the CLI mid-delete: a non-clean exit must read as "this may have partly
+// completed", never as "nothing happened".
 //
 // Typed `boolean` on purpose: as a `false` literal every guarded block would be
 // statically dead, and the reviewer's own linter would start asking to delete the
