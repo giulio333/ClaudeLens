@@ -177,12 +177,52 @@ export interface PurgePlanItem {
   targets: string[];
 }
 
+/**
+ * One project whose state a purge plan would delete. More than one of these means
+ * the plan reaches beyond the project the user selected — `claude project purge`
+ * acts on a path subtree, not on a project (#224) — and the purge is refused.
+ */
+export interface PurgePlanProject {
+  hash: string;
+  target: string;
+  /** The real cwd, when the registry could name it. Never derived from the hash. */
+  path: string | null;
+  requested: boolean;
+}
+
 export interface PurgePlan {
   projectPath: string | null;
   items: PurgePlanItem[];
+  projects: PurgePlanProject[];
   notes: string[];
   totalItems: number | null;
   raw: string;
+}
+
+/** Why a purge was not attempted at all. */
+export type PurgeRefusal = 'multiple-projects' | 'unreadable-plan';
+
+export type PurgeStatus = 'clean' | 'partial' | 'unknown' | 'failed' | 'refused';
+
+/** One plan path, checked on disk after the attempt — never inferred from an exit code. */
+export interface PurgePathOutcome {
+  path: string;
+  kind: string;
+  status: 'gone' | 'remaining';
+}
+
+/**
+ * The outcome of a purge. `status` is the only field the UI may read as success,
+ * and only as `'clean'`: anything else means an irreversible deletion may have
+ * partly happened, which is what a red timeout banner used to hide (#224).
+ */
+export interface PurgeResult {
+  status: PurgeStatus;
+  output: string;
+  projects: PurgePlanProject[];
+  paths: PurgePathOutcome[];
+  refusal: PurgeRefusal | null;
+  error: string | null;
 }
 
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';

@@ -2189,12 +2189,29 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
           targets: ['projects["/Users/alice/Projects/acme"]'],
         },
       ],
+      projects: [
+        {
+          hash: '-Users-alice-Projects-acme',
+          target: '/Users/alice/.claude/projects/-Users-alice-Projects-acme',
+          path: '/Users/alice/Projects/acme',
+          requested: true,
+        },
+      ],
       notes: ['shell-snapshots/ are not project-scoped and will not be touched'],
       totalItems: 2,
       raw: '',
     })
   );
-  ipcMain.handle('projects:purge', () => ok({ output: 'Purged 2 item(s).' }));
+  ipcMain.handle('projects:purge', () =>
+    ok({
+      status: 'clean',
+      output: 'Purged 2 item(s).',
+      projects: [],
+      paths: [],
+      refusal: null,
+      error: null,
+    })
+  );
 
   ipcMain.handle('mcp:getGlobal', () => ok(MOCK_MCP));
 
