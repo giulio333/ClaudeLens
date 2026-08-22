@@ -15977,11 +15977,32 @@ select.cl-opt-input {
    and in the accent. Not a band of stat tiles — those were removed from this
    page once already, for printing the same numbers the cards carry. */
 .cl-mxtop {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px 28px;
   padding: 30px var(--cl-gutter) 24px;
   border-bottom: 1.5px solid var(--cl-ink);
 }
+.cl-mxtop-say-wrap {
+  min-width: 0;
+}
 .cl-mxtop .cl-eyebrow {
   margin-bottom: 11px;
+}
+/* What the whole machine is burning, in the corner opposite the sentence that
+   says what it is doing. It is the only place a token count survives on this
+   page: per process it was a second figure competing with the bill, summed over
+   every live one it is the only reading of scale there is. */
+.cl-mxtop-tot {
+  padding-bottom: 5px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
 }
 .cl-mxtop .cl-eyebrow .pip {
   background: var(--cl-ink-4);
@@ -16025,93 +16046,301 @@ select.cl-opt-input {
   color: var(--cl-ink-4);
 }
 
-/* ── The grid ──
-   Every card is the same height, so this is a real grid: rows line up, and the
-   clock, the gauge and the bill of any two cards sit on the same line of the
-   page. The earlier form let the body set the height and needed
-   `align-items: start` to avoid stretching short cards — which is another way of
-   saying the rack had no baseline at all. */
-.cl-mx-grid {
+/* ── The blocked band ──
+   Design handoff *Monitor Variants*, option 2b. The one process that is waiting
+   on YOU stops being a card in the rack and becomes a full-bleed dark band.
+
+   This is the third time a dark surface has been tried on this page, and the
+   first time it works — because the two that failed made it the DEFAULT. A wide
+   dark band holding five short strings is mostly empty by construction, and a
+   grid of them on warm paper reads as a foreign object. Here it is the
+   exception, it runs edge to edge, and what fills it is the one string on this
+   page long enough to earn display size: the question the session is waiting on.
+
+   Fixed dark in BOTH themes, like the live cell of the stat strip: the band is
+   not "the dark variant of a cell", it is the page's one negative surface, and a
+   surface that flips with the theme would stop being that. */
+.cl-mxband {
+  /* The band is fixed dark in a theme that is usually light, so the semantic
+     tokens inside it are re-bound to the lifts the DARK theme already declares —
+     same hues, higher lightness. Not new colours: `--cl-accent` at L 0.575 on a
+     surface at L 0.205 is ~3.9:1, which passes for the 52px clock and fails for
+     the 9.5px eyebrow and the 11.5px button beside it. */
+  --cl-accent: oklch(0.72 0.14 40);
+  --cl-warn: oklch(0.78 0.14 75);
+  --cl-danger: oklch(0.68 0.19 25);
+  --cl-ok: oklch(0.72 0.1 145);
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 18px;
-  padding-top: 4px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 20px 32px;
+  padding: 24px var(--cl-gutter) 26px;
+  background: oklch(0.205 0.008 75);
+  box-shadow: inset 0 -1px 0 oklch(0 0 0 / 0.35);
+}
+.cl-mxband + .cl-mxband {
+  box-shadow:
+    inset 0 1px 0 oklch(1 0 0 / 0.07),
+    inset 0 -1px 0 oklch(0 0 0 / 0.35);
+}
+.cl-mxband-say {
+  min-width: 0;
+}
+/* The eyebrow is the only place the silence is said for a blocked session: the
+   vitals row below it would print `quiet 4m` in 10px grey, and how long a
+   session has been sitting on your answer is not a footnote. */
+.cl-mxband .cl-eyebrow {
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  color: var(--cl-accent);
+}
+.cl-mxband .cl-eyebrow .pip {
+  background: var(--cl-accent);
+  animation: cl-mx-beat 2.2s ease-out infinite;
+}
+/* What it is waiting on, at display size. It leads the band instead of the
+   project name because by the time you are reading a band you already know
+   which of your projects raised it — what you do not know is what it wants. */
+.cl-mxband .ask {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: clamp(19px, 2.1vw, 27px);
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.03em;
+  color: oklch(0.95 0.006 85);
+  text-wrap: pretty;
+}
+/* Identity demoted to one mono line: project, conversation title, then the
+   machine facts — pid first, because it is what you need to `kill`. */
+.cl-mxband .meta {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: oklch(0.66 0.009 75);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-mxband .meta .proj {
+  font-weight: 600;
+  color: oklch(0.87 0.006 80);
+}
+.cl-mxband .meta .sep {
+  margin: 0 7px;
+  font-style: normal;
+  opacity: 0.5;
+}
+.cl-mxband .meta .is-unnamed {
+  font-style: italic;
+  opacity: 0.8;
+}
+/* The ribbon and the vitals ride the band too. The design's band carries
+   neither, but the session you are about to answer is the one where "how full
+   is the window" and "what has this cost" actually change what you do — and a
+   flatlined right-hand end of the lane is the picture of what `blocked for`
+   says in figures. */
+.cl-mxband .cl-mx-ribbon {
+  margin-top: 14px;
+}
+.cl-mxband .cl-mx-ribbon::after {
+  background: oklch(1 0 0 / 0.12);
+}
+.cl-mxband .cl-mx-ribbon .none {
+  color: oklch(0.63 0.008 75);
+}
+.cl-mxband .cl-mx-vitals {
+  margin-top: 12px;
+  border-top-color: oklch(1 0 0 / 0.1);
+  color: oklch(0.66 0.008 75);
+}
+.cl-mxband .cl-mx-vitals .ctx .bar {
+  background: oklch(1 0 0 / 0.14);
+}
+/* Only the neutral band is re-tinted: warn and danger already read on a dark
+   surface, and overriding them would silence the one gauge that is allowed to
+   raise its voice. */
+.cl-mxband .cl-mx-vitals .ctx[data-load='ok'] .bar i {
+  background: oklch(0.72 0.01 75);
+}
+.cl-mxband .cl-mx-vitals .ctx[data-load='ok'] .v {
+  color: oklch(0.72 0.01 75);
+}
+.cl-mxband .cl-mx-vitals .ctx.is-none .k,
+.cl-mxband .cl-mx-vitals .ctx.is-none .v {
+  color: oklch(0.63 0.008 75);
+}
+.cl-mxband .cl-mx-vitals .money {
+  color: oklch(0.93 0.005 85);
+}
+/* The clock is the band's second big figure, and the only one that measures the
+   thing this state is about: how long you have been the bottleneck. */
+.cl-mxband-act {
+  text-align: right;
+}
+.cl-mxband-act .clk {
+  font-family: var(--font-mono);
+  font-size: clamp(34px, 4vw, 52px);
+  line-height: 1;
+  letter-spacing: -0.045em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-accent);
+}
+.cl-mxband-act .lbl {
+  margin-top: 8px;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: oklch(0.65 0.009 70);
+}
+.cl-mxband-act button {
+  margin-top: 14px;
+  padding: 9px 15px;
+  border-radius: 12px;
+  cursor: pointer;
+  border: 1px solid color-mix(in oklch, var(--cl-accent) 55%, transparent);
+  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  color: var(--cl-accent);
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+.cl-mxband-act button:hover {
+  background: color-mix(in oklch, var(--cl-accent) 26%, transparent);
+  border-color: var(--cl-accent);
+}
+.cl-mxband-act button:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
+}
+/* Side by side, the clock needs a column of its own; stacked, it does not. */
+@media (max-width: 820px) {
+  .cl-mxband {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cl-mxband-act {
+    text-align: left;
+  }
 }
 
-/* ── The card ──
-   FIXED ANATOMY: five rows, one height, whatever the session has been up to.
-   The slot takes the `1fr`, so any slack (a vitals line that wrapped, a card
-   with fewer machine facts) is absorbed BELOW the ruled rows — the head, the
-   identity block and the vitals stay where they are on every card in the rack.
-   `overflow: hidden` is the guarantee, not the layout: nothing inside is allowed
-   to grow the frame, and everything that could is already ellipsized. */
-.cl-mx {
+/* ── The grid ──
+   NO card borders at all: a cell is defined by the rules between it and its
+   neighbours, which is exactly what lets the band above be the only raised
+   thing on the page. The rack of bordered cards it replaces had to spend a
+   heavy accent edge on the blocked card to be read in order — and once the
+   blocked process has a band of its own, everything left is by definition the
+   normal case and none of it has to shout.
+
+   The columns are fixed rather than auto-filled because the first and last of
+   them carry the page gutter: with `auto-fill` there is no way to say "the cell
+   at the edge", and the grid would start 32px in from a header that starts at
+   the gutter. */
+.cl-mx-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+/* ── The cell ──
+   FIXED ANATOMY: head, NOW, ribbon, vitals — in that order, in every cell. The
+   vitals take the `1fr` and sit at the bottom, so any slack (a wrapped vitals
+   line, a cell with fewer machine facts) is absorbed above them and the gauges
+   of two neighbours stay on one line of the page. */
+.cl-mxcell {
   --mx: var(--cl-ok);
   display: grid;
-  grid-template-rows: auto auto auto 1fr auto;
-  height: 260px;
-  padding: 14px 16px 12px;
+  grid-template-rows: auto auto auto 1fr;
+  min-width: 0;
+  padding: 18px 22px 16px;
+  /* Bottom, not top: the header already closes itself with a 1.5px ink rule, and
+     a hairline immediately under it would read as that rule fraying. Ruling
+     downwards also closes the last row, so the grid ends on a line instead of
+     trailing off. */
+  border-bottom: 1px solid var(--cl-line);
+  border-left: 1px solid var(--cl-line);
   overflow: hidden;
-  border: 1px solid var(--cl-line);
-  border-radius: 14px;
-  background: var(--cl-paper);
   text-align: left;
-  transition:
-    border-color 120ms,
-    box-shadow 120ms;
+  transition: background 120ms;
 }
-.cl-mx[role='button'] {
+.cl-mxcell:nth-child(3n + 1) {
+  border-left: none;
+  padding-left: var(--cl-gutter);
+}
+.cl-mxcell:nth-child(3n) {
+  padding-right: var(--cl-gutter);
+}
+.cl-mxcell[role='button'] {
   cursor: pointer;
 }
-.cl-mx[role='button']:hover {
-  border-color: color-mix(in oklch, var(--cl-accent) 30%, var(--cl-line));
-  box-shadow: 0 2px 12px -6px oklch(0 0 0 / 0.18);
+.cl-mxcell[role='button']:hover {
+  background: color-mix(in oklch, var(--cl-ink) 3.5%, transparent);
 }
-:root[data-theme='dark'] .cl-mx[role='button']:hover {
-  box-shadow: 0 2px 12px -6px oklch(0 0 0 / 0.5);
-}
-.cl-mx[role='button']:focus-visible {
+.cl-mxcell[role='button']:focus-visible {
   outline: 2px solid var(--cl-accent);
   outline-offset: -2px;
 }
-/* The one bold thing on the page. A 1.5px accent edge plus the wash the memory
-   cards use for their first tile: the card that wants something is the only one
-   that raises its voice, and it does it once. */
-.cl-mx[data-state='blocked'] {
-  --mx: var(--cl-accent);
-  border-width: 1.5px;
-  border-color: color-mix(in oklch, var(--cl-accent) 46%, var(--cl-line));
-  background: linear-gradient(180deg, var(--cl-accent-soft), var(--cl-paper) 58%);
-}
-:root[data-theme='dark'] .cl-mx[data-state='blocked'] {
-  background: linear-gradient(
-    180deg,
-    color-mix(in oklch, var(--cl-accent) 12%, var(--cl-paper)),
-    var(--cl-paper) 58%
-  );
-}
-/* Alive, turn finished. Not muted like an ended card — it is still a process you
+/* Alive, turn finished. Not muted like an ended cell — it is still a process you
    can talk to — but it does not get the working hue either, because it is not
    working. */
-.cl-mx[data-state='ready'] {
+.cl-mxcell[data-state='ready'] {
   --mx: var(--cl-ink-3);
 }
-.cl-mx[data-state='ended'] {
+.cl-mxcell[data-state='ended'] {
   --mx: var(--cl-ink-4);
   background: var(--cl-paper-2);
 }
-.cl-mx[data-state='ended'] .cl-mx-who h3 {
+.cl-mxcell[data-state='ended'] .cl-mx-who h3 {
   color: var(--cl-ink-2);
+}
+.cl-mxcell .cl-mx-vitals {
+  align-self: end;
+}
+@media (max-width: 1240px) {
+  .cl-mx-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .cl-mxcell:nth-child(3n + 1),
+  .cl-mxcell:nth-child(3n) {
+    border-left: 1px solid var(--cl-line);
+    padding-left: 22px;
+    padding-right: 22px;
+  }
+  .cl-mxcell:nth-child(2n + 1) {
+    border-left: none;
+    padding-left: var(--cl-gutter);
+  }
+  .cl-mxcell:nth-child(2n) {
+    padding-right: var(--cl-gutter);
+  }
+}
+@media (max-width: 760px) {
+  .cl-mx-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .cl-mx-grid .cl-mxcell {
+    border-left: none;
+    padding-left: var(--cl-gutter);
+    padding-right: var(--cl-gutter);
+  }
 }
 
 /* ── Head: what it is, and for how long ── */
 .cl-mx-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: start;
   gap: 12px;
 }
-.cl-mx-head .tag {
+.cl-mx-who {
+  min-width: 0;
+}
+.cl-mx-who .tag {
   display: inline-flex;
   align-items: center;
   gap: 7px;
@@ -16121,73 +16350,34 @@ select.cl-opt-input {
   white-space: nowrap;
   color: var(--mx);
 }
-.cl-mx[data-state='blocked'] .tag {
-  color: var(--cl-accent-ink);
-}
-.cl-mx-head .tag i {
+.cl-mx-who .tag i {
   width: 7px;
   height: 7px;
   border-radius: 50%;
   background: var(--mx);
   flex-shrink: 0;
 }
-/* Only what is blocked pulses. A working session is expected to be working; a
-   halo on every card would make the page loud and say nothing. */
-.cl-mx[data-state='blocked'] .tag i {
-  animation: cl-mx-beat 2.2s ease-out infinite;
-}
+/* Nothing in the grid pulses. The halo belongs to the band, which is the only
+   thing on this page still asking for something; a working session is expected
+   to be working. */
 @keyframes cl-mx-beat {
   0% {
     box-shadow: 0 0 0 0 color-mix(in oklch, var(--cl-accent) 55%, transparent);
   }
   70% {
-    box-shadow: 0 0 0 8px transparent;
+    box-shadow: 0 0 0 9px transparent;
   }
   100% {
     box-shadow: 0 0 0 0 transparent;
   }
 }
-/* The card's one large figure, and it answers one question in every state: how
-   long it has been in THIS state. */
-.cl-mx-head .clk {
-  display: inline-flex;
-  align-items: baseline;
-  gap: 5px;
-  font-family: var(--font-mono);
-  font-size: 19px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-  color: var(--cl-ink);
-}
-.cl-mx[data-state='blocked'] .clk {
-  color: var(--cl-accent-ink);
-}
-.cl-mx[data-state='ready'] .clk,
-.cl-mx[data-state='ended'] .clk {
-  color: var(--cl-ink-3);
-}
-/* For a card that has ended, that state is over: the clock needs the one word
-   the tag cannot supply. */
-.cl-mx-head .clk .ago {
-  font-style: normal;
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
-}
-
-/* ── Who ── */
-.cl-mx-who {
-  margin-top: 11px;
-}
 .cl-mx-who h3 {
-  margin: 0;
+  margin: 8px 0 0;
   font-family: var(--font-sans);
-  font-size: 15px;
+  font-size: 18px;
   font-weight: 600;
-  letter-spacing: -0.02em;
-  line-height: 1.2;
+  letter-spacing: -0.028em;
+  line-height: 1.12;
   color: var(--cl-ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -16195,9 +16385,9 @@ select.cl-opt-input {
 }
 .cl-mx-who .ident {
   display: block;
-  margin-top: 2px;
+  margin-top: 3px;
   font-family: var(--font-mono);
-  font-size: 10.5px;
+  font-size: 10px;
   color: var(--cl-ink-3);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -16228,18 +16418,44 @@ select.cl-opt-input {
   font-style: normal;
   opacity: 0.55;
 }
+/* The cell's one large figure, and it answers one question in every state: how
+   long it has been in THIS state. */
+.cl-mx-head .clk {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 5px;
+  font-family: var(--font-mono);
+  font-size: 26px;
+  line-height: 1;
+  letter-spacing: -0.04em;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink);
+}
+.cl-mxcell[data-state='ready'] .clk,
+.cl-mxcell[data-state='ended'] .clk {
+  color: var(--cl-ink-3);
+}
+/* For a cell that has ended, that state is over: the clock needs the one word
+   the tag cannot supply. */
+.cl-mx-head .clk .ago {
+  font-style: normal;
+  font-size: 9px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
 
 /* ── NOW: what it is doing this second ──
-   Its own inset block, not the first row of the list below it. What a process is
-   doing right now and what it did are different kinds of claim, and printing
-   them as one list made the newest row look like history that happened to be at
-   the top. One line, ellipsized: the subject is the freest string on the card
-   and must never be the reason a card is taller than its neighbour. */
+   Its own inset block, not a row of the ribbon below it. What a process is doing
+   right now and what it did are different kinds of claim, and the ribbon cannot
+   make the first one at all — it has shape, not words. One line, ellipsized: the
+   subject is the freest string in the cell and must never be the reason one cell
+   is taller than its neighbour. */
 .cl-mx-now {
   display: flex;
   align-items: baseline;
   gap: 8px;
-  margin-top: 11px;
+  margin-top: 12px;
   padding: 8px 10px;
   border-radius: 9px;
   background: var(--cl-paper-2);
@@ -16265,108 +16481,54 @@ select.cl-opt-input {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-/* An ended card is already on paper-2: the inset needs the other surface or it
+/* An ended cell is already on paper-2: the inset needs the other surface or it
    disappears into its own background. */
-.cl-mx[data-state='ended'] .cl-mx-now {
+.cl-mxcell[data-state='ended'] .cl-mx-now {
   background: var(--cl-paper);
 }
-.cl-mx[data-state='blocked'] .cl-mx-now {
-  background: color-mix(in oklch, var(--cl-accent) 9%, var(--cl-paper));
-}
-.cl-mx[data-state='blocked'] .cl-mx-now b {
-  color: var(--cl-accent-ink);
-}
 
-/* ── The slot: what it did, newest first ──
-   THREE ROWS, ALWAYS. A row with nothing to say is drawn as a rule rather than
-   left out, which is what makes every card the same height — the one thing the
-   previous form could not do, since its body grew a line per tool call. Fixed
-   columns so the ages line up down the left and the tool names down the middle:
-   a tape you can scan by column is the difference between a log and a list of
-   sentences. */
-.cl-mx-slot {
-  margin: 10px 0 0;
-  padding: 0;
-  list-style: none;
+/* ── The ribbon: what it did, as shape ──
+   Runs of tool-tinted blocks on a 2.5-minute axis, oldest at the left. The tint
+   is `TOOL_TINT` — the transcript's own tool encoding — so a lane of cyan is a
+   session reading and a lane of violet one editing, and the width of a block is
+   how long that stretch of work lasted.
+
+   The hairline underneath is what makes it a LANE rather than a scatter of
+   marks: without it a session with two calls in two minutes has nothing to be
+   sparse against, and the empty right-hand end — which is the whole picture of
+   a session that has gone quiet — reads as blank page instead of as silence. */
+.cl-mx-ribbon {
+  position: relative;
+  margin-top: 12px;
+  min-height: 22px;
+}
+.cl-mx-ribbon::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 1px;
+  background: var(--cl-line-soft);
+}
+.cl-mx-ribbon i {
+  position: absolute;
+  top: 4px;
+  bottom: 5px;
+  border-radius: 1px;
+  opacity: 0.9;
+}
+/* A failed call takes the danger hue instead of its tool's: the tint answers
+   "what kind of work", and a call that came back an error outranks that. */
+.cl-mx-ribbon i.failed {
+  opacity: 1;
+}
+/* "No transcript to tail" is not the same claim as "did nothing", and only one
+   of the two can be fixed by waiting — so a lane that cannot exist says so, and
+   an empty one says the other thing. */
+.cl-mx-ribbon .none {
+  display: block;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-}
-.cl-mx-slot li {
-  display: grid;
-  grid-template-columns: 26px 5px auto minmax(0, 1fr) auto;
-  align-items: center;
-  gap: 0 7px;
-  height: 18px;
-  color: var(--cl-ink-3);
-}
-.cl-mx-slot .when {
-  text-align: right;
-  font-size: 9px;
-  letter-spacing: 0.02em;
-  color: var(--cl-ink-4);
-  font-variant-numeric: tabular-nums;
-}
-/* The tint column. `TOOL_TINT` — the transcript's own tool encoding — on a 5px
-   swatch rather than on the tool's name: colouring text you have to read is
-   worse than colouring a marker beside it, and the swatches stack into a column
-   that gives each card the signature of the kind of work it is doing. A run of
-   cyan is a session reading, violet a session editing. */
-.cl-mx-slot .dot {
-  width: 5px;
-  height: 5px;
-  border-radius: 1.5px;
-}
-.cl-mx-slot b {
-  font-weight: 500;
-  color: var(--cl-ink-2);
-  white-space: nowrap;
-}
-/* The subject truncates rather than wrapping: inside a fixed row it is the one
-   string that could otherwise push the card past its frame. */
-.cl-mx-slot .arg {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-/* One trailing cell for every verdict a row can carry — `×3`, `✕`, `+2` — so two
-   of them never fight over the same column. */
-.cl-mx-slot .mark {
-  grid-column: 5;
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  font-style: normal;
-}
-.cl-mx-slot .times,
-.cl-mx-slot .more {
-  font-style: normal;
-  font-size: 9px;
-  color: var(--cl-ink-4);
-}
-.cl-mx-slot .x {
-  font-style: normal;
-  font-size: 9.5px;
-  color: var(--cl-danger);
-}
-.cl-mx-slot li.failed b {
-  color: var(--cl-danger);
-}
-/* The ruled empty row. It is deliberately visible: a blank gap would read as the
-   card having ended early, where a rule reads as a line nothing has been written
-   on yet — the same thing ruled paper says. */
-.cl-mx-slot li.rule {
-  display: block;
-}
-.cl-mx-slot li.rule i {
-  display: block;
-  margin: 8px 0 0 33px;
-  border-top: 1px dotted var(--cl-line);
-}
-/* An agent's note: "no transcript to tail" is not the same claim as "it did
-   nothing", and only one of the two can be fixed by waiting. */
-.cl-mx-slot li.none {
-  display: block;
-  padding-left: 33px;
   font-size: 9.5px;
   line-height: 18px;
   font-style: italic;
@@ -16383,6 +16545,7 @@ select.cl-opt-input {
   align-items: center;
   flex-wrap: wrap;
   gap: 5px 12px;
+  margin-top: 12px;
   padding-top: 10px;
   border-top: 1px solid var(--cl-line-soft);
   font-family: var(--font-mono);
@@ -16448,15 +16611,12 @@ select.cl-opt-input {
   font-variant-numeric: tabular-nums;
   color: var(--cl-ink);
 }
-/* No `margin-left: auto` here any more: on a card this narrow the row can take a
+/* No `margin-left: auto` here any more: in a cell this narrow the row can take a
    second line, and an item pushed to the right edge of a wrapped line reads as
    belonging to nothing. Left to right, in the order they were decided: the
    measures first, then what they mean. */
 .cl-mx-vitals .quiet {
   white-space: nowrap;
-}
-.cl-mx[data-state='blocked'] .cl-mx-vitals .quiet {
-  color: var(--cl-accent-ink);
 }
 .cl-mx-vitals .vol {
   overflow: hidden;
@@ -16465,7 +16625,7 @@ select.cl-opt-input {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-mx[data-state='blocked'] .tag i,
+  .cl-mxband .cl-eyebrow .pip,
   .cl-mxtop .cl-eyebrow .pip.live {
     animation: none;
   }

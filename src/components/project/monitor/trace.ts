@@ -1,96 +1,120 @@
 import type { TraceMark } from '../../../types';
 
-// The Monitor's tape: the last things a session actually did, newest first.
+// The Monitor's ribbon: the last two and a half minutes of a session, drawn as
+// runs of tinted blocks on a shared time axis.
 //
-// It has been a histogram (42 anonymous buckets, height by count) and then a
-// track of tinted ticks. Both answered "at what rhythm" and nothing else, and a
-// rhythm on its own is a heartbeat — it says the session is alive without ever
-// saying what it is doing. The marks carry the tool and its subject now, so the
-// same seconds can be read as prose: `Edit MonitorView.tsx`, `Bash npm run
-// typecheck ✕`. The rhythm survives in the age of each row: a tape whose top row
-// says `4m` is a session that has done nothing for four minutes, which is the
-// question the strip existed to answer, asked in words.
+// It replaces the three-row textual tape that stood here (design handoff
+// *Monitor Variants*, option 2b). The trade is explicit: the tape said what a
+// session did in words and cost the cell four fixed rows, which is what made a
+// card 260px tall and forced the rack into 340px columns. 2b spends that height
+// on a full-bleed band for the one session that is blocked and gives everything
+// else a hairline grid three columns wide — so the history had to compress into
+// a lane. What survives the compression is the shape of the work and its
+// rhythm, tinted by tool; what a session is doing RIGHT NOW is still in words,
+// in the cell's NOW line, which is the claim the strip could never make on its
+// own.
 //
-// This returns the WHOLE story in the window and caps nothing. The card's slot
-// is what decides how many rows are printed (`TAPE_ROWS`), and it needs the full
-// count to say how much it is leaving out — `+3` at the end of the last row.
-// A cap here would hide that figure from the one surface that has to state it.
-// The window itself is the bound, and the digest ships at most 160 marks.
+// The rhythm is read off real timestamps, not off a rasterised string: the
+// window is cut into equal cells, each mark falls in the cell its `at` lands in,
+// and contiguous cells of one tool collapse into a single block. A retry loop is
+// then one long block, a session hammering three different tools is three short
+// ones, and a session that has done nothing for a minute is a lane with a
+// minute of nothing at its right-hand end — which is the whole question the lane
+// exists to answer.
 //
 // Pure and separate from the view for two reasons: the repo's fast-refresh rule
 // (a component file exports only components), and because this is the part worth
-// pinning down in tests — what counts as one step, and which end of the history
-// survives.
+// pinning down in tests — where a mark lands, what counts as one block, and what
+// falls outside the window.
 
-/** How far back the tape reaches. The digest keeps a wider window than this
- *  (`TRACE_WINDOW_MS`), so the cap is what a card can show, not what is known. */
-export const TAPE_SPAN_MS = 150_000;
+/** How far back the ribbon reaches. The digest keeps a wider window than this
+ *  (`TRACE_WINDOW_MS`), so the cap is what a cell can show, not what is known. */
+export const RIBBON_SPAN_MS = 150_000;
 
-/** Rows the card's slot holds — and it holds them whether or not there is
- *  anything to put in them. That is the whole point of the fixed form: the slot
- *  is drawn either way, so a session that has done six things and one that has
- *  done none are the same size, and the grid finally has a baseline. Three is
- *  what fits under the identity block and the NOW line at this card height.
- *  The newest rows are the ones kept: what a session just did explains it
- *  better than what it started with. */
-export const TAPE_ROWS = 3;
+/** The window's grain. 48 cells over 150s is roughly three seconds each: fine
+ *  enough that two calls a few seconds apart stay two blocks, coarse enough that
+ *  a burst reads as one stretch of work rather than a picket fence. */
+export const RIBBON_CELLS = 48;
 
-export interface TapeStep {
-  /** Epoch ms of the (first) call. */
-  at: number;
+/** The window, in the words the tooltip says it in. Spelled with its half
+ *  minute rather than rounded: the figure this lane is read against is how long
+ *  its empty right-hand end has been empty, and rounding 150s up to "3 min"
+ *  overstates that by a fifth. */
+export const RIBBON_WINDOW = `${Number((RIBBON_SPAN_MS / 60_000).toFixed(1))} min`;
+
+/** Percent of the window left blank between two blocks, so runs of two
+ *  different tools never fuse into one bar. */
+const BLOCK_GAP = 0.35;
+
+/** Percent a single-cell block is never allowed to fall below: at this grain one
+ *  call is ~2% of the lane, and a block thinner than a hairline is not a mark,
+ *  it is a rendering artefact. */
+const BLOCK_MIN = 0.9;
+
+export interface RibbonRun {
   tool: string;
-  /** The one-line subject, or '' for a tool that takes nothing worth printing. */
-  arg: string;
-  /** Its result came back an error. */
+  /** Left edge, as a percentage of the window. */
+  left: number;
+  /** Width, as a percentage of the window. */
+  width: number;
+  /** At least one call in this run came back an error. A verdict on the run, so
+   *  it takes the danger hue instead of the tool's — the tint answers "what kind
+   *  of work", and a failure outranks that. */
   failed: boolean;
-  /** Consecutive identical calls collapsed into this row — a retry loop reads as
-   *  `Bash npm test ×3`, which is the truth about it, instead of three rows that
-   *  look like three different pieces of work. */
-  count: number;
 }
 
 /**
- * The last actions of a session, newest first.
- *
- * `dropNewest` is set when the card is already printing the in-flight call as
- * its "now" row: the newest mark IS that call, and a tape that repeats it above
- * its own history reads as if the session had done the same thing twice.
+ * The last actions of a session, oldest to newest, as blocks on the window.
  *
  * Marks outside the window are dropped rather than clamped — including ones
  * stamped in the future, which clock skew between the CLI and this process can
- * produce.
+ * produce. Prose marks are dropped too: they have no tool, so they have no
+ * tint, and a grey block between two edits would read as a tool nobody can name.
  */
-export function buildTape(
-  marks: TraceMark[],
-  now: number,
-  options: { dropNewest?: boolean } = {}
-): TapeStep[] {
-  const { dropNewest = false } = options;
-  const start = now - TAPE_SPAN_MS;
+export function buildRibbon(marks: TraceMark[], now: number): RibbonRun[] {
+  const start = now - RIBBON_SPAN_MS;
+  const step = RIBBON_SPAN_MS / RIBBON_CELLS;
+  const cells: ({ tool: string; failed: boolean } | null)[] = Array.from(
+    { length: RIBBON_CELLS },
+    () => null
+  );
 
-  // Prose marks the trace but is not a step of the story: "wrote some text"
-  // between two edits would break the sequence in half without adding anything a
-  // reader could act on.
-  const tools = marks
-    .filter(m => m.kind === 'tool' && m.at >= start && m.at <= now)
-    .sort((a, b) => b.at - a.at);
-
-  const steps: TapeStep[] = [];
-  for (const mark of tools.slice(dropNewest ? 1 : 0)) {
-    const previous = steps[steps.length - 1];
-    const tool = mark.tool ?? 'unknown';
-    const arg = mark.arg ?? '';
-    // Collapse only an EXACT repeat (same tool, same subject): two edits of two
-    // different files are two pieces of work, two runs of the same command are
-    // one thing happening twice.
-    if (previous && previous.tool === tool && previous.arg === arg) {
-      previous.count += 1;
-      previous.failed = previous.failed || !!mark.failed;
-      // The row is dated by its oldest call: it says when this started.
-      previous.at = mark.at;
+  for (const mark of marks) {
+    if (mark.kind !== 'tool') continue;
+    if (mark.at < start || mark.at > now) continue;
+    const index = Math.min(RIBBON_CELLS - 1, Math.floor((mark.at - start) / step));
+    const cell = cells[index];
+    if (cell) {
+      // Two tools in one cell: the first keeps the tint (the lane is read left
+      // to right, so the earlier call is what that position means) and the
+      // failure is carried either way — it is the fact worth not losing.
+      cell.failed = cell.failed || !!mark.failed;
       continue;
     }
-    steps.push({ at: mark.at, tool, arg, failed: !!mark.failed, count: 1 });
+    cells[index] = { tool: mark.tool ?? 'unknown', failed: !!mark.failed };
   }
-  return steps;
+
+  const runs: RibbonRun[] = [];
+  let i = 0;
+  while (i < RIBBON_CELLS) {
+    const cell = cells[i];
+    if (!cell) {
+      i += 1;
+      continue;
+    }
+    let j = i;
+    let failed = false;
+    while (j < RIBBON_CELLS && cells[j]?.tool === cell.tool) {
+      failed = failed || !!cells[j]?.failed;
+      j += 1;
+    }
+    runs.push({
+      tool: cell.tool,
+      left: (i / RIBBON_CELLS) * 100,
+      width: Math.max(BLOCK_MIN, ((j - i) / RIBBON_CELLS) * 100 - BLOCK_GAP),
+      failed,
+    });
+    i = j;
+  }
+  return runs;
 }
