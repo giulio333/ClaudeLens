@@ -1,4 +1,5 @@
 import { useEffectiveConfig } from '../../../hooks/useIPC';
+import { PROJECT_PURGE_ENABLED } from '../shared/project-purge';
 import { GeneralTab, PermissionsTab, ToolsTab, McpTab, ExtensionsTab } from './SettingsView';
 
 // Project-scoped variant of the Settings page. Resolves the effective config
@@ -48,25 +49,31 @@ export function ProjectConfigView({
 
       {/* The only visible way to delete a project. It used to be a "Remove
           current" button in the search popover's status bar — findable only by
-          someone who already knew it was there. */}
-      <div style={{ maxWidth: 660, marginTop: 44 }}>
-        <div className="set-block-head">
-          <span className="lbl">Danger zone</span>
-        </div>
-        <div className="cl-danger-zone">
-          <div className="cl-danger-zone-body">
-            <strong>Delete this project&rsquo;s Claude Code state</strong>
-            <span>
-              Transcripts, tasks, file history and its entry in{' '}
-              <span className="font-mono">~/.claude.json</span>. Your source files are never
-              touched. You&rsquo;ll see exactly what goes before confirming.
-            </span>
+          someone who already knew it was there.
+
+          Withdrawn while PROJECT_PURGE_ENABLED is off: the purge reached
+          projects the user had not selected, and the plan on screen did not say
+          so. See the flag for the two causes. */}
+      {PROJECT_PURGE_ENABLED && (
+        <div style={{ maxWidth: 660, marginTop: 44 }}>
+          <div className="set-block-head">
+            <span className="lbl">Danger zone</span>
           </div>
-          <button type="button" className="cl-danger-zone-btn" onClick={onDeleteProject}>
-            Delete state…
-          </button>
+          <div className="cl-danger-zone">
+            <div className="cl-danger-zone-body">
+              <strong>Delete this project&rsquo;s Claude Code state</strong>
+              <span>
+                Transcripts, tasks, file history and its entry in{' '}
+                <span className="font-mono">~/.claude.json</span>. Your source files are never
+                touched. You&rsquo;ll see exactly what goes before confirming.
+              </span>
+            </div>
+            <button type="button" className="cl-danger-zone-btn" onClick={onDeleteProject}>
+              Delete state…
+            </button>
+          </div>
         </div>
-      </div>
+      )}
     </section>
   );
 }

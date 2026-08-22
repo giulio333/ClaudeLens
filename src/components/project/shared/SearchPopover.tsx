@@ -2,6 +2,7 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Agent, McpServer, ProjectCost, SessionSummary, Skill } from '../../../types';
 import { fmtModel, sessionTitle } from '../utils';
 import { projectDisplayName } from './projectName';
+import { PROJECT_PURGE_ENABLED } from './project-purge';
 import { isSearchTrigger } from './searchTrigger';
 
 type Project = { hash: string; realPath: string };
@@ -623,7 +624,9 @@ export function SearchPopover({
           <kbd>⌘P</kbd>pin
         </span>
         {sessionsLoading && mode === 'global' && <span>loading sessions</span>}
-        {mode === 'projects' && currentProject && onDeleteCurrent && (
+        {/* Withdrawn with the Danger zone entry point — same reason, see
+            PROJECT_PURGE_ENABLED. */}
+        {PROJECT_PURGE_ENABLED && mode === 'projects' && currentProject && onDeleteCurrent && (
           <button
             type="button"
             className="cl-search-danger"
