@@ -144,9 +144,28 @@ export interface SessionArtifacts {
   artifacts: SessionArtifact[];
 }
 
+/** One path the delete dialog asks for; `required` = the locked session transcript. */
+export interface DeleteRequest {
+  path: string;
+  required?: boolean;
+}
+
+/** See `electron/modules/session-deleter.ts` — `absent` is kept apart from `deleted`. */
+export type DeleteStatus = 'deleted' | 'absent' | 'refused' | 'failed';
+
+export interface ArtifactOutcome {
+  path: string;
+  status: DeleteStatus;
+  required: boolean;
+  reason?: string;
+}
+
 export interface DeleteSessionResult {
+  outcomes: ArtifactOutcome[];
   deleted: string[];
   warnings: string[];
+  /** Every required path is gone — the only field the UI may read as success. */
+  succeeded: boolean;
 }
 
 /** The plan from `claude project purge --dry-run` — see `electron/modules/project-purger.ts`. */
