@@ -1,5 +1,5 @@
 import { getSessionArtifacts, deleteSessionArtifacts } from '../electron/modules/session-deleter';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -111,15 +111,22 @@ describe('getSessionArtifacts', () => {
 });
 
 describe('deleteSessionArtifacts', () => {
+  // Il transcript è la voce `required`: la sua sopravvivenza rende falsa l'intera
+  // operazione, ed è ciò che `succeeded` esiste per dire.
+  const req = (path: string) => ({ path, required: true });
+  const opt = (path: string) => ({ path });
+
   it('cancella file e cartelle indicati, sotto la root', () => {
     const sessionFile = join(projectPath, 'sess1.jsonl');
     const sidecar = join(projectPath, 'sess1');
     const taskFolder = join(tasksDir, 'sess1');
 
-    const res = deleteSessionArtifacts([sessionFile, sidecar, taskFolder], root);
+    const res = deleteSessionArtifacts([req(sessionFile), opt(sidecar), opt(taskFolder)], root);
 
+    expect(res.succeeded).toBe(true);
     expect(res.warnings).toHaveLength(0);
     expect(res.deleted).toHaveLength(3);
+    expect(res.outcomes.map(o => o.status)).toEqual(['deleted', 'deleted', 'deleted']);
     expect(existsSync(sessionFile)).toBe(false);
     expect(existsSync(sidecar)).toBe(false);
     expect(existsSync(taskFolder)).toBe(false);
@@ -132,19 +139,96 @@ describe('deleteSessionArtifacts', () => {
     const victim = join(outside, 'keepme.txt');
     writeFileSync(victim, 'data', 'utf-8');
 
-    const res = deleteSessionArtifacts([victim], root);
+    const res = deleteSessionArtifacts([opt(victim)], root);
 
     expect(res.deleted).toHaveLength(0);
     expect(res.warnings).toHaveLength(1);
     expect(res.warnings[0]).toMatch(/outside/);
+    expect(res.outcomes[0].status).toBe('refused');
     expect(existsSync(victim)).toBe(true);
 
     rmSync(outside, { recursive: true, force: true });
   });
 
   it('ignora silenziosamente path già inesistenti sotto la root', () => {
-    const res = deleteSessionArtifacts([join(projectPath, 'ghost.jsonl')], root);
+    const res = deleteSessionArtifacts([opt(join(projectPath, 'ghost.jsonl'))], root);
     expect(res.deleted).toHaveLength(0);
     expect(res.warnings).toHaveLength(0);
+    expect(res.outcomes[0].status).toBe('absent');
+  });
+
+  // Un transcript già assente soddisfa la richiesta: lo stato finale voluto è
+  // "non esiste", e ci siamo. Ma resta `absent`, non `deleted` — non l'abbiamo
+  // cancellato noi, e il report lo dice con parole diverse.
+  it('considera riuscita una sessione il cui transcript era già sparito', () => {
+    const res = deleteSessionArtifacts([req(join(projectPath, 'ghost.jsonl'))], root);
+
+    expect(res.succeeded).toBe(true);
+    expect(res.outcomes[0]).toMatchObject({ status: 'absent', required: true });
+    expect(res.deleted).toHaveLength(0);
+  });
+
+  // Il caso della issue: il transcript non si cancella. Prima tornava un
+  // risultato indistinguibile dal successo e la UI navigava via.
+  it('non si dichiara riuscita se il transcript required resta su disco', () => {
+    const sessionFile = join(projectPath, 'sess1.jsonl');
+    const taskFolder = join(tasksDir, 'sess1');
+    // Directory in sola lettura: l'unlink del figlio fallisce, la cartella no.
+    chmodSync(projectPath, 0o500);
+    try {
+      const res = deleteSessionArtifacts([req(sessionFile), opt(taskFolder)], root);
+
+      expect(res.succeeded).toBe(false);
+      const session = res.outcomes.find(o => o.path === sessionFile);
+      expect(session?.status).toBe('failed');
+      expect(session?.reason).toBeTruthy();
+      expect(res.warnings.some(w => w.includes(sessionFile))).toBe(true);
+      expect(existsSync(sessionFile)).toBe(true);
+      // Best-effort per voce: il fallimento del transcript non blocca il resto.
+      expect(existsSync(taskFolder)).toBe(false);
+      expect(res.deleted).toEqual([taskFolder]);
+    } finally {
+      chmodSync(projectPath, 0o700);
+    }
+  });
+
+  // L'altra metà: la sessione è andata, un artefatto opzionale no. Successo —
+  // ma con qualcosa da dire, che è il motivo per cui `warnings` sopravvive.
+  it('resta riuscita se fallisce solo un artefatto opzionale, ma lo segnala', () => {
+    const sessionFile = join(projectPath, 'sess1.jsonl');
+    const plan = join(plansDir, 'p1.md');
+    chmodSync(plansDir, 0o500);
+    try {
+      const res = deleteSessionArtifacts([req(sessionFile), opt(plan)], root);
+
+      expect(res.succeeded).toBe(true);
+      expect(res.warnings).toHaveLength(1);
+      expect(res.warnings[0]).toContain(plan);
+      expect(res.outcomes.find(o => o.path === plan)?.status).toBe('failed');
+      expect(existsSync(sessionFile)).toBe(false);
+      expect(existsSync(plan)).toBe(true);
+    } finally {
+      chmodSync(plansDir, 0o700);
+    }
+  });
+
+  it('un required rifiutato perché fuori root non passa per riuscito', () => {
+    const outside = mkdtempSync(join(tmpdir(), 'cl-outside-'));
+    try {
+      const res = deleteSessionArtifacts([req(join(outside, 'x.jsonl'))], root);
+      expect(res.succeeded).toBe(false);
+      expect(res.outcomes[0].status).toBe('refused');
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+
+  it('rifiuta una voce senza path valido invece di ignorarla', () => {
+    const res = deleteSessionArtifacts(
+      [{ path: '', required: true } as { path: string; required: boolean }],
+      root
+    );
+    expect(res.succeeded).toBe(false);
+    expect(res.outcomes[0].status).toBe('refused');
   });
 });

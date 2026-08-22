@@ -35,8 +35,11 @@ import type {
 import type {
   ActiveSession,
   BgSession,
+  DeleteRequest,
+  DeleteSessionResult,
   EffectiveConfig,
   SessionActivity,
+  SessionArtifacts,
   PurgePlan,
 } from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
@@ -121,6 +124,15 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     ),
     stopMessage: vi.fn(async () => ok(null)),
     endChat: vi.fn(async () => ok(null)),
+    // Session deletion: `getArtifacts` is the inventory the dialog shows,
+    // `deleteSession` the act. The default answer is a clean success — the
+    // interesting cases are the partial ones, scripted per test.
+    getArtifacts: vi.fn(async (_hash: string, _filename: string) =>
+      ok<SessionArtifacts>({ sessionId: 'sess1', artifacts: [] })
+    ),
+    deleteSession: vi.fn(async (_requests: DeleteRequest[]) =>
+      ok<DeleteSessionResult>({ outcomes: [], deleted: [], warnings: [], succeeded: true })
+    ),
     respondPermission: vi.fn(async (_requestId: string, _decision: unknown) => ok(null)),
 
     onChatStarted: channels.chatStarted.subscribe,

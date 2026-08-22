@@ -2272,8 +2272,19 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   ipcMain.handle('sessions:getArtifacts', (_e: unknown, _hash: string, filename: string) =>
     ok(getSessionArtifacts(filename))
   );
-  ipcMain.handle('sessions:deleteSession', (_e: unknown, paths: string[]) =>
-    ok({ deleted: paths, warnings: [] })
+  ipcMain.handle(
+    'sessions:deleteSession',
+    (_e: unknown, requests: Array<{ path: string; required?: boolean }>) =>
+      ok({
+        outcomes: requests.map(r => ({
+          path: r.path,
+          status: 'deleted' as const,
+          required: r.required === true,
+        })),
+        deleted: requests.map(r => r.path),
+        warnings: [],
+        succeeded: true,
+      })
   );
 
   // Plugins installati (user scope)

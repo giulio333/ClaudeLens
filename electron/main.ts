@@ -1068,11 +1068,19 @@ ipcMain.handle('sessions:getArtifacts', async (_event, hash: string, filename: s
   }
 });
 
-ipcMain.handle('sessions:deleteSession', async (_event, paths: string[]) => {
+// The renderer sends what it showed: each selected path, and which of them the
+// dialog presented as `locked`. `required` is what makes the answer meaningful —
+// a delete that leaves the transcript behind is a failure, and without the flag
+// this handler had no way to say so.
+ipcMain.handle('sessions:deleteSession', async (_event, requests: unknown) => {
   try {
-    if (!Array.isArray(paths)) throw new Error('paths must be an array');
-    const result = deleteSessionArtifacts(paths, CLAUDE_DIR);
-    return ok(result);
+    if (!Array.isArray(requests)) throw new Error('requests must be an array');
+    const parsed = requests.map(r => {
+      const item = r as { path?: unknown; required?: unknown };
+      if (typeof item?.path !== 'string') throw new Error('each request needs a string path');
+      return { path: item.path, required: item.required === true };
+    });
+    return ok(deleteSessionArtifacts(parsed, CLAUDE_DIR));
   } catch (e) {
     return err(e);
   }

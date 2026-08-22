@@ -15,6 +15,7 @@ import type {
   SessionSummary,
   SubagentMeta,
   SessionArtifacts,
+  DeleteRequest,
   DeleteSessionResult,
   ExportSaveResult,
   RuleFile,
@@ -84,6 +85,7 @@ export type {
   SessionSummary,
   SubagentMeta,
   SessionArtifacts,
+  DeleteRequest,
   DeleteSessionResult,
   ExportSaveResult,
   RuleFile,
@@ -259,7 +261,7 @@ declare global {
           agentId: string
         ) => Promise<IpcResult<ChatMessage[]>>;
         getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>;
-        deleteSession: (paths: string[]) => Promise<IpcResult<DeleteSessionResult>>;
+        deleteSession: (requests: DeleteRequest[]) => Promise<IpcResult<DeleteSessionResult>>;
         sendMessage: (
           realPath: string,
           sessionId: string,
@@ -723,7 +725,8 @@ export function useSessionArtifacts(hash: string | null, filename: string | null
 export function useDeleteSession(hash: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (paths: string[]) => unwrap(window.electronAPI.sessions.deleteSession(paths)),
+    mutationFn: (requests: DeleteRequest[]) =>
+      unwrap(window.electronAPI.sessions.deleteSession(requests)),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['sessions:project', hash] });
       qc.invalidateQueries({ queryKey: ['tasks:project', hash] });
