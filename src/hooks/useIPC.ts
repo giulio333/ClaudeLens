@@ -68,6 +68,7 @@ import type {
   ChatDoneEvent,
   ChatErrorEvent,
   NotificationEvent,
+  LiveWatchStatus,
   PurgePlan,
   PurgeResult,
 } from '../types';
@@ -445,9 +446,13 @@ declare global {
         onBgSessionsChanged: (cb: (sessions: BgSession[]) => void) => () => void;
         getActivity: () => Promise<IpcResult<SessionActivity[]>>;
         onSessionActivityChanged: (cb: (activity: SessionActivity[]) => void) => () => void;
-        startWatch: (hash: string, sessionId?: string) => Promise<IpcResult<{ started: boolean }>>;
+        startWatch: (
+          hash: string,
+          sessionId?: string
+        ) => Promise<IpcResult<LiveWatchStatus & { started: boolean }>>;
         stopWatch: () => Promise<IpcResult<null>>;
         onEvent: (cb: (event: unknown) => void) => () => void;
+        onWatchStatus: (cb: (status: LiveWatchStatus) => void) => () => void;
       };
     };
   }

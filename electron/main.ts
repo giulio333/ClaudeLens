@@ -2073,13 +2073,22 @@ ipcMain.handle('live:getActivity', async () => {
 
 ipcMain.handle('live:startWatch', async (event, hash: string, sessionId?: string) => {
   try {
-    const projectPath = projectDir(hash);
-    const started = await startLiveMonitor(projectPath, sessionId ?? null, liveEvent => {
-      if (!event.sender.isDestroyed()) {
-        event.sender.send('live:event', liveEvent);
-      }
+    const send = (channel: string, payload: unknown) => {
+      if (!event.sender.isDestroyed()) event.sender.send(channel, payload);
+    };
+    const status = await startLiveMonitor({
+      projectPath: projectDir(hash),
+      sessionId: sessionId ?? null,
+      onEvent: liveEvent => send('live:event', liveEvent),
+      // A requested session can be published by the registry before its
+      // transcript exists, so the monitor may start out waiting for the exact
+      // file. When it appears, the renderer has to hear about it: the answer to
+      // `startWatch` was `pending` and nothing else would ever correct it.
+      onStatus: liveStatus => send('live:watchStatus', liveStatus),
     });
-    return ok({ started });
+    // `started` is kept for the renderer's older reading of this call; `state`
+    // is the honest one — `pending` is neither started nor a failure.
+    return ok({ started: status.state === 'tailing', ...status });
   } catch (e) {
     return err(e);
   }

@@ -259,5 +259,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('live:startWatch', hash, sessionId),
     stopWatch: () => ipcRenderer.invoke('live:stopWatch'),
     onEvent: (cb: (event: unknown) => void) => subscribe('live:event', cb),
+    // The watch can start out waiting for a session's transcript to exist; this
+    // is how the renderer learns it has actually attached.
+    onWatchStatus: (cb: (status: unknown) => void) => subscribe('live:watchStatus', cb),
   },
 });
