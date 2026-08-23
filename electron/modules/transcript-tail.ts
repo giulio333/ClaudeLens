@@ -46,11 +46,22 @@ export interface LiveEvent {
  * (input + both cache figures) is what occupies the context window and is a
  * level — only the newest line's value means anything. Everything billed,
  * output included, is a total and accumulates.
+ *
+ * Which is why `usageKey` is here: one turn is written as SEVERAL lines (one per
+ * content block) that each repeat the same message-level usage, so a consumer
+ * that treats every entry as a turn bills the turn once per block. The level is
+ * unharmed — the repeats carry the same figure — but the totals are not. See
+ * `parseTurnUsage`.
  */
 export interface TurnUsage {
   /** Epoch ms of the line; 0 when it carried no parsable timestamp. */
   at: number;
   model?: string;
+  /** Stable identity of this turn's message-level usage (`message.id` +
+   *  `requestId`), so a caller accumulating totals can count each turn once.
+   *  Undefined when the line carries neither id — then the entry is all the
+   *  identity there is and it counts as its own turn. */
+  usageKey?: string;
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
@@ -166,6 +177,16 @@ export function readAppend(filePath: string, from: number, chunkSize = MAX_READ_
  * Every field is read defensively: this is an undocumented internal format, and
  * a usage block that gained or lost a key must cost us a zero, never a NaN
  * propagating into a dollar figure.
+ *
+ * The `usageKey` it stamps is the same identity `cost-tracker` dedupes on, and
+ * for the same reason (issue #56): Claude Code writes one line per content block
+ * of an assistant turn and each repeats the whole message envelope, usage
+ * included. Measured over 11 real transcripts, up to 5 lines carry one turn's
+ * usage and 28 of 33 turns in one of them were written twice — a tail summing
+ * every entry reported 1.86× the tokens the project views quote for the same
+ * file. The key is produced here rather than deduped here on purpose: this
+ * function sees one line, and the repeats can straddle two appends, so only a
+ * caller with memory across reads can drop them.
  */
 export function parseTurnUsage(json: Record<string, unknown>): TurnUsage | null {
   if (json.type !== 'assistant') return null;
@@ -186,10 +207,14 @@ export function parseTurnUsage(json: Record<string, unknown>): TurnUsage | null 
   // would stamp the session's activity without any work having happened.
   if (!inputTokens && !outputTokens && !cacheWriteTokens && !cacheReadTokens) return null;
 
+  const messageId = typeof msg?.id === 'string' ? msg.id : '';
+  const requestId = typeof json.requestId === 'string' ? json.requestId : '';
+
   const stamp = Date.parse(String(json.timestamp ?? ''));
   return {
     at: Number.isNaN(stamp) ? 0 : stamp,
     model: typeof msg?.model === 'string' ? msg.model : undefined,
+    usageKey: messageId || requestId ? `${messageId}:${requestId}` : undefined,
     inputTokens,
     outputTokens,
     cacheWriteTokens,
