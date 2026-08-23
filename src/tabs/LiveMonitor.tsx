@@ -1,5 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { LiveEvent, useActiveSessions } from '../hooks/useIPC';
+import type { LiveWatchState } from '../types';
 import { UsedItem, VISIBLE_TYPES, MAX_EVENTS, CHART_H } from './live/types';
 import { ActivityChart } from './live/ActivityChart';
 import { ProjectContextPanel } from './live/ProjectContextPanel';
@@ -20,6 +21,22 @@ function shortPath(p: string): string {
   return '/' + p.split(/[\\/]/).filter(Boolean).slice(-2).join('/');
 }
 
+// Lo stato del watch, detto per quello che è. `WAITING` è il caso che prima
+// veniva raccontato come LIVE su un altro transcript: la sessione richiesta
+// esiste nel registro ma il suo `.jsonl` non è ancora stato creato, cosa che
+// dura i primi istanti di una sessione e si risolve da sé.
+const WATCH_LABEL: Record<LiveWatchState | 'idle', { text: string; color: string; hint: string }> =
+  {
+    idle: { text: '…', color: '#2e3650', hint: 'Starting the watch' },
+    tailing: { text: 'LIVE', color: '#00e5ff', hint: 'Tailing this session transcript' },
+    pending: {
+      text: 'WAITING',
+      color: '#e0a03c',
+      hint: 'This session has no transcript yet — waiting for its own file, not tailing another one',
+    },
+    none: { text: 'OFFLINE', color: '#2e3650', hint: 'Nothing to tail in this project' },
+  };
+
 // ─── Componente principale ────────────────────────────────────────────────────
 
 export default function LiveMonitor({
@@ -31,7 +48,11 @@ export default function LiveMonitor({
 }) {
   const [events, setEvents] = useState<LiveEvent[]>([]);
   const { data: processes = [] } = useActiveSessions();
-  const [watching, setWatching] = useState(false);
+  // `idle` = non abbiamo ancora una risposta; `pending` = il main sta aspettando
+  // che il transcript della sessione richiesta compaia (non è né LIVE né un
+  // errore); `tailing` = agganciati a quel file, e a nessun altro.
+  const [watchState, setWatchState] = useState<LiveWatchState | 'idle'>('idle');
+  const watching = watchState === 'tailing';
   const [claudeStatus, setClaudeStatus] = useState<'idle' | 'thinking' | 'busy'>('idle');
   const [activeTool, setActiveTool] = useState<{
     name: string;
@@ -123,16 +144,59 @@ export default function LiveMonitor({
   // main ripiega sul .jsonl più recente. Cambia sessionId → restart del watch.
   const liveSessionId = activeProcs.find(p => p.sessionId)?.sessionId;
 
+  // Ogni restart guarda un'altra sessione: eventi, stato di Claude e tool in
+  // corso appartengono a quella di prima, e tenerli mescolava l'attività di due
+  // sessioni lasciando LIVE accesa dopo un restart fallito (#194). Il reset sta
+  // **in render** e non in un effetto — è il modo React di aggiustare lo stato
+  // quando cambia un input: dentro l'effetto ci sarebbe un frame in cui il
+  // pannello mostra il lavoro della sessione precedente sotto il nome di quella
+  // nuova, che è esattamente la confusione da eliminare.
+  const watchKey = `${project.hash}:${liveSessionId ?? ''}`;
+  const [watchedKey, setWatchedKey] = useState(watchKey);
+  if (watchedKey !== watchKey) {
+    setWatchedKey(watchKey);
+    setEvents([]);
+    setWatchState('idle');
+    setClaudeStatus('idle');
+    setActiveTool(null);
+    setUsedItems([]);
+    setElapsed(0);
+  }
+
   useEffect(() => {
-    const disposeEvent = window.electronAPI.live.onEvent(e => handleEvent(e as LiveEvent));
-    window.electronAPI.live.startWatch(project.hash, liveSessionId).then(r => {
-      if (r.data?.started) setWatching(true);
+    // I ref non fanno rendere nulla, quindi si azzerano qui: `lastUsedId` lega un
+    // tool_result all'item aperto dal tool_use di PRIMA, e tenerlo attraverso un
+    // cambio di sessione chiuderebbe l'item di una sessione col risultato di
+    // un'altra.
+    lastUsedIdRef.current = null;
+    toolStartRef.current = 0;
+
+    // `cancelled` è la generazione della richiesta: una risposta o un evento che
+    // arriva dopo un cambio di sessione riguarda il target precedente, e
+    // applicarlo accenderebbe LIVE sul watch sbagliato.
+    let cancelled = false;
+    const disposeEvent = window.electronAPI.live.onEvent(e => {
+      if (!cancelled) handleEvent(e as LiveEvent);
     });
+    // Il watch può partire in attesa: quando il transcript compare, questo è
+    // l'unico modo in cui il renderer lo viene a sapere.
+    const disposeStatus = window.electronAPI.live.onWatchStatus(status => {
+      if (!cancelled && status?.state) setWatchState(status.state);
+    });
+
+    window.electronAPI.live.startWatch(project.hash, liveSessionId).then(r => {
+      if (!cancelled) setWatchState(r.data?.state ?? 'none');
+    });
+
     return () => {
+      cancelled = true;
       disposeEvent();
+      disposeStatus();
       window.electronAPI.live.stopWatch();
     };
   }, [project.hash, liveSessionId, handleEvent]);
+
+  const watchLabel = WATCH_LABEL[watchState];
 
   const toolFreq = events
     .filter(e => e.type === 'tool_use')
@@ -206,13 +270,14 @@ export default function LiveMonitor({
         </button>
         <div className="w-px h-4" style={{ background: 'rgba(0,229,255,0.12)' }} />
 
-        {/* Badge LIVE */}
-        <div className="flex items-center gap-2">
+        {/* Badge LIVE — tre stati, perché "in attesa del transcript" non è
+            offline: la sessione è viva, il suo file non è ancora nato. */}
+        <div className="flex items-center gap-2" title={watchLabel.hint}>
           <div className="relative w-2.5 h-2.5">
             <div
               className="absolute inset-0 rounded-full"
               style={{
-                background: watching ? '#00e5ff' : '#2e3650',
+                background: watchLabel.color,
                 animation: watching ? 'dotPulse 2s ease-in-out infinite' : undefined,
               }}
             />
@@ -228,9 +293,9 @@ export default function LiveMonitor({
           </div>
           <span
             className="text-[10px] font-bold tracking-[0.2em]"
-            style={{ color: watching ? '#00e5ff' : '#2e3650' }}
+            style={{ color: watchLabel.color }}
           >
-            {watching ? 'LIVE' : 'OFFLINE'}
+            {watchLabel.text}
           </span>
         </div>
 
