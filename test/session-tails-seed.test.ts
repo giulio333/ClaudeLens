@@ -50,6 +50,10 @@ vi.mock('../electron/modules/cost-tracker', async () => {
 });
 
 const tails = await import('../electron/modules/session-tails');
+// See the note in `session-tails.test.ts`: the seed reads through cost-tracker's
+// parse cache, and these tests rewrite one path with different content, which is
+// the one thing an append-only cache may not be asked to survive.
+const { resetParseCache } = await import('../electron/modules/cost-tracker');
 const { syncSessionTails, onTranscriptChanged, getSessionActivity, resetSessionTails } = tails;
 type ActiveSession = import('../electron/modules/sessions-registry-reader').ActiveSession;
 
@@ -68,6 +72,7 @@ function transcript(content: string): string {
 
 beforeEach(() => {
   resetSessionTails();
+  resetParseCache();
   written.length = 0;
   rmSync(projectsDir, { recursive: true, force: true });
   mkdirSync(projectsDir, { recursive: true });
