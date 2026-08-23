@@ -23,7 +23,16 @@ and the chat `utils`.
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, and the read
 cache's invalidation. CI (`.github/workflows/ci.yml`) runs format:check +
-typecheck + lint + test + build on every push/PR. The style gate is strict:
+typecheck + lint + test + build on every push/PR. **Test order is randomised**
+(`sequence.shuffle` in `vitest.config.ts`): every `it` has to be an independent
+claim, and three files had quietly stopped being that — one test created the
+workflow the next edited, another appended to a transcript a later one measured,
+a third left an entry in `cost-tracker`'s append-only parse cache under a path it
+then rewrote with different content. Each passed in file order and failed as soon
+as two tests swapped places. So a fixture belongs in `beforeEach`, never in the
+test that happens to run first, and module-level state (`resetParseCache`,
+`resetSessionTails`, `resetSessionReadCache`, …) is reset there too. A red CI run
+is reproduced with the seed it prints: `npx vitest run --sequence.seed=<n>`. The style gate is strict:
 Prettier formatting is enforced repo-wide and `lint` runs with
 `--max-warnings 0`, so a new warning fails the build — fix it or add an inline
 `eslint-disable` with a reason. `typecheck` covers three projects: the renderer,

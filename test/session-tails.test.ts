@@ -8,6 +8,17 @@ const configDir = mkdtempSync(join(homedir(), '.cl-tails-test-'));
 process.env.CLAUDE_CONFIG_DIR = configDir;
 
 const tails = await import('../electron/modules/session-tails');
+// The spend seed runs through cost-tracker's parse cache, which is module state
+// this file shares across its tests — and it is keyed on the assumption that a
+// transcript only ever grows. These tests rewrite the SAME path with different
+// content, which breaks that assumption: a shorter parse left cached under the
+// path, then a longer file written over it, and the incremental read resumes at
+// an offset that now falls mid-line, folding a fragment into nothing. Real
+// transcripts are append-only, so the cache is right and the fixture is the odd
+// one out; it just has to leave no state behind. Without this the file passed
+// only in its declared order (`--sequence.shuffle --sequence.seed=42` was enough
+// to reorder two tests and report a seeded session's spend as zero).
+const { resetParseCache } = await import('../electron/modules/cost-tracker');
 const {
   toolArg,
   foldEvents,
@@ -115,6 +126,7 @@ const EMPTY: SessionActivity = {
 
 beforeEach(() => {
   resetSessionTails();
+  resetParseCache();
   rmSync(projectsDir, { recursive: true, force: true });
   mkdirSync(projectsDir, { recursive: true });
 });
