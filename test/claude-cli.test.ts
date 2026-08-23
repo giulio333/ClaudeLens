@@ -1,5 +1,5 @@
 import { describe, expect, it, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, chmodSync, existsSync, readFileSync } from 'fs';
 import { execFileSync } from 'child_process';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -92,6 +92,65 @@ describe.skipIf(process.platform === 'win32')('claude-cli (fake CLI on PATH)', (
     expect(e.message).toContain('150ms');
     // Ha atteso davvero il timeout, non è uscito da solo prima.
     expect(Date.now() - started).toBeGreaterThanOrEqual(150);
+  });
+
+  it("onTimeout: 'detach' lascia VIVO il processo, 'kill' lo uccide", async () => {
+    // Il caso per cui `detach` esiste: `claude project purge` cancella una voce
+    // alla volta e su una che non riesce a rimuovere si appende. Ucciderlo al cap
+    // lasciava cancellato tutto ciò che veniva prima e intatto il resto, con un
+    // banner rosso di fallimento sopra una cancellazione irreversibile a metà
+    // (#224). La differenza fra le due modalità è la SOPRAVVIVENZA del processo,
+    // quindi il test la misura sul pid: un marker su file non discriminerebbe —
+    // né un processo ucciso né uno ancora bloccato lo scriverebbero.
+    const pidFile = join(binDir, 'child.pid');
+    const slow = join(binDir, 'claude');
+    // `read` è un builtin e blocca sullo stdin del pipe, che nessuno scrive: il
+    // processo non finisce mai da solo (un `sleep` non esiste in questo PATH).
+    writeFileSync(slow, `#!/bin/sh\necho $$ > ${pidFile}\nread ignored\n`, 'utf-8');
+    chmodSync(slow, 0o755);
+
+    const alive = (pid: number) => {
+      try {
+        process.kill(pid, 0);
+        return true;
+      } catch {
+        return false;
+      }
+    };
+    // Il cap è generoso di proposito: il figlio deve avere scritto il suo pid
+    // PRIMA che scatti, altrimenti in modalità `kill` muore senza lasciarne
+    // traccia e il test non avrebbe nulla da interrogare. Misurato: spawn +
+    // avvio di /bin/sh sta sopra i 150ms su questa macchina, quindi un cap
+    // stretto gareggia con l'avvio invece di misurare la sopravvivenza.
+    const runWith = async (onTimeout: 'kill' | 'detach') => {
+      rmSync(pidFile, { force: true });
+      const err = (await execClaude(['x'], {
+        env: { PATH: binDir },
+        timeout: 1500,
+        onTimeout,
+      }).catch(e => e)) as ExecClaudeError;
+      expect(existsSync(pidFile)).toBe(true);
+      return { err, pid: Number(readFileSync(pidFile, 'utf-8').trim()) };
+    };
+
+    const detached = await runWith('detach');
+    expect(detached.err.code).toBe('ETIMEDOUT');
+    expect(detached.err.detached).toBe(true);
+    // L'attesa è la parte che rende il test capace di distinguere: un segnale
+    // appena inviato non ha ancora ucciso nulla, quindi interrogare il pid subito
+    // dopo il reject risponderebbe "vivo" anche in modalità `kill`.
+    await new Promise(r => setTimeout(r, 400));
+    expect(alive(detached.pid)).toBe(true);
+    process.kill(detached.pid, 'SIGKILL');
+
+    const killed = await runWith('kill');
+    expect(killed.err.code).toBe('ETIMEDOUT');
+    expect(killed.err.detached).toBe(false);
+    // La morte non è istantanea: si attende la consegna del segnale.
+    for (let i = 0; i < 40 && alive(killed.pid); i++) {
+      await new Promise(r => setTimeout(r, 25));
+    }
+    expect(alive(killed.pid)).toBe(false);
   });
 
   it('execClaude non lascia timer pendenti sul successo', async () => {

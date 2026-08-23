@@ -51,9 +51,11 @@ export function ProjectConfigView({
           current" button in the search popover's status bar — findable only by
           someone who already knew it was there.
 
-          Withdrawn while PROJECT_PURGE_ENABLED is off: the purge reached
-          projects the user had not selected, and the plan on screen did not say
-          so. See the flag for the two causes. */}
+          Gated on PROJECT_PURGE_ENABLED, which was off for v2.2.13: the purge
+          reached projects the user had not selected and the plan on screen did
+          not say so (#224). It is on again now that the dialog names every
+          project in the plan and refuses one that holds more than this project.
+          The flag carries the full account. */}
       {PROJECT_PURGE_ENABLED && (
         <div style={{ maxWidth: 660, marginTop: 44 }}>
           <div className="set-block-head">
@@ -65,7 +67,8 @@ export function ProjectConfigView({
               <span>
                 Transcripts, tasks, file history and its entry in{' '}
                 <span className="font-mono">~/.claude.json</span>. Your source files are never
-                touched. You&rsquo;ll see exactly what goes before confirming.
+                touched. You&rsquo;ll see exactly what goes — named project by project — before
+                confirming.
               </span>
             </div>
             <button type="button" className="cl-danger-zone-btn" onClick={onDeleteProject}>

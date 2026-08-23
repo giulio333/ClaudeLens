@@ -69,6 +69,7 @@ import type {
   ChatErrorEvent,
   NotificationEvent,
   PurgePlan,
+  PurgeResult,
 } from '../types';
 
 // Re-export per backward compatibility — i componenti che importano i tipi da qui continuano a funzionare
@@ -222,7 +223,7 @@ declare global {
       projects: {
         getDescription: (realPath: string) => Promise<IpcResult<DerivedDescription | null>>;
         planPurge: (hash: string) => Promise<IpcResult<PurgePlan>>;
-        purge: (hash: string) => Promise<IpcResult<{ output: string }>>;
+        purge: (hash: string) => Promise<IpcResult<PurgeResult>>;
         detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>;
         planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>;
         executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>;
@@ -1342,8 +1343,13 @@ export function usePurgeProject() {
   return useMutation({
     mutationFn: (hash: string) => unwrap(window.electronAPI.projects.purge(hash)),
     // The purge clears `~/.claude` of everything about this project: every query
-    // that read it has just stopped having an answer.
-    onSuccess: () => qc.invalidateQueries(),
+    // that read it has just stopped having an answer. A *refused* purge (the guard
+    // in `project-purger.ts` declined to run it) resolves like any other call and
+    // deleted nothing — invalidating there would re-read all of `~/.claude` for an
+    // operation that never happened.
+    onSuccess: result => {
+      if (result.status !== 'refused') qc.invalidateQueries();
+    },
   });
 }
 
