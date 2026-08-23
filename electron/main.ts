@@ -1412,6 +1412,20 @@ function purgeTargetPath(hash: string): string {
   return resolveRealPath(PROJECTS_DIR, hash);
 }
 
+// Names the `projects/<hash>` folders a purge plan would delete — the rows that
+// tell the user WHICH projects are going, and the count the guard refuses on.
+//
+// `resolveRealPath` never fails: when no transcript yields a cwd it falls back to
+// `hashToPath`, which is lossy (`/` and `.` both collapse to `-`, so the inverse
+// is a guess). `hasResolvedCwd` is what separates the two, and here the
+// difference matters more than anywhere else: a guessed path would put a
+// plausible, possibly wrong project name on a row in a deletion dialog. Unnamed
+// is honest; misnamed is what #224 was.
+function resolveProjectPathForPlan(hash: string): string | null {
+  const path = resolveRealPath(PROJECTS_DIR, hash);
+  return hasResolvedCwd(hash) ? path : null;
+}
+
 function purgeError(e: any): IpcResult<never> {
   if (e?.code === 'ENOENT') {
     return err(
@@ -1423,7 +1437,12 @@ function purgeError(e: any): IpcResult<never> {
 
 ipcMain.handle('projects:planPurge', async (_event, hash: string) => {
   try {
-    return ok(await planProjectPurge(purgeTargetPath(hash), { env: claudeEnv() }));
+    return ok(
+      await planProjectPurge(purgeTargetPath(hash), {
+        env: claudeEnv(),
+        resolveProjectPath: resolveProjectPathForPlan,
+      })
+    );
   } catch (e) {
     return purgeError(e);
   }
@@ -1431,10 +1450,15 @@ ipcMain.handle('projects:planPurge', async (_event, hash: string) => {
 
 ipcMain.handle('projects:purge', async (_event, hash: string) => {
   try {
-    const result = await runProjectPurge(purgeTargetPath(hash), { env: claudeEnv() });
+    const result = await runProjectPurge(purgeTargetPath(hash), {
+      env: claudeEnv(),
+      resolveProjectPath: resolveProjectPathForPlan,
+    });
     // The project folder is gone: the cwd resolved for that hash is now a cache
-    // entry no read can confirm any more.
-    invalidateCwdCache(hash);
+    // entry no read can confirm any more. A refused purge deleted nothing, so its
+    // cache entry is still the truth — and dropping it would make the next plan
+    // re-read every transcript for no reason.
+    if (result.status !== 'refused') invalidateCwdCache(hash);
     return ok(result);
   } catch (e) {
     return purgeError(e);
