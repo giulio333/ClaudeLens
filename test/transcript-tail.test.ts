@@ -335,6 +335,48 @@ describe('parseTurnUsage', () => {
     const read = readAppend(file, 0);
     expect(read.turns.map(t => t.outputTokens)).toEqual([1, 2]);
   });
+
+  // One turn, several lines. Claude Code writes an assistant message one line per
+  // content block and repeats the whole envelope — usage included — on each, so
+  // the entries have to carry the identity that says they are one turn or a
+  // consumer summing them bills it twice (measured at 1.86× on a real
+  // transcript). Same identity `cost-tracker` has deduped on since #56.
+  it('stamps the lines of one turn with the same identity', () => {
+    const block = (blocks: unknown[]) =>
+      JSON.parse(
+        JSON.stringify({
+          type: 'assistant',
+          timestamp: '2026-08-16T10:00:00.000Z',
+          requestId: 'req_01AB',
+          message: {
+            id: 'msg_01XY',
+            role: 'assistant',
+            model: 'claude-opus-5',
+            content: blocks,
+            usage: { input_tokens: 4, output_tokens: 120, cache_read_input_tokens: 90_000 },
+          },
+        })
+      ) as Record<string, unknown>;
+
+    const text = parseTurnUsage(block([{ type: 'text', text: 'on it' }]));
+    const call = parseTurnUsage(block([{ type: 'tool_use', id: 'tu_1', name: 'Read', input: {} }]));
+
+    expect(text?.usageKey).toBe('msg_01XY:req_01AB');
+    expect(call?.usageKey).toBe(text?.usageKey);
+    // The figures are identical too — which is exactly why summing them is wrong
+    // and taking the newest as the context level is not.
+    expect(call?.cacheReadTokens).toBe(90_000);
+  });
+
+  // Neither id: the entry is the only identity there is, so it must not collide
+  // with the next line that also has none — an empty key would fold a whole
+  // session's turns into one.
+  it('leaves the identity absent when the line carries no id at all', () => {
+    expect(parseTurnUsage(withUsage({ output_tokens: 3 }))?.usageKey).toBeUndefined();
+    expect(
+      parseTurnUsage(withUsage({ output_tokens: 3 }, { requestId: 'req_only' }))?.usageKey
+    ).toBe(':req_only');
+  });
 });
 
 // The head-scan that names a card for a session already running when the Monitor

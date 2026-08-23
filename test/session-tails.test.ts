@@ -43,6 +43,34 @@ function line(blocks: unknown[], timestamp = '2026-08-16T10:00:00.000Z'): string
   );
 }
 
+/** The lines ONE assistant turn is actually written as: Claude Code emits one
+ *  per content block and repeats the whole envelope — usage included — on each,
+ *  tagged with the same `message.id`/`requestId`. What a real transcript looks
+ *  like, and what the tail used to bill once per block. */
+function billedTurnLines(id: string, cacheRead: number, output: number, lines = 2): string {
+  return (
+    Array.from({ length: lines }, (_, i) =>
+      JSON.stringify({
+        type: 'assistant',
+        timestamp: '2026-08-16T10:00:00.000Z',
+        requestId: `req_${id}`,
+        message: {
+          id: `msg_${id}`,
+          role: 'assistant',
+          model: 'claude-opus-5',
+          content: [{ type: 'text', text: `block ${i}` }],
+          usage: {
+            input_tokens: 0,
+            cache_creation_input_tokens: 0,
+            cache_read_input_tokens: cacheRead,
+            output_tokens: output,
+          },
+        },
+      })
+    ).join('\n') + '\n'
+  );
+}
+
 /** An assistant line that billed something — what the spend and the context
  *  reading are both derived from. */
 function billedLine(cacheRead: number, output: number): string {
@@ -284,6 +312,45 @@ describe('foldEvents · usage', () => {
     const guessed = foldEvents(EMPTY, [], [usage({ model: 'claude-opus-9-preview' })]);
     expect(exact.spendEstimated).toBe(false);
     expect(guessed.spendEstimated).toBe(true);
+  });
+
+  // The bug this dedupe exists for: one assistant turn reaches the fold as
+  // several entries (one per content block, each repeating the same usage), and
+  // a total that adds them all bills the turn once per block — 1.86× the tokens
+  // `cost-tracker` reports for the same transcript, on the one page that quotes
+  // a live session's bill.
+  it('bills a turn once however many lines it was written as', () => {
+    const turn = usage({ usageKey: 'msg_01:req_01' });
+    const once = foldEvents(EMPTY, [], [turn]);
+    const repeated = foldEvents(EMPTY, [], [turn, { ...turn }, { ...turn }]);
+
+    expect(repeated.tokens).toBe(once.tokens);
+    expect(repeated.spend).toBe(once.spend);
+    // The level is the same reading either way — the repeats carry it unchanged.
+    expect(repeated.context).toEqual(once.context);
+  });
+
+  // The repeated lines can straddle two reads: the file grows between the block
+  // that opened the turn and the one that closed it. The memory is the caller's
+  // for exactly this reason.
+  it('still bills it once when the repeat arrives in the next append', () => {
+    const turn = usage({ usageKey: 'msg_01:req_01' });
+    const seen: string[] = [];
+    const first = foldEvents(EMPTY, [], [turn], seen);
+    const second = foldEvents(first, [], [{ ...turn }], seen);
+
+    expect(second.tokens).toBe(first.tokens);
+    expect(second.spend).toBe(first.spend);
+  });
+
+  // Dedupe is not "the same figures twice": two turns can legitimately bill the
+  // identical usage, and only the identity tells them apart.
+  it('counts a genuinely new turn that happens to bill the same', () => {
+    const seen: string[] = [];
+    const first = foldEvents(EMPTY, [], [usage({ usageKey: 'msg_01:req_01' })], seen);
+    const second = foldEvents(first, [], [usage({ usageKey: 'msg_02:req_02' })], seen);
+
+    expect(second.tokens).toBe(first.tokens * 2);
   });
 
   it('leaves both figures untouched when an append carries no turns', () => {
@@ -609,6 +676,34 @@ describe('syncSessionTails / onTranscriptChanged', () => {
     const after = getSessionActivity()[0];
     expect(after.tokens).toBe(415_100);
     expect(after.spend).toBeGreaterThan(seeded.spend!);
+  });
+
+  // End to end on the real path, with the transcript a session actually writes:
+  // a turn split over two lines must move the bill once. `cost-tracker` (which
+  // seeds the figure) has deduped on this identity since #56, so counting both
+  // lines here made the same session cost two different amounts depending on
+  // which page you read it from.
+  it('bills a multi-line turn once when it arrives through the tail', async () => {
+    const dir = join(projectsDir, '-Users-foo-proj');
+    mkdirSync(dir, { recursive: true });
+    const file = join(dir, 's1.jsonl');
+    writeFileSync(file, '');
+
+    await syncSessionTails([session('s1')]);
+    appendFileSync(file, billedTurnLines('01', 120_000, 500));
+    onTranscriptChanged(file);
+
+    const after = getSessionActivity()[0];
+    expect(after.tokens).toBe(120_500);
+    expect(after.context).toEqual({ used: 120_000, max: 1_000_000 });
+
+    // And a turn whose blocks straddle two appends is still one turn.
+    const half = billedTurnLines('02', 130_000, 400, 1);
+    appendFileSync(file, half);
+    onTranscriptChanged(file);
+    appendFileSync(file, half);
+    onTranscriptChanged(file);
+    expect(getSessionActivity()[0].tokens).toBe(120_500 + 130_400);
   });
 
   // The one case where seeding would be wrong: a transcript that did not exist at
