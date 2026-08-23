@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, afterAll, beforeEach } from 'vitest';
 import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync, writeFileSync } from 'fs';
 import { homedir } from 'os';
 import { join } from 'path';
@@ -15,6 +15,23 @@ const compiler = await import('../electron/modules/studio-compiler');
 afterAll(() => {
   delete process.env.CLAUDE_CONFIG_DIR;
   rmSync(configDir, { recursive: true, force: true });
+});
+
+// The workflows dir IS the state under test here — the modules keep none of
+// their own, the `.js` files on disk are the source of truth — so a test that
+// leaves one behind is setting up the next one. Several did: the duplicate-name
+// check and the visual save both read the script the first test creates, and the
+// project-scope block wrote a blueprint in one test, listed it in the second and
+// deleted it in the last. That reads as a story and passes in file order, but
+// each `it` is supposed to be its own claim; reordering them (a plain
+// `--sequence.shuffle`) turned four of them red. Wipe the dir before each test
+// and let every test state its own precondition.
+beforeEach(() => {
+  rmSync(join(configDir, 'workflows'), { recursive: true, force: true });
+  // Recreated empty rather than just removed: several tests drop a `.js` in
+  // there with a plain `writeFileSync`, which until now relied on an earlier
+  // test's `createBlueprint` having made the directory.
+  mkdirSync(join(configDir, 'workflows'), { recursive: true });
 });
 
 function blueprint(name = 'release-triage'): Blueprint {
@@ -38,6 +55,29 @@ function blueprint(name = 'release-triage'): Blueprint {
   };
 }
 
+/** A representable native script, written straight to disk with no ClaudeLens
+ *  involvement — the shape the reader has to project, and the file the
+ *  raw-source tests edit. Shared because both blocks need it on disk; it used to
+ *  be left there by whichever test ran first. */
+const EXTERNAL_REVIEW = `export const meta = {
+  name: "external-review",
+  description: "review a patch",
+  whenToUse: "Inspect a supplied patch",
+  phases: [{ title: "Review" }],
+}
+
+phase("Review")
+const reviewer = await agent(\`Review \${args}\`, { label: "reviewer", model: "sonnet" })
+
+return reviewer
+`;
+
+function writeGlobalScript(fileName: string, source: string): string {
+  const path = join(configDir, 'workflows', fileName);
+  writeFileSync(path, source, 'utf-8');
+  return path;
+}
+
 function firstStep(bp: Blueprint | null | undefined) {
   const node = bp?.phases[0]?.nodes[0];
   return node?.kind === 'step' ? node.step : undefined;
@@ -59,6 +99,7 @@ describe('script-only Agent Studio persistence', () => {
   });
 
   it('refuses duplicate creation and traversal names', async () => {
+    await writer.createBlueprint(blueprint());
     await expect(writer.createBlueprint(blueprint())).rejects.toThrow(/already exists/);
     await expect(writer.saveBlueprint(blueprint('../evil'))).rejects.toThrow(
       /Invalid workflow name/
@@ -69,6 +110,7 @@ describe('script-only Agent Studio persistence', () => {
   });
 
   it('saves visual edits back to the same script file', async () => {
+    await writer.createBlueprint(blueprint());
     const changed = (await reader.readBlueprint('release-triage'))!;
     firstStep(changed)!.prompt = 'Collect carefully for ${args}';
     const result = await writer.saveBlueprint(changed, 'release-triage.js');
@@ -109,19 +151,8 @@ describe('script-only Agent Studio persistence', () => {
 
 describe('native script parsing', () => {
   it('projects an external representable workflow into the same Brief and Flow model', async () => {
-    const source = `export const meta = {
-  name: "external-review",
-  description: "review a patch",
-  whenToUse: "Inspect a supplied patch",
-  phases: [{ title: "Review" }],
-}
-
-phase("Review")
-const reviewer = await agent(\`Review \${args}\`, { label: "reviewer", model: "sonnet" })
-
-return reviewer
-`;
-    writeFileSync(join(configDir, 'workflows', 'external-review.js'), source, 'utf-8');
+    const source = EXTERNAL_REVIEW;
+    writeGlobalScript('external-review.js', source);
 
     const detail = await reader.getBlueprintDetail('external-review.js');
     expect(detail?.structured).toBe(true);
@@ -528,6 +559,10 @@ describe('round-trip corruption guards', () => {
 });
 
 describe('raw source operations', () => {
+  // These edit a script that is already on disk; which one is not the point, so
+  // it is written here rather than inherited from the parsing block above.
+  beforeEach(() => writeGlobalScript('external-review.js', EXTERNAL_REVIEW));
+
   it('reads and overwrites an existing workflow verbatim', async () => {
     const before = (await reader.getBlueprintDetail('external-review.js'))!;
     const changed = `${before.source}\n// manual edit\n`;
@@ -561,6 +596,7 @@ describe('raw source operations', () => {
   });
 
   it('deletes the native script itself', async () => {
+    await writer.createBlueprint(blueprint());
     writer.deleteBlueprint('release-triage.js');
     expect(existsSync(join(configDir, 'workflows', 'release-triage.js'))).toBe(false);
     expect(await reader.readBlueprint('release-triage')).toBeNull();
@@ -571,6 +607,14 @@ describe('project-local workflows (.claude/workflows in the project cwd)', () =>
   const projectDir = mkdtempSync(join(homedir(), '.cl-studio-proj-'));
   const projectWorkflows = join(projectDir, '.claude', 'workflows');
   afterAll(() => rmSync(projectDir, { recursive: true, force: true }));
+
+  // One project-scope blueprint, present for every test in the block: the
+  // listing reads it, the overwrite edits it and the delete removes it, so
+  // whichever runs first cannot be the one that creates it.
+  beforeEach(async () => {
+    rmSync(projectWorkflows, { recursive: true, force: true });
+    await writer.saveBlueprint(blueprint('proj-flow'), undefined, projectDir);
+  });
 
   it('saves and reads back a blueprint in the project scope', async () => {
     const { scriptPath } = await writer.saveBlueprint(
@@ -587,6 +631,8 @@ describe('project-local workflows (.claude/workflows in the project cwd)', () =>
   });
 
   it('lists global and project scripts together, tagged with their scope', async () => {
+    // The global half of the claim needs a global script to exist.
+    await writer.createBlueprint(blueprint());
     const all = await reader.getBlueprints([projectDir]);
     const projFlow = all.find(bp => bp.name === 'proj-flow');
     expect(projFlow).toMatchObject({ scope: 'project', projectPath: projectDir });

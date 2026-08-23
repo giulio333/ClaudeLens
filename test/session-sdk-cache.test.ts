@@ -82,6 +82,22 @@ beforeAll(() => {
   mkdirSync(join(projDir, SESSION_ID, 'subagents'), { recursive: true });
 
   transcript = join(projDir, `${SESSION_ID}.jsonl`);
+  subagentTranscript = join(projDir, SESSION_ID, 'subagents', `agent-${AGENT_ID}.jsonl`);
+  source = { projectDir: projDir, cwd: CWD };
+});
+
+/**
+ * The transcripts every test reads, back at their starting length.
+ *
+ * They are fixtures, not accumulated state — but two tests here append to
+ * them on purpose (that IS what they assert: a grown transcript must
+ * invalidate its cache), and what they leave behind changed the answer for
+ * whoever ran next. In file order the growers happen to run last; reordered,
+ * a sub-agent that had answered once reported two messages. Written from
+ * `beforeEach` alongside the cache resets, so each test starts from the same
+ * disk as well as the same cache.
+ */
+function writeFixtures(): void {
   writeFileSync(
     transcript,
     jsonl([
@@ -94,7 +110,6 @@ beforeAll(() => {
     ])
   );
 
-  subagentTranscript = join(projDir, SESSION_ID, 'subagents', `agent-${AGENT_ID}.jsonl`);
   writeFileSync(
     subagentTranscript,
     jsonl([
@@ -127,11 +142,10 @@ beforeAll(() => {
       assistantLine('n2', 'n1', [{ type: 'text', text: 'answered directly' }]),
     ])
   );
-
-  source = { projectDir: projDir, cwd: CWD };
-});
+}
 
 beforeEach(() => {
+  writeFixtures();
   resetSessionReadCache();
   resetSubagentsCache();
 });
