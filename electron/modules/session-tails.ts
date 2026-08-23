@@ -511,6 +511,18 @@ async function findTranscript(sessionId: string): Promise<string | null> {
  * cursor adopted at offset 0, which reads the file itself. It also survives a
  * failed read, so the next sync tries again instead of leaving the session
  * without a figure for the rest of its life.
+ *
+ * The seed also OWNS THE CURSOR, because a seed and an offset are two halves of
+ * one statement: everything before byte N is in the figure, everything after it
+ * is the tail's to add. Sizing the cursor separately — a `statSync` before this
+ * read — made those two halves describe different moments, since the read is
+ * asynchronous over a file the session is still appending to (8–53 ms per
+ * transcript, measured). A turn written inside that window landed in the seed
+ * AND after the cursor, so the tail billed it a second time; the dedupe added
+ * for #228 cannot see it either, because the seed registers no turn identities.
+ * `readSessionSpend` therefore reports where its figure stops and the cursor
+ * moves there. A read that carries no position (missing or unreadable file)
+ * leaves the cursor untouched.
  */
 async function seedSpend(cursor: Cursor): Promise<void> {
   if (!cursor.needsSeed || !cursor.transcriptPath) return;
@@ -520,6 +532,7 @@ async function seedSpend(cursor: Cursor): Promise<void> {
     cursor.tokens = seed.tokens;
     cursor.spendEstimated = !isModelPriced(seed.model);
     cursor.model = cursor.model ?? seed.model ?? null;
+    if (seed.bytes !== null) cursor.offset = seed.bytes;
     cursor.needsSeed = false;
   } catch {
     // Unreadable right now: `needsSeed` stays set, so the next sync retries and
@@ -581,6 +594,9 @@ export async function syncSessionTails(
     const path = await findTranscript(session.sessionId);
     if (!path) continue; // not written yet: adopted later, see onTranscriptChanged
     cursor.transcriptPath = path;
+    // A provisional cursor: the seed below reports where its own figure stops
+    // and moves it there, which is the only offset consistent with that figure
+    // (see `seedSpend`). This one stands when the seed cannot be read at all.
     try {
       cursor.offset = statSync(path).size;
     } catch {
