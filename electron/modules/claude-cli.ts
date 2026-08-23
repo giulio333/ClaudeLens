@@ -31,13 +31,46 @@ export interface ExecClaudeError extends Error {
   code?: string;
   exitCode?: number | null;
   stderr?: string;
+  /** What the CLI had already printed: on a partial run it is the only account of it. */
+  stdout?: string;
+  /** Set with `code: 'ETIMEDOUT'` when the cap fired and the process was LEFT RUNNING. */
+  detached?: boolean;
+}
+
+/**
+ * What a `timeout` does when it fires.
+ *
+ * `kill` (the default, and right for every read) stops a CLI that will not
+ * terminate — a `mcp list` waiting on a network health check.
+ *
+ * `detach` stops *waiting* without killing anything: the promise rejects with
+ * `code: 'ETIMEDOUT'` and `detached: true` while the process keeps running,
+ * unref'd. It exists for commands that DELETE: `claude project purge` walks a
+ * flat list one entry at a time and hangs on one it cannot remove, so killing it
+ * at the cap left everything before the stall deleted, everything after it
+ * intact, and the caller reporting a plain failure over an irreversible partial
+ * deletion (#224). A caller that asks for `detach` must treat the rejection as
+ * "outcome unknown, possibly partial" — never as "nothing happened".
+ */
+export type ExecTimeoutMode = 'kill' | 'detach';
+
+// I pipe di un child process sono `net.Socket` a runtime — quindi hanno `unref()`
+// — ma sono tipizzati `Readable`/`Writable`, che non lo dichiarano. Il cast è
+// confinato qui, e la chiamata è opzionale: se un giorno non fosse un socket,
+// non chiamare `unref` costa un handle in più nel loop, non un errore.
+function unrefStream(stream: unknown): void {
+  (stream as { unref?: () => void } | null | undefined)?.unref?.();
 }
 
 // Esecuzione bufferizzata stile promisify(execFile): risolve con stdout/stderr
 // a exit 0, rigetta con un errore che porta `code` (ENOENT incluso) e `stderr`.
 export function execClaude(
   args: string[],
-  opts: ClaudeSpawnOptions & { maxBuffer?: number; timeout?: number } = {}
+  opts: ClaudeSpawnOptions & {
+    maxBuffer?: number;
+    timeout?: number;
+    onTimeout?: ExecTimeoutMode;
+  } = {}
 ): Promise<{ stdout: string; stderr: string }> {
   const maxBuffer = opts.maxBuffer ?? 1024 * 1024;
   return new Promise((resolve, reject) => {
@@ -47,12 +80,31 @@ export function execClaude(
     let settled = false;
     // Comandi come `mcp list` fanno health check di rete: senza un tetto, una
     // CLI che non termina lascerebbe la promise appesa per sempre.
+    const detachOnTimeout = opts.onTimeout === 'detach';
     const timer = opts.timeout
       ? setTimeout(() => {
-          proc.kill();
+          // `detach` deliberately does not kill: see ExecTimeoutMode. We take our
+          // leave of the child instead — stop reading its pipes and drop its
+          // handles from the loop — and let it finish whatever it was in the
+          // middle of. Dropping the `data` listeners is not tidiness: a detached
+          // child that kept writing would grow the buffer past `maxBuffer` and
+          // reach `overflow()`, which kills — the one thing this mode exists to
+          // avoid. The pipes are unref'd rather than destroyed, so the child is
+          // never handed an EPIPE for writing to us.
+          if (detachOnTimeout) {
+            proc.stdout?.removeAllListeners('data');
+            proc.stderr?.removeAllListeners('data');
+            unrefStream(proc.stdout);
+            unrefStream(proc.stderr);
+            unrefStream(proc.stdin);
+            proc.unref();
+          } else {
+            proc.kill();
+          }
           fail(
             Object.assign(new Error(`claude timed out after ${opts.timeout}ms`), {
               code: 'ETIMEDOUT',
+              detached: detachOnTimeout,
             })
           );
         }, opts.timeout)
@@ -63,6 +115,7 @@ export function execClaude(
       settled = true;
       clearTimeout(timer);
       if (e.stderr === undefined) e.stderr = stderr;
+      if (e.stdout === undefined) e.stdout = stdout;
       reject(e);
     };
     const overflow = () => {

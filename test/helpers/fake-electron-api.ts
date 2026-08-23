@@ -41,6 +41,7 @@ import type {
   SessionActivity,
   SessionArtifacts,
   PurgePlan,
+  PurgeResult,
 } from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
 
@@ -54,9 +55,25 @@ export const fail = <T = never>(error: string): IpcResult<T> => ({ data: null, e
 export const emptyPurgePlan = (over: Partial<PurgePlan> = {}): PurgePlan => ({
   projectPath: null,
   items: [],
+  projects: [],
   notes: [],
   totalItems: null,
   raw: '',
+  ...over,
+});
+
+/**
+ * A purge outcome. Defaults to the clean one — the only status the dialog may
+ * read as "this is over" — so a test that cares about a partial or refused run
+ * has to say which.
+ */
+export const purgeResult = (over: Partial<PurgeResult> = {}): PurgeResult => ({
+  status: 'clean',
+  output: '',
+  projects: [],
+  paths: [],
+  refusal: null,
+  error: null,
   ...over,
 });
 
@@ -170,7 +187,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   const projects = {
     getDescription: vi.fn(async (_realPath: string) => ok<DerivedDescription | null>(null)),
     planPurge: vi.fn(async (_hash: string) => ok(emptyPurgePlan())),
-    purge: vi.fn(async (_hash: string) => ok({ output: '' })),
+    purge: vi.fn(async (_hash: string) => ok(purgeResult())),
   };
 
   // The effective config, resolved through the Agent SDK. `null` data is a real
