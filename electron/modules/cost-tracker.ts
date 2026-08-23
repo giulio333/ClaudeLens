@@ -240,16 +240,32 @@ export function costOfUsage(
  *
  * Cheap because it is the same cached `parseSession` the project views use: an
  * unchanged transcript costs one `stat`, a grown one only its tail.
+ *
+ * `bytes` is what makes the handover exact, and it is the whole reason the
+ * caller must not size its cursor itself. This read is asynchronous over a file
+ * a live session is appending to, so a cursor placed at EOF *before* it and a
+ * figure covering everything read *during* it describe two different moments:
+ * measured at 8–53 ms per transcript, and every turn written inside that window
+ * is counted by both. So the figure says where it stops — the offset of the last
+ * complete line it folded, the trailing partial one excluded so the tail re-reads
+ * that record whole once it is finished. `null` when nothing was parsed (missing
+ * file, unreadable): then the reading carries no position and the caller keeps
+ * whatever cursor it had.
  */
 export async function readSessionSpend(
   filePath: string
-): Promise<{ costUsd: number; tokens: number; model: string | undefined }> {
+): Promise<{ costUsd: number; tokens: number; model: string | undefined; bytes: number | null }> {
   const parsed = await parseSession(filePath);
+  // Read AFTER the parse, so it is that parse's own position — including the
+  // branches that fold nothing and leave the previous entry standing, where the
+  // figure and the offset stay consistent because both come from that entry.
+  const entry = cacheGet(filePath);
   return {
     costUsd: costOfUsage(parsed, parsed.model, parsed.date),
     tokens:
       parsed.inputTokens + parsed.outputTokens + parsed.cacheWriteTokens + parsed.cacheReadTokens,
     model: parsed.model,
+    bytes: entry ? entry.consumed - entry.partial.length : null,
   };
 }
 
