@@ -179,6 +179,11 @@ interface Cursor extends SessionActivity {
    *  behind it — see `seedSpend`. Cursor-only state, stripped before the digest
    *  leaves for the renderer. */
   needsSeed: boolean;
+  /** Identities of the turns already billed, so the several lines one turn is
+   *  written as are counted once — see `dropRepeats`. Cursor-only for the same
+   *  reason as the two above: it is bookkeeping about the read, not something
+   *  the digest says about the session. */
+  seenUsage: string[];
 }
 
 const cursors = new Map<string, Cursor>(); // keyed by sessionId
@@ -238,6 +243,7 @@ function emptyActivity(sessionId: string): Cursor {
     endedAt: null,
     offset: 0,
     needsSeed: false,
+    seenUsage: [],
   };
 }
 
@@ -267,6 +273,45 @@ export function toolArg(input: Record<string, unknown> | undefined): string {
 }
 
 /**
+ * How many turn identities the fold remembers, so a turn written as several
+ * lines is billed once (see `dropRepeats`).
+ *
+ * A fixed window rather than the whole set `cost-tracker` keeps: that one is
+ * bounded by a file it parses and then forgets, while a cursor here lives as
+ * long as the session does, and one entry per turn ever made is memory that only
+ * grows. Sixteen is three times the widest turn measured (5 lines) and the
+ * repeats are contiguous — over 11 real transcripts, 500 multi-line turns, not
+ * one was interleaved with another's lines.
+ */
+const USAGE_MEMORY = 16;
+
+/**
+ * Drop the turns this cursor has already billed.
+ *
+ * Claude Code writes one JSONL line per content block of an assistant turn and
+ * each line repeats the same message-level usage — so `readAppend` hands up two
+ * to five entries for one turn, and summing them bills it as many times. It cost
+ * the Monitor 1.86× the tokens the project views quote for the same transcript,
+ * and the same figure could not be wrong in both places: `cost-tracker` has
+ * deduped on this identity since issue #56, and the tail's whole claim to price
+ * a turn is that it uses that module's table on that module's terms.
+ *
+ * `seen` is caller-owned and mutated in place, like the offset the caller
+ * advances: the repeated lines can straddle two appends, so the memory has to
+ * outlive the batch, and it must not travel to the renderer with the digest.
+ */
+function dropRepeats(turns: TurnUsage[], seen: string[]): TurnUsage[] {
+  return turns.filter(turn => {
+    // No id at all: the entry is the only identity there is, so it is its own turn.
+    if (!turn.usageKey) return true;
+    if (seen.includes(turn.usageKey)) return false;
+    seen.push(turn.usageKey);
+    if (seen.length > USAGE_MEMORY) seen.splice(0, seen.length - USAGE_MEMORY);
+    return true;
+  });
+}
+
+/**
  * Fold one append's assistant turns into the digest's two derived figures.
  *
  * They are different KINDS of quantity and are treated as such: the context is a
@@ -275,11 +320,17 @@ export function toolArg(input: Record<string, unknown> | undefined): string {
  * Reading the prompt as a total (or the bill as a level) is the mistake this
  * split exists to make impossible.
  *
+ * It is also why a repeated line is dropped BEFORE either figure is touched
+ * rather than only before the totals: the level is unharmed by the repeats (they
+ * carry the same prompt), so an append that turns out to be nothing but repeats
+ * has nothing new to say about the session at all.
+ *
  * Each turn is priced with ITS OWN model and timestamp, not the session's: a
  * `/model` switch mid-session is real, and so is a model whose published rate
  * changed on a date the session straddles.
  */
-function foldTurns(prev: SessionActivity, turns: TurnUsage[]): SessionActivity {
+function foldTurns(prev: SessionActivity, allTurns: TurnUsage[], seen: string[]): SessionActivity {
+  const turns = dropRepeats(allTurns, seen);
   if (!turns.length) return prev;
 
   let spend = prev.spend ?? 0;
@@ -305,7 +356,10 @@ function foldTurns(prev: SessionActivity, turns: TurnUsage[]): SessionActivity {
 }
 
 /**
- * Fold tail events into the running digest. Pure: the caller owns the state.
+ * Fold tail events into the running digest. Pure: the caller owns the state,
+ * `seen` included — it is the memory that lets a turn split across two appends
+ * be billed once (see `dropRepeats`). Omitting it dedupes within the batch only,
+ * which is what a caller with no cursor of its own can honestly offer.
  *
  * Order matters — a batch usually ends with the event that best describes the
  * session (the tool it just started), so later events win over earlier ones.
@@ -313,9 +367,10 @@ function foldTurns(prev: SessionActivity, turns: TurnUsage[]): SessionActivity {
 export function foldEvents(
   prev: SessionActivity,
   events: LiveEvent[],
-  turns: TurnUsage[] = []
+  turns: TurnUsage[] = [],
+  seen: string[] = []
 ): SessionActivity {
-  let next = foldTurns(prev, turns);
+  let next = foldTurns(prev, turns, seen);
   const marks = [...prev.recent];
 
   for (const event of events) {
@@ -578,7 +633,7 @@ export function onTranscriptChanged(path: string): boolean {
     // repeats the current one). Returning early on `events` alone would drop the
     // context reading and the turn's cost.
     if (read.events.length === 0 && read.turns.length === 0) return read.reset;
-    Object.assign(cursor, foldEvents(cursor, read.events, read.turns));
+    Object.assign(cursor, foldEvents(cursor, read.events, read.turns, cursor.seenUsage));
     return true;
   } catch {
     // Deleted or unreadable mid-read: keep the cursor, the next append retries.
@@ -599,6 +654,7 @@ export function getSessionActivity(now: number = Date.now()): SessionActivity[] 
   const strip = ({
     offset: _offset,
     needsSeed: _needsSeed,
+    seenUsage: _seenUsage,
     ...activity
   }: Cursor): SessionActivity => activity;
   return [...[...cursors.values()].map(strip), ...[...ended.values()].map(strip)];
