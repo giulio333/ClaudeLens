@@ -225,6 +225,21 @@ export interface PurgeResult {
   error: string | null;
 }
 
+/**
+ * What the Live Monitor is attached to. `pending` is the state that did not
+ * exist: asked for a session whose transcript has not been created yet, the
+ * monitor used to fall back to the project's newest `.jsonl` and report itself
+ * started — showing another session's activity under the requested one's name
+ * (#194). Now an explicit session id only ever resolves to its own file.
+ */
+export type LiveWatchState = 'tailing' | 'pending' | 'none';
+
+export interface LiveWatchStatus {
+  state: LiveWatchState;
+  sessionId: string | null;
+  filePath: string | null;
+}
+
 export type TaskStatus = 'pending' | 'in_progress' | 'completed';
 
 export interface Task {

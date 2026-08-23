@@ -38,6 +38,8 @@ import type {
   DeleteRequest,
   DeleteSessionResult,
   EffectiveConfig,
+  LiveEvent,
+  LiveWatchStatus,
   SessionActivity,
   SessionArtifacts,
   PurgePlan,
@@ -118,6 +120,14 @@ export function createChannels() {
     sessionActivity: new Channel<SessionActivity[]>(),
     /** `live:bgSessions` — background agents (jobs + daemon roster). */
     bgSessions: new Channel<BgSession[]>(),
+    /** `live:event` — the Live Monitor's transcript tail, one event per record. */
+    liveEvent: new Channel<LiveEvent>(),
+    /**
+     * `live:watchStatus` — how the main's tail is attached. It exists because a
+     * watch can start out `pending` (the requested session has no transcript
+     * yet) and nothing else would ever tell the renderer it went live (#194).
+     */
+    liveWatchStatus: new Channel<LiveWatchStatus>(),
   };
 }
 
@@ -212,6 +222,19 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     onSessionActivityChanged: channels.sessionActivity.subscribe,
     getSessions: vi.fn(async () => ok<BgSession[]>([])),
     onBgSessionsChanged: channels.bgSessions.subscribe,
+    // The Live Monitor's tail. `startWatch` answers with the attachment state,
+    // and `tailing` is the only one that means "you are seeing this session".
+    startWatch: vi.fn(async (_hash: string, sessionId?: string) =>
+      ok<LiveWatchStatus & { started: boolean }>({
+        started: true,
+        state: 'tailing',
+        sessionId: sessionId ?? null,
+        filePath: null,
+      })
+    ),
+    stopWatch: vi.fn(async () => ok(null)),
+    onEvent: channels.liveEvent.subscribe,
+    onWatchStatus: channels.liveWatchStatus.subscribe,
   };
 
   const memory = {
