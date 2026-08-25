@@ -1,5 +1,4 @@
 import {
-  readdirSync,
   readFileSync,
   statSync,
   realpathSync,
@@ -10,6 +9,7 @@ import {
 } from 'fs';
 import { dirname, join, resolve, sep } from 'path';
 import os from 'os';
+import { listProjectSessionFilesSync } from './modules/session-files';
 
 // Respect CLAUDE_CONFIG_DIR if the user has relocated their Claude data dir.
 export const CLAUDE_DIR = process.env.CLAUDE_CONFIG_DIR ?? join(os.homedir(), '.claude');
@@ -131,12 +131,17 @@ export function resolveRealPath(projectsDir: string, hash: string): string {
 
   const projectDir = join(projectsDir, hash);
   try {
-    const files = readdirSync(projectDir)
-      .filter(f => f.endsWith('.jsonl'))
-      .map(f => {
-        const full = join(projectDir, f);
-        return { full, mtime: statSync(full).mtimeMs };
-      })
+    // Entrambi i layout nativi, tramite l'unico enumeratore che ne conosce la
+    // regola: elencare la sola radice lasciava ogni progetto in layout
+    // `sessions/` senza cwd autoritativo e quindi sul fallback lossy di
+    // `hashToPath`, che è una stima. E questa è la funzione da cui quel path
+    // arriva a tutto il resto: il `dir` hint dell'SDK, la riga del dialog di
+    // purge, la scoperta dei workflow di progetto in Studio.
+    const files = listProjectSessionFilesSync(projectDir)
+      // `stat` difensivo: un transcript sparito tra l'elenco e la lettura vale
+      // mtime 0, non la perdita dell'intera risoluzione — ricadere sul path
+      // stimato per un file in meno sarebbe lo stesso difetto in piccolo.
+      .map(full => ({ full, mtime: safeMtime(full) }))
       .sort((a, b) => b.mtime - a.mtime);
 
     for (const { full } of files) {
@@ -151,6 +156,14 @@ export function resolveRealPath(projectsDir: string, hash: string): string {
   }
 
   return hashToPath(hash);
+}
+
+function safeMtime(filePath: string): number {
+  try {
+    return statSync(filePath).mtimeMs;
+  } catch {
+    return 0;
+  }
 }
 
 // Il `cwd` sta nel primo record `user` del transcript, che nella pratica cade
