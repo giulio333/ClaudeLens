@@ -1,6 +1,7 @@
 import { readdirSync, statSync, existsSync } from 'fs';
 import { join, basename } from 'path';
 import { resolveRealPath } from '../utils';
+import { listProjectSessionFilesSync } from './session-files';
 
 /** Una singola cartella history in ~/.claude/projects/ candidata a duplicato. */
 export interface DuplicateFolder {
@@ -32,17 +33,20 @@ export interface DuplicateGroup {
 function scanFolder(projectsDir: string, hash: string): DuplicateFolder {
   const dir = join(projectsDir, hash);
 
+  // Entrambi i layout nativi: leggere la sola radice dava zero sessioni per ogni
+  // progetto in layout `sessions/`, e quello zero non è solo un numero sbagliato
+  // nella card — è anche `realPathAuthoritative` (sotto) che diventa false, cioè
+  // il path del progetto marcato come stimato mentre sta scritto in un transcript.
   let sessionCount = 0;
   let lastMtime = 0;
-  try {
-    for (const entry of readdirSync(dir)) {
-      if (!entry.endsWith('.jsonl')) continue;
-      sessionCount++;
-      const m = statSync(join(dir, entry)).mtimeMs;
+  for (const file of listProjectSessionFilesSync(dir)) {
+    sessionCount++;
+    try {
+      const m = statSync(file).mtimeMs;
       if (m > lastMtime) lastMtime = m;
+    } catch {
+      // file sparito fra l'elenco e lo stat: non aggiorna l'attività
     }
-  } catch {
-    // cartella illeggibile: resta a 0
   }
 
   let memoryTopicCount = 0;
