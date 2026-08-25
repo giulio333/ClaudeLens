@@ -59,10 +59,22 @@ export async function listProjectSessionFiles(
  * consumer of the registry would have to thread.
  */
 export function listProjectSessionFilesSync(projectPath: string): string[] {
+  return jsonlFilesIn(projectSessionDirSync(projectPath));
+}
+
+/**
+ * The directory a project's transcripts live in: its `sessions/` when that holds
+ * any, else the project root.
+ *
+ * The layout DECISION, exposed apart from the listing because a caller that
+ * MOVES transcripts needs to know where they go, not only what is there — and
+ * because a project must stay in ONE layout. `listProjectSessionFiles` reads
+ * `sessions/` alone when it is non-empty, so a project left with transcripts in
+ * both places shows only the `sessions/` half and silently hides the rest.
+ */
+export function projectSessionDirSync(projectPath: string): string {
   const sessionsDir = join(projectPath, 'sessions');
-  const nested = jsonlFilesIn(sessionsDir);
-  if (nested.length > 0) return nested;
-  return jsonlFilesIn(projectPath);
+  return jsonlFilesIn(sessionsDir).length > 0 ? sessionsDir : projectPath;
 }
 
 /** The `.jsonl` direct children of `dir`, absolute; [] when it cannot be read. */
