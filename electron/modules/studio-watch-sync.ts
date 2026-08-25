@@ -20,7 +20,20 @@ export function projectHashForRegistryEvent(projectsDir: string, eventPath: stri
 
   const parts = rel.split(sep);
   if (parts.length === 1) return parts[0];
-  if (parts.length === 2 && parts[1].endsWith('.jsonl')) return parts[0];
+
+  // A transcript, in EITHER native layout: `<hash>/<id>.jsonl` and
+  // `<hash>/sessions/<id>.jsonl` are the same event — the write that finally
+  // carries the project's cwd. Matching the root alone meant a `sessions/`-layout
+  // project never got the one event this coordinator exists for, so its cwd was
+  // still the lossy guess and its project-local `.claude/workflows/` was never
+  // watched.
+  //
+  // Nothing deeper qualifies: `<hash>/<id>/subagents/agent-*.jsonl` (and its
+  // `sessions/` twin) is a sub-agent sidecar, which says nothing new about the
+  // project that its parent transcript has not already said.
+  if (!parts[parts.length - 1].endsWith('.jsonl')) return null;
+  if (parts.length === 2) return parts[0];
+  if (parts.length === 3 && parts[1] === 'sessions') return parts[0];
   return null;
 }
 

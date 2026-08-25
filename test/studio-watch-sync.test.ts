@@ -100,5 +100,49 @@ describe('project workflow watcher sync', () => {
         '/claude/projects/-Users-me-repo/session/subagents/agent.jsonl'
       )
     ).toBeNull();
+    // The same sidecar under the `sessions/` layout: one level deeper, and still
+    // a sub-agent's own transcript rather than anything new about the project.
+    expect(
+      projectHashForRegistryEvent(
+        '/claude/projects',
+        '/claude/projects/-Users-me-repo/sessions/session/subagents/agent.jsonl'
+      )
+    ).toBeNull();
+    // A nested path that is not a transcript at all.
+    expect(
+      projectHashForRegistryEvent('/claude/projects', '/claude/projects/-Users-me-repo/memory')
+    ).toBeNull();
+  });
+
+  it('accepts a transcript written in the sessions/ layout', () => {
+    // The event this coordinator exists for is the write that finally carries a
+    // project's cwd, and Claude Code puts that transcript in one of two places.
+    // Matching `<hash>/<id>.jsonl` alone meant a `sessions/`-layout project
+    // never triggered the sync at all: its cwd stayed the lossy guess and its
+    // project-local `.claude/workflows/` was never watched.
+    expect(
+      projectHashForRegistryEvent(
+        '/claude/projects',
+        '/claude/projects/-Users-me-SARA2-0/sessions/6f1e-8a2b.jsonl'
+      )
+    ).toBe('-Users-me-SARA2-0');
+  });
+
+  it('refreshes for a sessions/-layout project once its transcript is written', () => {
+    vi.useFakeTimers();
+    const invalidate = vi.fn();
+    const sync = vi.fn();
+    const coordinator = createProjectWorkflowWatchSync({
+      projectsDir: '/claude/projects',
+      invalidate,
+      sync,
+      delayMs: 100,
+    });
+
+    coordinator.onEvent('/claude/projects/-Users-me-SARA2-0/sessions/6f1e-8a2b.jsonl');
+    vi.advanceTimersByTime(100);
+
+    expect(invalidate).toHaveBeenCalledWith('-Users-me-SARA2-0');
+    expect(sync).toHaveBeenCalledTimes(1);
   });
 });

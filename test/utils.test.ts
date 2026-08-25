@@ -97,10 +97,14 @@ describe('resolveRealPath (cwd extraction)', () => {
     JSON.stringify({ type: 'file-history-snapshot', snapshot: {} }),
   ].join('\n');
 
-  /** Scrive un progetto con i file dati (in ordine di mtime crescente) e ne torna l'hash. */
-  function project(files: string[]): string {
+  /**
+   * Scrive un progetto con i file dati (in ordine di mtime crescente) e ne torna
+   * l'hash. `layout` sceglie quale delle due posizioni native di Claude Code
+   * ospita i transcript: la radice del progetto o la sua `sessions/`.
+   */
+  function project(files: string[], layout: 'root' | 'sessions' = 'root'): string {
     const hash = `-tmp-fake-project-${n++}`;
-    const dir = join(root, hash);
+    const dir = layout === 'sessions' ? join(root, hash, 'sessions') : join(root, hash);
     mkdirSync(dir, { recursive: true });
     files.forEach((content, i) => {
       const full = join(dir, `s${i}.jsonl`);
@@ -173,6 +177,28 @@ describe('resolveRealPath (cwd extraction)', () => {
   it('falls back to the lossy hash inversion when no transcript carries a cwd', () => {
     const hash = project([`${PREAMBLE}\n`]);
     expect(resolveRealPath(root, hash)).toBe(`/${hash.replace(/^-/, '').replace(/-/g, '/')}`);
+  });
+
+  it('reads the cwd of a project whose transcripts live under sessions/', () => {
+    // Claude Code writes a project's transcripts in one of two layouts. Reading
+    // the project root alone left every `sessions/`-layout project on the lossy
+    // `hashToPath` inversion — an ESTIMATED path, presented everywhere the real
+    // one is (the SDK's `dir` hint, the purge dialog, Studio's project
+    // discovery) with nothing marking it as a guess.
+    const hash = project(
+      [`${PREAMBLE}\n${JSON.stringify({ type: 'user', cwd: '/Users/foo/SARA2.0' })}\n`],
+      'sessions'
+    );
+    expect(resolveRealPath(root, hash)).toBe('/Users/foo/SARA2.0');
+    expect(hasResolvedCwd(hash)).toBe(true);
+  });
+
+  it('still reads the root when sessions/ exists but holds no transcript', () => {
+    // A project mid-migration between the two layouts: an empty `sessions/` is
+    // not an answer, so the root still decides.
+    const hash = project([`${JSON.stringify({ type: 'user', cwd: '/Users/foo/mid' })}\n`]);
+    mkdirSync(join(root, hash, 'sessions'), { recursive: true });
+    expect(resolveRealPath(root, hash)).toBe('/Users/foo/mid');
   });
 
   describe('hasResolvedCwd', () => {
