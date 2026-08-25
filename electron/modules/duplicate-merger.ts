@@ -1,6 +1,7 @@
 import { readdirSync, readFileSync, existsSync, statSync } from 'fs';
-import { join } from 'path';
+import { join, relative } from 'path';
 import { resolveRealPath, isAbsolutePath } from '../utils';
+import { projectSessionDirSync } from './session-files';
 
 /** Spostamento di un file di sessione dalla source alla dest. */
 export interface SessionMove {
@@ -23,16 +24,41 @@ export interface MemoryAction {
   targetName?: string;
 }
 
-/** Directory sidecar di sessione (UUID/) che contiene tool-results/, subagents/, ecc. */
+/** Directory sidecar di sessione (UUID/) che contiene tool-results/, subagents/, ecc.
+ *
+ *  Vive ACCANTO al suo `.jsonl`, quindi la sua posizione la decide il layout
+ *  (`MergeLayout`) esattamente come quella del transcript: si prende da
+ *  `<source>/<layout.from>/<name>` e si consegna a `<dest>/<layout.to>/<name>`. */
 export interface SidecarMove {
   name: string;
   /** true se una directory con lo stesso nome esiste già nella dest (verrà saltata). */
   collides: boolean;
 }
 
+/**
+ * Dove stanno i transcript dei due progetti, relativo alla cartella del
+ * progetto: `''` per la radice, `'sessions'` per il layout annidato.
+ *
+ * Il merge deve saperlo per tre motivi distinti, e prima li ignorava tutti e
+ * tre. Legge da `from`, altrimenti in layout `sessions/` non vede una sola
+ * sessione da spostare. Scrive in `to`, cioè nel layout che la dest usa GIÀ,
+ * perché un progetto va tenuto su UNO: `listProjectSessionFiles` legge la
+ * `sessions/` da sola quando non è vuota, quindi una dest lasciata con
+ * transcript in entrambi i posti mostra solo la metà annidata e nasconde la sua
+ * — che è esattamente il danno che questo piano produceva, spostando la
+ * `sessions/` della source come se fosse la cartella sidecar di una sessione.
+ * E i sidecar seguono il loro transcript, quindi vivono anche loro qui.
+ */
+export interface MergeLayout {
+  from: string;
+  to: string;
+}
+
 export interface MergePlan {
   source: { hash: string; realPath: string; authoritative: boolean };
   dest: { hash: string; realPath: string; authoritative: boolean };
+  /** Sottocartella dei transcript nei due progetti — vedi `MergeLayout`. */
+  layout: MergeLayout;
   /** Riscrittura cwd da applicare ai .jsonl spostati; null se non necessaria/possibile. */
   cwdRewrite: { from: string; to: string } | null;
   sessions: SessionMove[];
@@ -104,6 +130,27 @@ function uniqueRenameTarget(baseName: string, taken: Set<string>): string {
 }
 
 /**
+ * Cosa resta dentro `<source>/sessions` dopo il merge.
+ *
+ * I `.jsonl` e i sidecar spostabili se ne vanno solo se QUELLA è la cartella dei
+ * transcript in uso; tutto il resto rimane. Una `sessions/` che non esiste, o che
+ * il merge svuota, non conta come residuo: è un artefatto di layout, e
+ * l'esecuzione la rimuove insieme a ciò che conteneva.
+ */
+function sessionsDirLeftovers(
+  sourceDir: string,
+  layout: MergeLayout,
+  movableSidecars: Set<string>
+): string[] {
+  const consumedHere = layout.from === 'sessions';
+  return listFiles(join(sourceDir, 'sessions'), () => true).filter(
+    name =>
+      name !== '.DS_Store' &&
+      !(consumedHere && (name.endsWith('.jsonl') || movableSidecars.has(name)))
+  );
+}
+
+/**
  * Calcola — in sola lettura — cosa comporterebbe fondere la cartella `sourceHash`
  * dentro `destHash`. Non scrive nulla: produce il piano che alimenta il dialog di
  * conferma e, successivamente, l'esecuzione.
@@ -116,8 +163,20 @@ export function computeMergePlan(
   const sourceDir = join(projectsDir, sourceHash);
   const destDir = join(projectsDir, destHash);
 
-  const sourceSessions = listFiles(sourceDir, f => f.endsWith('.jsonl'));
-  const destSessions = listFiles(destDir, f => f.endsWith('.jsonl'));
+  // I transcript stanno in uno dei due layout nativi, e i due progetti possono
+  // usarne uno diverso: leggere la sola radice significava non vedere NIENTE da
+  // spostare per una source annidata, e dichiarare una dest annidata priva di
+  // sessioni — cioè bloccare il merge dicendo che non se ne può ricavare il cwd
+  // mentre sta scritto nei suoi transcript.
+  const sourceSessionDir = projectSessionDirSync(sourceDir);
+  const destSessionDir = projectSessionDirSync(destDir);
+  const layout: MergeLayout = {
+    from: relative(sourceDir, sourceSessionDir),
+    to: relative(destDir, destSessionDir),
+  };
+
+  const sourceSessions = listFiles(sourceSessionDir, f => f.endsWith('.jsonl'));
+  const destSessions = listFiles(destSessionDir, f => f.endsWith('.jsonl'));
 
   const sourceReal = resolveRealPath(projectsDir, sourceHash);
   const destReal = resolveRealPath(projectsDir, destHash);
@@ -161,7 +220,7 @@ export function computeMergePlan(
       cwdRewrite = { from: sourceReal, to: destReal };
       // Verifica che la source contenga davvero quel cwd (sanity check informativo).
       const sample = sourceSessions
-        .map(f => readCwdSet(join(sourceDir, f)))
+        .map(f => readCwdSet(join(sourceSessionDir, f)))
         .find(set => set.size > 0);
       if (sample && !sample.has(sourceReal)) {
         warnings.push(
@@ -213,9 +272,14 @@ export function computeMergePlan(
   // ── Directory sidecar di sessione (UUID/ con tool-results/, subagents/, …) ──────
   // Sono tutte le sottocartelle della source diverse da memory/. Vanno spostate
   // insieme ai .jsonl, altrimenti tool-results e subagent transcripts restano orfani.
-  const destSubdirSet = new Set(listSubdirs(destDir));
-  const sidecars: SidecarMove[] = listSubdirs(sourceDir)
-    .filter(name => name !== 'memory')
+  // Stanno accanto ai loro transcript, quindi si cercano nella cartella dei
+  // transcript della source e atterrano in quella della dest. Due nomi non sono
+  // mai sidecar: `memory/`, che si fonde a parte, e `sessions/`, che è il layout
+  // stesso — prenderla per la cartella di una sessione è ciò che rovesciava i
+  // transcript della source dentro una dest che poi nascondeva i propri.
+  const destSubdirSet = new Set(listSubdirs(destSessionDir));
+  const sidecars: SidecarMove[] = listSubdirs(sourceSessionDir)
+    .filter(name => name !== 'memory' && name !== 'sessions')
     .map(name => {
       const collides = destSubdirSet.has(name);
       if (collides) {
@@ -230,20 +294,33 @@ export function computeMergePlan(
   // ── Stato finale della source ──────────────────────────────────────────────────
   // Il merge consuma sessioni (.jsonl), memory/ e le sidecar spostabili. La source
   // è cancellabile solo se non resta nient'altro (oltre a .DS_Store).
+  //
+  // Solo dentro la cartella dei transcript, però: quello che sta FUORI dal layout
+  // in uso non viene spostato, e dichiararlo consumato cancellerebbe la source con
+  // dei file dentro. Un `.jsonl` nella radice di un progetto in layout `sessions/`
+  // è esattamente quel caso.
   let sourceEntries: string[] = [];
   try {
     sourceEntries = readdirSync(sourceDir);
   } catch {
     /* ignore */
   }
-  const leftovers = sourceEntries.filter(
-    n => n !== 'memory' && n !== '.DS_Store' && !n.endsWith('.jsonl') && !movableSidecars.has(n)
-  );
+  const rootIsTranscriptDir = layout.from === '';
+  const leftovers = sourceEntries.filter(name => {
+    if (name === 'memory' || name === '.DS_Store') return false;
+    if (rootIsTranscriptDir && (name.endsWith('.jsonl') || movableSidecars.has(name))) return false;
+    // `sessions/` non è contenuto ma layout: se il merge ne porta via tutto resta
+    // una cartella vuota, che l'esecuzione rimuove con i file che conteneva.
+    if (name === 'sessions')
+      return sessionsDirLeftovers(sourceDir, layout, movableSidecars).length > 0;
+    return true;
+  });
   const sourceEmptyAfter = leftovers.length === 0;
 
   return {
     source: { hash: sourceHash, realPath: sourceReal, authoritative: sourceAuthoritative },
     dest: { hash: destHash, realPath: destReal, authoritative: destAuthoritative },
+    layout,
     cwdRewrite,
     sessions,
     sidecars,
