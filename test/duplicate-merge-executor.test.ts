@@ -8,9 +8,11 @@ import {
   readFileSync,
   readdirSync,
 } from 'fs';
-import { join } from 'path';
+import { basename, join } from 'path';
 import { tmpdir } from 'os';
 import { executeMerge } from '../electron/modules/duplicate-merge-executor';
+import { computeMergePlan } from '../electron/modules/duplicate-merger';
+import { listProjectSessionFilesSync } from '../electron/modules/session-files';
 import { invalidateCwdCache } from '../electron/utils';
 
 // Integration test su temp dir per il modulo più rischioso del backend (#98):
@@ -184,6 +186,120 @@ describe('executeMerge — collisioni', () => {
     expect(res.sourceDeleted).toBe(false);
     expect(readFileSync(join(sourceDir, 'notes.txt'), 'utf-8')).toBe('leftover');
     expect(res.warnings.some(w => w.includes('notes.txt'))).toBe(true);
+  });
+});
+
+describe('executeMerge — i due layout nativi', () => {
+  // Claude Code tiene i transcript di un progetto nella radice della sua cartella
+  // o in una `sessions/` annidata, e i due progetti di un merge possono usare
+  // layout diversi. Il piano leggeva la sola radice, quindi per una source
+  // annidata non vedeva NIENTE da spostare e prendeva la sua `sessions/` per la
+  // cartella sidecar di una sessione: la spostava intera dentro la dest, che si
+  // ritrovava con una `sessions/` non vuota accanto ai propri `.jsonl` — e
+  // `listProjectSessionFiles`, che in quel caso legge solo la annidata, smetteva
+  // di vedere le sessioni della dest. Merge riuscito, cronologia della
+  // destinazione invisibile.
+
+  it('porta i transcript di una source annidata nel layout della dest', () => {
+    const srcSessions = join(sourceDir, 'sessions');
+    mkdirSync(srcSessions, { recursive: true });
+    writeSession(srcSessions, 'sess-a.jsonl', SOURCE_CWD);
+    writeSession(destDir, 'sess-dest.jsonl', DEST_CWD);
+
+    const res = executeMerge(projectsDir, SOURCE_HASH, DEST_HASH);
+
+    expect(res.movedSessions).toBe(1);
+    expect(res.cwdRewrittenFiles).toBe(1);
+    expect(res.movedSidecars).toBe(0); // `sessions/` non è un sidecar
+    expect(
+      JSON.parse(readFileSync(join(destDir, 'sess-a.jsonl'), 'utf-8').split('\n')[0]).cwd
+    ).toBe(DEST_CWD);
+    // La dest resta su UN layout: senza questo le sue sessioni sparirebbero
+    // dall'app pur restando su disco.
+    expect(existsSync(join(destDir, 'sessions'))).toBe(false);
+    expect(
+      listProjectSessionFilesSync(destDir)
+        .map(f => basename(f))
+        .sort()
+    ).toEqual(['sess-a.jsonl', 'sess-dest.jsonl']);
+    expect(res.sourceDeleted).toBe(true);
+  });
+
+  it('porta il sidecar di una sessione accanto al suo transcript', () => {
+    const srcSessions = join(sourceDir, 'sessions');
+    mkdirSync(join(srcSessions, 'sess-a', 'subagents'), { recursive: true });
+    writeSession(srcSessions, 'sess-a.jsonl', SOURCE_CWD);
+    writeFileSync(join(srcSessions, 'sess-a', 'subagents', 'agent-x.jsonl'), '{}', 'utf-8');
+    writeSession(destDir, 'sess-dest.jsonl', DEST_CWD);
+
+    const res = executeMerge(projectsDir, SOURCE_HASH, DEST_HASH);
+
+    expect(res.movedSidecars).toBe(1);
+    // Accanto al `.jsonl`, cioè nel layout della dest — non dove stava nella source.
+    expect(existsSync(join(destDir, 'sess-a', 'subagents', 'agent-x.jsonl'))).toBe(true);
+  });
+
+  it('consegna dentro sessions/ quando è la dest a usare quel layout', () => {
+    writeSession(sourceDir, 'sess-a.jsonl', SOURCE_CWD);
+    const dstSessions = join(destDir, 'sessions');
+    mkdirSync(dstSessions, { recursive: true });
+    writeSession(dstSessions, 'sess-dest.jsonl', DEST_CWD);
+
+    const res = executeMerge(projectsDir, SOURCE_HASH, DEST_HASH);
+
+    expect(res.movedSessions).toBe(1);
+    expect(existsSync(join(dstSessions, 'sess-a.jsonl'))).toBe(true);
+    expect(existsSync(join(destDir, 'sess-a.jsonl'))).toBe(false);
+    expect(
+      listProjectSessionFilesSync(destDir)
+        .map(f => basename(f))
+        .sort()
+    ).toEqual(['sess-a.jsonl', 'sess-dest.jsonl']);
+  });
+
+  it('non cancella una source che ha transcript fuori dal layout in uso', () => {
+    // Un progetto a metà migrazione: la `sessions/` decide il layout, quindi il
+    // `.jsonl` rimasto nella radice NON viene spostato — e dichiararlo consumato
+    // cancellerebbe la source con quel file dentro.
+    const srcSessions = join(sourceDir, 'sessions');
+    mkdirSync(srcSessions, { recursive: true });
+    writeSession(srcSessions, 'sess-a.jsonl', SOURCE_CWD);
+    writeSession(sourceDir, 'stray.jsonl', SOURCE_CWD);
+    writeSession(destDir, 'sess-dest.jsonl', DEST_CWD);
+
+    const res = executeMerge(projectsDir, SOURCE_HASH, DEST_HASH);
+
+    expect(res.movedSessions).toBe(1);
+    expect(res.sourceDeleted).toBe(false);
+    expect(existsSync(join(sourceDir, 'stray.jsonl'))).toBe(true);
+    expect(res.warnings.some(w => w.includes('stray.jsonl'))).toBe(true);
+    // La `sessions/` svuotata invece se ne va: è layout, non contenuto.
+    expect(existsSync(srcSessions)).toBe(false);
+  });
+
+  it('non blocca il merge verso una dest che tiene le sessioni in sessions/', () => {
+    // Il blocker diceva che il cwd della dest non è ricavabile perché non ha
+    // sessioni, con le sue sessioni in `sessions/`.
+    writeSession(sourceDir, 'sess-a.jsonl', SOURCE_CWD);
+    const dstSessions = join(destDir, 'sessions');
+    mkdirSync(dstSessions, { recursive: true });
+    writeSession(dstSessions, 'sess-dest.jsonl', DEST_CWD);
+
+    expect(computeMergePlan(projectsDir, SOURCE_HASH, DEST_HASH).blockers).toEqual([]);
+  });
+
+  it('non elenca sessions/ tra i sidecar da spostare', () => {
+    const srcSessions = join(sourceDir, 'sessions');
+    mkdirSync(srcSessions, { recursive: true });
+    writeSession(srcSessions, 'sess-a.jsonl', SOURCE_CWD);
+    writeSession(destDir, 'sess-dest.jsonl', DEST_CWD);
+
+    const plan = computeMergePlan(projectsDir, SOURCE_HASH, DEST_HASH);
+
+    expect(plan.layout).toEqual({ from: 'sessions', to: '' });
+    expect(plan.sidecars.map(sc => sc.name)).not.toContain('sessions');
+    expect(plan.sessions.map(sm => sm.filename)).toEqual(['sess-a.jsonl']);
+    expect(plan.cwdRewrite).toEqual({ from: SOURCE_CWD, to: DEST_CWD });
   });
 });
 

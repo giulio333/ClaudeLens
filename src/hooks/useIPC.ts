@@ -197,6 +197,10 @@ export interface DerivedDescription {
 export interface MergePlan {
   source: { hash: string; realPath: string; authoritative: boolean };
   dest: { hash: string; realPath: string; authoritative: boolean };
+  /** Sottocartella in cui i due progetti tengono i transcript: '' = radice,
+   *  'sessions' = layout annidato. Il merge legge da `from` e scrive in `to`,
+   *  cioè nel layout che la dest usa già. */
+  layout: { from: string; to: string };
   cwdRewrite: { from: string; to: string } | null;
   sessions: SessionMove[];
   sidecars: { name: string; collides: boolean }[];

@@ -201,9 +201,15 @@ export function executeMerge(
 
   try {
     // ── Sessioni ─────────────────────────────────────────────────────────────────
+    // I due progetti possono usare layout diversi, e la dest va tenuta su UNO:
+    // `plan.layout` dice da quale cartella si prende e in quale si consegna (vedi
+    // `MergeLayout`). `join(dir, '', name)` è `join(dir, name)`, quindi il layout
+    // a radice non ha bisogno di un ramo suo.
+    const sourceSessionDir = join(sourceDir, plan.layout.from);
+    const destSessionDir = join(destDir, plan.layout.to);
     for (const s of plan.sessions) {
-      const srcPath = join(sourceDir, s.filename);
-      const destPath = join(destDir, s.targetName);
+      const srcPath = join(sourceSessionDir, s.filename);
+      const destPath = join(destSessionDir, s.targetName);
       let content = readFileSync(srcPath, 'utf-8');
       if (plan.cwdRewrite) {
         const r = rewriteCwd(content, plan.cwdRewrite.from, plan.cwdRewrite.to);
@@ -220,8 +226,8 @@ export function executeMerge(
     // ── Directory sidecar di sessione (tool-results/, subagents/, …) ───────────────
     for (const sc of plan.sidecars) {
       if (sc.collides) continue; // già avvisato nel piano: non sovrascrivere la dest
-      const destSidecar = join(destDir, sc.name);
-      moveDir(join(sourceDir, sc.name), destSidecar);
+      const destSidecar = join(destSessionDir, sc.name);
+      moveDir(join(sourceSessionDir, sc.name), destSidecar);
       createdInDest.push(destSidecar);
       movedSidecars += 1;
     }
@@ -265,6 +271,18 @@ export function executeMerge(
     // Recheck reale (non il valore pre-merge del piano): tutte le sessioni e i sidecar
     // spostabili sono stati consumati, e memory/ è stata fusa nella dest. La source è
     // cancellabile solo se non resta nient'altro oltre a memory/ e .DS_Store.
+    // Una `sessions/` svuotata dal merge è un artefatto di layout, non contenuto:
+    // va via con i transcript che conteneva, altrimenti tiene in vita una source
+    // che è di fatto vuota (e il piano, che la conta consumata, direbbe il falso).
+    const sourceSessionsDir = join(sourceDir, 'sessions');
+    try {
+      if (readdirSync(sourceSessionsDir).filter(n => n !== '.DS_Store').length === 0) {
+        rmSync(sourceSessionsDir, { recursive: true, force: true });
+      }
+    } catch {
+      /* assente o illeggibile: non c'è niente da rimuovere */
+    }
+
     let remaining: string[] = [];
     try {
       remaining = readdirSync(sourceDir).filter(n => n !== '.DS_Store' && n !== 'memory');
