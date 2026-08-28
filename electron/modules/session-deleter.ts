@@ -1,9 +1,8 @@
 import { existsSync, readdirSync, rmSync, statSync, unlinkSync } from 'fs';
 import { basename, join, resolve, sep } from 'path';
-import { glob } from 'glob';
 
 import { findSessionFile } from './session-reader';
-import { readPlanRefs } from './plans-reader';
+import { isWithinPlansDir, listPlanSessionFiles, readPlanRefs } from './plans-reader';
 
 // Una sessione di Claude Code è un semplice file `.jsonl` su disco, ma porta con
 // sé alcuni artefatti collaterali (transcript dei sub-agenti, task, piani). Questo
@@ -110,12 +109,34 @@ function findSidecarDir(projectPath: string, sessionId: string): string | null {
   return candidates.find(d => existsSync(d) && statSync(d).isDirectory()) ?? null;
 }
 
-// Per ogni piano referenziato dalla sessione, conta in quante sessioni del progetto
-// compare lo stesso `planFilePath`. Serve ad avvisare l'utente che un piano è
-// condiviso prima di cancellarlo (i piani vivono globali in ~/.claude/plans).
+/** True solo per un file regolare esistente e leggibile. */
+function isRegularFile(path: string): boolean {
+  try {
+    return statSync(path).isFile();
+  } catch {
+    return false;
+  }
+}
+
+// Per ogni piano referenziato dalla sessione, conta in quante SESSIONI del
+// progetto compare lo stesso `planFilePath`. Serve ad avvisare l'utente che un
+// piano è condiviso prima di cancellarlo (i piani vivono globali in
+// ~/.claude/plans).
+//
+// L'unità è la sessione, quindi l'enumerazione è quella condivisa
+// (`listPlanSessionFiles` → `listProjectSessionFiles`), mai una glob ricorsiva.
+// `**/*.jsonl` sbagliava tre volte in una riga: pescava le sidecar dei
+// sub-agenti (`{sessionId}/subagents/agent-*.jsonl`, e quelle dei workflow
+// annidate sotto `subagents/workflows/<runId>/`) contandole per sessioni — il
+// dialog stampa "referenced by N sessions" —, apriva l'intero albero delle
+// sidecar all'apertura di una modale, e soprattutto popolava la cache di
+// `readPlanRefs` sotto directory che nessuna scansione ripassa mai: la potatura
+// arriva dall'hook `onScan` di questa enumerazione, quindi quelle entry (refs +
+// buffer parziale) sopravvivevano per tutta la vita del processo. È lo stesso
+// errore di #95, nell'unico punto in cui era rimasto.
 async function planReferenceCounts(projectPath: string): Promise<Map<string, number>> {
   const counts = new Map<string, number>();
-  const sessionFiles = await glob('**/*.jsonl', { cwd: projectPath, absolute: true });
+  const sessionFiles = await listPlanSessionFiles(projectPath);
   for (const file of sessionFiles) {
     const paths = new Set((await readPlanRefs(file)).map(r => r.filePath));
     for (const p of paths) counts.set(p, (counts.get(p) ?? 0) + 1);
@@ -183,11 +204,28 @@ export async function getSessionArtifacts(
   }
 
   // 4. Piani referenziati (file globali condivisi: default deselezionati).
-  const planPaths = new Set((await readPlanRefs(sessionFile)).map(r => r.filePath));
+  //
+  // `planFilePath` arriva VERBATIM da un attachment del transcript, quindi può
+  // nominare qualsiasi path su disco. `plans-reader` si rifiuta già di LEGGERE
+  // fuori da ~/.claude/plans (transcript avvelenato/condiviso che punta a
+  // ~/.aws/credentials); qui si offrirebbe di CANCELLARLO, che è strettamente
+  // peggio, e l'unica guardia a valle è la root ~/.claude di
+  // `deleteSessionArtifacts` — abbastanza larga da lasciar passare
+  // ~/.claude/settings.json o il transcript di un altro progetto. Si confina
+  // PRIMA di sondare: un path che abbiamo già stabilito non essere nostro non
+  // merita nemmeno uno `stat` (esistenza inclusa).
+  const planPaths = new Set(
+    (await readPlanRefs(sessionFile)).map(r => r.filePath).filter(isWithinPlansDir)
+  );
   if (planPaths.size > 0) {
     const refCounts = await planReferenceCounts(projectPath);
     for (const planPath of planPaths) {
-      if (!existsSync(planPath)) continue; // piano già cancellato altrove
+      // `isDir: false` era un'assunzione, non un fatto: `deleteSessionArtifacts`
+      // ri-statta il path e su una directory usa `rmSync` ricorsivo, quindi un
+      // `planFilePath` che nomina una cartella diventava una casella sola che
+      // cancella un albero. Un piano è un file regolare: se non lo è, o non c'è
+      // più, semplicemente non si elenca.
+      if (!isRegularFile(planPath)) continue;
       artifacts.push({
         kind: 'plan',
         label: basename(planPath, '.md'),
