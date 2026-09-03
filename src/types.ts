@@ -747,10 +747,15 @@ export interface TraceMark {
  *  `sessionId` in the renderer: the registry says busy/waiting, this says at what. */
 export interface SessionActivity {
   sessionId: string;
-  /** The title Claude wrote for this conversation (`ai-title` in the transcript);
-   *  null until one has been seen. The only human name a session has — the
+  /** The name this conversation goes by — the user's `/title` (`custom-title`)
+   *  if they set one, else the one Claude generated (`ai-title`); null until a
+   *  title record has been seen. The only human name a session has — the
    *  registry's `name` is the project plus two random characters. */
   title: string | null;
+  /** Which record `title` came from; null while `title` is. The two do not rank
+   *  equally — `ai-title` is rewritten on later turns — so the main process
+   *  carries the source to keep a `/title` from being overwritten by it. */
+  titleSource: 'custom' | 'ai' | null;
   transcriptPath: string | null;
   /** 'thinking' | 'busy' | 'idle'; null when nothing has been read yet. */
   activity: string | null;

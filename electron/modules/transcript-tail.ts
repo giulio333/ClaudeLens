@@ -9,6 +9,14 @@ import { openSync, fstatSync, readSync, closeSync } from 'fs';
 // Both callers append-read the same way: `live-monitor` for the one session a
 // user is watching, `session-tails` for every live session at once.
 
+/** Which record named the session. Claude Code writes two: `custom-title` for
+ *  the name the USER set (`/title`), `ai-title` for the one it generated. They
+ *  are not interchangeable — the generated one is rewritten on later turns, so
+ *  without knowing which is which a `/title` gets silently overwritten by the
+ *  next auto-title. The precedence is the app's existing one (`cost-tracker`
+ *  reads `customTitle || aiTitle`): the user's name wins. */
+export type SessionTitleSource = 'custom' | 'ai';
+
 export interface LiveEvent {
   id: string;
   timestamp: string;
@@ -30,6 +38,10 @@ export interface LiveEvent {
    *  transcript writes it as `<tool-use-id>`). It is what lets a consumer pair a
    *  dispatch with its end without guessing from arrival order. */
   toolUseId?: string;
+  /** Set on `session_title` only: which record carried the name. A consumer
+   *  folding successive appends needs it to keep a user's `/title` from being
+   *  clobbered by a later auto-title. */
+  titleSource?: SessionTitleSource;
 }
 
 /**
@@ -222,30 +234,66 @@ export function parseTurnUsage(json: Record<string, unknown>): TurnUsage | null 
   };
 }
 
+/** A session's name as one transcript record carries it. */
+export interface SessionTitle {
+  title: string;
+  source: SessionTitleSource;
+}
+
+/** The title, if any, that an already-parsed transcript line carries. The one
+ *  place that knows which record types name a session and under which key, so
+ *  the streaming path (`parseJsonlLine`) and the head scan (`readSessionTitle`)
+ *  cannot drift apart on it — they read the same two records and resolve them
+ *  the same way. The cap is what the name is FOR: one line on a card, and a
+ *  record is undocumented, so an unbounded one would ride every append over
+ *  IPC. */
+const TITLE_MAX = 120;
+function readTitleRecord(json: Record<string, unknown>): SessionTitle | null {
+  const key =
+    json.type === 'custom-title' ? 'customTitle' : json.type === 'ai-title' ? 'aiTitle' : null;
+  if (!key) return null;
+  const raw = json[key];
+  const title = typeof raw === 'string' ? raw.trim() : '';
+  if (!title) return null;
+  return { title: title.slice(0, TITLE_MAX), source: key === 'customTitle' ? 'custom' : 'ai' };
+}
+
 /** Translate one transcript line into the flat events the Live views render. */
 export function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
   const events: LiveEvent[] = [];
 
-  // The session's human title. Claude Code writes it as its own record type
-  // (`{"type":"ai-title","aiTitle":"…"}`) and rewrites it on every turn, so it
-  // is neither a message nor in the registry — where `name` is only the derived
-  // "<project>-xx". It therefore sits ahead of the user/assistant filter below,
-  // which would otherwise drop the one field that tells two sessions of the same
-  // project apart. The record carries no timestamp: an empty one leaves the
-  // digest's activity stamp alone (Date.parse fails, the fold keeps the old
-  // value) instead of dating the session to now.
-  if (json.type === 'ai-title') {
-    const title = typeof json.aiTitle === 'string' ? json.aiTitle.trim() : '';
-    if (!title) return events;
+  // The session's human title. Claude Code writes it as its own record type —
+  // `{"type":"ai-title","aiTitle":"…"}` for the name it generates and
+  // `{"type":"custom-title","customTitle":"…"}` for the one the user sets with
+  // `/title` — so it is neither a message nor in the registry, where `name` is
+  // only the derived "<project>-xx". It therefore sits ahead of the
+  // user/assistant filter below, which would otherwise drop the one field that
+  // tells two sessions of the same project apart. The record carries no
+  // timestamp: an empty one leaves the digest's activity stamp alone (Date.parse
+  // fails, the fold keeps the old value) instead of dating the session to now.
+  //
+  // BOTH records, not just the generated one: reading `ai-title` alone left the
+  // Monitor unable to name a session the user had renamed, while the sessions
+  // list — which reads `customTitle || aiTitle` — showed that name. Two
+  // surfaces disagreeing about which session is which is the whole problem the
+  // title exists to solve, and after `/clear` (a new session id in the same
+  // process, with the previous one still on screen for its retention window)
+  // it leaves two cards of one project with nothing to tell them apart.
+  const titleRecord = readTitleRecord(json);
+  if (titleRecord) {
     return [
       {
-        id: `title-${title.slice(0, 24)}`,
+        id: `title-${titleRecord.title.slice(0, 24)}`,
         timestamp: String(json.timestamp ?? ''),
         type: 'session_title',
-        content: title.slice(0, 120),
+        content: titleRecord.title,
+        titleSource: titleRecord.source,
       },
     ];
   }
+  // A title record that carried no usable name is still a title record: fall
+  // through to nothing rather than to the message parsing below.
+  if (json.type === 'ai-title' || json.type === 'custom-title') return events;
 
   if (json.type !== 'user' && json.type !== 'assistant') return events;
   if (json.isMeta === true || json.isSidechain === true) return events;
@@ -359,13 +407,21 @@ const TITLE_SCAN_BYTES = 256 * 1024;
 /**
  * The session's human title, read from the head of an existing transcript.
  *
- * A tail cursor starts at EOF, so the `ai-title` record is already behind it: a
+ * A tail cursor starts at EOF, so the title record is already behind it: a
  * session that was running before the Monitor opened would otherwise stay
  * nameless until its next turn. Returns null when the file has no title record
- * in its head, or cannot be read — an unnamed card falls back to the pid, it
- * never invents a name.
+ * in its head, or cannot be read — an unnamed card says so, it never invents a
+ * name.
+ *
+ * Returns the SOURCE alongside the name, because the caller folds later appends
+ * onto this value and the two records do not rank equally: `ai-title` is
+ * rewritten on subsequent turns, so a `/title` seeded here has to be able to
+ * refuse the next generated one.
  */
-export function readSessionTitle(filePath: string, maxBytes = TITLE_SCAN_BYTES): string | null {
+export function readSessionTitle(
+  filePath: string,
+  maxBytes = TITLE_SCAN_BYTES
+): SessionTitle | null {
   let fd: number | null = null;
   try {
     fd = openSync(filePath, 'r');
@@ -378,22 +434,24 @@ export function readSessionTitle(filePath: string, maxBytes = TITLE_SCAN_BYTES):
     // than hand a truncated JSON object to the parser.
     const cut = text.lastIndexOf('\n');
     const lines = (cut < 0 ? text : text.slice(0, cut)).split('\n');
-    let title: string | null = null;
+    // Tracked apart, then resolved once: within a source the last record wins
+    // (both are rewritten, and the newest is current), but a user's `/title`
+    // outranks a generated name however late that one was written.
+    let ai: SessionTitle | null = null;
+    let custom: SessionTitle | null = null;
     for (const line of lines) {
       // Cheap reject first: parsing every line of a transcript head to find one
       // record would make this as expensive as the scan it replaces.
-      if (!line.includes('"ai-title"')) continue;
+      if (!line.includes('"ai-title"') && !line.includes('"custom-title"')) continue;
       try {
-        const json = JSON.parse(line) as { type?: string; aiTitle?: unknown };
-        if (json.type === 'ai-title' && typeof json.aiTitle === 'string' && json.aiTitle.trim()) {
-          // Keep walking: the title is rewritten, and the last one is current.
-          title = json.aiTitle.trim().slice(0, 120);
-        }
+        const found = readTitleRecord(JSON.parse(line) as Record<string, unknown>);
+        if (found?.source === 'custom') custom = found;
+        else if (found) ai = found;
       } catch {
         // Not JSON, so not a title.
       }
     }
-    return title;
+    return custom ?? ai;
   } catch {
     return null;
   } finally {
