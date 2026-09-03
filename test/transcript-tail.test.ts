@@ -217,11 +217,30 @@ describe('parseJsonlLine', () => {
     expect(events[0].type).toBe('session_title');
     expect(events[0].content).toBe('Sessione di test');
     expect(events[0].timestamp).toBe('');
+    expect(events[0].titleSource).toBe('ai');
   });
 
-  it('ignores an ai-title record with nothing in it', () => {
+  // The record `/title` writes. Reading only the generated one left the Monitor
+  // showing its no-name fallback for a session the user had named, while the
+  // sessions list (`customTitle || aiTitle`) printed that name — two surfaces
+  // disagreeing about which session is which.
+  it('emits the session title from a custom-title record', () => {
+    const events = parseJsonlLine({
+      type: 'custom-title',
+      customTitle: 'Il nome che ho scelto',
+      sessionId: 's',
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('session_title');
+    expect(events[0].content).toBe('Il nome che ho scelto');
+    expect(events[0].titleSource).toBe('custom');
+  });
+
+  it('ignores a title record with nothing in it', () => {
     expect(parseJsonlLine({ type: 'ai-title', aiTitle: '   ' })).toEqual([]);
     expect(parseJsonlLine({ type: 'ai-title' })).toEqual([]);
+    expect(parseJsonlLine({ type: 'custom-title', customTitle: '' })).toEqual([]);
+    expect(parseJsonlLine({ type: 'custom-title' })).toEqual([]);
   });
 
   it('leaves toolUseId unset on an ordinary user prompt', () => {
@@ -384,6 +403,8 @@ describe('parseTurnUsage', () => {
 describe('readSessionTitle', () => {
   const title = (t: string) =>
     JSON.stringify({ type: 'ai-title', aiTitle: t, sessionId: 's' }) + '\n';
+  const custom = (t: string) =>
+    JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: 's' }) + '\n';
 
   it('reads the title out of a transcript head', () => {
     writeFileSync(
@@ -391,12 +412,29 @@ describe('readSessionTitle', () => {
       assistant([{ type: 'text', text: 'hi' }]) + title('Sessione di test'),
       'utf-8'
     );
-    expect(readSessionTitle(file)).toBe('Sessione di test');
+    expect(readSessionTitle(file)).toEqual({ title: 'Sessione di test', source: 'ai' });
   });
 
   it('takes the last title, since the record is rewritten every turn', () => {
     writeFileSync(file, title('First guess') + assistant([]) + title('What it became'), 'utf-8');
-    expect(readSessionTitle(file)).toBe('What it became');
+    expect(readSessionTitle(file)).toEqual({ title: 'What it became', source: 'ai' });
+  });
+
+  it('reads a custom-title record', () => {
+    writeFileSync(file, assistant([]) + custom('Il nome che ho scelto'), 'utf-8');
+    expect(readSessionTitle(file)).toEqual({ title: 'Il nome che ho scelto', source: 'custom' });
+  });
+
+  // The precedence the rest of the app already uses (`customTitle || aiTitle`):
+  // a name the user typed is not overridden by a generated one, whichever of the
+  // two was written last.
+  it('prefers the user title over a generated one written after it', () => {
+    writeFileSync(
+      file,
+      custom('Il nome che ho scelto') + assistant([]) + title('Auto guess'),
+      'utf-8'
+    );
+    expect(readSessionTitle(file)).toEqual({ title: 'Il nome che ho scelto', source: 'custom' });
   });
 
   it('returns null when the head holds no title', () => {
@@ -409,7 +447,10 @@ describe('readSessionTitle', () => {
     writeFileSync(file, line, 'utf-8');
     // Cap inside the record: the only complete line is none of it.
     expect(readSessionTitle(file, line.length - 5)).toBeNull();
-    expect(readSessionTitle(file, line.length)).toBe('Sessione di test');
+    expect(readSessionTitle(file, line.length)).toEqual({
+      title: 'Sessione di test',
+      source: 'ai',
+    });
   });
 
   it('survives a missing file and an empty one', () => {
@@ -420,6 +461,6 @@ describe('readSessionTitle', () => {
 
   it('skips a corrupt line instead of throwing', () => {
     writeFileSync(file, '{"type":"ai-title" broken\n' + title('Good one'), 'utf-8');
-    expect(readSessionTitle(file)).toBe('Good one');
+    expect(readSessionTitle(file)).toEqual({ title: 'Good one', source: 'ai' });
   });
 });

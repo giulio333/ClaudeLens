@@ -2,7 +2,13 @@ import { basename, join } from 'path';
 import { statSync } from 'fs';
 import { glob } from 'glob';
 import { CLAUDE_DIR } from '../utils';
-import { readAppend, readSessionTitle, type LiveEvent, type TurnUsage } from './transcript-tail';
+import {
+  readAppend,
+  readSessionTitle,
+  type LiveEvent,
+  type SessionTitleSource,
+  type TurnUsage,
+} from './transcript-tail';
 import { costOfUsage, isModelPriced, readSessionSpend } from './cost-tracker';
 import { contextWindowFor } from '../shared/context-window';
 import type { ActiveSession } from './sessions-registry-reader';
@@ -119,11 +125,17 @@ const TRACE_MAX_MARKS = 160;
 
 export interface SessionActivity {
   sessionId: string;
-  /** The title Claude wrote for this conversation (`ai-title` in the
-   *  transcript), null until one has been seen. It is the only human name a
-   *  session has: the registry's `name` is the project plus two random
-   *  characters, so two sessions of one project were told apart by pid alone. */
+  /** The name this conversation goes by — the user's `/title` (`custom-title`)
+   *  if they set one, else the one Claude generated (`ai-title`); null until a
+   *  title record has been seen. It is the only human name a session has: the
+   *  registry's `name` is the project plus two random characters, so two
+   *  sessions of one project were told apart by pid alone. */
   title: string | null;
+  /** Which record `title` came from. Carried because the two do not rank
+   *  equally: `ai-title` is rewritten on later turns, and a fold that took the
+   *  freshest record unconditionally replaced a user's `/title` with the next
+   *  auto-title. Null while `title` is. */
+  titleSource: SessionTitleSource | null;
   /** Copied from the registry entry while the session is live. Kept after it
    *  ends because the registry file is gone by then, and a finished cell still
    *  has to say which project it belonged to. */
@@ -226,6 +238,7 @@ function emptyActivity(sessionId: string): Cursor {
   return {
     sessionId,
     title: null,
+    titleSource: null,
     cwd: null,
     recent: [],
     transcriptPath: null,
@@ -386,11 +399,18 @@ export function foldEvents(
       case 'status_change':
         next = { ...next, activity: event.content ?? next.activity };
         break;
-      case 'session_title':
-        // Rewritten on every turn, so the freshest one wins. Never marks the
-        // strip: naming the conversation is not work the session did.
-        next = { ...next, title: event.content ?? next.title };
+      case 'session_title': {
+        // Within one source the freshest record wins — both are rewritten, and
+        // the newest is current. ACROSS sources the user's `/title` outranks a
+        // generated name, so an `ai-title` written on a later turn must not
+        // replace it; taking the freshest record unconditionally is what made a
+        // renamed session revert to the auto-title on its next turn. Never marks
+        // the strip: naming the conversation is not work the session did.
+        const source = event.titleSource ?? 'ai';
+        if (source === 'ai' && next.titleSource === 'custom') break;
+        if (event.content) next = { ...next, title: event.content, titleSource: source };
         break;
+      }
       case 'tool_use':
         next = {
           ...next,
@@ -604,8 +624,16 @@ export async function syncSessionTails(
     }
     // The cursor starts at EOF, so the title record is behind it: read it once,
     // here, or a session already running when the Monitor opened stays nameless
-    // until its next turn. Appends keep it current from now on.
-    cursor.title = cursor.title ?? readSessionTitle(path);
+    // until its next turn. Appends keep it current from now on — and they need
+    // the source too, or the first auto-title rewrite after this read would
+    // overwrite a `/title` seeded from the head.
+    if (cursor.title === null) {
+      const seeded = readSessionTitle(path);
+      if (seeded) {
+        cursor.title = seeded.title;
+        cursor.titleSource = seeded.source;
+      }
+    }
     // Same reasoning, with money at stake — see `seedSpend`. Only a cursor that
     // starts at EOF has a history behind it to seed; one adopted at offset 0
     // reads the whole file itself and must NOT be seeded, or every turn would be

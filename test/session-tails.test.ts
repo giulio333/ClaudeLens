@@ -107,6 +107,7 @@ function billedLine(cacheRead: number, output: number): string {
 const EMPTY: SessionActivity = {
   sessionId: 's1',
   title: null,
+  titleSource: null,
   cwd: null,
   recent: [],
   transcriptPath: null,
@@ -186,6 +187,63 @@ describe('foldEvents', () => {
     expect(done.errorCount).toBe(1);
     expect(done.toolCount).toBe(1);
     expect(done.lastActivityAt).toBe(Date.parse('2026-08-16T10:00:05.000Z'));
+  });
+
+  // The session's name reaches the digest through the event stream, and the two
+  // records that carry one do not rank equally.
+  describe('the session title', () => {
+    const titleEvent = (content: string, titleSource?: 'custom' | 'ai') => ({
+      id: `t-${content}`,
+      timestamp: '',
+      type: 'session_title' as const,
+      content,
+      titleSource,
+    });
+
+    it('takes the name from an ai-title event', () => {
+      const next = foldEvents(EMPTY, [titleEvent('Auto guess', 'ai')]);
+      expect(next.title).toBe('Auto guess');
+      expect(next.titleSource).toBe('ai');
+    });
+
+    it('takes the name from a custom-title event', () => {
+      const next = foldEvents(EMPTY, [titleEvent('Il nome che ho scelto', 'custom')]);
+      expect(next.title).toBe('Il nome che ho scelto');
+      expect(next.titleSource).toBe('custom');
+    });
+
+    // Within one source the freshest record is current — both are rewritten.
+    it('lets a later record of the same source replace the name', () => {
+      const first = foldEvents(EMPTY, [titleEvent('First guess', 'ai')]);
+      const second = foldEvents(first, [titleEvent('What it became', 'ai')]);
+      expect(second.title).toBe('What it became');
+    });
+
+    // The bug the source exists to prevent: `ai-title` is rewritten on later
+    // turns, so a fold that always took the freshest record made a `/title`
+    // revert to the auto-title one turn after the user typed it.
+    it('never lets a generated title overwrite the one the user set', () => {
+      const named = foldEvents(EMPTY, [titleEvent('Il nome che ho scelto', 'custom')]);
+      const later = foldEvents(named, [titleEvent('Auto guess', 'ai')]);
+      expect(later.title).toBe('Il nome che ho scelto');
+      expect(later.titleSource).toBe('custom');
+    });
+
+    it('lets the user rename a session that already had a generated title', () => {
+      const auto = foldEvents(EMPTY, [titleEvent('Auto guess', 'ai')]);
+      const named = foldEvents(auto, [titleEvent('Il nome che ho scelto', 'custom')]);
+      expect(named.title).toBe('Il nome che ho scelto');
+      expect(named.titleSource).toBe('custom');
+    });
+
+    // Naming the conversation is not work the session did, and the record
+    // carries no timestamp — dating the session to now would make an idle
+    // session look busy.
+    it('marks nothing on the strip and does not restamp the session', () => {
+      const next = foldEvents(EMPTY, [titleEvent('Auto guess', 'ai')]);
+      expect(next.recent).toEqual([]);
+      expect(next.lastActivityAt).toBeNull();
+    });
   });
 
   // Regression: a finished turn used to read "thinking" forever. The parser
@@ -597,6 +655,77 @@ describe('syncSessionTails / onTranscriptChanged', () => {
     // The path mapping went with it: a later append is nobody's business.
     appendFileSync(file, line([{ type: 'text', text: 'after death' }]));
     expect(onTranscriptChanged(file)).toBe(false);
+  });
+
+  // `/clear` in a running terminal: the CLI mints a new session id in the SAME
+  // process, so the registry entry (keyed by pid) swaps ids under us while the
+  // session that just ended stays on screen for its retention window. That is
+  // two cards of one project at once, and each has to carry its OWN name — the
+  // head scan reading only `ai-title` left both showing the no-name fallback,
+  // which is how one session's work came to be read under the other's identity.
+  it('names each session after a /clear leaves two cards of one project', async () => {
+    const dir = join(projectsDir, '-Users-foo-proj');
+    mkdirSync(dir, { recursive: true });
+    const named = (id: string, title: string) =>
+      JSON.stringify({ type: 'custom-title', customTitle: title, sessionId: id }) + '\n';
+
+    const before = join(dir, 'clear-before.jsonl');
+    writeFileSync(before, named('clear-before', 'Prima del clear') + line([]));
+    await syncSessionTails([session('clear-before', { pid: 777 })], 1_000);
+    expect(getSessionActivity(1_000)).toMatchObject([{ title: 'Prima del clear' }]);
+
+    // The same pid now runs a different session; its transcript already exists.
+    const after = join(dir, 'clear-after.jsonl');
+    writeFileSync(after, named('clear-after', 'Dopo il clear') + line([]));
+    await syncSessionTails([session('clear-after', { pid: 777 })], 2_000);
+
+    const cards = getSessionActivity(2_000);
+    expect(cards).toHaveLength(2);
+    expect(cards.find(a => a.sessionId === 'clear-after')).toMatchObject({
+      title: 'Dopo il clear',
+      titleSource: 'custom',
+      endedAt: null,
+    });
+    expect(cards.find(a => a.sessionId === 'clear-before')).toMatchObject({
+      title: 'Prima del clear',
+      endedAt: 2_000,
+    });
+  });
+
+  // Two sessions of one project can genuinely carry the SAME name (the title is
+  // generated from the conversation, and after a `/clear` the new one can be
+  // named just like the old). Nothing downstream may key on it: the digests stay
+  // separate, and the live/ended verdict comes from the registry.
+  it('keeps two identically named sessions apart', async () => {
+    const dir = join(projectsDir, '-Users-foo-proj');
+    mkdirSync(dir, { recursive: true });
+    const named = (id: string) =>
+      JSON.stringify({ type: 'custom-title', customTitle: 'Fix the login bug', sessionId: id }) +
+      '\n';
+
+    writeFileSync(join(dir, 'twin-a.jsonl'), named('twin-a') + line([]));
+    writeFileSync(join(dir, 'twin-b.jsonl'), named('twin-b') + line([]));
+    await syncSessionTails([session('twin-a'), session('twin-b')], 1_000);
+
+    // Only twin-b is still live; twin-a is retained as ended.
+    await syncSessionTails([session('twin-b')], 2_000);
+    const cards = getSessionActivity(2_000);
+    expect(cards.map(a => a.title)).toEqual(['Fix the login bug', 'Fix the login bug']);
+    expect(cards.find(a => a.sessionId === 'twin-b')?.endedAt).toBeNull();
+    expect(cards.find(a => a.sessionId === 'twin-a')?.endedAt).toBe(2_000);
+
+    // And an append still reaches the session that owns the file, not its twin.
+    appendFileSync(
+      join(dir, 'twin-b.jsonl'),
+      line([{ type: 'tool_use', name: 'Edit', input: { file_path: '/a/b/c.ts' } }])
+    );
+    expect(onTranscriptChanged(join(dir, 'twin-b.jsonl'))).toBe(true);
+    const after = getSessionActivity(2_000);
+    expect(after.find(a => a.sessionId === 'twin-b')?.lastTool).toEqual({
+      name: 'Edit',
+      arg: '…/b/c.ts',
+    });
+    expect(after.find(a => a.sessionId === 'twin-a')?.lastTool).toBeNull();
   });
 
   it('forgets an ended session once the retention window passes', async () => {
