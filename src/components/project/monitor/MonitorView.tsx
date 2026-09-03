@@ -231,8 +231,13 @@ function doingOf(activity: SessionActivity | undefined, status: string): string 
   }
 }
 
-/** What tells two sessions of one project apart: the title Claude wrote for the
- *  conversation. The pid is not carried inside it — a title long enough to need
+/** What tells two sessions of one project apart: the name the conversation goes
+ *  by — the user's `/title` when they set one, else the title Claude generated.
+ *  Reading only the generated one left every renamed session showing the
+ *  fallback here while the sessions list printed its name, and after `/clear`
+ *  (a new session id in the same process, the previous one still on screen for
+ *  its retention window) two cards of one project with nothing to separate
+ *  them. The pid is not carried inside it — a title long enough to need
  *  the CSS ellipsis cut it off the end, losing the one part that could not be
  *  guessed — but it is not dropped either: it has its own field in the machine
  *  row below, where nothing truncates it and it is what you need to `kill`. The
