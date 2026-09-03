@@ -42,6 +42,7 @@ function activity(over: Partial<SessionActivity> = {}): SessionActivity {
   return {
     sessionId: 'sess-1',
     title: null,
+    titleSource: null,
     cwd: PROJECT.realPath,
     recent: [],
     transcriptPath: '/Users/alice/.claude/projects/-Users-alice-Projects-acme/sess-1.jsonl',
