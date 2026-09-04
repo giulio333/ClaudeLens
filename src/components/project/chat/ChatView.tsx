@@ -14,6 +14,8 @@ import {
 } from '../../../hooks/useIPC';
 import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
+import { useThoughtsShown } from '../../../hooks/useThoughtsShown';
+import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
   buildProcessedMessages,
@@ -215,6 +217,15 @@ export function ChatView({
   // sessions — including this view's own composer — are excluded from it.)
   const { data: activeSessions = [] } = useActiveSessions();
   const liveInTerminal = activeSessions.some(a => a.sessionId === sessionId);
+
+  // Running commentary: the note Claude wrote for each action, one at a time,
+  // above the control pill. Fed by the same watcher-driven read the transcript
+  // uses — nothing extra is fetched — and it narrates only calls that arrive
+  // AFTER this view opened, so re-reading a finished session says nothing.
+  // The toggle is offered only while the session is live, because that is the
+  // only state in which there is anything to narrate.
+  const { shown: thoughtsShown, toggle: toggleThoughts } = useThoughtsShown();
+  const thought = useThoughtStream(displayMessages, thoughtsShown);
 
   // Sub-agents dispatched in this session, correlated to their internal
   // transcript files. Drives the right-hand activity rail.
@@ -638,6 +649,9 @@ export function ChatView({
       onOpenSkill={skill => onOpenSkill?.(skill)}
       onOpenSkillOutput={openTool}
       onLocateSkill={jumpToTurn}
+      thought={thought}
+      thoughtsShown={thoughtsShown}
+      onToggleThoughts={liveInTerminal ? toggleThoughts : undefined}
     />
   );
 
