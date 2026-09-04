@@ -77,3 +77,26 @@ export function LocateGlyph() {
     </svg>
   );
 }
+
+/** The narration toggle in the control pill: a line of speech, struck through
+ *  when the line is off. Not a lightbulb and not a thought bubble — the app
+ *  renders real `thinking` blocks elsewhere and these are something else: what
+ *  Claude said each action was for. */
+export function NarrateGlyph({ on }: { on: boolean }) {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M2.5 3.5h11M2.5 7h7.5M2.5 10.5h5" />
+      {!on && <path d="M13.5 4.5 3.5 12" strokeWidth="1.3" />}
+    </svg>
+  );
+}

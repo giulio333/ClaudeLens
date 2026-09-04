@@ -18,7 +18,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-and the chat `utils`.
+`thoughts`, and the chat `utils`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, and the read
@@ -56,7 +56,12 @@ reaches `telemetry:trackError` and what the browser-noise filter drops first)
 the SDK handshake's bundled `claude_code_version`, and says so when the read
 fails instead of falling back to it), `project-description-view` (the hero's
 description line: an edit goes to the prefs and never to the project's
-CLAUDE.md, and clearing it falls back to the derived sentence) and
+CLAUDE.md, and clearing it falls back to the derived sentence) `thought-stream` (the running commentary of #236: only calls that arrive after
+the view opened are narrated, a sentence holds the line for its own dwell and
+the line then empties rather than keeping a stale one, a burst drops its middle
+instead of falling behind, narration turned back on starts from the present, and
+the deadline is absolute so a session appending in bursts cannot freeze one
+sentence on screen) and
 `live-monitor-view` (the Live Monitor's own half of #194: a retarget clears the
 previous session's events/status/running tool before the new watch starts, LIVE
 is shown only for a verified attachment — a `pending` watch reads WAITING — and

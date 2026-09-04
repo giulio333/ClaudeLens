@@ -12,7 +12,9 @@ import {
   skillInitial,
 } from './utils';
 import { CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export';
-import { ChevronUpGlyph, DockCaretGlyph, LocateGlyph, TrashGlyph } from './icons';
+import { ChevronUpGlyph, DockCaretGlyph, LocateGlyph, NarrateGlyph, TrashGlyph } from './icons';
+import { ThoughtLine } from './ThoughtLine';
+import { Thought } from './thoughts';
 
 function fmtAgentSpan(startedAt?: string, endedAt?: string): string | null {
   if (!startedAt || !endedAt) return null;
@@ -299,6 +301,9 @@ export function ChatControlPill({
   onOpenSkill,
   onOpenSkillOutput,
   onLocateSkill,
+  thought,
+  thoughtsShown,
+  onToggleThoughts,
 }: {
   showTranscriptControls: boolean;
   filter: TurnFilter;
@@ -333,6 +338,14 @@ export function ChatControlPill({
   onOpenSkill: (skill: Skill) => void;
   onOpenSkillOutput: (group: ToolGroup) => void;
   onLocateSkill: (turnN: number) => void;
+  /** The sentence currently being narrated, or null when there is nothing to
+   *  say. Rendered above the pill; see `ThoughtLine`. */
+  thought?: Thought | null;
+  thoughtsShown?: boolean;
+  /** Present only where narration is possible at all (a session that is still
+   *  running). A permanent toggle for something that can never speak would be
+   *  a control for nothing. */
+  onToggleThoughts?: () => void;
 }) {
   // Only one sheet is raised above the pill at a time: the agent dock list, the
   // skill dock list, or the export/delete menu.
@@ -387,6 +400,9 @@ export function ChatControlPill({
 
   return (
     <div className="cl-pill-wrap" ref={rootRef}>
+      {/* Keyed by the call, so each sentence enters on its own rather than
+          cross-fading into the next one mid-read. */}
+      {thoughtsShown && thought && <ThoughtLine key={thought.id} thought={thought} />}
       {sheet === 'agents' && agents.length > 0 && (
         <AgentDockSheet
           agents={agents}
@@ -532,6 +548,26 @@ export function ChatControlPill({
                 </button>
               ))}
             </div>
+            <span className="cl-pill-div" />
+          </>
+        )}
+        {onToggleThoughts && (
+          <>
+            <button
+              type="button"
+              className="cl-pill-narrate"
+              aria-pressed={thoughtsShown}
+              data-on={thoughtsShown || undefined}
+              title={
+                thoughtsShown
+                  ? 'Hide the running commentary — the note Claude writes for each action'
+                  : 'Show the running commentary — the note Claude writes for each action'
+              }
+              onClick={onToggleThoughts}
+            >
+              <NarrateGlyph on={Boolean(thoughtsShown)} />
+              <span>Notes</span>
+            </button>
             <span className="cl-pill-div" />
           </>
         )}

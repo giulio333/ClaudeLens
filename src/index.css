@@ -3626,6 +3626,120 @@ body {
   opacity: 1;
 }
 
+/* ──────────────────────────────────────────────────────────
+   RUNNING COMMENTARY — the note Claude wrote for one action.
+
+   Anchored to the TOP EDGE of `.cl-pill-wrap` and out of flow, which is the
+   whole point: it inherits every bottom offset the wrap already carries (plain
+   Lens, composer, locked composer) without restating one of them, it cannot
+   stretch the pill it floats over (the wrap is `align-items: stretch`, so a
+   58-character sentence as a flex child would widen the pill to match), and it
+   lands inside the padding the reading column already reserves under the
+   transcript — so it covers no turn and moves nothing.
+   ────────────────────────────────────────────────────────── */
+.cl-thought {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+  max-width: min(560px, 74vw);
+  padding: 6px 13px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
+  -webkit-backdrop-filter: blur(26px);
+  backdrop-filter: blur(26px);
+  box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
+  /* One line, ellipsis, never a wrap: a sentence that reflows to two lines
+     moves the pill under it, and this surface's contract is that nothing on
+     the page moves when it speaks. */
+  white-space: nowrap;
+  /* Takes the cursor, unlike the VitalsPopover cards: those are hover-opened,
+     so capturing it would keep them up after the pointer left, while this line
+     is clock-driven and its `title` — the untruncated sentence — can only be
+     read if the element is hoverable at all. It floats over the padding the
+     reading column reserves, so there is nothing beneath it to steal a click
+     from. */
+  cursor: default;
+  animation: cl-thought-in 0.22s ease-out;
+}
+.cl-thought-dot {
+  flex: none;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  /* Static. The line changing IS the motion here — a pulsing dot would be a
+     second animation competing with the one that carries meaning. */
+}
+.cl-thought-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 400 12.5px/1.5 var(--font-reading);
+  color: var(--cl-ink-2);
+}
+.cl-thought-tool {
+  flex: none;
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+@keyframes cl-thought-in {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 3px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-thought {
+    animation: none;
+  }
+}
+
+/* The commentary toggle, sitting with the other transcript controls. */
+.cl-pill-narrate {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  transition:
+    background 0.14s,
+    color 0.14s;
+}
+.cl-pill-narrate:hover {
+  color: var(--cl-ink-2);
+  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+}
+.cl-pill-narrate[data-on] {
+  color: var(--cl-accent-ink);
+}
+
+/* The in-flight chip carries a sentence now, not just a tool name: prose in
+   mono reads as a command. The meta half stays mono — it IS an identifier. */
+.cl-live-tool.is-note b {
+  font: 500 12px/1.45 var(--font-reading);
+  letter-spacing: 0;
+  color: var(--cl-ink-2);
+}
+
 /* floating control pill — bottom centre, glass */
 .cl-pill-wrap {
   position: absolute;
