@@ -9,8 +9,13 @@ import { listProjectSessionFiles } from './session-files';
 // anywhere on disk. Confine reads to this dir to preserve the ~/.claude invariant.
 const PLANS_DIR = join(CLAUDE_DIR, 'plans');
 
-/** True when an absolute path resolves inside ~/.claude/plans. */
-function isWithinPlansDir(filePath: string): boolean {
+/** True when an absolute path resolves inside ~/.claude/plans.
+ *  Exported because it is the containment rule for a `planFilePath`, and that
+ *  value reaches a SECOND consumer that acts on it far more destructively than
+ *  this module does: `session-deleter` offers plans for deletion. One rule, one
+ *  definition — a reader that refuses to open a path outside this dir and a
+ *  deleter that would happily remove it are not two opinions, they are a bug. */
+export function isWithinPlansDir(filePath: string): boolean {
   const resolved = resolve(filePath);
   return resolved === PLANS_DIR || resolved.startsWith(PLANS_DIR + sep);
 }
@@ -318,8 +323,13 @@ async function toPlan(ref: PlanRef): Promise<Plan> {
  *  piani di un progetto in layout `sessions/`.
  *
  *  Ogni glob è l'insieme vivo della sua directory: la passa a `retainSessions`
- *  per sfrattare le entry dei transcript spariti dopo il popolamento della cache. */
-async function sessionFilesIn(projectPath: string): Promise<string[]> {
+ *  per sfrattare le entry dei transcript spariti dopo il popolamento della cache.
+ *
+ *  Esportata perché `session-deleter` conta gli stessi riferimenti con lo stesso
+ *  `readPlanRefs`: la potatura vive QUI, agganciata a questa enumerazione, quindi
+ *  un chiamante che elenca i transcript per conto suo popola la cache in
+ *  directory che nessuna scansione ripasserà mai. */
+export async function listPlanSessionFiles(projectPath: string): Promise<string[]> {
   return listProjectSessionFiles(projectPath, retainSessions);
 }
 
@@ -328,7 +338,7 @@ async function sessionFilesIn(projectPath: string): Promise<string[]> {
 // Restituisce solo i gruppi non vuoti, sessione più recente prima.
 export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]> {
   try {
-    const sessionFiles = await sessionFilesIn(projectPath);
+    const sessionFiles = await listPlanSessionFiles(projectPath);
     const groups: { group: PlanGroup; sortKey: string }[] = [];
 
     for (const sessionFile of sessionFiles) {
@@ -373,12 +383,12 @@ export async function getProjectPlans(projectPath: string): Promise<PlanGroup[]>
 /** Ogni `planFilePath` referenziato da un attachment, in tutti i progetti. */
 async function referencedPlanPaths(projectsDir: string): Promise<Set<string>> {
   const referenced = new Set<string>();
-  // Le dir di progetto, non i transcript: `sessionFilesIn` sa poi da quale delle
+  // Le dir di progetto, non i transcript: `listPlanSessionFiles` sa poi da quale delle
   // due location leggerli, e riceve la lista viva che serve alla potatura.
   // Stesso pattern di `calculateCostSummary` per enumerare i progetti.
   const projectDirs = await glob('[!.]*', { cwd: projectsDir, absolute: true });
   for (const projectPath of projectDirs) {
-    for (const sessionFile of await sessionFilesIn(projectPath)) {
+    for (const sessionFile of await listPlanSessionFiles(projectPath)) {
       for (const ref of await readPlanRefs(sessionFile)) referenced.add(resolve(ref.filePath));
     }
   }
