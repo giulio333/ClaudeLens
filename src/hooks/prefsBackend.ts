@@ -18,6 +18,7 @@ const KEY_EVENTS: Record<string, string> = {
   'cl-highlights': 'cl-highlights-changed',
   'cl-rail-collapsed': 'cl-rail-collapsed-changed',
   'cl-project-descriptions': 'cl-project-descriptions-changed',
+  'cl-thoughts-hidden': 'cl-thoughts-hidden-changed',
 };
 
 function hasBackend(): boolean {

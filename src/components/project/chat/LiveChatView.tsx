@@ -1,6 +1,7 @@
 import { useMemo } from 'react';
 import { TopBar } from '../shared/TopBar';
 import { buildProcessedMessages } from './utils';
+import { pendingToolThought } from './thoughts';
 import { LiveInTerminalBadge } from './atoms';
 import { ChatComposer } from './ChatComposer';
 import { MessageBubble } from './MessageBubble';
@@ -100,6 +101,19 @@ export function LiveChatView({
     return undefined;
   }, [chat.displayMessages]);
 
+  // The running tool's own note, for the in-flight chip. `ToolActivity` carries
+  // no id (it is emitted before the call's input has streamed), so the note is
+  // matched by tool name against the newest call still awaiting a result.
+  // Keyed on the tool NAME, not on the ToolActivity object: that one is
+  // re-emitted every `tool_progress` heartbeat with a new `elapsedSeconds`, and
+  // the sentence does not change when the clock beside it does — otherwise the
+  // whole transcript is walked once a second for a value already known.
+  const runningTool = chat.liveTool?.toolName ?? null;
+  const liveThought = useMemo(
+    () => (runningTool ? pendingToolThought(chat.displayMessages, runningTool) : ''),
+    [runningTool, chat.displayMessages]
+  );
+
   const summary = chat.summary;
 
   return (
@@ -153,6 +167,7 @@ export function LiveChatView({
                       <LiveTurn
                         text={chat.streamText}
                         tool={chat.liveTool}
+                        thought={liveThought}
                         turnNumber={processed.length + 1}
                       />
                     )}
