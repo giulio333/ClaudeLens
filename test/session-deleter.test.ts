@@ -1,27 +1,51 @@
-import { getSessionArtifacts, deleteSessionArtifacts } from '../electron/modules/session-deleter';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
 import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
-let root: string; // simula ~/.claude
-let projectsDir: string;
-let tasksDir: string;
-let plansDir: string;
-let projectPath: string;
+// PLANS_DIR è una costante di modulo derivata da CLAUDE_DIR: va puntata sulla
+// root finta PRIMA di importare i moduli (stesso schema di
+// test/plans-unlinked.test.ts), altrimenti il confinamento a ~/.claude/plans
+// rifiuterebbe il piano di questo stesso fixture.
+const root = mkdtempSync(join(tmpdir(), 'cl-del-')); // simula ~/.claude
+process.env.CLAUDE_CONFIG_DIR = root;
+
+const deleter = await import('../electron/modules/session-deleter');
+const { getSessionArtifacts, deleteSessionArtifacts } = deleter;
+const { getPlanRefStats, resetPlanRefCache } = await import('../electron/modules/plans-reader');
+
+const projectsDir = join(root, 'projects');
+const tasksDir = join(root, 'tasks');
+const plansDir = join(root, 'plans');
+const projectPath = join(projectsDir, '-tmp-proj');
+
+afterAll(() => {
+  delete process.env.CLAUDE_CONFIG_DIR;
+  rmSync(root, { recursive: true, force: true });
+});
 
 function line(obj: unknown): string {
   return JSON.stringify(obj);
 }
 
-beforeEach(() => {
-  root = mkdtempSync(join(tmpdir(), 'cl-del-'));
-  projectsDir = join(root, 'projects');
-  tasksDir = join(root, 'tasks');
-  plansDir = join(root, 'plans');
-  projectPath = join(projectsDir, '-tmp-proj');
+/** Una riga attachment che referenzia `planPath`. */
+function planAttachment(
+  type: 'plan_mode' | 'plan_mode_exit',
+  planPath: string,
+  at: string
+): string {
+  return line({ type: 'attachment', timestamp: at, attachment: { type, planFilePath: planPath } });
+}
 
+beforeEach(() => {
+  // La root è condivisa (la costante di modulo la legge una volta sola), quindi
+  // sono i suoi contenuti a essere ricostruiti a ogni test: ogni `it` resta
+  // un'affermazione indipendente anche con l'ordine randomizzato.
+  for (const dir of [projectsDir, tasksDir, plansDir])
+    rmSync(dir, { recursive: true, force: true });
   mkdirSync(projectPath, { recursive: true });
   mkdirSync(plansDir, { recursive: true });
+  resetPlanRefCache();
 
   // Piano globale condiviso da due sessioni.
   const planPath = join(plansDir, 'p1.md');
@@ -37,11 +61,7 @@ beforeEach(() => {
         timestamp: '2026-01-01T00:00:00Z',
         message: { role: 'user', content: 'hi' },
       }),
-      line({
-        type: 'attachment',
-        timestamp: '2026-01-01T00:01:00Z',
-        attachment: { type: 'plan_mode_exit', planFilePath: planPath },
-      }),
+      planAttachment('plan_mode_exit', planPath, '2026-01-01T00:01:00Z'),
     ].join('\n'),
     'utf-8'
   );
@@ -61,17 +81,14 @@ beforeEach(() => {
   // Sessione 2: referenzia lo stesso piano (refCount = 2).
   writeFileSync(
     join(projectPath, 'sess2.jsonl'),
-    line({
-      type: 'attachment',
-      timestamp: '2026-01-02T00:00:00Z',
-      attachment: { type: 'plan_mode', planFilePath: planPath },
-    }),
+    planAttachment('plan_mode', planPath, '2026-01-02T00:00:00Z'),
     'utf-8'
   );
 });
 
 afterEach(() => {
-  rmSync(root, { recursive: true, force: true });
+  for (const dir of [projectsDir, tasksDir, plansDir])
+    rmSync(dir, { recursive: true, force: true });
 });
 
 describe('getSessionArtifacts', () => {
@@ -107,6 +124,88 @@ describe('getSessionArtifacts', () => {
     const res = await getSessionArtifacts(projectPath, tasksDir, 'lonely.jsonl');
     expect(res.artifacts).toHaveLength(1);
     expect(res.artifacts[0].kind).toBe('session');
+  });
+
+  // `planFilePath` arriva verbatim dal transcript: `plans-reader` si rifiuta già
+  // di leggerlo fuori da ~/.claude/plans, e offrirlo per la CANCELLAZIONE è
+  // peggio che leggerlo — la sola guardia a valle è la root ~/.claude, che
+  // lascia passare tutto ciò che ci vive dentro.
+  it('non offre come piano un path fuori da ~/.claude/plans', async () => {
+    const settings = join(root, 'settings.json');
+    writeFileSync(settings, '{}', 'utf-8');
+    const outside = join(tmpdir(), 'cl-not-a-plan.md');
+    writeFileSync(outside, '# nope\n', 'utf-8');
+
+    writeFileSync(
+      join(projectPath, 'poisoned.jsonl'),
+      [
+        planAttachment('plan_mode', settings, '2026-01-03T00:00:00Z'),
+        planAttachment('plan_mode', outside, '2026-01-03T00:01:00Z'),
+      ].join('\n'),
+      'utf-8'
+    );
+
+    try {
+      const res = await getSessionArtifacts(projectPath, tasksDir, 'poisoned.jsonl');
+
+      expect(res.artifacts.filter(a => a.kind === 'plan')).toHaveLength(0);
+      expect(res.artifacts.map(a => a.path)).not.toContain(settings);
+      expect(res.artifacts.map(a => a.path)).not.toContain(outside);
+    } finally {
+      rmSync(outside, { force: true });
+    }
+  });
+
+  // `isDir: false` era un'assunzione: `deleteSessionArtifacts` ri-statta il path
+  // e su una directory usa `rmSync` ricorsivo. Una casella sola avrebbe
+  // cancellato un albero.
+  it('non offre come piano una directory, nemmeno dentro la plans dir', async () => {
+    const dirPlan = join(plansDir, 'not-a-file.md');
+    mkdirSync(dirPlan, { recursive: true });
+    writeFileSync(join(dirPlan, 'inside.txt'), 'data', 'utf-8');
+
+    writeFileSync(
+      join(projectPath, 'dirplan.jsonl'),
+      planAttachment('plan_mode', dirPlan, '2026-01-04T00:00:00Z'),
+      'utf-8'
+    );
+
+    const res = await getSessionArtifacts(projectPath, tasksDir, 'dirplan.jsonl');
+
+    expect(res.artifacts.filter(a => a.kind === 'plan')).toHaveLength(0);
+    expect(res.artifacts.some(a => a.path === dirPlan)).toBe(false);
+    expect(existsSync(join(dirPlan, 'inside.txt'))).toBe(true);
+  });
+
+  // Il dialog stampa "referenced by N sessions": l'unità è la sessione, non il
+  // file. Una glob ricorsiva pescava anche le sidecar dei sub-agenti, che sono
+  // dentro la sessione che le ha generate — contarle è contarla due volte.
+  it('conta le sessioni, non le sidecar dei sub-agenti', async () => {
+    const planPath = join(plansDir, 'p1.md');
+    // La sidecar porta lo stesso attachment del padre.
+    writeFileSync(
+      join(projectPath, 'sess1', 'subagents', 'agent-aaa.jsonl'),
+      [
+        line({ type: 'user', message: { role: 'user', content: 'x' } }),
+        planAttachment('plan_mode', planPath, '2026-01-01T00:02:00Z'),
+      ].join('\n'),
+      'utf-8'
+    );
+
+    const res = await getSessionArtifacts(projectPath, tasksDir, 'sess1.jsonl');
+    const plan = res.artifacts.find(a => a.kind === 'plan');
+
+    expect(plan?.referencedBy).toBe(2); // sess1 + sess2, non la sidecar
+  });
+
+  // La potatura della cache di `readPlanRefs` è agganciata all'enumerazione
+  // condivisa: una entry piantata sotto `subagents/` non verrebbe ripassata da
+  // nessuna scansione e sopravvivrebbe per tutta la vita del processo.
+  it('non lascia in cache le sidecar dei sub-agenti', async () => {
+    await getSessionArtifacts(projectPath, tasksDir, 'sess1.jsonl');
+
+    // I due transcript di sessione del progetto, e nient'altro.
+    expect(getPlanRefStats().cachedFiles).toBe(2);
   });
 });
 
