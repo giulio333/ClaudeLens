@@ -113,6 +113,27 @@ export interface ReadChatOptions {
 export function readChatSession(filePath: string, options: ReadChatOptions = {}): ChatMessage[] {
   if (!existsSync(filePath)) return [];
 
+  try {
+    return parseChatSessionText(readFileSync(filePath, 'utf-8'), options);
+  } catch (error) {
+    console.error(`Errore leggendo sessione chat ${filePath}: ${error}`);
+    return [];
+  }
+}
+
+/**
+ * The line-by-line half of `readChatSession`, over text already in memory.
+ *
+ * Exported because `session-search` reads each transcript ONCE — raw, for its
+ * cheap substring reject — and must parse the survivors from that same string
+ * rather than opening the file a second time. Sharing the function (instead of
+ * the search growing its own line loop) is what keeps the two from drifting on
+ * the rules that decide what a message even IS here: meta and sidechain lines
+ * skipped, the `No response requested.` placeholder dropped, uuid-deduped
+ * sdk-cli/cli rewrites collapsed. A search that applied a different set would
+ * quote text the transcript view then refuses to show.
+ */
+export function parseChatSessionText(raw: string, options: ReadChatOptions = {}): ChatMessage[] {
   const messages: ChatMessage[] = [];
   // Una sessione ripresa in modalità headless (`claude -p --resume`, lanciato
   // da ClaudeLens) e poi riaperta nella CLI interattiva riscrive lo stesso
@@ -121,63 +142,57 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   // turno due volte e le key React duplicate rompono la riconciliazione.
   const seenUuids = new Set<string>();
 
-  try {
-    const lines = readFileSync(filePath, 'utf-8')
-      .split('\n')
-      .filter(l => l.trim());
+  const lines = raw.split('\n').filter(l => l.trim());
 
-    for (const line of lines) {
-      try {
-        const json = JSON.parse(line) as Record<string, unknown>;
+  for (const line of lines) {
+    try {
+      const json = JSON.parse(line) as Record<string, unknown>;
 
-        // Salta righe non-chat
-        if (json.type !== 'user' && json.type !== 'assistant') continue;
-        // Salta messaggi di sistema/meta
-        if (json.isMeta === true) continue;
-        // Salta sidechain (subagent internals) salvo lettura esplicita del transcript
-        if (json.isSidechain === true && !options.includeSidechain) continue;
+      // Salta righe non-chat
+      if (json.type !== 'user' && json.type !== 'assistant') continue;
+      // Salta messaggi di sistema/meta
+      if (json.isMeta === true) continue;
+      // Salta sidechain (subagent internals) salvo lettura esplicita del transcript
+      if (json.isSidechain === true && !options.includeSidechain) continue;
 
-        const msg = json.message as Record<string, unknown> | undefined;
-        if (!msg) continue;
+      const msg = json.message as Record<string, unknown> | undefined;
+      if (!msg) continue;
 
-        const role = msg.role as 'user' | 'assistant';
-        if (role !== 'user' && role !== 'assistant') continue;
+      const role = msg.role as 'user' | 'assistant';
+      if (role !== 'user' && role !== 'assistant') continue;
 
-        const rawContent = msg.content;
-        let blocks: ChatContentBlock[] = [];
+      const rawContent = msg.content;
+      let blocks: ChatContentBlock[] = [];
 
-        if (typeof rawContent === 'string') {
-          blocks = parseStringContent(rawContent);
-          if (blocks.length === 0) continue;
-        } else if (Array.isArray(rawContent)) {
-          blocks = parseContentArray(rawContent);
-        }
-
+      if (typeof rawContent === 'string') {
+        blocks = parseStringContent(rawContent);
         if (blocks.length === 0) continue;
-        // Salta il placeholder "No response requested." dei comandi locali.
-        if (role === 'assistant' && isPlaceholderNote(blocks)) continue;
-
-        // Scarta i duplicati esatti per uuid (vedi nota su sdk-cli/cli sopra).
-        // Gli uuid vuoti non vengono deduplicati per non collassare righe
-        // distinte che ne fossero prive.
-        const uuid = String(json.uuid ?? '');
-        if (uuid && seenUuids.has(uuid)) continue;
-        if (uuid) seenUuids.add(uuid);
-
-        messages.push({
-          uuid,
-          role,
-          timestamp: String(json.timestamp ?? ''),
-          model: msg.model as string | undefined,
-          content: blocks,
-          usage: parseUsage(msg),
-        });
-      } catch {
-        // riga non-JSON
+      } else if (Array.isArray(rawContent)) {
+        blocks = parseContentArray(rawContent);
       }
+
+      if (blocks.length === 0) continue;
+      // Salta il placeholder "No response requested." dei comandi locali.
+      if (role === 'assistant' && isPlaceholderNote(blocks)) continue;
+
+      // Scarta i duplicati esatti per uuid (vedi nota su sdk-cli/cli sopra).
+      // Gli uuid vuoti non vengono deduplicati per non collassare righe
+      // distinte che ne fossero prive.
+      const uuid = String(json.uuid ?? '');
+      if (uuid && seenUuids.has(uuid)) continue;
+      if (uuid) seenUuids.add(uuid);
+
+      messages.push({
+        uuid,
+        role,
+        timestamp: String(json.timestamp ?? ''),
+        model: msg.model as string | undefined,
+        content: blocks,
+        usage: parseUsage(msg),
+      });
+    } catch {
+      // riga non-JSON
     }
-  } catch (error) {
-    console.error(`Errore leggendo sessione chat ${filePath}: ${error}`);
   }
 
   return messages;

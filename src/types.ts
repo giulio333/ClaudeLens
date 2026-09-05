@@ -127,6 +127,54 @@ export interface ExportSaveResult {
 
 export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan';
 
+// ── Conversation search ──────────────────────────────────────────────────────
+// Manually mirrored from electron/modules/session-search.ts: that module pulls
+// in `fs`/`glob`, so it can't be imported from the renderer the way the shared
+// chat types are. Keep the two in step.
+
+export interface ConversationSearchHit {
+  /** The message the match is in. The renderer joins on this, never on a
+   *  position: the transcript view reads through the SDK, which truncates at the
+   *  compaction boundary, so a hit on disk may have no turn to scroll to. */
+  messageUuid: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+  kind: 'text' | 'thinking';
+  snippet: string;
+  /** Offset and length of the match inside `snippet`, for highlighting. */
+  matchStart: number;
+  matchLength: number;
+}
+
+export interface ConversationSearchSession {
+  projectHash: string;
+  /** Absent when the project's cwd could only be guessed from its folder name. */
+  projectPath?: string;
+  sessionId: string;
+  sessionTitle?: string;
+  mtime: number;
+  /** Total matches in this session; `hits` is the sample that is shown. */
+  hitCount: number;
+  hits: ConversationSearchHit[];
+}
+
+export interface ConversationSearchResult {
+  results: ConversationSearchSession[];
+  scanned: number;
+  parsed: number;
+  truncated: boolean;
+  prefiltered: boolean;
+  elapsedMs: number;
+}
+
+export interface ConversationSearchRequest {
+  text: string;
+  projectHash?: string;
+  includeThinking?: boolean;
+  maxSessions?: number;
+  maxHitsPerSession?: number;
+}
+
 export interface SessionArtifact {
   kind: ArtifactKind;
   label: string;

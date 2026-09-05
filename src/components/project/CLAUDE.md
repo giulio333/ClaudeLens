@@ -576,6 +576,58 @@ teardown, modello del ribbon).
 
 ---
 
+### `search/` — Cercare dentro le conversazioni
+
+Vista `search` (deep view, globale o scoped a un progetto). L'app legge ogni
+conversazione mai avuta con Claude Code e finora non c'era modo di chiedere
+**dove** è successo qualcosa: `SearchPopover` cerca **nomi** (path di progetto,
+titoli di sessione, skill, agent, MCP), non contenuti — una query che lì non
+trova niente non ha ricevuto risposta, semplicemente non ha fatto match.
+
+| File             | Esporta      | Descrizione                                                                                                                                                                                                                     |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SearchView.tsx` | `SearchView` | Campo + risultati raggruppati per sessione (progetto · titolo · id corto · data · conteggio match), snippet con la run evidenziata. Chrome standard delle deep view (`TopBar` + `cl-hero` + `Lens` + `cl-hband` + `cl-section`) |
+
+Decisioni, tutte con un costo dichiarato:
+
+- **La query si sottomette, non si strema.** Ogni run è una passata su tutta la
+  storia su disco (vedi `electron/modules/session-search.ts`), quindi battere a
+  macchina non deve farne partire una: si preme Invio, e il campo è **seedato**
+  con le parole già scritte nel popover, così arrivare qui mostra risultati
+  invece di chiedere un secondo Invio.
+- **La query NON è invalidata da `data:changed`** (`useConversationSearch` non
+  sta nel set di `useDataChangedRefetch`): un result set è l'istantanea di una
+  scansione, e rieseguirla a ogni append di ogni sessione viva metterebbe una
+  passata sull'intera storia dietro ogni riga scritta — esattamente il costo che
+  le cache dei reader esistono per togliere.
+- **L'evidenziazione usa gli offset che la scansione ha riportato**, non ricerca
+  di nuovo la query nello snippet: il match è stato trovato da una regex
+  case-insensitive, e una `indexOf` naive qui disegnerebbe il box sulla parola
+  sbagliata su ogni folding che le due non risolvono allo stesso modo.
+- **Aprire un hit risolve la `SessionSummary` vera** dalla lista del progetto
+  (`qc.fetchQuery(['sessions:project', hash])`) e **rifiuta** se la sessione non
+  c'è più: `ChatView` è guidata da quella riga, con i suoi costi e token, e
+  fabbricarne una a zeri metterebbe cifre inventate nella testata. Un transcript
+  cancellato dopo la scansione non è una sessione apribile, e dirlo batte
+  navigare su una vista vuota.
+- **Il deep-link al turno viaggia per `uuid`, mai per posizione** (`ChatView`
+  prop `focusMessageUuid`): la vista transcript legge via Agent SDK, che
+  **tronca alla compaction**, mentre la scansione legge il file — un match nella
+  storia pre-`/compact` è reale e lì irraggiungibile. Con un indice il
+  disallineamento sarebbe stato silenzioso (atterraggio sul turno sbagliato);
+  con lo uuid o il messaggio si trova, o la vista lo **dichiara** e non finge.
+- **Lo scope parte dal progetto aperto** (è la storia in cui uno sta) e la
+  pagina dei risultati lo allarga con una checkbox; il conteggio in testata dice
+  quanti transcript sono stati letti e quanti parsati, e una scansione tagliata
+  da un cap lo dichiara invece di presentare un campione come la risposta.
+
+**Ingresso**: il piede di `SearchPopover` — `⌘↵ search conversations`
+(`.cl-search-more`), che compare da 2 caratteri in su (il pavimento della
+scansione lato main). Deliberatamente **non** su Invio semplice: il primo
+risultato del popover resta a un tasto di distanza.
+
+---
+
 ### `sessions/`
 
 | File                 | Esporta          | Descrizione                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                |
