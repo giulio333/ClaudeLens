@@ -15,6 +15,7 @@ import { usePinnedSessions } from '../hooks/usePinnedSessions';
 import { View } from '../components/project/types';
 import { reportViewOpened } from '../lib/telemetry';
 import { STUDIO_ENABLED } from '../lib/features';
+import { SearchView } from '../components/project/search/SearchView';
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog';
 import {
   SearchPopover,
@@ -559,13 +560,41 @@ export default function ProjectOverview() {
             key={view.session.filename}
             project={view.project}
             session={view.session}
+            focusMessageUuid={view.focusMessageUuid}
             onBack={() =>
               view.from === 'agents-live'
                 ? setView({ type: 'agents-live', project: view.project })
-                : setView({ type: 'sessions', project: view.project })
+                : view.from === 'search'
+                  ? // Back to the results, with the query that produced them: a
+                    // search is a place you come back to, and re-running it from
+                    // an empty field is the one thing a result page must not ask.
+                    setView({ type: 'search', query: view.searchQuery ?? '' })
+                  : setView({ type: 'sessions', project: view.project })
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
+          />
+        );
+      case 'search':
+        return (
+          <SearchView
+            initialQuery={view.query}
+            scope={view.scope}
+            onBack={() =>
+              view.scope
+                ? setView({ type: 'sessions', project: view.scope })
+                : setView({ type: 'global-home' })
+            }
+            onOpenHit={(project, session, messageUuid) =>
+              setView({
+                type: 'chat',
+                project,
+                session,
+                from: 'search',
+                searchQuery: view.query,
+                focusMessageUuid: messageUuid,
+              })
+            }
           />
         );
       case 'new-chat':
@@ -886,6 +915,11 @@ export default function ProjectOverview() {
             server,
             totalProjects: server.enabledInProjects + server.disabledInProjects,
           })
+        }
+        onSearchConversations={q =>
+          // Scoped to the open project when there is one — that is the history
+          // the person is standing in — and the results page can widen it.
+          setView({ type: 'search', query: q, scope: selected ?? undefined })
         }
         onSelectSession={(project, session) => {
           setSelected(project);

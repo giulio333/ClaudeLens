@@ -169,6 +169,7 @@ export function SearchPopover({
   onSelectAgent,
   onSelectMcp,
   onSelectSession,
+  onSearchConversations,
   onDeleteCurrent,
   onClose,
 }: {
@@ -190,6 +191,10 @@ export function SearchPopover({
   onTogglePin: (hash: string) => void;
   onToggleSessionPin?: (projectHash: string, sessionFilename: string) => void;
   onSelectProject: (p: Project) => void;
+  /** Escape hatch to the full-text search over transcript CONTENT. This popover
+   *  matches names — project paths, session titles, skill and agent names — so a
+   *  query that finds nothing here has not been answered, only not matched. */
+  onSearchConversations?: (query: string) => void;
   onSelectSkill?: (skill: Skill) => void;
   onSelectAgent?: (agent: Agent) => void;
   onSelectMcp?: (server: McpServer) => void;
@@ -202,6 +207,9 @@ export function SearchPopover({
   const [query, setQuery] = useState('');
   const [hl, setHl] = useState(0);
   const [activeFilter, setActiveFilter] = useState<SearchFilter>('all');
+  // Two characters is the scan's own floor (`MIN_QUERY_LENGTH`); offering the
+  // action below it would hand the main process a query it refuses.
+  const canSearchConversations = onSearchConversations !== undefined && query.trim().length >= 2;
 
   // Reset the search buffer each time the popover opens or switches mode
   // (render-time adjustment; the focus side-effect stays in the effect below).
@@ -478,6 +486,13 @@ export function SearchPopover({
       moveFilter(-1);
     } else if (e.key === 'Enter') {
       e.preventDefault();
+      // ⌘↵ leaves the name matching behind and searches what was SAID. Kept off
+      // plain Enter so the popover's own first result stays one keystroke away.
+      if ((e.metaKey || e.ctrlKey) && canSearchConversations) {
+        onSearchConversations?.(query.trim());
+        onClose();
+        return;
+      }
       const row = flat[hl];
       if (row) selectRow(row);
     } else if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'p') {
@@ -623,6 +638,18 @@ export function SearchPopover({
         <span>
           <kbd>⌘P</kbd>pin
         </span>
+        {canSearchConversations && (
+          <button
+            type="button"
+            className="cl-search-more"
+            onClick={() => {
+              onSearchConversations?.(query.trim());
+              onClose();
+            }}
+          >
+            <kbd>⌘↵</kbd>search conversations
+          </button>
+        )}
         {sessionsLoading && mode === 'global' && <span>loading sessions</span>}
         {/* Withdrawn with the Danger zone entry point — same reason, see
             PROJECT_PURGE_ENABLED. */}

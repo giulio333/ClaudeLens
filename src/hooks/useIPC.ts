@@ -13,6 +13,8 @@ import type {
   ChatContentBlock,
   ChatMessage,
   SessionSummary,
+  ConversationSearchRequest,
+  ConversationSearchResult,
   SubagentMeta,
   SessionArtifacts,
   DeleteRequest,
@@ -256,6 +258,11 @@ declare global {
           content: string
         ) => Promise<IpcResult<ExportSaveResult>>;
         savePdf: (defaultFilename: string, html: string) => Promise<IpcResult<ExportSaveResult>>;
+      };
+      search: {
+        conversations: (
+          request: ConversationSearchRequest
+        ) => Promise<IpcResult<ConversationSearchResult>>;
       };
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>;
@@ -629,6 +636,32 @@ export function useSessionList(hash: string | null) {
     queryKey: ['sessions:project', hash],
     queryFn: () => unwrap(window.electronAPI.sessions.listByProject(hash!)),
     enabled: hash !== null,
+  });
+}
+
+/**
+ * Full-text search across the transcripts on disk.
+ *
+ * Deliberately NOT invalidated by `useDataChangedRefetch`: a result set is a
+ * snapshot of a scan, and re-running it on every `data:changed` would put a
+ * pass over the whole history behind every append of every live session — the
+ * exact cost the reader caches exist to remove. The user re-runs it by asking
+ * again.
+ *
+ * `enabled` is what keeps a half-typed word from starting a scan: the caller
+ * submits, it doesn't stream keystrokes in.
+ */
+export function useConversationSearch(request: ConversationSearchRequest | null) {
+  return useQuery({
+    queryKey: ['search:conversations', request],
+    queryFn: () => unwrap(window.electronAPI.search.conversations(request!)),
+    enabled: request !== null,
+    // A scan is expensive and its answer doesn't rot in seconds; keep it for the
+    // back-and-forth between a result and the session it points at.
+    staleTime: 60_000,
+    // The scan already reports what it could not read; a retry would just run
+    // the whole pass again for the same answer.
+    retry: false,
   });
 }
 

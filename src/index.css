@@ -897,6 +897,23 @@ body {
   color: var(--cl-danger);
 }
 
+/* The escape hatch out of name matching and into what was actually said. Sits
+   with the shortcut hints because it IS one — same weight, same face — and
+   takes the accent only on hover, where the rest of this footer is inert. */
+.cl-search-more {
+  margin-left: auto;
+  background: none;
+  border: none;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  font: inherit;
+  padding: 0;
+  transition: color 140ms;
+}
+.cl-search-more:hover {
+  color: var(--cl-accent);
+}
+
 /* ── PIN row action inside Projects list (cl-row) ── */
 .cl-row {
   position: relative;

@@ -73,6 +73,7 @@ export function ChatView({
   onOpenTool,
   embedded = false,
   jumpToTurnRef,
+  focusMessageUuid,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -96,6 +97,11 @@ export function ChatView({
    *  PTY. The floating control pill and the left TURNS capsule stay — they
    *  anchor to the chat column. */
   embedded?: boolean;
+  /** Open scrolled to the turn holding this message (a search hit). Matched by
+   *  uuid, not by index: this view loads through the SDK, which truncates at the
+   *  compaction boundary, so the message may simply not be here — and then the
+   *  view says so instead of landing on whatever turn an index happened to hit. */
+  focusMessageUuid?: string;
 }) {
   const {
     data: messages,
@@ -419,6 +425,32 @@ export function ChatView({
     [scrollToTurn, followRef]
   );
 
+  // Land on the turn a search hit points at.
+  //
+  // Runs once per uuid, gated on the transcript having loaded (`processed`
+  // starts empty and fills on the first read), and it may legitimately find
+  // nothing: `sessions:getChat` reads through the Agent SDK, which truncates at
+  // the compaction boundary, while the search reads the file. A hit in
+  // pre-`/compact` history is real and unreachable here — so the miss is
+  // reported rather than swallowed, and never approximated by scrolling
+  // somewhere plausible.
+  const focusedRef = useRef<string | null>(null);
+  const [focusMissed, setFocusMissed] = useState(false);
+  useEffect(() => {
+    if (!focusMessageUuid || processed.length === 0) return;
+    if (focusedRef.current === focusMessageUuid) return;
+    focusedRef.current = focusMessageUuid;
+    const idx = processed.findIndex(p => p.msg.uuid === focusMessageUuid);
+    if (idx < 0) {
+      setFocusMissed(true);
+      return;
+    }
+    setFocusMissed(false);
+    // Turn numbers are 1-based indices into `processed` — the same numbering
+    // `useTranscriptModel` gives the minimap and the row map.
+    jumpToTurn(idx + 1);
+  }, [focusMessageUuid, processed, jumpToTurn]);
+
   // Publish `jumpToTurn` to an outside navigator (the v2 session Outline). The
   // outline lives in the unified Terminal/Lens frame, beside this embedded view;
   // wiring the handle lets an outline row scroll this transcript to its turn.
@@ -657,6 +689,27 @@ export function ChatView({
 
   return (
     <div className="cl-chat">
+      {focusMissed && (
+        <div
+          role="status"
+          style={{
+            padding: '8px 28px',
+            fontSize: 12.5,
+            color: 'var(--cl-ink-2)',
+            background: 'var(--cl-paper-2)',
+            borderBottom: '1px solid var(--cl-line)',
+          }}
+        >
+          That match is in this session's history but not in the transcript this view can load — it
+          sits before a <code>/compact</code>, which the reader stops at.{' '}
+          <button
+            onClick={() => setFocusMissed(false)}
+            style={{ color: 'var(--cl-accent)', textDecoration: 'underline' }}
+          >
+            Dismiss
+          </button>
+        </div>
+      )}
       {!embedded && (
         <TopBar
           // Same stack rule as the unified frame: with a detail open the arrow
