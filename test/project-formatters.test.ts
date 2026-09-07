@@ -64,6 +64,8 @@ describe('fmtModel — model id to display name', () => {
     ['claude-sonnet-5', 'Sonnet 5'],
     ['claude-fable-5', 'Fable 5'],
     ['claude-mythos-5', 'Mythos 5'],
+    ['claude-fable-5-1', 'Fable 5.1'],
+    ['claude-mythos-5-1', 'Mythos 5.1'],
     ['claude-opus-4-8', 'Opus 4.8'],
     ['claude-sonnet-4-6', 'Sonnet 4.6'],
     ['claude-haiku-4-5', 'Haiku 4.5'],
@@ -119,10 +121,20 @@ describe('buildModelMix — project hero band', () => {
       s('claude-haiku-4-5-20251001', 100),
       s('claude-sonnet-4-6', 100),
       s('claude-opus-5', 100),
+      s('claude-fable-5-1', 100),
       s(undefined, 100),
     ]);
-    expect(mix.map(m => m.key)).toEqual(['opus', 'sonnet', 'haiku', 'other']);
+    expect(mix.map(m => m.key)).toEqual(['fable', 'opus', 'sonnet', 'haiku', 'other']);
     expect(mix.reduce((n, m) => n + m.pct, 0)).toBeCloseTo(100, 10);
+  });
+
+  // Fable used to be counted as "Other" — a family with its own price, its own
+  // colour everywhere else in the app, and no name on the one chart that says
+  // where the tokens went. Mythos stays in `other` on purpose: same tier, but
+  // labelling it "Fable" would name it as a model it is not.
+  it('names Fable and leaves Mythos unnamed rather than mislabelled', () => {
+    const mix = buildModelMix([s('claude-fable-5-1', 100), s('claude-mythos-5-1', 100)]);
+    expect(mix.map(m => m.key)).toEqual(['fable', 'other']);
   });
 
   it('drops families with no tokens so the bar never carries a zero-width segment', () => {
