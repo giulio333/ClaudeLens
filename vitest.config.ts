@@ -1,6 +1,12 @@
 import { defineConfig } from 'vitest/config';
+import Icons from 'unplugin-icons/vite';
 
 export default defineConfig({
+  // Same icon plugin as the app build: the `~icons/*` imports in `fileIcons.tsx`
+  // are virtual modules, so without it any renderer test that mounts a chat
+  // component fails to resolve them. JSX itself needs no plugin here (esbuild
+  // reads `jsx: react-jsx` from the tsconfig).
+  plugins: [Icons({ compiler: 'jsx', jsx: 'react' })],
   test: {
     globals: true,
     environment: 'node',

@@ -767,6 +767,17 @@ export const MessageBubble = memo(function MessageBubble({
             </button>
           )}
           <span className="cl-turn-who">{roleLabel}</span>
+          {msg.queued && (
+            // Typed while Claude was already working, and absorbed into that
+            // turn — so it was never a turn of its own, and the reply to it sits
+            // inside the turn above rather than below (#245).
+            <span
+              className="cl-turn-queued-badge"
+              title="Typed while Claude was working on the previous turn"
+            >
+              sent mid-turn
+            </span>
+          )}
           {timestamp &&
             !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
             !(showAgentStrip && textBlocks.length === 0) && (
