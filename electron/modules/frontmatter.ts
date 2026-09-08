@@ -10,7 +10,7 @@ import { load, dump } from 'js-yaml';
  *
  * Robust by design:
  * - no frontmatter block        -> { frontmatter: {}, body: content }
- * - malformed YAML / load throws -> { frontmatter: {}, body }
+ * - malformed YAML / load throws -> line-by-line recovery, see `recoverFields`
  * - YAML parses to a non-object  -> { frontmatter: {}, body }
  */
 export function parseFrontmatter(content: string): {
@@ -33,10 +33,87 @@ export function parseFrontmatter(content: string): {
       return { frontmatter: parsed as Record<string, unknown>, body };
     }
   } catch {
-    // Malformed frontmatter: fall through to the empty result, keeping the body.
+    // Malformed frontmatter: recover what the block still says instead of
+    // dropping every field because of one bad line.
+    return { frontmatter: recoverFields(match[1]), body };
   }
 
   return { frontmatter: {}, body };
+}
+
+/**
+ * A YAML indicator in first position means the value opens a flow collection, a
+ * block scalar, an anchor/alias or a directive — something whose meaning spans
+ * more than the line it starts on. Those we cannot recover by hand, so a value
+ * starting with one is dropped rather than kept as prose.
+ */
+const YAML_INDICATOR = /^[[{|>&*!%@`]/;
+
+/**
+ * Last-resort reader for a frontmatter block js-yaml refused to load. Skill and
+ * agent files are hand-written, and the single most common mistake is a `: `
+ * inside an unquoted description ("Serve anche per chiamare un'istanza: fa
+ * login da sé") — YAML reads that as a nested mapping and throws, which used to
+ * cost the file its name, description and every other field. Here each
+ * top-level `key: value` line is read on its own, so one bad line loses only
+ * itself. Claude Code shows those descriptions; ClaudeLens showing an empty
+ * one was our parse being stricter than the tool whose data we display.
+ *
+ * Values are still handed to js-yaml one line at a time, so `true`, `7`,
+ * `[a, b]` and quoted strings keep their type; only a line that fails on its
+ * own falls back to its raw text. Block lists (`- item` under a bare key) are
+ * collected; anything else indented is skipped.
+ */
+function recoverFields(block: string): Record<string, unknown> {
+  const fields: Record<string, unknown> = {};
+  let listKey: string | null = null;
+
+  for (const line of block.split('\n')) {
+    if (!line.trim() || line.trimStart().startsWith('#')) continue;
+
+    const item = line.match(/^\s*-\s+(.*)$/);
+    if (item && listKey) {
+      const value = scalar(item[1].trim());
+      if (value !== undefined) (fields[listKey] as unknown[]).push(value);
+      continue;
+    }
+
+    const field = line.match(/^([\w.-]+):\s*(.*)$/);
+    if (!field) continue;
+    const [, key, raw] = field;
+
+    if (!raw.trim()) {
+      // A bare key opens a block list; an empty value is nothing to record.
+      fields[key] = [];
+      listKey = key;
+      continue;
+    }
+    listKey = null;
+
+    const value = scalar(raw.trim());
+    if (value !== undefined) fields[key] = value;
+  }
+
+  // A bare key that no `- item` followed was not a list after all.
+  for (const [key, value] of Object.entries(fields)) {
+    if (Array.isArray(value) && value.length === 0) delete fields[key];
+  }
+  return fields;
+}
+
+/** Read one line's value as YAML, falling back to its raw text as a string. */
+function scalar(raw: string): unknown {
+  try {
+    const value = load(raw);
+    if (value === null) return undefined;
+    // A value that reads back as a mapping is the colon-space case itself:
+    // `Serve a questo: leggere` is valid YAML on its own line, just not the
+    // mapping the author meant. Only `{a: 1}` really asked to be one.
+    if (typeof value === 'object' && !Array.isArray(value) && !raw.startsWith('{')) return raw;
+    return value;
+  } catch {
+    return YAML_INDICATOR.test(raw) ? undefined : raw;
+  }
 }
 
 /**
