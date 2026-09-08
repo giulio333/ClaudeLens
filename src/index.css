@@ -5166,6 +5166,20 @@ body {
   background: var(--cl-ink-4);
   flex-shrink: 0;
 }
+/* A message typed while Claude was working, absorbed into the running turn:
+   same neutral header pill as the hidden-tools badge, without the dot — it
+   states a provenance, not a count. */
+.cl-turn-queued-badge {
+  display: inline-flex;
+  align-items: center;
+  font: 500 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-4);
+  padding: 4px 9px;
+  border: 1px dashed var(--cl-line);
+  border-radius: 999px;
+}
 /* Multiplier chip for a collapsed run of tool-only turns ("× 4"). */
 .cl-turn-tools-hidden-x {
   font-weight: 700;

@@ -166,13 +166,15 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
         Extract<ChatContentBlock, { type: 'text' }> | undefined;
       if (text) {
         command = parseClaudeSlashCommand(text.text) ?? undefined;
-        // A skill invocation is a slash command immediately followed by Claude
-        // Code's skill-expansion message — peek the next raw message to tell a
-        // skill apart from a plain built-in command.
+        // A skill invocation is a slash command whose skill-expansion message
+        // Claude Code injects right after. On a stored transcript that row is
+        // `isMeta` and the SDK read never returns it, so the main process hands
+        // us its base dir on the command message itself (`skillPath`, #246); the
+        // next-message peek stays for the live stream, which can still carry it.
         if (
           command &&
-          i + 1 < messages.length &&
-          SKILL_EXPANSION_RE.test(firstText(messages[i + 1]))
+          (msg.skillPath ||
+            (i + 1 < messages.length && SKILL_EXPANSION_RE.test(firstText(messages[i + 1]))))
         ) {
           command.isSkill = true;
         }
@@ -766,19 +768,32 @@ export function skillHasViewableOutput(group: ToolGroup | undefined): boolean {
   return !isSkillLaunchOutput(content);
 }
 
+/**
+ * Resolver from an invoked skill name to its definition. Plain names come from
+ * the project/global registry; a plugin skill is invoked namespaced —
+ * `${plugin.name}:${skill.name}` (e.g. `document-skills:pdf`) — and never
+ * matches a plain registry name, so it resolves against the installed plugins.
+ *
+ * Shared so the footer dock and the turn's own card cannot disagree on what a
+ * name means: the card used to index the registry alone, which is why a plugin
+ * skill was listed in the dock and still drawn as a plain command.
+ */
+export function buildSkillIndex(
+  skills: Skill[] = [],
+  plugins: InstalledPlugin[] = []
+): (name: string) => Skill | null {
+  const byName = new Map(skills.map(s => [s.name, s]));
+  const byNamespaced = new Map<string, Skill>();
+  for (const pl of plugins) for (const s of pl.skills) byNamespaced.set(`${pl.name}:${s.name}`, s);
+  return (name: string) => byName.get(name) ?? byNamespaced.get(name) ?? null;
+}
+
 export function correlateSessionSkills(
   processed: ProcessedMessage[],
   skills: Skill[],
   plugins: InstalledPlugin[] = []
 ): SessionSkill[] {
-  const byName = new Map(skills.map(s => [s.name, s]));
-  // Plugin skills are invoked namespaced — `${plugin.name}:${skill.name}` (e.g.
-  // `document-skills:pdf`) — so they never match a plain registry name; resolve
-  // them against the installed plugins instead.
-  const byNamespaced = new Map<string, Skill>();
-  for (const pl of plugins) for (const s of pl.skills) byNamespaced.set(`${pl.name}:${s.name}`, s);
-  const resolve = (name: string): Skill | null =>
-    byName.get(name) ?? byNamespaced.get(name) ?? null;
+  const resolve = buildSkillIndex(skills, plugins);
 
   const out: SessionSkill[] = [];
   processed.forEach((p, idx) => {

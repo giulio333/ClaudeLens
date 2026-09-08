@@ -18,5 +18,9 @@
     "checkJs": false,
     "types": ["node", "vitest/globals", "vite/client"]
   },
-  "include": ["test"]
+  // `src/icons.d.ts` declares the `~icons/*` virtual modules unplugin-icons
+  // serves: a renderer test that mounts a chat component pulls in `fileIcons.tsx`,
+  // which imports them, and the renderer project gets the declaration for free
+  // from its own `include`.
+  "include": ["test", "src/icons.d.ts"]
 }
