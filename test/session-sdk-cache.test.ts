@@ -24,6 +24,10 @@ const SESSION_ID = '11111111-2222-3333-4444-555555555555';
 /** A session in the SAME project that dispatched no sub-agent — the common case,
  *  and the one where an empty scoped read has to be believed rather than retried. */
 const SESSION_NO_SUB = '66666666-7777-8888-9999-000000000000';
+/** A session carrying the two kinds of row `getSessionMessages` never returns: a
+ *  `queue-operation` (a message absorbed mid-turn, #245) and the `isMeta` skill
+ *  expansion that identifies a slash-command skill (#246). */
+const SESSION_EXTRAS = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 const AGENT_ID = 'abc123';
 const DISPATCH_PROMPT = 'Investigate the flaky test in the parser suite';
 const CWD = join(tmpdir(), 'cl-cache-proj');
@@ -142,6 +146,68 @@ function writeFixtures(): void {
       assistantLine('n2', 'n1', [{ type: 'text', text: 'answered directly' }]),
     ])
   );
+
+  // A `/build-dmg` skill invocation followed by a message typed while the turn
+  // was running. Both signals live in rows the SDK read drops, so this fixture
+  // is what proves the second pass puts them back.
+  writeFileSync(
+    join(projDir, `${SESSION_EXTRAS}.jsonl`),
+    jsonl([
+      { type: 'mode', mode: 'normal', sessionId: SESSION_EXTRAS, cwd: CWD },
+      {
+        parentUuid: null,
+        isSidechain: false,
+        type: 'user',
+        uuid: 'x1',
+        cwd: CWD,
+        timestamp: '2026-06-17T11:00:00.000Z',
+        message: { role: 'user', content: '<command-name>/build-dmg</command-name>' },
+      },
+      {
+        parentUuid: 'x1',
+        isSidechain: false,
+        type: 'user',
+        uuid: 'xmeta',
+        isMeta: true,
+        cwd: CWD,
+        timestamp: '2026-06-17T11:00:01.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Base directory for this skill: /skills/build-dmg' }],
+        },
+      },
+      {
+        type: 'queue-operation',
+        operation: 'enqueue',
+        timestamp: '2026-06-17T11:00:20.000Z',
+        sessionId: SESSION_EXTRAS,
+        content: 'metti anche il changelog',
+      },
+      {
+        type: 'queue-operation',
+        operation: 'remove',
+        timestamp: '2026-06-17T11:00:40.000Z',
+        sessionId: SESSION_EXTRAS,
+        content: 'metti anche il changelog',
+        reason: 'absorbed_mid_turn',
+      },
+      {
+        parentUuid: 'xmeta',
+        isSidechain: false,
+        type: 'assistant',
+        uuid: 'x2',
+        cwd: CWD,
+        timestamp: '2026-06-17T11:01:00.000Z',
+        message: {
+          model: 'claude-opus-4-8',
+          id: 'msg_x2',
+          type: 'message',
+          role: 'assistant',
+          content: [{ type: 'text', text: 'built, changelog included' }],
+        },
+      },
+    ])
+  );
 }
 
 beforeEach(() => {
@@ -236,6 +302,51 @@ describe('readChatSessionViaSdk — change-stamped cache', () => {
 // common case is a session with no sub-agents, and retrying that unscoped runs
 // the cross-project scan the hint exists to avoid — on every flush of a live
 // session, since each append invalidates the entry.
+describe('readChatSessionViaSdk — the rows the SDK read cannot see', () => {
+  it('puts back the message typed while the turn was running', async () => {
+    const messages = await readChatSessionViaSdk(SESSION_EXTRAS, source);
+    const queued = messages.filter(m => m.queued);
+
+    expect(queued).toHaveLength(1);
+    expect(queued[0].content).toEqual([{ type: 'text', text: 'metti anche il changelog' }]);
+    // At the moment it was typed: after the command, before the answer.
+    expect(messages.map(m => m.uuid)).toEqual([messages[0].uuid, queued[0].uuid, 'x2']);
+  });
+
+  it('marks the slash command that expanded into a skill', async () => {
+    const messages = await readChatSessionViaSdk(SESSION_EXTRAS, source);
+
+    expect(messages[0].skillPath).toBe('/skills/build-dmg');
+    expect(messages.find(m => m.uuid === 'x2')?.skillPath).toBeUndefined();
+    // The expansion itself stays out of the transcript — it is Claude Code
+    // talking to the model, not a turn.
+    expect(messages.some(m => m.uuid === 'xmeta')).toBe(false);
+  });
+
+  it('serves both passes from one cache entry, until the file changes', async () => {
+    const first = await readChatSessionViaSdk(SESSION_EXTRAS, source);
+    expect(await readChatSessionViaSdk(SESSION_EXTRAS, source)).toBe(first);
+
+    appendFileSync(
+      join(projDir, `${SESSION_EXTRAS}.jsonl`),
+      jsonl([
+        {
+          type: 'queue-operation',
+          operation: 'remove',
+          timestamp: '2026-06-17T11:02:00.000Z',
+          sessionId: SESSION_EXTRAS,
+          content: 'e anche i test',
+          reason: 'absorbed_mid_turn',
+        },
+      ])
+    );
+
+    const after = await readChatSessionViaSdk(SESSION_EXTRAS, source);
+    expect(after).not.toBe(first);
+    expect(after.filter(m => m.queued)).toHaveLength(2);
+  });
+});
+
 describe('dir narrowing — a proven scope spares the cross-project retry', () => {
   it('retries while the scope is unproven', async () => {
     const metas = await readSessionSubagentsViaSdk(SESSION_NO_SUB, source);

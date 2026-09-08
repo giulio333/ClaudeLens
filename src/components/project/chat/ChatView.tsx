@@ -19,6 +19,7 @@ import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
   buildProcessedMessages,
+  buildSkillIndex,
   correlateSessionAgents,
   correlateSessionSkills,
   ChatDetailsFilter,
@@ -131,12 +132,12 @@ export function ChatView({
   }, [globalAgents, projectAgents]);
 
   // Resolve a skill's full definition by name (the slash-command id) — feeds both
-  // the inline skill card link and the footer skill dock.
+  // the inline skill card link and the footer skill dock, through the same index
+  // the dock uses, so a plugin skill (`plugin:leaf`) resolves on both surfaces.
   const skillOf = useMemo(() => {
-    const byName = new Map<string, Skill>();
-    for (const s of allSkills ?? []) byName.set(s.name, s);
-    return (name: string) => byName.get(name);
-  }, [allSkills]);
+    const resolve = buildSkillIndex(allSkills, plugins);
+    return (name: string) => resolve(name) ?? undefined;
+  }, [allSkills, plugins]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);

@@ -254,7 +254,10 @@ function buildTurnMarkdown(
 ): string[] {
   const { msg, toolGroups } = processed;
   const who = processed.notification ? 'Task event' : roleLabel(msg.role);
-  const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`;
+  // A message absorbed into the running turn is marked here too: without it the
+  // export reads as if Claude answered something nobody asked (#245).
+  const provenance = msg.queued ? ' (sent mid-turn)' : '';
+  const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${provenance}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`;
   const lines = [heading, ''];
 
   // Command / notification turns replace their raw text blocks (which carry
@@ -527,6 +530,7 @@ function renderTurnHtml(
     <article class="turn ${msg.role === 'user' ? 'is-user' : 'is-assistant'}">
       <header class="turn-head">
         <span class="turn-who">${escapeHtml(role)}</span>
+        ${msg.queued ? '<span class="turn-queued">sent mid-turn</span>' : ''}
         ${time ? `<span class="turn-sep">·</span><time>${escapeHtml(time)}</time>` : ''}
         ${model ? `<span class="turn-sep">·</span>${model}` : ''}
       </header>
@@ -618,6 +622,11 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
     .message-text { margin-bottom: 8px; }
     .message-text > :first-child { margin-top: 0; }
     .message-text > :last-child { margin-bottom: 0; }
+    /* Message typed while Claude was working, absorbed into the running turn. */
+    .turn-queued {
+      margin-left: 8px; padding: 2px 7px; border: 1px dashed #c9c3b6; border-radius: 999px;
+      font-size: 9px; text-transform: uppercase; letter-spacing: 0.08em; color: #7c7669;
+    }
     /* Slash-command turn: the compact command chip (mirrors the live view). */
     .command-line { margin-bottom: 8px; }
     .command-line code { font-weight: 700; }

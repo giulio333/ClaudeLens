@@ -34,6 +34,16 @@ export interface ChatMessage {
   model?: string;
   content: ChatContentBlock[];
   usage?: MessageUsage;
+  /** Typed while a turn was already running, and absorbed into it. Claude Code
+   *  keeps such a message ONLY in the transcript's `queue-operation` rows, so it
+   *  reaches the renderer through `transcript-extras`, not through the SDK read
+   *  (#245). Shown as a normal user message wearing a "sent mid-turn" chip. */
+  queued?: true;
+  /** Base directory of the skill this user message expanded into — recovered
+   *  from the `isMeta` expansion row the SDK read drops. Present only on the
+   *  `<command-name>`/`tool_result` row that invoked a skill, and it is what
+   *  tells a `/foo` skill apart from a built-in command (#246). */
+  skillPath?: string;
 }
 
 /** Live tool indicator for the in-flight turn (`sessions:chatToolActivity`):
