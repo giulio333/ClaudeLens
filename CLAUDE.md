@@ -11,11 +11,14 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-`thoughts`, and the chat `utils`.
+`thoughts`, `transcript-extras`, and the chat `utils`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
-read path, the `dir` narrowing hint and its empty-result fallback, and the read
-cache's invalidation. CI (`.github/workflows/ci.yml`) runs format:check +
+read path, the `dir` narrowing hint and its empty-result fallback, the read
+cache's invalidation, and the merge of the rows the SDK read does not return
+(#245/#246 — a message absorbed mid-turn lands in chronological place and a
+slash-command skill gets its `skillPath`, both from one extra pass over the
+same file). CI (`.github/workflows/ci.yml`) runs format:check +
 typecheck + lint + test + build on every push/PR. **Test order is randomised**
 (`sequence.shuffle` in `vitest.config.ts`): every `it` has to be an independent
 claim, and three files had quietly stopped being that — one test created the
@@ -58,7 +61,12 @@ sentence on screen) and
 `live-monitor-view` (the Live Monitor's own half of #194: a retarget clears the
 previous session's events/status/running tool before the new watch starts, LIVE
 is shown only for a verified attachment — a `pending` watch reads WAITING — and
-a `startWatch` answer belonging to a superseded session changes nothing).
+a `startWatch` answer belonging to a superseded session changes nothing) and
+`message-bubble-markers` (the first test to mount `MessageBubble`: a message
+absorbed mid-turn wears the "sent mid-turn" chip and an ordinary one does not,
+and a slash command carrying a `skillPath` renders the skill card instead of
+the plain command one — the claim the old `isSkill` tests only appeared to
+make, since they fed the `isMeta` row the read path stopped returning).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
