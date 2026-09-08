@@ -11,7 +11,8 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-`thoughts`, `transcript-extras`, and the chat `utils`.
+`thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
+and the chat `utils`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, the read

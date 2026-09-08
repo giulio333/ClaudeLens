@@ -794,19 +794,51 @@ export interface SessionActivity {
   endedAt: number | null;
 }
 
+/** A unit of work the supervisor launched beside the turn (a shell, a fetch). */
+export interface BgFanTask {
+  kind: string;
+  label: string;
+  /** Epoch ms; 0 when the state file carried no usable stamp. */
+  startedAt: number;
+}
+
 export interface BgSession {
   id: string;
   sessionId: string;
   name: string;
+  /** An outcome name (`done`/`failed`/`stopped`/…), NOT what the job is doing
+   *  now — that is `tempo`. See `agents-live/status.ts` for why this matters. */
   state: string;
+  /** `idle` | `active` | `blocked` — the live one. */
   tempo: string;
+  /** Last status line. Can be the user's own reply, so it is never shown as a
+   *  pending question. */
   detail: string;
   intent: string;
+  /** Starting prompt, when the intent does not carry it. */
+  initialPrompt: string;
   result: string | null;
   cwd: string;
   projectName: string;
   template: string;
   inFlightTasks: number;
+  /** WHICH kinds of work are in flight (`session_cron`, …) — a different
+   *  question from how many. */
+  inFlightKinds: string[];
+  /** Work running beside the turn: the evidence that a job is busy. */
+  fan: BgFanTask[];
+  /** Tokens spent, when reported. No input/output/cache split, so it can never
+   *  become a dollar figure. */
+  tokens: number | null;
+  /** The flags a respawn would reuse: model, permission mode, effort. */
+  respawnFlags: string[];
+  /** The job wakes on a schedule. */
+  hasRoutine: boolean;
+  /** The job re-wakes itself. */
+  selfWake: boolean;
+  /** The transcript the supervisor itself scans — the authoritative path, never
+   *  derived from the cwd. */
+  transcriptPath: string | null;
   alive: boolean;
   pid: number | null;
   createdAt: string;
