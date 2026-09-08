@@ -31,7 +31,7 @@ import {
   formatTokens,
   buildModelMix,
 } from '../utils';
-import type { SessionSummary, MemoryTopic } from '../../../types';
+import type { SessionSummary, MemoryTopic, ClaudeMdLayer } from '../../../types';
 import { Lens } from './Lens';
 import { ProjectDescription } from './ProjectDescription';
 import { McpServerGrid } from '../mcp/McpServerGrid';
@@ -303,6 +303,30 @@ const CLAUDE_MD_SCOPE_LABEL: Record<'global' | 'project' | 'local' | 'subdir', s
   subdir: 'Subdir',
   global: 'Global',
 };
+
+/** Ogni layer è un CLAUDE.md, quindi lo scope da solo non distingue una riga
+ *  dall'altra: quattro righe su sei si chiamavano "Subdir". Quello che le
+ *  distingue è la cartella che governano, così il path diventa il nome della
+ *  riga e viene spezzato in genitori (smorzati) + segmento identificante +
+ *  nome file (smorzato): la lista si legge sul segmento in evidenza senza
+ *  perdere il path intero. */
+function claudeMdPathParts(layer: ClaudeMdLayer, rootPath: string) {
+  if (layer.scope === 'global') {
+    return { prefix: '~/.claude/', focus: 'CLAUDE.md', suffix: '' };
+  }
+  const rel = layer.filePath.startsWith(rootPath + '/')
+    ? layer.filePath.slice(rootPath.length + 1)
+    : layer.filePath;
+  const cut = rel.lastIndexOf('/');
+  if (cut === -1) return { prefix: '', focus: rel, suffix: '' };
+  const dir = rel.slice(0, cut);
+  const up = dir.lastIndexOf('/');
+  return {
+    prefix: up === -1 ? '' : dir.slice(0, up + 1),
+    focus: dir.slice(up + 1) + '/',
+    suffix: rel.slice(cut + 1),
+  };
+}
 
 // Ripulisce la sintassi markdown e tronca per un'anteprima pulita.
 function memPreview(raw: string, max: number = MEM_PREVIEW_MAX): string {
@@ -745,9 +769,22 @@ export function ProjectView({
   }, [mcpData, project.realPath]);
 
   const claudeMdLayers = claudeMd?.layers.length ?? 0;
+  // Ordinati come la cascata che l'intestazione annuncia (global → project →
+  // local → subdir), non con il project in testa: la riga d'intestazione fa da
+  // legenda della lista solo se la lista la segue. I subdir vengono dopo, per
+  // profondità e poi alfabetici, così il ramo si legge dall'alto.
   const claudeMdLayerList = useMemo(() => {
-    const order = { project: 0, local: 1, subdir: 2, global: 3 } as const;
-    return [...(claudeMd?.layers ?? [])].sort((a, b) => order[a.scope] - order[b.scope]);
+    const order = { global: 0, project: 1, local: 2, subdir: 3 } as const;
+    const rows = [...(claudeMd?.layers ?? [])]
+      .map(layer => ({ layer, lines: layer.content.split('\n').length }))
+      .sort((a, b) => {
+        const byScope = order[a.layer.scope] - order[b.layer.scope];
+        if (byScope !== 0) return byScope;
+        const depth = a.layer.filePath.split('/').length - b.layer.filePath.split('/').length;
+        return depth !== 0 ? depth : a.layer.filePath.localeCompare(b.layer.filePath);
+      });
+    const maxLines = rows.reduce((m, r) => Math.max(m, r.lines), 1);
+    return rows.map(r => ({ ...r, weight: r.lines / maxLines }));
   }, [claudeMd]);
   const skillCount = allSkills.length;
   const agents = useMemo(() => {
@@ -1078,32 +1115,36 @@ export function ProjectView({
             {claudeMdLayers === 0 ? (
               <div className="cl-empty">No CLAUDE.md instructions for this project.</div>
             ) : (
-              <div className="cl-tile-grid">
-                {claudeMdLayerList.map((l, i) => {
-                  const lines = l.content.split('\n').length;
-                  const path =
-                    l.scope === 'global'
-                      ? '~/.claude/CLAUDE.md'
-                      : l.filePath.startsWith(project.realPath + '/')
-                        ? l.filePath.slice(project.realPath.length + 1)
-                        : l.filePath;
+              /* Una colonna sola: la cascata è una sequenza ordinata, e la
+                 griglia a due colonne la faceva leggere a zig-zag. */
+              <div className="cl-md-cascade">
+                {claudeMdLayerList.map(({ layer: l, lines, weight }) => {
+                  const { prefix, focus, suffix } = claudeMdPathParts(l, project.realPath);
                   return (
                     <button
                       key={l.filePath}
                       type="button"
-                      className={`cl-tile ${i === 0 ? 'accent' : ''}`}
+                      className="cl-md-layer"
+                      data-scope={l.scope}
+                      title={l.scope === 'global' ? '~/.claude/CLAUDE.md' : l.filePath}
                       onClick={() =>
                         l.scope === 'global'
                           ? onNavigate({ type: 'global-claudemd' })
                           : onNavigate({ type: 'project-claudemd', project, layer: l })
                       }
                     >
-                      <span className="glyph">M</span>
-                      <div style={{ minWidth: 0 }}>
-                        <div className="t-name">{CLAUDE_MD_SCOPE_LABEL[l.scope]}</div>
-                        <div className="t-desc">{path}</div>
-                      </div>
-                      <span className="t-meta">
+                      <span className="scope">{CLAUDE_MD_SCOPE_LABEL[l.scope]}</span>
+                      <span className="path">
+                        {prefix && <span className="dim">{prefix}</span>}
+                        <span className="focus">{focus}</span>
+                        {suffix && <span className="dim">{suffix}</span>}
+                      </span>
+                      {/* 36 righe contro 882: la barra dice a colpo d'occhio
+                          quale layer pesa davvero nel contesto. */}
+                      <span className="weight" aria-hidden="true">
+                        <i style={{ width: `${Math.max(4, Math.round(weight * 100))}%` }} />
+                      </span>
+                      <span className="lines">
                         <b>{lines}</b> lines
                       </span>
                     </button>

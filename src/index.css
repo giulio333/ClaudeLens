@@ -11315,6 +11315,115 @@ button.cl-sw-member:focus-visible,
   letter-spacing: 0.02em;
 }
 
+/* ── CLAUDE.md cascade (landing di progetto) ──────────────────────────────
+   Sei layer sono sei file con lo stesso nome: l'unica cosa che li distingue è
+   la cartella che governano, quindi il path è il nome della riga e lo scope
+   scende a chip. Come tile-grid quattro righe su sei si chiamavano "Subdir" e
+   il path stava nella riga smorzata sotto; qui la parola generica è un chip di
+   larghezza fissa che allinea tutti i path sulla stessa colonna, il segmento
+   identificante è in evidenza fra genitori e nome file smorzati, e la barra a
+   destra dà la scala (36 righe contro 882) che una colonna di cifre lascia
+   fare a mente. Una colonna sola: la cascata è una sequenza ordinata e le due
+   colonne la facevano leggere a zig-zag. */
+.cl-md-cascade {
+  border-top: 1px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-md-layer {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 88px auto;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding: 14px 2px 14px 0;
+  border: none;
+  border-bottom: 1px solid var(--cl-line-soft);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.cl-md-layer:last-child {
+  border-bottom: none;
+}
+.cl-md-layer:hover {
+  background: var(--cl-glass-hover-bg);
+}
+.cl-md-layer .scope {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--cl-ink-4);
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-pill);
+  padding: 3px 0 4px;
+}
+/* Il CLAUDE.md del progetto è quello che si apre più spesso: l'accento sta lì
+   e non sulla prima riga, che ora è il globale. */
+.cl-md-layer[data-scope='project'] .scope {
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+}
+.cl-md-layer .path {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-md-layer .path .dim {
+  color: var(--cl-ink-4);
+}
+.cl-md-layer .path .focus {
+  color: var(--cl-ink);
+  font-weight: 600;
+}
+.cl-md-layer .weight {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cl-line-soft);
+  overflow: hidden;
+}
+.cl-md-layer .weight i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in oklch, var(--cl-accent) 42%, transparent);
+}
+.cl-md-layer:hover .weight i,
+.cl-md-layer[data-scope='project'] .weight i {
+  background: var(--cl-accent);
+}
+.cl-md-layer .lines {
+  min-width: 66px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+}
+.cl-md-layer .lines b {
+  color: var(--cl-ink-2);
+  font-weight: 500;
+}
+@media (max-width: 760px) {
+  .cl-md-layer {
+    grid-template-columns: 68px minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+  .cl-md-layer .weight {
+    display: none;
+  }
+}
+
 /* Dense, single-line "file row" variant (skill supporting files): smaller
    glyph, name left, size right — reads like a file manager instead of a card. */
 .cl-tile--file {
