@@ -596,7 +596,18 @@ describe('parseClaudeSlashCommand — namespaced (plugin) skills', () => {
 });
 
 describe('skill detection in buildProcessedMessages', () => {
-  it('flags a slash command followed by the skill-expansion message as a skill', () => {
+  it('flags a slash command carrying the skill path recovered from the transcript', () => {
+    // The stored-transcript signal: the expansion row is `isMeta` and the SDK
+    // read never returns it, so the main process hands us its base dir on the
+    // command message itself (#246).
+    const command = msg('user', [text('<command-name>/build-dmg</command-name>')]);
+    const processed = buildProcessedMessages([
+      { ...command, skillPath: '/Users/x/.claude/skills/build-dmg' },
+    ]);
+    expect(processed[0].command?.isSkill).toBe(true);
+  });
+
+  it('still flags a slash command followed by the expansion message (live stream)', () => {
     const processed = buildProcessedMessages([
       msg('user', [text('<command-name>/build-dmg</command-name>')]),
       msg('user', [skillExpansion('build-dmg')]),
@@ -604,7 +615,7 @@ describe('skill detection in buildProcessedMessages', () => {
     expect(processed[0].command?.isSkill).toBe(true);
   });
 
-  it('does not flag a plain command not followed by a skill expansion', () => {
+  it('does not flag a plain command with neither signal', () => {
     const processed = buildProcessedMessages([
       msg('user', [text('<command-name>/clear</command-name>')]),
       msg('user', [text('hello')]),
