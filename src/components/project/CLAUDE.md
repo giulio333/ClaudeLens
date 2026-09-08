@@ -812,7 +812,24 @@ la usa la toolbar della subtab.
 (ancora) nessun ingresso di creazione memoria, solo l'IPC `memory:createTopic`
 e l'hook `useCreateTopic` inutilizzato; sarebbe una feature, non un cambio di
 layout. Fuori scope anche la «context chain» che collassa CLAUDE.md sotto
-l'hero: la sezione CLAUDE.md resta la tile-grid attuale.
+l'hero.
+
+La sezione **CLAUDE.md** ha invece lasciato la tile-grid per una **cascata a
+una colonna** (`.cl-md-cascade`/`.cl-md-layer`): ogni layer è un file con lo
+stesso nome, quindi lo scope da solo non distingue una riga dall'altra — con
+sei layer quattro righe si chiamavano `Subdir` e il path stava nella riga
+smorzata sotto. Ora **il path è il nome della riga**, spezzato da
+`claudeMdPathParts` in genitori smorzati + segmento identificante in evidenza +
+nome file smorzato (`src/components/`**`project/`**`CLAUDE.md`), e la parola
+generica scende a **chip di larghezza fissa** che allinea tutti i path sulla
+stessa colonna. L'ordine segue la cascata che la testata annuncia (global →
+project → local → subdir, i subdir per profondità poi alfabetici): la riga di
+intestazione fa da legenda solo se la lista la segue, mentre prima partiva dal
+project. L'accento passa quindi **dalla prima riga al layer `project`**, che
+resta quello che si apre più spesso. Una **barra proporzionale** dà la scala
+(36 righe contro 882) che una colonna di cifre lascia fare a mente; sotto i
+760px sparisce. Una colonna sola perché la cascata è una sequenza ordinata e la
+griglia a due colonne la faceva leggere a zig-zag.
 La sezione **Teams** conserva l'hero compatto (`cl-hero--compact`) e la
 vecchia meta-riga: è una vista operativa, non una landing di progetto.
 Il **filtro per tag** (`sessions/TagBar`) non è più una banda sotto il titolo:
