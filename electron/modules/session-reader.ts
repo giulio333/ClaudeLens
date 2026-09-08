@@ -2,7 +2,8 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
-import { StampCache, firstFileStamp, treeStamp } from './session-read-cache';
+import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
+import { mergeTranscriptExtras, readTranscriptExtras } from './transcript-extras';
 import type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
 
 // The message shapes live in the shared module (single definition for main and
@@ -270,6 +271,19 @@ function transcriptCandidates(projectDir: string, sessionId: string): string[] {
   ];
 }
 
+/** The session's transcript on disk, or `null` when neither layout holds it.
+ *  Probed in the same order as `sessionTranscriptStamp`, so the file we read the
+ *  SDK-invisible rows from is the file whose stamp invalidates that read. */
+async function firstExistingTranscript(
+  projectDir: string,
+  sessionId: string
+): Promise<string | null> {
+  for (const candidate of transcriptCandidates(projectDir, sessionId)) {
+    if (await fileStamp(candidate)) return candidate;
+  }
+  return null;
+}
+
 /** `subagents/` sidecar dir of a session, whose tree feeds the sub-agent readers. */
 export function subagentsDirFor(projectDir: string, sessionId: string): string {
   return join(projectDir, sessionId, 'subagents');
@@ -380,9 +394,20 @@ export async function readChatSessionViaSdk(
   source: SessionSource = {}
 ): Promise<ChatMessage[]> {
   const stamp = await sessionTranscriptStamp(sessionId, source);
-  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () =>
-    mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp))
-  );
+  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () => {
+    const messages = mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp));
+    // `getSessionMessages` returns chat rows only, so a second pass over the same
+    // file recovers what it cannot see: the messages typed mid-turn (#245) and the
+    // skill expansion that identifies a `/foo` skill (#246). It rides this cache
+    // entry, whose stamp is that very file's `size:mtimeMs` — a new row there
+    // invalidates both passes together. Without a `projectDir` we don't know which
+    // file the SDK read, so the read stays SDK-only rather than guessing.
+    const transcript = source.projectDir
+      ? await firstExistingTranscript(source.projectDir, sessionId)
+      : null;
+    if (!transcript) return messages;
+    return mergeTranscriptExtras(messages, await readTranscriptExtras(transcript));
+  });
 }
 
 // Transcript interno di un sub-agente via SDK (`getSubagentMessages`), in luogo
