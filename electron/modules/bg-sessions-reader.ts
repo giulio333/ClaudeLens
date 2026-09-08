@@ -5,20 +5,52 @@ import { isPidAlive } from './sessions-registry-reader';
 const JOBS_DIR = join(CLAUDE_DIR, 'jobs');
 const ROSTER_PATH = join(CLAUDE_DIR, 'daemon', 'roster.json');
 
+/** A unit of work the supervisor launched beside the turn (a shell, a fetch).
+ *  A non-empty `fan` is the evidence that a worker is busy, whatever `state`
+ *  says — see `src/components/project/agents-live/status.ts`. */
+export interface BgFanTask {
+  kind: string;
+  label: string;
+  /** Epoch ms. 0 when the state file carried no usable stamp — never NaN. */
+  startedAt: number;
+}
+
 // Sessione background gestita dal supervisor di `claude agents`.
 export interface BgSession {
   id: string; // short id (= nome cartella in ~/.claude/jobs)
   sessionId: string;
   name: string; // name esplicito, o derivato dall'intent, o id
-  state: string; // running | done | failed | stopped | ...
-  tempo: string; // idle | thinking | busy
-  detail: string; // ultima riga di stato
+  /** `done` | `failed` | `stopped` | `working` | `blocked` | … — an outcome
+   *  name, NOT what the job is doing now. That is `tempo`. */
+  state: string;
+  /** `idle` | `active` | `blocked` — the live one. */
+  tempo: string;
+  detail: string; // ultima riga di stato: può essere la risposta dell'utente
   intent: string; // prompt originale
+  initialPrompt: string; // prompt di partenza, quando l'intent non lo porta
   result: string | null; // output.result quando done
   cwd: string;
   projectName: string;
-  template: string; // bg | claude
+  template: string; // bg | claude | exec
   inFlightTasks: number;
+  /** `inFlight.kinds` — WHICH kinds of work are in flight (`session_cron`, …),
+   *  a different question from how many (`inFlightTasks` is 0 while a `fan`
+   *  shell runs). Part of the recurring-job verdict. */
+  inFlightKinds: string[];
+  /** Work running beside the turn. */
+  fan: BgFanTask[];
+  /** Tokens the job has spent, when the supervisor reported them. There is no
+   *  input/output/cache split here, so this can never become a dollar figure. */
+  tokens: number | null;
+  /** The flags a respawn would use — model, permission mode, effort. */
+  respawnFlags: string[];
+  /** True when the state file carries a `routine`: the job wakes on a schedule. */
+  hasRoutine: boolean;
+  /** True when the job re-wakes itself. */
+  selfWake: boolean;
+  /** The transcript the supervisor itself scans, i.e. the authoritative path.
+   *  Never derived from the cwd, whose folder-name rule is lossy. */
+  transcriptPath: string | null;
   alive: boolean; // processo attivo secondo il roster del supervisor
   pid: number | null;
   createdAt: string;
@@ -83,6 +115,40 @@ function readResult(output: unknown): string | null {
   return null;
 }
 
+function readStr(v: unknown): string {
+  return typeof v === 'string' ? v : '';
+}
+
+function readStrArray(v: unknown): string[] {
+  if (!Array.isArray(v)) return [];
+  return v.filter((x): x is string => typeof x === 'string');
+}
+
+/** The `fan` array comes from an undocumented format: keep only the entries
+ *  that can actually be shown, and never let a missing stamp become a NaN age. */
+function readFan(v: unknown): BgFanTask[] {
+  if (!Array.isArray(v)) return [];
+  const out: BgFanTask[] = [];
+  for (const raw of v) {
+    if (!raw || typeof raw !== 'object') continue;
+    const t = raw as Record<string, unknown>;
+    const label = readStr(t.label).trim();
+    const kind = readStr(t.kind).trim();
+    if (!label && !kind) continue;
+    const startedAt =
+      typeof t.startedAt === 'number' && Number.isFinite(t.startedAt) ? t.startedAt : 0;
+    out.push({ kind, label, startedAt });
+  }
+  return out;
+}
+
+function readInFlight(v: unknown): { tasks: number; kinds: string[] } {
+  if (!v || typeof v !== 'object') return { tasks: 0, kinds: [] };
+  const f = v as { tasks?: unknown; kinds?: unknown };
+  // `|| 0` coerces a non-numeric tasks value (NaN) back to 0.
+  return { tasks: Number(f.tasks ?? 0) || 0, kinds: readStrArray(f.kinds) };
+}
+
 export function getBgSessions(): BgSession[] {
   if (!existsSync(JOBS_DIR)) return [];
 
@@ -109,6 +175,7 @@ export function getBgSessions(): BgSession[] {
 
     const worker = roster[id];
     const cwd = (state.cwd as string) ?? worker?.cwd ?? '';
+    const inFlight = readInFlight(state.inFlight);
 
     sessions.push({
       id,
@@ -118,15 +185,20 @@ export function getBgSessions(): BgSession[] {
       tempo: (state.tempo as string) ?? 'idle',
       detail: (state.detail as string) ?? '',
       intent: (state.intent as string) ?? '',
+      initialPrompt: readStr(state.initialPrompt),
       result: readResult(state.output),
       cwd,
       projectName: cwd ? basename(cwd) || cwd : '',
       template: (state.template as string) ?? '',
-      inFlightTasks:
-        state.inFlight && typeof state.inFlight === 'object'
-          ? // `|| 0` coerces a non-numeric tasks value (NaN) back to 0.
-            Number((state.inFlight as { tasks?: number }).tasks ?? 0) || 0
-          : 0,
+      inFlightTasks: inFlight.tasks,
+      inFlightKinds: inFlight.kinds,
+      fan: readFan(state.fan),
+      tokens:
+        typeof state.tokens === 'number' && Number.isFinite(state.tokens) ? state.tokens : null,
+      respawnFlags: readStrArray(state.respawnFlags),
+      hasRoutine: state.routine !== undefined && state.routine !== null,
+      selfWake: state.selfWake === true,
+      transcriptPath: readStr(state.linkScanPath) || null,
       // Probe the pid rather than trusting its mere presence in the roster: a
       // crashed worker leaves a stale pid. Treat the state field as a secondary
       // signal when the pid is gone.
