@@ -36,6 +36,8 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "test": "vitest run",
+    "census": "node scripts/transcript-census.mjs",
+    "census:accept": "node scripts/transcript-census.mjs --update-baseline",
     "test:watch": "vitest",
     "postinstall": "node scripts/fix-spawn-helper.cjs",
     "electron:build": "electron-builder",
