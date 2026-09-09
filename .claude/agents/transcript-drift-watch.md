@@ -45,6 +45,12 @@ if the block is a message's only content the whole turn disappears.
   plain harness bookkeeping, `candidate` for something the app could clearly
   use. Then `npm run census:accept` so the next run is quiet. Say what you
   triaged and why.
+- **Report the findings before you accept, never after.** Shapes come back every
+  run until triaged, but the census reports a _field_ only once — it is diffed
+  against the baseline, not against a table — so `census:accept` erases a field
+  finding permanently, understood or not. Accepting first destroys the only
+  evidence there was. Look, report, write a `FIELDS` entry for anything that
+  carries something, and accept last.
 - Never write `read` — that claims a module consumes the shape, which is only
   true once one does.
 - Never change a reader, a parser, or a type. A reader change needs a test

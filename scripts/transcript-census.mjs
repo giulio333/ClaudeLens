@@ -23,7 +23,7 @@
 // real work, and the baseline gets committed.
 
 import { createReadStream, readFileSync, writeFileSync, existsSync } from 'node:fs';
-import { readdir } from 'node:fs/promises';
+import { readdir, readFile } from 'node:fs/promises';
 import { createInterface } from 'node:readline';
 import { join, resolve, dirname } from 'node:path';
 import { homedir } from 'node:os';
@@ -61,7 +61,22 @@ const KEY_PATH_DEPTH = 3;
 // is still honoured — that is how the exercise script censuses its own output.
 const EXERCISE_MARKER = 'cl-exercise-';
 
-/** Every `.jsonl` under `root`, recursively, skipping exercise sandboxes. */
+// Claude Code writes a second file class next to the sub-agent transcripts:
+// `subagents/agent-*.meta.json`, one flat object per sub-agent run. A census of
+// `.jsonl` alone cannot see it, which is a blind spot the first unattended run
+// found by hand rather than by instrument — `agentType` sits in all 35 of them,
+// naming the sub-agent's readable type, while `subagents-reader` reconstructs
+// that same fact indirectly and its header comment still says it is not
+// available. Exactly the kind of thing this tool exists to notice, so the
+// walker takes both and the rows are folded in under a synthetic `agent-meta`
+// row type.
+const META_SUFFIX = '.meta.json';
+// Not a `type` Claude Code writes — these files have no `type` field at all —
+// so the name is ours, and the manifest triages it like any other row.
+const META_ROW_TYPE = 'agent-meta';
+
+/** Every transcript and sub-agent meta file under `root`, recursively,
+ *  skipping exercise sandboxes. */
 async function findTranscripts(root, includeExercise) {
   const found = [];
   async function walk(dir) {
@@ -75,7 +90,8 @@ async function findTranscripts(root, includeExercise) {
       if (!includeExercise && e.isDirectory() && e.name.includes(EXERCISE_MARKER)) continue;
       const full = join(dir, e.name);
       if (e.isDirectory()) await walk(full);
-      else if (e.isFile() && e.name.endsWith('.jsonl')) found.push(full);
+      else if (!e.isFile()) continue;
+      else if (e.name.endsWith('.jsonl') || e.name.endsWith(META_SUFFIX)) found.push(full);
     }
   }
   await walk(root);
@@ -171,6 +187,22 @@ export async function runCensus(root, includeExercise = false) {
   census.files = files.length;
 
   for (const file of files) {
+    // A `.meta.json` is one whole-file object, not a stream of rows: read it as
+    // such and give it the synthetic row type the manifest triages it under.
+    if (file.endsWith(META_SUFFIX)) {
+      let json;
+      try {
+        json = JSON.parse(await readFile(file, 'utf8'));
+      } catch {
+        census.unparsable++;
+        continue;
+      }
+      if (!json || typeof json !== 'object') continue;
+      census.rows++;
+      observe(census, { ...json, type: META_ROW_TYPE });
+      continue;
+    }
+
     const rl = createInterface({
       input: createReadStream(file, { encoding: 'utf8' }),
       crlfDelay: Infinity,
@@ -298,6 +330,17 @@ function formatReport(census, diff) {
       '\nTriage each one into scripts/transcript-manifest.mjs (read / ignored / candidate),'
     );
     out.push('then re-run with --update-baseline.');
+    if (diff.newPaths.length) {
+      // The asymmetry is easy to walk into: an un-triaged shape comes back
+      // every run, so accepting early costs nothing, and the habit that builds
+      // silently discards field findings. Say it where it will be read.
+      out.push(
+        '\nNOTE: the fields above are reported ONCE. Unlike shapes, they are diffed against\n' +
+          'the baseline alone, so --update-baseline drops them for good — understood or not.\n' +
+          'Look at them first, and give any that carry something a FIELDS entry to keep it\n' +
+          'in the backlog.'
+      );
+    }
   }
 
   const candidates = diff.known.filter(k => k.verdict === 'candidate');

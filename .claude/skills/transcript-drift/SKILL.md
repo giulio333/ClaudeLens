@@ -10,7 +10,8 @@ keeps adding to what it writes there. Nothing announces it. A new row type, a
 new `attachment` subtype, a new content block simply doesn't appear in the app —
 #245 and #246 both sat unnoticed for months.
 
-Two instruments answer two different questions. Run both; they do not overlap.
+Stages 1 and 2 answer two different questions and do not overlap — run both.
+Stage 3 costs tokens and is only for a question the first two left open.
 
 ## 1. What we don't read
 
@@ -20,14 +21,28 @@ npm run census
 
 Streams the whole corpus (~1s) and diffs the shapes it finds against the
 decisions in `scripts/transcript-manifest.mjs`. Exit 1 means drift. Read the
-report in three parts:
+report in four parts:
 
 - **Drift** — a shape with no manifest entry, absent from the baseline. This is
   the finding. Claude Code writes it and nobody has looked at it.
+- **New fields** — the same drift line counts these separately, as in
+  `0 unknown shapes, 11 new fields`. A key-path on a row we read or intend to
+  read that the baseline has never seen. **Read the warning below before
+  re-baselining.**
 - **Known gaps** — triaged `candidate`: decided, not yet read. A standing
   backlog, not news. Don't report these as new.
 - **In the manifest, absent from this corpus** — either dropped upstream, or
   never exercised here. Stage 3 tells the two apart.
+
+> **The field axis is report-once.** Shapes are diffed against the manifest, so
+> an un-triaged shape returns every run until someone decides about it. Fields
+> are diffed against the _baseline_ only — there is no table they must appear in
+> — so `npm run census:accept` makes a field finding **disappear permanently**,
+> whether or not you understood it. That is deliberate: a hand table of every
+> field would be a second copy of the format and wrong within a week. But it
+> means the sequence matters. Look at the fields, write a `FIELDS` entry for any
+> that carry something (that is what keeps them in the backlog where you can see
+> them), and only then accept. Accepting first destroys the evidence.
 
 ## 2. What we read wrong
 
@@ -79,6 +94,14 @@ next run, and a tool that repeats itself gets ignored.
   reason is the point: it's what stops the next person re-litigating it.
 - `candidate('<what it would give us>')` — not read, and it should be. Say what
   the app could do with it, not just what the field is.
+
+Which table the entry goes in follows the axis the report named: a row type in
+`ROW_TYPES`, an `attachment.type` in `ATTACHMENT_TYPES`, a content block in
+`CONTENT_BLOCKS`, a `system.subtype` in `SYSTEM_SUBTYPES`, a field in `FIELDS`
+keyed by the dotted path exactly as printed. `FIELDS` is the one table allowed
+to be incomplete — see the report-once warning in stage 1 — so a field entry is
+worth writing precisely when the field carries something and you want it to stay
+visible. A field that is plain scaffolding needs no entry: accept and move on.
 
 To decide, read the actual rows before guessing:
 

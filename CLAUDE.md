@@ -84,7 +84,9 @@ months). Two instruments, answering two different questions, driven by the
 `transcript-drift` skill:
 
 - `npm run census` (`scripts/transcript-census.mjs`) — **what we don't read.**
-  Streams the whole corpus (~1s for 261 MB) counting four discriminant axes —
+  Streams the whole corpus (~1.7s for 261 MB, 329 files — the `.jsonl`
+  transcripts plus the `subagents/agent-*.meta.json` sidecars, folded in under a
+  synthetic `agent-meta` row type) counting four discriminant axes —
   row `type`, `attachment.type`, `message.content[].type`, `system.subtype` —
   plus the key-paths of every row type the manifest does not mark `ignored`
   (covering only the chat rows left a hole where the interest is: a row already
