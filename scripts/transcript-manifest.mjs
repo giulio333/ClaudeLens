@@ -287,10 +287,10 @@ export const FIELDS = {
     "duplicates the dispatch input's `subagent_type`, which is what the renderer already reads (MessageBubble.tsx, ToolGroupCard.tsx, session-tails.ts)"
   ),
   'user.toolUseResult.model': ignored(
-    "the spawned agent's own transcript rows carry `message.model`; nothing here the sub-agent read does not already have"
+    "teams-reader already reads `model` from the teammate's `agent-*.meta.json` sidecar, and the spawned agent's own rows carry `message.model` — this is the third copy"
   ),
   'user.toolUseResult.color': ignored(
-    'the CLI-assigned agent color; the app resolves its own agent colors from `subagent_type` (MessageBubble.tsx:532) and matching the terminal palette is not a transcript concern'
+    "teams-reader already reads `color` from the teammate's `agent-*.meta.json` sidecar; the chat view resolves its own agent colors from `subagent_type` (MessageBubble.tsx:532)"
   ),
   'user.toolUseResult.plan_mode_required': ignored(
     'spawn-time configuration of the agent definition, readable from the definition itself; the `permission-mode` row type is what records the mode a session actually ran in'

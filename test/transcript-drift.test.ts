@@ -243,7 +243,22 @@ describe('the census leaks no transcript content into the baseline', () => {
 // ── the corpus sweep ────────────────────────────────────────────────────────
 
 const CORPUS = join(homedir(), '.claude', 'projects');
-const hasCorpus = existsSync(CORPUS);
+
+// Opt-in, via `npm run census:replay`. Two reasons, and the second is the one
+// that matters:
+//
+// It costs ~1.2s and grows with the corpus — but worse, it is a test whose
+// outcome depends on state the test did not create. Left unconditional it runs
+// on every developer machine that has a `~/.claude`, so someone working on an
+// unrelated branch goes red because *their* transcripts happen to contain a
+// block type Claude Code shipped last week. That is the same failure the
+// randomised test order exists to catch, wearing different clothes: an `it`
+// that is not an independent claim about the code.
+//
+// So `npm test` stays a claim about the code — the fixtures above, which are
+// deterministic and are the actual regression gate — and the sweep stays a
+// claim about the world, alongside `npm run census`, which is the other one.
+const hasCorpus = existsSync(CORPUS) && process.env.CLAUDELENS_DRIFT_CORPUS === '1';
 
 /** Every `.jsonl` under `root`, recursively. */
 function transcripts(root: string, out: string[] = []): string[] {

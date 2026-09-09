@@ -109,7 +109,7 @@ const SCENARIOS = [
   {
     key: 'interrupt',
     provokes: ['assistant.isAbortedMidStream', 'assistant.truncatedAfterOutput'],
-    why: 'a turn cut short mid-stream leaves a fragment the transcript renders as if complete; the 1-turn cap is the closest thing to an interrupt a print-mode run can stage',
+    why: 'a turn cut short leaves a fragment the transcript renders as if complete; the 1-turn cap is the closest a print-mode run can get to an interrupt. UNVERIFIED — the cap may end the turn cleanly and write neither field, in which case this scenario reports success while proving nothing. Confirm with --census before trusting its silence.',
     prompt:
       'Read NOTES.md, then read NOTES.md again, then reply with its first word. Do all three.',
     args: ['--allowed-tools', 'Read', '--max-turns', '1'],
