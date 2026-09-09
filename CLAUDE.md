@@ -91,11 +91,17 @@ months). Two instruments, answering two different questions, driven by the
   triaged `candidate` is not drift and its fields went uncollected, so a field
   added to one fired nothing), and diffs them against
   `scripts/transcript-manifest.mjs`. Exit 1 on drift.
-- `test/transcript-drift.test.ts` — **what we read wrong.** The census only sees
-  the file; a field can be present, recognised and still dropped, which is what
-  #245/#246 were. Fixtures pin which content blocks survive `parseContentArray`,
-  and a corpus sweep (skipped where there is no corpus, so CI stays green) fails
-  on any dropped block the manifest hasn't triaged.
+- `npm run census:replay` (`test/transcript-drift.test.ts`) — **what we read
+  wrong.** The census only sees the file; a field can be present, recognised and
+  still dropped, which is what #245/#246 were. Fixtures pin which content blocks
+  survive `parseContentArray`, and a corpus sweep fails on any dropped block the
+  manifest hasn't triaged. The sweep is opt-in
+  (`CLAUDELENS_DRIFT_CORPUS=1`) and `npm test` skips it: it costs ~1.2s and grows
+  with the corpus, but the real reason is that its outcome depends on state the
+  test did not create — unconditional, it reddens `npm test` on an unrelated
+  branch because that machine's transcripts happen to hold something new, which
+  is the same failure the randomised order exists to catch. The fixtures stay
+  unconditional; they are the regression gate.
 
 The manifest is what keeps this usable past its second run: it records
 **decisions**, not observations — every shape is `read` (naming the module),

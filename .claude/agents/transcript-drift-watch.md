@@ -16,8 +16,10 @@ verdicts are written. This file is only about running it unattended.
 ## Do
 
 1. `npm run census` — exit 0 and "No drift" means stage 1 is clean.
-2. `npx vitest run test/transcript-drift.test.ts` — red here matters even when
-   the census is clean: it means we mishandle a shape we already know about.
+2. `npm run census:replay` — the reader run against real rows. Red here matters
+   even when the census is clean: it means we mishandle a shape we already know
+   about. Plain `npm test` skips the corpus sweep on purpose, so run this
+   script, not the test file directly.
 3. `claude --version`, and compare against `claudeCodeVersion` in
    `package.json`. A version bump with no drift is worth one line; drift right
    after a bump is worth naming the bump as the likely cause.
