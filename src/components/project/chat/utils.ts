@@ -1,4 +1,5 @@
 import {
+  AdvisorConsult,
   ChatMessage,
   ChatContentBlock,
   MemoryTopic,
@@ -39,6 +40,9 @@ export type ProcessedMessage = {
   toolGroups: ToolGroup[]; // solo per messaggi assistant con tool_use
   command?: ClaudeSlashCommand; // se il messaggio è un Claude Code command (XML tag flow)
   notification?: TaskNotification; // set when the message is a harness task-notification
+  /** Set when the turn consulted the `advisor` tool. The advice itself is
+   *  encrypted in the transcript, so this is a marker, never content. */
+  advisor?: AdvisorConsult;
 };
 
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference';
@@ -194,10 +198,21 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
       }));
     }
 
-    result.push({ msg, toolGroups, command });
+    // The advisor consult of this turn, if any. It stays on the message that
+    // holds it — an advisor-only message renders as a slim marker in the
+    // stream (see buildRenderItems), not as a turn of its own.
+    const advisor = msg.content.find(b => b.type === 'advisor') as AdvisorConsult | undefined;
+
+    result.push({ msg, toolGroups, command, advisor });
   }
 
   return result;
+}
+
+/** True when a turn holds nothing but its advisor consult — the usual shape,
+ *  since Claude Code persists the consult's two blocks as rows of their own. */
+export function isAdvisorOnly(p: ProcessedMessage): boolean {
+  return !!p.advisor && p.msg.content.every(b => b.type === 'advisor');
 }
 
 // Strip codici ANSI escape (es. \x1b[1m...\x1b[22m) usati dal terminale.
@@ -387,7 +402,11 @@ export type MinimapItem = TurnDescriptor & { n: number; time: string };
  *  — a standalone "tools hidden" badge. */
 export type RenderItem =
   | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
-  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] };
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
+  /** An advisor consult, drawn as a slim marker at its position in the stream
+   *  (both density modes): there is no advice to read, so it never earns a
+   *  bubble. */
+  | { kind: 'advisor'; key: string; consult: AdvisorConsult };
 
 /** The per-type counts that drive the filter chips in the control pill. */
 export type TurnFilterCounts = {
@@ -506,7 +525,11 @@ export function describeTurn(
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
-    showQuestions;
+    showQuestions ||
+    // Mirrors MessageBubble: a consult riding a turn whose own content is
+    // hidden still renders — as the header chip (an advisor-ONLY message never
+    // reaches here, it becomes a marker item instead).
+    !!p.advisor;
   // Minimal mode collapses a tool-only turn into a single badge; it's not a
   // standalone message, so the minimap skips it — but it still counts as visible.
   const toolsOnly = !hasVisibleContent && !showTools && hasTools;
@@ -1273,6 +1296,16 @@ export function buildRenderItems(
     run = null;
   };
   descriptors.forEach((d, idx) => {
+    const p = processed[idx];
+    const consult = p?.advisor;
+    if (consult && isAdvisorOnly(p)) {
+      // Never folded into a neighbouring turn: the consult sits between two
+      // halves of the same assistant message, and in minimal mode both of them
+      // can collapse — the marker would vanish with them.
+      flush();
+      items.push({ kind: 'advisor', key: `advisor-${idx}`, consult });
+      return;
+    }
     if (d.toolsOnly) {
       // toolsOnly guarantees the turn holds only standard tools (no question/agent).
       const groups = processed[idx].toolGroups;
