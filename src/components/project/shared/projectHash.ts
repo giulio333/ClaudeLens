@@ -16,6 +16,13 @@
 // '/' and '\'. It is deliberately NOT treated as correct: the exact folding
 // rule for a Windows drive letter is unverified here, and `reconcileProject`
 // swaps the whole project for the real entry as soon as the folder appears.
+//
+// The authoritative rule lives main-side in `encodeProjectHash`
+// (`electron/utils.ts`): every non-alphanumeric character folds to '-'. This
+// fold is narrower on purpose — it is not the same function and must not be
+// "aligned" without reading that one first. The two diverge on a space, so a
+// project under `Application Support` gets a wrong provisional key until
+// `reconcileProject` replaces it.
 export function provisionalProjectHash(cwd: string): string {
   return cwd.replace(/[/\\:.]/g, '-');
 }

@@ -408,10 +408,14 @@ export function sessionCacheKey(sessionId: string, source: SessionSource): strin
  * This is what lets an empty scoped read be believed instead of retried (see
  * `canTrustEmptyScoped`). It is deliberately empirical rather than derived —
  * checking `pathToHash(cwd) === basename(projectDir)` would bake in an
- * assumption about how the SDK turns a `dir` into a project dir (Claude Code
- * folds both '/' and '.' into '-', which is exactly the kind of detail that
- * drifts), and being wrong there would HIDE a transcript. An observation cannot
- * be wrong about the only thing we ask of it.
+ * assumption about how the SDK turns a `dir` into a project dir, and being
+ * wrong there would HIDE a transcript. An observation cannot be wrong about the
+ * only thing we ask of it.
+ *
+ * The naming rule itself is now known (`encodeProjectHash` in `electron/utils.ts`
+ * folds EVERY non-alphanumeric character, not just '/' and '.'), but the reason
+ * to keep this check empirical stands: there the rule can only *prefer* one cwd
+ * over another and a miss costs nothing, whereas here a miss hides a session.
  */
 const verifiedCwds = new Set<string>();
 
