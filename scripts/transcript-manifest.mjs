@@ -267,6 +267,42 @@ export const FIELDS = {
   'queue-operation.reason': candidate(
     'absorbed_mid_turn / delivered_to_agent; transcript-extras deliberately ignores it (#245) but it is the only thing distinguishing the two'
   ),
+
+  // The `Agent` tool's result when the dispatch is a *named teammate* rather
+  // than an anonymous sub-agent (`status: 'teammate_spawned'`). One row in the
+  // corpus so far — the spawn that launched the drift check that first saw it —
+  // but every team run writes this shape, so it is triaged now rather than
+  // absorbed into the baseline.
+  'user.toolUseResult.team_name': candidate(
+    'the team a spawn belongs to; teams-reader only ever sees a team name inside a message tag, so nothing today links a dispatch to the team run it was part of'
+  ),
+  'user.toolUseResult.agent_id': candidate(
+    'the addressable `<name>@<team>` teammate id, in the same form teams-reader parses out of message tags — the spawn row is where it is declared. Note it does NOT key the `subagents/agent-*.jsonl` sidecar, whose own key is a separate `<name>-<hex>` slug'
+  ),
+  'user.toolUseResult.teammate_id': candidate(
+    'held the identical value to agent_id in the one row observed; kept separate until a row shows them diverge'
+  ),
+
+  'user.toolUseResult.agent_type': ignored(
+    "duplicates the dispatch input's `subagent_type`, which is what the renderer already reads (MessageBubble.tsx, ToolGroupCard.tsx, session-tails.ts)"
+  ),
+  'user.toolUseResult.model': ignored(
+    "the spawned agent's own transcript rows carry `message.model`; nothing here the sub-agent read does not already have"
+  ),
+  'user.toolUseResult.color': ignored(
+    'the CLI-assigned agent color; the app resolves its own agent colors from `subagent_type` (MessageBubble.tsx:532) and matching the terminal palette is not a transcript concern'
+  ),
+  'user.toolUseResult.plan_mode_required': ignored(
+    'spawn-time configuration of the agent definition, readable from the definition itself; the `permission-mode` row type is what records the mode a session actually ran in'
+  ),
+  'user.toolUseResult.is_splitpane': ignored(
+    'terminal layout bookkeeping — where the teammate is displayed, not what it did'
+  ),
+  'user.toolUseResult.tmux_session_name': ignored(
+    'terminal layout bookkeeping; `"in-process"` for an in-process teammate, a real tmux name only when one backs it'
+  ),
+  'user.toolUseResult.tmux_window_name': ignored('as tmux_session_name'),
+  'user.toolUseResult.tmux_pane_id': ignored('as tmux_session_name'),
 };
 
 /** The census axes, in report order. Each names its table and a label. */
