@@ -2,6 +2,7 @@
   "axes": {
     "rowType": [
       "agent-color",
+      "agent-meta",
       "agent-name",
       "ai-title",
       "artifact-autoreact-ledger",
@@ -77,6 +78,21 @@
     ]
   },
   "keyPaths": [
+    "agent-meta.agentType",
+    "agent-meta.color",
+    "agent-meta.description",
+    "agent-meta.model",
+    "agent-meta.name",
+    "agent-meta.parentAgentId",
+    "agent-meta.permissionMode",
+    "agent-meta.planModeRequired",
+    "agent-meta.requestNonInteractive",
+    "agent-meta.requestShape",
+    "agent-meta.spawnDepth",
+    "agent-meta.taskKind",
+    "agent-meta.teamName",
+    "agent-meta.toolUseId",
+    "agent-meta.type",
     "agent-name.agentName",
     "agent-name.sessionId",
     "agent-name.type",
