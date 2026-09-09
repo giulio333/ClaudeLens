@@ -21,7 +21,7 @@ npm run census
 
 Streams the whole corpus (~1s) and diffs the shapes it finds against the
 decisions in `scripts/transcript-manifest.mjs`. Exit 1 means drift. Read the
-report in four parts:
+report in five parts:
 
 - **Drift** — a shape with no manifest entry, absent from the baseline. This is
   the finding. Claude Code writes it and nobody has looked at it.
@@ -31,8 +31,12 @@ report in four parts:
   re-baselining.**
 - **Known gaps** — triaged `candidate`: decided, not yet read. A standing
   backlog, not news. Don't report these as new.
+- **Looked at, not decided** — triaged `unknown`: open questions someone already
+  examined. Also not news, but each one names what would settle it, so this is
+  where to look when you have a new specimen in hand.
 - **In the manifest, absent from this corpus** — either dropped upstream, or
-  never exercised here. Stage 3 tells the two apart.
+  never exercised here. Stage 3 tells the two apart. Suppressed under `--root`,
+  where a narrowed corpus makes it list most of the manifest and mean nothing.
 
 > **The field axis is report-once.** Shapes are diffed against the manifest, so
 > an un-triaged shape returns every run until someone decides about it. Fields
@@ -83,10 +87,12 @@ settle, and say which scenarios you want to run and why before running them.
 
 ## Triage
 
-Every drift finding gets exactly one verdict in
+Every drift finding on a _shape_ axis gets one verdict in
 `scripts/transcript-manifest.mjs`, then `npm run census:accept` to re-baseline.
-The verdict is the deliverable — an un-triaged finding comes back identically
-next run, and a tool that repeats itself gets ignored.
+(Fields are the exception — `FIELDS` is the one table allowed to be incomplete;
+see the report-once warning above.) The verdict is the deliverable: an un-triaged
+shape comes back identically next run, and a tool that repeats itself gets
+ignored.
 
 - `read('<module>')` — a module consumes it. Only after it actually does.
 - `ignored('<reason>')` — deliberately not read. Harness bookkeeping, prompt
@@ -94,14 +100,30 @@ next run, and a tool that repeats itself gets ignored.
   reason is the point: it's what stops the next person re-litigating it.
 - `candidate('<what it would give us>')` — not read, and it should be. Say what
   the app could do with it, not just what the field is.
+- `unknown('<what you saw; what would settle it>')` — looked at, and the rows
+  didn't say enough.
+
+**Use `unknown` rather than guessing.** Sometimes the only evidence is a shape's
+name and one row with an opaque payload — a single occurrence, a bare `{type,
+uuid}`, a field whose value tells you nothing. That is not `ignored`: every
+`ignored` entry in the manifest names what the thing _is_, and none of them says
+"it had no fields". It isn't `candidate` either, which claims the app could use
+it. `unknown` records that someone looked, which stops it being re-reported as
+fresh drift, and keeps it in its own report section as the open question it is.
+Write what a real specimen would need to look like to settle it — that is the
+note's job.
+
+One thing no verdict expresses well: a shape read for one purpose and not
+another. `agent-meta` is read by `teams-reader`, but only for the
+`in_process_teammate` case — 1 of the 35 sidecars on disk — and by nothing for
+the other 34. It is filed as `candidate` with that stated in the note, because a
+single verdict per shape can't say it. If you hit the same thing, put it in the
+note rather than picking the least-wrong verdict silently.
 
 Which table the entry goes in follows the axis the report named: a row type in
 `ROW_TYPES`, an `attachment.type` in `ATTACHMENT_TYPES`, a content block in
 `CONTENT_BLOCKS`, a `system.subtype` in `SYSTEM_SUBTYPES`, a field in `FIELDS`
-keyed by the dotted path exactly as printed. `FIELDS` is the one table allowed
-to be incomplete — see the report-once warning in stage 1 — so a field entry is
-worth writing precisely when the field carries something and you want it to stay
-visible. A field that is plain scaffolding needs no entry: accept and move on.
+keyed by the dotted path exactly as printed.
 
 To decide, read the actual rows before guessing:
 

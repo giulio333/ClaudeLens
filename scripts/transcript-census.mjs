@@ -246,8 +246,13 @@ function toBaseline(census) {
  * `stale`     — in the manifest but absent from the corpus: either removed
  *               upstream or never present here. Reported, never fatal.
  * `newPaths`  — key-paths absent from the baseline.
+ *
+ * `overrides` merges extra entries over an axis's manifest table, keyed by axis
+ * (`{ rowType: { 'some-row': verdict } }`). Only tests use it: it is how a
+ * verdict's *effect* can be asserted without adding a fake shape to the real
+ * manifest, which would then show up in every report.
  */
-export function diffCensus(census, baseline) {
+export function diffCensus(census, baseline, overrides = {}) {
   const drift = [];
   const known = [];
   const stale = [];
@@ -255,9 +260,10 @@ export function diffCensus(census, baseline) {
   for (const axis of AXES) {
     const seen = census.counts[axis.key];
     const wasSeen = new Set(baseline.axes?.[axis.key] ?? []);
+    const table = overrides[axis.key] ? { ...axis.table, ...overrides[axis.key] } : axis.table;
 
     for (const [value, count] of [...seen].sort((a, b) => b[1] - a[1])) {
-      const entry = axis.table[value];
+      const entry = table[value];
       if (!entry) {
         if (!wasSeen.has(value)) drift.push({ axis: axis.key, label: axis.label, value, count });
         continue;
@@ -274,7 +280,7 @@ export function diffCensus(census, baseline) {
       }
     }
 
-    for (const value of Object.keys(axis.table)) {
+    for (const value of Object.keys(table)) {
       if (!seen.has(value)) stale.push({ axis: axis.key, label: axis.label, value });
     }
   }
@@ -306,7 +312,7 @@ export function diffCensus(census, baseline) {
   return { drift, known, stale, newPaths };
 }
 
-function formatReport(census, diff) {
+function formatReport(census, diff, narrowed) {
   const out = [];
   const n = census.rows.toLocaleString('en-US');
   out.push(
@@ -327,9 +333,20 @@ function formatReport(census, diff) {
       out.push(`  ${String(d.count).padStart(7)}  ${d.label}: ${d.value}`);
     for (const p of diff.newPaths) out.push(`  ${'—'.padStart(7)}  field: ${p}`);
     out.push(
-      '\nTriage each one into scripts/transcript-manifest.mjs (read / ignored / candidate),'
+      '\nTriage each one into scripts/transcript-manifest.mjs (read / ignored / candidate /\n' +
+        'unknown — the last one for a shape you looked at and could not decide), then re-run\n' +
+        'with --update-baseline.'
     );
-    out.push('then re-run with --update-baseline.');
+    if (diff.drift.length && diff.newPaths.length) {
+      // Measured on the synthetic corpus: one planted shape produced one shape
+      // finding *and* one field finding, because the walker descends into the
+      // row it was planted in. Reading the two counts as independent overstates
+      // how many decisions are actually waiting.
+      out.push(
+        '\nNOTE: the two counts overlap. A new shape also contributes its own fields, so a\n' +
+          'field listed under a shape above is the same finding seen twice, not a second one.'
+      );
+    }
     if (diff.newPaths.length) {
       // The asymmetry is easy to walk into: an un-triaged shape comes back
       // every run, so accepting early costs nothing, and the habit that builds
@@ -354,10 +371,31 @@ function formatReport(census, diff) {
     }
   }
 
-  if (diff.stale.length) {
+  const undecided = diff.known.filter(k => k.verdict === 'unknown');
+  if (undecided.length) {
+    out.push(`\n## Looked at, not decided — ${undecided.length}`);
+    out.push('Seen, and the rows did not say enough. Each note says what would settle it.');
+    for (const k of undecided) {
+      const count = k.count === null ? '—' : String(k.count);
+      out.push(`  ${count.padStart(7)}  ${k.label}: ${k.value}`);
+      out.push(`           ${k.note}`);
+    }
+  }
+
+  // Suppressed under --root, where it is noise rather than signal: against a
+  // one-file corpus this section lists essentially the whole manifest (102
+  // entries, measured), which says nothing about that corpus and buries the
+  // findings that do. The claim "absent upstream" only means anything when the
+  // corpus is the whole corpus.
+  if (diff.stale.length && !narrowed) {
     out.push(`\n## In the manifest, absent from this corpus — ${diff.stale.length}`);
     out.push('Either removed upstream, or simply never exercised here.');
     for (const s of diff.stale) out.push(`           ${s.label}: ${s.value}`);
+  } else if (diff.stale.length) {
+    out.push(
+      `\n(${diff.stale.length} manifest entries are absent from this corpus — not listed, ` +
+        'since\n--root narrows the corpus and makes that section meaningless.)'
+    );
   }
 
   return out.join('\n');
@@ -392,7 +430,7 @@ async function main() {
   if (argv.includes('--json')) {
     console.log(JSON.stringify({ files: census.files, rows: census.rows, ...diff }, null, 2));
   } else {
-    console.log(formatReport(census, diff));
+    console.log(formatReport(census, diff, rootFlag >= 0));
   }
 
   process.exit(diff.drift.length || diff.newPaths.length ? 1 : 0);

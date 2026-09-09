@@ -7,7 +7,7 @@
 // everywhere (`'user'` is a chat role, an IPC namespace and a directory name),
 // so "do we read this?" is a decision a human makes once and writes down.
 //
-// Every shape gets exactly one verdict:
+// A shape that appears here has been looked at. It gets one of four verdicts:
 //
 //   read     — a module consumes it. `by` names the module, so a report can say
 //              where a changed field would land.
@@ -16,15 +16,34 @@
 //   candidate— not read, and it probably should be. These stay in the report as
 //              a standing backlog: they are known, so they are not *drift*, but
 //              they are not settled either.
+//   unknown  — looked at, and the rows did not say enough to decide. Say what
+//              you saw and what would settle it.
 //
-// A shape with no entry is drift: Claude Code started writing something new.
-// That is the whole signal this file exists to produce, so resist the urge to
-// pre-populate it with guesses — an entry means someone looked.
+// `unknown` exists because the first three forced a choice between guessing and
+// letting a finding return identically forever. A shape whose only evidence is
+// its name and an opaque payload is not `ignored` — every `ignored` above names
+// what the thing *is*, and none of them says "it had no fields". Nor is it a
+// `candidate`, which claims the app could use it. Recording it as `unknown`
+// stops it being re-reported as fresh drift while keeping it visible as an open
+// question, which is what it actually is.
+//
+// A shape with no entry at all is drift: Claude Code started writing something
+// new. That is the whole signal this file exists to produce, so resist the urge
+// to pre-populate it with guesses — an entry means someone looked.
 
 /** Verdict helpers, so the tables below read as prose. */
 const read = by => ({ verdict: 'read', by });
 const ignored = reason => ({ verdict: 'ignored', reason });
 const candidate = note => ({ verdict: 'candidate', note });
+/**
+ * Looked at, not decidable. `note` says what was seen and what would settle it.
+ *
+ * Exported, unlike its three siblings, because no undecidable shape is on record
+ * yet — the tables below use the other three. The export is what keeps it from
+ * reading as dead code, and it lets the test that pins the verdict's behaviour
+ * build one with this helper instead of hand-rolling the shape.
+ */
+export const unknown = note => ({ verdict: 'unknown', note });
 
 /**
  * Top-level `type` of a `.jsonl` row.

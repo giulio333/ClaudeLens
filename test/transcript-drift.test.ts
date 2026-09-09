@@ -27,8 +27,8 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir, homedir } from 'node:os';
 import { readChatSession } from '../electron/modules/session-reader';
-import { CONTENT_BLOCKS } from '../scripts/transcript-manifest.mjs';
-import { runCensus } from '../scripts/transcript-census.mjs';
+import { CONTENT_BLOCKS, unknown } from '../scripts/transcript-manifest.mjs';
+import { runCensus, diffCensus } from '../scripts/transcript-census.mjs';
 
 /** Every block type the census has observed, with a minimal well-formed body.
  *  Adding an entry here is how a newly-observed block type gets a claim. */
@@ -237,6 +237,49 @@ describe('the census leaks no transcript content into the baseline', () => {
     // `atis-latch` is `ignored`: we decided it carries nothing, so its fields
     // are deliberately not collected.
     expect([...keyPaths]).not.toContain('atis-latch.shouldNotBeWalked');
+  });
+});
+
+describe('a shape can be recorded as looked-at-but-undecided', () => {
+  // The `unknown` verdict exists because the other three forced a choice
+  // between guessing and letting a finding return identically forever — which
+  // is what the first unattended run hit: four of five findings on a synthetic
+  // corpus had nothing but a name and an opaque payload. These tests pin the
+  // two properties that make the verdict worth having.
+  const undecided = unknown('one row, payload said nothing');
+
+  it('stops being reported as drift', async () => {
+    writeTranscript('s.jsonl', [{ type: 'mystery-row', uuid: 'm1' }]);
+    const census = await runCensus(dir, true);
+
+    const asDrift = diffCensus(census, { axes: {}, keyPaths: [] });
+    expect(asDrift.drift.map(d => d.value)).toContain('mystery-row');
+
+    // With the verdict recorded, the same corpus yields no drift — someone
+    // looked, so it is no longer news.
+    const asTriaged = diffCensus(
+      census,
+      { axes: {}, keyPaths: [] },
+      { rowType: { 'mystery-row': undecided } }
+    );
+    expect(asTriaged.drift.map(d => d.value)).not.toContain('mystery-row');
+  });
+
+  it('stays visible instead of being retired', async () => {
+    writeTranscript('s.jsonl', [{ type: 'mystery-row', uuid: 'm1' }]);
+    const census = await runCensus(dir, true);
+
+    // The point of the verdict: not silence, a different section. An `ignored`
+    // shape is settled and says nothing further; an `unknown` one is an open
+    // question and has to keep saying so.
+    const { known } = diffCensus(
+      census,
+      { axes: {}, keyPaths: [] },
+      { rowType: { 'mystery-row': undecided } }
+    );
+    const entry = known.find(k => k.value === 'mystery-row');
+    expect(entry?.verdict).toBe('unknown');
+    expect(entry?.note).toBe(undecided.note);
   });
 });
 

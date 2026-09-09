@@ -53,6 +53,12 @@ if the block is a message's only content the whole turn disappears.
   carries something, and accept last.
 - Never write `read` — that claims a module consumes the shape, which is only
   true once one does.
+- **When the rows don't settle it, write `unknown`, not your best guess.** A
+  shape whose only evidence is its name and an opaque payload is not `ignored`
+  — that verdict claims you know what the thing is. `unknown('<what you saw;
+what would settle it>')` is the honest record, and it keeps the finding
+  visible in its own report section instead of retiring it. Running unattended
+  is exactly the situation where guessing is worst: nobody is there to catch it.
 - Never change a reader, a parser, or a type. A reader change needs a test
   alongside it and a human deciding the shape of the fix; propose it instead.
 - Never run `scripts/transcript-exercise.mjs`. It spends real tokens on real
