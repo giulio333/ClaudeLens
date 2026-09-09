@@ -59,6 +59,7 @@ export interface ClaudeMdHierarchy {
 // Ri-esportati qui così il renderer continua a importarli da './types'.
 export type {
   ChatContentBlock,
+  AdvisorConsult,
   ChatMessage,
   MessageUsage,
   ToolActivity,
