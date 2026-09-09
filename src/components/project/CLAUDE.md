@@ -693,6 +693,34 @@ l'unico ingresso a `DuplicateProjectsView` nell'app, quindi anche se il mock 6b
 non lo disegna va tenuto — si limita a non renderizzare nulla quando non ci sono
 duplicati.
 
+**Sotto i 980px lo split si impila, e la colonna margine deve smettere di
+comportarsi da colonna.** Due cose si rompono se resta com'è a due colonne.
+`.cl-ghome-pinned` è `flex:1 1 0%` — corretto per una stanza di altezza data,
+dove i pin scrollano in place accanto al benvenuto — ma impilato l'`aside` ha
+altezza propria (il suo contenuto), e con quel flex-basis la dimensione
+ipotetica della lista è **zero**: `overflow-y:auto` la nascondeva del tutto e
+in schermata si vedeva la label PINNED, poi il filetto di Configuration, e in
+mezzo niente, con nove progetti pinnati sul disco. Nella media query pinned
+torna `flex:none` con `overflow-y:visible`: i pin prendono l'altezza che
+serve e scrolla la pagina. Seconda: la **lente** è ancorata all'angolo in
+basso a destra della colonna di benvenuto, che impilata è larga tutto — cioè
+proprio dietro le righe live, che si fermano a `620px` (`max-width` di
+`.cl-ghome-welcome-inner`); rimpicciolisce a 320px e si sposta fuori dalla loro
+strada, e **sotto i 760px sparisce** (`display:none`), larghezza sotto la quale
+la colonna non tiene più testo e lente insieme. La colonna di benvenuto perde
+anche il centraggio verticale (`justify-content:flex-start`): impilata non ha
+più un'altezza da riempire e il centraggio si limitava a spingere il titolo giù
+lasciando un buco sopra.
+
+**Le righe live sono card, quindi hanno aria tra loro** (`.cl-ghome-working`,
+`gap:10px` — era `2px`, che le faceva leggere come un blocco unico spezzato da
+una fessura). Conseguenza diretta: `data-live='warn'` non poteva più restare
+senza fondo. Aveva solo il pallino colorato, e a 2px di gap una riga non tinta
+era semplicemente sobria, mentre a 10px tra due card `accent-soft` diventa un
+**buco** — la riga che ti sta chiedendo qualcosa che sembra la card mancante.
+Prende lo stesso trattamento di `ok` nella tinta di stato (`--cl-warn-soft`,
+hover `color-mix` verso `--cl-warn`, action su `--cl-ink-2`).
+
 **Token di raggio.** `--cl-r-card` (usato da `.cl-ghome-working-row`) e
 `--cl-r-tile` sono dichiarati in `:root`: una var non definita invalida l'intera
 dichiarazione a computed-value time, e questo aveva già reso squadrate

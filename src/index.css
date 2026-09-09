@@ -7697,7 +7697,7 @@ body {
   margin-top: 44px;
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 10px;
 }
 .cl-ghome-working-row {
   display: flex;
@@ -7722,6 +7722,19 @@ body {
 }
 .cl-ghome-working-row[data-live='ok']:hover {
   background: color-mix(in oklch, var(--cl-accent-soft) 72%, var(--cl-accent) 8%);
+}
+/* `warn` is the row that asks something of you, so it can't read as the one
+   card that is missing: it gets the same treatment as `ok` in the status hue
+   (the rows are separated cards now — at the old 2px gap an untinted row was
+   merely quiet, at 10px it would be a hole). */
+.cl-ghome-working-row[data-live='warn'] {
+  background: var(--cl-warn-soft);
+}
+.cl-ghome-working-row[data-live='warn']:hover {
+  background: color-mix(in oklch, var(--cl-warn-soft) 72%, var(--cl-warn) 8%);
+}
+.cl-ghome-working-row[data-live='warn'] .cl-ghome-working-action {
+  color: var(--cl-ink-2);
 }
 .cl-ghome-working-dot {
   width: 9px;
@@ -7897,14 +7910,50 @@ body {
   color: var(--cl-ink-4);
 }
 
+/* Stacked, under the two-column threshold: the margin column stops being a
+   column. Two things break if it keeps the full-height behaviour.
+   `.cl-ghome-pinned` is `flex: 1 1 0%` for a room whose height is given — a
+   list that scrolls in place beside the welcome — but the stacked aside's
+   height is its own content, so that flex-basis makes the pinned list's
+   hypothetical size zero and `overflow-y: auto` hides every pin (the config
+   block below it is `flex: none` and keeps its size, which is why the label
+   survived and the list didn't). Here the pins take the height they need and
+   the page scrolls. And the lens is anchored to the welcome column's
+   bottom-right corner, which stacked runs the full width — right behind the
+   live rows — so it shrinks back out of their way, and drops out entirely
+   once the column is too narrow to hold both. */
 @media (max-width: 980px) {
   .cl-ghome-split {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .cl-ghome-welcome {
+    justify-content: flex-start;
+    padding: 48px var(--cl-gutter) 40px;
+  }
+  .cl-lens--corner {
+    width: 320px;
+    height: 320px;
+    right: -130px;
+    bottom: -110px;
+    opacity: 0.2;
   }
   .cl-ghome-aside {
     border-left: none;
     border-top: 1px solid var(--cl-line);
     padding: 32px var(--cl-gutter) 40px;
+  }
+  .cl-ghome-pinned {
+    flex: none;
+  }
+  .cl-ghome-pinned-list {
+    flex: none;
+    overflow-y: visible;
+  }
+}
+
+@media (max-width: 760px) {
+  .cl-lens--corner {
+    display: none;
   }
 }
 
