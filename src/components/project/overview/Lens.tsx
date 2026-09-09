@@ -1,6 +1,10 @@
-export function Lens() {
+export function Lens({ className }: { className?: string } = {}) {
   return (
-    <svg className="cl-lens" viewBox="0 0 540 540" aria-hidden="true">
+    <svg
+      className={className ? `cl-lens ${className}` : 'cl-lens'}
+      viewBox="0 0 540 540"
+      aria-hidden="true"
+    >
       <circle className="ring-1" cx="270" cy="270" r="260" />
       <circle className="ring-2" cx="270" cy="270" r="210" />
       <circle className="ring-3" cx="270" cy="270" r="160" />

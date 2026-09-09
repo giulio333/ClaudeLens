@@ -632,74 +632,73 @@ Subtab "Teams": mostra i **team di agenti** di Claude Code 2.x (teammate in-proc
 
 ### `overview/`
 
-- **`GlobalHomeView.tsx`** — Home globale: progetti **pinnati**, panoramica MCP, link a sezioni globali. Vedi sotto
+- **`GlobalHomeView.tsx`** — Home globale: benvenuto + sessioni live + margine con progetti **pinnati** e configurazione. Vedi sotto
 - **`Lens.tsx`** — Componente "lente" usata per inquadrare le metriche/sezioni della overview
 - **`ProjectDescription.tsx`** — La riga di prosa sotto il nome nell'hero: che cos'è questo progetto. Default **derivato dal CLAUDE.md** del progetto (`useProjectDescription` → IPC `projects:getDescription`, ladder empirica in `electron/modules/project-description.ts`), sovrascrivibile in place. **L'edit non tocca il CLAUDE.md**: la formulazione dell'utente vive nelle prefs di ClaudeLens (`useProjectDescriptions` → `cl-project-descriptions`, chiave = hash progetto) e svuotare il campo **cancella l'override** invece di salvare una descrizione vuota, così il file torna a fare da sorgente. **La frase stessa è il controllo**: si clicca il testo per modificarlo — niente bottone Edit né tag `from CLAUDE.md` di fianco, che spendevano spazio dell'hero per dire quello che dicono già il click e il tooltip (che nomina il file sorgente, o dichiara l'override). L'hover è l'unica affordance, una tinta e non un box. Senza né override né derivato resta un invito `+ Add a description`. Non montata nell'hero compatto dei Teams. Coperta da `test/project-description-view.test.tsx`
 - **`ProjectOverviewContent.tsx`** — Vista di un progetto: hero + **fascia metriche** + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp). Vedi sotto
 - **`ProjectRail.tsx`** — **Rail verticale** di navigazione del progetto (design 5a) — ha sostituito `ProjectSubtabs`. Vedi sotto
 - **`DuplicateProjectsNotice.tsx`** → `DuplicateProjectsBadge`, `DuplicateProjectsView` — Badge compatto nella home globale + vista dedicata dei progetti duplicati (cwd rewrite + merge). Vedi sotto
 
-**Home globale — la lista progetti è una shortlist, non un indice.**
-`GlobalHomeView` mostra **solo i progetti pinnati**: il filtro Pinned/All è
-stato rimosso (con il suo CSS `.cl-pinfilter`) perché l'indice completo ha già
-il suo ingresso, la **lente** in alto a destra con `⌘F`, e una home che elenca
-150 progetti non è una home. L'ordine è **fisso per nome**, senza barra SORT BY
-(`.cl-sortbar` resta, la usa `McpServerGrid`): gli ordinamenti per uso
-riordinavano la lista mentre si lavorava, cioè l'unica cosa che una shortlist
-navigata a memoria non deve fare. **Senza pin la sezione non esiste** — un empty
-state che invita a pinnare sarebbe un elemento permanente per un'azione una
-tantum; si pinna dalla lente o dall'hero del progetto (`cl-eyebrow-pin`). La
-paginazione resta (5 per pagina) e la didascalia dichiara il range solo quando
-c'è più di una pagina. Nota per gli screenshot: `screenshotFixtures.ts` semina
-già un pin (`cl-pinned-projects`), quindi SCREENSHOT_MODE continua a mostrare la
-sezione.
+**Home globale — un benvenuto, non una dashboard. Design handoff _ClaudeLens
+Home v6_, opzione 6b.** `GlobalHomeView` ha sostituito interamente il layout a
+sezioni verticali (hero → fascia cifre → live processes → pinned → config a
+card → grid MCP) con una stanza a **due colonne** (`.cl-ghome-split`, grid
+`minmax(0,1fr) 320px`) che occupa tutta l'altezza del corpo app: `.cl-ghome`
+diventa `flex:1` per crescere dentro `.cl-main`, lo stesso opt-in che qualsiasi
+vista può prendere (vedi il commento su `.cl-main` più sopra). **Fascia cifre,
+tabella dei processi live con PID/cwd e griglia MCP sono state rimosse, non
+spostate** — il mock 6b non le prevede e la richiesta a monte era esplicitamente
+di allontanarsi da "sembra già una dashboard o un monitoring". Il CSS morto che
+le serviva (`.cl-stats--home`, `.cl-tile-grid--cards`, `.cl-proc`/`.cl-proc-list`
 
-**Fascia cifre sotto l'hero — design handoff _Global Home varianti_, opzione 1a.**
-Tra l'hero e la prima sezione c'è una striscia di 4 celle
-(`.cl-stats.cl-stats--home`): Projects · Tokens · Spend · **Live now**, con
-l'ultima cella come **slab scuro fisso in entrambi i temi** (il trattamento che
-`.cl-stat:last-child` già portava) e il dot sage `.cl-live-dot` a fianco della
-cifra. Riusa l'anatomia `.cl-stats`/`.cl-stat` che vive in `index.css` da
-Studio/Agents Live; il modificatore `--home` cambia una cosa sola: la **cifra
-viene prima e la label sotto**, perché qui i quattro numeri _sono_ l'affermazione
-e vanno letti prima per riga e poi per colonna, mentre le altre strisce
-etichettano una lista che le segue. I qualificatori (`$`, l'unità, i centesimi)
-sono lo stesso display face a metà altezza e **a filo** della cifra, così
-`$99.78` resta un numero e non tre token — la nota mono di `.cl-stat .num small`
-li avrebbe staccati.
-I totali sono su **tutto l'install** (somma di `cost:getSummary`), non sulla
-shortlist pinnata sotto: Tokens e Spend sono la sola risposta della home a
-"quanto è costato tutto questo", che prima non stava da nessuna parte. Projects
-e Live now ripetono di proposito due cifre della meta-riga dell'hero — è il
-ritmo editoriale del mock (frase d'inventario → strato numerico), non una svista.
-Con nessun processo vivo il dot **non pulsa**: un alone attorno a uno zero
-sarebbe l'elemento più urlato della striscia senza significare nulla.
+- il suo `@keyframes clPulseGreen`, e il blocco di reset `.cl-ghome .cl-sec-head`
+  /`.cl-section`/`.cl-stats`/`.cl-row`/`.cl-tile-grid` di design 1a) è stato tolto
+  da `index.css` insieme al markup: nessuna di quelle classi rende più nulla sotto
+  `.cl-ghome`. `McpServerGrid` come componente resta — lo monta ancora
+  `GlobalMcpView` — solo non più qui.
 
-**Configuration a card + ritmo delle sezioni.** Sempre da 1a, la sezione
-Configuration non è più la lista a due colonne divisa da hairline: è una
-**griglia 3-up di card bordate** (`.cl-tile-grid--cards`, un modificatore di
-`.cl-tile-grid` — la lista resta il default per Skills, Plugins, memoria,
-CLAUDE.md e tutti gli altri usi). Sulla card il conteggio **scende sotto la
-descrizione** invece di stare nella terza colonna: appartiene alla frase che
-qualifica, e da colonna destra leggeva come una cella di tabella. Per la stessa
-ragione la descrizione perde il mono — quello era il device della lista per
-tenere allineate due colonne di testo, su una card è solo prosa breve. Glifo:
-tile arrotondata `--cl-r-tile`, piena accent sulla prima card.
-Il resto del corpo home è scopato sotto **`.cl-ghome`**: il filetto d'inchiostro
-**risale sotto la testata** (1.5px, 12px sotto il titolo) invece di stare in
-cima alla lista, dove i 24px di `.cl-sec-head` lo staccavano dal titolo che
-dovrebbe sottolineare. Con quel filetto a portare la separazione, la hairline di
-chiusura di `.cl-section` e quella della striscia cifre diventano una terza e
-una quarta riga fra due blocchi e vengono spente; le righe pinnate passano da
-`border-top` a `border-bottom` così l'ultima resta chiusa prima del pager.
-Nessuna di queste regole esce dalla home.
-**Attenzione ai token di raggio**: `--cl-r-card`/`--cl-r-tile` erano _usati_ da
-`.cl-plan-card` e `.cl-ask-card` ma **mai dichiarati** in `index.css` (vivono
-nel design system), e una var non definita invalida l'intera dichiarazione a
-computed-value time — quelle due card rendevano squadrate, e le card della
-Configuration hanno fatto lo stesso finché i token non sono stati dichiarati in
-`:root`. Le elevazioni (`--cl-elev-card`) restano non dichiarate di proposito:
-lì i call site passano un fallback esplicito.
+**Colonna di benvenuto.** Eyebrow ridotta a `~/.claude` (il contatore progetti
+viveva nella fascia cifre rimossa), titolo statico `Welcome back.` sul
+consueto `.cl-h-name.static`, e sotto una **sola frase dinamica**
+(`welcomeLine()`) che sostituisce sia la fascia cifre sia la tabella dei
+processi: conta quante sessioni sono vive e chiama per nome quella in attesa
+("`X` is waiting on you") invece di limitarsi a un numero — un nome è l'unica
+cosa che un conteggio non può dire. Sotto, **al massimo due righe**
+(`HERO_ROWS`) delle sessioni effettivamente live, deduplicate per cwd
+(`liveRowsFromProcs`: più processi sullo stesso progetto restano una riga sola,
+e `waiting` vince su `busy`/`idle` se convivono). Il tetto a due righe è
+deliberato — un benvenuto che cresce senza limite con l'occupazione di
+`~/.claude` smette di essere un benvenuto — ed è per questo che la frase sopra,
+non l'elenco, è la fonte di verità sul totale: quel che eccede le due righe
+resta comunque contato lì.
+
+**Colonna margine — pinned + configuration.** Niente più sezioni separate sotto
+la piega: `.cl-ghome-aside` (border-left, piena altezza) porta **Pinned** come
+indice numerato (`01`, `02`, …, solo nome — niente stato live, sessioni, token o
+spesa per riga: quel dettaglio viveva nella card `.cl-row.has-pin` che questa
+vista non usa più) e **Configuration** come lista compatta di monogrammi
+(`.cl-ghome-mono`, 20px, variante `.accent` per CLAUDE.md) invece della griglia
+3-up di card di design 1a. **Mostra tutti i pin**, non una pagina alla volta: la
+paginazione (`PROJECTS_PAGE_SIZE`) è sparita insieme alle card, e la lista
+scrolla da sola dentro la colonna (`.cl-ghome-pinned-list`, `flex:1;
+overflow-y:auto`) così Configuration e la didascalia di chiusura restano ferme
+in fondo. **Pinnare/spinnare non si fa più dalla home** (niente
+`cl-pin-row`/`PinIcon` qui): resta raggiungibile da dove lo era già prima di 1a
+— la lente (`⌘F`) o `cl-eyebrow-pin` sull'hero del progetto. Senza pin, la
+colonna non sparisce (a differenza della vecchia sezione "solo se c'è qualcosa
+da mostrare"): mostra un invito muto (`.cl-ghome-pinned-empty`), perché ora è
+una colonna strutturale sempre presente, non una sezione opzionale.
+`DuplicateProjectsBadge` resta montato (`.cl-ghome-notice`, sopra lo split): è
+l'unico ingresso a `DuplicateProjectsView` nell'app, quindi anche se il mock 6b
+non lo disegna va tenuto — si limita a non renderizzare nulla quando non ci sono
+duplicati.
+
+**Token di raggio.** `--cl-r-card` (usato da `.cl-ghome-working-row`) e
+`--cl-r-tile` sono dichiarati in `:root`: una var non definita invalida l'intera
+dichiarazione a computed-value time, e questo aveva già reso squadrate
+`.cl-plan-card`/`.cl-ask-card` prima che i token fossero aggiunti. Le elevazioni
+(`--cl-elev-card`) restano non dichiarate di proposito: lì i call site passano
+un fallback esplicito.
 
 **Trigger di ricerca — pill nella top bar.** `.cl-lens-btn` non è più il tondo
 da 28px: è il pill di 1a (lente + `Search projects, sessions…` + chip `⌘F`).
