@@ -67,7 +67,10 @@ a `startWatch` answer belonging to a superseded session changes nothing) and
 absorbed mid-turn wears the "sent mid-turn" chip and an ordinary one does not,
 and a slash command carrying a `skillPath` renders the skill card instead of
 the plain command one — the claim the old `isSkill` tests only appeared to
-make, since they fed the `isMeta` row the read path stopped returning).
+make, since they fed the `isMeta` row the read path stopped returning; and an
+`advisor` consult is a stream marker of its own in both density modes, stating
+the reviewer model, the wall time and the spend, or degrading to the bare label
+when the turn holds two consults and the shared `usage` cannot be split).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
@@ -131,7 +134,7 @@ One entry per module, with the rationale and the gotchas, lives in
 - `useIPC.ts` — all React Query hooks + `window.electronAPI` type declarations; `unwrap()` raises on error
 - Mutations (`useCreateTopic`, `useUpdateTopic`, `useDeleteTopic`) invalidate `['memory:project', hash]` on success
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
-- Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`
+- Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`. An `advisor` consult (the harness's reviewer-model tool) is persisted as two rows of one assistant message — a `server_tool_use` and an `advisor_tool_result` whose payload is encrypted (`advisor_redacted_result`) — so it can never be rendered as content: `session-reader` folds the pair into a single `advisor` block carrying the reviewer model, its token spend (from the `advisor_message` entry of `usage.iterations`, omitted when one message holds two consults, since that usage object is repeated verbatim on every row) and the wall time between the two rows, and the renderer draws it as a slim stream marker rather than a turn
 
 ## Brand palette (Claude Code official)
 
