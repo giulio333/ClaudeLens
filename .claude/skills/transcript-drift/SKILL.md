@@ -32,13 +32,20 @@ report in three parts:
 ## 2. What we read wrong
 
 ```
-npx vitest run test/transcript-drift.test.ts
+npm run census:replay
 ```
 
 The census only sees the file. A field can be present, recognised, and still
 dropped — which is what #245/#246 were. This test runs the real reader:
 fixtures pin which content blocks survive `parseContentArray`, and a corpus
 sweep fails on any dropped block the manifest hasn't triaged.
+
+The sweep is opt-in (that script sets `CLAUDELENS_DRIFT_CORPUS=1`) and `npm
+test` skips it: it reads the whole corpus, so its outcome depends on state the
+test did not create, and left unconditional it reddens `npm test` on an
+unrelated branch because _this_ machine's transcripts happen to contain
+something new. The fixtures in the same file are unconditional — they are the
+regression gate.
 
 A census with no drift and a red test here is the more serious result: it means
 we mishandle something we already know about.
