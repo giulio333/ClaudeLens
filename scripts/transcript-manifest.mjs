@@ -87,6 +87,14 @@ export const ROW_TYPES = {
     'the session that continues this one after a /clear or compaction — the missing edge for a session chain view'
   ),
   attachment: candidate('a wrapper row: see ATTACHMENT_TYPES for the per-subtype verdicts'),
+
+  // Not a row type Claude Code writes — the census's own name for a
+  // `subagents/agent-*.meta.json`, which is one flat object per sub-agent run
+  // rather than a stream of rows. It sits in ROW_TYPES so its fields get walked
+  // and triaged like everything else.
+  'agent-meta': candidate(
+    'the sub-agent sidecar. `teams-reader` reads it, but only when taskKind is "in_process_teammate" — 1 of the 35 on disk; for the rest nothing reads it at all. See FIELDS for agentType'
+  ),
 };
 
 /**
@@ -301,6 +309,47 @@ export const FIELDS = {
   'user.toolUseResult.tmux_session_name': ignored(
     'terminal layout bookkeeping; `"in-process"` for an in-process teammate, a real tmux name only when one backs it'
   ),
+  'agent-meta.agentType': candidate(
+    'the sub-agent\'s readable type ("Explore", "general-purpose", …), present in all 35 sidecars on disk since 2026-08-22 and read by nothing. subagents-reader reconstructs the same fact indirectly and its header comment (lines 14-20) still claims it "is NOT in the subagent file" and must be matched by prompt prefix — which is doubly stale, since the code itself already joins on parent_tool_use_id (line 166). Reading this field would replace an inference with a fact; the comment needs correcting either way'
+  ),
+  'agent-meta.toolUseId': candidate(
+    'the parent tool_use this sidecar belongs to — the same join subagents-reader makes from the transcript side, available here directly'
+  ),
+  'agent-meta.spawnDepth': candidate(
+    'how deep a nested spawn is; would let a sub-agent tree be shown as a tree'
+  ),
+  'agent-meta.description': ignored(
+    "the dispatch's own description, already on the parent's tool_use input"
+  ),
+  'agent-meta.type': ignored(
+    'synthetic — the census stamps the `agent-meta` row type onto these objects itself, since the files carry no type field of their own'
+  ),
+
+  // The rest appear only on a *teammate* spawn: 1-2 of the 35 sidecars on disk,
+  // so the shape is thinly observed and these verdicts are provisional.
+  'agent-meta.teamName': candidate(
+    'the team a sub-agent run belonged to; the same gap as user.toolUseResult.team_name, from the sidecar side'
+  ),
+  'agent-meta.parentAgentId': candidate(
+    'the spawning agent — with spawnDepth, the other half of a sub-agent tree'
+  ),
+  'agent-meta.taskKind': candidate(
+    'what kind of dispatch this was; it is the field teams-reader gates on, so it decides whether the sidecar is read at all'
+  ),
+  'agent-meta.permissionMode': candidate(
+    'the mode the sub-agent ran under — the per-agent counterpart of the permission-mode row'
+  ),
+  'agent-meta.model': ignored("the sub-agent's own transcript rows carry message.model"),
+  'agent-meta.name': ignored(
+    'the teammate name, also the addressable id in toolUseResult.agent_id'
+  ),
+  'agent-meta.color': ignored('CLI label colour; the app resolves its own from the agent type'),
+  'agent-meta.planModeRequired': ignored(
+    'spawn-time configuration, readable from the agent definition'
+  ),
+  'agent-meta.requestShape': ignored('SDK request bookkeeping'),
+  'agent-meta.requestNonInteractive': ignored('SDK request bookkeeping'),
+
   'user.toolUseResult.tmux_window_name': ignored('as tmux_session_name'),
   'user.toolUseResult.tmux_pane_id': ignored('as tmux_session_name'),
 };
