@@ -138,9 +138,20 @@ name so synthetic rows never look like real usage. Note the gotcha it was writte
 around: Claude Code hashes the **resolved** cwd, so a macOS temp dir lands under
 `-private-var-folders-…`, not `-var-folders-…`.
 
-`transcript-drift-watch` is the unattended entry point (for `/loop` or
-`/schedule`): it runs both instruments, reports only what is new, may write
-`ignored`/`candidate` triage, and never touches a reader.
+**When to run it:** after every Claude Code upgrade, and whenever a session
+renders oddly and the format is a suspect. `npm run census` then
+`npm run census:replay`; if the census reports something, write a verdict in the
+manifest and `npm run census:accept` — without the verdict the same finding
+returns identically every run.
+
+`transcript-drift-watch` is the unattended entry point: it runs both
+instruments, reports only what is new, may write `ignored`/`candidate`/`unknown`
+triage, and never touches a reader. **Not enabled — deliberately.** Putting it on
+`/loop` or `/schedule` is the recommended next step, but it stays a manual call
+until someone decides to: it writes to the manifest and the baseline on its own,
+and the first run showed why that wants a look before it becomes automatic —
+`census:accept` retires a field finding permanently, so an unattended run that
+misjudges one destroys the only evidence of it.
 
 ## Release
 
