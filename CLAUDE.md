@@ -77,6 +77,63 @@ test`, adding a renderer test when the change touches hook or stream state, and
 leave running the app to the user, who will check the UI manually. Visual and
 layout behavior still has no automated coverage.
 
+**Transcript format drift** — the app reads a format Claude Code keeps extending,
+and nothing announces a change: a new row type, `attachment` subtype or content
+block just doesn't appear in the app (#245 and #246 both sat unnoticed for
+months). Two instruments, answering two different questions, driven by the
+`transcript-drift` skill:
+
+- `npm run census` (`scripts/transcript-census.mjs`) — **what we don't read.**
+  Streams the whole corpus (~1s for 261 MB) counting four discriminant axes —
+  row `type`, `attachment.type`, `message.content[].type`, `system.subtype` —
+  plus the key-paths of every row type the manifest does not mark `ignored`
+  (covering only the chat rows left a hole where the interest is: a row already
+  triaged `candidate` is not drift and its fields went uncollected, so a field
+  added to one fired nothing), and diffs them against
+  `scripts/transcript-manifest.mjs`. Exit 1 on drift.
+- `test/transcript-drift.test.ts` — **what we read wrong.** The census only sees
+  the file; a field can be present, recognised and still dropped, which is what
+  #245/#246 were. Fixtures pin which content blocks survive `parseContentArray`,
+  and a corpus sweep (skipped where there is no corpus, so CI stays green) fails
+  on any dropped block the manifest hasn't triaged.
+
+The manifest is what keeps this usable past its second run: it records
+**decisions**, not observations — every shape is `read` (naming the module),
+`ignored` (with the reason) or `candidate` (not read, and it should be), so a
+shape with no entry is drift. Without that, every run re-lists the same
+twenty-odd known-but-unread shapes and the tool dies of its own noise. The
+committed `transcript-baseline.json` plays that role for key-paths, where a hand
+table would be a second copy of the format and wrong within a week. Triage into
+the manifest, then `npm run census:accept`. Only discriminant values are ever
+recorded — the corpus is the user's real work and the baseline is committed. Note
+where that nearly broke: a _key_ can be data. `file-history-snapshot` keys by
+absolute file path, `cost-state` by model id, `toolUseResult.answers` by the full
+text of the question asked, and the first walker recorded all three verbatim.
+Data-keyed maps collapse to `{*}`, which keeps the schema under them
+(`cost-state.modelUsage.{*}.costUSD`) and drops the keys; three tests hold that
+line, one of them asserting the committed baseline itself looks like key-paths
+and nothing else.
+
+The first run found 14 row types and 27 attachment subtypes the code never
+mentions, and three content blocks the reader drops silently: `image` (57 in the
+corpus, each a turn rendered as nothing), `server_tool_use` and
+`advisor_tool_result`. All triaged as `candidate` — the backlog is in the
+manifest, not in an issue tracker.
+
+`scripts/transcript-exercise.mjs` is the third stage and **opt-in** (`--yes`, and
+refuses to start without it): it drives `claude -p` against prompts chosen to
+provoke specific shapes, because the corpus only covers what this user happens to
+do — a feature nobody exercised writes no rows, so the census can't tell "Claude
+Code doesn't do this" from "we never tried". Real model turns, real tokens; never
+part of a verify. It works in a throwaway temp dir, which the census skips by
+name so synthetic rows never look like real usage. Note the gotcha it was written
+around: Claude Code hashes the **resolved** cwd, so a macOS temp dir lands under
+`-private-var-folders-…`, not `-var-folders-…`.
+
+`transcript-drift-watch` is the unattended entry point (for `/loop` or
+`/schedule`): it runs both instruments, reports only what is new, may write
+`ignored`/`candidate` triage, and never touches a reader.
+
 ## Release
 
 Before creating a GitHub Release, always run these steps **in order**:
