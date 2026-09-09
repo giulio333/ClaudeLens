@@ -455,8 +455,22 @@ const parseStats = {
 
 export function getParseStats() {
   let cachedFiles = 0;
-  for (const byFile of parseCache.values()) cachedFiles += byFile.size;
-  return { ...parseStats, cachedFiles };
+  // `retainedPartialBytes` is what the cache costs in `external` memory, and it
+  // is the number whose absence let a `subarray` view pin whole transcripts
+  // unnoticed. Distinct backing stores, not view lengths: small copies come out
+  // of Node's shared 8 KB buffer pool, so billing every entry for its
+  // `buffer.byteLength` would count that one slab once per cached file.
+  const backings = new Set<ArrayBufferLike>();
+  let retainedPartialBytes = 0;
+  for (const byFile of parseCache.values()) {
+    cachedFiles += byFile.size;
+    for (const { partial } of byFile.values()) {
+      if (backings.has(partial.buffer)) continue;
+      backings.add(partial.buffer);
+      retainedPartialBytes += partial.buffer.byteLength;
+    }
+  }
+  return { ...parseStats, cachedFiles, retainedPartialBytes };
 }
 
 export function resetParseCache() {
@@ -670,7 +684,14 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
     }
   }
 
-  entry.partial = combined.subarray(start);
+  // A *copy* of the trailing partial line, not a view onto it. `subarray` shares
+  // the backing ArrayBuffer, so parking that view in a process-lifetime cache
+  // pins everything `combined` was read from — on a full parse, the entire
+  // transcript. Measured on a real `~/.claude` (92 transcripts, 419 MB of
+  // JSONL): the main process held 333 MB of `external` memory and its RSS fell
+  // from 520 MB to 179 MB the moment the cache was cleared by hand. The bytes
+  // we actually need are the ones after the last newline, usually a few dozen.
+  entry.partial = Buffer.from(combined.subarray(start));
   entry.consumed += chunk.length;
   entry.mtimeMs = st.mtimeMs;
   cacheSet(filePath, entry);
