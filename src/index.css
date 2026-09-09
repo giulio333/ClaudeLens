@@ -5180,6 +5180,53 @@ body {
   border: 1px dashed var(--cl-line);
   border-radius: 999px;
 }
+/* Advisor consult marker. Claude asked a stronger reviewer model to look at the
+   conversation; the answer goes to Claude and is stored encrypted, so this is a
+   marker and never an expandable card. Same neutral header-pill idiom as the
+   queued/hidden-tools badges, with a hairline of the brand accent to mark it as
+   a model event rather than a count — no new hue. */
+.cl-advisor-mark {
+  padding: 0 0 4px;
+  transition:
+    opacity 0.2s,
+    filter 0.2s;
+}
+.cl-advisor-mark[data-dim] {
+  opacity: 0.28;
+  filter: saturate(0.4);
+}
+.cl-advisor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
+  padding: 4px 10px;
+  border: 1px solid color-mix(in oklab, var(--cl-accent) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--cl-accent) 6%, transparent);
+  cursor: default;
+}
+.cl-advisor-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  flex-shrink: 0;
+}
+/* Model · duration · tokens — quieter than the label they follow. */
+.cl-advisor-detail {
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.cl-chat-reading .cl-advisor-mark {
+  margin: 0 0 0 30px;
+  padding: 10px 0 18px;
+}
 /* Multiplier chip for a collapsed run of tool-only turns ("× 4"). */
 .cl-turn-tools-hidden-x {
   font-weight: 700;

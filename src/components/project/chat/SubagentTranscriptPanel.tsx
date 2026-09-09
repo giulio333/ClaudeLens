@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react';
 import { useSubagentTranscript } from '../../../hooks/useIPC';
-import { buildProcessedMessages, ToolGroup } from './utils';
-import { MessageBubble } from './MessageBubble';
+import { buildProcessedMessages, isAdvisorOnly, ToolGroup } from './utils';
+import { AdvisorBadge, MessageBubble } from './MessageBubble';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { QueryError } from '../../QueryError';
 
@@ -99,15 +99,22 @@ export function SubagentTranscriptPanel({
             {processed.length === 0 ? (
               <p className="cl-transcript-state">No internal messages recorded for this agent.</p>
             ) : (
-              processed.map((p, i) => (
-                <MessageBubble
-                  key={p.msg.uuid || i}
-                  processed={p}
-                  detailsFilter="all"
-                  onOpenToolDetail={setSelectedTool}
-                  turnIndex={i + 1}
-                />
-              ))
+              processed.map((p, i) =>
+                // An advisor consult is a stream marker, not a turn — same slim
+                // badge the main transcript draws (this panel renders bubbles
+                // directly, without the chat's render-item pass).
+                p.advisor && isAdvisorOnly(p) ? (
+                  <AdvisorBadge key={p.msg.uuid || i} consult={p.advisor} />
+                ) : (
+                  <MessageBubble
+                    key={p.msg.uuid || i}
+                    processed={p}
+                    detailsFilter="all"
+                    onOpenToolDetail={setSelectedTool}
+                    turnIndex={i + 1}
+                  />
+                )
+              )
             )}
           </div>
         )}

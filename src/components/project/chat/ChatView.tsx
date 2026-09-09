@@ -37,7 +37,7 @@ import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
-import { MessageBubble, ToolsHiddenBadge } from './MessageBubble';
+import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
 import { FocusMinimap } from './FocusMinimap';
 import { agentTintColor } from '../shared/entityOptions';
@@ -569,6 +569,11 @@ export function ChatView({
     // standalone badge at its stream position. The common case is folded into
     // the preceding turn's header — that "tools hidden" chip used to be
     // deferred onto the *following* message, pinning it to the wrong turn.
+    // The advisor marker is a stream event, not a turn: it renders the same in
+    // both density modes (the consult itself is the whole content).
+    if (item.kind === 'advisor') {
+      return <AdvisorBadge consult={item.consult} dimmed={activeFilter !== 'all'} />;
+    }
     if (item.kind !== 'turn') {
       return (
         <ToolsHiddenBadge
