@@ -521,7 +521,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 18px 14px;
+  padding: 13px 16px 12px;
   border-bottom: 1px solid oklch(0.2 0.02 60 / 0.08);
 }
 :root[data-theme='dark'] .cl-search-row {
@@ -565,7 +565,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 10px;
+  padding: 7px 10px;
   border-bottom: 1px solid oklch(0.2 0.02 60 / 0.07);
   overflow-x: auto;
 }
@@ -617,11 +617,11 @@ body {
 
 .cl-search-list {
   overflow-y: auto;
-  padding: 4px 0 6px;
+  padding: 3px 0 4px;
   flex: 1;
 }
 .cl-search-empty {
-  padding: 28px 18px;
+  padding: 24px 16px;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -633,7 +633,7 @@ body {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--cl-ink-4);
-  padding: 14px 18px 6px;
+  padding: 11px 16px 5px;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -651,7 +651,7 @@ body {
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 18px 8px 18px;
+  padding: 6px 16px;
   cursor: pointer;
   position: relative;
   transition: background 160ms;
@@ -675,7 +675,7 @@ body {
   letter-spacing: -0.005em;
   white-space: nowrap;
   flex-shrink: 0;
-  max-width: 60%;
+  max-width: 68%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -712,18 +712,14 @@ body {
 }
 .cl-search-item:hover,
 .cl-search-item.hl {
-  background: oklch(0.95 0.04 40 / 0.3);
-}
-:root[data-theme='dark'] .cl-search-item:hover,
-:root[data-theme='dark'] .cl-search-item.hl {
-  background: oklch(0.55 0.18 40 / 0.18);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-search-item.hl::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
+  top: 4px;
+  bottom: 4px;
   width: 2px;
   background: var(--cl-accent);
   border-radius: 0 2px 2px 0;
@@ -733,33 +729,27 @@ body {
 }
 
 .cl-search-item.entity {
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   gap: 10px;
-  padding-top: 9px;
-  padding-bottom: 9px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 .cl-search-item.entity.has-pin {
-  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
 }
 .cl-search-item.entity .eglyph {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: oklch(1 0 0 / 0.52);
-  border: 1px solid oklch(1 0 0 / 0.68);
+  background: transparent;
+  border: 1px solid var(--cl-line);
   color: var(--cl-ink-3);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.68);
-}
-:root[data-theme='dark'] .cl-search-item.entity .eglyph {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.1);
 }
 .cl-search-item.entity.session .eglyph {
   color: #4f46e5;
@@ -772,13 +762,6 @@ body {
 }
 .cl-search-item.entity.mcp .eglyph {
   color: var(--cl-accent-ink);
-}
-.cl-search-item .ekind {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
 }
 .cl-search-item.entity:hover .pname,
 .cl-search-item.entity.hl .pname {
@@ -822,7 +805,7 @@ body {
 }
 
 .cl-search-foot {
-  padding: 10px 18px 12px;
+  padding: 8px 16px 9px;
   border-top: 1px solid oklch(0.2 0.02 60 / 0.08);
   display: flex;
   align-items: center;
