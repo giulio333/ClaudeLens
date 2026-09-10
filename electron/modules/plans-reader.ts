@@ -138,8 +138,19 @@ const refStats = { cacheHits: 0, fullParses: 0, incrementalParses: 0, fileReads:
 
 export function getPlanRefStats() {
   let cachedFiles = 0;
-  for (const byFile of refCache.values()) cachedFiles += byFile.size;
-  return { ...refStats, cachedFiles };
+  // See `getParseStats` in cost-tracker: distinct backing stores, because a
+  // small copy is pooled and would otherwise be billed once per cached file.
+  const backings = new Set<ArrayBufferLike>();
+  let retainedPartialBytes = 0;
+  for (const byFile of refCache.values()) {
+    cachedFiles += byFile.size;
+    for (const { partial } of byFile.values()) {
+      if (backings.has(partial.buffer)) continue;
+      backings.add(partial.buffer);
+      retainedPartialBytes += partial.buffer.byteLength;
+    }
+  }
+  return { ...refStats, cachedFiles, retainedPartialBytes };
 }
 
 export function resetPlanRefCache() {
@@ -255,7 +266,10 @@ export async function readPlanRefs(sessionFilePath: string): Promise<PlanRef[]> 
       start = i + 1;
     }
   }
-  entry.partial = combined.subarray(start);
+  // A copy, not a view — same reason as `cost-tracker.parseSession`: `subarray`
+  // shares the backing ArrayBuffer, so keeping it in `refCache` for the life of
+  // the process would pin every byte this parse read, not the unterminated tail.
+  entry.partial = Buffer.from(combined.subarray(start));
   entry.consumed += chunk.length;
   entry.mtimeMs = st.mtimeMs;
   cacheSet(sessionFilePath, entry);
