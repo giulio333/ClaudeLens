@@ -737,6 +737,64 @@ rail progetto — quindi resta uno solo, dov'era, e vale su ogni vista. Sotto i
 di riempire**: un pieno terracotta largo 230px sarebbe l'elemento più urlato
 della chrome, e il popover sotto dice già che la ricerca è aperta.
 
+**Hover della top bar — una risposta sola.** Le tre superfici della barra
+(scope nav, pill della lente, ingranaggio) rispondevano al puntatore in tre modi
+diversi, tutti scritti a mano. Ora usano gli stessi due token: la tinta
+`--cl-glass-hover-bg` (la stessa di altre 12 superfici) e la durata
+`--cl-hover-ms` (120ms), col testo che va a `--cl-accent-ink`. Cosa se n'è
+andato, e perché:
+
+- **Il pill di vetro dei tab** (`.cl-scope button::before`) era un bottone
+  modellato — gradiente radiale bianco, rim interno, ombra portata, molla
+  `scale(0.92 → 1)` con overshoot su 360ms. Era l'hover più rumoroso dell'app
+  sull'elemento più quieto, e l'ultimo utente di un idioma che nient'altro
+  segue; l'override dark serviva solo a rifare lo stesso gradiente con altri
+  numeri, e sparisce col gradiente. Al suo posto **l'hover anticipa la tab
+  attiva** invece di inventarsi una forma propria: la stessa underline, a un
+  terzo dell'inchiostro (`--cl-accent` al 35%), col testo che va a `--cl-ink`.
+  Un vocabolario solo per "dove sei" e "dove stai passando".
+- **La fascia è piatta.** Non era vetro: compositava bianco al 42% sopra
+  `.cl-app`, che è `--cl-paper` — bianco su bianco — e poi sfocava e saturava
+  una finestra opaca sotto cui non scorre niente (l'header è fratello flex
+  dell'area di scroll, non un layer sopra). Quello che si vedeva davvero era
+  l'ombra interna inferiore a fare da bordo, accanto a un `border-bottom` vero
+  che era bianco puro, cioè invisibile. Ora: la carta che era già, e una
+  hairline onesta. Stesso trattamento per la pill della lente e l'ingranaggio,
+  che avevano il loro vetro (bianco 18% + blur + rim) sulla stessa barra bianca.
+  **Altezza (52px), gap e tipografia mono restano quelli di prima**: provati a
+  46px e in sans, la barra perdeva presenza.
+- I bottoni della nav ora **prendono l'altezza piena della barra**
+  (`align-items: stretch` sul grid, `height` implicita sul flex), così
+  l'underline atterra sulla hairline qualunque sia la misura della fascia;
+  brand e blocco destro si ricentrano da sé con `align-self: center`.
+- **L'hover della lente impersonava lo stato aperto**: si dava la stessa lavata
+  accento _e_ un bordo terracotta, che è il segnale esclusivo di `.on`. Ora
+  l'hover tinge e basta — il bordo resta la firma dell'aperto.
+- **L'hover dell'ingranaggio era bianco su bianco** (`oklch(1 0 0 / 0.32)` su una
+  barra già bianca): invisibile. Ora è la stessa tinta della pill accanto.
+- Il **brand** non aveva hover pur essendo un bottone (va a Global): ora vira ad
+  accent-ink come tutto il resto.
+
+La stessa passata è stata estesa al resto dell'app, ma **a due famiglie, non a
+una**: l'app ha due hover legittimi — quello **neutro** delle superfici a lista
+fitta (voci di menu, righe del tag picker, chip di provenance, opzioni di
+export, filtri della ricerca, pill del narratore) e quello **accento** dei
+controlli azionabili (pin, menu di riga sessione, remove degli highlight).
+Appiattirli in uno sarebbe stato una regressione, non una normalizzazione, così
+il neutro ha preso un token suo (`--cl-hover-bg`) e l'accento riusa
+`--cl-glass-hover-bg`. Ogni sito resta nella sua famiglia: i valori si spostano
+di un punto o due (accento 12–14% → accent-soft 78%, ink 4% → 5%), quindi la
+resa è **quasi** identica, non identica. Quello che sparisce davvero sono **tre
+override dark** (`.cl-menu-item`, `.cl-tag-picker-row`, `.cl-search-filters
+button`) che esistevano solo perché il valore light non era theme-aware, e un
+`rgba(193, 95, 60, 0.12)` che era `#C15F3C` battuto a mano invece del token.
+
+**Due esclusioni volute.** `.cl-term-btn` gira sulla palette propria del
+terminale (`--t-*`), non su `--cl-*`. E `.cl-btn--primary:hover` non è una
+tinta ma uno stato composto (background + border-mix + box-shadow): ripuntare
+il solo fondo lo desincronizzerebbe dal bordo accanto, quindi o si cambiano
+tutti e tre o non si tocca.
+
 **Chrome del progetto — design handoff _Sessions Varianti_ (rail 5a + contenuto 5b).**
 La navigazione di progetto non è più una fascia orizzontale di subtab: è una
 **colonna di lavoro** a sinistra (`ProjectRail`, 220px, `--cl-paper-2`, hairline
