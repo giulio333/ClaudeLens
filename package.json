@@ -1,7 +1,7 @@
 {
   "name": "claudelens-app",
-  "version": "2.2.16",
-  "claudeCodeVersion": "2.1.266",
+  "version": "2.2.17",
+  "claudeCodeVersion": "2.1.268",
   "description": "ClaudeLens — GUI for Claude Code data",
   "author": "Giulio Di Giamberardino",
   "license": "MIT",
