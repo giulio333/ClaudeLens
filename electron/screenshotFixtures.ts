@@ -1263,8 +1263,8 @@ const MOCK_TEAMS = [(({ members: _m, events: _e, configPath: _c, ...s }) => s)(M
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
 // mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
 const MOCK_BG_SESSIONS = [
-  // ── Progetto webapp: spettro completo di stati per popolare ogni bucket della
-  // Agent View (Needs input · Working · Ready · Completed · Failed · Stopped) ──
+  // Keep the Monitor compact: two background workers plus the two interactive sessions.
+  // Completed entries still populate the Agent View without adding Monitor cards.
   {
     id: 'a1b2c3',
     sessionId: '20260329T101500_000123',
@@ -1286,27 +1286,6 @@ const MOCK_BG_SESSIONS = [
     hasPendingQuestion: false,
   },
   {
-    id: 'b2c3d4',
-    sessionId: '20260531T094000_000201',
-    name: 'Add Stripe checkout flow',
-    state: 'running',
-    tempo: 'blocked',
-    detail: 'Paused — needs a decision before continuing',
-    intent: 'Wire up Stripe Checkout for the Pro plan and handle the success webhook.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 25104,
-    createdAt: minsAgo(32),
-    updatedAt: minsAgo(2),
-    needs:
-      'Should I store the Stripe customer ID on the users table or in a separate billing table?',
-    hasPendingQuestion: true,
-  },
-  {
     id: 'c3d4e5',
     sessionId: '20260531T093000_000202',
     name: 'Investigate flaky e2e test',
@@ -1323,26 +1302,6 @@ const MOCK_BG_SESSIONS = [
     pid: 25210,
     createdAt: minsAgo(11),
     updatedAt: minsAgo(1),
-    needs: null,
-    hasPendingQuestion: false,
-  },
-  {
-    id: 'd4e5f6',
-    sessionId: '20260531T090500_000203',
-    name: 'Bump dependencies',
-    state: 'idle',
-    tempo: 'idle',
-    detail: 'Idle — awaiting your next prompt',
-    intent: 'Upgrade React, Vite and TypeScript to their latest minor versions.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 0,
-    alive: true,
-    pid: 25288,
-    createdAt: minsAgo(46),
-    updatedAt: minsAgo(9),
     needs: null,
     hasPendingQuestion: false,
   },
@@ -1389,26 +1348,6 @@ const MOCK_BG_SESSIONS = [
     hasPendingQuestion: false,
   },
   // ── Altri progetti: variano la Global Agent View ──
-  {
-    id: 'a7b8c9',
-    sessionId: '20260531T095500_000098',
-    name: 'Generate API docs',
-    state: 'running',
-    tempo: 'thinking',
-    detail: 'Summarizing OpenAPI schema',
-    intent: 'Write reference docs for every endpoint in the api-server project.',
-    result: null,
-    cwd: '/Users/alice/projects/api-server',
-    projectName: 'api-server',
-    template: 'claude',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 24990,
-    createdAt: minsAgo(25),
-    updatedAt: minsAgo(3),
-    needs: 'Waiting for confirmation: overwrite existing docs/api.md?',
-    hasPendingQuestion: true,
-  },
   {
     id: 'g7h8i9',
     sessionId: '20260531T084000_000071',
