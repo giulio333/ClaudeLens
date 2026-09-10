@@ -84,8 +84,10 @@ function FolderPanel({
 }
 
 /**
- * Compact signal shown in the global home: a clickable row that opens the
- * dedicated view. Renders nothing when there are no duplicates.
+ * Compact signal shown in the global home: a notification pill — count badge
+ * and one line — sized to its content instead of the full-width filled band it
+ * used to be. The pill *is* the button, so it carries no separate action word. It is the only entry point to `DuplicateProjectsView`, so
+ * it stays mounted; it renders nothing when there are no duplicates.
  */
 export function DuplicateProjectsBadge({ onNavigate }: { onNavigate: (v: View) => void }) {
   const { data: groups = [] } = useDuplicateProjects();
@@ -94,35 +96,11 @@ export function DuplicateProjectsBadge({ onNavigate }: { onNavigate: (v: View) =
   return (
     <button
       type="button"
+      className="cl-ghome-dup"
       onClick={() => onNavigate({ type: 'duplicates' })}
-      style={{
-        display: 'flex',
-        alignItems: 'center',
-        gap: 10,
-        width: '100%',
-        padding: '8px 14px',
-        margin: '0 0 18px',
-        borderRadius: 8,
-        border: '1px solid var(--cl-line)',
-        background: 'var(--cl-warn-soft)',
-        cursor: 'pointer',
-        textAlign: 'left',
-      }}
     >
-      <span style={{ color: 'var(--cl-warn)', fontSize: 13 }}>⚠</span>
-      <span style={{ fontSize: 13, color: 'var(--cl-ink)', flex: 1 }}>
-        {groups.length} possible duplicate {groups.length === 1 ? 'project' : 'projects'} detected
-      </span>
-      <span
-        style={{
-          fontFamily: 'var(--font-mono)',
-          fontSize: 11,
-          color: 'var(--cl-ink)',
-          opacity: 0.55,
-        }}
-      >
-        details →
-      </span>
+      <span className="count">{groups.length}</span>
+      <span className="txt">possible duplicate {groups.length === 1 ? 'project' : 'projects'}</span>
     </button>
   );
 }
