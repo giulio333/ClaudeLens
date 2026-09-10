@@ -12,9 +12,11 @@ import { projectDisplayName } from './project/shared/projectName';
 // Mounted inside ProjectOverview (not App) so `onOpenSession` has access to the
 // navigation state. Keeps its own small queue; auto-dismisses after a while.
 //
-// Each toast is rendered as one Mission Control feed row (time gutter · state
-// dot · subject · status tag): a notification is a session event, and that is
-// the language this app already uses for events.
+// Each toast is rendered as one Mission Control feed row (state dot · subject ·
+// status tag): a notification is a session event, and that is the language this
+// app already uses for events. The row keeps the feed's shape but wears the
+// global home's register — card radius, sans subject, a bare mono action —
+// since that is the surface it floats over.
 
 const AUTO_DISMISS_MS = 9000;
 const MAX_VISIBLE = 4;
@@ -136,7 +138,6 @@ function NotificationRow({
       onFocus={() => setPaused(true)}
       onBlur={() => setPaused(false)}
     >
-      <span className="cl-ntf-when">now</span>
       <span className="cl-ntf-dot" aria-hidden="true" />
       <span className="cl-ntf-subject">
         <span className="cl-ntf-name">{project || event.title}</span>
@@ -150,7 +151,7 @@ function NotificationRow({
       {event.sessionId && (
         <div className="cl-ntf-foot">
           <button type="button" className="cl-ntf-open" onClick={onOpen}>
-            Open session →
+            open session →
           </button>
         </div>
       )}
