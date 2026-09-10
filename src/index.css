@@ -7641,9 +7641,6 @@ body {
   flex-direction: column;
   min-height: 0;
 }
-.cl-ghome-notice {
-  padding: 0 var(--cl-gutter);
-}
 .cl-ghome-split {
   flex: 1;
   display: grid;
@@ -7672,7 +7669,23 @@ body {
 .cl-ghome-welcome-inner {
   position: relative;
   z-index: 2;
-  max-width: 620px;
+  max-width: 680px;
+}
+/* The shared `.cl-h-name` runs up to 132px because elsewhere it carries a
+   project name in a full-bleed hero; here it sits in a 680px column and
+   "Welcome back" was being cut to "Welcome…" by the ellipsis guard that exists
+   for user-supplied names. The title is a fixed literal, so it doesn't need
+   that guard — it needs to fit: a smaller ceiling keeps it on one line, and
+   wrapping (rather than truncating) is the fallback at widths where it can't. */
+.cl-ghome-welcome .cl-h-name {
+  font-size: clamp(40px, 6vw, 84px);
+  gap: 12px;
+}
+.cl-ghome-welcome .cl-h-name .label-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  max-width: 100%;
 }
 .cl-ghome-lede {
   margin-top: 24px;
@@ -7707,23 +7720,33 @@ body {
 .cl-ghome-working-row:hover {
   background: var(--cl-glass-hover-bg);
 }
-.cl-ghome-working-row[data-live='ok'] {
+.cl-ghome-working-row[data-live='working'] {
   background: var(--cl-accent-soft);
 }
-.cl-ghome-working-row[data-live='ok']:hover {
+.cl-ghome-working-row[data-live='working']:hover {
   background: color-mix(in oklch, var(--cl-accent-soft) 72%, var(--cl-accent) 8%);
 }
-/* `warn` is the row that asks something of you, so it can't read as the one
-   card that is missing: it gets the same treatment as `ok` in the status hue
-   (the rows are separated cards now — at the old 2px gap an untinted row was
-   merely quiet, at 10px it would be a hole). */
-.cl-ghome-working-row[data-live='warn'] {
+/* `waiting` is the row that asks something of you, so it can't read as the one
+   card that is missing: it gets the same treatment as `working` in the status
+   hue (the rows are separated cards now — at the old 2px gap an untinted row
+   was merely quiet, at 10px it would be a hole). */
+.cl-ghome-working-row[data-live='waiting'] {
   background: var(--cl-warn-soft);
 }
-.cl-ghome-working-row[data-live='warn']:hover {
+.cl-ghome-working-row[data-live='waiting']:hover {
   background: color-mix(in oklch, var(--cl-warn-soft) 72%, var(--cl-warn) 8%);
 }
-.cl-ghome-working-row[data-live='warn'] .cl-ghome-working-action {
+.cl-ghome-working-row[data-live='waiting'] .cl-ghome-working-action {
+  color: var(--cl-ink-2);
+}
+/* `open` — alive, turn finished, nothing in flight. It is the one state the
+   welcome used to paint as work, so it is the one that must not be tinted: an
+   outlined card next to two filled ones says "here, but idle" without a word. */
+.cl-ghome-working-row[data-live='open'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--cl-line);
+}
+.cl-ghome-working-row[data-live='open'] .cl-ghome-working-name {
   color: var(--cl-ink-2);
 }
 .cl-ghome-working-dot {
@@ -7733,10 +7756,10 @@ body {
   border-radius: 50%;
   background: var(--cl-ink-4);
 }
-.cl-ghome-working-dot[data-live='ok'] {
+.cl-ghome-working-dot[data-live='working'] {
   background: var(--cl-ok);
 }
-.cl-ghome-working-dot[data-live='warn'] {
+.cl-ghome-working-dot[data-live='waiting'] {
   background: var(--cl-warn);
 }
 .cl-ghome-working-name {
@@ -7757,8 +7780,54 @@ body {
   font-size: 12.5px;
   color: var(--cl-ink-3);
 }
-.cl-ghome-working-row[data-live='ok'] .cl-ghome-working-action {
+.cl-ghome-working-row[data-live='working'] .cl-ghome-working-action {
   color: var(--cl-accent-ink);
+}
+
+/* Duplicate projects — a notification, not a banner. The full-width
+   `--cl-warn-soft` strip made a background housekeeping hint the loudest thing
+   on the welcome; a bare mono line, tried next, was so quiet it read as a
+   caption. This is the middle: the pill is sized to its content, so it takes a
+   sliver of the band it used to fill, but it keeps the amber and leads with a
+   filled count badge — the one shape that reads as "something is waiting" at a
+   glance. Amber runs 0.70–0.78 in lightness in both themes, so the badge's ink
+   is a dark mix of the token itself rather than a second hue. */
+.cl-ghome-dup {
+  margin-top: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--cl-warn) 45%, transparent);
+  background: color-mix(in oklch, var(--cl-warn) 15%, transparent);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink-2);
+  text-align: left;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+.cl-ghome-dup .count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cl-warn);
+  color: color-mix(in oklch, var(--cl-warn) 22%, black);
+  font-size: 11.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.cl-ghome-dup:hover {
+  background: color-mix(in oklch, var(--cl-warn) 25%, transparent);
+  border-color: color-mix(in oklch, var(--cl-warn) 70%, transparent);
 }
 
 /* ── Margin column: pinned projects + global configuration ── */
@@ -7767,9 +7836,14 @@ body {
   min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 44px;
+  gap: 30px;
   border-left: 1px solid var(--cl-line);
-  padding: 64px 40px 44px;
+  /* Il bordo alto e quello basso vanno misurati **dal testo**, non dal box: in
+     fondo l'ultima riga di Configuration porta già 8px di padding suo, quindi
+     40px di padding-bottom fanno 48px di aria sotto il testo. In cima
+     l'etichetta non ha niente sopra di sé, così 56px di padding erano 56px veri
+     — otto in più del fondo, abbastanza da far pendere la colonna. */
+  padding: 48px 40px 40px;
 }
 .cl-ghome-lbl {
   display: block;
@@ -7786,7 +7860,7 @@ body {
   flex-direction: column;
 }
 .cl-ghome-pinned-list {
-  margin-top: 16px;
+  margin-top: 14px;
   flex: 1;
   min-height: 0;
   overflow-y: auto;
@@ -7826,7 +7900,7 @@ body {
   white-space: nowrap;
 }
 .cl-ghome-pinned-empty {
-  margin-top: 16px;
+  margin-top: 14px;
   font-family: var(--font-sans);
   font-size: 12.5px;
   line-height: 1.5;
@@ -7834,7 +7908,7 @@ body {
 }
 .cl-ghome-config {
   flex: none;
-  padding-top: 44px;
+  padding-top: 30px;
   border-top: 1px solid var(--cl-line);
 }
 .cl-ghome-config-list {
@@ -7892,14 +7966,6 @@ body {
   font-size: 11px;
   color: var(--cl-ink-4);
 }
-.cl-ghome-aside-foot {
-  display: block;
-  font-family: var(--font-mono);
-  font-size: 11px;
-  line-height: 1.5;
-  color: var(--cl-ink-4);
-}
-
 /* Stacked, under the two-column threshold: the margin column stops being a
    column. Two things break if it keeps the full-height behaviour.
    `.cl-ghome-pinned` is `flex: 1 1 0%` for a room whose height is given — a

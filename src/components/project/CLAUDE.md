@@ -688,10 +688,83 @@ in fondo. **Pinnare/spinnare non si fa più dalla home** (niente
 colonna non sparisce (a differenza della vecchia sezione "solo se c'è qualcosa
 da mostrare"): mostra un invito muto (`.cl-ghome-pinned-empty`), perché ora è
 una colonna strutturale sempre presente, non una sezione opzionale.
-`DuplicateProjectsBadge` resta montato (`.cl-ghome-notice`, sopra lo split): è
-l'unico ingresso a `DuplicateProjectsView` nell'app, quindi anche se il mock 6b
-non lo disegna va tenuto — si limita a non renderizzare nulla quando non ci sono
-duplicati.
+`DuplicateProjectsBadge` resta montato: è l'unico ingresso a
+`DuplicateProjectsView` nell'app, quindi anche se il mock 6b non lo disegna va
+tenuto — si limita a non renderizzare nulla quando non ci sono duplicati. Non è
+più la fascia piena a tutta larghezza in `--cl-warn-soft` sopra lo split
+(`.cl-ghome-notice`, sparita): quella forma faceva del suggerimento di
+manutenzione la cosa più rumorosa del benvenuto. Ora è una **pill di notifica**
+(`.cl-ghome-dup`) larga quanto il contenuto, **in coda alla colonna welcome** —
+dentro `.cl-ghome-welcome-inner`, non da fratello, altrimenti combatterebbe con
+`justify-content:center`. Nello stesso posto era stata provata una riga mono
+nuda, senza fondo: scartata perché si leggeva come una didascalia e non attirava
+lo sguardo — il problema era la forma, non la posizione. La pill tiene l'ambra e apre con un
+**badge del conteggio pieno**, la forma che a colpo d'occhio dice "c'è qualcosa
+in sospeso". L'ambra sta fra 0.70 e 0.78 di lightness in entrambi i temi, quindi
+l'inchiostro del badge è un mix scuro del token stesso (`color-mix(… 22%,
+black)`) invece di una seconda tinta.
+
+**Il titolo dell'hero è rimpicciolito solo qui** (`.cl-ghome-welcome
+.cl-h-name`, `clamp(40px, 6vw, 84px)`). `.cl-h-name` arriva a 132px perché
+altrove sta in un hero a tutta pagina; dentro la colonna welcome (680px)
+"Welcome back" finiva troncato in "Welcome…" dalla guardia
+`text-overflow:ellipsis` di `.label-name`, che esiste per i nomi di progetto —
+dati utente di lunghezza ignota. Qui il titolo è una stringa fissa: la guardia
+non serve e viene disattivata (va a capo invece di troncare, come fallback alle
+larghezze in cui non ci sta), e la misura più bassa è quella che lo tiene su una
+riga.
+
+**La colonna margine non ha più la didascalia di chiusura.** `Global · ~ ·
+shared across all projects` (`.cl-ghome-aside-foot`) andava a capo su due righe
+in 240px di colonna per ripetere quello che dicono già il tab GLOBAL e
+l'eyebrow `~/.claude` del benvenuto; l'unica informazione sua era lo **scope**
+delle voci sotto — che `Skills 0` conta le skill globali, non quelle del
+progetto. Quello scope è finito nell'etichetta della sezione (`GLOBAL
+CONFIGURATION`), dove costa zero righe. Con la didascalia via, gli spazi si
+stringono: `gap` dell'aside 44 → 30px, `padding-top` di `.cl-ghome-config` 44 →
+30px (erano 88px cumulativi fra l'ultimo pin e l'etichetta successiva, un vuoto
+che la colonna non poteva permettersi), padding 64/44 → 48/40.
+`.cl-ghome-pinned` resta `flex:1`, quindi Configuration continua a stare in
+fondo da sé.
+
+I due bordi vanno misurati **dal testo, non dal box**, ed è lì che la colonna
+pendeva: in fondo l'ultima riga di Configuration porta 8px di padding suoi, così
+40px di padding-bottom danno 48px di aria sotto il testo, mentre in cima
+l'etichetta non ha niente sopra di sé e 56px di padding erano 56px veri. Ora il
+padding-top è 48 e i due margini ottici pareggiano. Per la stessa ragione lo
+stacco etichetta → prima riga è scritto **a somma costante** nei due blocchi:
+`.cl-ghome-pinned-list` ha `margin-top:14` sopra righe con 10px di padding,
+`.cl-ghome-config-list` ne ha 16 sopra righe con 8 — 24px in entrambi i casi,
+che a occhio è la cosa che conta.
+
+**Il benvenuto distingueva due stati su tre, e per questo mentiva.**
+`liveRowsFromProcs` leggeva `waiting` e metteva tutto il resto in un unico
+secchio che la frase chiamava «working right now»: due sessioni aperte e ferme
+al prompt venivano annunciate come due progetti al lavoro. Il registro di
+`~/.claude/sessions` gli stati li distingue da sempre e il Monitor li legge
+tutti e tre (`isReady`/`doingOf` in `monitor/MonitorView.tsx`); ora lo fa anche
+la home, con le stesse regole: `busy` → **working**, `waiting` → **waiting**,
+`idle` e `unknown` → **open** (una sessione che non ha mai riportato niente non
+è stata osservata lavorare, esattamente come là). Conseguenze:
+
+- La frase si compone per clausole invece di avere un caso per ogni forma:
+  quante lavorano, chi aspetta te, e quante sono soltanto aperte — col nome
+  proprio ovunque una clausola appartenga a un progetto solo, perché il nome è
+  l'unica cosa che un conteggio non sa dire.
+- Le righe escono **ordinate per priorità** (waiting > working > open), così le
+  due che l'hero ha spazio di mostrare sono le due che contano; la stessa
+  priorità decide quale stato vince quando una cwd ha più processi.
+- La riga `open` è l'unica **non tinta** — contorno e basta, nome smorzato:
+  era lo stato dipinto come lavoro, ed è quello che non deve più sembrarlo. La
+  sua azione è `resume →` — il verbo di Claude Code stesso per tornare su una
+  sessione ferma — mentre `working` prende `watch →` e `waiting` resta
+  `answer →`. `watch` e non `open`: una sessione che gira non la apri, la
+  guardi, e `open` è già la parola con cui la frase sopra chiama l'altro stato
+  («2 projects are open»), due significati a due righe di distanza.
+- La parte pura sta in **`overview/live-rows.ts`**, non nella vista: il file
+  della vista esporta un componente e basta (regola fast-refresh, come
+  `CreateFormKit`), e così le frasi si asseriscono direttamente —
+  `test/global-home-live.test.ts`.
 
 **Sotto i 980px lo split si impila, e la colonna margine deve smettere di
 comportarsi da colonna.** Due cose si rompono se resta com'è a due colonne.
