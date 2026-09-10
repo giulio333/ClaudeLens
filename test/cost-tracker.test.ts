@@ -930,3 +930,63 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(getPricingMeta().knownModels).toContain('claude-sonnet-5');
   });
 });
+
+// ─── Parse cache: what the cached entry is allowed to keep alive ──────────────
+
+describe('parse cache — retained bytes', () => {
+  it('keeps the unterminated tail, not the transcript it was read from', async () => {
+    resetParseCache();
+    // A transcript whose last line has no newline yet, which is the only reason
+    // the cache holds bytes at all: the tail is folded once the rest arrives.
+    const lines: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      lines.push(
+        assistantLine({
+          model: 'claude-sonnet-4-5',
+          input: 10,
+          output: 5,
+          id: `m${i}`,
+          requestId: `r${i}`,
+        })
+      );
+    }
+    const unterminated = '{"type":"assistant","message":{"id":"tail"';
+    const body = lines.join('\n') + '\n' + unterminated;
+    writeFileSync(join(tmp, 'a.jsonl'), body, 'utf-8');
+    expect(body.length).toBeGreaterThan(512 * 1024);
+
+    const [session] = await getSessionList(tmp);
+    const stats = getParseStats();
+
+    // The tail is buffered rather than folded or dropped…
+    expect(session.messageCount).toBe(4000);
+    expect(stats.cachedFiles).toBe(1);
+    // …and it is a copy: a `subarray` view would pin all 512 KB+ of `combined`
+    // for the life of the process, once per cached transcript.
+    expect(stats.retainedPartialBytes).toBeLessThan(64 * 1024);
+  });
+
+  it('drops the retained bytes with the entry when the transcript vanishes', async () => {
+    resetParseCache();
+    writeFileSync(
+      join(tmp, 'a.jsonl'),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 5,
+        id: 'm1',
+        requestId: 'r1',
+      }) +
+        '\n' +
+        '{"type":"assistant","message":{"id":"tail"',
+      'utf-8'
+    );
+    await getSessionList(tmp);
+    expect(getParseStats().cachedFiles).toBe(1);
+
+    rmSync(join(tmp, 'a.jsonl'));
+    await getSessionList(tmp);
+
+    expect(getParseStats()).toMatchObject({ cachedFiles: 0, retainedPartialBytes: 0 });
+  });
+});
