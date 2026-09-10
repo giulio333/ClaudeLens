@@ -146,6 +146,16 @@
    pairs translucency with a soft specular edge so flat editorial rows
    pick up a subtle liquid shimmer when interacted with. */
 :root {
+  /* One answer to "the pointer is over me": the accent-soft tint below, this
+     duration, and — where the element is text — `--cl-accent-ink`. The top bar
+     used to hand-roll all three per control. */
+  --cl-hover-ms: 120ms;
+  /* Two families, deliberately: `--cl-hover-bg` is the neutral wash of dense
+     list surfaces (menu items, tag rows, source chips), `--cl-glass-hover-bg`
+     the accent one of actionable controls. Both were hand-rolled per site —
+     ink at 4% here, 5% there, `--cl-paper-2` elsewhere with a dark override to
+     undo it, and one `rgba(193, 95, 60, 0.12)` that was `#C15F3C` typed out. */
+  --cl-hover-bg: color-mix(in oklch, var(--cl-ink) 5%, transparent);
   --cl-glass-hover-bg: color-mix(in oklch, var(--cl-accent-soft) 78%, transparent);
   --cl-glass-hover-edge: oklch(1 0 0 / 0.45);
   --cl-glass-sheen-top: oklch(1 0 0 / 0.55);
@@ -155,6 +165,7 @@
   --cl-glass-edge-side: oklch(1 0 0 / 0.25);
 }
 :root[data-theme='dark'] {
+  --cl-hover-bg: oklch(1 0 0 / 0.07);
   --cl-glass-hover-bg: color-mix(in oklch, var(--cl-accent-soft) 60%, transparent);
   --cl-glass-hover-edge: oklch(1 0 0 / 0.08);
   --cl-glass-sheen-top: oklch(1 0 0 / 0.14);
@@ -302,31 +313,26 @@ body {
 }
 
 /* ── Top bar ── */
+/* A flat surface, not a glass one. The bar used to composite white at 42% over
+   `.cl-app`, which is `--cl-paper` — white over white — then blur and saturate
+   a window that is opaque and has nothing scrolling underneath (the header is a
+   flex sibling of the scroll area, not a layer over it). What we actually saw
+   was the inset bottom shadow doing the job of a border, next to a real
+   `border-bottom` that was pure white and therefore invisible. So: the paper it
+   already was, and one honest hairline. */
 .cl-bar {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
-  align-items: center;
+  align-items: stretch;
   gap: 28px;
   padding: 0 28px 0 88px;
   height: 52px;
   flex-shrink: 0;
-  border-bottom: 1px solid oklch(1 0 0 / 0.55);
+  background: var(--cl-paper);
+  border-bottom: 1px solid var(--cl-line);
   position: relative;
   z-index: 30;
-  background: oklch(1 0 0 / 0.42);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.75),
-    inset 0 -1px 0 oklch(0.3 0.02 80 / 0.1);
   -webkit-app-region: drag;
-}
-:root[data-theme='dark'] .cl-bar {
-  background: oklch(0.22 0.008 75 / 0.5);
-  border-bottom-color: oklch(1 0 0 / 0.08);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.1),
-    inset 0 -1px 0 oklch(0 0 0 / 0.35);
 }
 .cl-bar button,
 .cl-bar a,
@@ -337,11 +343,16 @@ body {
 .cl-brand {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 10px;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--cl-ink);
+  transition: color var(--cl-hover-ms) ease;
+}
+.cl-brand:hover {
+  color: var(--cl-accent-ink);
 }
 .cl-brand-mark {
   width: 18px;
@@ -351,77 +362,46 @@ body {
 }
 .cl-scope {
   display: inline-flex;
+  align-items: stretch;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .cl-scope button {
-  position: relative;
+  display: inline-flex;
+  align-items: center;
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 16px 14px 14px;
+  padding: 0 14px;
   color: var(--cl-ink-4);
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   border-bottom: 2px solid transparent;
   transition:
-    color 240ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-bottom-color 120ms;
+    color var(--cl-hover-ms) ease,
+    border-bottom-color var(--cl-hover-ms) ease;
 }
-.cl-scope button::before {
-  content: '';
-  position: absolute;
-  inset: 7px 4px 9px;
-  border-radius: 999px;
-  background: radial-gradient(
-    120% 140% at 50% 0%,
-    oklch(1 0 0 / 0.85) 0%,
-    oklch(1 0 0 / 0.35) 60%,
-    oklch(1 0 0 / 0.2) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.85),
-    inset 0 -1px 0 oklch(0.3 0.04 40 / 0.12),
-    inset 0 0 0 1px oklch(1 0 0 / 0.45),
-    0 6px 16px -8px oklch(0.3 0.08 40 / 0.3);
-  opacity: 0;
-  transform: scale(0.92);
-  transition:
-    opacity 320ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 360ms cubic-bezier(0.34, 1.3, 0.64, 1);
-  pointer-events: none;
-  z-index: -1;
-}
-.cl-scope button:hover::before {
-  opacity: 1;
-  transform: scale(1);
-}
+/* Hover anticipates the active tab rather than inventing a shape of its own:
+   the same underline, at a third of the ink. It used to be a modelled-glass
+   pill — white radial gradient, inner rim, drop shadow, a 360ms spring
+   overshoot — which is a second vocabulary for "where the pointer is" next to
+   the underline's "where you are", and the louder of the two. */
 .cl-scope button:hover {
   color: var(--cl-ink);
+  border-bottom-color: color-mix(in oklch, var(--cl-accent) 35%, transparent);
 }
 .cl-scope button.on {
   color: var(--cl-ink);
   border-bottom-color: var(--cl-accent);
 }
-:root[data-theme='dark'] .cl-scope button::before {
-  background: radial-gradient(
-    120% 140% at 50% 0%,
-    oklch(1 0 0 / 0.22) 0%,
-    oklch(1 0 0 / 0.08) 60%,
-    oklch(1 0 0 / 0.04) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.2),
-    inset 0 0 0 1px oklch(1 0 0 / 0.1),
-    0 6px 16px -8px oklch(0.55 0.18 40 / 0.3);
-}
 
 .cl-bar-right {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 12px;
 }
 
@@ -436,10 +416,8 @@ body {
   height: 28px;
   padding: 0 8px 0 11px;
   border-radius: var(--cl-r-pill);
-  border: 1px solid oklch(1 0 0 / 0.35);
-  background: oklch(1 0 0 / 0.18);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
+  border: 1px solid var(--cl-line);
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -447,13 +425,9 @@ body {
   color: var(--cl-ink-3);
   cursor: pointer;
   transition:
-    background 160ms,
-    color 160ms,
-    border-color 160ms,
-    box-shadow 200ms;
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.55),
-    inset 0 -1px 0 oklch(0 0 0 / 0.05);
+    background var(--cl-hover-ms) ease,
+    color var(--cl-hover-ms) ease,
+    border-color var(--cl-hover-ms) ease;
 }
 .cl-lens-btn svg {
   width: 14px;
@@ -478,10 +452,12 @@ body {
   border-radius: 5px;
   flex: none;
 }
+/* Hover tints, open outlines. The two used to be near-identical — hover
+   hand-rolled the accent wash *and* a terracotta border, which is the `.on`
+   state's own signal — so the pill looked open whenever the pointer crossed it. */
 .cl-lens-btn:hover {
   color: var(--cl-accent-ink);
-  background: oklch(0.95 0.04 40 / 0.55);
-  border-color: oklch(0.55 0.18 40 / 0.4);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-lens-btn:hover .ph {
   color: var(--cl-accent-ink);
@@ -511,15 +487,6 @@ body {
   .cl-lens-btn .kbd {
     display: none;
   }
-}
-:root[data-theme='dark'] .cl-lens-btn {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-}
-:root[data-theme='dark'] .cl-lens-btn:hover {
-  background: oklch(0.55 0.18 40 / 0.3);
-  border-color: oklch(0.55 0.18 40 / 0.4);
-  color: var(--cl-ink);
 }
 
 /* ── SEARCH POPOVER · editorial, anchored top-right ── */
@@ -633,15 +600,12 @@ body {
 }
 .cl-search-filters button:hover {
   color: var(--cl-ink);
-  background: oklch(0.2 0.02 60 / 0.045);
+  background: var(--cl-hover-bg);
 }
 .cl-search-filters button.on {
   color: var(--cl-accent-ink);
   background: oklch(0.95 0.04 40 / 0.36);
   border-color: oklch(0.55 0.18 40 / 0.22);
-}
-:root[data-theme='dark'] .cl-search-filters button:hover {
-  background: oklch(1 0 0 / 0.06);
 }
 :root[data-theme='dark'] .cl-search-filters button.on {
   background: oklch(0.55 0.18 40 / 0.18);
@@ -1100,7 +1064,7 @@ body {
 }
 .cl-tag--filter.is-interactive:hover {
   color: var(--cl-ink);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-tag--filter.tone-on,
 .cl-tag--filter.tone-soft {
@@ -1270,7 +1234,7 @@ body {
 }
 .cl-tagbar-all:hover {
   color: var(--cl-ink);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-tagbar-all.on {
   color: var(--cl-accent-ink);
@@ -1405,10 +1369,7 @@ body {
   height: 13px;
 }
 .cl-menu-item:hover {
-  background: var(--cl-paper-2);
-}
-:root[data-theme='dark'] .cl-menu-item:hover {
-  background: oklch(0.3 0.012 70 / 0.45);
+  background: var(--cl-hover-bg);
 }
 .cl-menu-item.danger {
   color: var(--cl-danger);
@@ -1480,10 +1441,7 @@ body {
   transition: background 100ms;
 }
 .cl-tag-picker-row:hover {
-  background: var(--cl-paper-2);
-}
-:root[data-theme='dark'] .cl-tag-picker-row:hover {
-  background: oklch(0.3 0.012 70 / 0.45);
+  background: var(--cl-hover-bg);
 }
 .cl-tag-picker-row.on {
   color: var(--cl-accent-ink);
@@ -1517,33 +1475,18 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid var(--cl-glass-border);
-  background: oklch(1 0 0 / 0.18);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
-  border-color: oklch(1 0 0 / 0.35);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.55),
-    inset 0 -1px 0 oklch(0 0 0 / 0.05);
+  border: 1px solid var(--cl-line);
+  background: transparent;
   color: var(--cl-ink-3);
   cursor: pointer;
   transition:
-    background 160ms,
-    color 160ms,
-    border-color 160ms;
+    background var(--cl-hover-ms) ease,
+    color var(--cl-hover-ms) ease,
+    border-color var(--cl-hover-ms) ease;
 }
 .cl-theme-toggle:hover {
-  color: var(--cl-ink);
-  background: oklch(1 0 0 / 0.32);
-  border-color: oklch(1 0 0 / 0.5);
-}
-:root[data-theme='dark'] .cl-theme-toggle {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-}
-:root[data-theme='dark'] .cl-theme-toggle:hover {
-  background: oklch(1 0 0 / 0.16);
-  border-color: oklch(1 0 0 / 0.22);
+  color: var(--cl-accent-ink);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-user {
   display: inline-flex;
@@ -2048,7 +1991,7 @@ body {
 }
 .cl-eyebrow-pin.is-pinned:hover {
   border-color: color-mix(in oklch, var(--cl-accent) 65%, transparent);
-  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
+  background: var(--cl-glass-hover-bg);
 }
 
 .cl-h-name {
@@ -2711,7 +2654,7 @@ body {
   border-top: 0;
 }
 .cl-export-option:hover {
-  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-export-option.is-active {
   background: var(--cl-accent-soft);
@@ -3013,7 +2956,7 @@ body {
   transition: background-color 0.12s ease;
 }
 .cl-src:hover {
-  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-src .n {
   flex: 0 0 auto;
@@ -3726,7 +3669,7 @@ body {
 }
 .cl-pill-narrate:hover {
   color: var(--cl-ink-2);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-pill-narrate[data-on] {
   color: var(--cl-accent-ink);
@@ -5534,7 +5477,7 @@ body {
   padding: 0;
 }
 .cl-hl-remove:hover {
-  background: rgba(193, 95, 60, 0.12);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 /* Command turn — niente shell glass extra, card command è già stand-alone */
@@ -16106,7 +16049,7 @@ select.cl-opt-input {
   color: var(--cl-accent);
 }
 .cl-srow-pin:hover {
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 .cl-srow .idx {
@@ -16227,7 +16170,7 @@ select.cl-opt-input {
 }
 .cl-srow-menu:hover,
 .cl-srow-menu.is-open {
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 .cl-srow-menu:focus-visible {
