@@ -868,6 +868,41 @@ tinta ma uno stato composto (background + border-mix + box-shadow): ripuntare
 il solo fondo lo desincronizzerebbe dal bordo accanto, quindi o si cambiano
 tutti e tre o non si tocca.
 
+**Il popover di ricerca è stato stretto senza togliergli informazioni.** Il
+recupero grosso non è nei padding ma nel **path**: ogni riga stampava
+`/Users/<utente>/Projects/…`, un prefisso identico su tutte le righe che, stando
+in testa, mandava sotto l'ellissi proprio la coda — l'unica parte che distingue
+una riga dall'altra (nello screenshot del bug si leggeva
+`/Users/giuliodigiamberardino/Projects/Cl…`). Ora passa da `homeRelativePath`
+(`shared/projectName.ts`, coperto in `test/project-formatters.test.ts`), che
+riconosce la home **per forma** — `/Users/<x>`, `/home/<x>`, `C:\Users\<x>` —
+perché nel renderer non c'è `os.homedir()` e questi path sono per costruzione
+quelli dell'utente corrente; `/Users/Shared` è escluso, è una cartella vera. Si
+applica **al render** (`.ppath`), non nei costruttori delle righe: così vale per
+tutte e cinque le famiglie con due call site invece di cinque, e una `detail`
+che è una descrizione e non un path attraversa la funzione intatta.
+
+**Due informazioni sono state tolte perché ridette altrove.** Una riga di
+sessione portava il **path del progetto**: identico per tutte le sessioni dello
+stesso progetto e troncato a `~/Projec…`, cioè zero informazione occupando la
+metà della riga. Al suo posto c'è il **nome** del progetto — di una sessione
+conta _in che progetto_ sta, e quello è il modo corto di dirlo. E il **tag di
+tipo** (`SESSION`, `MCP`, …) era il terzo posto in cui la stessa cosa veniva
+detta, dopo l'intestazione di sezione sotto cui la riga sta e la tile colorata
+del glifo alla sua sinistra: via il tag, il glifo resta a distinguere i tipi
+nelle sezioni miste (i pin). Le due colonne liberate vanno al titolo, che prima
+si troncava a `Kernel alarm bro…`.
+
+Il resto è ritmo verticale — header, filtri, sezioni, righe, piede tutti più
+stretti di 2–5px, con le gutter portate da 18 a 16px: valgono circa una riga e
+mezzo di risultati in più a parità di `max-height`. Due cose che erano rimaste
+indietro: la **tile del glifo** delle entity era l'ultimo chip di vetro
+modellato dell'app (fondo bianco 52%, bordo bianco, inset highlight, su una
+superficie già quasi bianca) e ora è la stessa tile della home globale — 20px,
+`1px solid var(--cl-line)`, fondo trasparente; e l'**highlight di riga** era
+un'altra lavata accento scritta a mano con override dark al seguito, ora è
+`--cl-glass-hover-bg`.
+
 **Chrome del progetto — design handoff _Sessions Varianti_ (rail 5a + contenuto 5b).**
 La navigazione di progetto non è più una fascia orizzontale di subtab: è una
 **colonna di lavoro** a sinistra (`ProjectRail`, 220px, `--cl-paper-2`, hairline

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { fmtDate, fmtModel, modelColor, buildModelMix } from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
-import { sharedPathPrefix } from '../src/components/project/shared/projectName';
+import { homeRelativePath, sharedPathPrefix } from '../src/components/project/shared/projectName';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
 // Robustness fixes from the #99 audit: pure date/scale formatters must not
@@ -219,5 +219,47 @@ describe('sharedPathPrefix — the part of a duplicate group that carries no sig
   it('handles Windows separators like projectDisplayName does', () => {
     const prefix = sharedPathPrefix(['C:\\Users\\x\\one\\proj', 'C:\\Users\\x\\two\\proj']);
     expect(prefix).toBe('C:\\Users\\x\\');
+  });
+});
+
+// La ricerca stampa il path di ogni riga in una colonna sola: il prefisso della
+// home è identico ovunque e spinge sotto l'ellissi la coda, che è l'unica parte
+// che distingue una riga dall'altra. Il riconoscimento è per forma, quindi le
+// due cose da tenere ferme sono che una home vera venga accorciata e che una
+// cartella che *sembra* una home non lo sia.
+describe('homeRelativePath', () => {
+  it('replaces a macOS home prefix with ~', () => {
+    expect(homeRelativePath('/Users/giulio/Projects/ClaudeLens')).toBe('~/Projects/ClaudeLens');
+  });
+
+  it('replaces a Linux home prefix with ~', () => {
+    expect(homeRelativePath('/home/giulio/src/app')).toBe('~/src/app');
+  });
+
+  it('replaces a Windows home prefix with ~', () => {
+    expect(homeRelativePath('C:\\Users\\giulio\\Projects\\app')).toBe('~\\Projects\\app');
+  });
+
+  it('collapses the home itself to a bare ~', () => {
+    expect(homeRelativePath('/Users/giulio')).toBe('~');
+  });
+
+  it('keeps a dotfile tail visible', () => {
+    expect(homeRelativePath('/Users/giulio/.claude/skills/foo')).toBe('~/.claude/skills/foo');
+  });
+
+  it('leaves /Users/Shared alone — a real macOS folder, not a home', () => {
+    expect(homeRelativePath('/Users/Shared/thing')).toBe('/Users/Shared/thing');
+  });
+
+  it('leaves paths outside any home untouched', () => {
+    expect(homeRelativePath('/private/var/folders/6z/abc/T/x')).toBe(
+      '/private/var/folders/6z/abc/T/x'
+    );
+    expect(homeRelativePath('/opt/tools')).toBe('/opt/tools');
+  });
+
+  it('passes a description through unchanged (rows may carry prose, not a path)', () => {
+    expect(homeRelativePath('Reads the local transcript')).toBe('Reads the local transcript');
   });
 });
