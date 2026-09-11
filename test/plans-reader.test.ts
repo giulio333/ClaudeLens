@@ -274,6 +274,8 @@ describe('ref cache — retained bytes', () => {
     // A `subarray` view of the tail would pin every byte just read, for the
     // life of the process — see the same fix in cost-tracker.parseSession.
     expect(getPlanRefStats()).toMatchObject({ cachedFiles: 1 });
-    expect(getPlanRefStats().retainedPartialBytes).toBeLessThan(64 * 1024);
+    // Bounded by the buffer pool the copy is served from, not by a literal —
+    // see the same assertion in `cost-tracker.test.ts` and #258.
+    expect(getPlanRefStats().retainedPartialBytes).toBeLessThanOrEqual(Buffer.poolSize);
   });
 });
