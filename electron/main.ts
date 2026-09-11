@@ -38,6 +38,7 @@ import {
   type SessionSource,
 } from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
+import { searchSessions, type SearchRequest } from './modules/session-search';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans, getUnlinkedPlans } from './modules/plans-reader';
@@ -1063,6 +1064,31 @@ ipcMain.handle('sessions:getArtifacts', async (_event, hash: string, filename: s
     const projectPath = projectDir(hash);
     const artifacts = await getSessionArtifacts(projectPath, TASKS_DIR, filename);
     return ok(artifacts);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Full-text search across the transcripts on disk (`modules/session-search.ts`).
+// The renderer supplies the query; everything that becomes a path is derived
+// here — `projectHash` is validated the same way every other project-scoped
+// handler validates it, and the roots are this process' own constants, so no
+// caller-supplied path reaches the filesystem.
+//
+// `resolveProjectPathForPlan` is reused deliberately: it is the resolver that
+// answers "the project's real cwd, or nothing" rather than handing back the
+// lossy inversion of the folder name. A search result names the project it
+// found; naming it with a guess is the mistake #224 was made of.
+ipcMain.handle('search:conversations', async (_event, request: unknown) => {
+  try {
+    const req = (request && typeof request === 'object' ? request : {}) as SearchRequest;
+    if (req.projectHash !== undefined) assertValidHash(req.projectHash);
+    const outcome = await searchSessions(
+      PROJECTS_DIR,
+      req,
+      hash => resolveProjectPathForPlan(hash) ?? undefined
+    );
+    return ok(outcome);
   } catch (e) {
     return err(e);
   }
