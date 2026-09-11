@@ -1,7 +1,7 @@
 import { memo, useState } from 'react';
 import type { CSSProperties, Ref } from 'react';
 import Markdown from '../../Markdown';
-import { ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC';
+import { AdvisorConsult, ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC';
 import {
   ProcessedMessage,
   ToolGroup,
@@ -456,6 +456,46 @@ export function ToolsHiddenBadge({
   );
 }
 
+/** Marker for an `advisor` consult: Claude asked a stronger reviewer model to
+ *  look at the conversation before carrying on. The reviewer answers Claude,
+ *  not the user, and Claude Code stores that answer encrypted
+ *  (`advisor_redacted_result`) — so there is nothing to expand. The marker
+ *  states that it happened, what it took and what it cost, and nothing more. */
+export function AdvisorBadge({ consult, dimmed }: { consult: AdvisorConsult; dimmed?: boolean }) {
+  return (
+    <div className="cl-advisor-mark" data-dim={dimmed || undefined}>
+      <AdvisorChip consult={consult} />
+    </div>
+  );
+}
+
+/** The pill itself — also worn in a turn header when the consult happens to
+ *  share its message with renderable content (the live stream delivers a whole
+ *  assistant message at once, where a stored transcript splits it into rows). */
+export function AdvisorChip({ consult }: { consult: AdvisorConsult }) {
+  const tokens =
+    consult.inputTokens != null && consult.outputTokens != null
+      ? consult.inputTokens + consult.outputTokens
+      : null;
+  const detail: string[] = [];
+  if (consult.model) detail.push(fmtModel(consult.model));
+  if (consult.durationSeconds != null) detail.push(fmtDuration(consult.durationSeconds * 1000));
+  if (tokens != null) detail.push(`${fmtTokens(tokens)} tok`);
+  return (
+    <span
+      className="cl-advisor-badge"
+      title={
+        tokens != null
+          ? `Claude consulted the advisor model — ${consult.inputTokens?.toLocaleString()} in / ${consult.outputTokens?.toLocaleString()} out tokens. The advice is stored encrypted and cannot be shown.`
+          : 'Claude consulted the advisor model. The advice is stored encrypted and cannot be shown.'
+      }
+    >
+      advisor
+      {detail.length > 0 && <span className="cl-advisor-detail">{detail.join(' · ')}</span>}
+    </span>
+  );
+}
+
 /** Row of file chips at the foot of a turn: one icon per file the (hidden) tools
  *  touched, tinted by file kind, with the file name on hover. */
 function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: number }) {
@@ -605,7 +645,10 @@ export const MessageBubble = memo(function MessageBubble({
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
-    showQuestions;
+    showQuestions ||
+    // An advisor consult sharing a message with hidden content: the header chip
+    // is then the only thing left to render, and dropping the turn would lose it.
+    !!processed.advisor;
 
   // Tool-only turns (no text/agents/questions) render nothing here: in minimal
   // mode ChatView collapses runs of them into a single <ToolsHiddenBadge>, and
@@ -767,6 +810,18 @@ export const MessageBubble = memo(function MessageBubble({
             </button>
           )}
           <span className="cl-turn-who">{roleLabel}</span>
+          {processed.advisor && <AdvisorChip consult={processed.advisor} />}
+          {msg.queued && (
+            // Typed while Claude was already working, and absorbed into that
+            // turn — so it was never a turn of its own, and the reply to it sits
+            // inside the turn above rather than below (#245).
+            <span
+              className="cl-turn-queued-badge"
+              title="Typed while Claude was working on the previous turn"
+            >
+              sent mid-turn
+            </span>
+          )}
           {timestamp &&
             !(showTools && textBlocks.length === 0 && thinkingBlocks.length === 0) &&
             !(showAgentStrip && textBlocks.length === 0) && (

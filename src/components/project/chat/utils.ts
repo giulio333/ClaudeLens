@@ -1,4 +1,5 @@
 import {
+  AdvisorConsult,
   ChatMessage,
   ChatContentBlock,
   MemoryTopic,
@@ -39,6 +40,9 @@ export type ProcessedMessage = {
   toolGroups: ToolGroup[]; // solo per messaggi assistant con tool_use
   command?: ClaudeSlashCommand; // se il messaggio è un Claude Code command (XML tag flow)
   notification?: TaskNotification; // set when the message is a harness task-notification
+  /** Set when the turn consulted the `advisor` tool. The advice itself is
+   *  encrypted in the transcript, so this is a marker, never content. */
+  advisor?: AdvisorConsult;
 };
 
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference';
@@ -166,13 +170,15 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
         Extract<ChatContentBlock, { type: 'text' }> | undefined;
       if (text) {
         command = parseClaudeSlashCommand(text.text) ?? undefined;
-        // A skill invocation is a slash command immediately followed by Claude
-        // Code's skill-expansion message — peek the next raw message to tell a
-        // skill apart from a plain built-in command.
+        // A skill invocation is a slash command whose skill-expansion message
+        // Claude Code injects right after. On a stored transcript that row is
+        // `isMeta` and the SDK read never returns it, so the main process hands
+        // us its base dir on the command message itself (`skillPath`, #246); the
+        // next-message peek stays for the live stream, which can still carry it.
         if (
           command &&
-          i + 1 < messages.length &&
-          SKILL_EXPANSION_RE.test(firstText(messages[i + 1]))
+          (msg.skillPath ||
+            (i + 1 < messages.length && SKILL_EXPANSION_RE.test(firstText(messages[i + 1]))))
         ) {
           command.isSkill = true;
         }
@@ -192,10 +198,21 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
       }));
     }
 
-    result.push({ msg, toolGroups, command });
+    // The advisor consult of this turn, if any. It stays on the message that
+    // holds it — an advisor-only message renders as a slim marker in the
+    // stream (see buildRenderItems), not as a turn of its own.
+    const advisor = msg.content.find(b => b.type === 'advisor') as AdvisorConsult | undefined;
+
+    result.push({ msg, toolGroups, command, advisor });
   }
 
   return result;
+}
+
+/** True when a turn holds nothing but its advisor consult — the usual shape,
+ *  since Claude Code persists the consult's two blocks as rows of their own. */
+export function isAdvisorOnly(p: ProcessedMessage): boolean {
+  return !!p.advisor && p.msg.content.every(b => b.type === 'advisor');
 }
 
 // Strip codici ANSI escape (es. \x1b[1m...\x1b[22m) usati dal terminale.
@@ -385,7 +402,11 @@ export type MinimapItem = TurnDescriptor & { n: number; time: string };
  *  — a standalone "tools hidden" badge. */
 export type RenderItem =
   | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
-  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] };
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
+  /** An advisor consult, drawn as a slim marker at its position in the stream
+   *  (both density modes): there is no advice to read, so it never earns a
+   *  bubble. */
+  | { kind: 'advisor'; key: string; consult: AdvisorConsult };
 
 /** The per-type counts that drive the filter chips in the control pill. */
 export type TurnFilterCounts = {
@@ -504,7 +525,11 @@ export function describeTurn(
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
-    showQuestions;
+    showQuestions ||
+    // Mirrors MessageBubble: a consult riding a turn whose own content is
+    // hidden still renders — as the header chip (an advisor-ONLY message never
+    // reaches here, it becomes a marker item instead).
+    !!p.advisor;
   // Minimal mode collapses a tool-only turn into a single badge; it's not a
   // standalone message, so the minimap skips it — but it still counts as visible.
   const toolsOnly = !hasVisibleContent && !showTools && hasTools;
@@ -766,19 +791,32 @@ export function skillHasViewableOutput(group: ToolGroup | undefined): boolean {
   return !isSkillLaunchOutput(content);
 }
 
+/**
+ * Resolver from an invoked skill name to its definition. Plain names come from
+ * the project/global registry; a plugin skill is invoked namespaced —
+ * `${plugin.name}:${skill.name}` (e.g. `document-skills:pdf`) — and never
+ * matches a plain registry name, so it resolves against the installed plugins.
+ *
+ * Shared so the footer dock and the turn's own card cannot disagree on what a
+ * name means: the card used to index the registry alone, which is why a plugin
+ * skill was listed in the dock and still drawn as a plain command.
+ */
+export function buildSkillIndex(
+  skills: Skill[] = [],
+  plugins: InstalledPlugin[] = []
+): (name: string) => Skill | null {
+  const byName = new Map(skills.map(s => [s.name, s]));
+  const byNamespaced = new Map<string, Skill>();
+  for (const pl of plugins) for (const s of pl.skills) byNamespaced.set(`${pl.name}:${s.name}`, s);
+  return (name: string) => byName.get(name) ?? byNamespaced.get(name) ?? null;
+}
+
 export function correlateSessionSkills(
   processed: ProcessedMessage[],
   skills: Skill[],
   plugins: InstalledPlugin[] = []
 ): SessionSkill[] {
-  const byName = new Map(skills.map(s => [s.name, s]));
-  // Plugin skills are invoked namespaced — `${plugin.name}:${skill.name}` (e.g.
-  // `document-skills:pdf`) — so they never match a plain registry name; resolve
-  // them against the installed plugins instead.
-  const byNamespaced = new Map<string, Skill>();
-  for (const pl of plugins) for (const s of pl.skills) byNamespaced.set(`${pl.name}:${s.name}`, s);
-  const resolve = (name: string): Skill | null =>
-    byName.get(name) ?? byNamespaced.get(name) ?? null;
+  const resolve = buildSkillIndex(skills, plugins);
 
   const out: SessionSkill[] = [];
   processed.forEach((p, idx) => {
@@ -1258,6 +1296,16 @@ export function buildRenderItems(
     run = null;
   };
   descriptors.forEach((d, idx) => {
+    const p = processed[idx];
+    const consult = p?.advisor;
+    if (consult && isAdvisorOnly(p)) {
+      // Never folded into a neighbouring turn: the consult sits between two
+      // halves of the same assistant message, and in minimal mode both of them
+      // can collapse — the marker would vanish with them.
+      flush();
+      items.push({ kind: 'advisor', key: `advisor-${idx}`, consult });
+      return;
+    }
     if (d.toolsOnly) {
       // toolsOnly guarantees the turn holds only standard tools (no question/agent).
       const groups = processed[idx].toolGroups;

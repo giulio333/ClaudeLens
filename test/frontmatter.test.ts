@@ -69,3 +69,67 @@ describe('frontmatter parsing under the YAML 1.2 core schema', () => {
     expect(getNumber(frontmatter, 'b')).toBe(8);
   });
 });
+
+// Skill and agent files are hand-written, and an unquoted `: ` inside a long
+// description is the mistake authors actually make. js-yaml reads it as a
+// nested mapping and throws — which used to cost the file every field it had,
+// so ClaudeLens showed a skill with no description at all while Claude Code
+// showed it fine. These pin the line-by-line recovery.
+describe('frontmatter recovery when js-yaml refuses the block', () => {
+  it('recovers a description carrying an unquoted colon-space, and the fields around it', () => {
+    const { frontmatter, body } = parseFrontmatter(
+      '---\n' +
+        'name: sara-legacy-db\n' +
+        'description: Interroga il database del Legacy. Le modifiche controllate: la lettura è libera, la scrittura no.\n' +
+        'model: sonnet\n' +
+        '---\n# Database\n'
+    );
+    expect(getString(frontmatter, 'name')).toBe('sara-legacy-db');
+    expect(getString(frontmatter, 'description')).toBe(
+      'Interroga il database del Legacy. Le modifiche controllate: la lettura è libera, la scrittura no.'
+    );
+    expect(getString(frontmatter, 'model')).toBe('sonnet');
+    expect(body).toBe('# Database\n');
+  });
+
+  it('keeps the type of the lines that are valid on their own', () => {
+    const { frontmatter } = parseFrontmatter(
+      '---\n' +
+        'background: true\n' +
+        'max-turns: 7\n' +
+        'paths: [src/api/**, src/db/**]\n' +
+        'quoted: "a: b"\n' +
+        'broken: Use when: the user asks\n' +
+        '---\nbody'
+    );
+    expect(getBoolean(frontmatter, 'background')).toBe(true);
+    expect(getNumber(frontmatter, 'max-turns')).toBe(7);
+    expect(getStringArray(frontmatter, 'paths')).toEqual(['src/api/**', 'src/db/**']);
+    expect(getString(frontmatter, 'quoted')).toBe('a: b');
+    expect(getString(frontmatter, 'broken')).toBe('Use when: the user asks');
+  });
+
+  it('recovers a block list, and drops a bare key no item followed', () => {
+    const { frontmatter } = parseFrontmatter(
+      '---\n' +
+        'allowed-tools:\n' +
+        '  - Read\n' +
+        '  - Bash\n' +
+        'empty:\n' +
+        'description: Serve a questo: leggere\n' +
+        '---\nbody'
+    );
+    expect(getStringArray(frontmatter, 'allowed-tools')).toEqual(['Read', 'Bash']);
+    expect(frontmatter).not.toHaveProperty('empty');
+    expect(getString(frontmatter, 'description')).toBe('Serve a questo: leggere');
+  });
+
+  it('drops only the field whose value opens a structure it cannot close', () => {
+    const { frontmatter } = parseFrontmatter(
+      '---\nname: api\npaths: [src/**\ndescription: Regole: quelle di sempre\n---\nbody'
+    );
+    expect(getString(frontmatter, 'name')).toBe('api');
+    expect(frontmatter).not.toHaveProperty('paths');
+    expect(getString(frontmatter, 'description')).toBe('Regole: quelle di sempre');
+  });
+});

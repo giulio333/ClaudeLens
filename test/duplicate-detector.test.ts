@@ -63,4 +63,35 @@ describe('detectDuplicateProjects', () => {
     session('-Users-me-solo', 'a.jsonl', '/Users/me/solo', 'sessions');
     expect(detectDuplicateProjects(projectsDir)).toEqual([]);
   });
+
+  it('non scambia per duplicati i git worktree di un repo', () => {
+    // Una sessione aperta nel repo e poi spostata in un worktree scrive due cwd
+    // nello stesso transcript. Finché si prendeva il primo, tutte e tre le
+    // cartelle risolvevano al repo padre: stesso basename, stesso path, un
+    // gruppo di tre "duplicati" con la riga identica ripetuta — e un merge che
+    // avrebbe fuso lavoro di branch diversi. Il cwd giusto è quello che
+    // ricodifica nel nome della cartella che lo contiene.
+    const parent = '/Users/me/repo';
+    session('-Users-me-repo', 'main.jsonl', parent, 'root');
+    for (const branch of ['fix-a', 'fix-b']) {
+      const dir = join(projectsDir, `-Users-me-repo--claude-worktrees-${branch}`);
+      mkdirSync(dir, { recursive: true });
+      const file = join(dir, 'wt.jsonl');
+      writeFileSync(
+        file,
+        [
+          JSON.stringify({ type: 'user', cwd: parent, message: { content: 'hi' } }),
+          JSON.stringify({
+            type: 'user',
+            cwd: `${parent}/.claude/worktrees/${branch}`,
+            message: { content: 'hi' },
+          }),
+        ].join('\n'),
+        'utf-8'
+      );
+      utimesSync(file, new Date(1_700_000_000_000), new Date(1_700_000_000_000));
+    }
+
+    expect(detectDuplicateProjects(projectsDir)).toEqual([]);
+  });
 });

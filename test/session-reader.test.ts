@@ -341,3 +341,104 @@ describe('findSessionFile', () => {
     expect(await findSessionFile(dir, 'missing.jsonl')).toBeNull();
   });
 });
+
+describe('advisor consults', () => {
+  // Shape taken from a real transcript: Claude Code persists a consult as two
+  // rows of ONE assistant message — a `server_tool_use` named `advisor` and an
+  // `advisor_tool_result` whose payload is encrypted — and repeats the whole
+  // message usage, `iterations` included, on every row.
+  function advisorRows(opts: { advisorIterations: number }): string[] {
+    const usage = {
+      input_tokens: 4,
+      output_tokens: 305,
+      iterations: [
+        { type: 'message', input_tokens: 2, output_tokens: 160 },
+        ...Array.from({ length: opts.advisorIterations }, () => ({
+          type: 'advisor_message',
+          model: 'claude-opus-5',
+          input_tokens: 60059,
+          output_tokens: 4085,
+        })),
+      ],
+    };
+    return [
+      line({
+        type: 'assistant',
+        uuid: 'a1',
+        timestamp: '2026-09-08T21:18:15.502Z',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-5',
+          usage,
+          content: [{ type: 'server_tool_use', id: 'srvtoolu_1', name: 'advisor', input: {} }],
+        },
+      }),
+      line({
+        type: 'assistant',
+        uuid: 'a2',
+        timestamp: '2026-09-08T21:19:17.834Z',
+        message: {
+          role: 'assistant',
+          model: 'claude-opus-5',
+          usage,
+          content: [
+            {
+              type: 'advisor_tool_result',
+              tool_use_id: 'srvtoolu_1',
+              content: { type: 'advisor_redacted_result', encrypted_content: 'EqYWCioIExgC…' },
+            },
+          ],
+        },
+      }),
+    ];
+  }
+
+  it('reports one consult with the reviewer model, its spend and its wall time', () => {
+    const msgs = readChatSession(writeJsonl('s.jsonl', advisorRows({ advisorIterations: 1 })));
+
+    // The opening row has nothing to render, so only the result becomes a message.
+    expect(msgs).toHaveLength(1);
+    expect(msgs[0].content).toEqual([
+      {
+        type: 'advisor',
+        id: 'srvtoolu_1',
+        model: 'claude-opus-5',
+        inputTokens: 60059,
+        outputTokens: 4085,
+        durationSeconds: 62,
+      },
+    ]);
+  });
+
+  it('leaves the spend off when one message holds two consults', () => {
+    // The usage object is identical on every row, so with two `advisor_message`
+    // iterations there is no way to say which consult spent what — reporting the
+    // pair's total on each chip would be a lie.
+    const msgs = readChatSession(writeJsonl('s.jsonl', advisorRows({ advisorIterations: 2 })));
+
+    expect(msgs[0].content).toEqual([{ type: 'advisor', id: 'srvtoolu_1', durationSeconds: 62 }]);
+  });
+
+  it('ignores a server tool that is not the advisor', () => {
+    // `server_tool_use` also records web search/fetch: those must not be read as
+    // consults, and their own result blocks are not advisor results.
+    const msgs = readChatSession(
+      writeJsonl('s.jsonl', [
+        line({
+          type: 'assistant',
+          uuid: 'a1',
+          timestamp: '2026-09-08T21:18:15.502Z',
+          message: {
+            role: 'assistant',
+            content: [
+              { type: 'server_tool_use', id: 'srvtoolu_9', name: 'web_search', input: { q: 'x' } },
+              { type: 'text', text: 'searching' },
+            ],
+          },
+        }),
+      ])
+    );
+
+    expect(msgs[0].content).toEqual([{ type: 'text', text: 'searching' }]);
+  });
+});
