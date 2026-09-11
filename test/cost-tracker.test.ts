@@ -23,8 +23,10 @@ const PRICE = {
   opusLegacy: { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
   haiku: { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
   fable: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
-  // Sonnet 5 introductory pricing, in effect through 2026-08-31.
-  sonnet5Intro: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
+  // Fable/Mythos 5.1: same tier, but the cache read is 0.025x the input price
+  // (the only models where it is not 0.1x).
+  fable51: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+  sonnet5: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
 };
 
 function expectedCost(
@@ -1052,6 +1054,19 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(await millionInput('claude-mythos-5')).toBeCloseTo(10, 10);
   });
 
+  // Fable 5.1 and Mythos 5.1 are the only models whose cache read is 0.025x the
+  // input price instead of 0.1x. Priced as Fable 5 they were charged 4x for
+  // every cache read — most of the input bill of an agentic session.
+  it("prices the 5.1 cache read at 0.025x, not at Fable 5's 0.1x", () => {
+    expect(calculateCacheSavings(1_000_000, 'claude-fable-5-1')).toBeCloseTo(
+      PRICE.fable51.input - PRICE.fable51.cacheRead,
+      6
+    );
+    expect(calculateCacheSavings(1_000_000, 'claude-mythos-5-1')).toBeCloseTo(9.75, 6);
+    // and Fable 5 keeps its own, dearer rate
+    expect(calculateCacheSavings(1_000_000, 'claude-fable-5')).toBeCloseTo(9, 6);
+  });
+
   it('anchors the fuzzy family fallbacks on the current generation', async () => {
     // An unlisted Opus must not inherit the retired model's rate.
     expect(await millionInput('some-opus-vNext')).toBeCloseTo(PRICE.opus.input, 10);
@@ -1066,28 +1081,31 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(await millionInput('claude-sonnet-4-5-20250929')).toBeCloseTo(3, 10);
   });
 
-  it('prices Sonnet 5 at the rate in force when the session ran', async () => {
-    // Introductory pricing through 2026-08-31, standard from 2026-09-01.
+  // The introductory $2/$10 became the standard price: the increase to $3/$15
+  // announced for 2026-09-01 was called off. This table carried it anyway, and
+  // for the week after that date every Sonnet 5 session was billed at 1.5x.
+  it('prices Sonnet 5 at $2/$10 on both sides of the cancelled 2026-09-01 rise', async () => {
     expect(await millionInput('claude-sonnet-5', '2026-08-15T10:00:00.000Z')).toBeCloseTo(2, 10);
-    expect(await millionInput('claude-sonnet-5', '2026-09-01T00:00:00.000Z')).toBeCloseTo(3, 10);
-    expect(await millionInput('claude-sonnet-5', '2026-12-01T10:00:00.000Z')).toBeCloseTo(3, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-09-01T00:00:00.000Z')).toBeCloseTo(2, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-12-01T10:00:00.000Z')).toBeCloseTo(2, 10);
   });
 
   it('applies the scheduled rate to cache savings too', () => {
-    // $2.00 input - $0.20 cache read = $1.80 / 1M during the introductory window.
+    // $2.00 input - $0.20 cache read = $1.80 / 1M, whenever the session ran.
     expect(
       calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-08-15T10:00:00.000Z')
     ).toBeCloseTo(1.8, 6);
-    // $3.00 - $0.30 = $2.70 afterwards.
     expect(
       calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-10-01T10:00:00.000Z')
-    ).toBeCloseTo(2.7, 6);
+    ).toBeCloseTo(1.8, 6);
   });
 
   it('reports scheduled models as exactly priced, not estimates', () => {
     expect(isModelPriced('claude-sonnet-5')).toBe(true);
     expect(isModelPriced('claude-opus-5')).toBe(true);
     expect(isModelPriced('claude-fable-5')).toBe(true);
+    expect(isModelPriced('claude-fable-5-1')).toBe(true);
+    expect(isModelPriced('claude-mythos-5-1')).toBe(true);
     expect(getPricingMeta().knownModels).toContain('claude-sonnet-5');
   });
 });

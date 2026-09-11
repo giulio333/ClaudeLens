@@ -71,7 +71,7 @@ export type AgentColor = (typeof AGENT_COLORS)[number];
 // rate (2x) is deliberately not modelled: a transcript records a single
 // `cache_creation_input_tokens` figure and does not say which TTL produced it,
 // so picking the shorter — and far more common — one is the honest default.
-export const PRICING_LAST_UPDATED = '2026-08-08';
+export const PRICING_LAST_UPDATED = '2026-09-07';
 
 interface ModelPricing {
   input: number;
@@ -91,7 +91,10 @@ const PRICING: Record<string, ModelPricing> = {
   'claude-3-5-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20240620': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  // Sonnet 4.x  (Sonnet 5 is scheduled — see SCHEDULED below)
+  // Sonnet 3.7 — retired; a transcript can still carry it
+  'claude-3-7-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-3-7-sonnet-20250219': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  // Sonnet 4.x  (Sonnet 5 is in SCHEDULED below — one rate, see the note there)
   'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
@@ -109,6 +112,12 @@ const PRICING: Record<string, ModelPricing> = {
   // land on the conservative Sonnet default at a third of their real price.
   'claude-fable-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
   'claude-mythos-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
+  // Fable 5.1 / Mythos 5.1 — same $10/$50 tier as 5, but the ONE model pair
+  // whose cache read is not 0.1x the input price: it is 0.025x ($0.25/MTok).
+  // Priced by the family fallback they would be charged 4x for every cache
+  // read, which on an agentic session is most of the input bill.
+  'claude-fable-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+  'claude-mythos-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
 };
 
 /** A published rate that changes on a date. `from` is the first day (UTC,
@@ -118,13 +127,20 @@ interface PriceSchedule {
   prices: ModelPricing;
 }
 
-// Sonnet 5 launched on introductory pricing that expires. A single static rate
-// would misprice one side of the cutover, and this app reconstructs HISTORICAL
-// cost — so each session is priced at the rate in force when it ran.
+// A dated rate change, for when one is actually published: this app
+// reconstructs HISTORICAL cost, so each session is priced at the rate in force
+// when it ran rather than at today's.
+//
+// Sonnet 5 is the standing example and the cautionary one. It launched on
+// introductory pricing announced as expiring on 2026-08-31, and this table
+// carried the scheduled rise to $3/$15 on 2026-09-01 — which never happened:
+// the pricing page now states the $2/$10 rate "is now the standard price. The
+// previously scheduled increase ... will not occur." An announced future rate
+// is not a fact until the day it takes effect, so a scheduled entry gets
+// re-verified against the pricing page BEFORE its `from` date arrives; the one
+// left here billed every Sonnet 5 session at 1.5x for a week.
 const SCHEDULED: Record<string, PriceSchedule[]> = {
   'claude-sonnet-5': [
-    { from: '2026-09-01', prices: { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 } },
-    // Introductory pricing, in effect through 2026-08-31.
     { from: '0000-01-01', prices: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 } },
   ],
 };
@@ -169,11 +185,14 @@ function getPricing(model: string | undefined, at?: string): ModelPricing {
   const m = model.toLowerCase();
   if (m.includes('haiku')) return PRICING['claude-haiku-4-5'];
   if (m.includes('opus')) return PRICING['claude-opus-5'];
-  if (m.includes('fable')) return PRICING['claude-fable-5'];
-  if (m.includes('mythos')) return PRICING['claude-mythos-5'];
-  if (m.includes('sonnet')) return PRICING['claude-sonnet-4-6'];
+  if (m.includes('fable')) return PRICING['claude-fable-5-1'];
+  if (m.includes('mythos')) return PRICING['claude-mythos-5-1'];
+  if (m.includes('sonnet'))
+    return scheduledPricing('claude-sonnet-5', at) ?? PRICING['claude-sonnet-4-6'];
 
-  // Default conservativo: Sonnet
+  // Default conservativo: Sonnet — deliberately the 4.6 rate and NOT the family
+  // anchor above. An id with no family word tells us nothing, and the honest
+  // way to be wrong about a model we cannot name is upwards.
   return PRICING['claude-sonnet-4-6'];
 }
 
