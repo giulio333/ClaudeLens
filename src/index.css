@@ -43,6 +43,9 @@
   --cl-violet-ink: oklch(0.34 0.17 305);
   --cl-cyan: oklch(0.62 0.14 200);
   --cl-haiku: oklch(0.58 0.18 175);
+  /* data-encoding hue for the Fable family, same category as --cl-violet /
+     --cl-haiku above (which model produced this slice), not a brand accent */
+  --cl-fable: oklch(0.55 0.2 355);
   --cl-danger: oklch(0.58 0.21 25);
   --cl-danger-soft: oklch(0.94 0.04 25);
   --cl-warn: oklch(0.7 0.15 75);
@@ -100,6 +103,7 @@
   --cl-violet-ink: oklch(0.84 0.12 305);
   --cl-cyan: oklch(0.7 0.14 200);
   --cl-haiku: oklch(0.7 0.16 175);
+  --cl-fable: oklch(0.72 0.17 355);
   --cl-danger: oklch(0.68 0.19 25);
   --cl-danger-soft: oklch(0.33 0.09 25);
   --cl-warn: oklch(0.78 0.14 75);
@@ -146,6 +150,16 @@
    pairs translucency with a soft specular edge so flat editorial rows
    pick up a subtle liquid shimmer when interacted with. */
 :root {
+  /* One answer to "the pointer is over me": the accent-soft tint below, this
+     duration, and — where the element is text — `--cl-accent-ink`. The top bar
+     used to hand-roll all three per control. */
+  --cl-hover-ms: 120ms;
+  /* Two families, deliberately: `--cl-hover-bg` is the neutral wash of dense
+     list surfaces (menu items, tag rows, source chips), `--cl-glass-hover-bg`
+     the accent one of actionable controls. Both were hand-rolled per site —
+     ink at 4% here, 5% there, `--cl-paper-2` elsewhere with a dark override to
+     undo it, and one `rgba(193, 95, 60, 0.12)` that was `#C15F3C` typed out. */
+  --cl-hover-bg: color-mix(in oklch, var(--cl-ink) 5%, transparent);
   --cl-glass-hover-bg: color-mix(in oklch, var(--cl-accent-soft) 78%, transparent);
   --cl-glass-hover-edge: oklch(1 0 0 / 0.45);
   --cl-glass-sheen-top: oklch(1 0 0 / 0.55);
@@ -155,6 +169,7 @@
   --cl-glass-edge-side: oklch(1 0 0 / 0.25);
 }
 :root[data-theme='dark'] {
+  --cl-hover-bg: oklch(1 0 0 / 0.07);
   --cl-glass-hover-bg: color-mix(in oklch, var(--cl-accent-soft) 60%, transparent);
   --cl-glass-hover-edge: oklch(1 0 0 / 0.08);
   --cl-glass-sheen-top: oklch(1 0 0 / 0.14);
@@ -162,6 +177,106 @@
   --cl-glass-sheen-bot: oklch(0 0 0 / 0.08);
   --cl-glass-edge-top: oklch(1 0 0 / 0.18);
   --cl-glass-edge-side: oklch(1 0 0 / 0.06);
+}
+
+/* ── Session colour (`/color`) ──
+   The eight names Claude Code's own `/color` accepts. These are the only hues
+   in the app outside the brand 40°, and deliberately so: the colour is the
+   USER's label on a session — what tells two concurrent runs apart at a glance
+   — so rendering a blue session in terracotta would be rendering something
+   else.
+   They are sized for TEXT, not for a dot: the sessions list wears the colour on
+   its row ordinal, so every one of them clears 4.5:1 on its own ground (worst
+   case light 4.64 — yellow, which is why it reads as amber and not as yellow;
+   worst case dark 6.82). Same pairing as every other token here: light dark and
+   saturated, dark lifted in L with chroma eased, hues untouched. */
+:root {
+  --cl-agent-red: oklch(0.52 0.18 27);
+  --cl-agent-orange: oklch(0.54 0.15 62);
+  --cl-agent-yellow: oklch(0.56 0.14 92);
+  --cl-agent-green: oklch(0.52 0.15 148);
+  --cl-agent-cyan: oklch(0.5 0.12 210);
+  --cl-agent-blue: oklch(0.52 0.16 258);
+  --cl-agent-purple: oklch(0.52 0.17 300);
+  --cl-agent-pink: oklch(0.54 0.18 350);
+}
+:root[data-theme='dark'] {
+  --cl-agent-red: oklch(0.74 0.16 27);
+  --cl-agent-orange: oklch(0.76 0.14 62);
+  --cl-agent-yellow: oklch(0.82 0.14 92);
+  --cl-agent-green: oklch(0.76 0.14 148);
+  --cl-agent-cyan: oklch(0.78 0.11 210);
+  --cl-agent-blue: oklch(0.72 0.14 258);
+  --cl-agent-purple: oklch(0.72 0.16 300);
+  --cl-agent-pink: oklch(0.75 0.16 350);
+}
+.cl-scolor {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-block;
+  /* No colour of its own: the name class below supplies one, so a value that
+     never matched renders an invisible 7px gap instead of a black dot. */
+  background: transparent;
+}
+.cl-scolor.red {
+  background: var(--cl-agent-red);
+}
+.cl-scolor.orange {
+  background: var(--cl-agent-orange);
+}
+.cl-scolor.yellow {
+  background: var(--cl-agent-yellow);
+}
+.cl-scolor.green {
+  background: var(--cl-agent-green);
+}
+.cl-scolor.cyan {
+  background: var(--cl-agent-cyan);
+}
+.cl-scolor.blue {
+  background: var(--cl-agent-blue);
+}
+.cl-scolor.purple {
+  background: var(--cl-agent-purple);
+}
+.cl-scolor.pink {
+  background: var(--cl-agent-pink);
+}
+/* On a sessions row the colour is worn by the ROW ORDINAL, not by a dot of its
+   own. The row already carries two dots — the green LIVE one and the model's —
+   and a third beside them read as a traffic light, three marks competing to say
+   three unrelated things. The ordinal is mono, decorative, and otherwise
+   `--cl-ink-4`: tinting it adds no geometry at all to a list whose whole
+   language is hairlines, and the number is exactly where the eye enters the
+   row. It outranks the pinned ordinal's accent — pinned is still said by the
+   filled pin glyph at the head of the row, while the colour is the only thing
+   that says WHICH session this is. */
+.cl-srow .idx.is-coloured.red {
+  color: var(--cl-agent-red);
+}
+.cl-srow .idx.is-coloured.orange {
+  color: var(--cl-agent-orange);
+}
+.cl-srow .idx.is-coloured.yellow {
+  color: var(--cl-agent-yellow);
+}
+.cl-srow .idx.is-coloured.green {
+  color: var(--cl-agent-green);
+}
+.cl-srow .idx.is-coloured.cyan {
+  color: var(--cl-agent-cyan);
+}
+.cl-srow .idx.is-coloured.blue {
+  color: var(--cl-agent-blue);
+}
+.cl-srow .idx.is-coloured.purple {
+  color: var(--cl-agent-purple);
+}
+.cl-srow .idx.is-coloured.pink {
+  color: var(--cl-agent-pink);
 }
 
 * {
@@ -302,31 +417,26 @@ body {
 }
 
 /* ── Top bar ── */
+/* A flat surface, not a glass one. The bar used to composite white at 42% over
+   `.cl-app`, which is `--cl-paper` — white over white — then blur and saturate
+   a window that is opaque and has nothing scrolling underneath (the header is a
+   flex sibling of the scroll area, not a layer over it). What we actually saw
+   was the inset bottom shadow doing the job of a border, next to a real
+   `border-bottom` that was pure white and therefore invisible. So: the paper it
+   already was, and one honest hairline. */
 .cl-bar {
   display: grid;
   grid-template-columns: auto auto 1fr auto;
-  align-items: center;
+  align-items: stretch;
   gap: 28px;
   padding: 0 28px 0 88px;
   height: 52px;
   flex-shrink: 0;
-  border-bottom: 1px solid oklch(1 0 0 / 0.55);
+  background: var(--cl-paper);
+  border-bottom: 1px solid var(--cl-line);
   position: relative;
   z-index: 30;
-  background: oklch(1 0 0 / 0.42);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  backdrop-filter: blur(30px) saturate(200%);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.75),
-    inset 0 -1px 0 oklch(0.3 0.02 80 / 0.1);
   -webkit-app-region: drag;
-}
-:root[data-theme='dark'] .cl-bar {
-  background: oklch(0.22 0.008 75 / 0.5);
-  border-bottom-color: oklch(1 0 0 / 0.08);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.1),
-    inset 0 -1px 0 oklch(0 0 0 / 0.35);
 }
 .cl-bar button,
 .cl-bar a,
@@ -337,11 +447,16 @@ body {
 .cl-brand {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 10px;
   font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.015em;
   color: var(--cl-ink);
+  transition: color var(--cl-hover-ms) ease;
+}
+.cl-brand:hover {
+  color: var(--cl-accent-ink);
 }
 .cl-brand-mark {
   width: 18px;
@@ -351,77 +466,46 @@ body {
 }
 .cl-scope {
   display: inline-flex;
+  align-items: stretch;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.1em;
   text-transform: uppercase;
 }
 .cl-scope button {
-  position: relative;
+  display: inline-flex;
+  align-items: center;
   background: transparent;
   border: none;
   cursor: pointer;
-  padding: 16px 14px 14px;
+  padding: 0 14px;
   color: var(--cl-ink-4);
   font: inherit;
   letter-spacing: inherit;
   text-transform: inherit;
   border-bottom: 2px solid transparent;
   transition:
-    color 240ms cubic-bezier(0.4, 0, 0.2, 1),
-    border-bottom-color 120ms;
+    color var(--cl-hover-ms) ease,
+    border-bottom-color var(--cl-hover-ms) ease;
 }
-.cl-scope button::before {
-  content: '';
-  position: absolute;
-  inset: 7px 4px 9px;
-  border-radius: 999px;
-  background: radial-gradient(
-    120% 140% at 50% 0%,
-    oklch(1 0 0 / 0.85) 0%,
-    oklch(1 0 0 / 0.35) 60%,
-    oklch(1 0 0 / 0.2) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.85),
-    inset 0 -1px 0 oklch(0.3 0.04 40 / 0.12),
-    inset 0 0 0 1px oklch(1 0 0 / 0.45),
-    0 6px 16px -8px oklch(0.3 0.08 40 / 0.3);
-  opacity: 0;
-  transform: scale(0.92);
-  transition:
-    opacity 320ms cubic-bezier(0.4, 0, 0.2, 1),
-    transform 360ms cubic-bezier(0.34, 1.3, 0.64, 1);
-  pointer-events: none;
-  z-index: -1;
-}
-.cl-scope button:hover::before {
-  opacity: 1;
-  transform: scale(1);
-}
+/* Hover anticipates the active tab rather than inventing a shape of its own:
+   the same underline, at a third of the ink. It used to be a modelled-glass
+   pill — white radial gradient, inner rim, drop shadow, a 360ms spring
+   overshoot — which is a second vocabulary for "where the pointer is" next to
+   the underline's "where you are", and the louder of the two. */
 .cl-scope button:hover {
   color: var(--cl-ink);
+  border-bottom-color: color-mix(in oklch, var(--cl-accent) 35%, transparent);
 }
 .cl-scope button.on {
   color: var(--cl-ink);
   border-bottom-color: var(--cl-accent);
 }
-:root[data-theme='dark'] .cl-scope button::before {
-  background: radial-gradient(
-    120% 140% at 50% 0%,
-    oklch(1 0 0 / 0.22) 0%,
-    oklch(1 0 0 / 0.08) 60%,
-    oklch(1 0 0 / 0.04) 100%
-  );
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.2),
-    inset 0 0 0 1px oklch(1 0 0 / 0.1),
-    0 6px 16px -8px oklch(0.55 0.18 40 / 0.3);
-}
 
 .cl-bar-right {
   display: inline-flex;
   align-items: center;
+  align-self: center;
   gap: 12px;
 }
 
@@ -436,10 +520,8 @@ body {
   height: 28px;
   padding: 0 8px 0 11px;
   border-radius: var(--cl-r-pill);
-  border: 1px solid oklch(1 0 0 / 0.35);
-  background: oklch(1 0 0 / 0.18);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
+  border: 1px solid var(--cl-line);
+  background: transparent;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -447,13 +529,9 @@ body {
   color: var(--cl-ink-3);
   cursor: pointer;
   transition:
-    background 160ms,
-    color 160ms,
-    border-color 160ms,
-    box-shadow 200ms;
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.55),
-    inset 0 -1px 0 oklch(0 0 0 / 0.05);
+    background var(--cl-hover-ms) ease,
+    color var(--cl-hover-ms) ease,
+    border-color var(--cl-hover-ms) ease;
 }
 .cl-lens-btn svg {
   width: 14px;
@@ -478,10 +556,12 @@ body {
   border-radius: 5px;
   flex: none;
 }
+/* Hover tints, open outlines. The two used to be near-identical — hover
+   hand-rolled the accent wash *and* a terracotta border, which is the `.on`
+   state's own signal — so the pill looked open whenever the pointer crossed it. */
 .cl-lens-btn:hover {
   color: var(--cl-accent-ink);
-  background: oklch(0.95 0.04 40 / 0.55);
-  border-color: oklch(0.55 0.18 40 / 0.4);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-lens-btn:hover .ph {
   color: var(--cl-accent-ink);
@@ -511,15 +591,6 @@ body {
   .cl-lens-btn .kbd {
     display: none;
   }
-}
-:root[data-theme='dark'] .cl-lens-btn {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-}
-:root[data-theme='dark'] .cl-lens-btn:hover {
-  background: oklch(0.55 0.18 40 / 0.3);
-  border-color: oklch(0.55 0.18 40 / 0.4);
-  color: var(--cl-ink);
 }
 
 /* ── SEARCH POPOVER · editorial, anchored top-right ── */
@@ -554,7 +625,7 @@ body {
   display: flex;
   align-items: center;
   gap: 12px;
-  padding: 16px 18px 14px;
+  padding: 13px 16px 12px;
   border-bottom: 1px solid oklch(0.2 0.02 60 / 0.08);
 }
 :root[data-theme='dark'] .cl-search-row {
@@ -598,7 +669,7 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 9px 10px;
+  padding: 7px 10px;
   border-bottom: 1px solid oklch(0.2 0.02 60 / 0.07);
   overflow-x: auto;
 }
@@ -633,15 +704,12 @@ body {
 }
 .cl-search-filters button:hover {
   color: var(--cl-ink);
-  background: oklch(0.2 0.02 60 / 0.045);
+  background: var(--cl-hover-bg);
 }
 .cl-search-filters button.on {
   color: var(--cl-accent-ink);
   background: oklch(0.95 0.04 40 / 0.36);
   border-color: oklch(0.55 0.18 40 / 0.22);
-}
-:root[data-theme='dark'] .cl-search-filters button:hover {
-  background: oklch(1 0 0 / 0.06);
 }
 :root[data-theme='dark'] .cl-search-filters button.on {
   background: oklch(0.55 0.18 40 / 0.18);
@@ -653,11 +721,11 @@ body {
 
 .cl-search-list {
   overflow-y: auto;
-  padding: 4px 0 6px;
+  padding: 3px 0 4px;
   flex: 1;
 }
 .cl-search-empty {
-  padding: 28px 18px;
+  padding: 24px 16px;
   text-align: center;
   font-family: var(--font-mono);
   font-size: 11px;
@@ -669,7 +737,7 @@ body {
   letter-spacing: 0.22em;
   text-transform: uppercase;
   color: var(--cl-ink-4);
-  padding: 14px 18px 6px;
+  padding: 11px 16px 5px;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -687,7 +755,7 @@ body {
   grid-template-columns: 1fr auto auto;
   align-items: center;
   gap: 12px;
-  padding: 8px 18px 8px 18px;
+  padding: 6px 16px;
   cursor: pointer;
   position: relative;
   transition: background 160ms;
@@ -711,7 +779,7 @@ body {
   letter-spacing: -0.005em;
   white-space: nowrap;
   flex-shrink: 0;
-  max-width: 60%;
+  max-width: 68%;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -748,18 +816,14 @@ body {
 }
 .cl-search-item:hover,
 .cl-search-item.hl {
-  background: oklch(0.95 0.04 40 / 0.3);
-}
-:root[data-theme='dark'] .cl-search-item:hover,
-:root[data-theme='dark'] .cl-search-item.hl {
-  background: oklch(0.55 0.18 40 / 0.18);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-search-item.hl::before {
   content: '';
   position: absolute;
   left: 0;
-  top: 6px;
-  bottom: 6px;
+  top: 4px;
+  bottom: 4px;
   width: 2px;
   background: var(--cl-accent);
   border-radius: 0 2px 2px 0;
@@ -769,33 +833,27 @@ body {
 }
 
 .cl-search-item.entity {
-  grid-template-columns: 24px minmax(0, 1fr) auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
   gap: 10px;
-  padding-top: 9px;
-  padding-bottom: 9px;
+  padding-top: 7px;
+  padding-bottom: 7px;
 }
 .cl-search-item.entity.has-pin {
-  grid-template-columns: 24px minmax(0, 1fr) auto auto auto;
+  grid-template-columns: 22px minmax(0, 1fr) auto auto;
 }
 .cl-search-item.entity .eglyph {
-  width: 22px;
-  height: 22px;
+  width: 20px;
+  height: 20px;
   border-radius: 6px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: oklch(1 0 0 / 0.52);
-  border: 1px solid oklch(1 0 0 / 0.68);
+  background: transparent;
+  border: 1px solid var(--cl-line);
   color: var(--cl-ink-3);
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 600;
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.68);
-}
-:root[data-theme='dark'] .cl-search-item.entity .eglyph {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.1);
 }
 .cl-search-item.entity.session .eglyph {
   color: #4f46e5;
@@ -808,13 +866,6 @@ body {
 }
 .cl-search-item.entity.mcp .eglyph {
   color: var(--cl-accent-ink);
-}
-.cl-search-item .ekind {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
 }
 .cl-search-item.entity:hover .pname,
 .cl-search-item.entity.hl .pname {
@@ -858,7 +909,7 @@ body {
 }
 
 .cl-search-foot {
-  padding: 10px 18px 12px;
+  padding: 8px 16px 9px;
   border-top: 1px solid oklch(0.2 0.02 60 / 0.08);
   display: flex;
   align-items: center;
@@ -1117,7 +1168,7 @@ body {
 }
 .cl-tag--filter.is-interactive:hover {
   color: var(--cl-ink);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-tag--filter.tone-on,
 .cl-tag--filter.tone-soft {
@@ -1287,7 +1338,7 @@ body {
 }
 .cl-tagbar-all:hover {
   color: var(--cl-ink);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-tagbar-all.on {
   color: var(--cl-accent-ink);
@@ -1422,10 +1473,7 @@ body {
   height: 13px;
 }
 .cl-menu-item:hover {
-  background: var(--cl-paper-2);
-}
-:root[data-theme='dark'] .cl-menu-item:hover {
-  background: oklch(0.3 0.012 70 / 0.45);
+  background: var(--cl-hover-bg);
 }
 .cl-menu-item.danger {
   color: var(--cl-danger);
@@ -1497,10 +1545,7 @@ body {
   transition: background 100ms;
 }
 .cl-tag-picker-row:hover {
-  background: var(--cl-paper-2);
-}
-:root[data-theme='dark'] .cl-tag-picker-row:hover {
-  background: oklch(0.3 0.012 70 / 0.45);
+  background: var(--cl-hover-bg);
 }
 .cl-tag-picker-row.on {
   color: var(--cl-accent-ink);
@@ -1534,33 +1579,18 @@ body {
   width: 28px;
   height: 28px;
   border-radius: 50%;
-  border: 1px solid var(--cl-glass-border);
-  background: oklch(1 0 0 / 0.18);
-  -webkit-backdrop-filter: blur(18px) saturate(1.8);
-  backdrop-filter: blur(18px) saturate(1.8);
-  border-color: oklch(1 0 0 / 0.35);
-  box-shadow:
-    inset 0 1px 0 oklch(1 0 0 / 0.55),
-    inset 0 -1px 0 oklch(0 0 0 / 0.05);
+  border: 1px solid var(--cl-line);
+  background: transparent;
   color: var(--cl-ink-3);
   cursor: pointer;
   transition:
-    background 160ms,
-    color 160ms,
-    border-color 160ms;
+    background var(--cl-hover-ms) ease,
+    color var(--cl-hover-ms) ease,
+    border-color var(--cl-hover-ms) ease;
 }
 .cl-theme-toggle:hover {
-  color: var(--cl-ink);
-  background: oklch(1 0 0 / 0.32);
-  border-color: oklch(1 0 0 / 0.5);
-}
-:root[data-theme='dark'] .cl-theme-toggle {
-  background: oklch(1 0 0 / 0.08);
-  border-color: oklch(1 0 0 / 0.14);
-}
-:root[data-theme='dark'] .cl-theme-toggle:hover {
-  background: oklch(1 0 0 / 0.16);
-  border-color: oklch(1 0 0 / 0.22);
+  color: var(--cl-accent-ink);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-user {
   display: inline-flex;
@@ -2065,7 +2095,7 @@ body {
 }
 .cl-eyebrow-pin.is-pinned:hover {
   border-color: color-mix(in oklch, var(--cl-accent) 65%, transparent);
-  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
+  background: var(--cl-glass-hover-bg);
 }
 
 .cl-h-name {
@@ -2728,7 +2758,7 @@ body {
   border-top: 0;
 }
 .cl-export-option:hover {
-  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-export-option.is-active {
   background: var(--cl-accent-soft);
@@ -3030,7 +3060,7 @@ body {
   transition: background-color 0.12s ease;
 }
 .cl-src:hover {
-  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-src .n {
   flex: 0 0 auto;
@@ -3743,7 +3773,7 @@ body {
 }
 .cl-pill-narrate:hover {
   color: var(--cl-ink-2);
-  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+  background: var(--cl-hover-bg);
 }
 .cl-pill-narrate[data-on] {
   color: var(--cl-accent-ink);
@@ -5183,6 +5213,67 @@ body {
   background: var(--cl-ink-4);
   flex-shrink: 0;
 }
+/* A message typed while Claude was working, absorbed into the running turn:
+   same neutral header pill as the hidden-tools badge, without the dot — it
+   states a provenance, not a count. */
+.cl-turn-queued-badge {
+  display: inline-flex;
+  align-items: center;
+  font: 500 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-4);
+  padding: 4px 9px;
+  border: 1px dashed var(--cl-line);
+  border-radius: 999px;
+}
+/* Advisor consult marker. Claude asked a stronger reviewer model to look at the
+   conversation; the answer goes to Claude and is stored encrypted, so this is a
+   marker and never an expandable card. Same neutral header-pill idiom as the
+   queued/hidden-tools badges, with a hairline of the brand accent to mark it as
+   a model event rather than a count — no new hue. */
+.cl-advisor-mark {
+  padding: 0 0 4px;
+  transition:
+    opacity 0.2s,
+    filter 0.2s;
+}
+.cl-advisor-mark[data-dim] {
+  opacity: 0.28;
+  filter: saturate(0.4);
+}
+.cl-advisor-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font: 500 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
+  padding: 4px 10px;
+  border: 1px solid color-mix(in oklab, var(--cl-accent) 28%, transparent);
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--cl-accent) 6%, transparent);
+  cursor: default;
+}
+.cl-advisor-badge::before {
+  content: '';
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  flex-shrink: 0;
+}
+/* Model · duration · tokens — quieter than the label they follow. */
+.cl-advisor-detail {
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.cl-chat-reading .cl-advisor-mark {
+  margin: 0 0 0 30px;
+  padding: 10px 0 18px;
+}
 /* Multiplier chip for a collapsed run of tool-only turns ("× 4"). */
 .cl-turn-tools-hidden-x {
   font-weight: 700;
@@ -5490,7 +5581,7 @@ body {
   padding: 0;
 }
 .cl-hl-remove:hover {
-  background: rgba(193, 95, 60, 0.12);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 /* Command turn — niente shell glass extra, card command è già stand-alone */
@@ -7639,99 +7730,391 @@ body {
   letter-spacing: 0.02em;
 }
 
-/* ── Global home variant (design 1a) ──────────────────────────────────────
-   The figure leads and the label sits under it. Elsewhere the strip labels
-   a list that follows it, so the label goes first; here the four numbers ARE
-   the statement, and putting them on one line of digits lets the row be read
-   across before it is read down. The qualifiers ($, the unit, the cents) are
-   the same display face at half height instead of the mono footnote used by
-   the label-first strips — flush against the figure, so "$99.78" stays one
-   number rather than three tokens. */
-.cl-stats--home .cl-stat .num {
-  margin-top: 0;
-}
-.cl-stats--home .cl-stat .lbl {
+/* ── Global home (design handoff "ClaudeLens Home v6", option 6b) ─────────
+   The home is a welcome, not a dashboard: no figure strip, no live-process
+   table, no card grid. `.cl-ghome-split` is a two-column room — the welcome
+   or gutter feel of the rest of the app — that runs the app's full body
+   height (its parent `.cl-ghome` grows via flex, same opt-in `.cl-main`
+   already offers any view). Pinned projects and global configuration move
+   into a single margin column instead of two sections below the fold, so
+   they're always visible without scrolling past a welcome message to reach
+   them. */
+.cl-ghome {
+  flex: 1;
   display: flex;
-  margin-top: 10px;
-  font-size: 10.5px;
-  letter-spacing: 0.2em;
-  color: var(--cl-ink-4);
+  flex-direction: column;
+  min-height: 0;
 }
-.cl-stats--home .cl-stat:last-child .lbl {
-  color: oklch(0.72 0.006 80);
+.cl-ghome-split {
+  flex: 1;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 320px;
+  min-height: 0;
 }
-.cl-stats--home .cl-stat .num small {
+
+/* ── Welcome column ── */
+.cl-ghome-welcome {
+  position: relative;
+  min-width: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 64px 56px 44px var(--cl-gutter);
+}
+.cl-lens--corner {
+  right: -160px;
+  top: auto;
+  bottom: -90px;
+  width: 460px;
+  height: 460px;
+  opacity: 0.28;
+}
+.cl-ghome-welcome-inner {
+  position: relative;
+  z-index: 2;
+  max-width: 680px;
+}
+/* The shared `.cl-h-name` runs up to 132px because elsewhere it carries a
+   project name in a full-bleed hero; here it sits in a 680px column and
+   "Welcome back" was being cut to "Welcome…" by the ellipsis guard that exists
+   for user-supplied names. The title is a fixed literal, so it doesn't need
+   that guard — it needs to fit: a smaller ceiling keeps it on one line, and
+   wrapping (rather than truncating) is the fallback at widths where it can't. */
+.cl-ghome-welcome .cl-h-name {
+  font-size: clamp(40px, 6vw, 84px);
+  gap: 12px;
+}
+.cl-ghome-welcome .cl-h-name .label-name {
+  overflow: visible;
+  text-overflow: clip;
+  white-space: normal;
+  max-width: 100%;
+}
+.cl-ghome-lede {
+  margin-top: 24px;
+  max-width: 56ch;
   font-family: var(--font-sans);
-  font-size: 26px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--cl-ink-3);
-  margin-left: 0;
+  font-size: 17px;
+  line-height: 1.65;
+  color: var(--cl-ink-2);
+  text-wrap: pretty;
 }
-.cl-stats--home .cl-stat--live .num {
+.cl-ghome-working {
+  margin-top: 44px;
   display: flex;
-  align-items: baseline;
+  flex-direction: column;
   gap: 10px;
 }
-.cl-stats--home .cl-stat--live .dot {
+.cl-ghome-working-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  padding: 18px 20px;
+  border-radius: var(--cl-r-card);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  transition: background 120ms;
+}
+.cl-ghome-working-row:hover {
+  background: var(--cl-glass-hover-bg);
+}
+.cl-ghome-working-row[data-live='working'] {
+  background: var(--cl-accent-soft);
+}
+.cl-ghome-working-row[data-live='working']:hover {
+  background: color-mix(in oklch, var(--cl-accent-soft) 72%, var(--cl-accent) 8%);
+}
+/* `waiting` is the row that asks something of you, so it can't read as the one
+   card that is missing: it gets the same treatment as `working` in the status
+   hue (the rows are separated cards now — at the old 2px gap an untinted row
+   was merely quiet, at 10px it would be a hole). */
+.cl-ghome-working-row[data-live='waiting'] {
+  background: var(--cl-warn-soft);
+}
+.cl-ghome-working-row[data-live='waiting']:hover {
+  background: color-mix(in oklch, var(--cl-warn-soft) 72%, var(--cl-warn) 8%);
+}
+.cl-ghome-working-row[data-live='waiting'] .cl-ghome-working-action {
+  color: var(--cl-ink-2);
+}
+/* `open` — alive, turn finished, nothing in flight. It is the one state the
+   welcome used to paint as work, so it is the one that must not be tinted: an
+   outlined card next to two filled ones says "here, but idle" without a word. */
+.cl-ghome-working-row[data-live='open'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1px var(--cl-line);
+}
+.cl-ghome-working-row[data-live='open'] .cl-ghome-working-name {
+  color: var(--cl-ink-2);
+}
+.cl-ghome-working-dot {
   width: 9px;
   height: 9px;
-  border-radius: 50%;
-  background: var(--cl-ok);
   flex: none;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+}
+.cl-ghome-working-dot[data-live='working'] {
+  background: var(--cl-ok);
+}
+.cl-ghome-working-dot[data-live='waiting'] {
+  background: var(--cl-warn);
+}
+.cl-ghome-working-name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 26px;
+  font-weight: 600;
+  line-height: 1.1;
+  letter-spacing: -0.028em;
+  color: var(--cl-ink);
+}
+.cl-ghome-working-action {
+  flex: none;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--cl-ink-3);
+}
+.cl-ghome-working-row[data-live='working'] .cl-ghome-working-action {
+  color: var(--cl-accent-ink);
 }
 
+/* Duplicate projects — a notification, not a banner. The full-width
+   `--cl-warn-soft` strip made a background housekeeping hint the loudest thing
+   on the welcome; a bare mono line, tried next, was so quiet it read as a
+   caption. This is the middle: the pill is sized to its content, so it takes a
+   sliver of the band it used to fill, but it keeps the amber and leads with a
+   filled count badge — the one shape that reads as "something is waiting" at a
+   glance. Amber runs 0.70–0.78 in lightness in both themes, so the badge's ink
+   is a dark mix of the token itself rather than a second hue. */
+.cl-ghome-dup {
+  margin-top: 40px;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--cl-warn) 45%, transparent);
+  background: color-mix(in oklch, var(--cl-warn) 15%, transparent);
+  cursor: pointer;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink-2);
+  text-align: left;
+  transition:
+    background 120ms,
+    border-color 120ms;
+}
+.cl-ghome-dup .count {
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cl-warn);
+  color: color-mix(in oklch, var(--cl-warn) 22%, black);
+  font-size: 11.5px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+.cl-ghome-dup:hover {
+  background: color-mix(in oklch, var(--cl-warn) 25%, transparent);
+  border-color: color-mix(in oklch, var(--cl-warn) 70%, transparent);
+}
+
+/* ── Margin column: pinned projects + global configuration ── */
+.cl-ghome-aside {
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 30px;
+  border-left: 1px solid var(--cl-line);
+  /* Il bordo alto e quello basso vanno misurati **dal testo**, non dal box: in
+     fondo l'ultima riga di Configuration porta già 8px di padding suo, quindi
+     40px di padding-bottom fanno 48px di aria sotto il testo. In cima
+     l'etichetta non ha niente sopra di sé, così 56px di padding erano 56px veri
+     — otto in più del fondo, abbastanza da far pendere la colonna. */
+  padding: 48px 40px 40px;
+}
+.cl-ghome-lbl {
+  display: block;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-ghome-pinned {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.cl-ghome-pinned-list {
+  margin-top: 14px;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+}
+.cl-ghome-pinned-row {
+  display: grid;
+  grid-template-columns: 26px 1fr;
+  align-items: baseline;
+  gap: 10px;
+  padding: 10px 0;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: color 120ms;
+}
+.cl-ghome-pinned-row:hover {
+  color: var(--cl-accent-ink);
+}
+.cl-ghome-pinned-idx {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-4);
+}
+.cl-ghome-pinned-name {
+  font-size: 16.5px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: -0.018em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-ghome-pinned-empty {
+  margin-top: 14px;
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+}
+.cl-ghome-config {
+  flex: none;
+  padding-top: 30px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-ghome-config-list {
+  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.cl-ghome-config-row {
+  display: grid;
+  grid-template-columns: 22px 1fr auto;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 8px 8px 0;
+  border-radius: 8px;
+  background: none;
+  border: none;
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  transition: background 120ms;
+}
+.cl-ghome-config-row:hover {
+  background: var(--cl-glass-hover-bg);
+}
+.cl-ghome-mono {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: none;
+  border: 1px solid var(--cl-line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 9.5px;
+  color: var(--cl-ink-3);
+}
+.cl-ghome-mono.accent {
+  border-color: transparent;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+}
+.cl-ghome-config-name {
+  font-size: 14.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--cl-ink);
+}
+.cl-ghome-config-meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-4);
+}
+/* Stacked, under the two-column threshold: the margin column stops being a
+   column. Two things break if it keeps the full-height behaviour.
+   `.cl-ghome-pinned` is `flex: 1 1 0%` for a room whose height is given — a
+   list that scrolls in place beside the welcome — but the stacked aside's
+   height is its own content, so that flex-basis makes the pinned list's
+   hypothetical size zero and `overflow-y: auto` hides every pin (the config
+   block below it is `flex: none` and keeps its size, which is why the label
+   survived and the list didn't). Here the pins take the height they need and
+   the page scrolls. And the lens is anchored to the welcome column's
+   bottom-right corner, which stacked runs the full width — right behind the
+   live rows — so it shrinks back out of their way, and drops out entirely
+   once the column is too narrow to hold both. */
 @media (max-width: 980px) {
-  .cl-stats--home .cl-stat {
-    padding: 20px 18px 22px;
+  .cl-ghome-split {
+    grid-template-columns: minmax(0, 1fr);
   }
-  .cl-stats--home .cl-stat .num {
-    font-size: 36px;
+  .cl-ghome-welcome {
+    justify-content: flex-start;
+    padding: 48px var(--cl-gutter) 40px;
   }
-  .cl-stats--home .cl-stat .num small {
-    font-size: 18px;
+  .cl-lens--corner {
+    width: 320px;
+    height: 320px;
+    right: -130px;
+    bottom: -110px;
+    opacity: 0.2;
+  }
+  .cl-ghome-aside {
+    border-left: none;
+    border-top: 1px solid var(--cl-line);
+    padding: 32px var(--cl-gutter) 40px;
+  }
+  .cl-ghome-pinned {
+    flex: none;
+  }
+  .cl-ghome-pinned-list {
+    flex: none;
+    overflow-y: visible;
   }
 }
 
-/* ── Global home section rhythm (design 1a) ───────────────────────────────
-   The rule belongs to the heading, not to the list. Everywhere else in the
-   app the ink rule sits on top of the list (.cl-proc-list / .cl-tile-grid /
-   .cl-row), which the shared .cl-sec-head's 24px gap detaches from the title
-   it is supposed to underline; 1a hugs it at 12px so head + rule read as one
-   masthead per block. With that rule carrying the separation, .cl-section's
-   closing hairline becomes a third line between two blocks, and the strip's
-   own bottom rule a fourth — both come off. Rows close with a hairline
-   instead of opening with one, so the last row is still shut before the
-   pager. All of it is scoped to the home: the rest of the app keeps the
-   list-top rule it was drawn with. */
-.cl-ghome .cl-sec-head {
-  border-bottom: 1.5px solid var(--cl-ink);
-  padding-bottom: 12px;
-  margin-bottom: 20px;
-}
-.cl-ghome .cl-section {
-  border-bottom: none;
-}
-.cl-ghome .cl-stats {
-  border-bottom: none;
-}
-.cl-ghome .cl-proc-list {
-  border-top: none;
-}
-.cl-ghome .cl-row {
-  border-top: none;
-  border-bottom: 1px solid var(--cl-line-soft);
-}
-/* The three list openers that draw their own ink rule further down the file:
-   .cl-row:first-child, .cl-tile-grid and .cl-mcp-row. The first two match the
-   rule above at equal specificity and simply win by order, so the head's rule
-   and the list's rule stack as two black lines 20px apart under the title —
-   which is what the home was redesigned to remove. Beat them here (one class
-   deeper) rather than reordering rules the rest of the app depends on. */
-.cl-ghome .cl-row:first-child,
-.cl-ghome .cl-tile-grid,
-.cl-ghome .cl-sec-head + .cl-mcp-row {
-  border-top: none;
+@media (max-width: 760px) {
+  .cl-lens--corner {
+    display: none;
+  }
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -10788,6 +11171,9 @@ button.cl-sw-member:focus-visible,
 .cl-row .model.haiku .dot {
   background: var(--cl-haiku);
 }
+.cl-row .model.fable .dot {
+  background: var(--cl-fable);
+}
 .cl-row .toks {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -11125,93 +11511,6 @@ button.cl-sw-member:focus-visible,
 .cl-tile-grid--list {
   grid-template-columns: 1fr;
 }
-/* ── Card variant (design 1a, the global home's Configuration) ────────────
-   Bordered rounded cards on a 3-up grid instead of the hairline-divided
-   two-column list. The meta leaves the third column and sits under the
-   description: on a card the figure belongs to the thing it describes, while
-   as a right-hand column it read as a table cell. The description drops the
-   mono face for the same reason — a card is a small piece of prose, and mono
-   was the list's device for keeping two columns of text aligned. */
-.cl-tile-grid--cards {
-  grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 14px;
-  border-top: none;
-  border-bottom: none;
-}
-.cl-tile-grid--cards .cl-tile,
-.cl-tile-grid--cards .cl-tile:nth-child(odd),
-.cl-tile-grid--cards .cl-tile:nth-child(even) {
-  grid-template-columns: 36px 1fr;
-  gap: 14px;
-  padding: 18px;
-  border: 1px solid var(--cl-line);
-  border-radius: var(--cl-r-card);
-  background: var(--cl-paper);
-}
-.cl-tile-grid--cards .cl-tile.accent,
-.cl-tile-grid--cards .cl-tile.accent:nth-child(odd) {
-  border-color: var(--cl-accent);
-  background: var(--cl-accent-soft);
-  box-shadow: inset 0 1px 0 var(--cl-glass-highlight);
-}
-/* Hover lifts the edge, it does not wash the surface: the shared .cl-tile
-   hover is an accent tint, and on this grid that made a hovered neutral card
-   read as the accent card. Here the accent fill means "this one is different",
-   so hover has to say something else. */
-.cl-tile-grid--cards .cl-tile:hover {
-  background: var(--cl-paper);
-  border-color: var(--cl-accent);
-  -webkit-backdrop-filter: none;
-  backdrop-filter: none;
-  box-shadow: 0 6px 18px -10px oklch(0.2 0.015 60 / 0.35);
-}
-.cl-tile-grid--cards .cl-tile.accent:hover {
-  background: var(--cl-accent-soft);
-  border-color: var(--cl-accent-ink);
-  box-shadow:
-    inset 0 1px 0 var(--cl-glass-highlight),
-    0 6px 18px -10px oklch(0.2 0.015 60 / 0.35);
-}
-.cl-tile-grid--cards .cl-tile .glyph {
-  width: 36px;
-  height: 36px;
-  border-radius: var(--cl-r-tile);
-  border: 1px solid var(--cl-line);
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--cl-ink-2);
-}
-.cl-tile-grid--cards .cl-tile.accent .glyph {
-  border-color: var(--cl-accent);
-  color: var(--cl-on-accent);
-}
-.cl-tile-grid--cards .cl-tile .t-name {
-  font-size: 17px;
-}
-.cl-tile-grid--cards .cl-tile .t-desc {
-  font-family: var(--font-sans);
-  font-size: 13px;
-  line-height: 1.6;
-}
-.cl-tile-grid--cards .cl-tile .t-meta {
-  display: block;
-  margin-top: 10px;
-  white-space: normal;
-}
-.cl-tile-grid--cards .cl-tile.accent .t-meta,
-.cl-tile-grid--cards .cl-tile.accent .t-meta b {
-  color: var(--cl-accent-ink);
-}
-@media (max-width: 1180px) {
-  .cl-tile-grid--cards {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 760px) {
-  .cl-tile-grid--cards {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
 .cl-tile-grid--list .cl-tile {
   padding: 22px 0;
   border-right: none;
@@ -11316,6 +11615,115 @@ button.cl-sw-member:focus-visible,
   font-weight: 400;
   font-size: 10px;
   letter-spacing: 0.02em;
+}
+
+/* ── CLAUDE.md cascade (landing di progetto) ──────────────────────────────
+   Sei layer sono sei file con lo stesso nome: l'unica cosa che li distingue è
+   la cartella che governano, quindi il path è il nome della riga e lo scope
+   scende a chip. Come tile-grid quattro righe su sei si chiamavano "Subdir" e
+   il path stava nella riga smorzata sotto; qui la parola generica è un chip di
+   larghezza fissa che allinea tutti i path sulla stessa colonna, il segmento
+   identificante è in evidenza fra genitori e nome file smorzati, e la barra a
+   destra dà la scala (36 righe contro 882) che una colonna di cifre lascia
+   fare a mente. Una colonna sola: la cascata è una sequenza ordinata e le due
+   colonne la facevano leggere a zig-zag. */
+.cl-md-cascade {
+  border-top: 1px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-md-layer {
+  display: grid;
+  grid-template-columns: 76px minmax(0, 1fr) 88px auto;
+  align-items: center;
+  gap: 20px;
+  width: 100%;
+  padding: 14px 2px 14px 0;
+  border: none;
+  border-bottom: 1px solid var(--cl-line-soft);
+  background: transparent;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: background 100ms;
+}
+.cl-md-layer:last-child {
+  border-bottom: none;
+}
+.cl-md-layer:hover {
+  background: var(--cl-glass-hover-bg);
+}
+.cl-md-layer .scope {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  text-align: center;
+  color: var(--cl-ink-4);
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-pill);
+  padding: 3px 0 4px;
+}
+/* Il CLAUDE.md del progetto è quello che si apre più spesso: l'accento sta lì
+   e non sulla prima riga, che ora è il globale. */
+.cl-md-layer[data-scope='project'] .scope {
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+}
+.cl-md-layer .path {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-md-layer .path .dim {
+  color: var(--cl-ink-4);
+}
+.cl-md-layer .path .focus {
+  color: var(--cl-ink);
+  font-weight: 600;
+}
+.cl-md-layer .weight {
+  height: 3px;
+  border-radius: 2px;
+  background: var(--cl-line-soft);
+  overflow: hidden;
+}
+.cl-md-layer .weight i {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: color-mix(in oklch, var(--cl-accent) 42%, transparent);
+}
+.cl-md-layer:hover .weight i,
+.cl-md-layer[data-scope='project'] .weight i {
+  background: var(--cl-accent);
+}
+.cl-md-layer .lines {
+  min-width: 66px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+}
+.cl-md-layer .lines b {
+  color: var(--cl-ink-2);
+  font-weight: 500;
+}
+@media (max-width: 760px) {
+  .cl-md-layer {
+    grid-template-columns: 68px minmax(0, 1fr) auto;
+    gap: 14px;
+  }
+  .cl-md-layer .weight {
+    display: none;
+  }
 }
 
 /* Dense, single-line "file row" variant (skill supporting files): smaller
@@ -11814,91 +12222,6 @@ button.cl-sw-member:focus-visible,
   height: 6px;
   border-radius: 50%;
   background: var(--cl-ok);
-}
-
-/* Live processes (Global view) */
-.cl-proc-list {
-  border-top: 1px solid var(--cl-ink);
-}
-.cl-proc {
-  display: grid;
-  grid-template-columns: 16px 110px 1fr auto auto;
-  gap: 22px;
-  align-items: center;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--cl-line-soft);
-  cursor: pointer;
-  background: transparent;
-  border-left: none;
-  border-right: none;
-  border-top: none;
-  width: 100%;
-  text-align: left;
-  font: inherit;
-  color: inherit;
-}
-.cl-proc:hover {
-  background: var(--cl-glass-hover-bg);
-  -webkit-backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
-  backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
-  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
-}
-.cl-proc .led {
-  width: 9px;
-  height: 9px;
-  border-radius: 50%;
-  background: var(--cl-ok);
-  box-shadow: 0 0 0 0 var(--cl-ok);
-  animation: clPulseGreen 1.8s infinite;
-}
-@keyframes clPulseGreen {
-  0% {
-    box-shadow: 0 0 0 0 oklch(0.62 0.16 150 / 0.6);
-  }
-  70% {
-    box-shadow: 0 0 0 10px oklch(0.62 0.16 150 / 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 oklch(0.62 0.16 150 / 0);
-  }
-}
-.cl-proc .pid {
-  font-family: var(--font-mono);
-  font-size: 12.5px;
-  color: var(--cl-accent);
-  font-weight: 500;
-}
-.cl-proc .pname {
-  font-size: 17px;
-  font-weight: 500;
-  letter-spacing: -0.015em;
-  color: var(--cl-ink);
-}
-.cl-proc .pcmd {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-3);
-  margin-top: 3px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cl-proc .ppath {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-3);
-  text-align: right;
-}
-.cl-proc .arrow {
-  width: 28px;
-  height: 28px;
-  border: 1px solid var(--cl-line);
-  border-radius: 50%;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--cl-ink-3);
-  font-size: 13px;
 }
 
 /* Empty-state helper */
@@ -14596,37 +14919,35 @@ select.cl-opt-input {
    tag. Composed from `kind` + `cwd` + `body` rather than from the event's
    `title`, which is written for the OS notification's conventions — that full
    sentence stays available as the row's tooltip. */
+/* The toast wears the global home's register — it floats over that surface, so
+   the card radius, the sans subject and the bare mono action are the same ones
+   the home uses. What it does *not* borrow is the home's tinted row: there the
+   accent wash means "live project you can resume", and the notification's state
+   is already carried three times over (dot, tag, timer hairline). The time
+   gutter is gone because its value was the constant string "now" — a transient
+   toast has no other time to show; the remaining three columns are still the
+   `terminal/MissionRail` feed anatomy. */
 .cl-ntf {
   pointer-events: auto;
   position: relative;
   display: grid;
-  grid-template-columns: 30px 14px minmax(0, 1fr) auto;
+  grid-template-columns: 9px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 9px;
-  padding: 10px 12px 11px;
-  border-radius: 10px;
+  gap: 12px;
+  padding: 14px 16px 15px;
+  border-radius: var(--cl-r-card);
   background: var(--cl-paper-2);
   border: 1px solid var(--cl-line);
   box-shadow: 0 12px 30px -14px oklch(0.2 0.02 60 / 0.34);
   overflow: hidden;
 }
-.cl-ntf-when {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.06em;
-  font-variant-numeric: tabular-nums;
-  color: var(--cl-ink-4);
-  align-self: start;
-  margin-top: 3px;
-}
 .cl-ntf-dot {
-  width: 7px;
-  height: 7px;
+  width: 9px;
+  height: 9px;
   border-radius: 50%;
   background: var(--cl-ink-4);
   align-self: start;
-  margin-top: 4px;
-  justify-self: center;
+  margin-top: 5px;
 }
 .cl-ntf--completed .cl-ntf-dot {
   background: var(--cl-ok);
@@ -14656,7 +14977,8 @@ select.cl-opt-input {
 }
 .cl-ntf-name {
   display: block;
-  font: 500 12.5px/1.3 var(--font-sans);
+  font: 500 14px/1.3 var(--font-sans);
+  letter-spacing: -0.012em;
   color: var(--cl-ink);
   overflow: hidden;
   text-overflow: ellipsis;
@@ -14666,9 +14988,9 @@ select.cl-opt-input {
   color: var(--cl-danger);
 }
 .cl-ntf-meta {
-  margin-top: 2px;
+  margin-top: 3px;
   font-family: var(--font-mono);
-  font-size: 9px;
+  font-size: 10px;
   line-height: 1.45;
   color: var(--cl-ink-4);
   /* an error body is the one that can run long: wrap it, capped at two lines
@@ -14680,12 +15002,12 @@ select.cl-opt-input {
 }
 .cl-ntf-state {
   font-family: var(--font-mono);
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
   white-space: nowrap;
   align-self: start;
-  margin-top: 3px;
+  margin-top: 4px;
   color: var(--cl-ink-4);
 }
 .cl-ntf--completed .cl-ntf-state {
@@ -14697,35 +15019,28 @@ select.cl-opt-input {
 .cl-ntf--error .cl-ntf-state {
   color: var(--cl-danger);
 }
-/* actions sit in the subject column, so they line up under the text */
+/* The action starts on the subject's left rail rather than floating at the
+   right edge: unboxed, a right-aligned mono link in a 340px card reads as
+   unanchored, while here it hangs off the text it belongs to. */
 .cl-ntf-foot {
-  grid-column: 3 / -1;
+  grid-column: 2 / -1;
   display: flex;
   align-items: center;
-  justify-content: flex-end;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 10px;
 }
 .cl-ntf-open {
   font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
+  font-size: 11.5px;
   color: var(--cl-ink-3);
   background: transparent;
-  border: 1px solid var(--cl-line);
-  border-radius: 7px;
-  padding: 5px 9px;
+  border: none;
+  padding: 0;
   cursor: pointer;
-  transition:
-    color 140ms,
-    border-color 140ms,
-    background 140ms;
+  transition: color 140ms;
 }
 .cl-ntf-open:hover {
   color: var(--cl-accent-ink);
-  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
-  background: var(--cl-accent-soft);
 }
 .cl-ntf-close {
   position: absolute;
@@ -14761,10 +15076,11 @@ select.cl-opt-input {
    long error would be lying. */
 .cl-ntf-timer {
   position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 16px;
+  right: 16px;
+  bottom: 7px;
   height: 1.5px;
+  border-radius: 1px;
   background: color-mix(in oklch, var(--cl-ink) 22%, transparent);
   transform-origin: left center;
   animation: cl-ntf-retract linear forwards;
@@ -15501,6 +15817,9 @@ select.cl-opt-input {
 .cl-mixbar .seg.haiku {
   background: var(--cl-haiku);
 }
+.cl-mixbar .seg.fable {
+  background: var(--cl-fable);
+}
 .cl-mixbar .seg.other {
   background: var(--cl-ink-4);
 }
@@ -15534,6 +15853,9 @@ select.cl-opt-input {
 }
 .cl-mixlegend .dot.haiku {
   background: var(--cl-haiku);
+}
+.cl-mixlegend .dot.fable {
+  background: var(--cl-fable);
 }
 .cl-mixlegend .dot.other {
   background: var(--cl-ink-4);
@@ -15899,7 +16221,7 @@ select.cl-opt-input {
   color: var(--cl-accent);
 }
 .cl-srow-pin:hover {
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 .cl-srow .idx {
@@ -15979,6 +16301,9 @@ select.cl-opt-input {
 .cl-srow .meta .model.haiku .dot {
   background: var(--cl-haiku);
 }
+.cl-srow .meta .model.fable .dot {
+  background: var(--cl-fable);
+}
 .cl-srow .meta .toks {
   font-size: 13px;
   color: var(--cl-ink);
@@ -16020,7 +16345,7 @@ select.cl-opt-input {
 }
 .cl-srow-menu:hover,
 .cl-srow-menu.is-open {
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  background: var(--cl-glass-hover-bg);
   color: var(--cl-accent-ink);
 }
 .cl-srow-menu:focus-visible {

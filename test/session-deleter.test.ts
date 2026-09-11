@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
-import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync, chmodSync } from 'fs';
+import { mkdtempSync, rmSync, writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
 
@@ -12,6 +12,7 @@ process.env.CLAUDE_CONFIG_DIR = root;
 
 const deleter = await import('../electron/modules/session-deleter');
 const { getSessionArtifacts, deleteSessionArtifacts } = deleter;
+type RemovePath = import('../electron/modules/session-deleter').RemovePath;
 const { getPlanRefStats, resetPlanRefCache } = await import('../electron/modules/plans-reader');
 
 const projectsDir = join(root, 'projects');
@@ -26,6 +27,22 @@ afterAll(() => {
 
 function line(obj: unknown): string {
   return JSON.stringify(obj);
+}
+
+/**
+ * Una rimozione che fallisce su UN path e lascia fare il resto.
+ *
+ * Sostituisce il vecchio `chmodSync(dir, 0o500)`: rendere la cartella padre di
+ * sola lettura affermava qualcosa sui permessi del processo, non su questo
+ * codice, e root ignora quei bit — la suite falliva in container e passava
+ * altrove (#240). Qui il fallimento è dichiarato, e vale su ogni uid.
+ */
+function failingOn(target: string, message: string): RemovePath {
+  return (path, isDirectory) => {
+    if (path === target) throw new Error(message);
+    if (isDirectory) rmSync(path, { recursive: true, force: true });
+    else rmSync(path);
+  };
 }
 
 /** Una riga attachment che referenzia `planPath`. */
@@ -272,23 +289,22 @@ describe('deleteSessionArtifacts', () => {
   it('non si dichiara riuscita se il transcript required resta su disco', () => {
     const sessionFile = join(projectPath, 'sess1.jsonl');
     const taskFolder = join(tasksDir, 'sess1');
-    // Directory in sola lettura: l'unlink del figlio fallisce, la cartella no.
-    chmodSync(projectPath, 0o500);
-    try {
-      const res = deleteSessionArtifacts([req(sessionFile), opt(taskFolder)], root);
 
-      expect(res.succeeded).toBe(false);
-      const session = res.outcomes.find(o => o.path === sessionFile);
-      expect(session?.status).toBe('failed');
-      expect(session?.reason).toBeTruthy();
-      expect(res.warnings.some(w => w.includes(sessionFile))).toBe(true);
-      expect(existsSync(sessionFile)).toBe(true);
-      // Best-effort per voce: il fallimento del transcript non blocca il resto.
-      expect(existsSync(taskFolder)).toBe(false);
-      expect(res.deleted).toEqual([taskFolder]);
-    } finally {
-      chmodSync(projectPath, 0o700);
-    }
+    const res = deleteSessionArtifacts(
+      [req(sessionFile), opt(taskFolder)],
+      root,
+      failingOn(sessionFile, 'EACCES: permission denied')
+    );
+
+    expect(res.succeeded).toBe(false);
+    const session = res.outcomes.find(o => o.path === sessionFile);
+    expect(session?.status).toBe('failed');
+    expect(session?.reason).toContain('EACCES');
+    expect(res.warnings.some(w => w.includes(sessionFile))).toBe(true);
+    expect(existsSync(sessionFile)).toBe(true);
+    // Best-effort per voce: il fallimento del transcript non blocca il resto.
+    expect(existsSync(taskFolder)).toBe(false);
+    expect(res.deleted).toEqual([taskFolder]);
   });
 
   // L'altra metà: la sessione è andata, un artefatto opzionale no. Successo —
@@ -296,19 +312,57 @@ describe('deleteSessionArtifacts', () => {
   it('resta riuscita se fallisce solo un artefatto opzionale, ma lo segnala', () => {
     const sessionFile = join(projectPath, 'sess1.jsonl');
     const plan = join(plansDir, 'p1.md');
-    chmodSync(plansDir, 0o500);
-    try {
-      const res = deleteSessionArtifacts([req(sessionFile), opt(plan)], root);
 
-      expect(res.succeeded).toBe(true);
-      expect(res.warnings).toHaveLength(1);
-      expect(res.warnings[0]).toContain(plan);
-      expect(res.outcomes.find(o => o.path === plan)?.status).toBe('failed');
-      expect(existsSync(sessionFile)).toBe(false);
-      expect(existsSync(plan)).toBe(true);
-    } finally {
-      chmodSync(plansDir, 0o700);
-    }
+    const res = deleteSessionArtifacts(
+      [req(sessionFile), opt(plan)],
+      root,
+      failingOn(plan, 'EPERM: operation not permitted')
+    );
+
+    expect(res.succeeded).toBe(true);
+    expect(res.warnings).toHaveLength(1);
+    expect(res.warnings[0]).toContain(plan);
+    expect(res.outcomes.find(o => o.path === plan)?.status).toBe('failed');
+    expect(existsSync(sessionFile)).toBe(false);
+    expect(existsSync(plan)).toBe(true);
+  });
+
+  // La ragione per cui l'esito è verificato su disco invece che dedotto
+  // dall'assenza di eccezioni: `rmSync(..., { force: true })` non segnala tutto
+  // ciò che non riesce a rimuovere. Qui la rimozione non lancia e non fa nulla —
+  // esattamente la forma di quel caso — e la voce deve restare `failed`, non
+  // diventare un successo perché nessuno ha protestato.
+  it('chiama failed una rimozione che non lancia ma lascia il path su disco', () => {
+    const sessionFile = join(projectPath, 'sess1.jsonl');
+
+    const res = deleteSessionArtifacts([req(sessionFile)], root, () => {
+      /* silenziosamente inefficace, come rmSync con force su ciò che non può togliere */
+    });
+
+    expect(res.succeeded).toBe(false);
+    expect(res.outcomes[0]).toMatchObject({ status: 'failed', required: true });
+    expect(res.outcomes[0].reason).toBe('still present after deletion');
+    expect(res.deleted).toEqual([]);
+    expect(existsSync(sessionFile)).toBe(true);
+  });
+
+  // Il contrappunto del test sopra: la stessa rimozione silenziosa, ma il path
+  // se n'è andato davvero. `deleted` è un'affermazione sul filesystem, non sul
+  // fatto che la chiamata sia tornata.
+  it('chiama deleted una rimozione che il filesystem conferma', () => {
+    const sessionFile = join(projectPath, 'sess1.jsonl');
+    let asked: [string, boolean] | null = null;
+
+    const res = deleteSessionArtifacts([req(sessionFile)], root, (path, isDirectory) => {
+      asked = [path, isDirectory];
+      rmSync(path);
+    });
+
+    // Il file, non la cartella: è il modulo a decidere quale delle due forme di
+    // rimozione serve, e passarlo sbagliato cancellerebbe un albero per un file.
+    expect(asked).toEqual([sessionFile, false]);
+    expect(res.succeeded).toBe(true);
+    expect(res.outcomes[0].status).toBe('deleted');
   });
 
   it('un required rifiutato perché fuori root non passa per riuscito', () => {

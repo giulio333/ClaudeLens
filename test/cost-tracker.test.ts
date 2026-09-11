@@ -23,8 +23,10 @@ const PRICE = {
   opusLegacy: { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
   haiku: { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
   fable: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
-  // Sonnet 5 introductory pricing, in effect through 2026-08-31.
-  sonnet5Intro: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
+  // Fable/Mythos 5.1: same tier, but the cache read is 0.025x the input price
+  // (the only models where it is not 0.1x).
+  fable51: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+  sonnet5: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
 };
 
 function expectedCost(
@@ -439,6 +441,167 @@ describe('getSessionList', () => {
 
     const sessions = await getSessionList(tmp);
     expect(sessions.map(s => s.filename)).toEqual(['inner.jsonl']);
+  });
+});
+
+// The name the user gives a conversation with `/rename`, written as its own
+// record. It is the CURRENT way to name a session — the command that wrote
+// `custom-title` was retired — so it outranks both the legacy title and the
+// generated one, and the summary carries all three for the renderer to resolve.
+describe('agentName — the /rename record', () => {
+  const renamed = (n: unknown): string =>
+    JSON.stringify({ type: 'agent-name', agentName: n, sessionId: 's' });
+  const generated = (t: string): string =>
+    JSON.stringify({ type: 'ai-title', aiTitle: t, sessionId: 's' });
+
+  beforeEach(() => {
+    resetParseCache();
+  });
+
+  it('reads the name off the record', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      renamed('feature color aggiungiamolaaa'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('feature color aggiungiamolaaa');
+  });
+
+  // The layout of a real transcript: the meta block is re-emitted every few
+  // turns, so the generated title is rewritten *after* the rename. Both names
+  // have to survive the parse — resolving them is the renderer's job, and it
+  // cannot prefer one it never received.
+  it('keeps the rename and the generated title side by side', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      generated('claudelens non mostra colore chat'),
+      renamed('feature color aggiungiamolaaa'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      generated('claudelens non mostra colore chat'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('feature color aggiungiamolaaa');
+    expect(s.aiTitle).toBe('claudelens non mostra colore chat');
+  });
+
+  it('takes the last rename and ignores an empty one', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      renamed('primo nome'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      renamed('secondo nome'),
+      renamed('   '),
+      renamed(undefined),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('secondo nome');
+  });
+
+  it('leaves a session that was never renamed undefined', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      generated('auto'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBeUndefined();
+  });
+
+  it('picks up a rename through the incremental tail read', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 10,
+        id: 'm1',
+        requestId: 'r1',
+      }),
+    ]);
+    expect((await getSessionList(tmp))[0].agentName).toBeUndefined();
+
+    appendFileSync(join(tmp, 'sess.jsonl'), renamed('rinominata a caldo') + '\n', 'utf-8');
+
+    expect((await getSessionList(tmp))[0].agentName).toBe('rinominata a caldo');
+    expect(getParseStats().incrementalParses).toBe(1);
+  });
+});
+
+// The colour `/color` stamps on a session. Claude Code appends it as its own
+// record and declares it last-wins: the row is re-emitted on later turns, so a
+// session recoloured mid-run holds every colour it ever had.
+describe('agentColor — the /color record, last wins', () => {
+  const color = (c: unknown): string =>
+    JSON.stringify({ type: 'agent-color', agentColor: c, sessionId: 's' });
+
+  beforeEach(() => {
+    resetParseCache();
+  });
+
+  it('takes the LAST colour record, not the first', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('purple'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      color('blue'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBe('blue');
+  });
+
+  it('leaves a session with no colour record undefined', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBeUndefined();
+  });
+
+  it('ignores a name outside the eight /color accepts', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('blue'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      // Not a colour the CLI can produce: keep the one we have rather than let
+      // an unknown string reach the renderer.
+      color('chartreuse'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBe('blue');
+  });
+
+  it('clears the colour on an empty or `default` record', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('blue'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      color('default'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBeUndefined();
+  });
+
+  it('picks up a colour set mid-session, through the incremental tail read', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 10,
+        id: 'm1',
+        requestId: 'r1',
+      }),
+    ]);
+    const [before] = await getSessionList(tmp);
+    expect(before.agentColor).toBeUndefined();
+
+    // The realistic case: `/color` runs while the app is open, so the record
+    // arrives in the appended tail the cache folds — never in a full re-parse.
+    appendFileSync(join(tmp, 'sess.jsonl'), color('green') + '\n', 'utf-8');
+
+    const [after] = await getSessionList(tmp);
+    expect(after.agentColor).toBe('green');
+    expect(getParseStats().incrementalParses).toBe(1);
   });
 });
 
@@ -891,6 +1054,19 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(await millionInput('claude-mythos-5')).toBeCloseTo(10, 10);
   });
 
+  // Fable 5.1 and Mythos 5.1 are the only models whose cache read is 0.025x the
+  // input price instead of 0.1x. Priced as Fable 5 they were charged 4x for
+  // every cache read — most of the input bill of an agentic session.
+  it("prices the 5.1 cache read at 0.025x, not at Fable 5's 0.1x", () => {
+    expect(calculateCacheSavings(1_000_000, 'claude-fable-5-1')).toBeCloseTo(
+      PRICE.fable51.input - PRICE.fable51.cacheRead,
+      6
+    );
+    expect(calculateCacheSavings(1_000_000, 'claude-mythos-5-1')).toBeCloseTo(9.75, 6);
+    // and Fable 5 keeps its own, dearer rate
+    expect(calculateCacheSavings(1_000_000, 'claude-fable-5')).toBeCloseTo(9, 6);
+  });
+
   it('anchors the fuzzy family fallbacks on the current generation', async () => {
     // An unlisted Opus must not inherit the retired model's rate.
     expect(await millionInput('some-opus-vNext')).toBeCloseTo(PRICE.opus.input, 10);
@@ -905,28 +1081,91 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(await millionInput('claude-sonnet-4-5-20250929')).toBeCloseTo(3, 10);
   });
 
-  it('prices Sonnet 5 at the rate in force when the session ran', async () => {
-    // Introductory pricing through 2026-08-31, standard from 2026-09-01.
+  // The introductory $2/$10 became the standard price: the increase to $3/$15
+  // announced for 2026-09-01 was called off. This table carried it anyway, and
+  // for the week after that date every Sonnet 5 session was billed at 1.5x.
+  it('prices Sonnet 5 at $2/$10 on both sides of the cancelled 2026-09-01 rise', async () => {
     expect(await millionInput('claude-sonnet-5', '2026-08-15T10:00:00.000Z')).toBeCloseTo(2, 10);
-    expect(await millionInput('claude-sonnet-5', '2026-09-01T00:00:00.000Z')).toBeCloseTo(3, 10);
-    expect(await millionInput('claude-sonnet-5', '2026-12-01T10:00:00.000Z')).toBeCloseTo(3, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-09-01T00:00:00.000Z')).toBeCloseTo(2, 10);
+    expect(await millionInput('claude-sonnet-5', '2026-12-01T10:00:00.000Z')).toBeCloseTo(2, 10);
   });
 
   it('applies the scheduled rate to cache savings too', () => {
-    // $2.00 input - $0.20 cache read = $1.80 / 1M during the introductory window.
+    // $2.00 input - $0.20 cache read = $1.80 / 1M, whenever the session ran.
     expect(
       calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-08-15T10:00:00.000Z')
     ).toBeCloseTo(1.8, 6);
-    // $3.00 - $0.30 = $2.70 afterwards.
     expect(
       calculateCacheSavings(1_000_000, 'claude-sonnet-5', '2026-10-01T10:00:00.000Z')
-    ).toBeCloseTo(2.7, 6);
+    ).toBeCloseTo(1.8, 6);
   });
 
   it('reports scheduled models as exactly priced, not estimates', () => {
     expect(isModelPriced('claude-sonnet-5')).toBe(true);
     expect(isModelPriced('claude-opus-5')).toBe(true);
     expect(isModelPriced('claude-fable-5')).toBe(true);
+    expect(isModelPriced('claude-fable-5-1')).toBe(true);
+    expect(isModelPriced('claude-mythos-5-1')).toBe(true);
     expect(getPricingMeta().knownModels).toContain('claude-sonnet-5');
+  });
+});
+
+// ─── Parse cache: what the cached entry is allowed to keep alive ──────────────
+
+describe('parse cache — retained bytes', () => {
+  it('keeps the unterminated tail, not the transcript it was read from', async () => {
+    resetParseCache();
+    // A transcript whose last line has no newline yet, which is the only reason
+    // the cache holds bytes at all: the tail is folded once the rest arrives.
+    const lines: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      lines.push(
+        assistantLine({
+          model: 'claude-sonnet-4-5',
+          input: 10,
+          output: 5,
+          id: `m${i}`,
+          requestId: `r${i}`,
+        })
+      );
+    }
+    const unterminated = '{"type":"assistant","message":{"id":"tail"';
+    const body = lines.join('\n') + '\n' + unterminated;
+    writeFileSync(join(tmp, 'a.jsonl'), body, 'utf-8');
+    expect(body.length).toBeGreaterThan(512 * 1024);
+
+    const [session] = await getSessionList(tmp);
+    const stats = getParseStats();
+
+    // The tail is buffered rather than folded or dropped…
+    expect(session.messageCount).toBe(4000);
+    expect(stats.cachedFiles).toBe(1);
+    // …and it is a copy: a `subarray` view would pin all 512 KB+ of `combined`
+    // for the life of the process, once per cached transcript.
+    expect(stats.retainedPartialBytes).toBeLessThan(64 * 1024);
+  });
+
+  it('drops the retained bytes with the entry when the transcript vanishes', async () => {
+    resetParseCache();
+    writeFileSync(
+      join(tmp, 'a.jsonl'),
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 5,
+        id: 'm1',
+        requestId: 'r1',
+      }) +
+        '\n' +
+        '{"type":"assistant","message":{"id":"tail"',
+      'utf-8'
+    );
+    await getSessionList(tmp);
+    expect(getParseStats().cachedFiles).toBe(1);
+
+    rmSync(join(tmp, 'a.jsonl'));
+    await getSessionList(tmp);
+
+    expect(getParseStats()).toMatchObject({ cachedFiles: 0, retainedPartialBytes: 0 });
   });
 });

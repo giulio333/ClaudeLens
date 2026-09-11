@@ -14,18 +14,40 @@ import {
 import { Lens } from '../overview/Lens';
 import { TopBar } from '../shared/TopBar';
 import { projectDisplayName } from '../shared/projectName';
+import { formatTokens } from '../utils';
+import {
+  statusOf,
+  needsInput,
+  primaryFanTask,
+  parseRespawnFlags,
+  projectHashFromTranscript,
+  transcriptFilename,
+  fmtAge,
+  TERMINAL_BUCKETS,
+  type Bucket,
+} from './status';
 
 type Project = { hash: string; realPath: string };
 
-// Claude Code nomina la cartella progetto sostituendo '/' e '.' con '-'.
+// Claude Code nomina la cartella progetto sostituendo '/' e '.' con '-'. È una
+// regola lossy in un verso solo, quindi resta il fallback per un job il cui
+// state.json non porta il path del transcript (`projectHashFromTranscript`).
 function hashFromCwd(cwd: string): string {
   return cwd.replace(/[/.]/g, '-');
+}
+
+/** Il progetto in cui aprire il transcript del job: dal path che il supervisor
+ *  stesso scansiona quando c'è, indovinato dal cwd solo in sua assenza. */
+function projectFor(s: BgSession): Project {
+  const hash = projectHashFromTranscript(s.transcriptPath) ?? hashFromCwd(s.cwd);
+  return { hash, realPath: s.cwd };
 }
 
 // Costruisce un SessionSummary minimale per aprire il transcript nella chat view.
 function summaryFor(s: BgSession): SessionSummary {
   return {
-    filename: `${s.sessionId}.jsonl`,
+    // Il nome del file su disco, non uno composto dal session id.
+    filename: transcriptFilename(s.transcriptPath) ?? `${s.sessionId}.jsonl`,
     date: s.updatedAt || s.createdAt,
     inputTokens: 0,
     outputTokens: 0,
@@ -40,53 +62,6 @@ function summaryFor(s: BgSession): SessionSummary {
     template: s.template,
   };
 }
-
-// ─── Status mapping ────────────────────────────────────────────────────────────
-
-type Bucket = 'needs-input' | 'working' | 'ready' | 'completed' | 'failed' | 'stopped';
-
-interface StatusInfo {
-  bucket: Bucket;
-  label: string;
-  color: string;
-  pulse: boolean;
-}
-
-// Mirrors the bucketing used by `claude agents` TUI: needs-input takes priority
-// over working so that rate-limits / pending questions surface immediately.
-function statusOf(s: BgSession): StatusInfo {
-  const needsInput =
-    !!s.hasPendingQuestion ||
-    s.state === 'blocked' ||
-    s.tempo === 'blocked' ||
-    (typeof s.needs === 'string' && s.needs.length > 0);
-  if (needsInput)
-    return { bucket: 'needs-input', label: 'Needs input', color: '#f59e0b', pulse: true };
-
-  if (s.state === 'done')
-    return { bucket: 'completed', label: 'Completed', color: '#22c55e', pulse: false };
-  if (s.state === 'failed' || s.state === 'errored')
-    return { bucket: 'failed', label: 'Failed', color: '#ef4444', pulse: false };
-  if (s.state === 'stopped')
-    return { bucket: 'stopped', label: 'Stopped', color: '#94a3b8', pulse: false };
-
-  // Alive worker: anything that's not idle-done is treated as Working so the
-  // user sees motion even when `tempo` lags behind the actual state.
-  if (s.alive) {
-    if (s.tempo === 'thinking')
-      return { bucket: 'working', label: 'Thinking', color: '#6366f1', pulse: true };
-    if (s.tempo === 'busy' || s.inFlightTasks > 0 || s.state === 'running' || s.state === 'working')
-      return { bucket: 'working', label: 'Working', color: '#6366f1', pulse: true };
-    return { bucket: 'ready', label: 'Ready', color: '#0ea5e9', pulse: false };
-  }
-
-  return { bucket: 'stopped', label: 'Asleep', color: '#94a3b8', pulse: false };
-}
-
-// Buckets that represent finished work. A worker process can stay alive (warm,
-// idle) after its task is done — `claude agents` keeps it around for attach /
-// resume — so pid-liveness alone overcounts "running now".
-const TERMINAL_BUCKETS = new Set<Bucket>(['completed', 'failed', 'stopped']);
 
 const BUCKET_ORDER: { key: Bucket; title: string; hint: string }[] = [
   { key: 'needs-input', title: 'Needs input', hint: 'waiting on you' },
@@ -107,6 +82,13 @@ function relTime(iso: string): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h ago`;
   return `${Math.floor(h / 24)}d ago`;
+}
+
+/** How long the in-flight task has been running. The clock lives here, next to
+ *  `relTime`'s, so `fmtAge` itself stays pure and testable; both refresh with
+ *  the row, which re-renders on every `live:bgSessions` push. */
+function fanAgeNote(startedAt: number): string {
+  return fmtAge(startedAt, Date.now());
 }
 
 // ─── Row ─────────────────────────────────────────────────────────────────────
@@ -250,7 +232,22 @@ function SessionRow({
   actions: RowActions;
 }) {
   const st = statusOf(s);
-  const subtitle = s.detail || s.result || s.intent || '—';
+  // `detail` is the last status line, and after an answered question that line
+  // is the USER's own reply — so a job waiting on you shows what it asked
+  // (`needs`), and never a message the user already sent.
+  const asking = needsInput(s);
+  const subtitle = asking ? s.needs || s.detail || '—' : s.detail || s.result || s.intent || '—';
+  const fan = primaryFanTask(s.fan);
+  const fanAge = fan ? fanAgeNote(fan.startedAt) : '';
+  const launch = parseRespawnFlags(s.respawnFlags);
+  const launchNote = [
+    launch.model,
+    launch.permissionMode,
+    launch.effort && `${launch.effort} effort`,
+  ]
+    .filter(Boolean)
+    .join(' · ');
+  const tok = s.tokens !== null && s.tokens > 0 ? formatTokens(s.tokens) : null;
   return (
     <button
       type="button"
@@ -289,7 +286,24 @@ function SessionRow({
           )}
         </div>
         <div className="t-desc truncate">{subtitle}</div>
-        {showProject && s.projectName && (
+        {/* What is running beside the turn: the one thing that says a job is
+            busy when its own status line has gone quiet. */}
+        {fan && (
+          <div
+            className="truncate"
+            style={{
+              fontSize: 11,
+              color: 'var(--cl-ink-4)',
+              fontFamily: 'var(--font-mono)',
+              marginTop: 3,
+            }}
+            title={fan.label || fan.kind}
+          >
+            <span style={{ color: 'var(--cl-ink-3)' }}>{fan.label || fan.kind}</span>
+            {fanAge && <> · {fanAge} in flight</>}
+          </div>
+        )}
+        {(launchNote || (showProject && s.projectName)) && (
           <div
             className="truncate"
             style={{
@@ -299,7 +313,9 @@ function SessionRow({
               marginTop: 3,
             }}
           >
-            {s.projectName}
+            {[showProject && s.projectName ? s.projectName : '', launchNote]
+              .filter(Boolean)
+              .join(' · ')}
           </div>
         )}
       </div>
@@ -308,7 +324,18 @@ function SessionRow({
           <b style={{ color: st.color }}>{st.label}</b>
           {s.inFlightTasks > 0 && <> · {s.inFlightTasks} task</>}
           <br />
-          <span style={{ color: 'var(--cl-ink-4)' }}>{relTime(s.updatedAt)}</span>
+          <span style={{ color: 'var(--cl-ink-4)' }}>
+            {relTime(s.updatedAt)}
+            {/* Tokens, not dollars: the supervisor reports one total with no
+                input/output/cache split, so it cannot be priced. */}
+            {tok && (
+              <>
+                {' · '}
+                {tok.value}
+                {tok.unit} tok
+              </>
+            )}
+          </span>
         </span>
         <ActionCluster s={s} actions={actions} />
       </div>
@@ -571,11 +598,10 @@ export function AgentsLiveView({
                         s={s}
                         showProject={!project}
                         onOpen={() =>
-                          onOpenSession(
-                            project ?? { hash: hashFromCwd(s.cwd), realPath: s.cwd },
-                            summaryFor(s),
-                            { jobId: s.id, alive: s.alive }
-                          )
+                          onOpenSession(project ?? projectFor(s), summaryFor(s), {
+                            jobId: s.id,
+                            alive: s.alive,
+                          })
                         }
                         actions={{
                           onAttach: () =>
@@ -683,6 +709,7 @@ export function AgentsLiveView({
                       { value: 'opus', label: 'Opus' },
                       { value: 'sonnet', label: 'Sonnet' },
                       { value: 'haiku', label: 'Haiku' },
+                      { value: 'fable', label: 'Fable' },
                     ]}
                   />
                   <label className="cl-dispatch-name-wrap">

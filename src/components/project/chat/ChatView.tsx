@@ -19,6 +19,7 @@ import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
   buildProcessedMessages,
+  buildSkillIndex,
   correlateSessionAgents,
   correlateSessionSkills,
   ChatDetailsFilter,
@@ -36,13 +37,14 @@ import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
-import { MessageBubble, ToolsHiddenBadge } from './MessageBubble';
+import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
 import { FocusMinimap } from './FocusMinimap';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
+import { SessionColorDot } from '../shared/SessionColorDot';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
 import { useSessionTags } from '../../../hooks/useSessionTags';
@@ -137,12 +139,12 @@ export function ChatView({
   }, [globalAgents, projectAgents]);
 
   // Resolve a skill's full definition by name (the slash-command id) — feeds both
-  // the inline skill card link and the footer skill dock.
+  // the inline skill card link and the footer skill dock, through the same index
+  // the dock uses, so a plugin skill (`plugin:leaf`) resolves on both surfaces.
   const skillOf = useMemo(() => {
-    const byName = new Map<string, Skill>();
-    for (const s of allSkills ?? []) byName.set(s.name, s);
-    return (name: string) => byName.get(name);
-  }, [allSkills]);
+    const resolve = buildSkillIndex(allSkills, plugins);
+    return (name: string) => resolve(name) ?? undefined;
+  }, [allSkills, plugins]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);
@@ -600,6 +602,11 @@ export function ChatView({
     // standalone badge at its stream position. The common case is folded into
     // the preceding turn's header — that "tools hidden" chip used to be
     // deferred onto the *following* message, pinning it to the wrong turn.
+    // The advisor marker is a stream event, not a turn: it renders the same in
+    // both density modes (the consult itself is the whole content).
+    if (item.kind === 'advisor') {
+      return <AdvisorBadge consult={item.consult} dimmed={activeFilter !== 'all'} />;
+    }
     if (item.kind !== 'turn') {
       return (
         <ToolsHiddenBadge
@@ -721,7 +728,21 @@ export function ChatView({
             // The session title is the same step back for the hand already up
             // here; the detail takes the "you are here" accent.
             {
-              label: title,
+              // The session's `/color` dot rides the crumb, so the colour the
+              // user set to tell two runs apart is on screen while reading one
+              // of them — not only in the list they picked it from.
+              // `flex`, not `inline-flex`: the crumb button truncates, and an
+              // inline box sized to its own content would be clipped mid-word
+              // instead of ellipsised. A block-level flex row takes the
+              // button's width and hands the truncation to the title span.
+              label: session.agentColor ? (
+                <span className="flex items-center min-w-0" style={{ gap: 7 }}>
+                  <SessionColorDot color={session.agentColor} />
+                  <span className="truncate min-w-0">{title}</span>
+                </span>
+              ) : (
+                title
+              ),
               accent: !detailBack,
               onClick: detailBack ?? undefined,
               title: detailBack ? 'Back to chat (Esc)' : undefined,

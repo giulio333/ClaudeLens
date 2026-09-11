@@ -30,18 +30,43 @@ export function formatTokens(n: number): { value: string; unit: string } {
   return { value: String(n), unit: '' };
 }
 
-// Restituisce un titolo umano per la sessione, in ordine di priorità:
-// 1) customTitle (impostato dall'utente)  2) aiTitle (generato da Claude)
-// 3) primo messaggio utente troncato       4) fallback "Untitled session"
-export function sessionTitle(
-  s: {
-    customTitle?: string;
-    aiTitle?: string;
-    firstUserMessage?: string;
-  },
-  maxLen = 80
-): string {
-  const raw = s.customTitle?.trim() || s.aiTitle?.trim() || s.firstUserMessage?.trim();
+// I campi da cui esce il nome di una sessione. Un oggetto strutturale e non
+// `SessionSummary`: i chiamanti ne passano anche versioni parziali.
+export type SessionNamed = {
+  agentName?: string;
+  customTitle?: string;
+  aiTitle?: string;
+  firstUserMessage?: string;
+};
+
+// Il nome della sessione, grezzo, o null se non ne ha nessuno. **L'unico posto
+// dove vive la precedenza**: era ricopiata in ogni vista che doveva anche solo
+// chiedersi "questa sessione ha un nome?" (la riga della lista per l'italico
+// "Untitled", il crumb dei team, il corpus della ricerca), e ogni copia
+// dimenticata è una sessione che l'utente ha chiamato in un modo e l'app mostra
+// in un altro.
+//
+// L'ordine è quello che risolve Claude Code stesso
+// (`registry name ?? customTitle ?? aiTitle`):
+// 1) agentName — `/rename`, l'unico modo che esiste oggi per dare un nome;
+// 2) customTitle — `/title`, il comando che `/rename` ha sostituito: resta nei
+//    transcript vecchi, e lì è comunque un nome scelto dall'utente;
+// 3) aiTitle — quello generato, riscritto a ogni turno;
+// 4) il primo messaggio dell'utente.
+export function sessionName(s: SessionNamed): string | null {
+  return (
+    s.agentName?.trim() ||
+    s.customTitle?.trim() ||
+    s.aiTitle?.trim() ||
+    s.firstUserMessage?.trim() ||
+    null
+  );
+}
+
+// Restituisce un titolo umano per la sessione: `sessionName` troncato, con
+// fallback "Untitled session".
+export function sessionTitle(s: SessionNamed, maxLen = 80): string {
+  const raw = sessionName(s);
   if (!raw) return 'Untitled session';
   const firstLine = raw.split('\n')[0].trim() || raw.trim();
   if (firstLine.length <= maxLen) return firstLine;
@@ -70,11 +95,12 @@ export function fmtModel(m: string): string {
 }
 
 /** Family modifier for the `.model` cell of a row: the dot takes its hue from a
- *  class, and only Opus and Haiku differ from the accent default. */
-export function modelFamily(m?: string | null): '' | 'opus' | 'haiku' {
+ *  class, and only Opus, Haiku and Fable differ from the accent default. */
+export function modelFamily(m?: string | null): '' | 'opus' | 'haiku' | 'fable' {
   if (!m) return '';
   if (m.includes('opus')) return 'opus';
   if (m.includes('haiku')) return 'haiku';
+  if (m.includes('fable')) return 'fable';
   return '';
 }
 
@@ -96,9 +122,13 @@ export type ModelMixSlice = {
   pctLabel: string;
 };
 
-export type ModelMixKey = 'opus' | 'sonnet' | 'haiku' | 'other';
+export type ModelMixKey = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
 
+// Ordered by tier, dearest first — and a family with no tokens is dropped
+// before the bar is drawn, so adding Fable changed nothing for a project that
+// never ran it.
 const MODEL_MIX_ORDER: { key: ModelMixKey; label: string }[] = [
+  { key: 'fable', label: 'Fable' },
   { key: 'opus', label: 'Opus' },
   { key: 'sonnet', label: 'Sonnet' },
   { key: 'haiku', label: 'Haiku' },
@@ -110,6 +140,10 @@ export function modelMixKey(model?: string): ModelMixKey {
   if (model.includes('opus')) return 'opus';
   if (model.includes('haiku')) return 'haiku';
   if (model.includes('sonnet')) return 'sonnet';
+  if (model.includes('fable')) return 'fable';
+  // Mythos is the same tier and the same price as Fable, but it is a different
+  // model: it stays in `other` rather than being counted under a name that
+  // isn't its own. A wrong label on a legend is worse than a generic one.
   return 'other';
 }
 

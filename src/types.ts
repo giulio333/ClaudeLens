@@ -59,6 +59,7 @@ export interface ClaudeMdHierarchy {
 // Ri-esportati qui così il renderer continua a importarli da './types'.
 export type {
   ChatContentBlock,
+  AdvisorConsult,
   ChatMessage,
   MessageUsage,
   ToolActivity,
@@ -101,6 +102,12 @@ export interface SubagentMeta {
   messageCount: number;
 }
 
+/** The eight names `/color` can stamp on a session. Mirrors `AGENT_COLORS` in
+ *  `electron/modules/cost-tracker.ts`, which is where the value is validated —
+ *  the renderer only ever sees one of these or nothing. */
+export type AgentColor =
+  'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange' | 'pink' | 'cyan';
+
 export interface SessionSummary {
   filename: string;
   date: string;
@@ -114,9 +121,12 @@ export interface SessionSummary {
   messageCount: number;
   model?: string;
   models: Record<string, number>;
+  /** The name the user typed with `/rename`; outranks both titles. */
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   template?: string;
 }
 
@@ -795,15 +805,17 @@ export interface TraceMark {
  *  `sessionId` in the renderer: the registry says busy/waiting, this says at what. */
 export interface SessionActivity {
   sessionId: string;
-  /** The name this conversation goes by — the user's `/title` (`custom-title`)
-   *  if they set one, else the one Claude generated (`ai-title`); null until a
-   *  title record has been seen. The only human name a session has — the
-   *  registry's `name` is the project plus two random characters. */
+  /** The name this conversation goes by — the one the user typed with `/rename`
+   *  (`agent-name`) or, in older transcripts, `/title` (`custom-title`), else
+   *  the one Claude generated (`ai-title`); null until a title record has been
+   *  seen. The only human name a session has — the registry's `name` is the
+   *  project plus two random characters. */
   title: string | null;
-  /** Which record `title` came from; null while `title` is. The two do not rank
-   *  equally — `ai-title` is rewritten on later turns — so the main process
-   *  carries the source to keep a `/title` from being overwritten by it. */
-  titleSource: 'custom' | 'ai' | null;
+  /** Which record `title` came from; null while `title` is. The three do not
+   *  rank equally — `ai-title` is rewritten on later turns — so the main process
+   *  carries the source to keep a name the user typed from being overwritten by
+   *  it. Mirrors `SessionTitleSource` in `electron/modules/transcript-tail.ts`. */
+  titleSource: 'agent' | 'custom' | 'ai' | null;
   transcriptPath: string | null;
   /** 'thinking' | 'busy' | 'idle'; null when nothing has been read yet. */
   activity: string | null;
@@ -842,19 +854,51 @@ export interface SessionActivity {
   endedAt: number | null;
 }
 
+/** A unit of work the supervisor launched beside the turn (a shell, a fetch). */
+export interface BgFanTask {
+  kind: string;
+  label: string;
+  /** Epoch ms; 0 when the state file carried no usable stamp. */
+  startedAt: number;
+}
+
 export interface BgSession {
   id: string;
   sessionId: string;
   name: string;
+  /** An outcome name (`done`/`failed`/`stopped`/…), NOT what the job is doing
+   *  now — that is `tempo`. See `agents-live/status.ts` for why this matters. */
   state: string;
+  /** `idle` | `active` | `blocked` — the live one. */
   tempo: string;
+  /** Last status line. Can be the user's own reply, so it is never shown as a
+   *  pending question. */
   detail: string;
   intent: string;
+  /** Starting prompt, when the intent does not carry it. */
+  initialPrompt: string;
   result: string | null;
   cwd: string;
   projectName: string;
   template: string;
   inFlightTasks: number;
+  /** WHICH kinds of work are in flight (`session_cron`, …) — a different
+   *  question from how many. */
+  inFlightKinds: string[];
+  /** Work running beside the turn: the evidence that a job is busy. */
+  fan: BgFanTask[];
+  /** Tokens spent, when reported. No input/output/cache split, so it can never
+   *  become a dollar figure. */
+  tokens: number | null;
+  /** The flags a respawn would reuse: model, permission mode, effort. */
+  respawnFlags: string[];
+  /** The job wakes on a schedule. */
+  hasRoutine: boolean;
+  /** The job re-wakes itself. */
+  selfWake: boolean;
+  /** The transcript the supervisor itself scans — the authoritative path, never
+   *  derived from the cwd. */
+  transcriptPath: string | null;
   alive: boolean;
   pid: number | null;
   createdAt: string;

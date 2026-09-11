@@ -242,6 +242,26 @@ export async function getSessionArtifacts(
 }
 
 /**
+ * La rimozione di un singolo path: file → unlink, cartella → rm ricorsivo.
+ *
+ * È un parametro invece che una chiamata diretta a `fs` perché il fallimento è
+ * la metà interessante di questo modulo, ed è quella che un test non può
+ * *allestire* in modo portabile. I due casi che contano — la rimozione che
+ * lancia, e quella che **non lancia e lascia il path lì** — venivano provati
+ * rendendo la cartella padre di sola lettura con `chmod 0o500`, cioè
+ * affermando qualcosa sui permessi del processo e non su questo codice: root
+ * ignora quei bit, quindi la suite falliva in container e passava altrove
+ * (#240). Con la rimozione iniettata il test dichiara l'esito che vuole
+ * osservare, e il controllo su disco che segue resta quello vero.
+ */
+export type RemovePath = (path: string, isDirectory: boolean) => void;
+
+const removeFromDisk: RemovePath = (path, isDirectory) => {
+  if (isDirectory) rmSync(path, { recursive: true, force: true });
+  else unlinkSync(path);
+};
+
+/**
  * Cancella i path indicati (file → unlink, cartelle → rm ricorsivo). Ogni path deve
  * risolvere sotto `rootDir` (~/.claude): quelli fuori scope sono scartati con un
  * warning. Best-effort per voce: un errore su un path non blocca gli altri.
@@ -251,10 +271,16 @@ export async function getSessionArtifacts(
  * segnala tutto ciò che non riesce a rimuovere, e una cancellazione distruttiva
  * che si dichiara riuscita perché nessuno ha protestato è esattamente il modo in
  * cui questa app ha già raccontato una bugia all'utente una volta.
+ *
+ * `remove` esiste per i test (vedi `RemovePath`); in produzione non è mai
+ * passato. Nota che l'esistenza — prima e dopo — è letta comunque dal
+ * filesystem vero: è *quella* la garanzia, e stubbarla vorrebbe dire provare lo
+ * stub invece del codice.
  */
 export function deleteSessionArtifacts(
   requests: DeleteRequest[],
-  rootDir: string
+  rootDir: string,
+  remove: RemovePath = removeFromDisk
 ): DeleteSessionResult {
   const outcomes: ArtifactOutcome[] = [];
   const root = resolve(rootDir);
@@ -280,11 +306,7 @@ export function deleteSessionArtifacts(
       continue;
     }
     try {
-      if (statSync(resolved).isDirectory()) {
-        rmSync(resolved, { recursive: true, force: true });
-      } else {
-        unlinkSync(resolved);
-      }
+      remove(resolved, statSync(resolved).isDirectory());
     } catch (e) {
       note(resolved, required, 'failed', e instanceof Error ? e.message : String(e));
       continue;
