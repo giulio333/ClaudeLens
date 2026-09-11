@@ -20,7 +20,13 @@ cache's invalidation, and the merge of the rows the SDK read does not return
 (#245/#246 — a message absorbed mid-turn lands in chronological place and a
 slash-command skill gets its `skillPath`, both from one extra pass over the
 same file). CI (`.github/workflows/ci.yml`) runs format:check +
-typecheck + lint + test + build on every push/PR. **Test order is randomised**
+typecheck + lint + test + build on every push/PR, **on Node 22 and 24 both** —
+`engines` says `>=22`, so a claim the suite only holds on one of them is a claim
+the project does not make. Pinning 22 alone is what hid #258: two assertions were
+bounded by the literal `64 * 1024`, which happened to equal Node 22's
+`Buffer.poolSize`, and went red on 24 — where that pool is exactly 65536 — while
+CI stayed green. A bound that has to describe an allocation belongs to
+`Buffer.poolSize`, never to a number that matches it today. **Test order is randomised**
 (`sequence.shuffle` in `vitest.config.ts`): every `it` has to be an independent
 claim, and three files had quietly stopped being that — one test created the
 workflow the next edited, another appended to a transcript a later one measured,
