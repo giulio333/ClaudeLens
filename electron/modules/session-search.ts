@@ -28,9 +28,13 @@
 // path took.
 //
 // ── What is searched ─────────────────────────────────────────────────────────
-// The user's prompts and the assistant's prose, through the SAME parse the
-// transcript view uses (`parseChatSessionText`), so a hit is by construction a
-// message the app is willing to render. Thinking blocks are opt-in; tool inputs
+// The user's prompts and the assistant's prose, through the SAME two passes the
+// transcript view makes — `parseChatSessionText` for the chat lines and
+// `parseTranscriptExtras` for the rows it drops on purpose — so a hit is by
+// construction a message the app is willing to render. The second pass is not
+// an optimisation: a message typed while a turn was running is recorded only as
+// a `queue-operation` and never as a `user` line, so a search without it misses
+// prose that is on screen. Thinking blocks are opt-in; tool inputs
 // and tool results are deliberately out (a `Read` result is the file's whole
 // content, so including them would make every search a grep over the user's
 // source tree, reported as if they had said it). Sidechain lines stay excluded,
@@ -49,6 +53,7 @@ import { basename, join } from 'path';
 import { glob } from 'glob';
 import { listProjectSessionFiles } from './session-files';
 import { parseChatSessionText } from './session-reader';
+import { mergeTranscriptExtras, parseTranscriptExtras } from './transcript-extras';
 import { readSessionTitle } from './transcript-tail';
 import type { ChatMessage } from '../shared/chat-types';
 
@@ -388,7 +393,15 @@ export async function searchSessions(
     }
 
     stats.parsed++;
-    const messages = parseChatSessionText(raw);
+    // The same two passes the transcript view makes, over the one string we
+    // already hold: the chat lines, then the rows the parse above drops on
+    // purpose. A message typed while a turn was running is recorded ONLY as a
+    // `queue-operation`, never as a `user` line, so without the second pass the
+    // search cannot find prose the view puts on screen — 57 of the 341
+    // transcripts on this machine carry at least one. The uuid those messages
+    // are given is derived from the file, so it is the same uuid the view
+    // assigns and the renderer can still jump to the message.
+    const messages = mergeTranscriptExtras(parseChatSessionText(raw), parseTranscriptExtras(raw));
     const { hits, total } = searchMessages(messages, needle, {
       includeThinking: request.includeThinking,
       maxHits: maxHitsPerSession,

@@ -36,6 +36,27 @@ function userLine(uuid: string, text: string, extra: Record<string, unknown> = {
   });
 }
 
+/** The pair Claude Code writes when a message typed mid-turn is absorbed into
+ *  the running turn: an `enqueue` when it was typed, a `remove` when the turn
+ *  swallowed it. There is never a `user` line for it. */
+function queuedLines(text: string, typedAt: string, absorbedAt: string): string[] {
+  return [
+    JSON.stringify({
+      type: 'queue-operation',
+      operation: 'enqueue',
+      content: text,
+      timestamp: typedAt,
+    }),
+    JSON.stringify({
+      type: 'queue-operation',
+      operation: 'remove',
+      reason: 'absorbed_mid_turn',
+      content: text,
+      timestamp: absorbedAt,
+    }),
+  ];
+}
+
 function assistantLine(uuid: string, blocks: unknown[]): string {
   return JSON.stringify({
     type: 'assistant',
@@ -230,6 +251,44 @@ describe('searchSessions (over real files)', () => {
     expect(out.results[0].sessionId).toBe('aaaaaaaa-1111');
     expect(out.results[0].projectHash).toBe('-Users-me-alpha');
     expect(out.results[0].hits[0].snippet).toContain('pty spawn');
+  });
+
+  it('finds a message the turn absorbed, which is no `user` line to parse', async () => {
+    // The view shows this message with a "sent mid-turn" chip; searching for
+    // prose that is on screen has to find it.
+    transcript('-Users-me-alpha', 'absorbed', [
+      userLine('u1', 'start the refactor'),
+      ...queuedLines('also rename the pty helper', '2026-01-01T00:00:30Z', '2026-01-01T00:02:00Z'),
+      assistantLine('a1', [{ type: 'text', text: 'done' }]),
+    ]);
+
+    const out = await searchSessions(projectsDir, { text: 'rename the pty helper' });
+
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0].hits[0].snippet).toContain('rename the pty helper');
+    // Named by the uuid the view gives it, derived from the file, so the
+    // renderer can still jump to the bubble.
+    expect(out.results[0].hits[0].messageUuid).toBe('queued-2026-01-01T00:00:30Z-0');
+  });
+
+  it('leaves a queued message that WAS delivered as its own turn counted once', async () => {
+    // `enqueue`/`dequeue` is the ordinary case: the message became a real turn,
+    // so the `user` line is already there and the extras pass must not double it.
+    transcript('-Users-me-alpha', 'delivered', [
+      JSON.stringify({
+        type: 'queue-operation',
+        operation: 'enqueue',
+        content: 'rename the pty helper',
+        timestamp: '2026-01-01T00:00:30Z',
+      }),
+      userLine('u1', 'rename the pty helper'),
+    ]);
+
+    const out = await searchSessions(projectsDir, { text: 'rename the pty helper' });
+
+    expect(out.results).toHaveLength(1);
+    expect(out.results[0].hitCount).toBe(1);
+    expect(out.results[0].hits[0].messageUuid).toBe('u1');
   });
 
   it('reads BOTH native layouts, so a `sessions/` project is not invisible', async () => {
