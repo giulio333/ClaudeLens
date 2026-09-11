@@ -175,6 +175,70 @@
   --cl-glass-edge-side: oklch(1 0 0 / 0.06);
 }
 
+/* ── Session colour (`/color`) ──
+   The eight names Claude Code's own `/color` accepts, as dots. These are the
+   only hues in the app outside the brand 40°, and deliberately so: the colour
+   is the USER's label on a session — what tells two concurrent runs apart at a
+   glance — so rendering a blue session in terracotta would be rendering
+   something else. They stay confined to a 7px dot.
+   Light: dark and saturated enough to read on warm paper. Dark: lifted in L,
+   chroma eased, same hues — the pairing every other token here uses. */
+:root {
+  --cl-agent-red: oklch(0.58 0.19 27);
+  --cl-agent-orange: oklch(0.65 0.16 60);
+  --cl-agent-yellow: oklch(0.7 0.14 90);
+  --cl-agent-green: oklch(0.57 0.14 148);
+  --cl-agent-cyan: oklch(0.62 0.11 210);
+  --cl-agent-blue: oklch(0.55 0.16 258);
+  --cl-agent-purple: oklch(0.53 0.17 300);
+  --cl-agent-pink: oklch(0.62 0.19 350);
+}
+:root[data-theme='dark'] {
+  --cl-agent-red: oklch(0.7 0.17 27);
+  --cl-agent-orange: oklch(0.76 0.15 60);
+  --cl-agent-yellow: oklch(0.84 0.13 92);
+  --cl-agent-green: oklch(0.74 0.14 148);
+  --cl-agent-cyan: oklch(0.76 0.1 210);
+  --cl-agent-blue: oklch(0.7 0.14 258);
+  --cl-agent-purple: oklch(0.7 0.16 300);
+  --cl-agent-pink: oklch(0.75 0.16 350);
+}
+.cl-scolor {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  align-self: center;
+  display: inline-block;
+  /* No colour of its own: the name class below supplies one, so a value that
+     never matched renders an invisible 7px gap instead of a black dot. */
+  background: transparent;
+}
+.cl-scolor.red {
+  background: var(--cl-agent-red);
+}
+.cl-scolor.orange {
+  background: var(--cl-agent-orange);
+}
+.cl-scolor.yellow {
+  background: var(--cl-agent-yellow);
+}
+.cl-scolor.green {
+  background: var(--cl-agent-green);
+}
+.cl-scolor.cyan {
+  background: var(--cl-agent-cyan);
+}
+.cl-scolor.blue {
+  background: var(--cl-agent-blue);
+}
+.cl-scolor.purple {
+  background: var(--cl-agent-purple);
+}
+.cl-scolor.pink {
+  background: var(--cl-agent-pink);
+}
+
 * {
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;

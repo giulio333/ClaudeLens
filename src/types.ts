@@ -102,6 +102,12 @@ export interface SubagentMeta {
   messageCount: number;
 }
 
+/** The eight names `/color` can stamp on a session. Mirrors `AGENT_COLORS` in
+ *  `electron/modules/cost-tracker.ts`, which is where the value is validated —
+ *  the renderer only ever sees one of these or nothing. */
+export type AgentColor =
+  'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange' | 'pink' | 'cyan';
+
 export interface SessionSummary {
   filename: string;
   date: string;
@@ -118,6 +124,7 @@ export interface SessionSummary {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   template?: string;
 }
 

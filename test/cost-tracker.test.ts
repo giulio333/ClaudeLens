@@ -442,6 +442,84 @@ describe('getSessionList', () => {
   });
 });
 
+// The colour `/color` stamps on a session. Claude Code appends it as its own
+// record and declares it last-wins: the row is re-emitted on later turns, so a
+// session recoloured mid-run holds every colour it ever had.
+describe('agentColor — the /color record, last wins', () => {
+  const color = (c: unknown): string =>
+    JSON.stringify({ type: 'agent-color', agentColor: c, sessionId: 's' });
+
+  beforeEach(() => {
+    resetParseCache();
+  });
+
+  it('takes the LAST colour record, not the first', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('purple'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      color('blue'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBe('blue');
+  });
+
+  it('leaves a session with no colour record undefined', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBeUndefined();
+  });
+
+  it('ignores a name outside the eight /color accepts', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('blue'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      // Not a colour the CLI can produce: keep the one we have rather than let
+      // an unknown string reach the renderer.
+      color('chartreuse'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBe('blue');
+  });
+
+  it('clears the colour on an empty or `default` record', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      color('blue'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      color('default'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentColor).toBeUndefined();
+  });
+
+  it('picks up a colour set mid-session, through the incremental tail read', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 10,
+        id: 'm1',
+        requestId: 'r1',
+      }),
+    ]);
+    const [before] = await getSessionList(tmp);
+    expect(before.agentColor).toBeUndefined();
+
+    // The realistic case: `/color` runs while the app is open, so the record
+    // arrives in the appended tail the cache folds — never in a full re-parse.
+    appendFileSync(join(tmp, 'sess.jsonl'), color('green') + '\n', 'utf-8');
+
+    const [after] = await getSessionList(tmp);
+    expect(after.agentColor).toBe('green');
+    expect(getParseStats().incrementalParses).toBe(1);
+  });
+});
+
 describe('pricing metadata', () => {
   it('exposes an ISO last-updated date and the list of exactly-priced models', () => {
     const meta = getPricingMeta();
