@@ -43,6 +43,9 @@
   --cl-violet-ink: oklch(0.34 0.17 305);
   --cl-cyan: oklch(0.62 0.14 200);
   --cl-haiku: oklch(0.58 0.18 175);
+  /* data-encoding hue for the Fable family, same category as --cl-violet /
+     --cl-haiku above (which model produced this slice), not a brand accent */
+  --cl-fable: oklch(0.55 0.2 355);
   --cl-danger: oklch(0.58 0.21 25);
   --cl-danger-soft: oklch(0.94 0.04 25);
   --cl-warn: oklch(0.7 0.15 75);
@@ -100,6 +103,7 @@
   --cl-violet-ink: oklch(0.84 0.12 305);
   --cl-cyan: oklch(0.7 0.14 200);
   --cl-haiku: oklch(0.7 0.16 175);
+  --cl-fable: oklch(0.72 0.17 355);
   --cl-danger: oklch(0.68 0.19 25);
   --cl-danger-soft: oklch(0.33 0.09 25);
   --cl-warn: oklch(0.78 0.14 75);
@@ -11150,6 +11154,9 @@ button.cl-sw-member:focus-visible,
 .cl-row .model.haiku .dot {
   background: var(--cl-haiku);
 }
+.cl-row .model.fable .dot {
+  background: var(--cl-fable);
+}
 .cl-row .toks {
   font-family: var(--font-mono);
   font-size: 13px;
@@ -15793,6 +15800,9 @@ select.cl-opt-input {
 .cl-mixbar .seg.haiku {
   background: var(--cl-haiku);
 }
+.cl-mixbar .seg.fable {
+  background: var(--cl-fable);
+}
 .cl-mixbar .seg.other {
   background: var(--cl-ink-4);
 }
@@ -15826,6 +15836,9 @@ select.cl-opt-input {
 }
 .cl-mixlegend .dot.haiku {
   background: var(--cl-haiku);
+}
+.cl-mixlegend .dot.fable {
+  background: var(--cl-fable);
 }
 .cl-mixlegend .dot.other {
   background: var(--cl-ink-4);
@@ -16270,6 +16283,9 @@ select.cl-opt-input {
 }
 .cl-srow .meta .model.haiku .dot {
   background: var(--cl-haiku);
+}
+.cl-srow .meta .model.fable .dot {
+  background: var(--cl-fable);
 }
 .cl-srow .meta .toks {
   font-size: 13px;

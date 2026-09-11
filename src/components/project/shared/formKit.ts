@@ -5,14 +5,19 @@ import { useEffect } from 'react';
 // Kept apart from CreateFormKit.tsx so that file only exports components —
 // what react-refresh/only-export-components needs for fast refresh to work.
 
+// Gli alias che la CLI accetta come impostazione di modello, più `default`
+// (= nessuna impostazione, si eredita). L'elenco segue il catalogo di Claude
+// Code: `fable` e `fable[1m]` sono arrivati con la famiglia omonima.
 export const MODEL_PRESETS = [
   'default',
   'best',
   'sonnet',
   'opus',
   'haiku',
+  'fable',
   'sonnet[1m]',
   'opus[1m]',
+  'fable[1m]',
   'opusplan',
 ] as const;
 

@@ -95,11 +95,12 @@ export function fmtModel(m: string): string {
 }
 
 /** Family modifier for the `.model` cell of a row: the dot takes its hue from a
- *  class, and only Opus and Haiku differ from the accent default. */
-export function modelFamily(m?: string | null): '' | 'opus' | 'haiku' {
+ *  class, and only Opus, Haiku and Fable differ from the accent default. */
+export function modelFamily(m?: string | null): '' | 'opus' | 'haiku' | 'fable' {
   if (!m) return '';
   if (m.includes('opus')) return 'opus';
   if (m.includes('haiku')) return 'haiku';
+  if (m.includes('fable')) return 'fable';
   return '';
 }
 
@@ -121,9 +122,13 @@ export type ModelMixSlice = {
   pctLabel: string;
 };
 
-export type ModelMixKey = 'opus' | 'sonnet' | 'haiku' | 'other';
+export type ModelMixKey = 'fable' | 'opus' | 'sonnet' | 'haiku' | 'other';
 
+// Ordered by tier, dearest first — and a family with no tokens is dropped
+// before the bar is drawn, so adding Fable changed nothing for a project that
+// never ran it.
 const MODEL_MIX_ORDER: { key: ModelMixKey; label: string }[] = [
+  { key: 'fable', label: 'Fable' },
   { key: 'opus', label: 'Opus' },
   { key: 'sonnet', label: 'Sonnet' },
   { key: 'haiku', label: 'Haiku' },
@@ -135,6 +140,10 @@ export function modelMixKey(model?: string): ModelMixKey {
   if (model.includes('opus')) return 'opus';
   if (model.includes('haiku')) return 'haiku';
   if (model.includes('sonnet')) return 'sonnet';
+  if (model.includes('fable')) return 'fable';
+  // Mythos is the same tier and the same price as Fable, but it is a different
+  // model: it stays in `other` rather than being counted under a name that
+  // isn't its own. A wrong label on a legend is worse than a generic one.
   return 'other';
 }
 
