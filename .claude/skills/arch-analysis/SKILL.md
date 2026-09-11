@@ -1,10 +1,11 @@
 ---
+name: arch-analysis
 description: Analisi architetturale del progetto ClaudeLens (Electron + React)
 context: fork
 agent: Explore
 ---
 
-Esegui un'analisi architetturale completa del progetto ClaudeLens in `claudelens-app/`.
+Esegui un'analisi architetturale completa del progetto ClaudeLens a partire dalla root del repo.
 
 ## 1. Main Process — IPC Handlers (`electron/main.ts`)
 

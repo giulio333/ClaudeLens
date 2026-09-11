@@ -1,7 +1,7 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react';
 import type { Agent, McpServer, ProjectCost, SessionSummary, Skill } from '../../../types';
 import { fmtModel, sessionTitle } from '../utils';
-import { projectDisplayName } from './projectName';
+import { homeRelativePath, projectDisplayName } from './projectName';
 import { PROJECT_PURGE_ENABLED } from './project-purge';
 import { isSearchTrigger } from './searchTrigger';
 
@@ -331,6 +331,9 @@ export function SearchPopover({
         includesQuery(q, [
           sessionTitle(session, 160),
           session.firstUserMessage,
+          // Ogni nome che la sessione ha avuto, non solo quello che vince: si
+          // cerca col nome che si ricorda, che può essere quello vecchio.
+          session.agentName,
           session.customTitle,
           session.aiTitle,
           session.filename,
@@ -346,7 +349,10 @@ export function SearchPopover({
         project,
         session,
         title: sessionTitle(session),
-        detail: project.realPath,
+        // Il nome del progetto, non il suo path: di una sessione conta *in che
+        // progetto* sta, e il path — identico per tutte le sessioni dello
+        // stesso progetto — veniva troncato a `~/Projec…`, che non dice nulla.
+        detail: projectName(project),
         meta: `${session.messageCount} msg · ${shortWhen(session.date)}`,
         glyph: '#',
         pinned: pinnedSessions ? pinnedSessions(project.hash, session.filename) : false,
@@ -669,7 +675,7 @@ function ProjectSearchItem({
       <span className="pname-line">
         <span className="pname">{row.title}</span>
         <span className="pdot" />
-        <span className="ppath">{row.detail}</span>
+        <span className="ppath">{homeRelativePath(row.detail)}</span>
       </span>
       <span className="pmeta">
         <b>{row.meta.split(' ')[0]}</b> {row.meta.split(' ').slice(1).join(' ')}
@@ -719,9 +725,8 @@ function EntitySearchItem({
       <span className="pname-line">
         <span className="pname">{row.title}</span>
         <span className="pdot" />
-        <span className="ppath">{row.detail}</span>
+        <span className="ppath">{homeRelativePath(row.detail)}</span>
       </span>
-      <span className="ekind">{row.kind}</span>
       <span className="pmeta">{row.meta}</span>
       {showPin && (
         <button

@@ -96,11 +96,11 @@ Transient toasts for session-lifecycle events pushed over `notifications:event`
 suggested only: it never navigates on its own.
 
 Each toast is **one Mission Control feed row** (`.cl-ntf-*`, mirroring
-`terminal/MissionRail`'s `FeedRow`: time gutter · state dot · subject · status
-tag). A notification _is_ a session event, and that is the language this app
-already uses for events; the previous form was a generic 4px-stripe-on-the-left
-card, a library convention in an app that carries state with a dot everywhere
-else. Consequences of the row form:
+`terminal/MissionRail`'s `FeedRow`: state dot · subject · status tag). A
+notification _is_ a session event, and that is the language this app already
+uses for events; the previous form was a generic 4px-stripe-on-the-left card, a
+library convention in an app that carries state with a dot everywhere else.
+Consequences of the row form:
 
 - **The subject line is the project**, not the prose — it is what the eye looks
   for when a corner of the screen moves. The state is the right-hand tag
@@ -109,10 +109,22 @@ else. Consequences of the row form:
 - The row is composed from `kind` + `cwd` + `body`, **deliberately not from the
   event's `title`**: that full sentence ("Claude finished — your turn") is
   written for the OS notification's conventions, so it stays the row's `title`
-  tooltip instead of being re-flowed into a 30px-gutter layout.
+  tooltip instead of being re-flowed into a two-line row.
 - `needs-attention` is the one kind still blocked on the user, so it is the one
   that pulses — with its own accent keyframes, since `.cl-live-dot`'s halo is
   hardcoded to the green "ok" hue.
+- **The card is dressed like the global home**, the surface it floats over:
+  `--cl-r-card` radius, 14px sans subject, 10px mono meta, and a bare mono
+  `open session →` in place of the boxed uppercase button — the same register as
+  the home's `resume →`. It stops short of the home's **tinted** row: there the
+  accent wash means "live project you can resume", while a state tint here would
+  be the colored-card idiom coming back in a softer coat, and the state is
+  already said three times (dot, tag, timer hairline). The action hangs off the
+  subject's left rail instead of the card's right edge — unboxed and
+  right-aligned in a 340px card, it read as unanchored.
+- **The time gutter is gone.** It printed the literal string `now`, always: a
+  transient toast has no other time to show, so the column was 30px of nothing.
+  The remaining three columns are still the feed anatomy.
 - **The auto-dismiss is visible**: a hairline that retracts over
   `AUTO_DISMISS_MS`, whose duration is passed in from the component so the bar
   and the timer cannot drift. Hover pauses **both** — a bar that kept running

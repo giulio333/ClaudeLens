@@ -30,3 +30,23 @@ export function sharedPathPrefix(paths: string[]): string {
   // there is nothing worth muting there
   return prefix === sep ? '' : prefix;
 }
+
+/**
+ * `/Users/foo/Projects/Bar` → `~/Projects/Bar`.
+ *
+ * In un elenco dei progetti *dell'utente* il prefisso della home è identico su
+ * ogni riga: è larghezza pura, e siccome sta in testa è la coda — l'unica parte
+ * che distingue una riga dall'altra — a finire sotto l'ellissi. La home viene
+ * riconosciuta per forma (`/Users/<x>`, `/home/<x>`, `C:\Users\<x>`) e non
+ * chiesta al main: nel renderer non c'è `os.homedir()`, e questi path sono per
+ * costruzione quelli dell'utente corrente. `/Users/Shared` è escluso perché è
+ * una cartella vera di macOS, non una home; tutto il resto (`/private/var/…`,
+ * `/opt/…`) passa intatto.
+ */
+export function homeRelativePath(p: string): string {
+  const unix = /^\/(?:Users|home)\/([^/\\]+)(?=[/\\]|$)/.exec(p);
+  if (unix && unix[1] !== 'Shared') return '~' + p.slice(unix[0].length);
+  const win = /^[A-Za-z]:\\Users\\([^\\/]+)(?=[\\/]|$)/.exec(p);
+  if (win && win[1] !== 'Public') return '~' + p.slice(win[0].length);
+  return p;
+}

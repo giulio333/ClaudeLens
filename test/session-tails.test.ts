@@ -189,10 +189,10 @@ describe('foldEvents', () => {
     expect(done.lastActivityAt).toBe(Date.parse('2026-08-16T10:00:05.000Z'));
   });
 
-  // The session's name reaches the digest through the event stream, and the two
-  // records that carry one do not rank equally.
+  // The session's name reaches the digest through the event stream, and the
+  // three records that carry one do not rank equally.
   describe('the session title', () => {
-    const titleEvent = (content: string, titleSource?: 'custom' | 'ai') => ({
+    const titleEvent = (content: string, titleSource?: 'agent' | 'custom' | 'ai') => ({
       id: `t-${content}`,
       timestamp: '',
       type: 'session_title' as const,
@@ -234,6 +234,28 @@ describe('foldEvents', () => {
       const named = foldEvents(auto, [titleEvent('Il nome che ho scelto', 'custom')]);
       expect(named.title).toBe('Il nome che ho scelto');
       expect(named.titleSource).toBe('custom');
+    });
+
+    // `/rename`, the command that replaced `/title`: same rule, and it also
+    // outranks the name the retired command left behind.
+    it('takes the name from an agent-name event, over both other sources', () => {
+      const auto = foldEvents(EMPTY, [titleEvent('Auto guess', 'ai')]);
+      const renamed = foldEvents(auto, [titleEvent('feature color', 'agent')]);
+      expect(renamed.title).toBe('feature color');
+      expect(renamed.titleSource).toBe('agent');
+
+      const older = foldEvents(renamed, [titleEvent('Il nome vecchio', 'custom')]);
+      expect(older.title).toBe('feature color');
+      expect(older.titleSource).toBe('agent');
+    });
+
+    // The same regression the `custom` rank was built for, one source up: the
+    // meta block re-emits the generated title on every later turn.
+    it('never lets a generated title overwrite a /rename', () => {
+      const renamed = foldEvents(EMPTY, [titleEvent('feature color', 'agent')]);
+      const later = foldEvents(renamed, [titleEvent('Auto guess', 'ai')]);
+      expect(later.title).toBe('feature color');
+      expect(later.titleSource).toBe('agent');
     });
 
     // Naming the conversation is not work the session did, and the record

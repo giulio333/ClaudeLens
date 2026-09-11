@@ -2,13 +2,53 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
-import { StampCache, firstFileStamp, treeStamp } from './session-read-cache';
-import type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
+import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
+import { mergeTranscriptExtras, readTranscriptExtras } from './transcript-extras';
+import type {
+  AdvisorConsult,
+  ChatContentBlock,
+  ChatMessage,
+  MessageUsage,
+} from '../shared/chat-types';
 
 // The message shapes live in the shared module (single definition for main and
 // renderer); re-exported here so existing `./session-reader` importers keep
 // working unchanged.
-export type { ChatContentBlock, ChatMessage, MessageUsage } from '../shared/chat-types';
+export type {
+  AdvisorConsult,
+  ChatContentBlock,
+  ChatMessage,
+  MessageUsage,
+} from '../shared/chat-types';
+
+/** The advisor's own token spend for this assistant message.
+ *
+ *  A turn that consults the advisor reports its sub-calls in `usage.iterations`,
+ *  one of which is `{ type: 'advisor_message', model, input_tokens, … }` — the
+ *  reviewer's spend, which is NOT part of the message-level totals (a consult
+ *  turn reads as 4 input tokens while the advisor burned 60k).
+ *
+ *  The same usage object is repeated verbatim on EVERY row of the assistant
+ *  message, so it says nothing about which block it belongs to. With a single
+ *  consult in the message that is unambiguous; with two there is no way to split
+ *  the pair, and we report nothing rather than show one consult's chip wearing
+ *  both. */
+function soleAdvisorSpend(
+  msg: Record<string, unknown>
+): Pick<AdvisorConsult, 'model' | 'inputTokens' | 'outputTokens'> {
+  const u = msg.usage as Record<string, unknown> | undefined;
+  const iterations = Array.isArray(u?.iterations) ? (u.iterations as unknown[]) : [];
+  const advisor = iterations.filter(
+    it => !!it && typeof it === 'object' && (it as { type?: string }).type === 'advisor_message'
+  ) as Array<Record<string, unknown>>;
+  if (advisor.length !== 1) return {};
+  const it = advisor[0];
+  return {
+    model: typeof it.model === 'string' ? it.model : undefined,
+    inputTokens: Number(it.input_tokens ?? 0),
+    outputTokens: Number(it.output_tokens ?? 0),
+  };
+}
 
 /** Parse the message-level `usage` block (Anthropic field names) if present. */
 function parseUsage(msg: Record<string, unknown>): MessageUsage | undefined {
@@ -35,7 +75,10 @@ function isPlaceholderNote(blocks: ChatContentBlock[]): boolean {
   );
 }
 
-function parseContentArray(raw: unknown[]): ChatContentBlock[] {
+function parseContentArray(
+  raw: unknown[],
+  advisorSpend: Pick<AdvisorConsult, 'model' | 'inputTokens' | 'outputTokens'> = {}
+): ChatContentBlock[] {
   const blocks: ChatContentBlock[] = [];
 
   for (const block of raw) {
@@ -86,6 +129,13 @@ function parseContentArray(raw: unknown[]): ChatContentBlock[] {
         content,
         isError: Boolean(b.is_error),
       });
+    } else if (b.type === 'advisor_tool_result') {
+      // The consult's completion. Its payload is `advisor_redacted_result` —
+      // an encrypted string — so there is no advice to render and we keep only
+      // the fact of the consult. Keyed off `tool_use_id`, never off a name: the
+      // result block carries none, and other server tools (web search/fetch)
+      // produce `server_tool_use` blocks we must not swallow.
+      blocks.push({ type: 'advisor', id: String(b.tool_use_id ?? ''), ...advisorSpend });
     }
   }
 
@@ -104,6 +154,36 @@ function parseStringContent(rawContent: string): ChatContentBlock[] {
   return [{ type: 'text', text: stripped }];
 }
 
+/** `tool_use_id` of the consult a raw content array OPENS, if any.
+ *
+ *  The `server_tool_use` row renders nothing on its own — the chip rides the
+ *  result block — but its timestamp is the only place the consult's start time
+ *  exists, so the readers keep it to compute how long the reviewer took. Matched
+ *  by name here (a `server_tool_use` is also how web search/fetch are recorded). */
+function advisorStartId(rawContent: unknown): string | null {
+  if (!Array.isArray(rawContent)) return null;
+  for (const block of rawContent) {
+    if (!block || typeof block !== 'object') continue;
+    const b = block as Record<string, unknown>;
+    if (b.type === 'server_tool_use' && b.name === 'advisor') return String(b.id ?? '');
+  }
+  return null;
+}
+
+/** Fill each advisor block's wall time from the row that opened its consult.
+ *  Both blocks belong to one assistant message but are persisted — and returned
+ *  by the SDK — as separate rows, so the pairing can only happen at stream
+ *  level. A message mapped alone (the live stream) simply has no duration. */
+function fillAdvisorDurations(msg: ChatMessage, startedAt: Map<string, string>): void {
+  for (const block of msg.content) {
+    if (block.type !== 'advisor') continue;
+    const start = startedAt.get(block.id);
+    if (!start) continue;
+    const seconds = (Date.parse(msg.timestamp) - Date.parse(start)) / 1000;
+    if (Number.isFinite(seconds) && seconds >= 0) block.durationSeconds = Math.round(seconds);
+  }
+}
+
 export interface ReadChatOptions {
   // I file dei subagent (`subagents/agent-*.jsonl`) hanno ogni riga con
   // isSidechain=true: per leggerne il transcript interno occorre NON saltarli.
@@ -120,6 +200,8 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   // `entrypoint`: "sdk-cli" → "cli"). Senza dedup il transcript mostra ogni
   // turno due volte e le key React duplicate rompono la riconciliazione.
   const seenUuids = new Set<string>();
+  // `server_tool_use` id → timestamp of the row that opened an advisor consult.
+  const advisorStartedAt = new Map<string, string>();
 
   try {
     const lines = readFileSync(filePath, 'utf-8')
@@ -150,7 +232,9 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
           blocks = parseStringContent(rawContent);
           if (blocks.length === 0) continue;
         } else if (Array.isArray(rawContent)) {
-          blocks = parseContentArray(rawContent);
+          const startId = advisorStartId(rawContent);
+          if (startId) advisorStartedAt.set(startId, String(json.timestamp ?? ''));
+          blocks = parseContentArray(rawContent, soleAdvisorSpend(msg));
         }
 
         if (blocks.length === 0) continue;
@@ -164,14 +248,16 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
         if (uuid && seenUuids.has(uuid)) continue;
         if (uuid) seenUuids.add(uuid);
 
-        messages.push({
+        const message: ChatMessage = {
           uuid,
           role,
           timestamp: String(json.timestamp ?? ''),
           model: msg.model as string | undefined,
           content: blocks,
           usage: parseUsage(msg),
-        });
+        };
+        fillAdvisorDurations(message, advisorStartedAt);
+        messages.push(message);
       } catch {
         // riga non-JSON
       }
@@ -213,7 +299,7 @@ export function mapSdkMessageToChat(m: SdkSessionMessage): ChatMessage | null {
   const rawContent = msg.content;
   let blocks: ChatContentBlock[] = [];
   if (typeof rawContent === 'string') blocks = parseStringContent(rawContent);
-  else if (Array.isArray(rawContent)) blocks = parseContentArray(rawContent);
+  else if (Array.isArray(rawContent)) blocks = parseContentArray(rawContent, soleAdvisorSpend(msg));
   if (blocks.length === 0) return null;
   // Drop the local-command placeholder (see isPlaceholderNote). The live output
   // streamed for the same turn is a distinct, real message and is kept.
@@ -238,9 +324,17 @@ export function mapSdkMessageToChat(m: SdkSessionMessage): ChatMessage | null {
 // transcript principale sia per quelli dei sub-agenti.
 function mapSdkMessagesToChat(raw: SdkSessionMessage[]): ChatMessage[] {
   const messages: ChatMessage[] = [];
+  // The row that opens an advisor consult maps to nothing (it has no renderable
+  // block), so its timestamp is collected here before it is dropped.
+  const advisorStartedAt = new Map<string, string>();
   for (const m of raw) {
+    const content = (m.message as Record<string, unknown> | undefined)?.content;
+    const startId = advisorStartId(content);
+    if (startId) advisorStartedAt.set(startId, String(m.timestamp ?? ''));
     const mapped = mapSdkMessageToChat(m);
-    if (mapped) messages.push(mapped);
+    if (!mapped) continue;
+    fillAdvisorDurations(mapped, advisorStartedAt);
+    messages.push(mapped);
   }
   return messages;
 }
@@ -268,6 +362,19 @@ function transcriptCandidates(projectDir: string, sessionId: string): string[] {
     join(projectDir, `${sessionId}.jsonl`),
     join(projectDir, 'sessions', `${sessionId}.jsonl`),
   ];
+}
+
+/** The session's transcript on disk, or `null` when neither layout holds it.
+ *  Probed in the same order as `sessionTranscriptStamp`, so the file we read the
+ *  SDK-invisible rows from is the file whose stamp invalidates that read. */
+async function firstExistingTranscript(
+  projectDir: string,
+  sessionId: string
+): Promise<string | null> {
+  for (const candidate of transcriptCandidates(projectDir, sessionId)) {
+    if (await fileStamp(candidate)) return candidate;
+  }
+  return null;
 }
 
 /** `subagents/` sidecar dir of a session, whose tree feeds the sub-agent readers. */
@@ -301,10 +408,14 @@ export function sessionCacheKey(sessionId: string, source: SessionSource): strin
  * This is what lets an empty scoped read be believed instead of retried (see
  * `canTrustEmptyScoped`). It is deliberately empirical rather than derived —
  * checking `pathToHash(cwd) === basename(projectDir)` would bake in an
- * assumption about how the SDK turns a `dir` into a project dir (Claude Code
- * folds both '/' and '.' into '-', which is exactly the kind of detail that
- * drifts), and being wrong there would HIDE a transcript. An observation cannot
- * be wrong about the only thing we ask of it.
+ * assumption about how the SDK turns a `dir` into a project dir, and being
+ * wrong there would HIDE a transcript. An observation cannot be wrong about the
+ * only thing we ask of it.
+ *
+ * The naming rule itself is now known (`encodeProjectHash` in `electron/utils.ts`
+ * folds EVERY non-alphanumeric character, not just '/' and '.'), but the reason
+ * to keep this check empirical stands: there the rule can only *prefer* one cwd
+ * over another and a miss costs nothing, whereas here a miss hides a session.
  */
 const verifiedCwds = new Set<string>();
 
@@ -380,9 +491,20 @@ export async function readChatSessionViaSdk(
   source: SessionSource = {}
 ): Promise<ChatMessage[]> {
   const stamp = await sessionTranscriptStamp(sessionId, source);
-  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () =>
-    mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp))
-  );
+  return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () => {
+    const messages = mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp));
+    // `getSessionMessages` returns chat rows only, so a second pass over the same
+    // file recovers what it cannot see: the messages typed mid-turn (#245) and the
+    // skill expansion that identifies a `/foo` skill (#246). It rides this cache
+    // entry, whose stamp is that very file's `size:mtimeMs` — a new row there
+    // invalidates both passes together. Without a `projectDir` we don't know which
+    // file the SDK read, so the read stays SDK-only rather than guessing.
+    const transcript = source.projectDir
+      ? await firstExistingTranscript(source.projectDir, sessionId)
+      : null;
+    if (!transcript) return messages;
+    return mergeTranscriptExtras(messages, await readTranscriptExtras(transcript));
+  });
 }
 
 // Transcript interno di un sub-agente via SDK (`getSubagentMessages`), in luogo

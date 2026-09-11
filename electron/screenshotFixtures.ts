@@ -1,4 +1,5 @@
 import { IpcMain } from 'electron';
+import type { ChatMessage } from './shared/chat-types';
 
 type IpcResult<T> = { data: T | null; error: string | null };
 const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
@@ -7,6 +8,8 @@ const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 // derivano da qui, così i filename di sessione sono deterministici e stabili tra
 // chiamate IPC diverse (necessario per agganciare tasks/plans alle sessioni reali).
 const NOW = new Date();
+const NOTES_DEMO_ID = 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10';
+const NOTES_DEMO_PROJECT = '-Users-alice-projects-webapp';
 
 // Helper per date relative a NOW, così chat/memory/agent non "invecchiano":
 // restano sempre coerenti con le sessioni (anch'esse ancorate a NOW).
@@ -149,7 +152,7 @@ function getSessionList(hash: string) {
     const d = new Date(now.getTime() - dayOffset * 86_400_000);
     const filename = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(i).padStart(6, '0')}.jsonl`;
     return {
-      filename,
+      filename: hash === NOTES_DEMO_PROJECT && i === 0 ? `${NOTES_DEMO_ID}.jsonl` : filename,
       date: d.toISOString(),
       inputTokens: t.input,
       outputTokens: t.output,
@@ -595,7 +598,7 @@ const MOCK_MCP = {
 const MOCK_ACTIVE_SESSIONS = [
   {
     pid: 18423,
-    sessionId: 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10',
+    sessionId: NOTES_DEMO_ID,
     cwd: '/Users/alice/projects/webapp',
     name: 'webapp-7c',
     kind: 'interactive',
@@ -1260,8 +1263,8 @@ const MOCK_TEAMS = [(({ members: _m, events: _e, configPath: _c, ...s }) => s)(M
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
 // mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
 const MOCK_BG_SESSIONS = [
-  // ── Progetto webapp: spettro completo di stati per popolare ogni bucket della
-  // Agent View (Needs input · Working · Ready · Completed · Failed · Stopped) ──
+  // Keep the Monitor compact: two background workers plus the two interactive sessions.
+  // Completed entries still populate the Agent View without adding Monitor cards.
   {
     id: 'a1b2c3',
     sessionId: '20260329T101500_000123',
@@ -1283,27 +1286,6 @@ const MOCK_BG_SESSIONS = [
     hasPendingQuestion: false,
   },
   {
-    id: 'b2c3d4',
-    sessionId: '20260531T094000_000201',
-    name: 'Add Stripe checkout flow',
-    state: 'running',
-    tempo: 'blocked',
-    detail: 'Paused — needs a decision before continuing',
-    intent: 'Wire up Stripe Checkout for the Pro plan and handle the success webhook.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 25104,
-    createdAt: minsAgo(32),
-    updatedAt: minsAgo(2),
-    needs:
-      'Should I store the Stripe customer ID on the users table or in a separate billing table?',
-    hasPendingQuestion: true,
-  },
-  {
     id: 'c3d4e5',
     sessionId: '20260531T093000_000202',
     name: 'Investigate flaky e2e test',
@@ -1320,26 +1302,6 @@ const MOCK_BG_SESSIONS = [
     pid: 25210,
     createdAt: minsAgo(11),
     updatedAt: minsAgo(1),
-    needs: null,
-    hasPendingQuestion: false,
-  },
-  {
-    id: 'd4e5f6',
-    sessionId: '20260531T090500_000203',
-    name: 'Bump dependencies',
-    state: 'idle',
-    tempo: 'idle',
-    detail: 'Idle — awaiting your next prompt',
-    intent: 'Upgrade React, Vite and TypeScript to their latest minor versions.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 0,
-    alive: true,
-    pid: 25288,
-    createdAt: minsAgo(46),
-    updatedAt: minsAgo(9),
     needs: null,
     hasPendingQuestion: false,
   },
@@ -1386,26 +1348,6 @@ const MOCK_BG_SESSIONS = [
     hasPendingQuestion: false,
   },
   // ── Altri progetti: variano la Global Agent View ──
-  {
-    id: 'a7b8c9',
-    sessionId: '20260531T095500_000098',
-    name: 'Generate API docs',
-    state: 'running',
-    tempo: 'thinking',
-    detail: 'Summarizing OpenAPI schema',
-    intent: 'Write reference docs for every endpoint in the api-server project.',
-    result: null,
-    cwd: '/Users/alice/projects/api-server',
-    projectName: 'api-server',
-    template: 'claude',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 24990,
-    createdAt: minsAgo(25),
-    updatedAt: minsAgo(3),
-    needs: 'Waiting for confirmation: overwrite existing docs/api.md?',
-    hasPendingQuestion: true,
-  },
   {
     id: 'g7h8i9',
     sessionId: '20260531T084000_000071',
@@ -2146,7 +2088,56 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   );
 
   ipcMain.handle('sessions:listByProject', (_e: unknown, hash: string) => ok(getSessionList(hash)));
-  ipcMain.handle('sessions:getChat', () => ok(MOCK_CHAT));
+  // Simulate new tool descriptions through the normal transcript refresh path.
+  // No commands run and no real session files are read or written. Keep only
+  // a few recent demo calls, and stop ticking once the view stops reading.
+  const notesDemos = new Map<number, { readAt: number; messages: ChatMessage[] }>();
+  ipcMain.handle('sessions:getChat', (event, hash: string, filename: string) => {
+    if (hash !== NOTES_DEMO_PROJECT || filename !== `${NOTES_DEMO_ID}.jsonl`) {
+      return ok(MOCK_CHAT);
+    }
+    const sender = event.sender;
+    let demo = notesDemos.get(sender.id);
+    if (!demo) {
+      demo = { readAt: Date.now(), messages: [] };
+      notesDemos.set(sender.id, demo);
+      const state = demo;
+      const actions = [
+        ['Checking which authentication tests failed', 'npm test -- auth'],
+        ['Verifying JWT expiration and invalid-token handling', 'npm test -- jwt'],
+        ['Reviewing the authentication changes before committing', 'git diff -- src/auth'],
+      ];
+      let sequence = 0;
+      const stop = () => {
+        clearInterval(timer);
+        notesDemos.delete(sender.id);
+        sender.removeListener('destroyed', stop);
+      };
+      const timer = setInterval(() => {
+        if (sender.isDestroyed() || Date.now() - state.readAt > 12_000) {
+          stop();
+          return;
+        }
+        const [description, command] = actions[sequence % actions.length];
+        const id = `demo-note-${++sequence}-${Date.now()}`;
+        state.messages = [
+          ...state.messages.slice(-2),
+          {
+            uuid: id,
+            role: 'assistant',
+            timestamp: new Date().toISOString(),
+            model: 'claude-sonnet-4-6',
+            content: [{ type: 'tool_use', id, name: 'Bash', input: { description, command } }],
+          },
+        ];
+        sender.send('data:changed', ['sessions']);
+      }, 3500);
+      timer.unref();
+      sender.once('destroyed', stop);
+    }
+    demo.readAt = Date.now();
+    return ok([...MOCK_CHAT, ...demo.messages]);
+  });
 
   ipcMain.handle('rules:getByProject', () => ok(MOCK_RULES));
 
