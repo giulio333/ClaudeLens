@@ -315,70 +315,158 @@ const MOCK_CHAT = [
 
 // ─── Memory per progetto ─────────────────────────────────────────────────────
 
+// Dense within each theme, sparse between themes: the real graph algorithm
+// derives the communities from these wikilinks, without preset cluster labels.
+const MOCK_MEMORY_TOPICS = [
+  {
+    filename: 'feedback_code_style.md',
+    name: 'Code style',
+    type: 'feedback',
+    description: 'Use small functions and explicit names.',
+    links: [
+      'user_profile',
+      'reference_typescript',
+      'feedback_react',
+      'reference_api_contracts',
+      'feedback_testing',
+    ],
+  },
+  {
+    filename: 'user_profile.md',
+    name: 'User profile',
+    type: 'user',
+    description: 'Full-stack engineer working with React and TypeScript.',
+    links: ['feedback_code_style', 'reference_typescript'],
+  },
+  {
+    filename: 'reference_typescript.md',
+    name: 'TypeScript',
+    type: 'reference',
+    description: 'Keep strict compiler checks and typed boundaries.',
+    links: ['feedback_code_style', 'reference_api_contracts'],
+  },
+  {
+    filename: 'feedback_react.md',
+    name: 'React patterns',
+    type: 'feedback',
+    description: 'Prefer functional components and local state.',
+    links: ['feedback_code_style', 'user_profile'],
+  },
+  {
+    filename: 'reference_api_contracts.md',
+    name: 'API contracts',
+    type: 'reference',
+    description: 'Validate request payloads at service boundaries.',
+    links: ['feedback_code_style', 'reference_typescript'],
+  },
+  {
+    filename: 'feedback_testing.md',
+    name: 'Testing',
+    type: 'feedback',
+    description: 'Exercise real integrations and verify failure paths.',
+    links: [
+      'reference_test_fixtures',
+      'reference_ci_checks',
+      'feedback_regressions',
+      'reference_test_database',
+      'project_goals',
+    ],
+  },
+  {
+    filename: 'reference_test_fixtures.md',
+    name: 'Test fixtures',
+    type: 'reference',
+    description: 'Reset sample records between independent tests.',
+    links: ['feedback_testing', 'reference_test_database'],
+  },
+  {
+    filename: 'reference_ci_checks.md',
+    name: 'CI checks',
+    type: 'reference',
+    description: 'Run lint, type checks and tests before merging.',
+    links: ['feedback_testing', 'feedback_regressions'],
+  },
+  {
+    filename: 'feedback_regressions.md',
+    name: 'Regressions',
+    type: 'feedback',
+    description: 'Reproduce the original failure before fixing it.',
+    links: ['feedback_testing', 'reference_test_fixtures'],
+  },
+  {
+    filename: 'reference_test_database.md',
+    name: 'Test database',
+    type: 'reference',
+    description: 'Use an isolated database for integration coverage.',
+    links: ['feedback_testing', 'reference_test_fixtures'],
+  },
+  {
+    filename: 'project_goals.md',
+    name: 'Release goals',
+    type: 'project',
+    description: 'Ship the beta after the release checklist passes.',
+    links: [
+      'reference_release_checklist',
+      'reference_versioning',
+      'feedback_changelog',
+      'reference_release_builds',
+    ],
+  },
+  {
+    filename: 'reference_release_checklist.md',
+    name: 'Release checklist',
+    type: 'reference',
+    description: 'Check packaged artifacts before publishing.',
+    links: ['project_goals', 'reference_release_builds', 'reference_versioning'],
+  },
+  {
+    filename: 'reference_versioning.md',
+    name: 'Versioning',
+    type: 'reference',
+    description: 'Keep package and release tag versions consistent.',
+    links: ['project_goals', 'feedback_changelog', 'reference_release_checklist'],
+  },
+  {
+    filename: 'feedback_changelog.md',
+    name: 'Changelog',
+    type: 'feedback',
+    description: 'Describe user-visible changes with concrete examples.',
+    links: ['project_goals', 'reference_versioning'],
+  },
+  {
+    filename: 'reference_release_builds.md',
+    name: 'Release builds',
+    type: 'reference',
+    description: 'Verify installation and startup on supported platforms.',
+    links: ['project_goals', 'reference_release_checklist'],
+  },
+];
+
 function getMemoryData(_hash: string) {
+  const index = MOCK_MEMORY_TOPICS.map(({ links: _links, ...topic }, i) => ({
+    ...topic,
+    createdAt: daysAgo(90 - i * 3),
+    updatedAt: daysAgo(1 + (i % 7)),
+  }));
+  const topics = Object.fromEntries(
+    MOCK_MEMORY_TOPICS.map(topic => [
+      topic.filename,
+      `---\nname: ${topic.name}\ndescription: ${topic.description}\ntype: ${topic.type}\n---\n\n${topic.description}\n\nRelated: ${topic.links.map(link => `[[${link}]]`).join(', ')}.`,
+    ])
+  );
+  const autoIndex = index.filter(topic => topic.filename !== 'project_goals.md');
+  const projectIndex = index.filter(topic => topic.filename === 'project_goals.md');
+  const memoryIndex = (entries: typeof index) => {
+    const content = `# Memory Index\n\n${entries.map(topic => `- [${topic.filename}](${topic.filename}) — ${topic.description}`).join('\n')}\n`;
+    return { content, lineCount: content.split('\n').length };
+  };
   return {
-    index: [
-      {
-        name: 'User profile',
-        description: 'Senior full-stack engineer, 8yr TypeScript experience',
-        type: 'user',
-        filename: 'user_profile.md',
-        createdAt: daysAgo(90),
-        updatedAt: daysAgo(4),
-      },
-      {
-        name: 'Code style feedback',
-        description: 'Prefers functional patterns, no class components, terse PR descriptions',
-        type: 'feedback',
-        filename: 'feedback_code_style.md',
-        createdAt: daysAgo(72),
-        updatedAt: daysAgo(6),
-      },
-      {
-        name: 'Testing approach',
-        description: 'Integration tests over unit mocks — past incident with divergent mock/prod',
-        type: 'feedback',
-        filename: 'feedback_testing.md',
-        createdAt: daysAgo(63),
-        updatedAt: daysAgo(11),
-      },
-    ],
-    topics: {
-      // I `[[wikilink]]` sono la sola sorgente degli archi pieni del grafo
-      // (memory/graph.ts): senza, la vista GRAPH legge "no relations yet" anche
-      // con quattro topic. Scritti nelle due forme che convivono sulle memorie
-      // reali — underscore e dash — più un link pendente verso il codice, che
-      // il grafo disegna tratteggiato.
-      'user_profile.md':
-        '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.\n\nThe conventions this implies are in [[feedback_code_style]], and the testing stance in [[feedback-testing]].',
-      'feedback_code_style.md':
-        '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.\n\n**Why:** Matches the stack and habits recorded in [[user_profile]].\n\n**How to apply:** Review diffs against this before suggesting a class or a decorator.',
-      'feedback_testing.md':
-        '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration — see [[src/db/migrations]].\n\n**How to apply:** Never mock the database layer in tests. Same spirit as [[feedback_code_style]], and the bar for [[project_goals]].',
-    },
-    memoryMd: {
-      content:
-        '# Memory Index\n\n- [user_profile.md](user_profile.md) — Senior full-stack engineer\n- [feedback_code_style.md](feedback_code_style.md) — Coding preferences\n- [feedback_testing.md](feedback_testing.md) — Integration tests preferred\n',
-      lineCount: 6,
-    },
-    projectLevelIndex: [
-      {
-        name: 'Project goals',
-        description: 'Q1 targets: launch beta, gather 50 signups',
-        type: 'project',
-        filename: 'project_goals.md',
-        createdAt: daysAgo(95),
-        updatedAt: daysAgo(20),
-      },
-    ],
-    projectLevelTopics: {
-      'project_goals.md':
-        '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.\n\nNothing ships without the coverage described in [[feedback-testing]].',
-    },
-    projectLevelMemoryMd: {
-      content: '# Project Memory\n\n- [project_goals.md](project_goals.md) — Q1 targets\n',
-      lineCount: 4,
-    },
+    index: autoIndex,
+    topics: Object.fromEntries(autoIndex.map(topic => [topic.filename, topics[topic.filename]])),
+    memoryMd: memoryIndex(autoIndex),
+    projectLevelIndex: projectIndex,
+    projectLevelTopics: { 'project_goals.md': topics['project_goals.md'] },
+    projectLevelMemoryMd: memoryIndex(projectIndex),
   };
 }
 
