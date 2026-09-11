@@ -35,8 +35,29 @@ export interface SessionSummary {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  /** The colour the user stamped on the session with `/color` — see AGENT_COLORS. */
+  agentColor?: AgentColor;
   template?: string;
 }
+
+// The eight names `/color` accepts. Claude Code writes the choice to the
+// transcript as its own record — `{"type":"agent-color","agentColor":"blue"}` —
+// and declares it **last-wins**: the row is re-appended on later turns, and a
+// session recoloured mid-run carries every colour it ever had, the current one
+// last. Anything outside this set is ignored rather than trusted: the record is
+// undocumented, and its value ends up selecting a CSS custom property, so an
+// unknown string must not travel there.
+export const AGENT_COLORS = [
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'purple',
+  'orange',
+  'pink',
+  'cyan',
+] as const;
+export type AgentColor = (typeof AGENT_COLORS)[number];
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
 // Source: the official pricing page, https://docs.claude.com/en/docs/about-claude/pricing
@@ -297,6 +318,7 @@ interface ParsedSession {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   template?: string;
 }
 
@@ -305,6 +327,9 @@ interface LineData {
   customTitle: string | undefined;
   aiTitle: string | undefined;
   firstUserMessage: string | undefined;
+  // Three states, not two: `undefined` = not a colour record at all, `null` =
+  // a record that clears the colour (`/color default`), a name = set it.
+  agentColor: AgentColor | null | undefined;
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
@@ -358,6 +383,17 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   return stripped;
 }
 
+// The colour record, if this line is one. Returns `null` for a record that
+// clears the colour (an empty value, or the `default` the slash command offers)
+// so the fold can distinguish "cleared" from "this line says nothing about
+// colour" — a colour set and then removed must not keep showing.
+function readAgentColor(json: any): AgentColor | null | undefined {
+  if (json.type !== 'agent-color') return undefined;
+  const raw = typeof json.agentColor === 'string' ? json.agentColor.trim().toLowerCase() : '';
+  if (!raw || raw === 'default') return null;
+  return (AGENT_COLORS as readonly string[]).includes(raw) ? (raw as AgentColor) : undefined;
+}
+
 // Extracts the relevant fields from an already-parsed JSONL object. Returns null
 // for well-formed lines that carry nothing we track (kept separate from JSON
 // parse failures, which the caller counts and logs).
@@ -371,8 +407,12 @@ function extractLineData(json: any): LineData | null {
     json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
   const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
   const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
+  const agentColor = readAgentColor(json);
   const usage = json.message?.usage;
-  if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
+  // `agentColor === null` is a meaningful line (the colour was cleared), so the
+  // guard tests for `undefined` rather than falsiness.
+  if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage && agentColor === undefined)
+    return null;
 
   const model: string | undefined = json.message?.model;
   // Claude Code writes one JSONL line per content block of an assistant turn
@@ -392,6 +432,7 @@ function extractLineData(json: any): LineData | null {
     customTitle,
     aiTitle,
     firstUserMessage,
+    agentColor,
     inputTokens: num(usage?.input_tokens),
     outputTokens: num(usage?.output_tokens),
     cacheWriteTokens: num(usage?.cache_creation_input_tokens),
@@ -415,6 +456,7 @@ interface SessionAccumulator {
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   dropped: number;
   // Usage identities already counted, so a repeated content-block line for the
   // same turn isn't double-counted (issue #56) — carried across increments.
@@ -577,6 +619,9 @@ function foldLine(line: string, acc: SessionAccumulator): void {
 
   if (parsed.customTitle) acc.customTitle = parsed.customTitle;
   if (parsed.aiTitle) acc.aiTitle = parsed.aiTitle;
+  // Last wins, clear included — a transcript recoloured mid-run holds every
+  // colour it ever had and only the final record is the session's colour.
+  if (parsed.agentColor !== undefined) acc.agentColor = parsed.agentColor ?? undefined;
   if (!acc.firstUserMessage && parsed.firstUserMessage)
     acc.firstUserMessage = parsed.firstUserMessage;
   if (parsed.date) acc.date = parsed.date;
@@ -617,6 +662,7 @@ function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
     customTitle: acc.customTitle,
     aiTitle: acc.aiTitle,
     firstUserMessage: acc.firstUserMessage,
+    agentColor: acc.agentColor,
   };
 }
 
@@ -870,6 +916,7 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           customTitle: s.customTitle,
           aiTitle: s.aiTitle,
           firstUserMessage: s.firstUserMessage,
+          agentColor: s.agentColor,
           template: s.template,
         };
       } catch {

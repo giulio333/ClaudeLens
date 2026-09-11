@@ -44,6 +44,7 @@ import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
+import { SessionColorDot } from '../shared/SessionColorDot';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
 import { useSessionTags } from '../../../hooks/useSessionTags';
@@ -674,7 +675,21 @@ export function ChatView({
             // The session title is the same step back for the hand already up
             // here; the detail takes the "you are here" accent.
             {
-              label: title,
+              // The session's `/color` dot rides the crumb, so the colour the
+              // user set to tell two runs apart is on screen while reading one
+              // of them — not only in the list they picked it from.
+              // `flex`, not `inline-flex`: the crumb button truncates, and an
+              // inline box sized to its own content would be clipped mid-word
+              // instead of ellipsised. A block-level flex row takes the
+              // button's width and hands the truncation to the title span.
+              label: session.agentColor ? (
+                <span className="flex items-center min-w-0" style={{ gap: 7 }}>
+                  <SessionColorDot color={session.agentColor} />
+                  <span className="truncate min-w-0">{title}</span>
+                </span>
+              ) : (
+                title
+              ),
               accent: !detailBack,
               onClick: detailBack ?? undefined,
               title: detailBack ? 'Back to chat (Esc)' : undefined,
