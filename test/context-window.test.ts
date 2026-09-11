@@ -23,6 +23,37 @@ describe('Mission Control context window', () => {
     expect(isOneMillion('claude-opus-5-20260724')).toBe(true);
   });
 
+  // The 1M split runs THROUGH each family, so it is a per-model list and not a
+  // family rule: Opus 4.7 up is native 1M and 4.6 is not, Sonnet 5 is and every
+  // earlier Sonnet is not.
+  it.each([
+    'claude-sonnet-5',
+    'claude-opus-4-7',
+    'claude-opus-4-8',
+    'claude-fable-5',
+    'claude-fable-5-1',
+    'claude-mythos-5-1',
+  ])('recognizes %s as native 1M too', model => {
+    expect(isOneMillion(model)).toBe(true);
+  });
+
+  it.each(['claude-opus-4-6', 'claude-opus-4-5', 'claude-sonnet-4-6', 'claude-haiku-4-5'])(
+    'keeps %s on the 200k window',
+    model => {
+      expect(isOneMillion(model)).toBe(false);
+    }
+  );
+
+  // The reading this fixes: 150k of prompt on a Sonnet 5 session read as 75%
+  // full — a compaction warning for a window at 15%.
+  it('measures a Sonnet 5 session against 1M below the 200k mark', () => {
+    expect(deriveContext([assistant('claude-sonnet-5', 150_000)], 'sonnet')).toMatchObject({
+      used: 150_000,
+      max: 1_000_000,
+      pct: 15,
+    });
+  });
+
   it('calculates the Opus 5 percentage against 1M before usage crosses 200k', () => {
     expect(deriveContext([assistant('claude-opus-5', 49_061)], 'opus')).toEqual({
       used: 49_061,

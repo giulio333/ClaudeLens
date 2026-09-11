@@ -22,7 +22,7 @@ Formatter puri (nessuna dipendenza React):
 - `fmtModel(m)` — ID modello → nome leggibile (`claude-sonnet-4-6` → `Sonnet 4.6`)
 - `modelColor(m)` — colore hex accent per famiglia modello
 - `formatTokens(n)` — conteggio compatto `{value, unit}` (`2.3` + `m`)
-- `modelMixKey(m)` / `buildModelMix(sessions)` — distribuzione per famiglia modello della **fascia metriche** dell'hero progetto: quota sui **token** (non sulle sessioni), famiglie a zero token scartate (mai un segmento a larghezza nulla), finestra senza uso → `[]` e la cella mostra l'empty state. Un id sconosciuto finisce in `other` invece di essere indovinato. Unit-tested in `test/project-formatters.test.ts`
+- `modelMixKey(m)` / `buildModelMix(sessions)` — distribuzione per famiglia modello della **fascia metriche** dell'hero progetto: quota sui **token** (non sulle sessioni), famiglie a zero token scartate (mai un segmento a larghezza nulla), finestra senza uso → `[]` e la cella mostra l'empty state. Le famiglie sono Fable / Opus / Sonnet / Haiku, in quest'ordine; un id sconosciuto finisce in `other` invece di essere indovinato, e lì resta anche Mythos — stessa fascia di Fable ma modello diverso, e un'etichetta sbagliata in legenda è peggio di una generica. Unit-tested in `test/project-formatters.test.ts`
 
 ---
 
