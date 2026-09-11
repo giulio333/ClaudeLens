@@ -1142,7 +1142,16 @@ describe('parse cache — retained bytes', () => {
     expect(stats.cachedFiles).toBe(1);
     // …and it is a copy: a `subarray` view would pin all 512 KB+ of `combined`
     // for the life of the process, once per cached transcript.
-    expect(stats.retainedPartialBytes).toBeLessThan(64 * 1024);
+    //
+    // The bound is `Buffer.poolSize`, not a literal: a copy this small is served
+    // from Node's shared buffer pool, so the backing store it reports IS the
+    // pool chunk. The literal `64 * 1024` this used to carry was that chunk's
+    // size on Node 22 by coincidence — Node 24 raised `poolSize` from 8192 to
+    // exactly 65536 and the assertion failed on a copy it should have passed
+    // (#258). A `subarray` view still fails it: `combined` is far too large to
+    // be pooled, so its backing store is the whole half-megabyte.
+    expect(stats.retainedPartialBytes).toBeLessThanOrEqual(Buffer.poolSize);
+    expect(stats.retainedPartialBytes).toBeLessThan(body.length / 4);
   });
 
   it('drops the retained bytes with the entry when the transcript vanishes', async () => {
