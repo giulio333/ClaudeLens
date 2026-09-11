@@ -99,6 +99,19 @@ Before creating a GitHub Release, always run these steps **in order**:
 3. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
 4. Create the GitHub Release with a `## Highlights` section at the top
 
+**A dependency bump can break packaging without CI noticing — that is what
+`package-smoke` is for.** `npm run build` is tsc + Vite and says nothing about
+whether the app can be PACKAGED: Electron 44 landed with electron-builder's
+bundled `node-abi` unaware of its ABI, every platform job died on `Could not
+detect abi for version 44.3.0`, and v2.2.20 was published with no binaries at
+all — because nothing between the dependency PR and the tag ever invoked
+electron-builder. The fix is an `overrides` pin on `node-abi` in `package.json`
+(electron-builder ships a range that lags new Electron majors), and the guard is
+the `package-smoke` job: `electron-builder --dir` resolves the ABI, packs the
+asar and runs the entry-point check without spending the minutes an installer
+costs. When an Electron major lands and packaging fails on the ABI, bump that
+pin rather than reverting Electron.
+
 **Binaries are built and attached by CI, not locally**: pushing the `v*` tag
 (which `gh release create` does) triggers `.github/workflows/release.yml` — it
 packages macOS DMG (x64 + arm64), Windows exe (windows-2022 runner) and Linux

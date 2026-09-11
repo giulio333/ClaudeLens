@@ -98,3 +98,38 @@ jobs:
         run: npm test -- terminal-spawn.integration claude-cli
         env:
           CLAUDE_E2E: '1'
+
+  # The step that used to run only on a tag — and so could only fail there.
+  #
+  # `npm run build` is tsc + Vite; it says nothing about whether the app can be
+  # PACKAGED. Electron 44 landed with electron-builder's bundled node-abi still
+  # unaware of its ABI, every platform job of release.yml died on `Could not
+  # detect abi for version 44.3.0`, and the Release was published with no
+  # binaries at all — because nothing between the dependency PR and the tag ever
+  # invoked electron-builder.
+  #
+  # `--dir` stops after the app directory: it resolves the ABI, packs the asar
+  # and runs the entry-point sanity check — the three things that broke — without
+  # spending the minutes an installer costs. Linux only; the failure mode is in
+  # the packager, not in any one platform's target.
+  package-smoke:
+    name: Package smoke (electron-builder --dir)
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Pack (no installer)
+        run: npx electron-builder --dir --linux
