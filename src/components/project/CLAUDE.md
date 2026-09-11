@@ -540,8 +540,11 @@ next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
   `status: 'unknown'` (registry scritto **prima** del primo stato).
 - **Il nome del processo non si mostra, il titolo della conversazione sì.** Il
   `name` del registry (`claudelens-b4`) è il progetto più due caratteri casuali.
-  Il titolo viene da `{"type":"ai-title"}` nel transcript, letto una volta dalla
-  **testa** del file (`readSessionTitle`) perché il cursore parte da EOF.
+  Il titolo viene dai record del transcript — `agent-name` (`/rename`),
+  `custom-title` (il vecchio `/title`), `ai-title` (generato), in quest'ordine —
+  letti una volta dai **due estremi** del file (`readSessionTitle`) perché il
+  cursore parte da EOF: il rinomina sta dove l'utente l'ha scritto, cioè ben
+  oltre una testa di 256 KB.
 - **Ordine**: la band viene prima della griglia per costruzione; dentro la
   griglia, prima chi lavora, poi chi è pronto, poi chi ha finito, e a parità di
   stato guida chi è in quello stato da più tempo.

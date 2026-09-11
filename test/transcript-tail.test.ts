@@ -236,11 +236,27 @@ describe('parseJsonlLine', () => {
     expect(events[0].titleSource).toBe('custom');
   });
 
+  // The record `/rename` writes — the command that replaced `/title`, and so
+  // the one a session is named with today.
+  it('emits the session title from an agent-name record', () => {
+    const events = parseJsonlLine({
+      type: 'agent-name',
+      agentName: 'feature color',
+      sessionId: 's',
+    });
+    expect(events).toHaveLength(1);
+    expect(events[0].type).toBe('session_title');
+    expect(events[0].content).toBe('feature color');
+    expect(events[0].titleSource).toBe('agent');
+  });
+
   it('ignores a title record with nothing in it', () => {
     expect(parseJsonlLine({ type: 'ai-title', aiTitle: '   ' })).toEqual([]);
     expect(parseJsonlLine({ type: 'ai-title' })).toEqual([]);
     expect(parseJsonlLine({ type: 'custom-title', customTitle: '' })).toEqual([]);
     expect(parseJsonlLine({ type: 'custom-title' })).toEqual([]);
+    expect(parseJsonlLine({ type: 'agent-name', agentName: ' ' })).toEqual([]);
+    expect(parseJsonlLine({ type: 'agent-name' })).toEqual([]);
   });
 
   it('leaves toolUseId unset on an ordinary user prompt', () => {
@@ -405,6 +421,8 @@ describe('readSessionTitle', () => {
     JSON.stringify({ type: 'ai-title', aiTitle: t, sessionId: 's' }) + '\n';
   const custom = (t: string) =>
     JSON.stringify({ type: 'custom-title', customTitle: t, sessionId: 's' }) + '\n';
+  const renamed = (t: string) =>
+    JSON.stringify({ type: 'agent-name', agentName: t, sessionId: 's' }) + '\n';
 
   it('reads the title out of a transcript head', () => {
     writeFileSync(
@@ -437,9 +455,71 @@ describe('readSessionTitle', () => {
     expect(readSessionTitle(file)).toEqual({ title: 'Il nome che ho scelto', source: 'custom' });
   });
 
-  it('returns null when the head holds no title', () => {
+  // The layout of a real transcript: Claude Code re-emits the whole meta block
+  // every few turns, so the `/rename` sits buried among repeats of the generated
+  // title — including ones written after it.
+  it('prefers a /rename over the generated titles written around it', () => {
+    writeFileSync(
+      file,
+      title('claudelens non mostra colore chat') +
+        renamed('feature color aggiungiamolaaa') +
+        assistant([]) +
+        title('claudelens non mostra colore chat'),
+      'utf-8'
+    );
+    expect(readSessionTitle(file)).toEqual({
+      title: 'feature color aggiungiamolaaa',
+      source: 'agent',
+    });
+  });
+
+  // `/rename` is the only way left to name a session, so a `custom-title` beside
+  // it is necessarily the older name, from before the command was retired.
+  it('prefers a /rename over the retired /title', () => {
+    writeFileSync(file, renamed('Il nome nuovo') + custom('Il nome vecchio'), 'utf-8');
+    expect(readSessionTitle(file)).toEqual({ title: 'Il nome nuovo', source: 'agent' });
+  });
+
+  it('returns null when neither end holds a title', () => {
     writeFileSync(file, assistant([{ type: 'text', text: 'hi' }]), 'utf-8');
     expect(readSessionTitle(file)).toBeNull();
+  });
+
+  // Why both ends are read. A rename lands where the user typed it — on a long
+  // session, far past any affordable head scan: in the transcript this was
+  // built from, the first `agent-name` sits at byte 294718 and the head window
+  // is 256 KB, so the Monitor named a renamed session with its old auto-title.
+  it('finds a rename written long past the head window', () => {
+    const filler = assistant([{ type: 'text', text: 'x'.repeat(400) }]);
+    writeFileSync(file, title('Auto guess') + filler + renamed('Il nome nuovo'), 'utf-8');
+    // A window far too small to reach the rename from the head.
+    expect(readSessionTitle(file, 120)).toEqual({ title: 'Il nome nuovo', source: 'agent' });
+  });
+
+  // The tail window opens mid-record. That fragment is dropped, not parsed —
+  // and dropping it must not take the record that follows with it.
+  it('drops the record the tail window opens in the middle of', () => {
+    const head = title('Auto guess');
+    const filler = assistant([{ type: 'text', text: 'x'.repeat(400) }]);
+    writeFileSync(file, head + filler + renamed('Il nome nuovo'), 'utf-8');
+    for (const window of [80, 100, 150, 200, 300]) {
+      // Whatever the window, the answer is a complete record or none — never a
+      // half-parsed one, and never a throw.
+      const read = readSessionTitle(file, window);
+      if (read) expect(['Il nome nuovo', 'Auto guess']).toContain(read.title);
+    }
+  });
+
+  // A file between one and two windows is still covered end to end: the tail
+  // slice starts where the head stopped, so nothing in the middle is skipped.
+  it('leaves no gap between the two windows on a mid-sized file', () => {
+    const head = title('Auto guess');
+    const body = head + renamed('Il nome nuovo') + assistant([]);
+    writeFileSync(file, body, 'utf-8');
+    expect(readSessionTitle(file, Math.ceil(body.length * 0.6))).toEqual({
+      title: 'Il nome nuovo',
+      source: 'agent',
+    });
   });
 
   it('never parses the fragment a byte cap cuts in half', () => {

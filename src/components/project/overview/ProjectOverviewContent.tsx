@@ -27,6 +27,7 @@ import {
   fmtCost,
   fmtModel,
   modelFamily,
+  sessionName,
   sessionTitle,
   formatTokens,
   buildModelMix,
@@ -1888,9 +1889,12 @@ const SessionRow = memo(function SessionRow({
   onDelete,
 }: SessionRowProps) {
   const fam = modelFamily(s.model);
-  // No title of any kind on disk → sessionTitle() falls back to the placeholder,
-  // which the row prints in the muted italic of the mock.
-  const untitled = !(s.customTitle?.trim() || s.aiTitle?.trim() || s.firstUserMessage?.trim());
+  // No name of any kind on disk → sessionTitle() falls back to the placeholder,
+  // which the row prints in the muted italic of the mock. Asked through
+  // `sessionName` rather than re-listing the fields: a row that re-derives the
+  // precedence is a row that misses the next record Claude Code adds — a
+  // `/rename`d session printed its name in the "Untitled" italic.
+  const untitled = sessionName(s) === null;
   return (
     <div
       role="button"

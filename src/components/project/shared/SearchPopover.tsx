@@ -331,6 +331,9 @@ export function SearchPopover({
         includesQuery(q, [
           sessionTitle(session, 160),
           session.firstUserMessage,
+          // Ogni nome che la sessione ha avuto, non solo quello che vince: si
+          // cerca col nome che si ricorda, che può essere quello vecchio.
+          session.agentName,
           session.customTitle,
           session.aiTitle,
           session.filename,

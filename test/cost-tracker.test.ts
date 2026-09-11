@@ -442,6 +442,89 @@ describe('getSessionList', () => {
   });
 });
 
+// The name the user gives a conversation with `/rename`, written as its own
+// record. It is the CURRENT way to name a session — the command that wrote
+// `custom-title` was retired — so it outranks both the legacy title and the
+// generated one, and the summary carries all three for the renderer to resolve.
+describe('agentName — the /rename record', () => {
+  const renamed = (n: unknown): string =>
+    JSON.stringify({ type: 'agent-name', agentName: n, sessionId: 's' });
+  const generated = (t: string): string =>
+    JSON.stringify({ type: 'ai-title', aiTitle: t, sessionId: 's' });
+
+  beforeEach(() => {
+    resetParseCache();
+  });
+
+  it('reads the name off the record', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      renamed('feature color aggiungiamolaaa'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('feature color aggiungiamolaaa');
+  });
+
+  // The layout of a real transcript: the meta block is re-emitted every few
+  // turns, so the generated title is rewritten *after* the rename. Both names
+  // have to survive the parse — resolving them is the renderer's job, and it
+  // cannot prefer one it never received.
+  it('keeps the rename and the generated title side by side', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      generated('claudelens non mostra colore chat'),
+      renamed('feature color aggiungiamolaaa'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      generated('claudelens non mostra colore chat'),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('feature color aggiungiamolaaa');
+    expect(s.aiTitle).toBe('claudelens non mostra colore chat');
+  });
+
+  it('takes the last rename and ignores an empty one', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      renamed('primo nome'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+      renamed('secondo nome'),
+      renamed('   '),
+      renamed(undefined),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBe('secondo nome');
+  });
+
+  it('leaves a session that was never renamed undefined', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      generated('auto'),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.agentName).toBeUndefined();
+  });
+
+  it('picks up a rename through the incremental tail read', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      assistantLine({
+        model: 'claude-sonnet-4-5',
+        input: 10,
+        output: 10,
+        id: 'm1',
+        requestId: 'r1',
+      }),
+    ]);
+    expect((await getSessionList(tmp))[0].agentName).toBeUndefined();
+
+    appendFileSync(join(tmp, 'sess.jsonl'), renamed('rinominata a caldo') + '\n', 'utf-8');
+
+    expect((await getSessionList(tmp))[0].agentName).toBe('rinominata a caldo');
+    expect(getParseStats().incrementalParses).toBe(1);
+  });
+});
+
 // The colour `/color` stamps on a session. Claude Code appends it as its own
 // record and declares it last-wins: the row is re-emitted on later turns, so a
 // session recoloured mid-run holds every colour it ever had.

@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { fmtDate, fmtModel, modelColor, buildModelMix } from '../src/components/project/utils';
+import {
+  fmtDate,
+  fmtModel,
+  modelColor,
+  buildModelMix,
+  sessionName,
+  sessionTitle,
+} from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
 import { homeRelativePath, sharedPathPrefix } from '../src/components/project/shared/projectName';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
@@ -261,5 +268,45 @@ describe('homeRelativePath', () => {
 
   it('passes a description through unchanged (rows may carry prose, not a path)', () => {
     expect(homeRelativePath('Reads the local transcript')).toBe('Reads the local transcript');
+  });
+});
+
+// The one place the app decides what a session is called. Every view that only
+// needed to ASK whether a session has a name used to re-list the fields, and
+// each copy is a session the user named one way and the app showed another.
+describe('sessionName — which of the four names wins', () => {
+  const all = {
+    agentName: 'the name I typed',
+    customTitle: 'the name the retired command set',
+    aiTitle: 'generated name',
+    firstUserMessage: 'first thing I typed',
+  };
+
+  // Claude Code's own order: `/rename` is the only way to name a session today,
+  // the command that wrote `custom-title` was retired, and the generated title
+  // is rewritten on every turn.
+  it('prefers the renamed name over every other', () => {
+    expect(sessionName(all)).toBe('the name I typed');
+  });
+
+  it('falls back through the old title, the generated one, then the first message', () => {
+    expect(sessionName({ ...all, agentName: undefined })).toBe('the name the retired command set');
+    expect(sessionName({ aiTitle: all.aiTitle, firstUserMessage: all.firstUserMessage })).toBe(
+      'generated name'
+    );
+    expect(sessionName({ firstUserMessage: all.firstUserMessage })).toBe('first thing I typed');
+  });
+
+  // What the "Untitled session" italic of the sessions list is keyed on: a name
+  // made of spaces is not a name, and no name at all is null rather than ''.
+  it('returns null when there is no name, whitespace included', () => {
+    expect(sessionName({})).toBeNull();
+    expect(sessionName({ agentName: '   ', customTitle: '\n', aiTitle: '' })).toBeNull();
+  });
+
+  it('is what sessionTitle prints, truncated, with its placeholder', () => {
+    expect(sessionTitle(all)).toBe('the name I typed');
+    expect(sessionTitle({})).toBe('Untitled session');
+    expect(sessionTitle({ agentName: 'x'.repeat(200) }, 10)).toBe('xxxxxxxxx…');
   });
 });
