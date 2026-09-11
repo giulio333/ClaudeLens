@@ -79,7 +79,21 @@ export async function readTranscriptExtras(filePath: string): Promise<Transcript
   } catch {
     return EMPTY;
   }
+  return parseTranscriptExtras(raw);
+}
 
+/**
+ * La metà pura di `readTranscriptExtras`, su testo già in memoria.
+ *
+ * Esportata per lo stesso motivo di `parseChatSessionText`: `session-search`
+ * legge ogni transcript UNA volta — grezzo, per il suo reject a substring — e
+ * deve ricavare gli extra da quella stessa stringa invece di riaprire il file.
+ * Condividere la funzione è anche ciò che tiene ricerca e transcript d'accordo
+ * su quali righe sono un messaggio: senza, la ricerca non vedrebbe i messaggi
+ * assorbiti a turno in corso, che la vista invece mostra — si cercherebbe una
+ * frase che si ha sotto gli occhi e non si troverebbe nulla.
+ */
+export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const queued: ChatMessage[] = [];
   const skillPathByParentUuid = new Map<string, string>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
