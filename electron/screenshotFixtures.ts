@@ -1,5 +1,6 @@
 import { IpcMain } from 'electron';
 import type { ChatMessage } from './shared/chat-types';
+import type { BgSession } from './modules/bg-sessions-reader';
 
 type IpcResult<T> = { data: T | null; error: string | null };
 const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
@@ -343,12 +344,17 @@ function getMemoryData(_hash: string) {
       },
     ],
     topics: {
+      // I `[[wikilink]]` sono la sola sorgente degli archi pieni del grafo
+      // (memory/graph.ts): senza, la vista GRAPH legge "no relations yet" anche
+      // con quattro topic. Scritti nelle due forme che convivono sulle memorie
+      // reali — underscore e dash — più un link pendente verso il codice, che
+      // il grafo disegna tratteggiato.
       'user_profile.md':
-        '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.',
+        '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.\n\nThe conventions this implies are in [[feedback_code_style]], and the testing stance in [[feedback-testing]].',
       'feedback_code_style.md':
-        '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.',
+        '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.\n\n**Why:** Matches the stack and habits recorded in [[user_profile]].\n\n**How to apply:** Review diffs against this before suggesting a class or a decorator.',
       'feedback_testing.md':
-        '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration.\n\n**How to apply:** Never mock the database layer in tests.',
+        '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration — see [[src/db/migrations]].\n\n**How to apply:** Never mock the database layer in tests. Same spirit as [[feedback_code_style]], and the bar for [[project_goals]].',
     },
     memoryMd: {
       content:
@@ -367,7 +373,7 @@ function getMemoryData(_hash: string) {
     ],
     projectLevelTopics: {
       'project_goals.md':
-        '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.',
+        '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.\n\nNothing ships without the coverage described in [[feedback-testing]].',
     },
     projectLevelMemoryMd: {
       content: '# Project Memory\n\n- [project_goals.md](project_goals.md) — Q1 targets\n',
@@ -1262,7 +1268,13 @@ const MOCK_TEAMS = [(({ members: _m, events: _e, configPath: _c, ...s }) => s)(M
 // ─── Sessioni agent live / background ──────────────────────────────────────────
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
 // mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
-const MOCK_BG_SESSIONS = [
+// Annotato `BgSession[]`: la vista legge questi campi senza difese, e senza
+// l'annotazione il letterale passa per `ok<T>` con il proprio tipo inferito —
+// così la fixture era rimasta senza `fan`/`initialPrompt`/`respawnFlags` e la
+// Agent View crashava in `isWorking`. `tempo` è `idle | active | blocked` e
+// nient'altro (vedi agents-live/status.ts): 'busy'/'thinking' sono i valori che
+// il vecchio codice rotto testava.
+const MOCK_BG_SESSIONS: BgSession[] = [
   // Keep the Monitor compact: two background workers plus the two interactive sessions.
   // Completed entries still populate the Agent View without adding Monitor cards.
   {
@@ -1270,14 +1282,30 @@ const MOCK_BG_SESSIONS = [
     sessionId: '20260329T101500_000123',
     name: 'Refactor auth to JWT',
     state: 'running',
-    tempo: 'busy',
+    tempo: 'active',
     detail: 'Editing src/middleware/protect.ts',
     intent: 'Replace the session middleware with JWT verification across all protected routes.',
+    initialPrompt: '',
     result: null,
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'bg',
     inFlightTasks: 2,
+    inFlightKinds: [],
+    // Il `fan` è il lavoro che gira di fianco al turno: la riga "… in flight"
+    // della Agent View esiste solo se c'è (#218).
+    fan: [
+      {
+        kind: 'agent',
+        label: 'Task agent · audit the protected routes',
+        startedAt: NOW.getTime() - 4 * 60_000,
+      },
+    ],
+    tokens: 184_000,
+    respawnFlags: ['--model', 'opus', '--effort', 'high'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: true,
     pid: 24817,
     createdAt: minsAgo(18),
@@ -1290,14 +1318,28 @@ const MOCK_BG_SESSIONS = [
     sessionId: '20260531T093000_000202',
     name: 'Investigate flaky e2e test',
     state: 'running',
-    tempo: 'thinking',
+    tempo: 'active',
     detail: 'Analyzing test/login.e2e.ts retry logs',
     intent: 'Find why the login e2e test fails ~1 in 5 runs on CI.',
+    initialPrompt: '',
     result: null,
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'claude',
     inFlightTasks: 1,
+    inFlightKinds: [],
+    fan: [
+      {
+        kind: 'shell',
+        label: 'Bash · npx vitest run test/login.e2e.ts',
+        startedAt: NOW.getTime() - 50_000,
+      },
+    ],
+    tokens: 62_400,
+    respawnFlags: ['--model', 'sonnet'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: true,
     pid: 25210,
     createdAt: minsAgo(11),
@@ -1313,12 +1355,20 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Completed — toggle shipped, 6 files changed',
     intent: 'Add a system-aware dark theme switch to the settings menu.',
+    initialPrompt: '',
     result:
       'Added data-theme switching with localStorage persistence; audited 12 components for hardcoded colors.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'bg',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 118_000,
+    respawnFlags: ['--model', 'sonnet'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(180),
@@ -1334,12 +1384,20 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Failed — build broke on circular import',
     intent: 'Convert the server bundle from CommonJS to native ESM.',
+    initialPrompt: '',
     result:
       'Stopped after the build failed: circular dependency between src/db.ts and src/models/user.ts.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'claude',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 45_200,
+    respawnFlags: [],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(240),
@@ -1356,11 +1414,19 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Completed — 14 tests added, all passing',
     intent: 'Write integration-style tests for the date and currency helpers.',
+    initialPrompt: '',
     result: 'Added 14 tests in test/utils.test.ts; coverage on src/utils.ts is now 96%.',
     cwd: '/Users/alice/experiments/llm-playground',
     projectName: 'llm-playground',
     template: 'bg',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 31_800,
+    respawnFlags: [],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(140),
