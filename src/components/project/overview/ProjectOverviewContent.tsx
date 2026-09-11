@@ -53,7 +53,6 @@ import { useSessionTags } from '../../../hooks/useSessionTags';
 import { useMemoryTags } from '../../../hooks/useMemoryTags';
 import { PinIcon } from '../shared/SearchPopover';
 import { searchTriggerProps } from '../shared/searchTrigger';
-import { SessionColorDot } from '../shared/SessionColorDot';
 import { TagChip } from '../sessions/TagChip';
 import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
@@ -1921,11 +1920,16 @@ const SessionRow = memo(function SessionRow({
       >
         <PinIcon filled={pinned} />
       </button>
-      <span className="idx">{String(rank).padStart(2, '0')}</span>
-      {/* Only when the session actually carries one: an always-present slot
-          would spend the row's 12px gap on nothing for the hundreds of
-          sessions that were never coloured. */}
-      <SessionColorDot color={s.agentColor} />
+      {/* The session's `/color`, worn by the ordinal itself — see `.cl-scolor`
+          in index.css for why it is not a dot here: the row already has the
+          green LIVE one and the model's, and a third read as a traffic light.
+          Nothing is added when the session carries no colour. */}
+      <span
+        className={`idx${s.agentColor ? ` is-coloured ${s.agentColor}` : ''}`}
+        title={s.agentColor ? `Session colour: ${s.agentColor}` : undefined}
+      >
+        {String(rank).padStart(2, '0')}
+      </span>
       <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
       {live && <LiveTag />}
       <ExpiryTag date={s.date} cleanupDays={cleanupDays} />

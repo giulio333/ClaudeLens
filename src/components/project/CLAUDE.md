@@ -939,10 +939,10 @@ periodo di retention sono scese dentro le prime due celle, media/costo sono
 diventati la riga piccola, e la cella "live" è migrata nel piede del rail (era
 duplicata in due punti). Il nome display scende a `clamp(40px, 4.2vw, 72px)`
 perché una cifra da 26px sotto un titolo da 132px non è una gerarchia.
-Le sessioni sono **righe** (`.cl-srow`): pin, indice, **pallino colore**,
-titolo, tag, spazio elastico, il gruppo cifre `msg · modello · token · data` e
-in coda il **kebab delle azioni**. Due elementi di 5b sono caduti qui, per la
-stessa ragione:
+Le sessioni sono **righe** (`.cl-srow`): pin, **indice (che porta il colore
+della sessione)**, titolo, tag, spazio elastico, il gruppo cifre
+`msg · modello · token · data` e in coda il **kebab delle azioni**. Due elementi
+di 5b sono caduti qui, per la stessa ragione:
 
 - **il filetto puntinato** che portava l'occhio dal titolo alle cifre. Esisteva
   anche come spazio morto riservato (`min-width: 196px`) sotto le azioni, che
@@ -962,21 +962,36 @@ stessa ragione:
   senza toccare il layout della riga. La `+ tag` non anchora più il `TagPicker`
   a sé: l'ancora è il kebab, misurato all'apertura.
 
-Il **pallino** (`SessionColorDot`, `.cl-scolor`, 7px) è il colore che l'utente
-ha dato alla sessione con `/color` — il modo di Claude Code di distinguere a
-colpo d'occhio due run concorrenti — letto da `agent-color` nel transcript. È
-l'unico punto dell'app dove vive una tinta fuori dai 40° del brand, e a ragione:
-quel colore è **un dato**, l'etichetta dell'utente, non un accento nostro — una
-sessione blu dipinta in terracotta sarebbe un'altra informazione. Per questo
-resta un pallino e non la barra a sinistra, che era già stata scartata per le
-righe pinnate come la cosa più rumorosa di una lista fatta di filetti. Il nome
-sceglie una **classe** (`.cl-scolor.blue`), mai uno `style` inline: il valore
-arriva da un record non documentato, `cost-tracker` lo restringe agli otto nomi
-che `/color` accetta, e uno che passasse comunque si disegna come niente. Non
-c'è slot fisso quando manca: le centinaia di sessioni senza colore non pagano i
-12px di gap della riga. Lo stesso pallino sta nel crumb della `ChatView`, così
-il colore è sotto gli occhi anche mentre si legge la sessione, non solo nella
-lista da cui la si è scelta.
+Il **colore della sessione** — quello che l'utente le ha dato con `/color`, il
+modo di Claude Code di distinguere a colpo d'occhio due run concorrenti, letto
+da `agent-color` nel transcript — è **portato dall'indice di riga**, non da un
+segno suo. È l'unico punto dell'app dove vive una tinta fuori dai 40° del brand,
+e a ragione: quel colore è **un dato**, l'etichetta dell'utente, non un accento
+nostro — una sessione blu dipinta in terracotta sarebbe un'altra informazione.
+
+**Perché l'indice e non un pallino.** Il pallino è stato provato per primo, in
+testa al titolo, ed era il terzo tondo della riga: il verde di LIVE e quello del
+modello dicono già due cose diverse, e un terzo accanto a loro si leggeva come
+un semaforo. L'indice invece è mono, decorativo, già smorzato a `--cl-ink-4` e
+sta esattamente dove l'occhio entra nella riga: tingerlo non aggiunge **nessuna
+geometria** a una lista fatta di soli filetti. Era stata considerata anche la
+**sfumatura di fondo** suggerita dall'utente e scartata per la ragione già
+scritta sopra per le righe pinnate — in dark è una macchia e litiga con la tinta
+dell'hover. La tinta batte l'accento dell'indice pinnato (specificità
+`.is-coloured`): "pinnata" resta detto dalla puntina piena in testa alla riga,
+mentre il colore è l'unica cosa che dice **quale** sessione è questa.
+
+Il nome sceglie una **classe** (`.cl-srow .idx.is-coloured.blue`), mai uno
+`style` inline: il valore arriva da un record non documentato, `cost-tracker` lo
+restringe agli otto nomi che `/color` accetta, e uno che passasse comunque non
+tinge niente. I token `--cl-agent-*` sono perciò tarati **per il testo**, non
+per un tondo: ognuno passa 4.5:1 sul proprio fondo (peggior caso chiaro 4.64, il
+giallo — che infatti si legge ambra).
+
+Il **pallino** (`SessionColorDot`, `.cl-scolor`, 7px) sopravvive dove non c'è un
+indice da tingere e nessun altro tondo con cui confondersi: il crumb della
+`ChatView`, così il colore è sotto gli occhi anche mentre si legge la sessione,
+non solo nella lista da cui la si è scelta.
 
 La riga pinnata **non ha alcun trattamento di superficie**. Due sono stati
 provati e **bocciati entrambi**, per lo stesso motivo: erano la cosa più urlata

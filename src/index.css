@@ -176,31 +176,34 @@
 }
 
 /* ── Session colour (`/color`) ──
-   The eight names Claude Code's own `/color` accepts, as dots. These are the
-   only hues in the app outside the brand 40°, and deliberately so: the colour
-   is the USER's label on a session — what tells two concurrent runs apart at a
-   glance — so rendering a blue session in terracotta would be rendering
-   something else. They stay confined to a 7px dot.
-   Light: dark and saturated enough to read on warm paper. Dark: lifted in L,
-   chroma eased, same hues — the pairing every other token here uses. */
+   The eight names Claude Code's own `/color` accepts. These are the only hues
+   in the app outside the brand 40°, and deliberately so: the colour is the
+   USER's label on a session — what tells two concurrent runs apart at a glance
+   — so rendering a blue session in terracotta would be rendering something
+   else.
+   They are sized for TEXT, not for a dot: the sessions list wears the colour on
+   its row ordinal, so every one of them clears 4.5:1 on its own ground (worst
+   case light 4.64 — yellow, which is why it reads as amber and not as yellow;
+   worst case dark 6.82). Same pairing as every other token here: light dark and
+   saturated, dark lifted in L with chroma eased, hues untouched. */
 :root {
-  --cl-agent-red: oklch(0.58 0.19 27);
-  --cl-agent-orange: oklch(0.65 0.16 60);
-  --cl-agent-yellow: oklch(0.7 0.14 90);
-  --cl-agent-green: oklch(0.57 0.14 148);
-  --cl-agent-cyan: oklch(0.62 0.11 210);
-  --cl-agent-blue: oklch(0.55 0.16 258);
-  --cl-agent-purple: oklch(0.53 0.17 300);
-  --cl-agent-pink: oklch(0.62 0.19 350);
+  --cl-agent-red: oklch(0.52 0.18 27);
+  --cl-agent-orange: oklch(0.54 0.15 62);
+  --cl-agent-yellow: oklch(0.56 0.14 92);
+  --cl-agent-green: oklch(0.52 0.15 148);
+  --cl-agent-cyan: oklch(0.5 0.12 210);
+  --cl-agent-blue: oklch(0.52 0.16 258);
+  --cl-agent-purple: oklch(0.52 0.17 300);
+  --cl-agent-pink: oklch(0.54 0.18 350);
 }
 :root[data-theme='dark'] {
-  --cl-agent-red: oklch(0.7 0.17 27);
-  --cl-agent-orange: oklch(0.76 0.15 60);
-  --cl-agent-yellow: oklch(0.84 0.13 92);
-  --cl-agent-green: oklch(0.74 0.14 148);
-  --cl-agent-cyan: oklch(0.76 0.1 210);
-  --cl-agent-blue: oklch(0.7 0.14 258);
-  --cl-agent-purple: oklch(0.7 0.16 300);
+  --cl-agent-red: oklch(0.74 0.16 27);
+  --cl-agent-orange: oklch(0.76 0.14 62);
+  --cl-agent-yellow: oklch(0.82 0.14 92);
+  --cl-agent-green: oklch(0.76 0.14 148);
+  --cl-agent-cyan: oklch(0.78 0.11 210);
+  --cl-agent-blue: oklch(0.72 0.14 258);
+  --cl-agent-purple: oklch(0.72 0.16 300);
   --cl-agent-pink: oklch(0.75 0.16 350);
 }
 .cl-scolor {
@@ -237,6 +240,39 @@
 }
 .cl-scolor.pink {
   background: var(--cl-agent-pink);
+}
+/* On a sessions row the colour is worn by the ROW ORDINAL, not by a dot of its
+   own. The row already carries two dots — the green LIVE one and the model's —
+   and a third beside them read as a traffic light, three marks competing to say
+   three unrelated things. The ordinal is mono, decorative, and otherwise
+   `--cl-ink-4`: tinting it adds no geometry at all to a list whose whole
+   language is hairlines, and the number is exactly where the eye enters the
+   row. It outranks the pinned ordinal's accent — pinned is still said by the
+   filled pin glyph at the head of the row, while the colour is the only thing
+   that says WHICH session this is. */
+.cl-srow .idx.is-coloured.red {
+  color: var(--cl-agent-red);
+}
+.cl-srow .idx.is-coloured.orange {
+  color: var(--cl-agent-orange);
+}
+.cl-srow .idx.is-coloured.yellow {
+  color: var(--cl-agent-yellow);
+}
+.cl-srow .idx.is-coloured.green {
+  color: var(--cl-agent-green);
+}
+.cl-srow .idx.is-coloured.cyan {
+  color: var(--cl-agent-cyan);
+}
+.cl-srow .idx.is-coloured.blue {
+  color: var(--cl-agent-blue);
+}
+.cl-srow .idx.is-coloured.purple {
+  color: var(--cl-agent-purple);
+}
+.cl-srow .idx.is-coloured.pink {
+  color: var(--cl-agent-pink);
 }
 
 * {
