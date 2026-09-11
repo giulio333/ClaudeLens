@@ -52,6 +52,7 @@ import { useSessionTags } from '../../../hooks/useSessionTags';
 import { useMemoryTags } from '../../../hooks/useMemoryTags';
 import { PinIcon } from '../shared/SearchPopover';
 import { searchTriggerProps } from '../shared/searchTrigger';
+import { SessionColorDot } from '../shared/SessionColorDot';
 import { TagChip } from '../sessions/TagChip';
 import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
@@ -1917,6 +1918,10 @@ const SessionRow = memo(function SessionRow({
         <PinIcon filled={pinned} />
       </button>
       <span className="idx">{String(rank).padStart(2, '0')}</span>
+      {/* Only when the session actually carries one: an always-present slot
+          would spend the row's 12px gap on nothing for the hundreds of
+          sessions that were never coloured. */}
+      <SessionColorDot color={s.agentColor} />
       <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
       {live && <LiveTag />}
       <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
