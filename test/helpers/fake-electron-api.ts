@@ -42,6 +42,9 @@ import type {
   LiveWatchStatus,
   SessionActivity,
   SessionArtifacts,
+  SessionSummary,
+  ConversationSearchRequest,
+  ConversationSearchResult,
   PurgePlan,
   PurgeResult,
 } from '../../src/types';
@@ -161,6 +164,10 @@ export function createFakeElectronAPI(channels: FakeChannels) {
       ok<DeleteSessionResult>({ outcomes: [], deleted: [], warnings: [], succeeded: true })
     ),
     respondPermission: vi.fn(async (_requestId: string, _decision: unknown) => ok(null)),
+    // The sessions list. A search result carries no cost/token figures, so the
+    // results view resolves the real `SessionSummary` through this before it can
+    // open a hit — and refuses the hit when the session is no longer listed.
+    listByProject: vi.fn(async (_hash: string) => ok<SessionSummary[]>([])),
 
     onChatStarted: channels.chatStarted.subscribe,
     onChatChunk: channels.chatChunk.subscribe,
@@ -241,8 +248,24 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     listProjects: vi.fn(async () => ok<Array<{ hash: string; realPath: string }>>([])),
   };
 
+  // Full-text search over the transcripts. Empty is the honest default: the
+  // interesting cases (a hit, a truncated scan) are scripted per test.
+  const search = {
+    conversations: vi.fn(async (_request: ConversationSearchRequest) =>
+      ok<ConversationSearchResult>({
+        results: [],
+        scanned: 0,
+        parsed: 0,
+        truncated: false,
+        prefiltered: true,
+        elapsedMs: 0,
+      })
+    ),
+  };
+
   return {
     sessions,
+    search,
     telemetry,
     updates,
     projects,
@@ -309,6 +332,28 @@ export function toolResultMessage(toolUseId: string, content: string, uuid?: str
     role: 'user',
     timestamp: new Date(0).toISOString(),
     content: [{ type: 'tool_result', toolUseId, content, isError: false }],
+  };
+}
+
+/**
+ * A session row as `sessions:listByProject` builds it. Every figure defaults to
+ * zero on purpose: a test that asserts on cost or tokens has to set them, so the
+ * fixture can never be mistaken for a real reading.
+ */
+export function sessionSummary(over: Partial<SessionSummary> = {}): SessionSummary {
+  return {
+    filename: 'aaaaaaaa-1111-2222-3333-444444444444.jsonl',
+    date: new Date(0).toISOString(),
+    inputTokens: 0,
+    outputTokens: 0,
+    cacheWriteTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: 0,
+    estimatedCost: 0,
+    cacheSavings: 0,
+    messageCount: 0,
+    models: {},
+    ...over,
   };
 }
 
