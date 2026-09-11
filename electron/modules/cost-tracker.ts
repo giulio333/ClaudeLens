@@ -32,6 +32,9 @@ export interface SessionSummary {
   messageCount: number;
   model?: string; // modello dominante (retrocompatibilità)
   models: Record<string, number>; // conteggio messaggi per modello
+  /** The name the user typed with `/rename`. Outranks both titles — see
+   *  `readAgentName`. */
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
@@ -315,6 +318,7 @@ interface ParsedSession {
   date: string;
   model: string | undefined; // modello dominante
   models: Record<string, number>;
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
@@ -324,6 +328,7 @@ interface ParsedSession {
 
 interface LineData {
   date: string;
+  agentName: string | undefined;
   customTitle: string | undefined;
   aiTitle: string | undefined;
   firstUserMessage: string | undefined;
@@ -383,6 +388,18 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   return stripped;
 }
 
+// The name the user gave the conversation with `/rename`, if this line is that
+// record. It is the CURRENT way to name a session — `/title`, which wrote
+// `custom-title`, no longer exists — so it outranks both the legacy custom title
+// and the generated one, which is also the precedence Claude Code itself
+// resolves (`registry name ?? customTitle ?? aiTitle`). Unlike the colour there
+// is no clearing form: `/rename` either sets a non-empty name or does nothing.
+function readAgentName(json: any): string | undefined {
+  if (json.type !== 'agent-name') return undefined;
+  const raw = typeof json.agentName === 'string' ? json.agentName.trim() : '';
+  return raw || undefined;
+}
+
 // The colour record, if this line is one. Returns `null` for a record that
 // clears the colour (an empty value, or the `default` the slash command offers)
 // so the fold can distinguish "cleared" from "this line says nothing about
@@ -407,11 +424,20 @@ function extractLineData(json: any): LineData | null {
     json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
   const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
   const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
+  const agentName = readAgentName(json);
   const agentColor = readAgentColor(json);
   const usage = json.message?.usage;
   // `agentColor === null` is a meaningful line (the colour was cleared), so the
   // guard tests for `undefined` rather than falsiness.
-  if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage && agentColor === undefined)
+  if (
+    !usage &&
+    !date &&
+    !customTitle &&
+    !aiTitle &&
+    !agentName &&
+    !firstUserMessage &&
+    agentColor === undefined
+  )
     return null;
 
   const model: string | undefined = json.message?.model;
@@ -429,6 +455,7 @@ function extractLineData(json: any): LineData | null {
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   return {
     date,
+    agentName,
     customTitle,
     aiTitle,
     firstUserMessage,
@@ -453,6 +480,7 @@ interface SessionAccumulator {
   messageCount: number;
   date: string;
   modelCounts: Record<string, number>;
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
@@ -617,6 +645,7 @@ function foldLine(line: string, acc: SessionAccumulator): void {
   const parsed = extractLineData(json);
   if (!parsed) return;
 
+  if (parsed.agentName) acc.agentName = parsed.agentName;
   if (parsed.customTitle) acc.customTitle = parsed.customTitle;
   if (parsed.aiTitle) acc.aiTitle = parsed.aiTitle;
   // Last wins, clear included — a transcript recoloured mid-run holds every
@@ -659,6 +688,7 @@ function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
     date: acc.date || new Date(mtimeMs).toISOString(),
     model: entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : undefined,
     models: { ...acc.modelCounts },
+    agentName: acc.agentName,
     customTitle: acc.customTitle,
     aiTitle: acc.aiTitle,
     firstUserMessage: acc.firstUserMessage,
@@ -913,6 +943,7 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           messageCount: s.messageCount,
           model: s.model,
           models: s.models,
+          agentName: s.agentName,
           customTitle: s.customTitle,
           aiTitle: s.aiTitle,
           firstUserMessage: s.firstUserMessage,

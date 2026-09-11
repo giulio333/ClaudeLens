@@ -11,17 +11,15 @@ import { TopBar } from '../shared/TopBar';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
 import { QueryError } from '../../QueryError';
 import Markdown from '../../Markdown';
-import { fmtDate, fmtModel, modelColor, sessionTitle } from '../utils';
+import { fmtDate, fmtModel, modelColor, sessionName, sessionTitle } from '../utils';
 import { eventTime, fmtRelative, fmtTokens, isTeamLive, memberColor } from './utils';
 import { TeamSwimlanes } from './TeamSwimlanes';
 
 type Project = { hash: string; realPath: string };
 
 function meaningfulSessionTitle(session: SessionSummary | undefined): string | null {
-  const hasTitle = Boolean(
-    session?.customTitle?.trim() || session?.aiTitle?.trim() || session?.firstUserMessage?.trim()
-  );
-  return hasTitle && session ? sessionTitle(session) : null;
+  if (!session || sessionName(session) === null) return null;
+  return sessionTitle(session);
 }
 
 function teamTitle(team: TeamDetail, sessionByFilename: Map<string, SessionSummary>): string {
