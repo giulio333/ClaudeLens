@@ -15,6 +15,7 @@
 
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
+import { StrictMode } from 'react';
 import Markdown from '../src/components/Markdown';
 import { VaultLinksProvider } from '../src/components/VaultLinks';
 import { installFakeElectronAPI, ok, type FakeBridge } from './helpers/fake-electron-api';
@@ -46,11 +47,22 @@ function resolvesTo(found: Record<string, string>): void {
   );
 }
 
+/**
+ * Mounted the way the app mounts (`src/main.tsx`): inside `StrictMode`.
+ *
+ * Not a detail. Testing Library's `render` does not use StrictMode, so every
+ * claim below once passed against a provider that, in the real app, had already
+ * disposed itself during React's mount/cleanup/mount rehearsal and never asked
+ * about anything — the chips sat in the neutral "we do not know" state on
+ * screen while the suite was green.
+ */
 function inChat(markdown: string) {
   return render(
-    <VaultLinksProvider root={ROOT}>
-      <Markdown>{markdown}</Markdown>
-    </VaultLinksProvider>
+    <StrictMode>
+      <VaultLinksProvider root={ROOT}>
+        <Markdown>{markdown}</Markdown>
+      </VaultLinksProvider>
+    </StrictMode>
   );
 }
 
@@ -140,9 +152,11 @@ describe('wikilink chips', () => {
     resolvesTo({ Nota: 'notes/Nota.md' });
     clock.mockReturnValue(1_000_000 + 31_000);
     rerender(
-      <VaultLinksProvider root={ROOT}>
-        <Markdown>{'Ancora [[Nota]], stavolta scritta.'}</Markdown>
-      </VaultLinksProvider>
+      <StrictMode>
+        <VaultLinksProvider root={ROOT}>
+          <Markdown>{'Ancora [[Nota]], stavolta scritta.'}</Markdown>
+        </VaultLinksProvider>
+      </StrictMode>
     );
 
     const chip = await screen.findByRole('button', { name: 'Nota' });
@@ -159,9 +173,11 @@ describe('wikilink chips', () => {
 
     clock.mockReturnValue(1_000_000 + 10 * 60_000);
     rerender(
-      <VaultLinksProvider root={ROOT}>
-        <Markdown>{'[[Nota]] due.'}</Markdown>
-      </VaultLinksProvider>
+      <StrictMode>
+        <VaultLinksProvider root={ROOT}>
+          <Markdown>{'[[Nota]] due.'}</Markdown>
+        </VaultLinksProvider>
+      </StrictMode>
     );
 
     await screen.findByRole('button', { name: 'Nota' });
@@ -170,7 +186,11 @@ describe('wikilink chips', () => {
   });
 
   it('renders plain text outside a provider, and asks nothing', () => {
-    const { container } = render(<Markdown>{'Fonte: [[Nota]].'}</Markdown>);
+    const { container } = render(
+      <StrictMode>
+        <Markdown>{'Fonte: [[Nota]].'}</Markdown>
+      </StrictMode>
+    );
     expect(container.textContent).toContain('[[Nota]]');
     expect(container.querySelector('.cl-wikilink')).toBeNull();
     expect(bridge.api.vault.resolveLinks).not.toHaveBeenCalled();

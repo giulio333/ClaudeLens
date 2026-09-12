@@ -37,7 +37,13 @@ export function VaultLinksProvider({ root, children }: { root: string; children:
   }
 
   const engine = useMemo(() => createVaultLinkEngine(root, setStates), [root]);
-  useEffect(() => () => engine.dispose(), [engine]);
+  // `revive` on the way in, not just `dispose` on the way out: StrictMode runs
+  // this effect, its cleanup, and this effect again — a one-way dispose turned
+  // that rehearsal into a permanently silent engine.
+  useEffect(() => {
+    engine.revive();
+    return () => engine.dispose();
+  }, [engine]);
 
   return (
     <VaultLinksApiContext.Provider value={engine}>

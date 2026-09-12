@@ -43,7 +43,13 @@ the main process, and `tsconfig.test.json` for `test/` — the suite used to be 
 one part of the repo tsc never looked at.
 
 **Renderer tests** run in jsdom against a fake preload bridge
-(`test/helpers/fake-electron-api.ts`). `window.electronAPI` is the renderer's
+(`test/helpers/fake-electron-api.ts`). **Mount them the way `src/main.tsx`
+mounts — inside `React.StrictMode`**: Testing Library's `render` does not, and
+that gap is not cosmetic. StrictMode runs every effect, its cleanup, and the
+effect again to prove a component survives a remount, and the wikilink chips
+shipped with a provider whose one-way `dispose` made that rehearsal permanent —
+on screen every citation stayed in the neutral "we do not know" state while all
+ten of its tests were green. `window.electronAPI` is the renderer's
 single seam to the main process, so replacing it makes hooks and components run
 unmodified with no Electron, no SDK and no `~/.claude` on disk: request/response
 methods are `vi.fn()`s returning the `{ data, error }` envelope, `on*` channels
