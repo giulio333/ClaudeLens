@@ -6444,6 +6444,76 @@ button.cl-pill-model[data-on] {
 }
 
 /* ── status strip ── */
+/* ── what the run changed on disk (#265) ──
+   Inside the terminal shell, under the output and above the footer: an edit made
+   from Bash leaves no Edit tool call, so this is the only place the transcript
+   can say a file changed. Palette is the shell's own `--t-*` — it is part of the
+   run, not a card beside it — and it sits outside `.cl-term-body` so the output
+   clamp cannot fold it away. */
+.cl-term-diff {
+  border-top: 1px solid var(--t-line);
+  background: color-mix(in oklch, var(--t-bar) 45%, var(--t-bg));
+  padding: 7px 12px 8px;
+}
+.cl-term-diff-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+.cl-term-diff-title {
+  color: var(--t-dim);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.cl-term-diff-more,
+.cl-term-diff-note {
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+}
+.cl-term-diff-note {
+  font-style: italic;
+}
+/* The one place a horizontal scroller is right: a diff line must not wrap, or
+   the `+`/`-` column stops lining up and the block is unreadable. */
+.cl-term-diff-body {
+  overflow-x: auto;
+}
+.cl-term-diff-row {
+  color: var(--t-dim);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre;
+}
+.cl-term-diff-row.is-path {
+  margin-top: 6px;
+  color: var(--t-accent);
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.cl-term-diff-row.is-path:first-child {
+  margin-top: 0;
+}
+.cl-term-diff-row.is-hunk {
+  color: var(--t-mute);
+  font-size: 10px;
+}
+.cl-term-diff-row.is-add {
+  color: var(--t-prompt);
+  background: color-mix(in oklch, var(--t-prompt) 12%, transparent);
+}
+.cl-term-diff-row.is-del {
+  color: var(--t-danger);
+  background: color-mix(in oklch, var(--t-danger) 12%, transparent);
+}
+.cl-term-diff .cl-term-link {
+  margin-top: 6px;
+}
+
 .cl-term-foot {
   display: flex;
   align-items: center;

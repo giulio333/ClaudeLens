@@ -3,7 +3,13 @@ import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
 import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
-import { mergeTranscriptExtras, readTranscriptExtras, rowEffort } from './transcript-extras';
+import {
+  mergeTranscriptExtras,
+  parseBashEditDiff,
+  readTranscriptExtras,
+  rowEffort,
+  withBashEditDiff,
+} from './transcript-extras';
 import type {
   AdvisorConsult,
   ChatContentBlock,
@@ -267,12 +273,18 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       if (uuid && seenUuids.has(uuid)) continue;
       if (uuid) seenUuids.add(uuid);
 
+      // Row-level like `effort`: the diff of the files a Bash command changed
+      // sits on `toolUseResult`, beside `message`, so here it is free — while
+      // the SDK path, which gets only `message`, has to recover it with a
+      // second pass (see `transcript-extras`).
+      const bashEditDiff = parseBashEditDiff(json.toolUseResult);
+
       const message: ChatMessage = {
         uuid,
         role,
         timestamp: String(json.timestamp ?? ''),
         model: msg.model as string | undefined,
-        content: blocks,
+        content: bashEditDiff ? withBashEditDiff(blocks, bashEditDiff) : blocks,
         usage: parseUsage(msg),
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).
