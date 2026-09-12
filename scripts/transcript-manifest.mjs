@@ -303,8 +303,8 @@ export const FIELDS = {
   // upgrade the drift watch caught while it was still fresh. Two of them are
   // maps keyed by tool_use id, which is what forced the census to learn that a
   // key can be a generated id and still look like a field name.
-  'assistant.wireToolInputs': candidate(
-    "the input each tool call was actually sent, keyed by tool_use id — and it differs from the `tool_use` block the app renders in 922 of the 1,463 pairs observed: a Bash command arrives with a `cd <project> &&` prefix the block does not carry, so the transcript shows a command that is not the one that ran. What sits under the id is the invoked tool's own input schema, which the census records the existence of and deliberately does not descend into (FOREIGN_SCHEMA_MAPS)"
+  'assistant.wireToolInputs': ignored(
+    "the input each tool call was sent BEFORE Claude Code normalized it, keyed by tool_use id. It differs from the `tool_use` block the app renders in 943 of 1,504 pairs, and both kinds of difference say the block is the normalized one: 934 are a Bash command whose leading `cd <project> &&` the CLI resolved into the call's cwd and dropped, and 81 are an `Edit` whose `replace_all: false` the block carries as a filled-in default and the wire does not. So the transcript already shows the better of the two, and what this adds is the literal model output — nothing a reader of the session is missing. What sits under the id is the invoked tool's own input schema, which the census records the existence of and deliberately does not descend into (FOREIGN_SCHEMA_MAPS)"
   ),
   'assistant.wireIngestContext': ignored(
     "a per-tool-call `{cwd}`, identical to the row's own cwd in all 831 observations — and the row cwd is what the app already reads. It would stop being a copy only if a dispatch ran somewhere else, which no row on disk shows"
