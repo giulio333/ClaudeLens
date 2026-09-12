@@ -309,12 +309,16 @@ export const FIELDS = {
   'assistant.wireIngestContext': ignored(
     "a per-tool-call `{cwd}`, identical to the row's own cwd in all 831 observations — and the row cwd is what the app already reads. It would stop being a copy only if a dispatch ran somewhere else, which no row on disk shows"
   ),
-  'assistant.perTurnEffort': unknown(
-    'null in all 3,838 rows that carry it, while the sibling `effort` holds the real value ("xhigh", "high", "medium", "low"). One row with a non-null value would settle whether it overrides `effort` for a single turn — which is the only thing that would make it worth reading beside it'
-  ),
-  'user.toolUseResult.bashEditDiff': candidate(
-    'the unified diff of the files a Bash call edited — `files[].filePath` with hunks, plus `changedFiles`, `moreFiles` and `unavailable` — on 122 rows. This is the gap that loses real work: an edit made with sed or a heredoc produces no Edit tool call at all, so the app renders the call as stdout and shows no diff, while Claude Code recorded here exactly which lines changed'
-  ),
+  // Read, though every row on disk has it null: `rowEffort` takes it when it is
+  // a non-empty string and falls back to `effort`, which is the whole point of
+  // the guard — the field is the per-turn override, and the fallback is what a
+  // `??` on a null would have got wrong.
+  'assistant.perTurnEffort': read('transcript-extras/rowEffort'),
+  // Read since #265: the diff of the files a Bash call edited. The file reader
+  // has the whole row and stamps the `tool_result` block itself; the SDK path
+  // never sees `toolUseResult` at all and recovers it in the second pass, keyed
+  // by the row's only `tool_use_id`.
+  'user.toolUseResult.bashEditDiff': read('session-reader + transcript-extras'),
   'user.toolUseResult.task': candidate(
     'a background task as of the turn — task_id, task_type ("local_bash"), status, description, output, exitCode — written by TaskCreate and TaskOutput. tasks-reader reads `~/.claude/tasks/`, so the app knows the tasks; nothing links one to the turn that spawned or polled it'
   ),

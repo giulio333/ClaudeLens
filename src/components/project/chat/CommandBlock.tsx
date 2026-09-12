@@ -3,6 +3,8 @@ import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import hljs from 'highlight.js/lib/common';
 import { ToolGroup } from './utils';
+import { BashEditDiffView } from './BashEditDiffView';
+import type { BashEditDiff } from '../../../types';
 import { parseShellCommand, normalizeOutput, promptRows } from './shell';
 import type { PromptLead } from './shell';
 
@@ -163,6 +165,7 @@ function TerminalWindow({
   onExpand,
   onClose,
   full,
+  diff,
 }: {
   title: string;
   meta: string;
@@ -173,6 +176,8 @@ function TerminalWindow({
   onExpand?: () => void;
   onClose?: () => void;
   full?: boolean;
+  /** Files the command edited, when Claude Code recorded them (#265). */
+  diff?: BashEditDiff;
 }) {
   const output = run?.output ?? '';
   const totalLines = run?.totalLines ?? 0;
@@ -253,6 +258,10 @@ function TerminalWindow({
             </div>
           ))}
       </div>
+
+      {/* Outside the body: the output clamp must not fold away the one part
+          that says a file changed. */}
+      {diff && <BashEditDiffView diff={diff} />}
 
       {run && (
         <div className="cl-term-foot">
@@ -335,6 +344,7 @@ export function CommandSheet({
         meta={meta}
         command={command}
         run={run}
+        diff={result?.bashEditDiff}
         clamped={clamped}
         onToggleClamp={totalLines > OUTPUT_CLAMP ? () => setExpanded(e => !e) : undefined}
         onExpand={command || output ? () => setFull(true) : undefined}
@@ -347,6 +357,7 @@ export function CommandSheet({
           // the "show me everything" view.
           command={readCommand(input)}
           run={run}
+          diff={result?.bashEditDiff}
           onClose={() => setFull(false)}
         />
       )}
@@ -361,12 +372,14 @@ function FullscreenTerminal({
   meta,
   command,
   run,
+  diff,
   onClose,
 }: {
   title: string;
   meta: string;
   command: string;
   run: Run;
+  diff?: BashEditDiff;
   onClose: () => void;
 }) {
   useEffect(() => {
@@ -385,6 +398,7 @@ function FullscreenTerminal({
           meta={meta}
           command={command}
           run={run}
+          diff={diff}
           clamped={false}
           onClose={onClose}
           full

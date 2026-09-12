@@ -87,6 +87,12 @@ make, since they fed the `isMeta` row the read path stopped returning; and an
 `advisor` consult is a stream marker of its own in both density modes, stating
 the reviewer model, the wall time and the spend, or degrading to the bare label
 when the turn holds two consults and the shared `usage` cannot be split) and
+`bash-edit-diff-view` (the diff of what a shell command changed, #265: the hunk
+is drawn under the run with added and removed lines apart, a created or deleted
+file is marked rather than printed, `unavailable` says so instead of drawing an
+empty diff — which would read as "nothing changed" — a long diff folds at 24
+lines and unfolds on ask, and a command that edited nothing renders exactly as
+before) and
 `markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
 has is a button carrying the path it resolved to, one nothing answers to is
 dashed and inert, the backticked form Claude writes just as often is caught too,
