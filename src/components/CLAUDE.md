@@ -73,6 +73,15 @@ resolve to what lives.
   created in a `useMemo` keyed on the root, not refs: it belongs to one project
   and is replaced wholesale when the root changes (a reply from the old engine
   is dropped by its `dispose`), and refs mutated during render are a lint error.
+  **A hit is cached forever, a miss only for 30s** (`RETRY_MISS_AFTER_MS`, which
+  must not be shorter than the main process' `INDEX_TTL_MS` or the re-ask is
+  served from the same cached index): Claude writes the notes it cites, so the
+  name that was not there when the transcript first mentioned it is exactly the
+  one that becomes real a minute later — a permanent "already asked" latch would
+  have reintroduced, one layer up, the failure the index TTL exists to avoid,
+  and would have pinned a chip to plain text on a single transient IPC error.
+  The re-ask rides a `<Markdown>` reporting the name again (a later message, a
+  streaming turn); a static transcript nobody adds to never re-asks.
 - **`VaultLinks.tsx`** — `VaultLinksProvider` and the chip. The provider is
   mounted by `ChatView` and `LiveChatView` with `project.realPath`, and
   **deliberately not higher**: the memory views carry wikilinks of their own
