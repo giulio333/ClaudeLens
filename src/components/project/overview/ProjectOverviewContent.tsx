@@ -44,6 +44,8 @@ import { PlansSection } from '../plans/PlansSection';
 import { WorkflowsSection } from '../workflows/WorkflowsSection';
 import { TeamsSection } from '../teams/TeamsSection';
 import { MemoryGraphView } from '../memory/MemoryGraphView';
+import { buildMemoryGraph, relationSummary } from '../memory/graph';
+import { MEMORY_TYPE_TINT } from '../chat/utils';
 import { ProjectConfigView } from '../settings/ProjectConfigView';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
@@ -390,6 +392,13 @@ export function ProjectView({
     () => ({ ...(memory?.topics ?? {}), ...(memory?.projectLevelTopics ?? {}) }),
     [memory]
   );
+  // Un solo grafo per le due viste: la mappa lo disegna, l'elenco lo dice a
+  // parole riga per riga. Costruirlo due volte rifarebbe la stessa regex su
+  // tutto l'archivio e, peggio, lascerebbe le due viste libere di divergere.
+  const memGraph = useMemo(
+    () => buildMemoryGraph(memTopics, memoryContents),
+    [memTopics, memoryContents]
+  );
   const activeMemTag =
     memTagFilter && memTags.some(t => t.name === memTagFilter) ? memTagFilter : null;
   // Set of types actually present among topics — used by the "Group by Type" option.
@@ -439,8 +448,20 @@ export function ProjectView({
     }
     return [];
   }, [activeMemGroup, presentMemTypes, memTags, visibleMemTopics, tagsForMemory]);
-  const renderMemTile = (t: MemoryTopic, accent: boolean) => {
+  /**
+   * Una memoria come riga (design 2b): il grafo detto a parole.
+   *
+   * Il pallino porta il tipo (`MEMORY_TYPE_TINT`, la stessa tinta della mappa)
+   * al posto del glifo con l'iniziale, che ripeteva la prima lettera del nome
+   * scritto accanto; sotto la descrizione la riga dice la relazione — chi la
+   * cita, che cosa cita, se è l'hub del gruppo — cioè l'arco che la mappa
+   * disegna. Chi non ha relazioni non porta la riga: il conteggio sta in fondo
+   * all'elenco, come la fascia dichiarata della mappa.
+   */
+  const renderMemRow = (t: MemoryTopic) => {
     const tTags = tagsForMemory(t.filename);
+    const rel = relationSummary(memGraph, t.filename);
+    const tint = MEMORY_TYPE_TINT[t.type];
     const open = () =>
       onNavigate({
         type: 'memory-topic',
@@ -453,7 +474,7 @@ export function ProjectView({
         key={t.filename}
         role="button"
         tabIndex={0}
-        className={`cl-tile ${accent ? 'accent' : ''}`}
+        className="cl-mem-row"
         onClick={open}
         onKeyDown={e => {
           if (e.key === 'Enter' || e.key === ' ') {
@@ -462,12 +483,32 @@ export function ProjectView({
           }
         }}
       >
-        <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
+        <span
+          className={`dot${rel.isHub ? ' is-hub' : ''}`}
+          style={{ background: tint, color: tint }}
+          title={rel.isHub ? `Hub of the "${rel.clusterLabel}" cluster` : t.type}
+        />
         <div style={{ minWidth: 0 }}>
           <div className="t-name">
             <SlugName text={t.name} />
           </div>
           <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
+          {(rel.inDeg > 0 || rel.outDeg > 0) && (
+            <div className="t-rel">
+              {rel.inDeg > 0 && (
+                <span>
+                  ↑ cited by {rel.inDeg}
+                  {rel.isHub && <span className="hub"> · cluster hub</span>}
+                </span>
+              )}
+              {rel.outDeg > 0 && (
+                <span className="out" title={rel.cites.join(', ')}>
+                  ↓ cites <b>{rel.cites[0]}</b>
+                  {rel.cites.length > 1 && ` +${rel.cites.length - 1}`}
+                </span>
+              )}
+            </div>
+          )}
           <div
             className="cl-tile-tags"
             onClick={e => e.stopPropagation()}
@@ -506,8 +547,10 @@ export function ProjectView({
             </button>
           </div>
         </div>
-        <span className="t-meta cl-tile-meta--mem">
-          <b>{t.type}</b>
+        <span className="t-meta">
+          <span className="type" style={{ color: tint }}>
+            {t.type}
+          </span>
           {t.createdAt && <span className="when">{tileDate(t.createdAt)}</span>}
         </span>
       </div>
@@ -915,8 +958,7 @@ export function ProjectView({
           </div>
           {memLayout === 'graph' ? (
             <MemoryGraphView
-              topics={memTopics}
-              contents={memoryContents}
+              graph={memGraph}
               onOpenTopic={t =>
                 onNavigate({
                   type: 'memory-topic',
@@ -928,6 +970,17 @@ export function ProjectView({
             />
           ) : (
             <>
+              {/* Gli stessi totali che apre la mappa: passare da una vista
+                  all'altra deve cambiare la forma, non i dati. */}
+              {memTopics.length > 1 && (
+                <div className="cl-memgraph-bar">
+                  <span className="cl-memgraph-stats">
+                    <b>{memGraph.links.length}</b> links · <b>{memGraph.clusters.length}</b>{' '}
+                    clusters · <b>{memGraph.nodes.length - memGraph.loners.length}</b>/
+                    {memGraph.nodes.length} connected
+                  </span>
+                </div>
+              )}
               {(() => {
                 const showGroupBy =
                   (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
@@ -985,9 +1038,7 @@ export function ProjectView({
               ) : visibleMemTopics.length === 0 ? (
                 <div className="cl-empty">No topics match these filters.</div>
               ) : activeMemGroup === 'none' ? (
-                <div className="cl-tile-grid cl-tile-grid--list">
-                  {visibleMemTopics.map((t, i) => renderMemTile(t, i === 0 && !activeMemTag))}
-                </div>
+                <div className="cl-mem-rows">{visibleMemTopics.map(renderMemRow)}</div>
               ) : (
                 memGroups.map(g => (
                   <div key={g.key} className="cl-mem-group">
@@ -995,11 +1046,24 @@ export function ProjectView({
                       <span className="lbl">{g.label}</span>
                       <span className="ct">{g.topics.length}</span>
                     </div>
-                    <div className="cl-tile-grid cl-tile-grid--list">
-                      {g.topics.map(t => renderMemTile(t, false))}
-                    </div>
+                    <div className="cl-mem-rows">{g.topics.map(renderMemRow)}</div>
                   </div>
                 ))
+              )}
+              {/* Il debito di connessione, dichiarato come lo dichiara la mappa:
+                  qui non c'è una posizione che possa mostrarlo, quindi si conta. */}
+              {memTopics.length > 1 && (
+                <div className="cl-mem-relnote">
+                  {memGraph.loners.length === 0
+                    ? 'No unconnected memory'
+                    : `${memGraph.loners.length} unconnected`}
+                  {' · '}
+                  {memGraph.affinities.length === 0
+                    ? 'no suggested affinity'
+                    : `${memGraph.affinities.length} suggested ${
+                        memGraph.affinities.length === 1 ? 'affinity' : 'affinities'
+                      } — see Graph`}
+                </div>
               )}
               {memPickerFor && (
                 <TagPicker
