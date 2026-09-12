@@ -1,5 +1,9 @@
-import { readTranscriptExtras, mergeTranscriptExtras } from '../electron/modules/transcript-extras';
-import type { ChatMessage } from '../electron/shared/chat-types';
+import {
+  readTranscriptExtras,
+  mergeTranscriptExtras,
+  parseBashEditDiff,
+} from '../electron/modules/transcript-extras';
+import type { BashEditDiff, ChatMessage } from '../electron/shared/chat-types';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -226,11 +230,13 @@ describe('mergeTranscriptExtras', () => {
   const extrasOf = (
     queued: ChatMessage[],
     skills: [string, string][] = [],
-    efforts: [string, string][] = []
+    efforts: [string, string][] = [],
+    diffs: [string, BashEditDiff][] = []
   ) => ({
     queued,
     skillPathByParentUuid: new Map(skills),
     effortByUuid: new Map(efforts),
+    bashEditDiffByToolUseId: new Map(diffs),
   });
 
   it('leaves the transcript untouched when there is nothing to add', () => {
@@ -322,5 +328,202 @@ describe('mergeTranscriptExtras', () => {
     const merged = mergeTranscriptExtras(messages, extrasOf([], [['cmd1', '/skills/build-dmg']]));
     expect(merged[0].skillPath).toBe('/skills/build-dmg');
     expect(merged[1].skillPath).toBeUndefined();
+  });
+});
+
+/** The row Claude Code writes when a Bash command edited files: the diff sits on
+ *  `toolUseResult`, beside `message`, and the result block names the tool call. */
+function bashResultRow(
+  uuid: string,
+  toolUseId: string,
+  bashEditDiff: unknown,
+  timestamp = '2026-09-08T10:00:02.000Z'
+) {
+  return {
+    type: 'user',
+    uuid,
+    timestamp,
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'ok' }],
+    },
+    toolUseResult: { stdout: 'ok', stderr: '', bashEditDiff },
+  };
+}
+
+const oneHunk = [
+  { oldStart: 12, oldLines: 3, newStart: 12, newLines: 4, lines: [' a', '-b', '+c'] },
+];
+
+describe('readTranscriptExtras — bashEditDiff', () => {
+  // The gap this closes: an edit made from Bash (`sed -i`, a heredoc) produces
+  // no Edit tool call at all, so without the diff the transcript shows a
+  // command and its stdout and nothing about the file it rewrote (#265). The
+  // SDK read cannot help — it returns `message` and never `toolUseResult`.
+  it('recovers the diff of a Bash result, keyed by its tool_use id', async () => {
+    const extras = await readTranscriptExtras(
+      writeJsonl([
+        userRow('u1', 'edit it'),
+        bashResultRow('r1', 'toolu_bash1', {
+          files: [{ filePath: '/p/a.ts', hunks: oneHunk }],
+          changedFiles: ['/p/a.ts'],
+          moreFiles: 0,
+        }),
+      ])
+    );
+
+    const diff = extras.bashEditDiffByToolUseId.get('toolu_bash1');
+    expect(diff?.files[0].filePath).toBe('/p/a.ts');
+    expect(diff?.files[0].hunks[0].lines).toEqual([' a', '-b', '+c']);
+    expect(diff?.changedFiles).toEqual(['/p/a.ts']);
+  });
+
+  it('refuses a row whose diff cannot be pinned to one tool call', async () => {
+    // The diff is on the row, not on the block, so with two results in the same
+    // row there is nothing that says which of them changed the files — and
+    // showing it on the wrong tool is worse than not showing it.
+    const row = bashResultRow('r1', 'toolu_bash1', {
+      files: [{ filePath: '/p/a.ts', hunks: oneHunk }],
+      changedFiles: ['/p/a.ts'],
+      moreFiles: 0,
+    });
+    row.message.content.push({ type: 'tool_result', tool_use_id: 'toolu_other', content: 'ok' });
+
+    const extras = await readTranscriptExtras(writeJsonl([row]));
+    expect(extras.bashEditDiffByToolUseId.size).toBe(0);
+  });
+
+  it('says a diff was unavailable instead of showing an empty one', async () => {
+    // `unavailable` comes with no `files` and no `changedFiles`. Dropping it
+    // would render as "the command changed nothing", which is a different claim.
+    const extras = await readTranscriptExtras(
+      writeJsonl([
+        bashResultRow('r1', 'toolu_bash1', { files: [], moreFiles: 0, unavailable: true }),
+      ])
+    );
+    expect(extras.bashEditDiffByToolUseId.get('toolu_bash1')).toEqual({
+      files: [],
+      changedFiles: [],
+      moreFiles: 0,
+      unavailable: true,
+    });
+  });
+
+  it('leaves a result alone when the row carries no diff', async () => {
+    const extras = await readTranscriptExtras(
+      writeJsonl([
+        {
+          type: 'user',
+          uuid: 'r1',
+          timestamp: '2026-09-08T10:00:02.000Z',
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'toolu_bash1', content: 'ok' }],
+          },
+          toolUseResult: { stdout: 'ok', stderr: '' },
+        },
+      ])
+    );
+    expect(extras.bashEditDiffByToolUseId.size).toBe(0);
+  });
+});
+
+describe('parseBashEditDiff', () => {
+  // The row comes from a file another program writes and nobody versions, so
+  // every piece is optional until it has been seen.
+  it('keeps the file flags the corpus carries and drops the malformed rest', () => {
+    const diff = parseBashEditDiff({
+      bashEditDiff: {
+        files: [
+          { filePath: '/p/new.ts', hunks: oneHunk, created: true },
+          { filePath: '/p/gone.ts', hunks: [], deleted: true },
+          { hunks: oneHunk },
+          'not a file',
+        ],
+        changedFiles: ['/p/new.ts', 42],
+        moreFiles: 3,
+      },
+    });
+
+    expect(diff?.files.map(f => f.filePath)).toEqual(['/p/new.ts', '/p/gone.ts']);
+    expect(diff?.files[0].created).toBe(true);
+    expect(diff?.files[1].deleted).toBe(true);
+    expect(diff?.changedFiles).toEqual(['/p/new.ts']);
+    expect(diff?.moreFiles).toBe(3);
+  });
+
+  it('is undefined when there is nothing a reader could show', () => {
+    expect(parseBashEditDiff(undefined)).toBeUndefined();
+    expect(parseBashEditDiff({ stdout: 'ok' })).toBeUndefined();
+    expect(
+      parseBashEditDiff({ bashEditDiff: { files: [], changedFiles: [], moreFiles: 0 } })
+    ).toBeUndefined();
+  });
+
+  it('drops a hunk with no lines, which would draw an empty diff', () => {
+    const diff = parseBashEditDiff({
+      bashEditDiff: {
+        files: [{ filePath: '/p/a.ts', hunks: [{ oldStart: 1, lines: [] }, oneHunk[0]] }],
+        changedFiles: ['/p/a.ts'],
+        moreFiles: 0,
+      },
+    });
+    expect(diff?.files[0].hunks).toHaveLength(1);
+    expect(diff?.files[0].hunks[0].newLines).toBe(4);
+  });
+});
+
+describe('mergeTranscriptExtras — bashEditDiff', () => {
+  const diffExtras = (diffs: [string, BashEditDiff][]) => ({
+    queued: [],
+    skillPathByParentUuid: new Map<string, string>(),
+    effortByUuid: new Map<string, string>(),
+    bashEditDiffByToolUseId: new Map(diffs),
+  });
+
+  const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
+    uuid,
+    role: 'user',
+    timestamp: '2026-09-08T10:00:02.000Z',
+    content: [{ type: 'tool_result', toolUseId, content: 'ok', isError: false }],
+  });
+
+  const diff: BashEditDiff = {
+    files: [{ filePath: '/p/a.ts', hunks: oneHunk }],
+    changedFiles: ['/p/a.ts'],
+    moreFiles: 0,
+  };
+
+  it('stamps the diff on the tool_result it belongs to, and on no other', () => {
+    const messages = [resultMsg('r1', 'toolu_bash1'), resultMsg('r2', 'toolu_other')];
+    const merged = mergeTranscriptExtras(messages, diffExtras([['toolu_bash1', diff]]));
+
+    const stamped = merged[0].content[0];
+    expect(stamped.type === 'tool_result' && stamped.bashEditDiff?.files[0].filePath).toBe(
+      '/p/a.ts'
+    );
+    expect(merged[1]).toBe(messages[1]);
+  });
+
+  it('returns the messages by reference when the reader already attached it', () => {
+    // The file reader has the whole row and stamps the block itself, so this
+    // pass has nothing to do — and must not copy every message to say so.
+    const messages: ChatMessage[] = [
+      {
+        ...resultMsg('r1', 'toolu_bash1'),
+        content: [
+          {
+            type: 'tool_result',
+            toolUseId: 'toolu_bash1',
+            content: 'ok',
+            isError: false,
+            bashEditDiff: diff,
+          },
+        ],
+      },
+    ];
+    expect(mergeTranscriptExtras(messages, diffExtras([['toolu_bash1', diff]]))[0]).toBe(
+      messages[0]
+    );
   });
 });

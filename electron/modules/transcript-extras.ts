@@ -13,14 +13,26 @@
 //     segue una slash command, e l'unico segnale che dice che quella `/foo` era
 //     una skill e non un comando builtin (#246).
 //
-// A cui si aggiunge un campo, non una riga: `effort` sta sulla riga assistant
+// A cui si aggiungono due campi, non righe: `effort` sta sulla riga assistant
 // ACCANTO a `uuid`, non dentro `message`, quindi `getSessionMessages` — che
-// restituisce solo `message` — non lo vede mai.
+// restituisce solo `message` — non lo vede mai. Stessa sorte per
+// `toolUseResult.bashEditDiff`, il diff dei file che un comando Bash ha
+// modificato: l'SDK non restituisce `toolUseResult` affatto (una riga user torna
+// con type/uuid/session_id/message/parent_tool_use_id/parent_agent_id/timestamp
+// e nient'altro), e senza di esso una modifica fatta con `sed` o un heredoc —
+// che non produce nessuna tool call Edit — si vede come un comando con il suo
+// stdout e nulla che dica che un file è cambiato (#265).
 //
 // Il modulo si limita a riferire cosa dice il file; cosa sia ridondante lo
 // decide `mergeTranscriptExtras`, che ha sotto gli occhi i messaggi dell'SDK.
 import { readTextFile } from './safe-fs';
-import type { ChatMessage } from '../shared/chat-types';
+import type {
+  BashEditDiff,
+  BashEditFile,
+  BashEditHunk,
+  ChatContentBlock,
+  ChatMessage,
+} from '../shared/chat-types';
 
 /** Prima riga dell'espansione che Claude Code inietta dopo una skill. */
 const SKILL_EXPANSION_PREFIX = 'Base directory for this skill:';
@@ -34,12 +46,15 @@ export interface TranscriptExtras {
   skillPathByParentUuid: Map<string, string>;
   /** uuid della riga assistant → effort con cui quel turno è girato. */
   effortByUuid: Map<string, string>;
+  /** `tool_use_id` del risultato Bash → i file che quel comando ha modificato. */
+  bashEditDiffByToolUseId: Map<string, BashEditDiff>;
 }
 
 const EMPTY: TranscriptExtras = {
   queued: [],
   skillPathByParentUuid: new Map(),
   effortByUuid: new Map(),
+  bashEditDiffByToolUseId: new Map(),
 };
 
 /**
@@ -53,6 +68,100 @@ export function rowEffort(row: Record<string, unknown>): string | undefined {
   if (typeof perTurn === 'string' && perTurn) return perTurn;
   const effort = row.effort;
   return typeof effort === 'string' && effort ? effort : undefined;
+}
+
+/**
+ * Il `bashEditDiff` di un `toolUseResult` già deserializzato, validato campo per
+ * campo: la riga arriva da un file che un altro programma scrive e che nessuno
+ * versiona, quindi ogni pezzo è opzionale finché non si è visto.
+ *
+ * Torna `undefined` quando non resta niente da mostrare — nessun file, nessun
+ * path cambiato e nessun `unavailable` — così il chiamante non attacca al
+ * transcript un blocco vuoto che si leggerebbe come "non è cambiato nulla".
+ */
+export function parseBashEditDiff(toolUseResult: unknown): BashEditDiff | undefined {
+  if (!toolUseResult || typeof toolUseResult !== 'object') return undefined;
+  const raw = (toolUseResult as Record<string, unknown>).bashEditDiff;
+  if (!raw || typeof raw !== 'object') return undefined;
+  const d = raw as Record<string, unknown>;
+
+  const files: BashEditFile[] = [];
+  if (Array.isArray(d.files)) {
+    for (const entry of d.files) {
+      if (!entry || typeof entry !== 'object') continue;
+      const f = entry as Record<string, unknown>;
+      if (typeof f.filePath !== 'string' || !f.filePath) continue;
+      files.push({
+        filePath: f.filePath,
+        hunks: parseHunks(f.hunks),
+        ...(f.created === true ? { created: true } : {}),
+        ...(f.deleted === true ? { deleted: true } : {}),
+      });
+    }
+  }
+
+  const changedFiles = Array.isArray(d.changedFiles)
+    ? d.changedFiles.filter((p): p is string => typeof p === 'string' && p.length > 0)
+    : [];
+  const moreFiles = typeof d.moreFiles === 'number' && d.moreFiles > 0 ? d.moreFiles : 0;
+  const unavailable = d.unavailable === true;
+
+  if (files.length === 0 && changedFiles.length === 0 && !unavailable) return undefined;
+  return { files, changedFiles, moreFiles, ...(unavailable ? { unavailable: true } : {}) };
+}
+
+function parseHunks(raw: unknown): BashEditHunk[] {
+  if (!Array.isArray(raw)) return [];
+  const hunks: BashEditHunk[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const h = entry as Record<string, unknown>;
+    const lines = Array.isArray(h.lines)
+      ? h.lines.filter((l): l is string => typeof l === 'string')
+      : [];
+    if (lines.length === 0) continue;
+    hunks.push({
+      oldStart: num(h.oldStart),
+      oldLines: num(h.oldLines),
+      newStart: num(h.newStart),
+      newLines: num(h.newLines),
+      lines,
+    });
+  }
+  return hunks;
+}
+
+const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/**
+ * Il `tool_use_id` dell'UNICO `tool_result` di una riga.
+ *
+ * Il diff sta sulla riga, non sul blocco, quindi con due risultati nella stessa
+ * riga non si saprebbe a quale dei due appartiene: sui 124 casi osservati la
+ * riga ne ha sempre esattamente uno (ed è sempre un `Bash`), e con qualunque
+ * altro numero si preferisce non mostrarlo che mostrarlo sul tool sbagliato.
+ */
+function soleToolResultId(message: unknown): string | undefined {
+  const content = (message as Record<string, unknown> | undefined)?.content;
+  if (!Array.isArray(content)) return undefined;
+  const ids = content
+    .filter((b): b is Record<string, unknown> => !!b && typeof b === 'object')
+    .filter(b => b.type === 'tool_result' && typeof b.tool_use_id === 'string')
+    .map(b => b.tool_use_id as string);
+  return ids.length === 1 ? ids[0] : undefined;
+}
+
+/**
+ * Attacca il diff all'unico `tool_result` dei blocchi già deserializzati — la
+ * metà di `soleToolResultId` per chi ha in mano i blocchi e non la riga grezza
+ * (il lettore da file, che la riga ce l'ha tutta e non deve ricostruire niente).
+ */
+export function withBashEditDiff(
+  blocks: ChatContentBlock[],
+  diff: BashEditDiff
+): ChatContentBlock[] {
+  if (blocks.filter(b => b.type === 'tool_result').length !== 1) return blocks;
+  return blocks.map(b => (b.type === 'tool_result' ? { ...b, bashEditDiff: diff } : b));
 }
 
 /**
@@ -140,6 +249,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const queued: ChatMessage[] = [];
   const skillPathByParentUuid = new Map<string, string>();
   const effortByUuid = new Map<string, string>();
+  const bashEditDiffByToolUseId = new Map<string, BashEditDiff>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
   // l'ora dell'assorbimento, la `enqueue` quella della digitazione.
   const enqueuedAt = new Map<string, string>();
@@ -155,12 +265,22 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
-    if (!isQueue && !isSkillExpansion) continue;
+    const isBashEdit = line.includes('"bashEditDiff"');
+    if (!isQueue && !isSkillExpansion && !isBashEdit) continue;
 
     let json: Record<string, unknown>;
     try {
       json = JSON.parse(line) as Record<string, unknown>;
     } catch {
+      continue;
+    }
+
+    if (isBashEdit) {
+      // Una riga col diff è una `user` con un solo `tool_result`: non è né una
+      // riga di coda né l'espansione di una skill, quindi si chiude qui.
+      const diff = parseBashEditDiff(json.toolUseResult);
+      const toolUseId = soleToolResultId(json.message);
+      if (diff && toolUseId) bashEditDiffByToolUseId.set(toolUseId, diff);
       continue;
     }
 
@@ -193,7 +313,27 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
   }
 
-  return { queued, skillPathByParentUuid, effortByUuid };
+  return { queued, skillPathByParentUuid, effortByUuid, bashEditDiffByToolUseId };
+}
+
+/**
+ * I `tool_result` di un messaggio con il diff della loro riga, quando ce n'è
+ * uno da mettere. Come sopra, il contenuto torna PER RIFERIMENTO se non cambia
+ * nulla — e per il lettore da file non cambia mai, perché lì il diff è già sul
+ * blocco: è la stessa ragione per cui `session-search` non paga una copia per
+ * ogni messaggio di ogni transcript che passa il prefiltro.
+ */
+function stampBashEditDiffs(
+  content: ChatContentBlock[],
+  byToolUseId: Map<string, BashEditDiff>
+): ChatContentBlock[] {
+  if (byToolUseId.size === 0) return content;
+  const needs = (b: ChatContentBlock): boolean =>
+    b.type === 'tool_result' && !b.bashEditDiff && byToolUseId.has(b.toolUseId);
+  if (!content.some(needs)) return content;
+  return content.map(b =>
+    needs(b) ? { ...b, bashEditDiff: byToolUseId.get((b as { toolUseId: string }).toolUseId) } : b
+  );
 }
 
 /**
@@ -209,8 +349,13 @@ export function mergeTranscriptExtras(
   messages: ChatMessage[],
   extras: TranscriptExtras
 ): ChatMessage[] {
-  const { queued, skillPathByParentUuid, effortByUuid } = extras;
-  if (queued.length === 0 && skillPathByParentUuid.size === 0 && effortByUuid.size === 0) {
+  const { queued, skillPathByParentUuid, effortByUuid, bashEditDiffByToolUseId } = extras;
+  if (
+    queued.length === 0 &&
+    skillPathByParentUuid.size === 0 &&
+    effortByUuid.size === 0 &&
+    bashEditDiffByToolUseId.size === 0
+  ) {
     return messages;
   }
 
@@ -221,13 +366,21 @@ export function mergeTranscriptExtras(
   // superi il prefiltro — copiarli tutti per riaffermare un campo letto dalla
   // stessa riga sarebbe un'allocazione per turno assistant e per file.
   const stamped =
-    skillPathByParentUuid.size === 0 && effortByUuid.size === 0
+    skillPathByParentUuid.size === 0 &&
+    effortByUuid.size === 0 &&
+    bashEditDiffByToolUseId.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
           const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
-          if (!skillPath && !effort) return msg;
-          return { ...msg, ...(skillPath ? { skillPath } : {}), ...(effort ? { effort } : {}) };
+          const content = stampBashEditDiffs(msg.content, bashEditDiffByToolUseId);
+          if (!skillPath && !effort && content === msg.content) return msg;
+          return {
+            ...msg,
+            ...(content === msg.content ? {} : { content }),
+            ...(skillPath ? { skillPath } : {}),
+            ...(effort ? { effort } : {}),
+          };
         });
   if (queued.length === 0) return stamped;
 
