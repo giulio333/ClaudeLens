@@ -68,6 +68,12 @@ export interface ChatMessage {
    *  `<command-name>`/`tool_result` row that invoked a skill, and it is what
    *  tells a `/foo` skill apart from a built-in command (#246). */
   skillPath?: string;
+  /** Reasoning effort the turn ran at (`medium` | `high` | `xhigh` | `max`).
+   *  Claude Code writes it on the transcript ROW, next to `uuid`, not inside
+   *  `message` — so the SDK read never returns it and it arrives through
+   *  `transcript-extras`, like `queued` and `skillPath`. A row's own
+   *  `perTurnEffort` wins over the session-level `effort` when set. */
+  effort?: string;
 }
 
 /** Live tool indicator for the in-flight turn (`sessions:chatToolActivity`):

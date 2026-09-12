@@ -856,6 +856,83 @@ export function correlateSessionSkills(
   return out;
 }
 
+// ──────────────────────────────────────────────────────────────────────────
+// Il modello in uso — e a che effort.
+//
+// Non è una proprietà della sessione: `/model` lo cambia a conversazione in
+// corso, e il transcript registra il cambio soltanto scrivendo un `model`
+// diverso sui turni successivi. La risposta quindi è sempre "quello dell'ultimo
+// turno assistant", e una sessione che ha cambiato deve poterlo dire: stampare
+// un nome solo per un transcript che ne ha girati due è la versione di questo
+// campo che disinforma.
+//
+// L'effort sta accanto al modello perché cambia con la stessa libertà e vale la
+// stessa domanda ("con cosa sto parlando adesso"). Arriva dalla riga di
+// transcript via `transcript-extras`, non da `message`.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Il placeholder che Claude Code scrive per i comandi builtin (`/context`,
+ *  `/usage`, …): una riga assistant senza turno di modello dietro. */
+const SYNTHETIC_MODEL = '<synthetic>';
+
+/** Il modello su cui un turno è girato davvero — assente per un turno utente e
+ *  per il placeholder `<synthetic>`, che non è girato su nessuno. */
+export function turnModel(msg: ChatMessage): string | undefined {
+  if (msg.role !== 'assistant') return undefined;
+  return msg.model && msg.model !== SYNTHETIC_MODEL ? msg.model : undefined;
+}
+
+/** Il modello su cui la conversazione è ADESSO: l'ultimo turno che ne ha uno.
+ *  Semina il picker del composer, così una risposta parte dallo stesso modello
+ *  su cui la chat sta girando, esattamente come farebbe un resume da terminale. */
+export function currentModel(messages: ChatMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const model = turnModel(messages[i]);
+    if (model) return model;
+  }
+  return undefined;
+}
+
+export type ModelRun = {
+  /** Chiave stabile (il turno su cui la tratta si apre). */
+  key: string;
+  /** Indice 1-based del primo turno della tratta — per il salto dal dock. */
+  turnN: number;
+  model: string;
+  /** Effort dei turni della tratta; assente sui transcript che non lo scrivono. */
+  effort?: string;
+  /** Quanti turni assistant ci sono girati. */
+  turns: number;
+};
+
+/**
+ * Le tratte consecutive di turni su una stessa coppia modello+effort, dalla più
+ * vecchia alla più recente; l'ultima è quella in cui la conversazione si trova.
+ *
+ * La tratta si spezza su ENTRAMBI i campi, non sul solo modello: l'effort si
+ * muove per conto suo — su questa macchina 3 transcript cambiano effort a
+ * modello fermo — e una tratta che dichiarasse un effort valido per una parte
+ * soltanto dei suoi turni direbbe una cosa falsa su tutti gli altri. Per la
+ * stessa ragione chi conta i MODELLI usati non può contare le tratte. I
+ * turni `<synthetic>` non spezzano nulla — non sono girati su un modello, quindi
+ * un `/context` in mezzo a dieci turni non li conta per due tratte.
+ */
+export function collectModelRuns(processed: ProcessedMessage[]): ModelRun[] {
+  const runs: ModelRun[] = [];
+  processed.forEach((p, idx) => {
+    const model = turnModel(p.msg);
+    if (!model) return;
+    const effort = p.msg.effort;
+    const open = runs[runs.length - 1];
+    if (open && open.model === model && open.effort === effort) {
+      open.turns += 1;
+      return;
+    }
+    runs.push({ key: `${idx + 1}-${model}`, turnN: idx + 1, model, effort, turns: 1 });
+  });
+  return runs;
+}
+
 export const TOOL_ICON: Record<string, string> = {
   Read: '📖',
   Write: '✏️',

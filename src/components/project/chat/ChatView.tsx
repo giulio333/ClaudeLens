@@ -22,6 +22,7 @@ import {
   buildSkillIndex,
   correlateSessionAgents,
   correlateSessionSkills,
+  collectModelRuns,
   ChatDetailsFilter,
   RenderRow,
   SessionAgent,
@@ -249,6 +250,11 @@ export function ChatView({
     () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []),
     [processed, allSkills, plugins]
   );
+
+  // Which model(s) this chat ran on, and at what effort — the footer chip. A
+  // `/model` mid-chat makes this a list rather than a value, and the chip prints
+  // the last entry, i.e. the one the conversation is actually on.
+  const modelRuns = useMemo(() => collectModelRuns(processed), [processed]);
 
   // The Focus transcript model: per-turn descriptors, the visible/minimap items,
   // the collapsed stream rows, and the filter counts — all derived from the
@@ -689,6 +695,8 @@ export function ChatView({
       onOpenSkill={skill => onOpenSkill?.(skill)}
       onOpenSkillOutput={openTool}
       onLocateSkill={jumpToTurn}
+      modelRuns={modelRuns}
+      onLocateModel={jumpToTurn}
       thought={thought}
       thoughtsShown={thoughtsShown}
       onToggleThoughts={liveInTerminal ? toggleThoughts : undefined}

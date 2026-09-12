@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { TopBar } from '../shared/TopBar';
-import { buildProcessedMessages } from './utils';
+import { buildProcessedMessages, currentModel } from './utils';
 import { pendingToolThought } from './thoughts';
 import { LiveInTerminalBadge } from './atoms';
 import { ChatComposer } from './ChatComposer';
@@ -91,16 +91,12 @@ export function LiveChatView({
         : firstPrompt
       : 'New chat';
 
-  // The model the conversation is currently on (its last assistant turn,
-  // synthetic notes excluded) — seeds the composer's model picker so a reply
-  // defaults to the same model, exactly as a resumed terminal session would.
-  const inheritedModel = useMemo(() => {
-    for (let i = chat.displayMessages.length - 1; i >= 0; i--) {
-      const m = chat.displayMessages[i];
-      if (m.role === 'assistant' && m.model && m.model !== '<synthetic>') return m.model;
-    }
-    return undefined;
-  }, [chat.displayMessages]);
+  // The model the conversation is currently on — seeds the composer's model
+  // picker so a reply defaults to the same model, exactly as a resumed terminal
+  // session would. Same answer the control pill prints in `ChatView`, from the
+  // same helper: two surfaces naming different models for one chat is worse
+  // than either of them being wrong.
+  const inheritedModel = useMemo(() => currentModel(chat.displayMessages), [chat.displayMessages]);
 
   // The running tool's own note, for the in-flight chip. `ToolActivity` carries
   // no id (it is emitted before the call's input has streamed), so the note is
