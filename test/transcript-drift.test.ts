@@ -45,7 +45,15 @@ const OBSERVED_BLOCKS: Record<string, Record<string, unknown>> = {
 
 /** The block types `parseContentArray` is built to keep. Everything else in
  *  OBSERVED_BLOCKS is dropped, and the manifest has to say so. */
-const PARSED_BLOCKS = ['text', 'thinking', 'tool_use', 'tool_result'];
+const PARSED_BLOCKS = ['text', 'thinking', 'tool_use', 'tool_result', 'advisor_tool_result'];
+
+/** What a kept block comes out as — usually itself. The exception is the one
+ *  that proves the watch works: `advisor_tool_result` was triaged a candidate
+ *  ("dropped like server_tool_use") and has since been picked up, and the
+ *  reader folds it together with its `server_tool_use` into a single `advisor`
+ *  block, so the name on the way out is not the name on the way in. */
+const KEPT_AS: Record<string, string> = { advisor_tool_result: 'advisor' };
+const keptAs = (type: string): string => KEPT_AS[type] ?? type;
 
 let dir: string;
 
@@ -77,14 +85,16 @@ describe('content blocks the reader keeps', () => {
   it.each(PARSED_BLOCKS)('keeps a %s block', type => {
     const path = writeTranscript('s.jsonl', [assistantRow([OBSERVED_BLOCKS[type]])]);
     const kept = readChatSession(path).flatMap(m => m.content.map(b => b.type));
-    expect(kept).toContain(type);
+    expect(kept).toContain(keptAs(type));
   });
 
   it('keeps every parsed block in one message, in order', () => {
     const blocks = PARSED_BLOCKS.filter(t => t !== 'tool_result').map(t => OBSERVED_BLOCKS[t]);
     const path = writeTranscript('s.jsonl', [assistantRow(blocks)]);
     const [msg] = readChatSession(path);
-    expect(msg.content.map(b => b.type)).toEqual(['text', 'thinking', 'tool_use']);
+    // `advisor` in place of the `advisor_tool_result` that went in, and in that
+    // row's position: the fold renames the block, it does not move it.
+    expect(msg.content.map(b => b.type)).toEqual(['text', 'thinking', 'tool_use', 'advisor']);
   });
 });
 

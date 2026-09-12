@@ -199,7 +199,11 @@ export const CONTENT_BLOCKS = {
   server_tool_use: candidate(
     'a server-side tool call (web_search, …); dropped, so the turn shows no tool at all'
   ),
-  advisor_tool_result: candidate("the advisor tool's answer; dropped like server_tool_use"),
+  // Was a candidate — "the advisor tool's answer; dropped like server_tool_use"
+  // — and has since been picked up: the reader folds it together with its
+  // `server_tool_use` into one `advisor` block, so the type that comes out is
+  // not the type that went in.
+  advisor_tool_result: read('session-reader/parseContentArray → advisor'),
   redacted_thinking: candidate(
     'encrypted thinking the API returns in place of a thinking block; not yet seen on disk but the API emits it'
   ),
