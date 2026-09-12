@@ -13,7 +13,7 @@
 //    what keeps the memory views (whose wikilinks point at `~/.claude` topics)
 //    from sprouting chips that resolve against the project tree.
 
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import Markdown from '../src/components/Markdown';
 import { VaultLinksProvider } from '../src/components/VaultLinks';
@@ -125,6 +125,48 @@ describe('wikilink chips', () => {
 
     await waitFor(() => expect(container.querySelector('.cl-wikilink-idle')).not.toBeNull());
     expect(container.querySelector('.cl-wikilink-missing')).toBeNull();
+  });
+
+  it('asks again about a name that was missing, once the answer could have changed', async () => {
+    // Claude cites a note before writing it — the normal order in a session
+    // that works with its own vault. A permanent "already asked" latch would
+    // have kept that chip dashed for the life of the view.
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    resolvesTo({});
+    const { rerender } = inChat('Fonte: [[Nota]].');
+    await waitFor(() => expect(screen.getByText('Nota').className).toContain('missing'));
+
+    // The note now exists, and a later message cites it again.
+    resolvesTo({ Nota: 'notes/Nota.md' });
+    clock.mockReturnValue(1_000_000 + 31_000);
+    rerender(
+      <VaultLinksProvider root={ROOT}>
+        <Markdown>{'Ancora [[Nota]], stavolta scritta.'}</Markdown>
+      </VaultLinksProvider>
+    );
+
+    const chip = await screen.findByRole('button', { name: 'Nota' });
+    expect(chip.className).toContain('cl-wikilink-found');
+    expect(bridge.api.vault.resolveLinks).toHaveBeenCalledTimes(2);
+    clock.mockRestore();
+  });
+
+  it('does not ask again about a name it already found', async () => {
+    const clock = vi.spyOn(Date, 'now').mockReturnValue(1_000_000);
+    resolvesTo({ Nota: 'notes/Nota.md' });
+    const { rerender } = inChat('[[Nota]] uno.');
+    await screen.findByRole('button', { name: 'Nota' });
+
+    clock.mockReturnValue(1_000_000 + 10 * 60_000);
+    rerender(
+      <VaultLinksProvider root={ROOT}>
+        <Markdown>{'[[Nota]] due.'}</Markdown>
+      </VaultLinksProvider>
+    );
+
+    await screen.findByRole('button', { name: 'Nota' });
+    expect(bridge.api.vault.resolveLinks).toHaveBeenCalledTimes(1);
+    clock.mockRestore();
   });
 
   it('renders plain text outside a provider, and asks nothing', () => {

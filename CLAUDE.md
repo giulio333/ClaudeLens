@@ -85,8 +85,9 @@ when the turn holds two consults and the shared `usage` cannot be split) and
 has is a button carrying the path it resolved to, one nothing answers to is
 dashed and inert, the backticked form Claude writes just as often is caught too,
 a fenced block keeps its brackets and asks nothing, a failed lookup does NOT
-read as missing, and outside a `VaultLinksProvider` the text renders exactly as
-before — which is what keeps the memory views' own wikilinks from resolving
+read as missing, a name that was missing is asked about again once the answer
+could have changed while a name that was found never is, and outside a
+`VaultLinksProvider` the text renders exactly as before — which is what keeps the memory views' own wikilinks from resolving
 against the project tree).
 Extend the fake as tests reach further; the one cast lives at its install point.
 

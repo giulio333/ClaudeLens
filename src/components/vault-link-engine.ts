@@ -58,11 +58,37 @@ export const VaultLinkStatesContext =
 /** Must match `MAX_VAULT_TARGETS` in `electron/main.ts`, which truncates past it. */
 const BATCH_SIZE = 64;
 
+/**
+ * How long a *negative* answer is kept before a fresh citation may ask again.
+ *
+ * Caching an answer forever is right for a hit and wrong for a miss: Claude
+ * writes the notes it cites, so a name that was not there when the transcript
+ * first mentioned it is precisely the name that becomes real a minute later —
+ * the failure the main-process index has a TTL to avoid, which a permanent
+ * latch here would have reintroduced one layer up. Same for a lookup that
+ * failed outright: one transient IPC error must not pin a chip forever.
+ *
+ * Not shorter than `INDEX_TTL_MS` in `electron/modules/vault-index.ts`: below
+ * it the re-ask is served from the same cached index and buys nothing.
+ *
+ * What triggers the re-ask is a `<Markdown>` reporting the name again — a new
+ * message citing it, or a streaming turn whose text keeps changing. A static
+ * transcript that nobody adds to never re-asks, which is the honest limit: it
+ * is also a page on which nothing else is moving.
+ */
+const RETRY_MISS_AFTER_MS = 30_000;
+
+interface Asked {
+  at: number;
+  /** A hit never expires: the answer is a path, and it was there. */
+  resolved: boolean;
+}
+
 type SetStates = Dispatch<SetStateAction<ReadonlyMap<string, VaultLinkState>>>;
 
 export function createVaultLinkEngine(root: string, setStates: SetStates): VaultLinkEngine {
-  /** Every name already asked about: what keeps a repeated citation to one call. */
-  const asked = new Set<string>();
+  /** Names already asked about, stamped: what keeps a repeated citation to one call. */
+  const asked = new Map<string, Asked>();
   let queue = new Set<string>();
   let timer: ReturnType<typeof setTimeout> | null = null;
   let disposed = false;
@@ -74,6 +100,7 @@ export function createVaultLinkEngine(root: string, setStates: SetStates): Vault
       const next = new Map(prev);
       if (answers) {
         for (const a of answers) {
+          if (a.rel) asked.set(a.target, { at: Date.now(), resolved: true });
           next.set(
             a.target,
             a.rel ? { status: 'resolved', rel: a.rel, match: a.match } : { status: 'missing' }
@@ -106,9 +133,11 @@ export function createVaultLinkEngine(root: string, setStates: SetStates): Vault
     request(targets) {
       if (disposed) return;
       let queued = false;
+      const now = Date.now();
       for (const t of targets) {
-        if (asked.has(t)) continue;
-        asked.add(t);
+        const prev = asked.get(t);
+        if (prev && (prev.resolved || now - prev.at < RETRY_MISS_AFTER_MS)) continue;
+        asked.set(t, { at: now, resolved: false });
         queue.add(t);
         queued = true;
       }
