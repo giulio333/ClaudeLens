@@ -111,11 +111,13 @@ export function ProjectDescription({ hash, realPath }: Props) {
       type="button"
       className="cl-h-desc"
       onClick={startEditing}
-      title={
+      // The sentence is clamped to two lines beside the project name, so the
+      // tooltip carries the whole of it before saying where it came from.
+      title={`${shown}\n\n${
         override
           ? 'Your description (stored in ClaudeLens) — click to edit'
           : `From ${derived?.filePath ?? 'CLAUDE.md'} — click to edit`
-      }
+      }`}
     >
       {shown}
     </button>
