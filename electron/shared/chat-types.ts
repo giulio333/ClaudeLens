@@ -16,8 +16,51 @@ export type ChatContentBlock =
   | { type: 'text'; text: string }
   | { type: 'thinking'; thinking: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean }
+  | {
+      type: 'tool_result';
+      toolUseId: string;
+      content: string;
+      isError: boolean;
+      /** Files the command edited, when Claude Code recorded them (Bash only). */
+      bashEditDiff?: BashEditDiff;
+    }
   | AdvisorConsult;
+
+/** What a shell command changed on disk, as Claude Code records it on the
+ *  result row (`toolUseResult.bashEditDiff`).
+ *
+ *  An edit made from Bash — `sed -i`, a heredoc, a one-line script — produces
+ *  no `Edit` tool call, so without this the transcript shows a command and its
+ *  stdout and nothing at all about the files it rewrote (#265). */
+export interface BashEditDiff {
+  files: BashEditFile[];
+  /** Every path the command touched, including the ones `files` omits. */
+  changedFiles: string[];
+  /** How many changed files are not in `files`, which Claude Code caps. */
+  moreFiles: number;
+  /** Claude Code could not produce the diff; `files` is then empty and saying
+   *  so is the point — an empty list would read as "nothing changed". */
+  unavailable?: boolean;
+}
+
+export interface BashEditFile {
+  filePath: string;
+  hunks: BashEditHunk[];
+  /** The file did not exist before / does not exist after. Marked rather than
+   *  printed: a created file's hunk is the whole file. */
+  created?: boolean;
+  deleted?: boolean;
+}
+
+/** One unified-diff hunk: the `@@ -oldStart,oldLines +newStart,newLines @@`
+ *  header and its lines, each still carrying its `+`/`-`/space prefix. */
+export interface BashEditHunk {
+  oldStart: number;
+  oldLines: number;
+  newStart: number;
+  newLines: number;
+  lines: string[];
+}
 
 /** A consult of the harness's `advisor` tool — a stronger reviewer model that
  *  reads the whole conversation and answers back to Claude, not to the user.

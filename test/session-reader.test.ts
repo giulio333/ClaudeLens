@@ -314,6 +314,87 @@ describe('readChatSession', () => {
   });
 });
 
+describe('bashEditDiff on the file read path', () => {
+  // The row carries the diff beside `message`, so the file reader has it for
+  // free — it is the SDK path that has to recover it (transcript-extras). The
+  // claim here is only that this reader does not throw it away.
+  const hunk = { oldStart: 12, oldLines: 3, newStart: 12, newLines: 4, lines: [' a', '-b', '+c'] };
+
+  const bashRows = (bashEditDiff: unknown, extraResult = false) => [
+    line({
+      type: 'assistant',
+      uuid: 'a1',
+      timestamp: '2026-01-01T00:00:00Z',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_bash1',
+            name: 'Bash',
+            input: { command: "sed -i '' s/a/b/ a.ts" },
+          },
+        ],
+      },
+    }),
+    line({
+      type: 'user',
+      uuid: 'u1',
+      timestamp: '2026-01-01T00:00:01Z',
+      message: {
+        role: 'user',
+        content: [
+          { type: 'tool_result', tool_use_id: 'toolu_bash1', content: '' },
+          ...(extraResult
+            ? [{ type: 'tool_result', tool_use_id: 'toolu_other', content: 'ok' }]
+            : []),
+        ],
+      },
+      toolUseResult: { stdout: '', stderr: '', bashEditDiff },
+    }),
+  ];
+
+  const resultBlock = (p: string) => {
+    const msgs = readChatSession(p);
+    const block = msgs[msgs.length - 1].content[0];
+    return block.type === 'tool_result' ? block : null;
+  };
+
+  it('attaches the diff to the result of the command that made it', () => {
+    const p = writeJsonl(
+      's.jsonl',
+      bashRows({
+        files: [{ filePath: '/p/a.ts', hunks: [hunk] }],
+        changedFiles: ['/p/a.ts'],
+        moreFiles: 0,
+      })
+    );
+    expect(resultBlock(p)?.bashEditDiff?.files[0].hunks[0].lines).toEqual([' a', '-b', '+c']);
+  });
+
+  it('leaves the result bare when the row has no diff', () => {
+    const p = writeJsonl('s.jsonl', bashRows(undefined));
+    expect(resultBlock(p)?.bashEditDiff).toBeUndefined();
+  });
+
+  it('attaches nothing when the row holds more than one result', () => {
+    // Two results, one row-level diff: nothing says which command changed the
+    // files, and the wrong tool is worse than no diff at all.
+    const p = writeJsonl(
+      's.jsonl',
+      bashRows(
+        {
+          files: [{ filePath: '/p/a.ts', hunks: [hunk] }],
+          changedFiles: ['/p/a.ts'],
+          moreFiles: 0,
+        },
+        true
+      )
+    );
+    expect(resultBlock(p)?.bashEditDiff).toBeUndefined();
+  });
+});
+
 describe('findSessionFile', () => {
   it('returns the path inside the sessions/ subdir when present', async () => {
     const sessions = join(dir, 'sessions');
