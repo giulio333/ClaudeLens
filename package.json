@@ -107,7 +107,7 @@
     "unplugin-icons": "^23.0.1",
     "vite": "^8.2.1",
     "vite-plugin-electron": "^1.1.1",
-    "vitest": "^4.1.11",
+    "vitest": "^5.0.0",
     "wait-on": "^9.1.0"
   },
   "build": {
