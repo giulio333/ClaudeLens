@@ -3,7 +3,7 @@ import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
 import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
-import { mergeTranscriptExtras, readTranscriptExtras } from './transcript-extras';
+import { mergeTranscriptExtras, readTranscriptExtras, rowEffort } from './transcript-extras';
 import type {
   AdvisorConsult,
   ChatContentBlock,
@@ -274,6 +274,9 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
         model: msg.model as string | undefined,
         content: blocks,
         usage: parseUsage(msg),
+        // Row-level, not `message`-level: free here, recovered by a second pass
+        // on the SDK path (see `transcript-extras`).
+        effort: rowEffort(json),
       };
       fillAdvisorDurations(message, advisorStartedAt);
       messages.push(message);

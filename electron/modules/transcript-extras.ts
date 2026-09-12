@@ -13,6 +13,10 @@
 //     segue una slash command, e l'unico segnale che dice che quella `/foo` era
 //     una skill e non un comando builtin (#246).
 //
+// A cui si aggiunge un campo, non una riga: `effort` sta sulla riga assistant
+// ACCANTO a `uuid`, non dentro `message`, quindi `getSessionMessages` — che
+// restituisce solo `message` — non lo vede mai.
+//
 // Il modulo si limita a riferire cosa dice il file; cosa sia ridondante lo
 // decide `mergeTranscriptExtras`, che ha sotto gli occhi i messaggi dell'SDK.
 import { readTextFile } from './safe-fs';
@@ -28,9 +32,48 @@ export interface TranscriptExtras {
    *  Il `parentUuid` dell'espansione è sempre quella riga: la `<command-name>`
    *  per una slash command, il `tool_result` per il tool `Skill`. */
   skillPathByParentUuid: Map<string, string>;
+  /** uuid della riga assistant → effort con cui quel turno è girato. */
+  effortByUuid: Map<string, string>;
 }
 
-const EMPTY: TranscriptExtras = { queued: [], skillPathByParentUuid: new Map() };
+const EMPTY: TranscriptExtras = {
+  queued: [],
+  skillPathByParentUuid: new Map(),
+  effortByUuid: new Map(),
+};
+
+/**
+ * L'effort di una riga di transcript già deserializzata: `perTurnEffort` quando
+ * c'è (l'override del singolo turno), altrimenti l'`effort` di sessione. Un
+ * valore non-stringa vale assente — sui transcript osservati `perTurnEffort` è
+ * sempre `null`, ed è esattamente il caso che il `??` non deve lasciar passare.
+ */
+export function rowEffort(row: Record<string, unknown>): string | undefined {
+  const perTurn = row.perTurnEffort;
+  if (typeof perTurn === 'string' && perTurn) return perTurn;
+  const effort = row.effort;
+  return typeof effort === 'string' && effort ? effort : undefined;
+}
+
+/**
+ * Il valore di un campo stringa dalla CODA di metadati di una riga grezza, senza
+ * `JSON.parse`.
+ *
+ * Le chiavi che interessano qui (`uuid`, `effort`, `perTurnEffort`) stanno tutte
+ * dopo `message` nell'ordine che Claude Code scrive, quindi `lastIndexOf` prende
+ * quella della riga anche se il contenuto di un tool_result cita un transcript.
+ * Niente `JSON.parse`: questa passata gira anche dentro `session-search`, su ogni
+ * transcript che supera il prefiltro, accanto a un parse completo che già c'è —
+ * raddoppiarlo per un campo di otto caratteri non si giustifica.
+ */
+function tailString(line: string, key: string): string | undefined {
+  const marker = `"${key}":"`;
+  const at = line.lastIndexOf(marker);
+  if (at === -1) return undefined;
+  const from = at + marker.length;
+  const end = line.indexOf('"', from);
+  return end > from ? line.slice(from, end) : undefined;
+}
 
 /** Il testo di un messaggio di chat, per confronti di contenuto. */
 function messageText(msg: ChatMessage): string {
@@ -96,12 +139,20 @@ export async function readTranscriptExtras(filePath: string): Promise<Transcript
 export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const queued: ChatMessage[] = [];
   const skillPathByParentUuid = new Map<string, string>();
+  const effortByUuid = new Map<string, string>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
   // l'ora dell'assorbimento, la `enqueue` quella della digitazione.
   const enqueuedAt = new Map<string, string>();
 
   for (const line of raw.split('\n')) {
     if (!line) continue;
+    // L'effort è un campo su una riga che l'SDK restituisce comunque, non una
+    // riga a sé: si legge qui e si esce, senza passare dal `JSON.parse` sotto.
+    if (line.includes('"type":"assistant"')) {
+      const uuid = tailString(line, 'uuid');
+      const effort = tailString(line, 'perTurnEffort') ?? tailString(line, 'effort');
+      if (uuid && effort) effortByUuid.set(uuid, effort);
+    }
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
     if (!isQueue && !isSkillExpansion) continue;
@@ -142,7 +193,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
   }
 
-  return { queued, skillPathByParentUuid };
+  return { queued, skillPathByParentUuid, effortByUuid };
 }
 
 /**
@@ -158,15 +209,25 @@ export function mergeTranscriptExtras(
   messages: ChatMessage[],
   extras: TranscriptExtras
 ): ChatMessage[] {
-  const { queued, skillPathByParentUuid } = extras;
-  if (queued.length === 0 && skillPathByParentUuid.size === 0) return messages;
+  const { queued, skillPathByParentUuid, effortByUuid } = extras;
+  if (queued.length === 0 && skillPathByParentUuid.size === 0 && effortByUuid.size === 0) {
+    return messages;
+  }
 
+  // `parseChatSessionText` legge l'effort dalla riga che ha già deserializzato,
+  // quindi per il lettore da file il campo è già pieno e qui non c'è nulla da
+  // fare: il messaggio torna PER RIFERIMENTO, non riscritto col valore che ha
+  // già. È il caso normale di `session-search`, che passa di qui ogni transcript
+  // superi il prefiltro — copiarli tutti per riaffermare un campo letto dalla
+  // stessa riga sarebbe un'allocazione per turno assistant e per file.
   const stamped =
-    skillPathByParentUuid.size === 0
+    skillPathByParentUuid.size === 0 && effortByUuid.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
-          return skillPath ? { ...msg, skillPath } : msg;
+          const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
+          if (!skillPath && !effort) return msg;
+          return { ...msg, ...(skillPath ? { skillPath } : {}), ...(effort ? { effort } : {}) };
         });
   if (queued.length === 0) return stamped;
 

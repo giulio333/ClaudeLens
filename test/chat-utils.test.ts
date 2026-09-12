@@ -24,6 +24,9 @@ import {
   writeAction,
   touchedFiles,
   toolRunStatus,
+  collectModelRuns,
+  currentModel,
+  turnModel,
 } from '../src/components/project/chat/utils';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
 
@@ -1081,5 +1084,82 @@ describe('toolRunStatus', () => {
       label: 'Complete',
       tone: 'is-ok',
     });
+  });
+});
+
+// The model the conversation is on is not a session property: `/model` changes
+// it mid-chat and the transcript records the change only by writing a different
+// model on the turns after it. These are the claims the footer chip makes.
+describe('model in use', () => {
+  /** An assistant turn as the readers deliver it: model on the message, effort
+   *  from the transcript row beside it. */
+  const turn = (model: string | undefined, effort?: string): ChatMessage => ({
+    ...msg('assistant', [text('ok')]),
+    ...(model ? { model } : {}),
+    ...(effort ? { effort } : {}),
+  });
+
+  it('reads no model off a user turn or off a built-in command placeholder', () => {
+    expect(turnModel(msg('user', [text('ciao')]))).toBeUndefined();
+    expect(turnModel(turn('<synthetic>'))).toBeUndefined();
+    expect(turnModel(turn('claude-sonnet-5'))).toBe('claude-sonnet-5');
+  });
+
+  it('answers with the model of the LAST turn, not the first', () => {
+    const messages = [
+      turn('claude-sonnet-5'),
+      msg('user', [text('/model opus')]),
+      turn('claude-opus-5'),
+    ];
+    expect(currentModel(messages)).toBe('claude-opus-5');
+  });
+
+  it('has no answer for a chat where no turn ran on a model', () => {
+    expect(currentModel([msg('user', [text('ciao')]), turn('<synthetic>')])).toBeUndefined();
+  });
+
+  it('collects one run per stretch, and the last one is where the chat is now', () => {
+    const runs = collectModelRuns(
+      buildProcessedMessages([
+        turn('claude-sonnet-5', 'medium'),
+        turn('claude-sonnet-5', 'medium'),
+        turn('claude-opus-5', 'medium'),
+      ])
+    );
+    expect(runs).toHaveLength(2);
+    expect(runs[0]).toMatchObject({ model: 'claude-sonnet-5', turnN: 1, turns: 2 });
+    expect(runs[1]).toMatchObject({ model: 'claude-opus-5', turnN: 3, turns: 1 });
+  });
+
+  // Effort moves on its own (`/effort`), so a run that spanned a change would
+  // declare an effort true of only some of its turns.
+  it('breaks a run when the effort changes under the same model', () => {
+    const runs = collectModelRuns(
+      buildProcessedMessages([turn('claude-opus-5', 'medium'), turn('claude-opus-5', 'xhigh')])
+    );
+    expect(runs.map(r => r.effort)).toEqual(['medium', 'xhigh']);
+    expect(runs).toHaveLength(2);
+  });
+
+  // A `/context` in the middle of a conversation ran on no model at all.
+  it('does not let a synthetic turn split a run in two', () => {
+    const runs = collectModelRuns(
+      buildProcessedMessages([
+        turn('claude-sonnet-5', 'high'),
+        turn('<synthetic>'),
+        turn('claude-sonnet-5', 'high'),
+      ])
+    );
+    expect(runs).toHaveLength(1);
+    expect(runs[0].turns).toBe(2);
+  });
+
+  it('leaves the effort out for a transcript that records none', () => {
+    const runs = collectModelRuns(buildProcessedMessages([turn('claude-sonnet-5')]));
+    expect(runs[0].effort).toBeUndefined();
+  });
+
+  it('has nothing to show for a chat with no model turn', () => {
+    expect(collectModelRuns(buildProcessedMessages([msg('user', [text('ciao')])]))).toEqual([]);
   });
 });
