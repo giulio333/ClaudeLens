@@ -6,6 +6,7 @@ import { LiveInTerminalBadge } from './atoms';
 import { ChatComposer } from './ChatComposer';
 import { MessageBubble } from './MessageBubble';
 import { LiveTurn } from './LiveTurn';
+import { VaultLinksProvider } from '../../VaultLinks';
 import { useChatAutoScroll } from './useAutoScroll';
 import { useLiveChat } from './useLiveChat';
 import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils';
@@ -117,93 +118,95 @@ export function LiveChatView({
   const summary = chat.summary;
 
   return (
-    <div className="cl-chat">
-      <TopBar
-        onBack={onBack}
-        backLabel="Sessions"
-        crumbs={[{ label: title, accent: true }]}
-        right={
-          <>
-            {liveInTerminal && <LiveInTerminalBadge />}
-            {summary && (
-              <span
-                className="font-mono"
-                title="Cost and tokens for this conversation (from the SDK, not the transcript file)"
-                style={{ fontSize: 11, color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
-              >
-                {fmtCost(summary.totalCostUsd)} · {fmt(summary.inputTokens)} in ·{' '}
-                {fmt(summary.outputTokens)} out
-                {summary.models.length > 0 && ` · ${summary.models.map(fmtModel).join(', ')}`}
-              </span>
-            )}
-          </>
-        }
-      />
-
-      <div className="cl-chat-workspace cl-chat-workspace--focus" data-composer>
-        <main className="cl-chat-feed" ref={feedRef} onScroll={onScroll} onWheel={onWheel}>
-          <div className="cl-chat-reading">
-            <div className="cl-transcript-inner" ref={innerRef}>
-              {chat.seedLoading && !chat.hasConversation ? (
-                <p className="cl-transcript-state">Loading session…</p>
-              ) : chat.hasConversation ? (
-                <>
-                  {processed.map((p, i) => (
-                    <MessageBubble
-                      key={`${i}:${p.msg.uuid}`}
-                      processed={p}
-                      // No Min/Full toggle in the live chat; default to minimal so
-                      // it shows prompts + assistant text but not raw tool cards,
-                      // matching ChatView's default density.
-                      detailsFilter="minimal"
-                      onOpenToolDetail={() => {}}
-                      turnIndex={i + 1}
-                    />
-                  ))}
-                  {chat.streaming &&
-                    (chat.streamText !== '' ||
-                      chat.liveTool !== null ||
-                      chat.liveMessages.length === 0) && (
-                      <LiveTurn
-                        text={chat.streamText}
-                        tool={chat.liveTool}
-                        thought={liveThought}
-                        turnNumber={processed.length + 1}
-                      />
-                    )}
-                </>
-              ) : (
-                <p className="cl-transcript-state">
-                  Start a new session in this project. Your first message creates the transcript —
-                  it streams live here and is saved to disk (readable later in the terminal or as a
-                  read-only session), but this view never reloads it from disk.
-                </p>
+    <VaultLinksProvider root={project.realPath}>
+      <div className="cl-chat">
+        <TopBar
+          onBack={onBack}
+          backLabel="Sessions"
+          crumbs={[{ label: title, accent: true }]}
+          right={
+            <>
+              {liveInTerminal && <LiveInTerminalBadge />}
+              {summary && (
+                <span
+                  className="font-mono"
+                  title="Cost and tokens for this conversation (from the SDK, not the transcript file)"
+                  style={{ fontSize: 11, color: 'var(--cl-ink-4)', whiteSpace: 'nowrap' }}
+                >
+                  {fmtCost(summary.totalCostUsd)} · {fmt(summary.inputTokens)} in ·{' '}
+                  {fmt(summary.outputTokens)} out
+                  {summary.models.length > 0 && ` · ${summary.models.map(fmtModel).join(', ')}`}
+                </span>
               )}
-            </div>
-          </div>
-        </main>
-
-        <ChatComposer
-          realPath={project.realPath}
-          // Undefined on the first send of a new chat (→ startMessage); set up
-          // front when resuming, and once the SDK reports the id later sends
-          // push into the same live session.
-          sessionId={chat.sessionId ?? undefined}
-          model={inheritedModel}
-          sending={chat.streaming}
-          errorText={chat.errorText}
-          permRequest={chat.permRequest}
-          permPendingCount={chat.permPendingCount}
-          onRespondPermission={chat.respondPermission}
-          onSend={(text, opts) => void chat.send(text, opts)}
-          onStop={chat.stop}
-          lockNotice={
-            liveInTerminal
-              ? 'This session is live in your terminal — replying here would race it on the same transcript. The composer unlocks when the terminal session ends.'
-              : null
+            </>
           }
         />
+
+        <div className="cl-chat-workspace cl-chat-workspace--focus" data-composer>
+          <main className="cl-chat-feed" ref={feedRef} onScroll={onScroll} onWheel={onWheel}>
+            <div className="cl-chat-reading">
+              <div className="cl-transcript-inner" ref={innerRef}>
+                {chat.seedLoading && !chat.hasConversation ? (
+                  <p className="cl-transcript-state">Loading session…</p>
+                ) : chat.hasConversation ? (
+                  <>
+                    {processed.map((p, i) => (
+                      <MessageBubble
+                        key={`${i}:${p.msg.uuid}`}
+                        processed={p}
+                        // No Min/Full toggle in the live chat; default to minimal so
+                        // it shows prompts + assistant text but not raw tool cards,
+                        // matching ChatView's default density.
+                        detailsFilter="minimal"
+                        onOpenToolDetail={() => {}}
+                        turnIndex={i + 1}
+                      />
+                    ))}
+                    {chat.streaming &&
+                      (chat.streamText !== '' ||
+                        chat.liveTool !== null ||
+                        chat.liveMessages.length === 0) && (
+                        <LiveTurn
+                          text={chat.streamText}
+                          tool={chat.liveTool}
+                          thought={liveThought}
+                          turnNumber={processed.length + 1}
+                        />
+                      )}
+                  </>
+                ) : (
+                  <p className="cl-transcript-state">
+                    Start a new session in this project. Your first message creates the transcript —
+                    it streams live here and is saved to disk (readable later in the terminal or as
+                    a read-only session), but this view never reloads it from disk.
+                  </p>
+                )}
+              </div>
+            </div>
+          </main>
+
+          <ChatComposer
+            realPath={project.realPath}
+            // Undefined on the first send of a new chat (→ startMessage); set up
+            // front when resuming, and once the SDK reports the id later sends
+            // push into the same live session.
+            sessionId={chat.sessionId ?? undefined}
+            model={inheritedModel}
+            sending={chat.streaming}
+            errorText={chat.errorText}
+            permRequest={chat.permRequest}
+            permPendingCount={chat.permPendingCount}
+            onRespondPermission={chat.respondPermission}
+            onSend={(text, opts) => void chat.send(text, opts)}
+            onStop={chat.stop}
+            lockNotice={
+              liveInTerminal
+                ? 'This session is live in your terminal — replying here would race it on the same transcript. The composer unlocks when the terminal session ends.'
+                : null
+            }
+          />
+        </div>
       </div>
-    </div>
+    </VaultLinksProvider>
   );
 }

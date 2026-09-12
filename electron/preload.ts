@@ -61,6 +61,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
       maxHitsPerSession?: number;
     }) => ipcRenderer.invoke('search:conversations', request),
   },
+  vault: {
+    // The `[[wikilinks]]` a message cites, resolved against the project's own
+    // files. One call per message, carrying only the names that message names —
+    // the index itself never crosses the bridge.
+    resolveLinks: (root: string, targets: string[]) =>
+      ipcRenderer.invoke('vault:resolveLinks', root, targets),
+    openFile: (root: string, rel: string) => ipcRenderer.invoke('vault:openFile', root, rel),
+  },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
     getChat: (hash: string, filename: string) =>

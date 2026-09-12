@@ -16,6 +16,7 @@ import type {
   SessionSummary,
   ConversationSearchRequest,
   ConversationSearchResult,
+  VaultLinkAnswer,
   SubagentMeta,
   SessionArtifacts,
   DeleteRequest,
@@ -265,6 +266,10 @@ declare global {
         conversations: (
           request: ConversationSearchRequest
         ) => Promise<IpcResult<ConversationSearchResult>>;
+      };
+      vault: {
+        resolveLinks: (root: string, targets: string[]) => Promise<IpcResult<VaultLinkAnswer[]>>;
+        openFile: (root: string, rel: string) => Promise<IpcResult<null>>;
       };
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>;

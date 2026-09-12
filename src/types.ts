@@ -185,6 +185,27 @@ export interface ConversationSearchRequest {
   maxHitsPerSession?: number;
 }
 
+/**
+ * One `[[wikilink]]` a message cites, answered by `electron/modules/vault-index.ts`.
+ * `rel` is relative to the project root and `/`-separated; `null` means no file
+ * in the project answers to that name — the transcript is citing a source that
+ * is not there.
+ */
+export interface VaultLinkHit {
+  target: string;
+  rel: string;
+  /** `fuzzy` = matched on a path suffix, not on the whole name. */
+  match: 'exact' | 'fuzzy';
+}
+
+export interface VaultLinkMiss {
+  target: string;
+  rel: null;
+  match: null;
+}
+
+export type VaultLinkAnswer = VaultLinkHit | VaultLinkMiss;
+
 export interface SessionArtifact {
   kind: ArtifactKind;
   label: string;
