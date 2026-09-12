@@ -8376,30 +8376,29 @@ button.cl-pill-model[data-on] {
   margin-top: 20px;
   overflow: visible;
 }
-.cl-memgraph-island {
+/* L'orbita ha preso il posto del riquadro (design 3a): passa per i satelliti,
+   quindi disegna il gruppo invece di limitarsi a recintarlo. */
+.cl-memgraph-orbit {
   fill: none;
   stroke: var(--cl-line);
-  stroke-dasharray: 3 5;
+  stroke-dasharray: 2 6;
 }
-.cl-memgraph-island-title {
-  font-family: var(--font-ui);
-  font-size: 11.5px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  fill: var(--cl-ink-2);
+.cl-memgraph-hub-ring {
+  fill: none;
+  stroke-width: 1.4;
+  opacity: 0.5;
 }
-.cl-memgraph-island-meta,
-.cl-memgraph-band-title {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.12em;
-  fill: var(--cl-ink-4);
+/* Cerchio vuoto: il fondo paper copre il tratteggio dell'orbita dove il nodo
+   la incontra, così ci sta sopra invece di sembrarne trafitto. */
+.cl-memgraph-dot {
+  fill: var(--cl-paper);
+  stroke-width: 2;
 }
 .cl-memgraph-link {
   fill: none;
   stroke: var(--cl-accent);
-  stroke-width: 1.3;
-  opacity: 0.4;
+  stroke-width: 1.6;
+  opacity: 0.55;
   transition:
     opacity 0.14s ease,
     stroke-width 0.14s ease;
@@ -8441,18 +8440,69 @@ button.cl-pill-model[data-on] {
 }
 .cl-memgraph-label {
   font-family: var(--font-mono);
-  font-size: 8.6px;
+  font-size: 10px;
   letter-spacing: 0.01em;
-  fill: var(--cl-ink-3);
+  fill: var(--cl-ink-2);
   pointer-events: none;
 }
 .cl-memgraph-label.is-hub {
-  font-size: 9.4px;
+  font-size: 11.5px;
   font-weight: 700;
   fill: var(--cl-ink);
 }
 .cl-memgraph-node.is-hover .cl-memgraph-label {
   fill: var(--cl-ink);
+}
+/* Le memorie che nessun link tocca: fuori dal canvas, ma nominate. Prima erano
+   una fascia in fondo alla mappa, cioè righe di grafo senza grafo; qui restano
+   un debito dichiarato e diventano raggiungibili con un click. */
+.cl-memgraph-loners {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cl-line-soft);
+}
+.cl-memgraph-loners .lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  white-space: nowrap;
+}
+.cl-memgraph-loners .chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cl-memgraph-loner {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 10px;
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-pill);
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition:
+    background 120ms,
+    color 120ms;
+}
+.cl-memgraph-loner:hover {
+  background: var(--cl-glass-hover-bg);
+  color: var(--cl-ink);
+}
+.cl-memgraph-loner .dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex: none;
 }
 .cl-memgraph-legend {
   display: flex;
@@ -11524,20 +11574,124 @@ button.cl-sw-member:focus-visible,
   color: var(--cl-ink-2);
   font-weight: 500;
 }
-/* Memory tiles stack the type badge over the creation date, so the date-sorted
-   grid reads in order despite the two-column zig-zag. */
-.cl-tile .t-meta.cl-tile-meta--mem {
+/* ════════════════════════════════════════════════════════════════════════
+   MEMORY LIST ROWS (design 2b) — il grafo detto a parole, senza canvas.
+   Righe, non tile: il glifo con l'iniziale diceva la stessa lettera del nome
+   che gli sta accanto, mentre il pallino dice il tipo — che è un dato. Sotto
+   il titolo la riga porta la relazione ("↑ cited by 2 · ↓ cites …"), cioè lo
+   stesso fatto che la mappa disegna come arco: le due viste rispondono alla
+   stessa domanda in due forme, non con due dati diversi.
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-mem-rows {
+  border-top: 1px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-mem-row {
+  display: grid;
+  grid-template-columns: 10px 1fr auto;
+  gap: 16px;
+  align-items: start;
+  padding: 17px 4px;
+  border-bottom: 1px solid var(--cl-line-soft);
+  cursor: pointer;
+  transition: background 100ms;
+}
+.cl-mem-row:last-child {
+  border-bottom: none;
+}
+.cl-mem-row:hover {
+  background: var(--cl-glass-hover-bg);
+  -webkit-backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
+  backdrop-filter: blur(8px) saturate(var(--cl-glass-sat));
+  box-shadow: inset 0 1px 0 var(--cl-glass-hover-edge);
+}
+.cl-mem-row > .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  margin-top: 7px;
+}
+/* L'hub del proprio gruppo porta l'anello che ha sulla mappa: è lo stesso
+   segno, così una memoria riconosciuta in una vista si riconosce nell'altra. */
+.cl-mem-row > .dot.is-hub {
+  /* outline e non box-shadow: lo stacco deve lasciar vedere lo sfondo vero
+     della riga, che sull'hover diventa la velatura d'accento. */
+  outline: 1.4px solid currentColor;
+  outline-offset: 2.4px;
+}
+.cl-mem-row .t-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+}
+.cl-mem-row .t-desc {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-3);
+  margin-top: 3px;
+  line-height: 1.5;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-clamp: 2;
+  overflow: hidden;
+}
+.cl-mem-row .t-rel {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 10px;
+  margin-top: 5px;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--cl-accent-ink);
+}
+.cl-mem-row .t-rel .out {
+  color: var(--cl-ink-3);
+}
+.cl-mem-row .t-rel .out b {
+  color: var(--cl-ink-2);
+  font-weight: 500;
+}
+.cl-mem-row .t-rel .hub {
+  color: var(--cl-ink-4);
+}
+.cl-mem-row .t-meta {
   display: flex;
   flex-direction: column;
   align-items: flex-end;
   gap: 4px;
   text-align: right;
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
 }
-.cl-tile .cl-tile-meta--mem .when {
+.cl-mem-row .t-meta .type {
+  font-weight: 500;
+}
+.cl-mem-row .t-meta .when {
   color: var(--cl-ink-4);
   font-weight: 400;
   font-size: 10px;
   letter-spacing: 0.02em;
+}
+.cl-mem-row:hover .cl-row-tag-add,
+.cl-mem-row:focus-within .cl-row-tag-add {
+  opacity: 1;
+}
+/* Riepilogo del grafo sopra le righe e debito di connessione sotto: la lista
+   porta gli stessi totali della mappa, altrimenti passare da una vista
+   all'altra sembrerebbe cambiare i dati e non la forma. */
+.cl-mem-relnote {
+  margin-top: 12px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-4);
 }
 
 /* ── CLAUDE.md cascade (landing di progetto) ──────────────────────────────

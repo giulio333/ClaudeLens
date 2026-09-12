@@ -5,9 +5,11 @@
 // del cursore lampeggerebbe a ogni movimento invece di rispondere a "voglio
 // sapere cosa c'è qui".
 
+import { StrictMode } from 'react';
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react';
 import { MemoryGraphView } from '../src/components/project/memory/MemoryGraphView';
+import { buildMemoryGraph } from '../src/components/project/memory/graph';
 import type { MemoryTopic } from '../src/types';
 
 afterEach(() => {
@@ -41,8 +43,12 @@ const CONTENTS = {
 
 function renderGraph() {
   const onOpenTopic = vi.fn();
+  // Montata come la monta `src/main.tsx`: StrictMode ripete effetto, cleanup e
+  // effetto, ed è lì che si vede se la vista sopravvive a un rimontaggio.
   const view = render(
-    <MemoryGraphView topics={TOPICS} contents={CONTENTS} onOpenTopic={onOpenTopic} />
+    <StrictMode>
+      <MemoryGraphView graph={buildMemoryGraph(TOPICS, CONTENTS)} onOpenTopic={onOpenTopic} />
+    </StrictMode>
   );
   const nodes = [...view.container.querySelectorAll('.cl-memgraph-node')];
   const alpha = nodes.find(n => (n.getAttribute('aria-label') ?? '').startsWith('A memory'))!;

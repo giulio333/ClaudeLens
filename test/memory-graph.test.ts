@@ -2,6 +2,7 @@ import {
   buildMemoryGraph,
   layoutMemoryGraph,
   neighborhoodOf,
+  relationSummary,
   graphLabel,
   nodeRadius,
 } from '../src/components/project/memory/graph';
@@ -288,18 +289,56 @@ describe('layoutMemoryGraph', () => {
     }
   });
 
-  it('gives the unconnected memories their own band below the islands', () => {
+  it('leaves the unconnected memories off the canvas, for the list below it', () => {
+    // Un nodo senza archi su una mappa di relazioni è una posizione che non
+    // significa nulla: resta dichiarato, ma come elenco fuori dal disegno.
     const g = buildMemoryGraph([...many, topic('lone.md')], { ...contents, 'lone.md': '' });
     const l = layoutMemoryGraph(g);
-    expect(l.lonersBand).not.toBeNull();
-    const island = l.islands[0];
-    expect(l.lonersBand!.y).toBeGreaterThan(island.y + island.h);
-    expect(l.positions['lone.md'].y).toBeGreaterThan(l.lonersBand!.y);
+    expect(g.loners).toContain('lone.md');
+    expect(l.positions['lone.md']).toBeUndefined();
+    expect(Object.keys(l.positions).sort()).toEqual(many.map(t => t.filename).sort());
   });
 
-  it('has no loners band when every memory is connected', () => {
+  it('puts the hub at the centre of its own orbit and the satellites on it', () => {
     const g = buildMemoryGraph(many, contents);
-    expect(layoutMemoryGraph(g).lonersBand).toBeNull();
+    const l = layoutMemoryGraph(g);
+    const island = l.islands[0];
+    // L'orbita è ciò che si disegna: se il suo centro non fosse l'hub, il
+    // cerchio tratteggiato passerebbe accanto ai nodi invece che per loro.
+    expect(l.positions[island.hub]).toEqual({ x: island.cx, y: island.cy });
+    const onEllipse = (p: { x: number; y: number }, rx: number, ry: number) =>
+      Math.abs(((p.x - island.cx) / rx) ** 2 + ((p.y - island.cy) / ry) ** 2 - 1) < 1e-9;
+    const satellites = g.clusters[0].members.filter(f => f !== island.hub);
+    for (const f of satellites) {
+      const p = l.positions[f];
+      expect(
+        onEllipse(p, island.rx, island.ry) || onEllipse(p, island.innerRx, island.innerRy)
+      ).toBe(true);
+    }
+  });
+
+  it('draws a small group almost round and a crowded one flattened', () => {
+    // Lo schiacciamento serve a distribuire etichette larghe lungo il giro: con
+    // due satelliti non c'è nulla da distribuire e i due lati restano vuoti.
+    const pair = [topic('a.md'), topic('b.md'), topic('c.md')];
+    const small = layoutMemoryGraph(
+      buildMemoryGraph(pair, { 'a.md': '[[c]]', 'b.md': '[[c]]', 'c.md': '' })
+    );
+    expect(small.islands[0].ry / small.islands[0].rx).toBeCloseTo(0.8);
+    expect(small.islands[0].rx).toBeLessThan(96); // il vecchio minimo fisso
+
+    const crowded = layoutMemoryGraph(buildMemoryGraph(many, contents));
+    expect(crowded.islands[0].ry / crowded.islands[0].rx).toBeCloseTo(0.62);
+  });
+
+  it('reports a second orbit only when satellites actually sit on it', () => {
+    // 13 satelliti: due anelli. Una coppia: uno solo — disegnare comunque un
+    // anello interno affermerebbe una struttura che i dati non hanno.
+    const crowded = layoutMemoryGraph(buildMemoryGraph(many, contents));
+    expect(crowded.islands[0].twoRings).toBe(true);
+    const pair = [topic('a.md'), topic('b.md')];
+    const small = layoutMemoryGraph(buildMemoryGraph(pair, { 'a.md': '[[b]]', 'b.md': '' }));
+    expect(small.islands[0].twoRings).toBe(false);
   });
 
   it('wraps islands onto a new shelf instead of overflowing the width', () => {
@@ -321,6 +360,64 @@ describe('layoutMemoryGraph', () => {
     const l = layoutMemoryGraph(buildMemoryGraph([], {}));
     expect(l.islands).toEqual([]);
     expect(l.positions).toEqual({});
+  });
+});
+
+/**
+ * La stessa relazione che la mappa disegna come arco, detta a parole: è quello
+ * che l'elenco può mostrare, dove non c'è una posizione da leggere.
+ */
+describe('relationSummary', () => {
+  const TOPICS = [
+    topic('feedback_hub.md', { name: 'Stage only my own files' }),
+    topic('feedback_one.md', { name: 'No assistant attribution' }),
+    topic('feedback_two.md', { name: 'Avoid shared branches' }),
+    topic('feedback_alone.md', { name: 'Review before merge' }),
+  ];
+  const CONTENTS = {
+    'feedback_hub.md': '',
+    'feedback_one.md': 'vedi [[feedback_hub]] e [[feedback_two]]',
+    'feedback_two.md': 'vedi [[feedback_hub]]',
+    'feedback_alone.md': 'nessun collegamento',
+  };
+  const graph = buildMemoryGraph(TOPICS, CONTENTS);
+
+  it('counts who cites the memory and names what it cites', () => {
+    expect(relationSummary(graph, 'feedback_hub.md')).toMatchObject({
+      inDeg: 2,
+      outDeg: 0,
+      cites: [],
+    });
+    expect(relationSummary(graph, 'feedback_one.md')).toMatchObject({
+      inDeg: 0,
+      outDeg: 2,
+      // Il titolo con cui ciascuna si presenta nell'elenco — non lo slug della
+      // mappa, o citarla non basterebbe a ritrovarla scorrendo la lista — e in
+      // ordine canonico, non in quello in cui compaiono nel testo: la riga deve
+      // leggersi uguale a ogni apertura.
+      cites: ['Avoid shared branches', 'Stage only my own files'],
+    });
+  });
+
+  it('marks the most cited memory of a group as its hub, and no other', () => {
+    expect(relationSummary(graph, 'feedback_hub.md').isHub).toBe(true);
+    expect(relationSummary(graph, 'feedback_one.md').isHub).toBe(false);
+    expect(relationSummary(graph, 'feedback_hub.md').clusterLabel).toBe('hub');
+  });
+
+  it('says nothing rather than something wrong about a memory with no relations', () => {
+    expect(relationSummary(graph, 'feedback_alone.md')).toEqual({
+      inDeg: 0,
+      outDeg: 0,
+      isHub: false,
+      cites: [],
+      clusterLabel: null,
+    });
+  });
+
+  it('answers for a filename the graph never saw', () => {
+    expect(relationSummary(graph, 'nope.md').inDeg).toBe(0);
+    expect(relationSummary(graph, 'nope.md').isHub).toBe(false);
   });
 });
 

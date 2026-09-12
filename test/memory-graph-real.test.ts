@@ -248,7 +248,8 @@ describe.skipIf(ARCHIVES.length === 0)('memory graph on every local archive', ()
         const layout = layoutMemoryGraph(graph);
         const radius = new Map(graph.nodes.map(n => [n.filename, nodeRadius(n.inDeg)]));
         const entries = Object.entries(layout.positions);
-        expect(entries).toHaveLength(graph.nodes.length);
+        // Le memorie senza relazioni non sono sul canvas: sono elencate sotto.
+        expect(entries).toHaveLength(graph.nodes.length - graph.loners.length);
         for (let i = 0; i < entries.length; i++)
           for (let j = i + 1; j < entries.length; j++) {
             const [fa, pa] = entries[i];
