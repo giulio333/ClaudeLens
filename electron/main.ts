@@ -38,6 +38,8 @@ import {
   type SessionSource,
 } from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
+import { searchSessions, type SearchRequest } from './modules/session-search';
+import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans, getUnlinkedPlans } from './modules/plans-reader';
@@ -1063,6 +1065,71 @@ ipcMain.handle('sessions:getArtifacts', async (_event, hash: string, filename: s
     const projectPath = projectDir(hash);
     const artifacts = await getSessionArtifacts(projectPath, TASKS_DIR, filename);
     return ok(artifacts);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Full-text search across the transcripts on disk (`modules/session-search.ts`).
+// The renderer supplies the query; everything that becomes a path is derived
+// here — `projectHash` is validated the same way every other project-scoped
+// handler validates it, and the roots are this process' own constants, so no
+// caller-supplied path reaches the filesystem.
+//
+// `resolveProjectPathForPlan` is reused deliberately: it is the resolver that
+// answers "the project's real cwd, or nothing" rather than handing back the
+// lossy inversion of the folder name. A search result names the project it
+// found; naming it with a guess is the mistake #224 was made of.
+ipcMain.handle('search:conversations', async (_event, request: unknown) => {
+  try {
+    const req = (request && typeof request === 'object' ? request : {}) as SearchRequest;
+    if (req.projectHash !== undefined) assertValidHash(req.projectHash);
+    const outcome = await searchSessions(
+      PROJECTS_DIR,
+      req,
+      hash => resolveProjectPathForPlan(hash) ?? undefined
+    );
+    return ok(outcome);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// ── vault:* — the `[[wikilinks]]` Claude writes into a conversation ──────────
+//
+// Resolution stays in the main process because the answer is small and the
+// question would be huge: the renderer asks about the handful of names one
+// message cites, never for a listing of the project (the why is in
+// `modules/vault-index.ts`). `root` is the project's real cwd, which the chat
+// view already holds; every path that reaches the filesystem is rebuilt from
+// the index under that root, never taken from the renderer's string.
+const MAX_VAULT_TARGETS = 64;
+
+ipcMain.handle('vault:resolveLinks', async (_event, root: unknown, targets: unknown) => {
+  try {
+    if (typeof root !== 'string' || !root) throw new Error('Missing project root');
+    if (!Array.isArray(targets)) throw new Error('targets must be an array');
+    const names = targets
+      .filter((t): t is string => typeof t === 'string')
+      .slice(0, MAX_VAULT_TARGETS);
+    return ok<VaultLinkAnswer[]>(resolveVaultLinks(root, names));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// Opening is deliberately the OS' job: the citations are PDFs as often as they
+// are notes, and the app that already knows how to show one is the one the user
+// picked. The `rel` came from `vault:resolveLinks`, and is re-resolved and
+// re-contained anyway — a handler that trusts its own earlier answer is a
+// handler that trusts the renderer.
+ipcMain.handle('vault:openFile', async (_event, root: unknown, rel: unknown) => {
+  try {
+    if (typeof root !== 'string') throw new Error('Missing project root');
+    if (typeof rel !== 'string') throw new Error('Missing file path');
+    const failure = await shell.openPath(resolveVaultFile(root, rel));
+    if (failure) throw new Error(failure);
+    return ok(null);
   } catch (e) {
     return err(e);
   }

@@ -50,8 +50,20 @@ export type View =
       type: 'chat';
       project: { hash: string; realPath: string };
       session: SessionSummary;
-      from?: 'agents-live' | 'sessions';
+      from?: 'agents-live' | 'sessions' | 'search';
+      /** Scroll to the turn holding this message on open (a search hit). By uuid,
+       *  never by position: the transcript view reads through the SDK, which
+       *  truncates at the compaction boundary, so a hit found on disk may have no
+       *  turn here — and an index would have jumped to the wrong one instead of
+       *  saying so. */
+      focusMessageUuid?: string;
+      /** The query that led here, so Back returns to the results instead of an
+       *  empty search field. */
+      searchQuery?: string;
     }
+  /** Full-text search over the transcripts. `scope` set = started from inside a
+   *  project, so the scan begins narrowed to it. */
+  | { type: 'search'; query: string; scope?: { hash: string; realPath: string } }
   | {
       type: 'new-chat';
       project: { hash: string; realPath: string };

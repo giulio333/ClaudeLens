@@ -257,3 +257,25 @@ describe('cache dei plan ref — potatura dei transcript spariti', () => {
     expect(getPlanRefStats()).toMatchObject({ cachedFiles: 1, evictions: 1, cacheHits: 1 });
   });
 });
+
+describe('ref cache — retained bytes', () => {
+  it('keeps the unterminated tail, not the transcript it was read from', async () => {
+    const lines: string[] = [];
+    for (let i = 0; i < 4000; i++) {
+      lines.push(planLine(`/p/${i}.md`, 'plan_mode', '2026-01-01T00:00:00Z'));
+    }
+    const body = lines.join('\n') + '\n' + '{"type":"attachment","attachment":{"type":"plan_mode"';
+    writeFileSync(transcript, body, 'utf-8');
+    expect(body.length).toBeGreaterThan(256 * 1024);
+
+    const refs = await readPlanRefs(transcript);
+
+    expect(refs).toHaveLength(4000);
+    // A `subarray` view of the tail would pin every byte just read, for the
+    // life of the process — see the same fix in cost-tracker.parseSession.
+    expect(getPlanRefStats()).toMatchObject({ cachedFiles: 1 });
+    // Bounded by the buffer pool the copy is served from, not by a literal —
+    // see the same assertion in `cost-tracker.test.ts` and #258.
+    expect(getPlanRefStats().retainedPartialBytes).toBeLessThanOrEqual(Buffer.poolSize);
+  });
+});

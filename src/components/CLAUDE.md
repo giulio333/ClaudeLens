@@ -15,6 +15,7 @@ Renders markdown with syntax highlighting and styled headings.
 - Frontmatter support (YAML)
 - Custom styled links, headings, and code blocks
 - External links open in system browser (safe from Electron context)
+- `[[wikilink]]` chips — **only inside a `VaultLinksProvider`** (see below)
 
 **Props:**
 
@@ -30,6 +31,79 @@ export default function MyDoc() {
   return <Markdown className="max-w-2xl">{markdownString}</Markdown>;
 }
 ```
+
+### VaultLinks.tsx + vault-link-engine.ts + rehype-wikilinks.ts
+
+The `[[wikilink]]` a message cites, drawn as a chip that says whether the file
+is there. Claude writes its sources in Obsidian's notation — `Fonte: [[Procedura
+Upload Tesi.pdf]]` — and the transcript rendered that as text, so a citation of
+a file that is really in the project and one Claude invented looked exactly the
+same. **Solid and clickable** = the project has it (click → `vault:openFile` →
+`shell.openPath`, because the citations are PDFs as often as notes);
+**dashed and inert** = nothing on disk answers to that name; **plain, no border**
+= the lookup is still in flight or failed — not knowing is a third thing and
+must not read as "missing". Resolution itself is in the main process
+(`electron/modules/vault-index.ts`), which is where the reasoning about what may
+resolve to what lives.
+
+- **`rehype-wikilinks.ts`** — the pass that emits the chips as
+  `<span data-wikilink>`, mapped back to `<WikiLink>` by `Markdown`'s `span`
+  component (a data attribute, not a custom tag: react-markdown's `Components`
+  map is keyed by intrinsic elements and a custom key needs a cast). It catches
+  **two** forms, because both occur in real transcripts: plain prose and inline
+  code — Claude writes `` `[[Nota]]` `` about as often — which is why this cannot
+  be a remark plugin over text nodes. An `<code>` is rewritten only when its
+  ENTIRE content is one link (a code span that merely mentions one is code);
+  `<pre>` is never descended into, so a transcript quoting markdown source keeps
+  its brackets. **It must run before `rehypeHighlight`**, which rewrites the
+  inside of code elements into nested spans — after it, an inline `` `[[x]]` ``
+  no longer has the single text child the pass looks for.
+- **`lib/wikilinks.ts`** — the grammar (`[[Note#Heading|alias]]` → target +
+  label) and `wikiLinkTargets`, the names a message reports. It strips fenced
+  blocks for the same reason the rehype pass skips `<pre>`: the two passes have
+  to agree on what counts as a citation, or the renderer asks the main process
+  about names that can never be drawn.
+- **`vault-link-engine.ts`** — contexts, hooks and the batching closure.
+  **One call per tick, not per link**: a transcript holds hundreds of messages,
+  so the engine collects what every `<Markdown>` reports in a commit and asks
+  once. **Two contexts** because `<Markdown>` is memoized for a measured reason
+  (see its own note): it consumes only the API context, stable for as long as
+  the project is, so answers arriving cannot re-render every bubble — the states
+  context is consumed by the chips alone. The mutable bookkeeping is a closure
+  created in a `useMemo` keyed on the root, not refs: it belongs to one project
+  and is replaced wholesale when the root changes (a reply from the old engine
+  is dropped by its `dispose`), and refs mutated during render are a lint error.
+  **`dispose` has a `revive` because the app mounts in `React.StrictMode`**
+  (`src/main.tsx`), which runs every effect, its cleanup, and the effect again
+  to prove a component survives a remount: a one-way dispose turned that
+  rehearsal into an engine that never asked anything, so in the real app every
+  citation sat in the neutral "we do not know" state while the suite was green —
+  Testing Library's `render` does not use StrictMode. Two consequences the fix
+  encodes: a name is stamped as asked **in `flush`, when it is actually sent**
+  (stamping on the way in meant a batch cancelled before it left was remembered
+  as asked and never sent again), and `request` is **not** gated on `disposed` —
+  effects run child-first, so a bubble reports its names before the provider
+  above it has revived; the timer is armed off the queue, and `flush` is where
+  the check belongs.
+  **A hit is cached forever, a miss only for 30s** (`RETRY_MISS_AFTER_MS`, which
+  must not be shorter than the main process' `INDEX_TTL_MS` or the re-ask is
+  served from the same cached index): Claude writes the notes it cites, so the
+  name that was not there when the transcript first mentioned it is exactly the
+  one that becomes real a minute later — a permanent "already asked" latch would
+  have reintroduced, one layer up, the failure the index TTL exists to avoid,
+  and would have pinned a chip to plain text on a single transient IPC error.
+  The re-ask rides a `<Markdown>` reporting the name again (a later message, a
+  streaming turn); a static transcript nobody adds to never re-asks.
+- **`VaultLinks.tsx`** — `VaultLinksProvider` and the chip. The provider is
+  mounted by `ChatView` and `LiveChatView` with `project.realPath`, and
+  **deliberately not higher**: the memory views carry wikilinks of their own
+  that point at topics under `~/.claude`, not at files in the project, so a
+  provider above them would mark every one of those as a missing source.
+  Outside a provider `Markdown` runs its original plugin list and `[[…]]`
+  renders byte-identical to before.
+
+Covered by `test/markdown-wikilinks.test.tsx` (the chip, both forms, the fence,
+the failed lookup, the no-provider passthrough) and `test/wikilinks.test.ts`.
 
 ### ErrorBoundary.tsx
 
@@ -96,11 +170,11 @@ Transient toasts for session-lifecycle events pushed over `notifications:event`
 suggested only: it never navigates on its own.
 
 Each toast is **one Mission Control feed row** (`.cl-ntf-*`, mirroring
-`terminal/MissionRail`'s `FeedRow`: time gutter · state dot · subject · status
-tag). A notification _is_ a session event, and that is the language this app
-already uses for events; the previous form was a generic 4px-stripe-on-the-left
-card, a library convention in an app that carries state with a dot everywhere
-else. Consequences of the row form:
+`terminal/MissionRail`'s `FeedRow`: state dot · subject · status tag). A
+notification _is_ a session event, and that is the language this app already
+uses for events; the previous form was a generic 4px-stripe-on-the-left card, a
+library convention in an app that carries state with a dot everywhere else.
+Consequences of the row form:
 
 - **The subject line is the project**, not the prose — it is what the eye looks
   for when a corner of the screen moves. The state is the right-hand tag
@@ -109,10 +183,22 @@ else. Consequences of the row form:
 - The row is composed from `kind` + `cwd` + `body`, **deliberately not from the
   event's `title`**: that full sentence ("Claude finished — your turn") is
   written for the OS notification's conventions, so it stays the row's `title`
-  tooltip instead of being re-flowed into a 30px-gutter layout.
+  tooltip instead of being re-flowed into a two-line row.
 - `needs-attention` is the one kind still blocked on the user, so it is the one
   that pulses — with its own accent keyframes, since `.cl-live-dot`'s halo is
   hardcoded to the green "ok" hue.
+- **The card is dressed like the global home**, the surface it floats over:
+  `--cl-r-card` radius, 14px sans subject, 10px mono meta, and a bare mono
+  `open session →` in place of the boxed uppercase button — the same register as
+  the home's `resume →`. It stops short of the home's **tinted** row: there the
+  accent wash means "live project you can resume", while a state tint here would
+  be the colored-card idiom coming back in a softer coat, and the state is
+  already said three times (dot, tag, timer hairline). The action hangs off the
+  subject's left rail instead of the card's right edge — unboxed and
+  right-aligned in a 340px card, it read as unanchored.
+- **The time gutter is gone.** It printed the literal string `now`, always: a
+  transient toast has no other time to show, so the column was 30px of nothing.
+  The remaining three columns are still the feed anatomy.
 - **The auto-dismiss is visible**: a hairline that retracts over
   `AUTO_DISMISS_MS`, whose duration is passed in from the component so the bar
   and the timer cannot drift. Hover pauses **both** — a bar that kept running

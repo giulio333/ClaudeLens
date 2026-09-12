@@ -5,7 +5,7 @@ import PromptPreview from './PromptPreview';
 import { SchemaBuilder } from './SchemaBuilder';
 import { inputCls, labelCls } from './studioLang';
 
-const STEP_MODELS = ['inherit', 'sonnet', 'opus', 'haiku'] as const;
+const STEP_MODELS = ['inherit', 'sonnet', 'opus', 'haiku', 'fable'] as const;
 const STEP_EFFORTS = ['inherit', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 
 function TogglePills<T extends string>({

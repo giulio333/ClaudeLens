@@ -3,6 +3,7 @@ import type { CSSProperties } from 'react';
 import { Skill } from '../../../hooks/useIPC';
 import {
   ChatDetailsFilter,
+  ModelRun,
   SessionAgent,
   SessionSkill,
   ToolGroup,
@@ -11,6 +12,7 @@ import {
   skillHasViewableOutput,
   skillInitial,
 } from './utils';
+import { fmtModel, modelColor } from '../utils';
 import { CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export';
 import { ChevronUpGlyph, DockCaretGlyph, LocateGlyph, NarrateGlyph, TrashGlyph } from './icons';
 import { ThoughtLine } from './ThoughtLine';
@@ -181,6 +183,66 @@ function SkillDockSheet({
   );
 }
 
+/** The model dock sheet — raised when a session did not run on one setting
+ *  throughout. One row per run, oldest first, each locating the turn the change
+ *  took effect on. Without it the pill's chip would name the current model and
+ *  say nothing about the switch that produced it.
+ *
+ *  A run breaks on the model OR the effort — both change mid-chat, and on this
+ *  machine three transcripts change effort with the model standing still — so
+ *  what is counted here is runs, and the label must not call them models. */
+function ModelDockSheet({
+  runs,
+  onLocate,
+}: {
+  runs: ModelRun[];
+  onLocate: (turnN: number) => void;
+}) {
+  return (
+    <div className="cl-sheet cl-sheet--agents" role="menu">
+      <div className="cl-sheet-head">
+        <span className="cl-dock-sheet-label">Model &amp; effort · {runs.length} runs</span>
+      </div>
+      <div className="cl-dock-rows">
+        {runs.map(run => (
+          <div key={run.key} className="cl-dock-row">
+            <button
+              type="button"
+              className="cl-dock-row-main"
+              onClick={() => onLocate(run.turnN)}
+              title="Jump to the first turn on this model"
+            >
+              <span className="orb" aria-hidden style={orbStyle(modelColor(run.model))}>
+                {fmtModel(run.model)[0]}
+              </span>
+              <span className="body">
+                <span className="r1">
+                  <span className="name">{fmtModel(run.model)}</span>
+                  {run.effort && <span className="status">{run.effort}</span>}
+                </span>
+                <span className="meta">
+                  <span className="steps">
+                    from turn {run.turnN} · {run.turns} turn{run.turns === 1 ? '' : 's'}
+                  </span>
+                </span>
+              </span>
+            </button>
+            <button
+              type="button"
+              className="cl-dock-row-locate"
+              onClick={() => onLocate(run.turnN)}
+              title="Jump to the first turn on this model"
+              aria-label="Jump to the first turn on this model"
+            >
+              <LocateGlyph />
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 /** The agent dock that lives inside the control pill (Focus layout, variant 4):
  *  an overlapping avatar cluster + count that toggles a sheet listing every
  *  sub-agent. The sheet is rendered by ChatControlPill above the pill; this just
@@ -301,6 +363,8 @@ export function ChatControlPill({
   onOpenSkill,
   onOpenSkillOutput,
   onLocateSkill,
+  modelRuns,
+  onLocateModel,
   thought,
   thoughtsShown,
   onToggleThoughts,
@@ -338,6 +402,10 @@ export function ChatControlPill({
   onOpenSkill: (skill: Skill) => void;
   onOpenSkillOutput: (group: ToolGroup) => void;
   onLocateSkill: (turnN: number) => void;
+  /** Every model+effort stretch of the transcript, oldest first. The last one is
+   *  what the chip prints; more than one is what makes it a dock. */
+  modelRuns: ModelRun[];
+  onLocateModel: (turnN: number) => void;
   /** The sentence currently being narrated, or null when there is nothing to
    *  say. Rendered above the pill; see `ThoughtLine`. */
   thought?: Thought | null;
@@ -349,7 +417,7 @@ export function ChatControlPill({
 }) {
   // Only one sheet is raised above the pill at a time: the agent dock list, the
   // skill dock list, or the export/delete menu.
-  const [sheet, setSheet] = useState<'export' | 'agents' | 'skills' | null>(null);
+  const [sheet, setSheet] = useState<'export' | 'agents' | 'skills' | 'models' | null>(null);
   const rootRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
@@ -384,6 +452,12 @@ export function ChatControlPill({
   };
   const toggleAgents = () => setSheet(s => (s === 'agents' ? null : 'agents'));
   const toggleSkills = () => setSheet(s => (s === 'skills' ? null : 'skills'));
+  const toggleModels = () => setSheet(s => (s === 'models' ? null : 'models'));
+
+  // The run the conversation is on now. `/model` rewrites this mid-chat, so it
+  // is the LAST run and never the first.
+  const currentRun = modelRuns.length > 0 ? modelRuns[modelRuns.length - 1] : null;
+  const switched = modelRuns.length > 1;
 
   const chip = (id: TurnFilter, label: string, c: number) => (
     <button
@@ -433,6 +507,15 @@ export function ChatControlPill({
           onLocate={turnN => {
             setSheet(null);
             onLocateSkill(turnN);
+          }}
+        />
+      )}
+      {sheet === 'models' && switched && (
+        <ModelDockSheet
+          runs={modelRuns}
+          onLocate={turnN => {
+            setSheet(null);
+            onLocateModel(turnN);
           }}
         />
       )}
@@ -526,6 +609,51 @@ export function ChatControlPill({
       )}
 
       <div className="cl-pill" role="toolbar" aria-label="Transcript controls">
+        {currentRun && (
+          <>
+            {switched ? (
+              <button
+                type="button"
+                className="cl-pill-model"
+                aria-haspopup="menu"
+                aria-expanded={sheet === 'models'}
+                data-on={sheet === 'models' || undefined}
+                style={{ '--mt': modelColor(currentRun.model) } as CSSProperties}
+                title={`On ${fmtModel(currentRun.model)}${
+                  currentRun.effort ? ` · ${currentRun.effort}` : ''
+                } since turn ${currentRun.turnN} — model or effort changed ${
+                  modelRuns.length - 1
+                } time${modelRuns.length === 2 ? '' : 's'} in this chat`}
+                onClick={toggleModels}
+              >
+                <span className="cl-pill-model-dot" aria-hidden />
+                <span className="cl-pill-model-name">{fmtModel(currentRun.model)}</span>
+                {currentRun.effort && (
+                  <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                )}
+                <span className="cl-pill-model-switched">+{modelRuns.length - 1}</span>
+                <DockCaretGlyph open={sheet === 'models'} />
+              </button>
+            ) : (
+              <span
+                className="cl-pill-model"
+                style={{ '--mt': modelColor(currentRun.model) } as CSSProperties}
+                title={
+                  currentRun.effort
+                    ? `Model in use — reasoning effort ${currentRun.effort}`
+                    : 'Model in use'
+                }
+              >
+                <span className="cl-pill-model-dot" aria-hidden />
+                <span className="cl-pill-model-name">{fmtModel(currentRun.model)}</span>
+                {currentRun.effort && (
+                  <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                )}
+              </span>
+            )}
+            <span className="cl-pill-div" />
+          </>
+        )}
         {showTranscriptControls && (
           <>
             <div className="cl-pill-filters" role="group" aria-label="Filter turns by type">

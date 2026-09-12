@@ -9,13 +9,31 @@ import { openSync, fstatSync, readSync, closeSync } from 'fs';
 // Both callers append-read the same way: `live-monitor` for the one session a
 // user is watching, `session-tails` for every live session at once.
 
-/** Which record named the session. Claude Code writes two: `custom-title` for
- *  the name the USER set (`/title`), `ai-title` for the one it generated. They
- *  are not interchangeable — the generated one is rewritten on later turns, so
- *  without knowing which is which a `/title` gets silently overwritten by the
- *  next auto-title. The precedence is the app's existing one (`cost-tracker`
- *  reads `customTitle || aiTitle`): the user's name wins. */
-export type SessionTitleSource = 'custom' | 'ai';
+/** Which record named the session. Claude Code writes THREE: `agent-name` for
+ *  the name the user typed with `/rename`, `custom-title` for the one they set
+ *  with `/title` (the command `/rename` replaced — the records live on in older
+ *  transcripts), and `ai-title` for the one it generated. They are not
+ *  interchangeable — the generated one is rewritten on later turns, so without
+ *  knowing which is which a name the user chose gets silently overwritten by
+ *  the next auto-title. */
+export type SessionTitleSource = 'agent' | 'custom' | 'ai';
+
+/** The precedence, in one place because two call sites resolve it: the head
+ *  scan that seeds a name and the fold that keeps it fresh. It is Claude Code's
+ *  own (`registry name ?? customTitle ?? aiTitle`) — a name the user typed beats
+ *  the generated one however late that one was written, and `/rename` beats the
+ *  retired `/title` because it is the only way left to set one. */
+const TITLE_RANK: Record<SessionTitleSource, number> = { agent: 2, custom: 1, ai: 0 };
+
+/** Whether a title record should replace the one already held. Equal ranks pass:
+ *  within a source the freshest record wins, since all three are rewritten and
+ *  the newest is current. */
+export function outranksTitle(
+  incoming: SessionTitleSource,
+  current: SessionTitleSource | null
+): boolean {
+  return current === null || TITLE_RANK[incoming] >= TITLE_RANK[current];
+}
 
 export interface LiveEvent {
   id: string;
@@ -248,14 +266,22 @@ export interface SessionTitle {
  *  record is undocumented, so an unbounded one would ride every append over
  *  IPC. */
 const TITLE_MAX = 120;
+/** The record types that name a session, each with the key holding the name. */
+const TITLE_RECORDS: Record<string, { key: string; source: SessionTitleSource }> = {
+  'agent-name': { key: 'agentName', source: 'agent' },
+  'custom-title': { key: 'customTitle', source: 'custom' },
+  'ai-title': { key: 'aiTitle', source: 'ai' },
+};
+/** The same record types as a substring test, for the head scan's cheap reject.
+ *  Derived from the table so a record added there is never missed here. */
+const TITLE_RECORD_MARKERS = Object.keys(TITLE_RECORDS).map(type => `"${type}"`);
 function readTitleRecord(json: Record<string, unknown>): SessionTitle | null {
-  const key =
-    json.type === 'custom-title' ? 'customTitle' : json.type === 'ai-title' ? 'aiTitle' : null;
-  if (!key) return null;
-  const raw = json[key];
+  const record = typeof json.type === 'string' ? TITLE_RECORDS[json.type] : undefined;
+  if (!record) return null;
+  const raw = json[record.key];
   const title = typeof raw === 'string' ? raw.trim() : '';
   if (!title) return null;
-  return { title: title.slice(0, TITLE_MAX), source: key === 'customTitle' ? 'custom' : 'ai' };
+  return { title: title.slice(0, TITLE_MAX), source: record.source };
 }
 
 /** Translate one transcript line into the flat events the Live views render. */
@@ -293,7 +319,7 @@ export function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
   }
   // A title record that carried no usable name is still a title record: fall
   // through to nothing rather than to the message parsing below.
-  if (json.type === 'ai-title' || json.type === 'custom-title') return events;
+  if (typeof json.type === 'string' && json.type in TITLE_RECORDS) return events;
 
   if (json.type !== 'user' && json.type !== 'assistant') return events;
   if (json.isMeta === true || json.isSidechain === true) return events;
@@ -398,24 +424,71 @@ export function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
   return events;
 }
 
-/** How much of a transcript's head is scanned for the session title. The record
- *  is written early in a session and rewritten on every turn — so the tail keeps
- *  it fresh from here on, and reading a whole multi-MB history just to name a
- *  card is the cost these modules exist to avoid. */
+/** How much of a transcript is scanned, at EACH END, for the session title. The
+ *  record is written early in a session and rewritten on every turn — so the
+ *  tail keeps it fresh from here on, and reading a whole multi-MB history just
+ *  to name a card is the cost these modules exist to avoid. */
 const TITLE_SCAN_BYTES = 256 * 1024;
 
+/** The title records in one already line-safe slice of a transcript, resolved
+ *  against what an earlier slice found. Within a source the last record wins
+ *  (all three are rewritten, and the newest is current), and across sources a
+ *  name the user typed outranks a generated one however late that one was
+ *  written. */
+function scanTitles(text: string, best: SessionTitle | null): SessionTitle | null {
+  for (const line of text.split('\n')) {
+    // Cheap reject first: parsing every line of a transcript slice to find one
+    // record would make this as expensive as the scan it replaces.
+    if (!TITLE_RECORD_MARKERS.some(marker => line.includes(marker))) continue;
+    try {
+      const found = readTitleRecord(JSON.parse(line) as Record<string, unknown>);
+      if (found && outranksTitle(found.source, best?.source ?? null)) best = found;
+    } catch {
+      // Not JSON, so not a title.
+    }
+  }
+  return best;
+}
+
+/** `length` bytes from `position`, as whole lines. Both ends are trimmed to a
+ *  newline: a slice that does not start at 0 opens mid-record (and possibly
+ *  mid-character), and one that ends before EOF — or at a record still being
+ *  written — closes the same way. Handing either fragment to `JSON.parse` is
+ *  what the trimming avoids. */
+function readLines(fd: number, position: number, length: number): string {
+  if (length <= 0) return '';
+  const buffer = Buffer.alloc(length);
+  const read = readSync(fd, buffer, 0, length, position);
+  const text = buffer.subarray(0, read).toString('utf8');
+  const newline = text.indexOf('\n');
+  if (position !== 0 && newline < 0) return '';
+  const from = position === 0 ? 0 : newline + 1;
+  const cut = text.lastIndexOf('\n');
+  return cut < 0 ? text.slice(from) : text.slice(from, cut);
+}
+
 /**
- * The session's human title, read from the head of an existing transcript.
+ * The session's human title, read from an existing transcript.
  *
  * A tail cursor starts at EOF, so the title record is already behind it: a
  * session that was running before the Monitor opened would otherwise stay
- * nameless until its next turn. Returns null when the file has no title record
- * in its head, or cannot be read — an unnamed card says so, it never invents a
- * name.
+ * nameless until its next turn. Returns null when the file holds no title
+ * record where it looks, or cannot be read — an unnamed card says so, it never
+ * invents a name.
+ *
+ * It reads BOTH ENDS, and that is the point rather than an optimisation. The
+ * generated title is written early, but a RENAME lands where the user typed it,
+ * which on a long session is far past any affordable head scan: in the
+ * transcript this was built from, `agent-name` first appears at byte 294718,
+ * past a 256 KB head, while `ai-title` sits at 120065. Reading the head alone
+ * therefore named a renamed session with the title it had before — on the one
+ * surface whose whole job is telling concurrent sessions apart. The meta block
+ * is re-emitted every few turns, so the end of the file carries the current
+ * name; the head is kept because it is where a short session's only record is.
  *
  * Returns the SOURCE alongside the name, because the caller folds later appends
- * onto this value and the two records do not rank equally: `ai-title` is
- * rewritten on subsequent turns, so a `/title` seeded here has to be able to
+ * onto this value and the three records do not rank equally: `ai-title` is
+ * rewritten on subsequent turns, so a `/rename` seeded here has to be able to
  * refuse the next generated one.
  */
 export function readSessionTitle(
@@ -425,33 +498,17 @@ export function readSessionTitle(
   let fd: number | null = null;
   try {
     fd = openSync(filePath, 'r');
-    const length = Math.min(fstatSync(fd).size, maxBytes);
-    if (length <= 0) return null;
-    const buffer = Buffer.alloc(length);
-    const read = readSync(fd, buffer, 0, length, 0);
-    const text = buffer.subarray(0, read).toString('utf8');
-    // With a byte cap the read usually stops mid-line: drop that fragment rather
-    // than hand a truncated JSON object to the parser.
-    const cut = text.lastIndexOf('\n');
-    const lines = (cut < 0 ? text : text.slice(0, cut)).split('\n');
-    // Tracked apart, then resolved once: within a source the last record wins
-    // (both are rewritten, and the newest is current), but a user's `/title`
-    // outranks a generated name however late that one was written.
-    let ai: SessionTitle | null = null;
-    let custom: SessionTitle | null = null;
-    for (const line of lines) {
-      // Cheap reject first: parsing every line of a transcript head to find one
-      // record would make this as expensive as the scan it replaces.
-      if (!line.includes('"ai-title"') && !line.includes('"custom-title"')) continue;
-      try {
-        const found = readTitleRecord(JSON.parse(line) as Record<string, unknown>);
-        if (found?.source === 'custom') custom = found;
-        else if (found) ai = found;
-      } catch {
-        // Not JSON, so not a title.
-      }
+    const size = fstatSync(fd).size;
+    if (size <= 0) return null;
+    let best = scanTitles(readLines(fd, 0, Math.min(size, maxBytes)), null);
+    // The second slice exists only on a file long enough to have one, and `from`
+    // never walks back into the head: the two windows meet at most once, so no
+    // line is scanned twice and a mid-sized file is still read whole.
+    if (size > maxBytes) {
+      const from = Math.max(maxBytes, size - maxBytes);
+      best = scanTitles(readLines(fd, from, size - from), best);
     }
-    return custom ?? ai;
+    return best;
   } catch {
     return null;
   } finally {

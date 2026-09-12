@@ -49,6 +49,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
     savePdf: (defaultFilename: string, html: string) =>
       ipcRenderer.invoke('export:pdf', defaultFilename, html),
   },
+  search: {
+    // Full-text search over the transcripts. One request object rather than
+    // positional args: the caps and the flags are all optional and the main
+    // process re-reads every field defensively anyway.
+    conversations: (request: {
+      text: string;
+      projectHash?: string;
+      includeThinking?: boolean;
+      maxSessions?: number;
+      maxHitsPerSession?: number;
+    }) => ipcRenderer.invoke('search:conversations', request),
+  },
+  vault: {
+    // The `[[wikilinks]]` a message cites, resolved against the project's own
+    // files. One call per message, carrying only the names that message names —
+    // the index itself never crosses the bridge.
+    resolveLinks: (root: string, targets: string[]) =>
+      ipcRenderer.invoke('vault:resolveLinks', root, targets),
+    openFile: (root: string, rel: string) => ipcRenderer.invoke('vault:openFile', root, rel),
+  },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
     getChat: (hash: string, filename: string) =>
