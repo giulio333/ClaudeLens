@@ -299,6 +299,42 @@ export const FIELDS = {
     'absorbed_mid_turn / delivered_to_agent; transcript-extras deliberately ignores it (#245) but it is the only thing distinguishing the two'
   ),
 
+  // Everything below arrived with Claude Code 2.1.266-2.1.269 — the first
+  // upgrade the drift watch caught while it was still fresh. Two of them are
+  // maps keyed by tool_use id, which is what forced the census to learn that a
+  // key can be a generated id and still look like a field name.
+  'assistant.wireToolInputs': candidate(
+    "the input each tool call was actually sent, keyed by tool_use id — and it differs from the `tool_use` block the app renders in 922 of the 1,463 pairs observed: a Bash command arrives with a `cd <project> &&` prefix the block does not carry, so the transcript shows a command that is not the one that ran. What sits under the id is the invoked tool's own input schema, which the census records the existence of and deliberately does not descend into (FOREIGN_SCHEMA_MAPS)"
+  ),
+  'assistant.wireIngestContext': ignored(
+    "a per-tool-call `{cwd}`, identical to the row's own cwd in all 831 observations — and the row cwd is what the app already reads. It would stop being a copy only if a dispatch ran somewhere else, which no row on disk shows"
+  ),
+  'assistant.perTurnEffort': unknown(
+    'null in all 3,838 rows that carry it, while the sibling `effort` holds the real value ("xhigh", "high", "medium", "low"). One row with a non-null value would settle whether it overrides `effort` for a single turn — which is the only thing that would make it worth reading beside it'
+  ),
+  'user.toolUseResult.bashEditDiff': candidate(
+    'the unified diff of the files a Bash call edited — `files[].filePath` with hunks, plus `changedFiles`, `moreFiles` and `unavailable` — on 122 rows. This is the gap that loses real work: an edit made with sed or a heredoc produces no Edit tool call at all, so the app renders the call as stdout and shows no diff, while Claude Code recorded here exactly which lines changed'
+  ),
+  'user.toolUseResult.task': candidate(
+    'a background task as of the turn — task_id, task_type ("local_bash"), status, description, output, exitCode — written by TaskCreate and TaskOutput. tasks-reader reads `~/.claude/tasks/`, so the app knows the tasks; nothing links one to the turn that spawned or polled it'
+  ),
+  'user.toolUseResult.retrieval_status': candidate(
+    '"timeout" / "not_ready" on a TaskOutput poll: whether the turn actually got the output it asked for. The pair of `task` above, and the difference between a turn that read a result and one that gave up waiting'
+  ),
+  'user.toolUseResult.failed_mcp_servers': candidate(
+    'name + errorCode + error of an MCP server that failed to connect for the session (one row so far, on a ToolSearch result). The mcp:* views list what is configured; nothing today records that a server was down while a session ran, which is the first thing a missing tool call looks like'
+  ),
+  'user.toolUseResult.seq': unknown(
+    "7, in the single Artifact publish result observed, beside that result's own `version`. An integer with no second specimen to compare it against; a session that publishes twice would say whether it counts publishes within one artifact"
+  ),
+  'attachment.attachment.managedCommit': unknown(
+    'false in all 13 `remote_session_change` rows, as is its `managedPr` twin. A cloud session that actually produced a commit or a PR would say whether these mark one the managed environment created rather than one the user pushed — and so whether a remote-session view has to tell the two apart'
+  ),
+  'attachment.attachment.managedPr': unknown('as managedCommit: false in all 13 rows observed'),
+  'attachment.renderedInHumanTurn': ignored(
+    'what was injected into the human turn beside a queued command: in all 14 parts observed it is the background-task `<system-reminder>`, prompt scaffolding the CLI shows nobody. The command itself is the `queued_command` attachment, which carries its own verdict'
+  ),
+
   // The `Agent` tool's result when the dispatch is a *named teammate* rather
   // than an anonymous sub-agent (`status: 'teammate_spawned'`). One row in the
   // corpus so far — the spawn that launched the drift check that first saw it —
