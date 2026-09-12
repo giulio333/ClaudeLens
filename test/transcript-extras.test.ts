@@ -58,6 +58,25 @@ function msg(
   return { uuid, role, timestamp, content: [{ type: 'text', text }] };
 }
 
+/** An assistant row in the key order Claude Code writes: `message` first, the
+ *  metadata (`uuid`, `effort`, `perTurnEffort`) after it. The order is what lets
+ *  the reader take the row's own values without deserializing the whole line. */
+function assistantRow(
+  uuid: string,
+  text: string,
+  meta: { effort?: string | null; perTurnEffort?: string | null } = {}
+) {
+  return {
+    parentUuid: 'p0',
+    message: { role: 'assistant', model: 'claude-sonnet-5', content: [{ type: 'text', text }] },
+    type: 'assistant',
+    uuid,
+    timestamp: '2026-09-08T10:00:00.000Z',
+    effort: meta.effort ?? null,
+    perTurnEffort: meta.perTurnEffort ?? null,
+  };
+}
+
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), 'cl-extras-'));
 });
@@ -155,10 +174,63 @@ describe('readTranscriptExtras', () => {
   });
 });
 
+describe('readTranscriptExtras — effort', () => {
+  it('reads the effort of each assistant turn', async () => {
+    const p = writeJsonl([
+      assistantRow('a1', 'primo', { effort: 'medium' }),
+      assistantRow('a2', 'secondo', { effort: 'xhigh' }),
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.effortByUuid.get('a1')).toBe('medium');
+    expect(extras.effortByUuid.get('a2')).toBe('xhigh');
+  });
+
+  it("prefers the turn's own override to the session effort", async () => {
+    const p = writeJsonl([assistantRow('a1', 'uno', { effort: 'medium', perTurnEffort: 'max' })]);
+    expect((await readTranscriptExtras(p)).effortByUuid.get('a1')).toBe('max');
+  });
+
+  it('reports no effort for a transcript that does not record one', async () => {
+    const p = writeJsonl([userRow('u1', 'ciao'), assistantRow('a1', 'ok')]);
+    expect((await readTranscriptExtras(p)).effortByUuid.size).toBe(0);
+  });
+
+  // The row's own metadata is written after `message`, so a tool_result quoting
+  // another transcript lands BEFORE it and must not be the pair that is read.
+  it('reads the row that owns the line, not a transcript quoted inside it', async () => {
+    const quoted = JSON.stringify({
+      type: 'assistant',
+      uuid: 'quoted-uuid',
+      effort: 'medium',
+    });
+    const row = {
+      parentUuid: 'p0',
+      message: {
+        role: 'assistant',
+        model: 'claude-sonnet-5',
+        content: [{ type: 'text', text: `ho letto: ${quoted}` }],
+      },
+      type: 'assistant',
+      uuid: 'real',
+      timestamp: '2026-09-08T10:00:00.000Z',
+      effort: 'xhigh',
+      perTurnEffort: null,
+    };
+    const extras = await readTranscriptExtras(writeJsonl([row]));
+    expect(extras.effortByUuid.get('real')).toBe('xhigh');
+    expect(extras.effortByUuid.has('quoted-uuid')).toBe(false);
+  });
+});
+
 describe('mergeTranscriptExtras', () => {
-  const extrasOf = (queued: ChatMessage[], skills: [string, string][] = []) => ({
+  const extrasOf = (
+    queued: ChatMessage[],
+    skills: [string, string][] = [],
+    efforts: [string, string][] = []
+  ) => ({
     queued,
     skillPathByParentUuid: new Map(skills),
+    effortByUuid: new Map(efforts),
   });
 
   it('leaves the transcript untouched when there is nothing to add', () => {
@@ -198,6 +270,48 @@ describe('mergeTranscriptExtras', () => {
       { ...msg('q', 'user', 'poi committa', '2026-09-08T09:59:00.000Z'), queued: true as const },
     ];
     expect(mergeTranscriptExtras(messages, extrasOf(queued)).map(m => m.uuid)).toEqual(['a']);
+  });
+
+  it('stamps the effort on the turn it belongs to', () => {
+    const messages = [
+      msg('a', 'assistant', 'uno', '2026-09-08T10:00:00.000Z'),
+      msg('b', 'assistant', 'due', '2026-09-08T10:01:00.000Z'),
+    ];
+    const merged = mergeTranscriptExtras(messages, extrasOf([], [], [['b', 'xhigh']]));
+    expect(merged[0].effort).toBeUndefined();
+    expect(merged[1].effort).toBe('xhigh');
+  });
+
+  // `session-search` sends every transcript that passes its prefilter through
+  // here, and the file reader has already stamped the effort on all of them:
+  // rewriting each message to reaffirm a value read from the same row would be
+  // one allocation per assistant turn, per file, for no change.
+  it('hands back the same messages when they already carry their effort', () => {
+    const messages = [
+      { ...msg('a', 'assistant', 'uno', '2026-09-08T10:00:00.000Z'), effort: 'xhigh' },
+      { ...msg('b', 'assistant', 'due', '2026-09-08T10:01:00.000Z'), effort: 'xhigh' },
+    ];
+    const merged = mergeTranscriptExtras(
+      messages,
+      extrasOf(
+        [],
+        [],
+        [
+          ['a', 'xhigh'],
+          ['b', 'xhigh'],
+        ]
+      )
+    );
+    expect(merged[0]).toBe(messages[0]);
+    expect(merged[1]).toBe(messages[1]);
+  });
+
+  it('keeps an effort the reader already put on the message', () => {
+    const messages = [
+      { ...msg('a', 'assistant', 'uno', '2026-09-08T10:00:00.000Z'), effort: 'max' },
+    ];
+    const merged = mergeTranscriptExtras(messages, extrasOf([], [], [['a', 'medium']]));
+    expect(merged[0].effort).toBe('max');
   });
 
   it('stamps the skill path on the message that invoked it, and only on it', () => {
