@@ -113,12 +113,40 @@ async function findTranscripts(root, includeExercise) {
 const SCHEMA_KEY = /^[A-Za-z_$][A-Za-z0-9_$]*$/;
 const MAP_KEY = '{*}';
 
+// Not every data key fails SCHEMA_KEY. A generated id is a perfectly good
+// identifier — `toolu_01H7XM6ap4zSvQmxLd1859nV` passes the test above — so the
+// shape check alone lets it through as if it were a field name. Claude Code
+// 2.1.268 added two maps keyed that way, `assistant.wireToolInputs` and
+// `assistant.wireIngestContext`, and one corpus turned them into 5,802
+// key-paths: one per tool call this machine has ever made, on their way into a
+// committed file, with the handful of real findings buried under them.
+//
+// An id is recognised by looking like one rather than by a list of prefixes,
+// which would be stale the first time Claude Code mints a new one: sixteen or
+// more characters mixing digits with capitals, optionally behind a short
+// `foo_`. A schema key shaped like that (`sha256Fingerprint`) is collapsed too
+// — the same asymmetry as above, precision traded away rather than a leak.
+const OPAQUE_KEY =
+  /^(?:[A-Za-z]{1,12}_)?(?=[A-Za-z0-9]*[0-9])(?=[A-Za-z0-9]*[A-Z])[A-Za-z0-9]{16,}$/;
+
+// Maps whose values are somebody else's schema. `wireToolInputs` holds each
+// tool's raw input, so the level below `{*}` is the union of the parameter
+// names of every tool this machine happened to invoke — 40 of them here, a
+// third belonging to one MCP server, and a different 40 on the next machine.
+// The claim worth keeping is that the map exists and is keyed by tool_use id;
+// what is under it is not Claude Code's format, and recording it would re-drift
+// with every server somebody connects. Contrast `wireIngestContext.{*}.cwd`,
+// which is bounded and keeps its leaf — collapsing a key is not a blanket stop.
+const FOREIGN_SCHEMA_MAPS = new Set(['assistant.wireToolInputs.{*}']);
+
 /**
  * Key-paths of `obj`, dotted, arrays collapsed to `[]`, data-keyed maps
  * collapsed to `{*}`, stopping at `depth`.
  *
  * Values never leave this function — only the shape of the object does. The one
- * way a value could escape is as a key, which is what SCHEMA_KEY guards.
+ * way a value could escape is as a key, which is what SCHEMA_KEY and OPAQUE_KEY
+ * guard between them: the first rejects a key that cannot be a field name, the
+ * second a key that can and still isn't one.
  */
 function keyPaths(obj, prefix, depth, out) {
   if (depth === 0 || !obj || typeof obj !== 'object') return;
@@ -133,8 +161,9 @@ function keyPaths(obj, prefix, depth, out) {
     // Every entry of a data-keyed map folds onto one path, so the *schema*
     // under it is still covered — `cost-state.modelUsage.{*}.costUSD` is a
     // claim worth having, `…modelUsage.claude-opus-5.costUSD` is not.
-    const path = `${prefix}.${SCHEMA_KEY.test(k) ? k : MAP_KEY}`;
+    const path = `${prefix}.${SCHEMA_KEY.test(k) && !OPAQUE_KEY.test(k) ? k : MAP_KEY}`;
     out.add(path);
+    if (FOREIGN_SCHEMA_MAPS.has(path)) continue;
     keyPaths(v, path, depth - 1, out);
   }
 }
