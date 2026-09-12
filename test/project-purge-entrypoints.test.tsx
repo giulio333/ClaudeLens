@@ -39,12 +39,19 @@ afterEach(() => {
 
 function mount() {
   let deleteRequests = 0;
+  const navigations: unknown[] = [];
   const view = render(
     createElement(
       QueryClientProvider,
       { client: queryClient },
       createElement(ProjectConfigView, {
         project: PROJECT,
+        // The view owns the CLAUDE.md cascade since design 3b stripped the
+        // Overview; nothing in this file clicks a layer, so the navigator only
+        // has to exist.
+        onNavigate: (v: unknown) => {
+          navigations.push(v);
+        },
         onDeleteProject: () => {
           deleteRequests++;
         },
