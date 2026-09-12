@@ -37,6 +37,12 @@
   --cl-accent-soft: oklch(0.95 0.035 50);
   --cl-accent-ink: oklch(0.42 0.13 40);
   --cl-on-accent: oklch(1 0 0);
+  /* the project hero's ground (design 3b) — the same warm tint accent-soft
+     carries, named for its job because dark needs a quieter one than a chip
+     bevel does. Half the chroma of the chip: a chip is 24px of colour, the
+     hero is 500px of it, and the same value that reads as a tint on one reads
+     as a pink field on the other. */
+  --cl-hero-wash: oklch(0.966 0.018 40);
   --cl-ok: oklch(0.62 0.1 145); /* warm sage — "live/ok" semantic, palette-friendly */
   --cl-violet: oklch(0.58 0.2 305);
   --cl-violet-soft: oklch(0.95 0.04 305);
@@ -54,6 +60,11 @@
   --cl-scroll: oklch(0.82 0.008 90 / 0.6);
   /* shared editorial gutter (hero / section horizontal padding) */
   --cl-gutter: clamp(32px, 5.5vw, 80px);
+  /* One measure for the project landing. The hero's figures stopped around
+     two thirds of the window while the session list ran to the far edge, so
+     the two blocks shared a left edge and nothing else; on a wide window that
+     left a mono line of metadata stranded against 600px of paper. */
+  --cl-measure: min(1080px, 100%);
 
   /* Radii, as the design system declares them. These were referenced before
      they were ever defined (.cl-plan-card and .cl-ask-card ask for
@@ -97,6 +108,9 @@
   --cl-accent-soft: oklch(0.32 0.08 40);
   --cl-accent-ink: oklch(0.86 0.1 50);
   --cl-on-accent: oklch(0.16 0.02 40);
+  /* a whole hero's worth of accent-soft reads as a colour field in dark, so
+     the wash keeps the hue and steps back toward paper */
+  --cl-hero-wash: oklch(0.235 0.018 40);
   --cl-ok: oklch(0.72 0.1 145); /* warm sage (dark lift) */
   --cl-violet: oklch(0.7 0.18 305);
   --cl-violet-soft: oklch(0.32 0.09 305);
@@ -2046,6 +2060,12 @@ body {
   width: max-content;
   max-width: 100%;
   margin-bottom: 14px;
+}
+/* A path inside the eyebrow keeps its own case and a normal tracking: the
+   label is a label, the path is data. */
+.cl-eyebrow .path {
+  text-transform: none;
+  letter-spacing: 0.04em;
 }
 .cl-eyebrow .pip {
   width: 7px;
@@ -4888,11 +4908,65 @@ body {
   background: color-mix(in oklch, var(--cl-violet-soft) 40%, transparent);
 }
 
+/* ──────────────────────────────────────────────────────────
+   MODEL CHIP — what the conversation is running on, and at what
+   effort. Leftmost cell of the pill: identity, not a control, so it
+   reads as the label of everything to its right. A chat that changed
+   model mid-way turns the chip into a dock (`+N` + caret) whose sheet
+   lists each run. Tinted by `modelColor()` through `--mt`, the same
+   data dimension the per-turn chip encodes — no new hue.
+   ────────────────────────────────────────────────────────── */
+.cl-pill-model {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 5px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+  line-height: 1;
+  color: var(--cl-ink-2);
+}
+button.cl-pill-model {
+  cursor: pointer;
+  transition:
+    background 0.14s,
+    color 0.14s;
+}
+button.cl-pill-model:hover,
+button.cl-pill-model[data-on] {
+  background: color-mix(in oklch, var(--mt, var(--cl-accent)) 12%, transparent);
+}
+.cl-pill-model-dot {
+  width: 6px;
+  height: 6px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: var(--mt, var(--cl-ink-3));
+}
+.cl-pill-model-effort {
+  color: var(--cl-ink-4);
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+}
+.cl-pill-model-switched {
+  color: var(--mt, var(--cl-accent));
+  font-weight: 600;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .cl-focus-tick,
   .cl-focus-current,
   .cl-pill-filter,
   .cl-pill-more,
+  .cl-pill-model,
   .cl-pill-dock,
   .cl-dock-row,
   .cl-dock-row-locate,
@@ -7617,65 +7691,6 @@ body {
   margin-top: 12px;
   letter-spacing: 0.02em;
 }
-.cl-bars {
-  margin-top: 14px;
-  display: grid;
-  grid-template-columns: repeat(12, minmax(0, 1fr));
-  align-items: end;
-  gap: 3px;
-  height: 28px;
-  min-width: 0;
-  width: 100%;
-  position: relative;
-  overflow: visible;
-}
-.cl-stat-bar {
-  position: relative;
-  display: flex;
-  align-items: end;
-  height: 28px;
-  min-width: 0;
-  overflow: hidden;
-  justify-self: stretch;
-  outline: none;
-}
-.cl-stat-bar-fill {
-  display: block;
-  background: var(--cl-ink);
-  width: 100%;
-  opacity: 0.85;
-  min-height: 1px;
-  transition:
-    height 160ms ease,
-    opacity 120ms ease,
-    background 120ms ease;
-}
-.cl-stat-bar.peak .cl-stat-bar-fill,
-.cl-stat-bar:hover .cl-stat-bar-fill,
-.cl-stat-bar:focus-visible .cl-stat-bar-fill {
-  background: var(--cl-accent);
-  opacity: 1;
-}
-.cl-bars-tip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  transform: translateX(-20%);
-  z-index: 6;
-  pointer-events: none;
-  white-space: nowrap;
-  width: 190px;
-  padding: 6px 8px;
-  border: 1px solid var(--cl-line);
-  border-radius: 6px;
-  background: var(--cl-paper);
-  color: var(--cl-ink);
-  box-shadow: 0 10px 24px oklch(0 0 0 / 0.12);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  line-height: 1.2;
-  letter-spacing: 0;
-}
-
 .cl-stat.live {
   display: flex;
   flex-direction: column;
@@ -11337,169 +11352,6 @@ button.cl-sw-member:focus-visible,
   gap: 10px;
 }
 
-/* ── Memory index cards (project landing, design 1c) ──
-   The landing's memory used to be a 3-column definition list, where a topic
-   read as a table row: no type, no tags, no hierarchy — the most penalised
-   section of the page. It is now a grid of index cards carrying the four
-   things that identify a memory: what kind it is and how old (header), what
-   it is called (headline), what it says (three lines of prose) and how it is
-   filed (tags). The tags are read-only here; editing them lives in the
-   Memory subtab, which owns the full list. */
-.cl-mem-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(248px, 1fr));
-  gap: 16px;
-}
-.cl-mcard {
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  min-height: 176px;
-  padding: 18px;
-  border: 1px solid var(--cl-line);
-  border-radius: 14px;
-  background: var(--cl-paper);
-  text-align: left;
-  cursor: pointer;
-  transition:
-    border-color 120ms,
-    box-shadow 120ms;
-}
-.cl-mcard:hover {
-  border-color: color-mix(in oklch, var(--cl-accent) 30%, var(--cl-line));
-  box-shadow: 0 2px 12px -6px oklch(0 0 0 / 0.18);
-}
-:root[data-theme='dark'] .cl-mcard:hover {
-  box-shadow: 0 2px 12px -6px oklch(0 0 0 / 0.5);
-}
-.cl-mcard:focus-visible {
-  outline: 2px solid var(--cl-accent);
-  outline-offset: -2px;
-}
-.cl-mcard.accent {
-  border-color: color-mix(in oklch, var(--cl-accent) 34%, var(--cl-line));
-  background: linear-gradient(180deg, var(--cl-accent-soft), var(--cl-paper) 62%);
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.6);
-}
-:root[data-theme='dark'] .cl-mcard.accent {
-  box-shadow: inset 0 1px 0 oklch(1 0 0 / 0.06);
-}
-.cl-mcard .head {
-  display: flex;
-  align-items: center;
-  gap: 9px;
-}
-.cl-mcard .glyph {
-  flex: none;
-  width: 28px;
-  height: 28px;
-  border: 1.5px solid var(--cl-ink);
-  border-radius: 8px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  font-family: var(--font-mono);
-  font-weight: 600;
-  font-size: 12px;
-  color: var(--cl-ink);
-}
-.cl-mcard.accent .glyph {
-  background: var(--cl-accent);
-  border-color: var(--cl-accent);
-  color: var(--cl-on-accent);
-}
-.cl-mcard .kind {
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  letter-spacing: 0.16em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
-}
-.cl-mcard.accent .kind {
-  color: var(--cl-accent-ink);
-}
-.cl-mcard .when {
-  margin-left: auto;
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  color: var(--cl-ink-4);
-}
-/* Memory names are slugs, and `feedback_no_manual_app_launch` is ONE word to a
-   line breaker: underscores are not break opportunities, so a snake_case title
-   ran straight out of its card while its kebab-case neighbours wrapped fine.
-   `<wbr>` after each underscore (see `SlugName`) gives it a decent break; this
-   is the net under it, for a name that has no separator at all. */
-.cl-mcard .name {
-  font-size: 16px;
-  font-weight: 600;
-  line-height: 1.25;
-  letter-spacing: -0.015em;
-  color: var(--cl-ink);
-  overflow-wrap: anywhere;
-}
-.cl-mcard .preview {
-  margin: 0;
-  font-family: var(--font-reading);
-  font-size: 13px;
-  line-height: 1.55;
-  color: var(--cl-ink-2);
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
-}
-.cl-mcard .tags {
-  margin-top: auto;
-  display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 5px;
-}
-
-/* Config strip */
-.cl-config-strip {
-  padding: 24px var(--cl-gutter) 40px;
-  display: flex;
-  align-items: center;
-  gap: 0;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  color: var(--cl-ink-3);
-  flex-wrap: wrap;
-}
-.cl-config-strip .item {
-  display: inline-flex;
-  align-items: center;
-  gap: 9px;
-  padding: 8px 22px 8px 0;
-  cursor: pointer;
-  transition: color 120ms;
-  background: none;
-  border: none;
-  font: inherit;
-  color: inherit;
-}
-.cl-config-strip .item:hover {
-  color: var(--cl-ink);
-}
-.cl-config-strip .item + .item {
-  padding-left: 22px;
-  border-left: 1px solid var(--cl-line);
-}
-.cl-config-strip .item .pip {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cl-ink-4);
-}
-.cl-config-strip .item.on .pip {
-  background: var(--cl-accent);
-}
-.cl-config-strip .item .num {
-  color: var(--cl-ink);
-  font-weight: 500;
-}
-
 /* Skill / Agent tiles */
 .cl-tile-grid {
   display: grid;
@@ -11570,8 +11422,8 @@ button.cl-sw-member:focus-visible,
   border-color: var(--cl-accent);
   color: var(--cl-on-accent);
 }
-/* Same exposure as `.cl-mcard .name`: the tiles carry the very same slugs in
-   the Memory subtab, and skills/agents names are free text. */
+/* Full exposure: the tiles carry the very same slugs as the Memory subtab, and
+   skills/agents names are free text. */
 .cl-tile .t-name {
   font-size: 16px;
   font-weight: 600;
@@ -11588,6 +11440,7 @@ button.cl-sw-member:focus-visible,
   display: -webkit-box;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
+  line-clamp: 2;
   overflow: hidden;
 }
 .cl-tile .t-meta {
@@ -15728,35 +15581,129 @@ select.cl-opt-input {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   HERO METRICS BAND (design 5b)
+   PROJECT HERO (design 3b — handoff "Project Overview Redesign", 1a → 2a → 3b)
    The band carries the project's figures, so the display name steps back from
    the full editorial clamp to roughly the mock's name:figure proportion —
-   otherwise a 132px name would swamp a strip of 26px numbers.
+   otherwise a 132px name would swamp a row of 30px numbers.
+   Everything here is scoped to `.cl-hero--band`: the Teams header
+   (`.cl-hero--compact`) shares the hero and none of its treatment.
    ════════════════════════════════════════════════════════════════════════ */
 .cl-hero--band {
   padding-top: 34px;
-  padding-bottom: 28px;
+  padding-bottom: 34px;
+  /* The Lens' concentric rings are gone: 3b dresses the hero with a warm wash
+     that fades to paper instead, so the figures sit on a plain ground. The
+     hero keeps its ink rule at the bottom — the wash ends in paper, and
+     without the rule the page would have no boundary there at all. */
+  /* Straight down, and no angle. A tilted gradient's line is
+     |W·sin a| + |H·cos a| long, so on a 1500×500 hero even 168deg stretched
+     the ramp to ~820px: the stops then landed far below where they read on
+     paper and the wash never reached paper before the rule. Vertical, the
+     percentages mean what they say — colour for the top third, paper from
+     halfway down, and the ink rule divides paper from paper. */
+  background: linear-gradient(
+    to bottom,
+    var(--cl-hero-wash) 0%,
+    color-mix(in oklch, var(--cl-hero-wash) 40%, var(--cl-paper)) 34%,
+    var(--cl-paper) 62%
+  );
 }
-.cl-hero--band .cl-hero-actions {
-  top: 34px;
+/* The live aura belongs to a hero with no ground of its own. Under the wash it
+   is a second animated accent field on top of a first — that is what mottled
+   the band, and a blurred glow behind the title is a poor way to say "a
+   process is running" anyway: it has no edge, so there is nothing to read.
+   The two aura layers go, and the claim moves into the eyebrow's pip, which
+   turns the running green and pulses like the rail's. One small mark that
+   means something, instead of 500px of weather. */
+.cl-hero--band.is-live::before,
+.cl-hero--band.is-live::after {
+  display: none;
 }
+.cl-hero--band.is-live .cl-eyebrow .pip {
+  background: var(--cl-ok);
+  animation: cl-rail-pulse 1.8s infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-hero--band.is-live .cl-eyebrow .pip {
+    animation: none;
+  }
+}
+
 .cl-hero--band .cl-h-name {
-  font-size: clamp(40px, 4.2vw, 72px);
-  gap: 14px;
+  font-size: clamp(40px, 4.2vw, 64px);
+  /* No gap: the row's own gap put a space between the name and its full stop,
+     so the title read as "Personal ." — a typo, in 64px. The stop is part of
+     the word; only the chevron is a separate thing, and it asks for its own
+     margin below. */
+  gap: 0;
 }
 .cl-hero--band .cl-h-name .chev {
-  width: 28px;
-  height: 28px;
-  font-size: 14px;
-  margin-bottom: 10px;
-  border-width: 1.5px;
+  margin-left: 16px;
 }
-.cl-hero--band .cl-lens {
-  width: 400px;
-  height: 400px;
-  right: -120px;
-  top: -90px;
+/* No ring here. A 36px ink circle beside a 64px name is a second thing asking
+   to be looked at in the same line; the glyph alone still says the name opens
+   something, and it comes forward on hover like every other quiet control. */
+.cl-hero--band .cl-h-name .chev {
+  width: auto;
+  height: auto;
+  border: none;
+  background: none;
+  font-size: 20px;
+  line-height: 1;
+  margin-bottom: 14px;
+  color: var(--cl-ink-4);
+  transition: color 120ms;
 }
+.cl-hero--band .cl-h-name:hover .chev,
+.cl-hero--band .cl-h-name:focus-visible .chev {
+  background: none;
+  color: var(--cl-accent);
+}
+
+/* Name and description on one baseline (design 2a). Flex only here: the Teams
+   header renders the same wrapper with a single child and must keep its own
+   block layout. */
+.cl-hero--band .cl-h-title {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  /* `last baseline`, not `baseline`: a description that wraps to two lines sat
+     on the name's baseline with its FIRST line, which pushed the second one
+     below it and left the block floating high. The sentence should finish
+     level with the name. The plain value stays underneath as the fallback —
+     an engine that does not parse `last baseline` would otherwise drop the
+     declaration entirely and stretch the row. */
+  align-items: baseline;
+  align-items: last baseline;
+  flex-wrap: wrap;
+  gap: 18px;
+}
+.cl-hero--band .cl-h-title .cl-h-desc,
+.cl-hero--band .cl-h-title .cl-h-desc-add {
+  margin-top: 0;
+  /* A reading measure beside the name, not under it: the sentence has to read
+     as the name's apposition, so it stops well before the hero's width. */
+  max-width: 34ch;
+  font-size: 15px;
+  line-height: 1.45;
+  padding-bottom: 6px;
+  /* Two lines. A third one climbs above the name's cap height and the
+     description starts competing with the thing it describes; the full text
+     stays in the element's title. */
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
+}
+/* The editor needs the full measure, so it breaks to its own line instead of
+   squeezing in beside a 64px name. */
+.cl-hero--band .cl-h-title .cl-h-desc-edit {
+  flex: 1 0 100%;
+  margin-top: 4px;
+}
+/* The shared metrics band: hairline-divided cells. Drawn by SearchView and
+   DuplicateProjectsNotice as well as the project hero, which overrides it
+   below — design 3b applies to the hero only. */
 .cl-hband {
   display: flex;
   align-items: stretch;
@@ -15771,8 +15718,7 @@ select.cl-opt-input {
   border-right: 1px solid var(--cl-line);
   flex: 0 0 auto;
   min-width: 0;
-  /* column so the small print bottom-aligns across cells of unequal height
-     (only two of them carry a sparkline) */
+  /* column so the small print bottom-aligns across cells of unequal height */
   display: flex;
   flex-direction: column;
 }
@@ -15818,16 +15764,6 @@ select.cl-opt-input {
   letter-spacing: 0;
   color: var(--cl-ink-4);
 }
-/* Neutral in both directions: green on "+3 sessions" encoded a verdict the
-   figure does not carry. The sign already says which way it went. */
-.cl-hcell .num .delta {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--cl-ink-4);
-  margin-left: 8px;
-}
 .cl-hcell .sub {
   font-family: var(--font-mono);
   font-size: 10px;
@@ -15836,26 +15772,72 @@ select.cl-opt-input {
   margin-top: auto;
   padding-top: 10px;
 }
-/* the retention sparkline rides inside the cell, compact */
-.cl-hcell .cl-bars {
-  margin-top: 11px;
-  height: 20px;
-  min-width: 140px;
+
+/* ── PROJECT HERO ONLY (design 3b) ────────────────────────────────────────
+   Four flat columns — a label and a figure each — separated by space instead
+   of rules. The hero is the one place that carries the band as the page's
+   headline; the search and duplicate views keep the divided cells, where the
+   figures are a caption to a result set rather than the subject. */
+.cl-hero--band .cl-hband {
+  max-width: var(--cl-measure);
+  align-items: flex-start;
+  margin-top: 40px;
+  border-top: none;
+  gap: 20px 56px;
 }
-.cl-hcell .cl-stat-bar {
-  height: 20px;
+.cl-hero--band .cl-hcell {
+  padding: 0;
+  border-right: none;
+  gap: 9px;
 }
+.cl-hero--band .cl-hcell--mix {
+  flex: 0 0 auto;
+  gap: 12px;
+  min-width: 190px;
+}
+.cl-hero--band .cl-hcell .lbl {
+  letter-spacing: 0.18em;
+}
+.cl-hero--band .cl-hcell .num {
+  font-size: 30px;
+  letter-spacing: -0.035em;
+  margin-top: 0;
+}
+.cl-hero--band .cl-hcell .num small {
+  font-size: 13px;
+}
+/* the mix cell's empty state is the only small print left in the hero row */
+.cl-hero--band .cl-hcell .sub {
+  margin-top: 0;
+  padding-top: 0;
+}
+/* the column's own gap does the spacing here — the shared margins would add
+   to it and pull the legend away from its bar */
+.cl-hero--band .cl-mixbar,
+.cl-hero--band .cl-mixlegend {
+  margin-top: 0;
+}
+/* the trailing cell closes the divided band — nothing sits to its right */
+.cl-hband > .cl-hcell:last-child {
+  border-right: none;
+}
+
 .cl-mixbar {
   display: flex;
-  height: 8px;
+  height: 6px;
   border-radius: 999px;
   overflow: hidden;
   margin-top: 13px;
-  max-width: 420px;
+  max-width: 220px;
   background: var(--cl-line-soft);
 }
+/* Every share that exists gets a mark. A project that ran 99.6% Opus drew one
+   unbroken violet block and a legend saying "Sonnet <1%" against nothing —
+   the bar denied what the words underneath it said. Two pixels is enough to
+   keep the claim honest, and it costs the majority slice nothing. */
 .cl-mixbar .seg {
   display: block;
+  min-width: 2px;
   background: var(--cl-accent);
 }
 .cl-mixbar .seg.opus {
@@ -15876,7 +15858,7 @@ select.cl-opt-input {
   display: flex;
   flex-wrap: nowrap;
   overflow: hidden;
-  gap: 14px;
+  gap: 12px;
   margin-top: 9px;
   font-family: var(--font-mono);
   font-size: 10px;
@@ -15908,11 +15890,6 @@ select.cl-opt-input {
   background: var(--cl-ink-4);
 }
 
-/* the trailing cell closes the band — nothing sits to the right of it */
-.cl-hband > .cl-hcell:last-child {
-  border-right: none;
-}
-
 /* The cell whose figure opens a breakdown card: it anchors the card and says so
    with a hint that only shows on approach. */
 .cl-hcell--hover {
@@ -15928,22 +15905,168 @@ select.cl-opt-input {
 .cl-hcell--hover .num:focus-visible {
   border-bottom-color: var(--cl-accent);
 }
-.cl-hpeek-hint {
-  opacity: 0;
-  transition: opacity 120ms ease;
-}
-.cl-hcell--hover:hover .cl-hpeek-hint,
-.cl-hcell--hover:focus-within .cl-hpeek-hint {
-  opacity: 1;
-}
 
 @media (max-width: 980px) {
   .cl-hcell {
     padding: 14px 18px 0;
   }
-  .cl-hcell .cl-bars {
-    display: none;
+  .cl-hero--band .cl-hband {
+    gap: 18px 32px;
   }
+}
+
+/* ── HERO ACTIONS (design 3b) ──────────────────────────────────────────────
+   The pair used to float top-right as two near-identical glass buttons, which
+   gave the page no way to say which one it is for. In flow under the metrics
+   they can carry a hierarchy: a terracotta pill for opening the project, and
+   SDK chat as a label beside it — still a button, still carrying the tooltip
+   that says which budget each one spends.
+   Scoped to `.cl-hero-cta-row`, which only the project hero renders; the Teams
+   header keeps `.cl-hero-actions` and its compact glass pair untouched. */
+.cl-hero-cta-row {
+  position: relative;
+  z-index: 3;
+  margin-top: 38px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 22px;
+}
+.cl-hero-cta {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 22px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: var(--cl-accent);
+  /* the established token for ink on an accent fill — white in light, near-ink
+     in dark, where the accent is lifted */
+  color: var(--cl-on-accent);
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition:
+    background 140ms,
+    box-shadow 140ms,
+    transform 140ms;
+}
+.cl-hero-cta:hover {
+  background: color-mix(in oklch, var(--cl-accent) 88%, var(--cl-ink));
+  box-shadow: 0 10px 24px -12px color-mix(in oklch, var(--cl-accent) 70%, transparent);
+  transform: translateY(-1px);
+}
+.cl-hero-cta:active {
+  transform: translateY(0.5px);
+  box-shadow: none;
+}
+.cl-hero-alt {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  background: none;
+  border: none;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: color 140ms;
+}
+.cl-hero-alt::after {
+  content: '→';
+  font-family: var(--font-sans);
+  font-size: 14px;
+  letter-spacing: 0;
+}
+.cl-hero-alt:hover {
+  color: var(--cl-accent-ink);
+}
+
+/* Dark: the accent is the light end here, so the hover darkens toward paper
+   instead of toward ink. */
+:root[data-theme='dark'] .cl-hero-cta:hover {
+  background: color-mix(in oklch, var(--cl-accent) 88%, var(--cl-paper));
+}
+
+/* ── LANDING SESSION LIST (design 3b) ──────────────────────────────────────
+   The Overview's list, which the mock draws as three quiet records: a title
+   with the running chip beside it, one mono line of figures underneath, rows
+   divided by hairlines and nothing else. The workspace row — pin, coloured
+   ordinal, tags, expiry, kebab — stays on `.cl-srow` in the Sessions view,
+   which is where a session is acted on rather than just read.
+   ═══════════════════════════════════════════════════════════════════════ */
+.cl-section--landing > * {
+  max-width: var(--cl-measure);
+}
+.cl-sec-head--rule {
+  align-items: baseline;
+  padding-bottom: 12px;
+  margin-bottom: 0;
+  border-bottom: 1px solid var(--cl-ink);
+}
+/* The head steps down to the mono label of the mock: the figures and the
+   session titles are the type on this page, and a 24px heading over an 18px
+   title was competing with the list it introduces. */
+.cl-sec-head--rule h2 {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+
+.cl-rsrow {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 18px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
+  cursor: pointer;
+  outline: none;
+  transition: background 120ms;
+  /* the row bleeds its hover into the gutter, so the band of colour lines up
+     with the section rule above it rather than floating inside it */
+  margin: 0 -10px;
+  padding-left: 10px;
+  padding-right: 10px;
+}
+.cl-rsrow:hover,
+.cl-rsrow:focus-visible {
+  background: var(--cl-paper-2);
+}
+/* The row has no outline, so the hover tint would be the only focus indicator —
+   and in dark mode paper and paper-2 are 0.04 of lightness apart, which is a
+   hover, not an "you are here". The accent edge says it in both themes; inset
+   so it never moves the row. */
+.cl-rsrow:focus-visible {
+  box-shadow: inset 2px 0 0 var(--cl-accent);
+}
+.cl-rsrow .head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.cl-rsrow .title {
+  font-size: 18px;
+  font-weight: 500;
+  letter-spacing: -0.018em;
+  color: var(--cl-ink);
+}
+.cl-rsrow .title.is-untitled {
+  font-style: italic;
+  color: var(--cl-ink-4);
+}
+.cl-rsrow .meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
 }
 
 /* Below this the four cells cannot sit on one line. Free wrapping left the
@@ -16459,7 +16582,7 @@ select.cl-opt-input {
    also reads as a foreign object. Nothing about a process makes it a terminal —
    that analogy was borrowed, and it cost the page twice.
 
-   So: the memory index card (`.cl-mcard`), on paper, in the app's own language —
+   So: an index card in the memory idiom, on paper, in the app's own language —
    and the body is what the session actually DID, six lines of `Edit
    MonitorView.tsx` / `Bash npm run typecheck ✕`. A card whose body is real text
    cannot look empty, because the content fills it.
