@@ -15,6 +15,7 @@ Renders markdown with syntax highlighting and styled headings.
 - Frontmatter support (YAML)
 - Custom styled links, headings, and code blocks
 - External links open in system browser (safe from Electron context)
+- `[[wikilink]]` chips — **only inside a `VaultLinksProvider`** (see below)
 
 **Props:**
 
@@ -30,6 +31,58 @@ export default function MyDoc() {
   return <Markdown className="max-w-2xl">{markdownString}</Markdown>;
 }
 ```
+
+### VaultLinks.tsx + vault-link-engine.ts + rehype-wikilinks.ts
+
+The `[[wikilink]]` a message cites, drawn as a chip that says whether the file
+is there. Claude writes its sources in Obsidian's notation — `Fonte: [[Procedura
+Upload Tesi.pdf]]` — and the transcript rendered that as text, so a citation of
+a file that is really in the project and one Claude invented looked exactly the
+same. **Solid and clickable** = the project has it (click → `vault:openFile` →
+`shell.openPath`, because the citations are PDFs as often as notes);
+**dashed and inert** = nothing on disk answers to that name; **plain, no border**
+= the lookup is still in flight or failed — not knowing is a third thing and
+must not read as "missing". Resolution itself is in the main process
+(`electron/modules/vault-index.ts`), which is where the reasoning about what may
+resolve to what lives.
+
+- **`rehype-wikilinks.ts`** — the pass that emits the chips as
+  `<span data-wikilink>`, mapped back to `<WikiLink>` by `Markdown`'s `span`
+  component (a data attribute, not a custom tag: react-markdown's `Components`
+  map is keyed by intrinsic elements and a custom key needs a cast). It catches
+  **two** forms, because both occur in real transcripts: plain prose and inline
+  code — Claude writes `` `[[Nota]]` `` about as often — which is why this cannot
+  be a remark plugin over text nodes. An `<code>` is rewritten only when its
+  ENTIRE content is one link (a code span that merely mentions one is code);
+  `<pre>` is never descended into, so a transcript quoting markdown source keeps
+  its brackets. **It must run before `rehypeHighlight`**, which rewrites the
+  inside of code elements into nested spans — after it, an inline `` `[[x]]` ``
+  no longer has the single text child the pass looks for.
+- **`lib/wikilinks.ts`** — the grammar (`[[Note#Heading|alias]]` → target +
+  label) and `wikiLinkTargets`, the names a message reports. It strips fenced
+  blocks for the same reason the rehype pass skips `<pre>`: the two passes have
+  to agree on what counts as a citation, or the renderer asks the main process
+  about names that can never be drawn.
+- **`vault-link-engine.ts`** — contexts, hooks and the batching closure.
+  **One call per tick, not per link**: a transcript holds hundreds of messages,
+  so the engine collects what every `<Markdown>` reports in a commit and asks
+  once. **Two contexts** because `<Markdown>` is memoized for a measured reason
+  (see its own note): it consumes only the API context, stable for as long as
+  the project is, so answers arriving cannot re-render every bubble — the states
+  context is consumed by the chips alone. The mutable bookkeeping is a closure
+  created in a `useMemo` keyed on the root, not refs: it belongs to one project
+  and is replaced wholesale when the root changes (a reply from the old engine
+  is dropped by its `dispose`), and refs mutated during render are a lint error.
+- **`VaultLinks.tsx`** — `VaultLinksProvider` and the chip. The provider is
+  mounted by `ChatView` and `LiveChatView` with `project.realPath`, and
+  **deliberately not higher**: the memory views carry wikilinks of their own
+  that point at topics under `~/.claude`, not at files in the project, so a
+  provider above them would mark every one of those as a missing source.
+  Outside a provider `Markdown` runs its original plugin list and `[[…]]`
+  renders byte-identical to before.
+
+Covered by `test/markdown-wikilinks.test.tsx` (the chip, both forms, the fence,
+the failed lookup, the no-provider passthrough) and `test/wikilinks.test.ts`.
 
 ### ErrorBoundary.tsx
 

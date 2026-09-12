@@ -47,6 +47,7 @@ import type {
   ConversationSearchResult,
   PurgePlan,
   PurgeResult,
+  VaultLinkAnswer,
 } from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
 
@@ -263,9 +264,20 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     ),
   };
 
+  // The `[[wikilinks]]` a message cites, resolved against the project's files.
+  // "Nothing resolves" is the honest default — a test that wants a chip to be
+  // found scripts the answer, so the two verdicts are never confused by accident.
+  const vault = {
+    resolveLinks: vi.fn(async (_root: string, targets: string[]) =>
+      ok<VaultLinkAnswer[]>(targets.map(target => ({ target, rel: null, match: null })))
+    ),
+    openFile: vi.fn(async (_root: string, _rel: string) => ok<null>(null)),
+  };
+
   return {
     sessions,
     search,
+    vault,
     telemetry,
     updates,
     projects,

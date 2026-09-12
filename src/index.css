@@ -12378,6 +12378,53 @@ button.cl-sw-member:focus-visible,
   line-height: 1.6;
 }
 
+/* ── Wikilink chips (`[[Nota]]` cited inside a message) ──
+   Three states, and the difference between them is the point of the feature:
+   `found` is a file the project really has (solid, clickable, opens in the OS
+   app), `missing` is a citation nothing on disk answers to (dashed, inert), and
+   `idle` is a lookup still in flight or failed — it must look like neither, so
+   it stays plain text with no border. All on the brand hue (40°), varying only
+   lightness/chroma. */
+.cl-wikilink {
+  font-family: var(--font-mono);
+  font-size: 0.86em;
+  line-height: 1.3;
+  padding: 0.04em 0.34em;
+  border-radius: 5px;
+  white-space: nowrap;
+  overflow-wrap: break-word;
+}
+
+.prose-lens .cl-wikilink-found,
+.cl-wikilink-found {
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+  border: 1px solid color-mix(in oklch, var(--cl-accent) 32%, transparent);
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    border-color 0.15s ease;
+}
+
+.cl-wikilink-found:hover {
+  background: color-mix(in oklch, var(--cl-accent-soft) 82%, var(--cl-accent) 18%);
+  border-color: var(--cl-accent);
+}
+
+/* Dashed and muted: the transcript names a source the project does not have. */
+.cl-wikilink-missing {
+  color: var(--cl-ink-4);
+  background: transparent;
+  border: 1px dashed var(--cl-line);
+  cursor: help;
+}
+
+.cl-wikilink-idle {
+  color: var(--cl-ink-3);
+  background: transparent;
+  border: 1px solid transparent;
+}
+
 /* ── Tool-detail code blocks (atoms `CodeBlock`) ──
    Unlike the editorial markdown fences above (fixed dark surface,
    github-dark-dimmed), these sit on the adaptive paper surface and follow the

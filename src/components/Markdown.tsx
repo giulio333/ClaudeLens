@@ -1,4 +1,4 @@
-import { isValidElement, memo, useRef, useState } from 'react';
+import { isValidElement, memo, useMemo, useRef, useState } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
@@ -7,6 +7,10 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import type { Components } from 'react-markdown';
 import 'katex/dist/katex.min.css';
+import { rehypeWikiLinks } from './rehype-wikilinks';
+import { useReportWikiLinks, useVaultLinksApi } from './vault-link-engine';
+import { WikiLink } from './VaultLinks';
+import { wikiLinkTargets } from '../lib/wikilinks';
 
 // Reads the `language-xxx` class off the <code> child of a fenced block.
 // Fences without a language (plain ```) have no such class — fall back to 'text'.
@@ -103,7 +107,29 @@ const components: Components = {
       </code>
     );
   },
+
+  // `rehypeWikiLinks` emits its chips as `<span data-wikilink>`; every other
+  // span (there are none without raw HTML, which is not enabled) passes through
+  // untouched. A data attribute rather than a custom tag name: it needs no cast
+  // on react-markdown's `Components` map, which is keyed by intrinsic elements.
+  span({ node, children, ...props }) {
+    void node;
+    const p = props as Record<string, unknown>;
+    const target = (p['data-wikilink'] ?? p.dataWikilink) as string | undefined;
+    if (typeof target === 'string') {
+      const label = ((p['data-wikilabel'] ?? p.dataWikilabel) as string | undefined) ?? target;
+      return <WikiLink target={target} label={label} />;
+    }
+    return <span {...props}>{children}</span>;
+  },
 };
+
+const BASE_REHYPE = [rehypeHighlight, rehypeKatex];
+// Wikilinks first: `rehypeHighlight` rewrites the inside of code elements into
+// nested spans, and after it an inline `` `[[x]]` `` no longer has the single
+// text child the chip pass looks for.
+const WIKILINK_REHYPE = [rehypeWikiLinks, rehypeHighlight, rehypeKatex];
+const NO_TARGETS: string[] = [];
 
 interface Props {
   children: string;
@@ -118,11 +144,22 @@ interface Props {
 // shallow prop compare lets it skip the whole pipeline whenever `children` is
 // unchanged — keeping those re-renders cheap.
 function Markdown({ children, className = '' }: Props) {
+  // Only inside a `VaultLinksProvider` — i.e. in a chat, where the project's
+  // real cwd is known — does `[[…]]` become a chip. Everywhere else the text
+  // renders exactly as it did before, which is what keeps the memory views
+  // (whose wikilinks point at topics, not at project files) unchanged.
+  const linksEnabled = useVaultLinksApi() !== null;
+  const targets = useMemo(
+    () => (linksEnabled ? wikiLinkTargets(children) : NO_TARGETS),
+    [linksEnabled, children]
+  );
+  useReportWikiLinks(targets);
+
   return (
     <div className={`prose prose-sm prose-lens max-w-none ${className}`}>
       <ReactMarkdown
         remarkPlugins={[remarkGfm, remarkFrontmatter, remarkMath]}
-        rehypePlugins={[rehypeHighlight, rehypeKatex]}
+        rehypePlugins={linksEnabled ? WIKILINK_REHYPE : BASE_REHYPE}
         components={components}
       >
         {children}
