@@ -12,9 +12,14 @@
 
 import { describe, it, expect, afterEach } from 'vitest';
 import { cleanup, render } from '@testing-library/react';
-import { MessageBubble } from '../src/components/project/chat/MessageBubble';
-import { buildProcessedMessages } from '../src/components/project/chat/utils';
-import type { ChatMessage } from '../src/types';
+import { AdvisorBadge, MessageBubble } from '../src/components/project/chat/MessageBubble';
+import {
+  buildProcessedMessages,
+  buildRenderItems,
+  describeTurn,
+} from '../src/components/project/chat/utils';
+import type { ChatDetailsFilter } from '../src/components/project/chat/utils';
+import type { AdvisorConsult, ChatMessage } from '../src/types';
 
 afterEach(cleanup);
 
@@ -69,5 +74,76 @@ describe('a slash command that expanded into a skill', () => {
 
     expect(container.querySelector('.cl-skill-card')).toBeNull();
     expect(container.querySelector('.cl-command-card')).not.toBeNull();
+  });
+});
+
+// An `advisor` consult: Claude asked a stronger reviewer model to look at the
+// conversation. The reviewer answers Claude, not the user, and Claude Code
+// stores that answer encrypted — so the transcript can only ever say that a
+// consult happened, not what was said. It is also persisted as a row of its own,
+// which in minimal mode sits between two halves of the same assistant message
+// that both collapse: hence a stream marker rather than a chip on a neighbour.
+describe('an advisor consult', () => {
+  const consult: AdvisorConsult = {
+    type: 'advisor',
+    id: 'srvtoolu_1',
+    model: 'claude-opus-5',
+    inputTokens: 60059,
+    outputTokens: 4085,
+    durationSeconds: 62,
+  };
+
+  function advisorMessage(extra: Partial<ChatMessage> = {}): ChatMessage {
+    return {
+      uuid: 'a2',
+      role: 'assistant',
+      timestamp: '2026-09-08T21:19:17.834Z',
+      model: 'claude-opus-5',
+      content: [consult],
+      ...extra,
+    };
+  }
+
+  function streamItems(messages: ChatMessage[], detailsFilter: ChatDetailsFilter) {
+    const processed = buildProcessedMessages(messages);
+    return buildRenderItems(
+      processed,
+      processed.map(p => describeTurn(p, detailsFilter))
+    );
+  }
+
+  it('is a stream marker of its own, in both density modes', () => {
+    for (const detailsFilter of ['all', 'minimal'] as const) {
+      const items = streamItems([advisorMessage()], detailsFilter);
+      expect(items).toEqual([{ kind: 'advisor', key: 'advisor-0', consult }]);
+    }
+  });
+
+  it('states the reviewer, the wall time and the spend — and nothing else', () => {
+    const { container } = render(<AdvisorBadge consult={consult} />);
+
+    const badge = container.querySelector('.cl-advisor-badge');
+    expect(badge?.textContent).toBe('advisorOpus 5 · 1m2s · 64k tok');
+    // No expandable card: there is no advice to open.
+    expect(container.querySelector('button')).toBeNull();
+  });
+
+  it('degrades to the bare marker when the turn holds more than one consult', () => {
+    // Two consults in one assistant message share a single usage object, so the
+    // reader reports no spend for either (see session-reader.test.ts).
+    const { container } = render(<AdvisorBadge consult={{ type: 'advisor', id: 'srvtoolu_1' }} />);
+
+    expect(container.querySelector('.cl-advisor-badge')?.textContent).toBe('advisor');
+    expect(container.querySelector('.cl-advisor-detail')).toBeNull();
+  });
+
+  it('rides the turn header when it shares a message with other content', () => {
+    // The live stream hands over a whole assistant message at once, where a
+    // stored transcript splits it into rows.
+    const { container } = mount(
+      advisorMessage({ content: [consult, { type: 'text', text: 'ok, procedo' }] })
+    );
+
+    expect(container.querySelector('.cl-advisor-badge')?.textContent).toContain('advisor');
   });
 });

@@ -46,7 +46,7 @@ const CONFIRM_MODES: PermissionMode[] = ['bypassPermissions'];
 
 /** Model aliases the CLI resolves on `--model`. The empty value means "send no
  *  --model flag" → Claude Code falls back to its configured default. */
-const MODEL_ALIASES = ['sonnet', 'opus', 'haiku'] as const;
+const MODEL_ALIASES = ['sonnet', 'opus', 'haiku', 'fable'] as const;
 
 /** A small upward popover anchored to a chip in the composer meta-row. Renders a
  *  trigger showing the current selection; clicking opens a menu of options above

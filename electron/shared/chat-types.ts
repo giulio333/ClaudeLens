@@ -16,7 +16,31 @@ export type ChatContentBlock =
   | { type: 'text'; text: string }
   | { type: 'thinking'; thinking: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-  | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean };
+  | { type: 'tool_result'; toolUseId: string; content: string; isError: boolean }
+  | AdvisorConsult;
+
+/** A consult of the harness's `advisor` tool — a stronger reviewer model that
+ *  reads the whole conversation and answers back to Claude, not to the user.
+ *  The transcript records it as two blocks of the same assistant message: a
+ *  `server_tool_use` (name `advisor`, empty input) and an `advisor_tool_result`
+ *  whose payload is `advisor_redacted_result` — an `encrypted_content` string.
+ *  So the advice itself can never be shown; what we can show is that a consult
+ *  happened, how long it took, and what it cost. */
+export interface AdvisorConsult {
+  type: 'advisor';
+  /** `tool_use_id` of the consult (`srvtoolu_…`) — pairs the two blocks. */
+  id: string;
+  /** Reviewer model, from the `advisor_message` iteration of the turn's usage. */
+  model?: string;
+  /** The reviewer's own token spend. Absent when the turn holds more than one
+   *  consult: the usage object is repeated verbatim on every row of the
+   *  assistant message, so the pair's total cannot be split between them. */
+  inputTokens?: number;
+  outputTokens?: number;
+  /** Wall time between the two blocks' rows. Absent on the live stream, where
+   *  the messages are mapped one at a time. */
+  durationSeconds?: number;
+}
 
 /** Message-level token usage (assistant turns only). `input + cacheRead +
  *  cacheWrite` of the latest turn ≈ the current context-window occupancy. */
@@ -44,6 +68,12 @@ export interface ChatMessage {
    *  `<command-name>`/`tool_result` row that invoked a skill, and it is what
    *  tells a `/foo` skill apart from a built-in command (#246). */
   skillPath?: string;
+  /** Reasoning effort the turn ran at (`medium` | `high` | `xhigh` | `max`).
+   *  Claude Code writes it on the transcript ROW, next to `uuid`, not inside
+   *  `message` — so the SDK read never returns it and it arrives through
+   *  `transcript-extras`, like `queued` and `skillPath`. A row's own
+   *  `perTurnEffort` wins over the session-level `effort` when set. */
+  effort?: string;
 }
 
 /** Live tool indicator for the in-flight turn (`sessions:chatToolActivity`):

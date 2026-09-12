@@ -178,6 +178,7 @@ export function modelDot(model?: string): string {
   if (model === 'opus') return 'var(--cl-violet)';
   if (model === 'haiku') return 'var(--cl-haiku)';
   if (model === 'sonnet') return 'var(--cl-cyan)';
+  if (model === 'fable') return 'var(--cl-fable)';
   return 'var(--cl-ink-4)';
 }
 

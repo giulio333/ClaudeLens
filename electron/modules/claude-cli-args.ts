@@ -9,8 +9,12 @@
  * sentinel non può proteggere — sono validati prima dell'uso.
  */
 
-/** Modelli accettati dal dispatch background (le opzioni offerte dalla UI). */
-export const BG_MODEL_ALLOWLIST = ['opus', 'sonnet', 'haiku'] as const;
+/** Modelli accettati dal dispatch background (le opzioni offerte dalla UI).
+ *  Sono gli alias che la CLI risolve su `--model` per una sessione in
+ *  background: la lista rispecchia quella del catalogo di Claude Code, dove
+ *  `fable` è entrato con la famiglia omonima — senza, un dispatch su Fable
+ *  veniva rifiutato qui prima ancora di raggiungere la CLI. */
+export const BG_MODEL_ALLOWLIST = ['opus', 'sonnet', 'haiku', 'fable'] as const;
 
 /** Rifiuta i valori bound a flag che la CLI leggerebbe come flag a loro volta. */
 function assertNotFlagLike(value: string, label: string): void {

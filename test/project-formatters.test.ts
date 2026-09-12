@@ -1,7 +1,14 @@
 import { describe, it, expect } from 'vitest';
-import { fmtDate, fmtModel, modelColor, buildModelMix } from '../src/components/project/utils';
+import {
+  fmtDate,
+  fmtModel,
+  modelColor,
+  buildModelMix,
+  sessionName,
+  sessionTitle,
+} from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
-import { sharedPathPrefix } from '../src/components/project/shared/projectName';
+import { homeRelativePath, sharedPathPrefix } from '../src/components/project/shared/projectName';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
 // Robustness fixes from the #99 audit: pure date/scale formatters must not
@@ -64,6 +71,8 @@ describe('fmtModel — model id to display name', () => {
     ['claude-sonnet-5', 'Sonnet 5'],
     ['claude-fable-5', 'Fable 5'],
     ['claude-mythos-5', 'Mythos 5'],
+    ['claude-fable-5-1', 'Fable 5.1'],
+    ['claude-mythos-5-1', 'Mythos 5.1'],
     ['claude-opus-4-8', 'Opus 4.8'],
     ['claude-sonnet-4-6', 'Sonnet 4.6'],
     ['claude-haiku-4-5', 'Haiku 4.5'],
@@ -119,10 +128,20 @@ describe('buildModelMix — project hero band', () => {
       s('claude-haiku-4-5-20251001', 100),
       s('claude-sonnet-4-6', 100),
       s('claude-opus-5', 100),
+      s('claude-fable-5-1', 100),
       s(undefined, 100),
     ]);
-    expect(mix.map(m => m.key)).toEqual(['opus', 'sonnet', 'haiku', 'other']);
+    expect(mix.map(m => m.key)).toEqual(['fable', 'opus', 'sonnet', 'haiku', 'other']);
     expect(mix.reduce((n, m) => n + m.pct, 0)).toBeCloseTo(100, 10);
+  });
+
+  // Fable used to be counted as "Other" — a family with its own price, its own
+  // colour everywhere else in the app, and no name on the one chart that says
+  // where the tokens went. Mythos stays in `other` on purpose: same tier, but
+  // labelling it "Fable" would name it as a model it is not.
+  it('names Fable and leaves Mythos unnamed rather than mislabelled', () => {
+    const mix = buildModelMix([s('claude-fable-5-1', 100), s('claude-mythos-5-1', 100)]);
+    expect(mix.map(m => m.key)).toEqual(['fable', 'other']);
   });
 
   it('drops families with no tokens so the bar never carries a zero-width segment', () => {
@@ -219,5 +238,87 @@ describe('sharedPathPrefix — the part of a duplicate group that carries no sig
   it('handles Windows separators like projectDisplayName does', () => {
     const prefix = sharedPathPrefix(['C:\\Users\\x\\one\\proj', 'C:\\Users\\x\\two\\proj']);
     expect(prefix).toBe('C:\\Users\\x\\');
+  });
+});
+
+// La ricerca stampa il path di ogni riga in una colonna sola: il prefisso della
+// home è identico ovunque e spinge sotto l'ellissi la coda, che è l'unica parte
+// che distingue una riga dall'altra. Il riconoscimento è per forma, quindi le
+// due cose da tenere ferme sono che una home vera venga accorciata e che una
+// cartella che *sembra* una home non lo sia.
+describe('homeRelativePath', () => {
+  it('replaces a macOS home prefix with ~', () => {
+    expect(homeRelativePath('/Users/giulio/Projects/ClaudeLens')).toBe('~/Projects/ClaudeLens');
+  });
+
+  it('replaces a Linux home prefix with ~', () => {
+    expect(homeRelativePath('/home/giulio/src/app')).toBe('~/src/app');
+  });
+
+  it('replaces a Windows home prefix with ~', () => {
+    expect(homeRelativePath('C:\\Users\\giulio\\Projects\\app')).toBe('~\\Projects\\app');
+  });
+
+  it('collapses the home itself to a bare ~', () => {
+    expect(homeRelativePath('/Users/giulio')).toBe('~');
+  });
+
+  it('keeps a dotfile tail visible', () => {
+    expect(homeRelativePath('/Users/giulio/.claude/skills/foo')).toBe('~/.claude/skills/foo');
+  });
+
+  it('leaves /Users/Shared alone — a real macOS folder, not a home', () => {
+    expect(homeRelativePath('/Users/Shared/thing')).toBe('/Users/Shared/thing');
+  });
+
+  it('leaves paths outside any home untouched', () => {
+    expect(homeRelativePath('/private/var/folders/6z/abc/T/x')).toBe(
+      '/private/var/folders/6z/abc/T/x'
+    );
+    expect(homeRelativePath('/opt/tools')).toBe('/opt/tools');
+  });
+
+  it('passes a description through unchanged (rows may carry prose, not a path)', () => {
+    expect(homeRelativePath('Reads the local transcript')).toBe('Reads the local transcript');
+  });
+});
+
+// The one place the app decides what a session is called. Every view that only
+// needed to ASK whether a session has a name used to re-list the fields, and
+// each copy is a session the user named one way and the app showed another.
+describe('sessionName — which of the four names wins', () => {
+  const all = {
+    agentName: 'the name I typed',
+    customTitle: 'the name the retired command set',
+    aiTitle: 'generated name',
+    firstUserMessage: 'first thing I typed',
+  };
+
+  // Claude Code's own order: `/rename` is the only way to name a session today,
+  // the command that wrote `custom-title` was retired, and the generated title
+  // is rewritten on every turn.
+  it('prefers the renamed name over every other', () => {
+    expect(sessionName(all)).toBe('the name I typed');
+  });
+
+  it('falls back through the old title, the generated one, then the first message', () => {
+    expect(sessionName({ ...all, agentName: undefined })).toBe('the name the retired command set');
+    expect(sessionName({ aiTitle: all.aiTitle, firstUserMessage: all.firstUserMessage })).toBe(
+      'generated name'
+    );
+    expect(sessionName({ firstUserMessage: all.firstUserMessage })).toBe('first thing I typed');
+  });
+
+  // What the "Untitled session" italic of the sessions list is keyed on: a name
+  // made of spaces is not a name, and no name at all is null rather than ''.
+  it('returns null when there is no name, whitespace included', () => {
+    expect(sessionName({})).toBeNull();
+    expect(sessionName({ agentName: '   ', customTitle: '\n', aiTitle: '' })).toBeNull();
+  });
+
+  it('is what sessionTitle prints, truncated, with its placeholder', () => {
+    expect(sessionTitle(all)).toBe('the name I typed');
+    expect(sessionTitle({})).toBe('Untitled session');
+    expect(sessionTitle({ agentName: 'x'.repeat(200) }, 10)).toBe('xxxxxxxxx…');
   });
 });

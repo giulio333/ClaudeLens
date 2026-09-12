@@ -6,6 +6,7 @@ import {
   readAppend,
   readSessionTitle,
   type LiveEvent,
+  outranksTitle,
   type SessionTitleSource,
   type TurnUsage,
 } from './transcript-tail';
@@ -125,15 +126,16 @@ const TRACE_MAX_MARKS = 160;
 
 export interface SessionActivity {
   sessionId: string;
-  /** The name this conversation goes by — the user's `/title` (`custom-title`)
-   *  if they set one, else the one Claude generated (`ai-title`); null until a
-   *  title record has been seen. It is the only human name a session has: the
-   *  registry's `name` is the project plus two random characters, so two
-   *  sessions of one project were told apart by pid alone. */
+  /** The name this conversation goes by — the one the user typed with `/rename`
+   *  (`agent-name`) or, in older transcripts, `/title` (`custom-title`), else
+   *  the one Claude generated (`ai-title`); null until a title record has been
+   *  seen. It is the only human name a session has: the registry's `name` is the
+   *  project plus two random characters, so two sessions of one project were
+   *  told apart by pid alone. */
   title: string | null;
-  /** Which record `title` came from. Carried because the two do not rank
+  /** Which record `title` came from. Carried because the three do not rank
    *  equally: `ai-title` is rewritten on later turns, and a fold that took the
-   *  freshest record unconditionally replaced a user's `/title` with the next
+   *  freshest record unconditionally replaced a user's `/rename` with the next
    *  auto-title. Null while `title` is. */
   titleSource: SessionTitleSource | null;
   /** Copied from the registry entry while the session is live. Kept after it
@@ -400,14 +402,15 @@ export function foldEvents(
         next = { ...next, activity: event.content ?? next.activity };
         break;
       case 'session_title': {
-        // Within one source the freshest record wins — both are rewritten, and
-        // the newest is current. ACROSS sources the user's `/title` outranks a
-        // generated name, so an `ai-title` written on a later turn must not
-        // replace it; taking the freshest record unconditionally is what made a
-        // renamed session revert to the auto-title on its next turn. Never marks
-        // the strip: naming the conversation is not work the session did.
+        // Ranked by `outranksTitle`, the same precedence the head scan resolves:
+        // within one source the freshest record wins (all are rewritten, and the
+        // newest is current), and across sources a name the user typed beats a
+        // generated one however late that one was written — taking the freshest
+        // record unconditionally is what made a renamed session revert to the
+        // auto-title on its next turn. Never marks the strip: naming the
+        // conversation is not work the session did.
         const source = event.titleSource ?? 'ai';
-        if (source === 'ai' && next.titleSource === 'custom') break;
+        if (!outranksTitle(source, next.titleSource)) break;
         if (event.content) next = { ...next, title: event.content, titleSource: source };
         break;
       }

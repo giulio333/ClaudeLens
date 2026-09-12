@@ -1,5 +1,6 @@
 import { IpcMain } from 'electron';
 import type { ChatMessage } from './shared/chat-types';
+import type { BgSession } from './modules/bg-sessions-reader';
 
 type IpcResult<T> = { data: T | null; error: string | null };
 const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
@@ -314,65 +315,158 @@ const MOCK_CHAT = [
 
 // ─── Memory per progetto ─────────────────────────────────────────────────────
 
+// Dense within each theme, sparse between themes: the real graph algorithm
+// derives the communities from these wikilinks, without preset cluster labels.
+const MOCK_MEMORY_TOPICS = [
+  {
+    filename: 'feedback_code_style.md',
+    name: 'Code style',
+    type: 'feedback',
+    description: 'Use small functions and explicit names.',
+    links: [
+      'user_profile',
+      'reference_typescript',
+      'feedback_react',
+      'reference_api_contracts',
+      'feedback_testing',
+    ],
+  },
+  {
+    filename: 'user_profile.md',
+    name: 'User profile',
+    type: 'user',
+    description: 'Full-stack engineer working with React and TypeScript.',
+    links: ['feedback_code_style', 'reference_typescript'],
+  },
+  {
+    filename: 'reference_typescript.md',
+    name: 'TypeScript',
+    type: 'reference',
+    description: 'Keep strict compiler checks and typed boundaries.',
+    links: ['feedback_code_style', 'reference_api_contracts'],
+  },
+  {
+    filename: 'feedback_react.md',
+    name: 'React patterns',
+    type: 'feedback',
+    description: 'Prefer functional components and local state.',
+    links: ['feedback_code_style', 'user_profile'],
+  },
+  {
+    filename: 'reference_api_contracts.md',
+    name: 'API contracts',
+    type: 'reference',
+    description: 'Validate request payloads at service boundaries.',
+    links: ['feedback_code_style', 'reference_typescript'],
+  },
+  {
+    filename: 'feedback_testing.md',
+    name: 'Testing',
+    type: 'feedback',
+    description: 'Exercise real integrations and verify failure paths.',
+    links: [
+      'reference_test_fixtures',
+      'reference_ci_checks',
+      'feedback_regressions',
+      'reference_test_database',
+      'project_goals',
+    ],
+  },
+  {
+    filename: 'reference_test_fixtures.md',
+    name: 'Test fixtures',
+    type: 'reference',
+    description: 'Reset sample records between independent tests.',
+    links: ['feedback_testing', 'reference_test_database'],
+  },
+  {
+    filename: 'reference_ci_checks.md',
+    name: 'CI checks',
+    type: 'reference',
+    description: 'Run lint, type checks and tests before merging.',
+    links: ['feedback_testing', 'feedback_regressions'],
+  },
+  {
+    filename: 'feedback_regressions.md',
+    name: 'Regressions',
+    type: 'feedback',
+    description: 'Reproduce the original failure before fixing it.',
+    links: ['feedback_testing', 'reference_test_fixtures'],
+  },
+  {
+    filename: 'reference_test_database.md',
+    name: 'Test database',
+    type: 'reference',
+    description: 'Use an isolated database for integration coverage.',
+    links: ['feedback_testing', 'reference_test_fixtures'],
+  },
+  {
+    filename: 'project_goals.md',
+    name: 'Release goals',
+    type: 'project',
+    description: 'Ship the beta after the release checklist passes.',
+    links: [
+      'reference_release_checklist',
+      'reference_versioning',
+      'feedback_changelog',
+      'reference_release_builds',
+    ],
+  },
+  {
+    filename: 'reference_release_checklist.md',
+    name: 'Release checklist',
+    type: 'reference',
+    description: 'Check packaged artifacts before publishing.',
+    links: ['project_goals', 'reference_release_builds', 'reference_versioning'],
+  },
+  {
+    filename: 'reference_versioning.md',
+    name: 'Versioning',
+    type: 'reference',
+    description: 'Keep package and release tag versions consistent.',
+    links: ['project_goals', 'feedback_changelog', 'reference_release_checklist'],
+  },
+  {
+    filename: 'feedback_changelog.md',
+    name: 'Changelog',
+    type: 'feedback',
+    description: 'Describe user-visible changes with concrete examples.',
+    links: ['project_goals', 'reference_versioning'],
+  },
+  {
+    filename: 'reference_release_builds.md',
+    name: 'Release builds',
+    type: 'reference',
+    description: 'Verify installation and startup on supported platforms.',
+    links: ['project_goals', 'reference_release_checklist'],
+  },
+];
+
 function getMemoryData(_hash: string) {
+  const index = MOCK_MEMORY_TOPICS.map(({ links: _links, ...topic }, i) => ({
+    ...topic,
+    createdAt: daysAgo(90 - i * 3),
+    updatedAt: daysAgo(1 + (i % 7)),
+  }));
+  const topics = Object.fromEntries(
+    MOCK_MEMORY_TOPICS.map(topic => [
+      topic.filename,
+      `---\nname: ${topic.name}\ndescription: ${topic.description}\ntype: ${topic.type}\n---\n\n${topic.description}\n\nRelated: ${topic.links.map(link => `[[${link}]]`).join(', ')}.`,
+    ])
+  );
+  const autoIndex = index.filter(topic => topic.filename !== 'project_goals.md');
+  const projectIndex = index.filter(topic => topic.filename === 'project_goals.md');
+  const memoryIndex = (entries: typeof index) => {
+    const content = `# Memory Index\n\n${entries.map(topic => `- [${topic.filename}](${topic.filename}) — ${topic.description}`).join('\n')}\n`;
+    return { content, lineCount: content.split('\n').length };
+  };
   return {
-    index: [
-      {
-        name: 'User profile',
-        description: 'Senior full-stack engineer, 8yr TypeScript experience',
-        type: 'user',
-        filename: 'user_profile.md',
-        createdAt: daysAgo(90),
-        updatedAt: daysAgo(4),
-      },
-      {
-        name: 'Code style feedback',
-        description: 'Prefers functional patterns, no class components, terse PR descriptions',
-        type: 'feedback',
-        filename: 'feedback_code_style.md',
-        createdAt: daysAgo(72),
-        updatedAt: daysAgo(6),
-      },
-      {
-        name: 'Testing approach',
-        description: 'Integration tests over unit mocks — past incident with divergent mock/prod',
-        type: 'feedback',
-        filename: 'feedback_testing.md',
-        createdAt: daysAgo(63),
-        updatedAt: daysAgo(11),
-      },
-    ],
-    topics: {
-      'user_profile.md':
-        '---\nname: User profile\ndescription: Senior full-stack engineer\ntype: user\n---\n\nSenior full-stack engineer with 8 years of TypeScript experience. Works primarily on React + Node.js stacks. Prefers functional patterns and concise code.',
-      'feedback_code_style.md':
-        '---\nname: Code style feedback\ndescription: Coding preferences\ntype: feedback\n---\n\nPrefers functional patterns over OOP. No class components in React. PR descriptions should be short and direct.',
-      'feedback_testing.md':
-        '---\nname: Testing approach\ndescription: Integration tests preferred\ntype: feedback\n---\n\nUse integration tests that hit real services, not mocks.\n\n**Why:** A previous incident where mock/prod divergence masked a broken migration.\n\n**How to apply:** Never mock the database layer in tests.',
-    },
-    memoryMd: {
-      content:
-        '# Memory Index\n\n- [user_profile.md](user_profile.md) — Senior full-stack engineer\n- [feedback_code_style.md](feedback_code_style.md) — Coding preferences\n- [feedback_testing.md](feedback_testing.md) — Integration tests preferred\n',
-      lineCount: 6,
-    },
-    projectLevelIndex: [
-      {
-        name: 'Project goals',
-        description: 'Q1 targets: launch beta, gather 50 signups',
-        type: 'project',
-        filename: 'project_goals.md',
-        createdAt: daysAgo(95),
-        updatedAt: daysAgo(20),
-      },
-    ],
-    projectLevelTopics: {
-      'project_goals.md':
-        '---\nname: Project goals\ndescription: Q1 targets\ntype: project\n---\n\nLaunch public beta by end of Q1. Target 50 early signups.',
-    },
-    projectLevelMemoryMd: {
-      content: '# Project Memory\n\n- [project_goals.md](project_goals.md) — Q1 targets\n',
-      lineCount: 4,
-    },
+    index: autoIndex,
+    topics: Object.fromEntries(autoIndex.map(topic => [topic.filename, topics[topic.filename]])),
+    memoryMd: memoryIndex(autoIndex),
+    projectLevelIndex: projectIndex,
+    projectLevelTopics: { 'project_goals.md': topics['project_goals.md'] },
+    projectLevelMemoryMd: memoryIndex(projectIndex),
   };
 }
 
@@ -1262,22 +1356,44 @@ const MOCK_TEAMS = [(({ members: _m, events: _e, configPath: _c, ...s }) => s)(M
 // ─── Sessioni agent live / background ──────────────────────────────────────────
 // Timestamp ancorati a NOW (minuti fa, via l'helper in cima) così la Agent View
 // mostra tempi relativi realistici ("just now", "5m ago") invece di date statiche.
-const MOCK_BG_SESSIONS = [
-  // ── Progetto webapp: spettro completo di stati per popolare ogni bucket della
-  // Agent View (Needs input · Working · Ready · Completed · Failed · Stopped) ──
+// Annotato `BgSession[]`: la vista legge questi campi senza difese, e senza
+// l'annotazione il letterale passa per `ok<T>` con il proprio tipo inferito —
+// così la fixture era rimasta senza `fan`/`initialPrompt`/`respawnFlags` e la
+// Agent View crashava in `isWorking`. `tempo` è `idle | active | blocked` e
+// nient'altro (vedi agents-live/status.ts): 'busy'/'thinking' sono i valori che
+// il vecchio codice rotto testava.
+const MOCK_BG_SESSIONS: BgSession[] = [
+  // Keep the Monitor compact: two background workers plus the two interactive sessions.
+  // Completed entries still populate the Agent View without adding Monitor cards.
   {
     id: 'a1b2c3',
     sessionId: '20260329T101500_000123',
     name: 'Refactor auth to JWT',
     state: 'running',
-    tempo: 'busy',
+    tempo: 'active',
     detail: 'Editing src/middleware/protect.ts',
     intent: 'Replace the session middleware with JWT verification across all protected routes.',
+    initialPrompt: '',
     result: null,
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'bg',
     inFlightTasks: 2,
+    inFlightKinds: [],
+    // Il `fan` è il lavoro che gira di fianco al turno: la riga "… in flight"
+    // della Agent View esiste solo se c'è (#218).
+    fan: [
+      {
+        kind: 'agent',
+        label: 'Task agent · audit the protected routes',
+        startedAt: NOW.getTime() - 4 * 60_000,
+      },
+    ],
+    tokens: 184_000,
+    respawnFlags: ['--model', 'opus', '--effort', 'high'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: true,
     pid: 24817,
     createdAt: minsAgo(18),
@@ -1286,63 +1402,36 @@ const MOCK_BG_SESSIONS = [
     hasPendingQuestion: false,
   },
   {
-    id: 'b2c3d4',
-    sessionId: '20260531T094000_000201',
-    name: 'Add Stripe checkout flow',
-    state: 'running',
-    tempo: 'blocked',
-    detail: 'Paused — needs a decision before continuing',
-    intent: 'Wire up Stripe Checkout for the Pro plan and handle the success webhook.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 25104,
-    createdAt: minsAgo(32),
-    updatedAt: minsAgo(2),
-    needs:
-      'Should I store the Stripe customer ID on the users table or in a separate billing table?',
-    hasPendingQuestion: true,
-  },
-  {
     id: 'c3d4e5',
     sessionId: '20260531T093000_000202',
     name: 'Investigate flaky e2e test',
     state: 'running',
-    tempo: 'thinking',
+    tempo: 'active',
     detail: 'Analyzing test/login.e2e.ts retry logs',
     intent: 'Find why the login e2e test fails ~1 in 5 runs on CI.',
+    initialPrompt: '',
     result: null,
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'claude',
     inFlightTasks: 1,
+    inFlightKinds: [],
+    fan: [
+      {
+        kind: 'shell',
+        label: 'Bash · npx vitest run test/login.e2e.ts',
+        startedAt: NOW.getTime() - 50_000,
+      },
+    ],
+    tokens: 62_400,
+    respawnFlags: ['--model', 'sonnet'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: true,
     pid: 25210,
     createdAt: minsAgo(11),
     updatedAt: minsAgo(1),
-    needs: null,
-    hasPendingQuestion: false,
-  },
-  {
-    id: 'd4e5f6',
-    sessionId: '20260531T090500_000203',
-    name: 'Bump dependencies',
-    state: 'idle',
-    tempo: 'idle',
-    detail: 'Idle — awaiting your next prompt',
-    intent: 'Upgrade React, Vite and TypeScript to their latest minor versions.',
-    result: null,
-    cwd: '/Users/alice/projects/webapp',
-    projectName: 'webapp',
-    template: 'bg',
-    inFlightTasks: 0,
-    alive: true,
-    pid: 25288,
-    createdAt: minsAgo(46),
-    updatedAt: minsAgo(9),
     needs: null,
     hasPendingQuestion: false,
   },
@@ -1354,12 +1443,20 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Completed — toggle shipped, 6 files changed',
     intent: 'Add a system-aware dark theme switch to the settings menu.',
+    initialPrompt: '',
     result:
       'Added data-theme switching with localStorage persistence; audited 12 components for hardcoded colors.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'bg',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 118_000,
+    respawnFlags: ['--model', 'sonnet'],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(180),
@@ -1375,12 +1472,20 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Failed — build broke on circular import',
     intent: 'Convert the server bundle from CommonJS to native ESM.',
+    initialPrompt: '',
     result:
       'Stopped after the build failed: circular dependency between src/db.ts and src/models/user.ts.',
     cwd: '/Users/alice/projects/webapp',
     projectName: 'webapp',
     template: 'claude',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 45_200,
+    respawnFlags: [],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(240),
@@ -1390,26 +1495,6 @@ const MOCK_BG_SESSIONS = [
   },
   // ── Altri progetti: variano la Global Agent View ──
   {
-    id: 'a7b8c9',
-    sessionId: '20260531T095500_000098',
-    name: 'Generate API docs',
-    state: 'running',
-    tempo: 'thinking',
-    detail: 'Summarizing OpenAPI schema',
-    intent: 'Write reference docs for every endpoint in the api-server project.',
-    result: null,
-    cwd: '/Users/alice/projects/api-server',
-    projectName: 'api-server',
-    template: 'claude',
-    inFlightTasks: 1,
-    alive: true,
-    pid: 24990,
-    createdAt: minsAgo(25),
-    updatedAt: minsAgo(3),
-    needs: 'Waiting for confirmation: overwrite existing docs/api.md?',
-    hasPendingQuestion: true,
-  },
-  {
     id: 'g7h8i9',
     sessionId: '20260531T084000_000071',
     name: 'Add unit tests for utils',
@@ -1417,11 +1502,19 @@ const MOCK_BG_SESSIONS = [
     tempo: 'idle',
     detail: 'Completed — 14 tests added, all passing',
     intent: 'Write integration-style tests for the date and currency helpers.',
+    initialPrompt: '',
     result: 'Added 14 tests in test/utils.test.ts; coverage on src/utils.ts is now 96%.',
     cwd: '/Users/alice/experiments/llm-playground',
     projectName: 'llm-playground',
     template: 'bg',
     inFlightTasks: 0,
+    inFlightKinds: [],
+    fan: [],
+    tokens: 31_800,
+    respawnFlags: [],
+    hasRoutine: false,
+    selfWake: false,
+    transcriptPath: null,
     alive: false,
     pid: null,
     createdAt: minsAgo(140),
