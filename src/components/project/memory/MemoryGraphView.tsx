@@ -2,10 +2,10 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { MemoryTopic } from '../../../hooks/useIPC';
 import { MEMORY_TYPE_TINT } from '../chat/utils';
 import {
-  buildMemoryGraph,
   layoutMemoryGraph,
   nodeRadius,
   LABEL_MAX_CHARS,
+  MemoryGraph,
   MemoryGraphNode,
 } from './graph';
 import { MemoryPeekCard, PeekAnchor } from './MemoryPeekCard';
@@ -22,25 +22,33 @@ import { MemoryPeekCard, PeekAnchor } from './MemoryPeekCard';
 const PEEK_DELAY_MS = 420;
 
 /**
- * La sezione memoria come **mappa delle relazioni**: un'isola per cluster, con
- * l'hub (la memoria più citata) al centro e il suo nome sopra il gruppo.
+ * La sezione memoria come **mappa delle relazioni**: un sistema di orbite per
+ * cluster, con l'hub (la memoria più citata) al centro e i suoi satelliti
+ * sull'anello tratteggiato che gli gira attorno.
+ *
+ * L'orbita ha preso il posto del riquadro (design 3a): una cornice rettangolare
+ * dichiara un confine ma non dice nulla di come il gruppo è fatto, mentre
+ * l'anello passa **per** i satelliti e rende leggibile a colpo d'occhio la sola
+ * cosa che la disposizione codifica — chi sta al centro e chi gli gira attorno.
+ * Il secondo anello si disegna solo quando i satelliti ci stanno davvero sopra:
+ * un'orbita vuota sarebbe una struttura affermata e non presente.
  *
  * Gli archi pieni sono i `[[wikilink]]` scritti nelle memorie; quelli
  * tratteggiati sono affinità di parole, un suggerimento che la vista non
  * promuove mai a link — scrivere il wikilink resta un gesto esplicito, fatto
- * nel file. Le memorie che nessun link tocca stanno in fondo, dichiarate.
+ * nel file. Le memorie che nessun link tocca **escono dal canvas** e sono
+ * elencate per nome sotto la mappa: restano dichiarate, come prima, ma non
+ * occupano più una fascia di grafo in cui non c'è alcun grafo da vedere.
  *
  * Nessuna freccia qui: su una mappa d'insieme il verso di 28 archi è rumore, e
  * il diametro del pallino già dice quante memorie citano quella. La direzione
  * si legge nell'orbita del dettaglio (`MemoryOrbit`), dove è la domanda vera.
  */
 export function MemoryGraphView({
-  topics,
-  contents,
+  graph,
   onOpenTopic,
 }: {
-  topics: MemoryTopic[];
-  contents: Record<string, string>;
+  graph: MemoryGraph;
   onOpenTopic: (topic: MemoryTopic) => void;
 }) {
   const [showAffinity, setShowAffinity] = useState(true);
@@ -48,9 +56,13 @@ export function MemoryGraphView({
   const [peek, setPeek] = useState<PeekAnchor | null>(null);
   const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const graph = useMemo(() => buildMemoryGraph(topics, contents), [topics, contents]);
   const layout = useMemo(() => layoutMemoryGraph(graph), [graph]);
   const nodeBy = useMemo(() => new Map(graph.nodes.map(n => [n.filename, n])), [graph]);
+  const hubs = useMemo(() => new Set(graph.clusters.map(c => c.hub)), [graph]);
+  const islandBy = useMemo(
+    () => new Map(layout.islands.map(i => [i.clusterId, i])),
+    [layout.islands]
+  );
   const clusterLabelOf = useMemo(() => {
     const byId = new Map(graph.clusters.map(c => [c.id, c.label]));
     return (node: MemoryGraphNode) => byId.get(node.clusterId) ?? null;
@@ -125,7 +137,13 @@ export function MemoryGraphView({
     const p = layout.positions[node.filename];
     if (!p) return null;
     const r = nodeRadius(node.inDeg);
-    const isHub = node.inDeg >= 3;
+    const isHub = hubs.has(node.filename);
+    const tint = MEMORY_TYPE_TINT[node.type];
+    // L'etichetta va **verso l'esterno dell'orbita**, non sempre sotto: un
+    // satellite nella metà alta si portava dietro un'etichetta che cadeva
+    // dentro l'anello, cioè scritta sopra il tratteggio. L'hub sta sul centro
+    // e non ha un fuori: la sua resta sotto.
+    const above = p.y < (islandBy.get(node.clusterId)?.cy ?? p.y);
     const active = hover === node.filename;
     const cited = node.inDeg === 1 ? '1 memory cites this' : `${node.inDeg} memories cite this`;
     return (
@@ -162,13 +180,38 @@ export function MemoryGraphView({
         }}
         role="button"
         tabIndex={0}
-        aria-label={`${node.name} — ${node.type}, ${cited}`}
+        aria-label={`${node.name} — ${node.type}, ${cited}${isHub ? ', cluster hub' : ''}`}
       >
-        <circle cx={p.x} cy={p.y} r={r + 5} className="cl-memgraph-halo" />
-        <circle cx={p.x} cy={p.y} r={r} fill={MEMORY_TYPE_TINT[node.type]} />
+        <circle cx={p.x} cy={p.y} r={r + 7} className="cl-memgraph-halo" />
+        {/* Il centro di un'orbita porta un anello proprio: il diametro codifica
+            già le citazioni, quindi "sta al centro" ha bisogno di un segno che
+            non sia di nuovo la dimensione. */}
+        {isHub && (
+          <circle
+            cx={p.x}
+            cy={p.y}
+            r={r + 5.5}
+            className="cl-memgraph-hub-ring"
+            style={{ stroke: tint }}
+          />
+        )}
+        {/* Cerchio **vuoto**, non pallino pieno: il fondo paper copre l'orbita
+            dove la attraversa, quindi il nodo ci sta sopra come una perla sul
+            filo invece di sembrarne infilzato. L'hub lo vela della propria
+            tinta. */}
+        <circle
+          cx={p.x}
+          cy={p.y}
+          r={r}
+          className="cl-memgraph-dot"
+          style={{
+            stroke: tint,
+            fill: isHub ? `color-mix(in oklch, ${tint} 22%, var(--cl-paper))` : undefined,
+          }}
+        />
         <text
           x={p.x}
-          y={p.y + r + 11}
+          y={above ? p.y - r - 7 : p.y + r + (isHub ? 15 : 11)}
           textAnchor="middle"
           className={`cl-memgraph-label${isHub ? ' is-hub' : ''}`}
         >
@@ -181,6 +224,7 @@ export function MemoryGraphView({
   if (!graph.nodes.length) return <div className="cl-empty">No memory topics yet.</div>;
 
   const linkedCount = graph.nodes.length - graph.loners.length;
+  const loners = graph.loners.map(f => nodeBy.get(f)).filter((n): n is MemoryGraphNode => !!n);
 
   return (
     <div className="cl-memgraph">
@@ -199,84 +243,104 @@ export function MemoryGraphView({
         </button>
       </div>
 
-      <svg
-        className="cl-memgraph-svg"
-        viewBox={`-8 -26 ${layout.width + 16} ${layout.height + 44}`}
-        role="img"
-        aria-label={`Memory graph: ${graph.nodes.length} topics, ${graph.links.length} links`}
-        onMouseLeave={cancelPeek}
-      >
-        {layout.islands.map(box => (
-          <g key={box.clusterId}>
-            <rect
-              x={box.x}
-              y={box.y}
-              width={box.w}
-              height={box.h}
-              rx={13}
-              className="cl-memgraph-island"
-            />
-            <text x={box.x + 13} y={box.y - 9} className="cl-memgraph-island-title">
-              {clip(box.label).toUpperCase()}
-            </text>
-            <text
-              x={box.x + box.w - 13}
-              y={box.y - 9}
-              textAnchor="end"
-              className="cl-memgraph-island-meta"
-            >
-              {box.size} memories
-            </text>
-          </g>
-        ))}
+      {graph.clusters.length === 0 ? (
+        <div className="cl-empty">
+          No memory declares a [[wikilink]] to another one yet — nothing to orbit.
+        </div>
+      ) : (
+        <svg
+          className="cl-memgraph-svg"
+          viewBox={`-8 -26 ${layout.width + 16} ${layout.height + 44}`}
+          role="img"
+          aria-label={`Memory graph: ${graph.nodes.length} topics, ${graph.links.length} links`}
+          onMouseLeave={cancelPeek}
+        >
+          {layout.islands.map(island => (
+            <g key={island.clusterId} className="cl-memgraph-orbits">
+              <ellipse
+                cx={island.cx}
+                cy={island.cy}
+                rx={island.rx}
+                ry={island.ry}
+                className="cl-memgraph-orbit"
+              />
+              {/* Il secondo anello si disegna solo se ci stanno sopra dei
+                  satelliti: un'orbita vuota affermerebbe una struttura che i
+                  dati non hanno. */}
+              {island.twoRings && (
+                <ellipse
+                  cx={island.cx}
+                  cy={island.cy}
+                  rx={island.innerRx}
+                  ry={island.innerRy}
+                  className="cl-memgraph-orbit"
+                />
+              )}
+            </g>
+          ))}
 
-        {layout.lonersBand && (
-          <text x={2} y={layout.lonersBand.y + 12} className="cl-memgraph-band-title">
-            NO RELATIONS YET · {graph.loners.length}
-          </text>
-        )}
+          {showAffinity &&
+            graph.affinities.map(edge => {
+              const d = curve(edge.a, edge.b);
+              if (!d) return null;
+              return (
+                <path
+                  key={`aff-${edge.a}-${edge.b}`}
+                  d={d}
+                  className={`cl-memgraph-affinity${touches(edge.a, edge.b) ? ' is-lit' : ''}`}
+                >
+                  <title>{`Suggested by shared words: ${edge.shared.join(', ')}`}</title>
+                </path>
+              );
+            })}
 
-        {showAffinity &&
-          graph.affinities.map(edge => {
-            const d = curve(edge.a, edge.b);
+          {graph.links.map(link => {
+            const d = curve(link.from, link.to);
             if (!d) return null;
+            // Un arco fra due gruppi attraversa la mappa e, a parità di peso
+            // visivo, coprirebbe la struttura che i gruppi dichiarano: resta
+            // leggibile ma arretra, e si accende all'hover come gli altri.
+            const crosses = nodeBy.get(link.from)?.clusterId !== nodeBy.get(link.to)?.clusterId;
             return (
               <path
-                key={`aff-${edge.a}-${edge.b}`}
+                key={`lnk-${link.from}-${link.to}`}
                 d={d}
-                className={`cl-memgraph-affinity${touches(edge.a, edge.b) ? ' is-lit' : ''}`}
+                className={`cl-memgraph-link${crosses ? ' is-cross' : ''}${
+                  touches(link.from, link.to) ? ' is-lit' : ''
+                }`}
               >
-                <title>{`Suggested by shared words: ${edge.shared.join(', ')}`}</title>
+                <title>{`${nodeBy.get(link.from)?.name ?? link.from} → ${
+                  nodeBy.get(link.to)?.name ?? link.to
+                }`}</title>
               </path>
             );
           })}
 
-        {graph.links.map(link => {
-          const d = curve(link.from, link.to);
-          if (!d) return null;
-          // Un arco fra due gruppi attraversa la mappa e, a parità di peso
-          // visivo, coprirebbe la struttura che i gruppi dichiarano: resta
-          // leggibile ma arretra, e si accende all'hover come gli altri.
-          const crosses = nodeBy.get(link.from)?.clusterId !== nodeBy.get(link.to)?.clusterId;
-          return (
-            <path
-              key={`lnk-${link.from}-${link.to}`}
-              d={d}
-              className={`cl-memgraph-link${crosses ? ' is-cross' : ''}${
-                touches(link.from, link.to) ? ' is-lit' : ''
-              }`}
-            >
-              <title>{`${nodeBy.get(link.from)?.name ?? link.from} → ${
-                nodeBy.get(link.to)?.name ?? link.to
-              }`}</title>
-            </path>
-          );
-        })}
-
-        {graph.nodes.map(renderNode)}
-      </svg>
+          {graph.nodes.map(renderNode)}
+        </svg>
+      )}
 
       {peek && <MemoryPeekCard anchor={peek} />}
+
+      {loners.length > 0 && (
+        <div className="cl-memgraph-loners">
+          <span className="lbl">{loners.length} unconnected</span>
+          <div className="chips">
+            {loners.map(node => (
+              <button
+                key={node.filename}
+                type="button"
+                className="cl-memgraph-loner"
+                title={node.name}
+                onClick={() => onOpenTopic(node.topic)}
+              >
+                <i className="dot" style={{ background: MEMORY_TYPE_TINT[node.type] }} />
+                {node.label}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
 
       <div className="cl-memgraph-legend">
         {(['project', 'reference', 'feedback', 'user'] as const)
@@ -287,15 +351,17 @@ export function MemoryGraphView({
               {t}
             </span>
           ))}
-        <span className="sw">
-          <i className="ln" />
-          declared link
-        </span>
-        <span className="sw">
-          <i className="ln dash" />
-          word affinity
-        </span>
+        {/* Niente voce per il tratto pieno: una linea fra due nodi di un grafo
+            non ha bisogno di essere dichiarata "un legame". Resta ciò che il
+            disegno non dice da sé. */}
+        {showAffinity && graph.affinities.length > 0 && (
+          <span className="sw">
+            <i className="ln dash" />
+            word affinity
+          </span>
+        )}
         <span className="sw">size = times cited</span>
+        <span className="sw">ringed = cluster hub</span>
         {graph.dangling.length > 0 && (
           <span
             className="sw muted"

@@ -429,68 +429,123 @@ export function buildMemoryGraph(
 // Layout
 // ---------------------------------------------------------------------------
 
-/** Raggio del pallino: cresce con quante memorie citano quella (cap a 6). */
+/**
+ * Raggio del nodo: cresce con quante memorie citano quella (cap a 6).
+ *
+ * La base è passata da 4.5 a 7.5 quando il nodo è diventato un cerchio **vuoto**
+ * col bordo colorato: a 4.5 un anello da 2px è quasi tutto bordo, e su un canvas
+ * largo quanto la finestra un pallino da 4.5 unità si rende in ~5px — la mappa
+ * si indovinava invece di leggersi. Il rapporto hub/satellite (2.4 per citazione
+ * invece di 2.1) resta quello che il disegno codifica.
+ */
 export function nodeRadius(inDeg: number): number {
-  return 4.5 + Math.min(inDeg, 6) * 2.1;
+  return 7.5 + Math.min(inDeg, 6) * 2.4;
 }
 
-/** Caratteri di etichetta disegnati sotto il nodo (oltre: ellissi). */
-export const LABEL_MAX_CHARS = 24;
+/** Caratteri di etichetta disegnati accanto al nodo (oltre: ellissi). */
+export const LABEL_MAX_CHARS = 26;
 
-/** Spazio orizzontale che un'etichetta si prende (24 char di mono a 9px). */
-const LABEL_W = 150;
+/** Spazio orizzontale che un'etichetta si prende (26 char di mono a 10px). */
+const LABEL_W = 160;
 /** Schiacciamento dell'anello: le etichette stanno sotto, serve più larghezza. */
 const RING_RATIO = 0.62;
+/**
+ * Un anello con pochi satelliti si disegna quasi tondo.
+ *
+ * Lo schiacciamento serve a distribuire etichette larghe lungo il giro; con
+ * due o tre satelliti non c'è nulla da distribuire, e l'ellissi larga il 60%
+ * più che alta lasciava vuoti i due lati — invisibile finché il gruppo era un
+ * riquadro, evidente da quando è un'orbita che si vede davvero.
+ */
+const SMALL_RING_MAX = 3;
+const SMALL_RING_RATIO = 0.8;
 const INNER_RING = 0.6;
 /** Fattore perimetro di un'ellisse con questo rapporto: 2π·√((1+ratio²)/2). */
-const PERIMETER_K = 2 * Math.PI * Math.sqrt((1 + RING_RATIO * RING_RATIO) / 2);
-const PAD_X = 86;
+const perimeterK = (ratio: number) => 2 * Math.PI * Math.sqrt((1 + ratio * ratio) / 2);
+const PERIMETER_K = perimeterK(RING_RATIO);
+const SMALL_PERIMETER_K = perimeterK(SMALL_RING_RATIO);
+/**
+ * Raggio minimo dell'anello: l'hub, la sua etichetta e il satellite più vicino
+ * ci devono stare senza toccarsi (17 + 12 + 17 ≈ 46 sul semiasse corto, che a
+ * questi rapporti vuol dire ~74 sul lungo). Era 96 fisso, cioè tarato sul caso
+ * peggiore di **etichette** da separare anche quando di etichette ce n'erano
+ * due.
+ */
+const MIN_RING = 80;
+/** Metà etichetta oltre il nodo più esterno, più un margine. */
+const PAD_X = LABEL_W / 2 + 12;
 const PAD_Y = 44;
 const GAP = 26;
-const LONER_STEP = 152;
-const LONER_ROW_H = 62;
 
 export interface MemoryIsland {
   clusterId: number;
   hub: string;
   label: string;
   size: number;
+  /** Riquadro che il cluster occupa sullo scaffale: è ciò che impacchetta. */
   x: number;
   y: number;
   w: number;
   h: number;
+  /** Centro dell'orbita — dove sta l'hub. */
+  cx: number;
+  cy: number;
+  /** Semiassi dell'orbita esterna: è lì che stanno i satelliti. */
+  rx: number;
+  ry: number;
+  /** Semiassi dell'orbita interna (usata davvero solo oltre i 7 satelliti). */
+  innerRx: number;
+  innerRy: number;
+  /** `true` quando i satelliti sono davvero distribuiti su due anelli. */
+  twoRings: boolean;
 }
 
 export interface MemoryGraphLayout {
   width: number;
   height: number;
+  /**
+   * Posizione dei soli nodi disegnati sulla mappa: le memorie senza alcuna
+   * relazione non stanno sul canvas (sono dichiarate sotto, come elenco) —
+   * un'orbita vuota non è un'orbita.
+   */
   positions: Record<string, { x: number; y: number }>;
   islands: MemoryIsland[];
-  /** Fascia delle memorie senza relazioni, in fondo (assente se non ce ne sono). */
-  lonersBand: { y: number; height: number } | null;
 }
 
-/** Semiasse orizzontale che tiene le etichette di `m` satelliti separate. */
-function ringRadius(m: number): number {
-  if (m <= 7) return Math.max(96, (LABEL_W * m) / PERIMETER_K);
+/** Semiassi dell'anello che tengono le etichette di `m` satelliti separate. */
+function ringGeometry(m: number): { rx: number; ry: number } {
+  if (m <= SMALL_RING_MAX) {
+    const rx = Math.max(MIN_RING, (LABEL_W * m) / SMALL_PERIMETER_K);
+    return { rx, ry: rx * SMALL_RING_RATIO };
+  }
+  if (m <= 7) {
+    const rx = Math.max(MIN_RING, (LABEL_W * m) / PERIMETER_K);
+    return { rx, ry: rx * RING_RATIO };
+  }
   const inner = Math.round(m * 0.37);
   const outer = m - inner;
-  return Math.max(
-    96,
+  const rx = Math.max(
+    MIN_RING,
     (LABEL_W * outer) / PERIMETER_K,
     (LABEL_W * inner) / (PERIMETER_K * INNER_RING)
   );
+  return { rx, ry: rx * RING_RATIO };
 }
 
 /**
- * Dispone le isole su scaffali di larghezza `maxWidth`, ogni cluster come un
- * hub centrale con i suoi satelliti su uno o due anelli.
+ * Dispone i cluster su scaffali di larghezza `maxWidth`, ognuno come un hub
+ * centrale con i suoi satelliti su una o due orbite.
  *
  * **Deterministico di proposito**: nessuna simulazione fisica, nessun seed
  * casuale. Un force-directed layout mette la stessa memoria in un punto
  * diverso a ogni apertura e trasforma i cluster in una nuvola indistinta —
  * qui la posizione è funzione dei soli dati, quindi il grafo si impara a
  * memoria e due aperture si confrontano.
+ *
+ * Il riquadro (`x/y/w/h`) resta: è ciò che impacchetta gli scaffali. Quello che
+ * si disegna sono invece le orbite (`cx/cy`, `rx/ry`, `innerRx/innerRy`), che
+ * hanno il centro sull'hub e passano per i satelliti — derivarle dal riquadro
+ * le farebbe cadere fuori posto di tutto il padding.
  */
 export function layoutMemoryGraph(graph: MemoryGraph, maxWidth = 1180): MemoryGraphLayout {
   const positions: Record<string, { x: number; y: number }> = {};
@@ -503,8 +558,7 @@ export function layoutMemoryGraph(graph: MemoryGraph, maxWidth = 1180): MemoryGr
 
   for (const cluster of graph.clusters) {
     const satellites = cluster.members.slice(1);
-    const rx = ringRadius(satellites.length);
-    const ry = rx * RING_RATIO;
+    const { rx, ry } = ringGeometry(satellites.length);
     const w = rx * 2 + PAD_X * 2;
     const h = ry * 2 + PAD_Y * 2;
 
@@ -513,6 +567,9 @@ export function layoutMemoryGraph(graph: MemoryGraph, maxWidth = 1180): MemoryGr
       shelfX = 0;
       shelfH = 0;
     }
+    const twoRings = satellites.length > 7;
+    const cx = shelfX + w / 2;
+    const cy = shelfY + h / 2;
     const box: MemoryIsland = {
       clusterId: cluster.id,
       hub: cluster.hub,
@@ -522,14 +579,18 @@ export function layoutMemoryGraph(graph: MemoryGraph, maxWidth = 1180): MemoryGr
       y: shelfY,
       w,
       h,
+      cx,
+      cy,
+      rx,
+      ry,
+      innerRx: rx * INNER_RING,
+      innerRy: ry * INNER_RING,
+      twoRings,
     };
     islands.push(box);
 
-    const cx = box.x + w / 2;
-    const cy = box.y + h / 2;
     positions[cluster.hub] = { x: cx, y: cy };
 
-    const twoRings = satellites.length > 7;
     const innerCount = twoRings ? Math.round(satellites.length * 0.37) : 0;
     const outerCount = satellites.length - innerCount;
     satellites.forEach((filename, i) => {
@@ -552,33 +613,13 @@ export function layoutMemoryGraph(graph: MemoryGraph, maxWidth = 1180): MemoryGr
     usedWidth = Math.max(usedWidth, Math.min(shelfX - GAP, Math.max(w, maxWidth)));
   }
 
-  let height = graph.clusters.length ? shelfY + shelfH : 0;
-  let lonersBand: MemoryGraphLayout['lonersBand'] = null;
-
-  if (graph.loners.length) {
-    const perRow = Math.max(1, Math.floor(maxWidth / LONER_STEP));
-    const rows = Math.ceil(graph.loners.length / perRow);
-    const bandTop = height ? height + GAP + 18 : 18;
-    graph.loners.forEach((filename, i) => {
-      const row = Math.floor(i / perRow);
-      const col = i % perRow;
-      positions[filename] = {
-        x: LONER_STEP / 2 + col * LONER_STEP,
-        y: bandTop + 22 + row * LONER_ROW_H,
-      };
-    });
-    const bandHeight = rows * LONER_ROW_H + 34;
-    lonersBand = { y: bandTop, height: bandHeight };
-    height = bandTop + bandHeight;
-    usedWidth = Math.max(usedWidth, Math.min(graph.loners.length, perRow) * LONER_STEP);
-  }
+  const height = graph.clusters.length ? shelfY + shelfH : 0;
 
   return {
     width: Math.max(usedWidth, 320),
     height: Math.max(height, 200),
     positions,
     islands,
-    lonersBand,
   };
 }
 
@@ -609,4 +650,48 @@ export function neighborhoodOf(graph: MemoryGraph, filename: string): MemoryNeig
     if (inRing1.has(l.to) && l.from !== filename && !inRing1.has(l.from)) ring2.add(l.from);
   }
   return { ring1, ring2: [...ring2].sort((a, b) => a.localeCompare(b)) };
+}
+
+/**
+ * Quello che una riga di elenco può dire della memoria che porta: quante la
+ * citano, che cosa cita, e se è l'hub del proprio gruppo.
+ *
+ * Esiste perché la lista e la mappa rispondono alla stessa domanda con due
+ * forme — righe e orbite — e la forma a righe non può leggere una posizione:
+ * le serve la relazione detta a parole. Puro, quindi verificabile senza DOM.
+ */
+export interface MemoryRelationSummary {
+  /** Quante memorie citano questa. */
+  inDeg: number;
+  /** Quante ne cita. */
+  outDeg: number;
+  /** È la memoria più citata del proprio gruppo. */
+  isHub: boolean;
+  /**
+   * Nomi delle memorie citate, in ordine canonico.
+   *
+   * Il **nome**, non l'etichetta breve che usa la mappa: in un elenco ogni riga
+   * si presenta col proprio titolo, e citarne una con un'altra forma renderebbe
+   * impossibile ritrovarla scorrendo la lista.
+   */
+  cites: string[];
+  /** Etichetta del gruppo a cui appartiene, o `null` se non ne ha uno. */
+  clusterLabel: string | null;
+}
+
+export function relationSummary(graph: MemoryGraph, filename: string): MemoryRelationSummary {
+  const node = graph.nodes.find(n => n.filename === filename);
+  const cluster = graph.clusters.find(c => c.members.includes(filename));
+  const nameOf = (f: string) => graph.nodes.find(n => n.filename === f)?.name ?? graphLabel(f);
+  const cites = graph.links
+    .filter(l => l.from === filename)
+    .map(l => nameOf(l.to))
+    .sort((a, b) => a.localeCompare(b));
+  return {
+    inDeg: node?.inDeg ?? 0,
+    outDeg: node?.outDeg ?? 0,
+    isHub: cluster?.hub === filename,
+    cites,
+    clusterLabel: cluster?.label ?? null,
+  };
 }
