@@ -192,21 +192,75 @@ describe('the census leaks no transcript content into the baseline', () => {
     expect(paths).toContain('cost-state.modelUsage.{*}.costUSD');
   });
 
+  it('collapses a map keyed by generated id, and stops above a foreign schema', async () => {
+    // The leak the test above misses: `toolu_01H7XM6ap4zSvQmxLd1859nV` is a
+    // perfectly good identifier, so the key-shape check passed it and the
+    // walker recorded one key-path per tool call — 5,802 of them on the corpus
+    // that found this, with the real findings buried underneath. An id is
+    // recognised by looking like one, not by its prefix.
+    //
+    // The second claim is about what sits *under* such a map. `wireToolInputs`
+    // holds the invoked tool's own input, so that level is the union of the
+    // parameters of every tool this machine ran — unbounded, foreign, and
+    // re-drifting with each MCP server connected. `wireIngestContext` is the
+    // control: collapsing a key must not turn into a blanket stop.
+    writeTranscript('s.jsonl', [
+      {
+        type: 'assistant',
+        uuid: 'a1',
+        timestamp: '2026-09-08T10:00:00.000Z',
+        message: { role: 'assistant', content: [{ type: 'text', text: 'x' }] },
+        wireToolInputs: {
+          toolu_01H7XM6ap4zSvQmxLd1859nV: {
+            jql: 'project = SECRET',
+            file_path: '/Users/someone/CV.html',
+          },
+        },
+        wireIngestContext: {
+          toolu_01H7XM6ap4zSvQmxLd1859nV: { cwd: '/Users/someone/Projects/Fisco' },
+        },
+      },
+    ]);
+
+    const { keyPaths } = await runCensus(dir, true);
+    const paths = [...keyPaths];
+
+    for (const secret of ['toolu_', 'someone', 'CV.html', 'Fisco', 'SECRET']) {
+      expect(
+        paths.filter(p => p.includes(secret)),
+        `"${secret}" reached a key-path`
+      ).toEqual([]);
+    }
+    // That the map exists and is keyed by tool_use id is the claim worth having.
+    expect(paths).toContain('assistant.wireToolInputs.{*}');
+    expect(paths.filter(p => p.startsWith('assistant.wireToolInputs.{*}.'))).toEqual([]);
+    // The bounded sibling keeps its leaf.
+    expect(paths).toContain('assistant.wireIngestContext.{*}.cwd');
+  });
+
   it('records the fields of a row type it is meant to read', async () => {
     // The complement of the claim above: the walker really does descend. A
     // guard that collapsed everything would pass the leak test and be useless.
+    //
+    // `truncatedAfterOutput` is here for the reject side of OPAQUE_KEY, which
+    // the id test only exercises deep inside its accept region. It is twenty
+    // characters of camelCase — long enough to be collapsed by a guard that
+    // stopped asking for a digit — and a field name all the same. Losing it
+    // would cost coverage without reddening anything.
     writeTranscript('s.jsonl', [
       {
         type: 'assistant',
         uuid: 'a1',
         timestamp: '2026-09-08T10:00:00.000Z',
         isApiErrorMessage: true,
+        truncatedAfterOutput: true,
         message: { role: 'assistant', content: [{ type: 'text', text: 'x' }], stop_reason: 'end' },
       },
     ]);
 
     const { keyPaths } = await runCensus(dir, true);
     expect([...keyPaths]).toContain('assistant.isApiErrorMessage');
+    expect([...keyPaths]).toContain('assistant.truncatedAfterOutput');
     expect([...keyPaths]).toContain('assistant.message.stop_reason');
   });
 
@@ -224,6 +278,18 @@ describe('the census leaks no transcript content into the baseline', () => {
       expect(path, `${path} does not look like a key-path`).toMatch(
         /^[A-Za-z_$][A-Za-z0-9_$-]*(\.(\{\*\}|[A-Za-z_$][A-Za-z0-9_$]*)(\[\])?)*$/
       );
+    }
+    // A segment can satisfy the shape above and still be data: the walker used
+    // to record `toolu_…` ids as if they were field names, and the regex was
+    // happy with every one of them. Written out here rather than imported from
+    // the walker — a test that reuses the definition it is checking would pass
+    // whatever the walker decided an id looks like.
+    for (const path of baseline.keyPaths) {
+      for (const segment of path.split('.')) {
+        expect(segment, `${path} carries what looks like a generated id`).not.toMatch(
+          /^(?:[A-Za-z]{1,12}_)?(?=[A-Za-z0-9]*[0-9])(?=[A-Za-z0-9]*[A-Z])[A-Za-z0-9]{16,}$/
+        );
+      }
     }
     // Axis values are discriminants — short, no whitespace.
     for (const [axis, values] of Object.entries(baseline.axes)) {
