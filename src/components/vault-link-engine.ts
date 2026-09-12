@@ -47,6 +47,17 @@ export interface VaultLinksApi {
 export interface VaultLinkEngine extends VaultLinksApi {
   /** Stop answering: a reply that arrives after this changes nothing. */
   dispose: () => void;
+  /**
+   * Start answering again, because the unmount was not real.
+   *
+   * `React.StrictMode` — which this app mounts in (`src/main.tsx`) — runs every
+   * effect, then its cleanup, then the effect again, to prove a component
+   * survives being remounted. Without this, that rehearsal disposed the engine
+   * for good and the chips never resolved: every citation stayed in the neutral
+   * "we do not know" state, in the real app, while the tests passed because
+   * Testing Library's `render` does not use StrictMode.
+   */
+  revive: () => void;
 }
 
 export const EMPTY_STATES: ReadonlyMap<string, VaultLinkState> = new Map();
@@ -119,6 +130,12 @@ export function createVaultLinkEngine(root: string, setStates: SetStates): Vault
     if (disposed) return;
     const names = [...queue];
     queue = new Set();
+    // Stamped here and not at `request`: a name is "asked" once it has actually
+    // been sent. Stamping on the way in meant a batch cancelled before it left
+    // (a dispose, in StrictMode's simulated unmount) was remembered as asked and
+    // never sent again.
+    const sentAt = Date.now();
+    for (const n of names) asked.set(n, { at: sentAt, resolved: false });
     for (let i = 0; i < names.length; i += BATCH_SIZE) {
       const slice = names.slice(i, i + BATCH_SIZE);
       void window.electronAPI.vault
@@ -130,20 +147,22 @@ export function createVaultLinkEngine(root: string, setStates: SetStates): Vault
 
   return {
     root,
+    // Deliberately NOT gated on `disposed`: effects run child-first, so under
+    // StrictMode a bubble reports its names before the provider above it has
+    // revived. Queueing is harmless — `flush` is where the check belongs, and by
+    // the time the timer fires the provider's effect has run.
     request(targets) {
-      if (disposed) return;
-      let queued = false;
       const now = Date.now();
       for (const t of targets) {
         const prev = asked.get(t);
         if (prev && (prev.resolved || now - prev.at < RETRY_MISS_AFTER_MS)) continue;
-        asked.set(t, { at: now, resolved: false });
         queue.add(t);
-        queued = true;
       }
       // A zero delay, not a microtask: it coalesces the whole batch of bubbles
-      // React mounts in one commit into a single call.
-      if (queued && timer === null) timer = setTimeout(flush, 0);
+      // React mounts in one commit into a single call. Armed off the queue, not
+      // off "did this call add something": a name queued before a cancelled
+      // flush is still waiting to be sent.
+      if (queue.size > 0 && timer === null) timer = setTimeout(flush, 0);
     },
     open(rel) {
       if (disposed) return;
@@ -153,6 +172,9 @@ export function createVaultLinkEngine(root: string, setStates: SetStates): Vault
       disposed = true;
       if (timer !== null) clearTimeout(timer);
       timer = null;
+    },
+    revive() {
+      disposed = false;
     },
   };
 }
