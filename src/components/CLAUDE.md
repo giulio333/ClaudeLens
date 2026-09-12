@@ -73,6 +73,18 @@ resolve to what lives.
   created in a `useMemo` keyed on the root, not refs: it belongs to one project
   and is replaced wholesale when the root changes (a reply from the old engine
   is dropped by its `dispose`), and refs mutated during render are a lint error.
+  **`dispose` has a `revive` because the app mounts in `React.StrictMode`**
+  (`src/main.tsx`), which runs every effect, its cleanup, and the effect again
+  to prove a component survives a remount: a one-way dispose turned that
+  rehearsal into an engine that never asked anything, so in the real app every
+  citation sat in the neutral "we do not know" state while the suite was green —
+  Testing Library's `render` does not use StrictMode. Two consequences the fix
+  encodes: a name is stamped as asked **in `flush`, when it is actually sent**
+  (stamping on the way in meant a batch cancelled before it left was remembered
+  as asked and never sent again), and `request` is **not** gated on `disposed` —
+  effects run child-first, so a bubble reports its names before the provider
+  above it has revived; the timer is armed off the queue, and `flush` is where
+  the check belongs.
   **A hit is cached forever, a miss only for 30s** (`RETRY_MISS_AFTER_MS`, which
   must not be shorter than the main process' `INDEX_TTL_MS` or the re-ask is
   served from the same cached index): Claude writes the notes it cites, so the
