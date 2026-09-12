@@ -12,7 +12,6 @@ import { createPortal } from 'react-dom';
 import {
   useMemoryProject,
   useSessionList,
-  useClaudeMdHierarchy,
   useProjectRules,
   useGlobalMcp,
   useAllSkills,
@@ -27,12 +26,12 @@ import {
   fmtCost,
   fmtModel,
   modelFamily,
+  sessionName,
   sessionTitle,
   formatTokens,
   buildModelMix,
 } from '../utils';
-import type { SessionSummary, MemoryTopic, ClaudeMdLayer } from '../../../types';
-import { Lens } from './Lens';
+import type { SessionSummary, MemoryTopic } from '../../../types';
 import { ProjectDescription } from './ProjectDescription';
 import { McpServerGrid } from '../mcp/McpServerGrid';
 import { AgentsLiveView } from '../agents-live/AgentsLiveView';
@@ -57,6 +56,15 @@ import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
 import { SessionRowMenu } from '../sessions/SessionRowMenu';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
+
+// The two entry points a project hero offers, and the only place the app says
+// which budget each one spends. Hoisted because the Teams header and the
+// project hero draw them differently (compact glass pair vs. design 3b's pill
+// + label) and the wording must not drift between the two.
+const SDK_CHAT_TITLE =
+  'In-app chat through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan';
+const CLAUDE_CODE_TITLE =
+  'Opens the interactive claude CLI embedded in ClaudeLens, with a Mission Control panel and a switch to read the same session as SDK chat (Lens). Terminal usage counts against your subscription plan.';
 
 function ChatGlyph() {
   return (
@@ -123,76 +131,9 @@ function shortWhen(iso: string): string {
 
 const DAY_MS = 86_400_000;
 const DEFAULT_RETENTION_DAYS = 30;
-const MAX_STAT_BARS = 12;
-
-type StatMetric = 'sessions' | 'tokens' | 'avg';
-
-type TimelineBucket = {
-  key: string;
-  label: string;
-  sessions: number;
-  tokens: number;
-};
 
 function normalizeRetentionDays(days: number): number {
   return Number.isFinite(days) && days > 0 ? Math.max(1, Math.round(days)) : DEFAULT_RETENTION_DAYS;
-}
-
-// en-US, not it-IT: the UI is english-only, and an it-IT month abbreviation
-// ("ago", "set") is the only italian word in the band's tooltips.
-function fmtBucketDate(ms: number): string {
-  return new Date(ms).toLocaleDateString('en-US', { day: '2-digit', month: 'short' });
-}
-
-function bucketLabel(startMs: number, endMs: number): string {
-  const start = fmtBucketDate(startMs);
-  const end = fmtBucketDate(Math.max(startMs, endMs - 1));
-  return start === end ? start : `${start} - ${end}`;
-}
-
-/** Local midnight, `offsetDays` away from the day `ms` falls in. Going through
- *  `setDate` rather than adding `DAY_MS` keeps every boundary on a true
- *  midnight across a DST change, where a day is 23 or 25 hours long. */
-function dayStart(ms: number, offsetDays = 0): number {
-  const d = new Date(ms);
-  d.setHours(0, 0, 0, 0);
-  d.setDate(d.getDate() + offsetDays);
-  return d.getTime();
-}
-
-// Buckets span whole days, aligned to local midnight. Slicing the window into
-// exactly MAX_STAT_BARS parts made 30 days into 2.5-day buckets cut at noon, so
-// two adjacent bars both printed the day they shared ("14 Aug - 16 Aug" next to
-// "16 Aug - 19 Aug") — the one thing a reader uses the label to rule out.
-function buildTimelineBuckets(
-  sessions: SessionSummary[],
-  days: number,
-  nowMs: number
-): TimelineBucket[] {
-  const daysPerBucket = Math.max(1, Math.ceil(days / MAX_STAT_BARS));
-  const bucketCount = Math.max(1, Math.ceil(days / daysPerBucket));
-  // Boundaries are computed, not derived by division: with DST in the window
-  // they are not equally spaced in milliseconds.
-  const edges = Array.from({ length: bucketCount + 1 }, (_, k) =>
-    dayStart(nowMs, 1 - (bucketCount - k) * daysPerBucket)
-  );
-  const buckets = Array.from({ length: bucketCount }, (_, i) => ({
-    key: `${edges[i]}-${edges[i + 1]}`,
-    label: bucketLabel(edges[i], edges[i + 1]),
-    sessions: 0,
-    tokens: 0,
-  }));
-
-  for (const s of sessions) {
-    const t = new Date(s.date).getTime();
-    if (isNaN(t) || t < edges[0] || t >= edges[bucketCount]) continue;
-    let idx = bucketCount - 1;
-    while (idx > 0 && t < edges[idx]) idx -= 1;
-    buckets[idx].sessions += 1;
-    buckets[idx].tokens += s.totalTokens;
-  }
-
-  return buckets;
 }
 
 /** Width of the token breakdown card — needed both to draw it and to clamp it
@@ -229,104 +170,12 @@ function pctOf(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
 }
 
-function bucketValue(bucket: TimelineBucket, metric: StatMetric): number {
-  if (metric === 'sessions') return bucket.sessions;
-  if (metric === 'tokens') return bucket.tokens;
-  return bucket.sessions > 0 ? bucket.tokens / bucket.sessions : 0;
-}
-
-function bucketTooltip(bucket: TimelineBucket, metric: StatMetric): string {
-  if (metric === 'sessions')
-    return `${bucket.label} · ${fmt(bucket.sessions)} sessions · ${fmt(bucket.tokens)} tok`;
-  if (metric === 'tokens')
-    return `${bucket.label} · ${fmt(bucket.tokens)} tok · ${fmt(bucket.sessions)} sessions`;
-  const avg = bucket.sessions > 0 ? Math.round(bucket.tokens / bucket.sessions) : 0;
-  return `${bucket.label} · ${fmt(avg)} tok/session · ${fmt(bucket.sessions)} sessions`;
-}
-
-function Bars({ buckets, metric }: { buckets: TimelineBucket[]; metric: StatMetric }) {
-  const [active, setActive] = useState<{ index: number; text: string } | null>(null);
-  const values = buckets.map(bucket => bucketValue(bucket, metric));
-  const max = Math.max(...values, 1);
-  const peakIdx = values.indexOf(Math.max(...values));
-  const gridStyle: CSSProperties = {
-    gridTemplateColumns: `repeat(${buckets.length}, minmax(0, 1fr))`,
-  };
-  return (
-    <div className="cl-bars" style={gridStyle}>
-      {buckets.map((bucket, i) => {
-        const value = values[i] ?? 0;
-        const tooltip = bucketTooltip(bucket, metric);
-        return (
-          <span
-            key={bucket.key}
-            className={`cl-stat-bar${value > 0 && i === peakIdx ? ' peak' : ''}`}
-            tabIndex={0}
-            title={tooltip}
-            aria-label={tooltip}
-            onMouseEnter={() => setActive({ index: i, text: tooltip })}
-            onMouseLeave={() => setActive(null)}
-            onFocus={() => setActive({ index: i, text: tooltip })}
-            onBlur={() => setActive(null)}
-          >
-            <span
-              className="cl-stat-bar-fill"
-              style={{ height: `${value > 0 ? Math.max((value / max) * 100, 6) : 0}%` }}
-            />
-          </span>
-        );
-      })}
-      {active && (
-        <span
-          className="cl-bars-tip"
-          style={{ left: `${((active.index + 0.5) / Math.max(buckets.length, 1)) * 100}%` }}
-        >
-          {active.text}
-        </span>
-      )}
-    </div>
-  );
-}
-
 const MEM_PREVIEW_MAX = 70;
-// The landing's index cards give the preview three lines of prose instead of a
-// single mono line, so they get a longer slice of the same cleaned text.
-const MEM_CARD_PREVIEW_MAX = 190;
-/** How many sessions and memory topics the project landing shows before
- *  handing over to the subtab (design 1c: three rows, two rows of cards). */
-const LANDING_SESSIONS = 3;
-const LANDING_MEM_CARDS = 6;
-
-const CLAUDE_MD_SCOPE_LABEL: Record<'global' | 'project' | 'local' | 'subdir', string> = {
-  project: 'Project',
-  local: 'Local',
-  subdir: 'Subdir',
-  global: 'Global',
-};
-
-/** Ogni layer è un CLAUDE.md, quindi lo scope da solo non distingue una riga
- *  dall'altra: quattro righe su sei si chiamavano "Subdir". Quello che le
- *  distingue è la cartella che governano, così il path diventa il nome della
- *  riga e viene spezzato in genitori (smorzati) + segmento identificante +
- *  nome file (smorzato): la lista si legge sul segmento in evidenza senza
- *  perdere il path intero. */
-function claudeMdPathParts(layer: ClaudeMdLayer, rootPath: string) {
-  if (layer.scope === 'global') {
-    return { prefix: '~/.claude/', focus: 'CLAUDE.md', suffix: '' };
-  }
-  const rel = layer.filePath.startsWith(rootPath + '/')
-    ? layer.filePath.slice(rootPath.length + 1)
-    : layer.filePath;
-  const cut = rel.lastIndexOf('/');
-  if (cut === -1) return { prefix: '', focus: rel, suffix: '' };
-  const dir = rel.slice(0, cut);
-  const up = dir.lastIndexOf('/');
-  return {
-    prefix: up === -1 ? '' : dir.slice(0, up + 1),
-    focus: dir.slice(up + 1) + '/',
-    suffix: rel.slice(cut + 1),
-  };
-}
+/** How many sessions the project landing shows before handing over to the
+ *  Sessions subtab (design 3b, "All N →" in the head). Five, where the mock
+ *  drew three: it was drawn in a 720px-tall frame, and on a real window three
+ *  rows end the page halfway down. */
+const LANDING_SESSIONS = 5;
 
 // Ripulisce la sintassi markdown e tronca per un'anteprima pulita.
 function memPreview(raw: string, max: number = MEM_PREVIEW_MAX): string {
@@ -391,7 +240,6 @@ export function ProjectView({
   const [memLayout, setMemLayout] = useState<'list' | 'graph'>('list');
   const { data: memory } = useMemoryProject(project.hash);
   const { data: sessions = [] } = useSessionList(project.hash);
-  const { data: claudeMd } = useClaudeMdHierarchy(project.realPath);
   const { data: rules = [] } = useProjectRules(project.realPath);
   const { data: mcpData } = useGlobalMcp();
   const { data: allSkills = [] } = useAllSkills(project.realPath);
@@ -460,9 +308,7 @@ export function ProjectView({
   const sessionCount = statsSessions.length;
   const totalTokens = statsSessions.reduce((s, x) => s + x.totalTokens, 0);
   const totalCost = statsSessions.reduce((s, x) => s + x.estimatedCost, 0);
-  const totalMessages = statsSessions.reduce((s, x) => s + x.messageCount, 0);
   const tokensFmt = formatTokens(totalTokens);
-  const avgMessages = sessionCount > 0 ? Math.round(totalMessages / sessionCount) : 0;
   // What the token figure is made of. `totalTokens` sums cache reads at full
   // weight even though they bill at a tenth of input, so on a long project the
   // headline number mostly measures re-read context — the composition is what
@@ -482,24 +328,7 @@ export function ProjectView({
       cacheShare: total > 0 ? (cacheRead / total) * 100 : 0,
     };
   }, [statsSessions]);
-  const allSessionCount = sessions.length;
-  const olderSessionCount = Math.max(0, allSessionCount - sessionCount);
   const lastActive = sessions[0]?.date;
-  const statBuckets = useMemo(
-    () => buildTimelineBuckets(statsSessions, retentionDays, nowMs),
-    [statsSessions, retentionDays, nowMs]
-  );
-  // Sessions in the window immediately before the retention one, so the hero
-  // band's session figure can carry an honest delta instead of a bare count.
-  const prevWindowSessions = useMemo(() => {
-    const end = nowMs - retentionDays * DAY_MS;
-    const start = end - retentionDays * DAY_MS;
-    return sessions.filter(s => {
-      const t = new Date(s.date).getTime();
-      return !isNaN(t) && t >= start && t < end;
-    }).length;
-  }, [sessions, retentionDays, nowMs]);
-  const sessionDelta = sessionCount - prevWindowSessions;
   const modelMix = useMemo(() => buildModelMix(statsSessions), [statsSessions]);
 
   const pinnedSessions = useMemo(
@@ -689,103 +518,18 @@ export function ProjectView({
   // One session list, pins first: they no longer have a section of their own,
   // so putting them at the head of the three is what keeps a pinned — and
   // therefore possibly old — conversation reachable from the landing.
-  const landingSessions = useMemo(
-    () => [...pinnedSessions, ...unpinnedSessions].slice(0, LANDING_SESSIONS),
-    [pinnedSessions, unpinnedSessions]
-  );
-  const landingMemTopics = useMemo(
-    () =>
-      [...memTopics]
-        .sort((a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0))
-        .slice(0, LANDING_MEM_CARDS),
-    [memTopics]
-  );
-  // "12 topics · 5 reference · 4 feedback" — the total, then the two commonest
-  // kinds. A full breakdown runs past the section head on any real memory, and
-  // the two that dominate are what says what this project remembers.
-  const memTypeBreakdown = useMemo(() => {
-    const counts = new Map<string, number>();
-    for (const t of memTopics) counts.set(t.type, (counts.get(t.type) ?? 0) + 1);
-    return [...counts.entries()]
-      .sort((a, b) => b[1] - a[1])
-      .slice(0, 2)
-      .map(([type, n]) => `${n} ${type}`);
-  }, [memTopics]);
-  const renderMemCard = (t: MemoryTopic, accent: boolean) => {
-    const tTags = tagsForMemory(t.filename);
-    const open = () =>
-      onNavigate({
-        type: 'memory-topic',
-        topic: t,
-        content: topicContent(t.filename),
-        hash: project.hash,
-      });
-    return (
-      <div
-        key={t.filename}
-        role="button"
-        tabIndex={0}
-        className={`cl-mcard${accent ? ' accent' : ''}`}
-        title={t.description || t.name}
-        onClick={open}
-        onKeyDown={e => {
-          if (e.key === 'Enter' || e.key === ' ') {
-            e.preventDefault();
-            open();
-          }
-        }}
-      >
-        <div className="head">
-          <span className="glyph">{(t.name[0] ?? '?').toUpperCase()}</span>
-          <span className="kind">{t.type}</span>
-          {t.createdAt && <span className="when">{relIso(t.createdAt)}</span>}
-        </div>
-        <div className="name">
-          <SlugName text={t.name} />
-        </div>
-        <p className="preview">
-          {t.description ? memPreview(t.description, MEM_CARD_PREVIEW_MAX) : '—'}
-        </p>
-        {tTags.length > 0 && (
-          <div className="tags">
-            {tTags.map(name => (
-              <TagChip
-                key={name}
-                name={name}
-                tone="soft"
-                variant="plain"
-                style={{ fontSize: 10, height: 18 }}
-              />
-            ))}
-          </div>
-        )}
-      </div>
-    );
-  };
+  // Recency, not pins-first (design 3b): the head says "Recent sessions" and
+  // the band no longer prints "last … ago", so the top row is now the page's
+  // only statement of when this project was last touched — a pinned session
+  // from three weeks ago in that slot would make the page lie. Pins keep their
+  // own section in the Sessions view, which is where they are acted on.
+  const landingSessions = useMemo(() => sessions.slice(0, LANDING_SESSIONS), [sessions]);
 
   const enabledMcp = useMemo(() => {
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])];
     return all.filter(s => !s.disabledProjectPaths.includes(project.realPath));
   }, [mcpData, project.realPath]);
 
-  const claudeMdLayers = claudeMd?.layers.length ?? 0;
-  // Ordinati come la cascata che l'intestazione annuncia (global → project →
-  // local → subdir), non con il project in testa: la riga d'intestazione fa da
-  // legenda della lista solo se la lista la segue. I subdir vengono dopo, per
-  // profondità e poi alfabetici, così il ramo si legge dall'alto.
-  const claudeMdLayerList = useMemo(() => {
-    const order = { global: 0, project: 1, local: 2, subdir: 3 } as const;
-    const rows = [...(claudeMd?.layers ?? [])]
-      .map(layer => ({ layer, lines: layer.content.split('\n').length }))
-      .sort((a, b) => {
-        const byScope = order[a.layer.scope] - order[b.layer.scope];
-        if (byScope !== 0) return byScope;
-        const depth = a.layer.filePath.split('/').length - b.layer.filePath.split('/').length;
-        return depth !== 0 ? depth : a.layer.filePath.localeCompare(b.layer.filePath);
-      });
-    const maxLines = rows.reduce((m, r) => Math.max(m, r.lines), 1);
-    return rows.map(r => ({ ...r, weight: r.lines / maxLines }));
-  }, [claudeMd]);
   const skillCount = allSkills.length;
   const agents = useMemo(() => {
     const seen = new Map<string, (typeof globalAgents)[number]>();
@@ -814,30 +558,40 @@ export function ProjectView({
           isTeamsSection ? ' cl-hero--compact cl-hero--teams' : ' cl-hero--band'
         }`}
       >
-        {!isTeamsSection && <Lens />}
-        <div className="cl-hero-actions">
-          <button
-            className="cl-btn cl-btn--quiet"
-            type="button"
-            title="In-app chat through the Agent SDK — billed to Agent SDK credits, separate from your subscription plan"
-            onClick={() => onNavigate({ type: 'new-chat', project })}
-          >
-            <ChatGlyph />
-            SDK chat
-          </button>
-          <button
-            className="cl-btn"
-            type="button"
-            title="Opens the interactive claude CLI embedded in ClaudeLens, with a Mission Control panel and a switch to read the same session as SDK chat (Lens). Terminal usage counts against your subscription plan."
-            onClick={() => onNavigate({ type: 'terminal', project })}
-          >
-            Open in Claude Code
-          </button>
-        </div>
+        {/* Teams keeps the compact glass pair pinned top-right. The project
+            hero drops it: design 3b puts the actions in flow under the metrics,
+            where the page can give them a hierarchy. */}
+        {isTeamsSection && (
+          <div className="cl-hero-actions">
+            <button
+              className="cl-btn cl-btn--quiet"
+              type="button"
+              title={SDK_CHAT_TITLE}
+              onClick={() => onNavigate({ type: 'new-chat', project })}
+            >
+              <ChatGlyph />
+              SDK chat
+            </button>
+            <button
+              className="cl-btn"
+              type="button"
+              title={CLAUDE_CODE_TITLE}
+              onClick={() => onNavigate({ type: 'terminal', project })}
+            >
+              Open in Claude Code
+            </button>
+          </div>
+        )}
 
         <div className="cl-eyebrow">
           <span className="pip" />
-          <span title={project.realPath}>Project · {project.realPath}</span>
+          {/* The path keeps its own case. The eyebrow is uppercase, and a
+              path is not free text — `/Users/…` rendered as `/USERS/…` is a
+              string that would not resolve, printed in the one place the page
+              claims to say where the project lives. */}
+          <span title={project.realPath}>
+            Project · <span className="path">{project.realPath}</span>
+          </span>
           {isTeamsSection && <span className="cl-hero-section-label">Teams</span>}
           <button
             type="button"
@@ -852,23 +606,30 @@ export function ProjectView({
           </button>
         </div>
 
-        <button
-          className="cl-h-name"
-          type="button"
-          {...searchTriggerProps}
-          onClick={e => onToggleProjectSearch(e.currentTarget)}
-          aria-haspopup="dialog"
-        >
-          <span className="label-name">{projectName}</span>
-          <span className="glyph">.</span>
-          <span className="chev">↓</span>
-        </button>
+        {/* Name and description share one baseline (design 2a): a single
+            typographic unit instead of two stacked blocks. The wrapper only
+            goes flex under `.cl-hero--band`, so the Teams header is untouched. */}
+        <div className="cl-h-title">
+          <button
+            className="cl-h-name"
+            type="button"
+            {...searchTriggerProps}
+            onClick={e => onToggleProjectSearch(e.currentTarget)}
+            aria-haspopup="dialog"
+          >
+            <span className="label-name">{projectName}</span>
+            <span className="glyph">.</span>
+            <span className="chev">↓</span>
+          </button>
 
-        {/* What the project is, in one line — derived from its CLAUDE.md and
-            editable in place (the edit is stored in ClaudeLens' prefs, never
-            written back to the file). The Teams hero is a compact operational
-            header, so it keeps its meta line instead. */}
-        {!isTeamsSection && <ProjectDescription hash={project.hash} realPath={project.realPath} />}
+          {/* What the project is, in one line — derived from its CLAUDE.md and
+              editable in place (the edit is stored in ClaudeLens' prefs, never
+              written back to the file). The Teams hero is a compact operational
+              header, so it keeps its meta line instead. */}
+          {!isTeamsSection && (
+            <ProjectDescription hash={project.hash} realPath={project.realPath} />
+          )}
+        </div>
 
         {isTeamsSection ? (
           <div className="cl-h-meta">
@@ -885,314 +646,181 @@ export function ProjectView({
             )}
           </div>
         ) : (
-          /* Metrics band (design 5b): the project's numbers read as a strip of
-             hairline-divided cells under the name, replacing both the old meta
-             line and the 4-cell stat strip that used to sit below the hero. The
-             timeline bars ride inside the first two cells so the retention
-             distribution survives the move. */
-          <div className="cl-hband">
-            <div className="cl-hcell">
-              <div className="lbl">
-                Sessions / {retentionDays}d
-                {lastActive && <span className="when">last {relIso(lastActive)} ago</span>}
+          /* Metrics row (design 3b): four flat columns — a label and a
+             figure each — in place of the hairline-divided band. The retention
+             window is stated once, on the first column, and governs the row;
+             the sparkline, the session delta and the per-cell small print went
+             with the band, which is the point of the rewrite. */
+          <>
+            <div className="cl-hband">
+              <div className="cl-hcell">
+                <div className="lbl">Sessions / {retentionDays}d</div>
+                <div className="num">{fmt(sessionCount)}</div>
               </div>
-              <div className="num">
-                {fmt(sessionCount)}
-                {sessionDelta !== 0 && (
-                  /* The delta is against the window immediately before this one.
-                     It carried no reference at all, and a green "+3" also read as
-                     a verdict the data does not hold — more sessions is not
-                     better — so it states its baseline and stays neutral. */
-                  <span
-                    className="delta"
-                    title={`${fmt(prevWindowSessions)} in the previous ${retentionDays} days`}
-                  >
-                    {sessionDelta > 0 ? '+' : '−'}
-                    {Math.abs(sessionDelta)}
-                  </span>
-                )}
-              </div>
-              {/* The only sparkline left: sessions and tokens trace nearly the
-                  same curve, so a second one spent a quarter of the band
-                  re-drawing this one. */}
-              <Bars buckets={statBuckets} metric="sessions" />
-              <div className="sub">
-                {olderSessionCount > 0
-                  ? `${fmt(olderSessionCount)} older · ${fmt(allSessionCount)} total`
-                  : `all ${fmt(allSessionCount)} in window`}
-              </div>
-            </div>
 
-            <div
-              className="cl-hcell cl-hcell--hover"
-              onMouseEnter={openTokenPeek}
-              onMouseLeave={closeTokenPeek}
-            >
-              <div className="lbl">Tokens / {retentionDays}d</div>
               <div
-                className="num"
-                ref={tokenNumRef}
-                tabIndex={0}
-                onFocus={openTokenPeek}
-                onBlur={closeTokenPeek}
+                className="cl-hcell cl-hcell--hover"
+                onMouseEnter={openTokenPeek}
+                onMouseLeave={closeTokenPeek}
               >
-                {tokensFmt.value}
-                <small>{tokensFmt.unit}</small>
-              </div>
-              <div className="sub">
-                {Math.round(tokenParts.cacheShare)}% cache read
-                <span className="cl-hpeek-hint"> · hover</span>
-              </div>
-              {/* Portalled to <body> on purpose: `.cl-hero` clips its children
-                  (`overflow: hidden` keeps the Lens, which overhangs by 120px,
-                  inside), so a card anchored inside the cell was cut off at the
-                  hero's bottom edge. Same move MemoryPeekCard makes. */}
-              {tokenPeek &&
-                totalTokens > 0 &&
-                createPortal(
-                  <ReadoutShell
-                    title="TOKENS"
-                    meta={`${retentionDays}d`}
-                    style={{
-                      position: 'fixed',
-                      top: tokenPeek.top,
-                      left: tokenPeek.left,
-                      width: PEEK_W,
-                    }}
-                  >
-                    <div className="flex" style={{ gap: 12, marginTop: 11 }}>
-                      <ReadoutCell label="TOTAL" value={kTok(totalTokens)} />
-                      <ReadoutCell
-                        label="CACHE READ"
-                        value={`${Math.round(tokenParts.cacheShare)}%`}
+                <div className="lbl">Tokens</div>
+                <div
+                  className="num"
+                  ref={tokenNumRef}
+                  tabIndex={0}
+                  onFocus={openTokenPeek}
+                  onBlur={closeTokenPeek}
+                >
+                  {tokensFmt.value}
+                  <small>{tokensFmt.unit}</small>
+                </div>
+                {/* Portalled to <body> on purpose: `.cl-hero` clips its children
+                    (`overflow: hidden` keeps the live aura inside), so a card
+                    anchored inside the cell was cut off at the hero's bottom
+                    edge. Same move MemoryPeekCard makes. The composition of the
+                    figure now lives only here — the band's "% cache read" line
+                    is gone — so the dotted rule under the number is the
+                    affordance. */}
+                {tokenPeek &&
+                  totalTokens > 0 &&
+                  createPortal(
+                    <ReadoutShell
+                      title="TOKENS"
+                      meta={`${retentionDays}d`}
+                      style={{
+                        position: 'fixed',
+                        top: tokenPeek.top,
+                        left: tokenPeek.left,
+                        width: PEEK_W,
+                      }}
+                    >
+                      <div className="flex" style={{ gap: 12, marginTop: 11 }}>
+                        <ReadoutCell label="TOTAL" value={kTok(totalTokens)} />
+                        <ReadoutCell
+                          label="CACHE READ"
+                          value={`${Math.round(tokenParts.cacheShare)}%`}
+                        />
+                        <ReadoutCell
+                          label="SAVED"
+                          value={fmtCost(tokenParts.cacheSavings)}
+                          color="var(--cl-ok)"
+                        />
+                      </div>
+                      <ReadoutRule />
+                      <ReadoutPart
+                        label="fresh in/out"
+                        value={kTok(tokenParts.fresh)}
+                        share={pctOf(tokenParts.fresh, totalTokens)}
+                        color={READOUT_RAMP.soft}
                       />
-                      <ReadoutCell
-                        label="SAVED"
-                        value={fmtCost(tokenParts.cacheSavings)}
-                        color="var(--cl-ok)"
+                      <ReadoutPart
+                        label="cache read"
+                        value={kTok(tokenParts.cacheRead)}
+                        share={pctOf(tokenParts.cacheRead, totalTokens)}
+                        color={READOUT_RAMP.full}
                       />
+                      <ReadoutPart
+                        label="cache write"
+                        value={kTok(tokenParts.cacheWrite)}
+                        share={pctOf(tokenParts.cacheWrite, totalTokens)}
+                        color={READOUT_RAMP.mid}
+                      />
+                    </ReadoutShell>,
+                    document.body
+                  )}
+              </div>
+
+              <div className="cl-hcell">
+                <div className="lbl">Spend</div>
+                <div className="num">{fmtCost(totalCost)}</div>
+              </div>
+
+              <div className="cl-hcell cl-hcell--mix">
+                <div className="lbl">Models</div>
+                {modelMix.length === 0 ? (
+                  <div className="sub">No usage in this window</div>
+                ) : (
+                  <>
+                    {/* A part-of-whole bar needs more than one visible part.
+                        On a project that ran 99.6% Opus it drew a solid violet
+                        block — a filled rectangle, saying only "all of it" —
+                        while the legend under it read `Sonnet <1%`. When one
+                        family takes the window, the legend says so on its own
+                        and the bar is dropped. */}
+                    {modelMix.filter(s => s.pct >= 1).length > 1 && (
+                      <div className="cl-mixbar">
+                        {modelMix.map(slice => (
+                          <i
+                            key={slice.key}
+                            className={`seg ${slice.key}`}
+                            style={{ width: `${slice.pct}%` }}
+                            title={`${slice.label} · ${fmt(slice.tokens)} tok · ${slice.sessions} ${
+                              slice.sessions === 1 ? 'session' : 'sessions'
+                            }`}
+                          />
+                        ))}
+                      </div>
+                    )}
+                    {/* One line, dot-separated: bar plus a stacked legend was the
+                        same share encoded twice, over two rows. */}
+                    <div className="cl-mixlegend">
+                      {modelMix.map(slice => (
+                        <span key={slice.key}>
+                          <i className={`dot ${slice.key}`} />
+                          {slice.label} {slice.pctLabel}%
+                        </span>
+                      ))}
                     </div>
-                    <ReadoutRule />
-                    <ReadoutPart
-                      label="fresh in/out"
-                      value={kTok(tokenParts.fresh)}
-                      share={pctOf(tokenParts.fresh, totalTokens)}
-                      color={READOUT_RAMP.soft}
-                    />
-                    <ReadoutPart
-                      label="cache read"
-                      value={kTok(tokenParts.cacheRead)}
-                      share={pctOf(tokenParts.cacheRead, totalTokens)}
-                      color={READOUT_RAMP.full}
-                    />
-                    <ReadoutPart
-                      label="cache write"
-                      value={kTok(tokenParts.cacheWrite)}
-                      share={pctOf(tokenParts.cacheWrite, totalTokens)}
-                      color={READOUT_RAMP.mid}
-                    />
-                  </ReadoutShell>,
-                  document.body
+                  </>
                 )}
-            </div>
-
-            {/* Spend takes the cell Messages held: it is the question an
-                overview gets asked, and it used to be the smallest line of the
-                band. Messages survives as the qualifier it always was. */}
-            <div className="cl-hcell">
-              <div className="lbl">Spend / {retentionDays}d</div>
-              <div className="num">{fmtCost(totalCost)}</div>
-              <div className="sub">
-                {fmt(avgMessages)} msg avg · {fmt(totalMessages)} total
               </div>
             </div>
 
-            <div className="cl-hcell cl-hcell--mix">
-              <div className="lbl">Model mix / {retentionDays}d</div>
-              {modelMix.length === 0 ? (
-                <div className="sub">No usage in this window</div>
-              ) : (
-                <>
-                  <div className="cl-mixbar">
-                    {modelMix.map(slice => (
-                      <i
-                        key={slice.key}
-                        className={`seg ${slice.key}`}
-                        style={{ width: `${slice.pct}%` }}
-                        title={`${slice.label} · ${fmt(slice.tokens)} tok · ${slice.sessions} ${
-                          slice.sessions === 1 ? 'session' : 'sessions'
-                        }`}
-                      />
-                    ))}
-                  </div>
-                  {/* One line, dot-separated: bar plus a stacked legend was the
-                      same share encoded twice, over two rows. */}
-                  <div className="cl-mixlegend">
-                    {modelMix.map(slice => (
-                      <span key={slice.key}>
-                        <i className={`dot ${slice.key}`} />
-                        {slice.label} {slice.pctLabel}%
-                      </span>
-                    ))}
-                  </div>
-                </>
-              )}
+            {/* One action (design 3b): a terracotta pill for the thing the page
+                is actually for, SDK chat as a label beside it. Both keep the
+                tooltip that says which budget each one spends — the only place
+                the app draws that line. */}
+            <div className="cl-hero-cta-row">
+              <button
+                className="cl-hero-cta"
+                type="button"
+                title={CLAUDE_CODE_TITLE}
+                onClick={() => onNavigate({ type: 'terminal', project })}
+              >
+                Open in Claude Code
+              </button>
+              <button
+                className="cl-hero-alt"
+                type="button"
+                title={SDK_CHAT_TITLE}
+                onClick={() => onNavigate({ type: 'new-chat', project })}
+              >
+                SDK chat
+              </button>
             </div>
-          </div>
+          </>
         )}
       </section>
 
       {/* ─── SECTION CONTENT ──────────────────────────── */}
       {section === 'overview' && (
-        <>
-          {/* One session block, not two (design 1c): the pinned section and the
-              thinner "Recent" strip were the same list read twice, and the strip
-              had to drop pins, tags and the figure cluster to justify sitting
-              under a section that carried them. Three full rows instead, pins
-              first, with the caption saying how many pins the history holds. */}
-          <section className="cl-section">
-            <div className="cl-sec-head">
-              <h2>Sessions</h2>
-              <span className="ct">
-                {hasPinnedSession ? `${pinnedSessions.length} pinned · ` : ''}
-                {fmt(sessions.length)} total
-              </span>
-              <button
-                className="all"
-                type="button"
-                onClick={() => onNavigate({ type: 'sessions', project })}
-              >
-                View all
-              </button>
-            </div>
-            {/* SessionRows prints its own "No sessions yet." empty state. */}
-            <SessionRows
-              sessions={landingSessions}
-              projectHash={project.hash}
-              cleanupDays={cleanupDays}
-              onOpen={openTerminal}
-              onOpenChat={openChat}
-              rankOf={s => sessionRank.get(s.filename) ?? 0}
-            />
-          </section>
-
-          <section className="cl-section">
-            <div className="cl-sec-head">
-              <h2>Memory</h2>
-              <span className="ct">
-                {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
-                {memTypeBreakdown.length > 0 && ` · ${memTypeBreakdown.join(' · ')}`}
-              </span>
-              <button
-                className="all"
-                type="button"
-                onClick={() => onNavigate({ type: 'project-memory', project })}
-              >
-                View all
-              </button>
-            </div>
-            {/* One view, newest first. The landing shows six cards out of a
-                history that runs to dozens: at that size grouping by type was a
-                control over a sample, and the subtab it links to owns the
-                complete list with the sorting and grouping that belong there. */}
-            {landingMemTopics.length === 0 ? (
-              <div className="cl-empty">No memory topics yet.</div>
-            ) : (
-              <div className="cl-mem-cards">
-                {landingMemTopics.map((t, i) => renderMemCard(t, i === 0))}
-              </div>
-            )}
-          </section>
-
-          <section className="cl-section">
-            <div className="cl-sec-head">
-              <h2>CLAUDE.md</h2>
-              <span className="ct">
-                {claudeMdLayers} {claudeMdLayers === 1 ? 'layer' : 'layers'} · global → project →
-                local → subdir
-              </span>
-            </div>
-            {claudeMdLayers === 0 ? (
-              <div className="cl-empty">No CLAUDE.md instructions for this project.</div>
-            ) : (
-              /* Una colonna sola: la cascata è una sequenza ordinata, e la
-                 griglia a due colonne la faceva leggere a zig-zag. */
-              <div className="cl-md-cascade">
-                {claudeMdLayerList.map(({ layer: l, lines, weight }) => {
-                  const { prefix, focus, suffix } = claudeMdPathParts(l, project.realPath);
-                  return (
-                    <button
-                      key={l.filePath}
-                      type="button"
-                      className="cl-md-layer"
-                      data-scope={l.scope}
-                      title={l.scope === 'global' ? '~/.claude/CLAUDE.md' : l.filePath}
-                      onClick={() =>
-                        l.scope === 'global'
-                          ? onNavigate({ type: 'global-claudemd' })
-                          : onNavigate({ type: 'project-claudemd', project, layer: l })
-                      }
-                    >
-                      <span className="scope">{CLAUDE_MD_SCOPE_LABEL[l.scope]}</span>
-                      <span className="path">
-                        {prefix && <span className="dim">{prefix}</span>}
-                        <span className="focus">{focus}</span>
-                        {suffix && <span className="dim">{suffix}</span>}
-                      </span>
-                      {/* 36 righe contro 882: la barra dice a colpo d'occhio
-                          quale layer pesa davvero nel contesto. */}
-                      <span className="weight" aria-hidden="true">
-                        <i style={{ width: `${Math.max(4, Math.round(weight * 100))}%` }} />
-                      </span>
-                      <span className="lines">
-                        <b>{lines}</b> lines
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </section>
-
-          <section className="cl-config-strip">
+        /* Design 3b: the landing is the hero and one list, nothing else. The
+           Memory cards, the CLAUDE.md cascade and the Skills/Agents/MCP/Rules
+           strip were previews of things the rail already counts one click
+           away; the cascade moved to Config, where a configuration belongs. */
+        <section className="cl-section cl-section--landing">
+          <div className="cl-sec-head cl-sec-head--rule">
+            <h2>Recent sessions</h2>
             <button
-              className={`item ${skillCount ? 'on' : ''}`}
+              className="all"
               type="button"
-              onClick={() => onNavigate({ type: 'project-skills', project })}
+              onClick={() => onNavigate({ type: 'sessions', project })}
             >
-              <span className="pip" />
-              <span>Skills</span>
-              <span className="num">{skillCount}</span>
+              All {fmt(sessions.length)}
             </button>
-            <button
-              className={`item ${agentCount ? 'on' : ''}`}
-              type="button"
-              onClick={() => onNavigate({ type: 'project-agents', project })}
-            >
-              <span className="pip" />
-              <span>Agents</span>
-              <span className="num">{agentCount}</span>
-            </button>
-            <button
-              className={`item ${enabledMcp.length ? 'on' : ''}`}
-              type="button"
-              onClick={() => onNavigate({ type: 'project-mcp', project })}
-            >
-              <span className="pip" />
-              <span>MCP</span>
-              <span className="num">{enabledMcp.length}</span>
-            </button>
-            <button
-              className={`item ${rules.length ? 'on' : ''}`}
-              type="button"
-              onClick={() => onNavigate({ type: 'project-mcp', project })}
-            >
-              <span className="pip" />
-              <span>Rules</span>
-              <span className="num">{rules.length} active</span>
-            </button>
-          </section>
-        </>
+          </div>
+          <RecentSessionRows sessions={landingSessions} onOpen={openTerminal} />
+        </section>
       )}
 
       {section === 'sessions' && (
@@ -1700,7 +1328,11 @@ export function ProjectView({
       )}
 
       {section === 'config' && (
-        <ProjectConfigView project={project} onDeleteProject={() => onDeleteProject(project)} />
+        <ProjectConfigView
+          project={project}
+          onNavigate={onNavigate}
+          onDeleteProject={() => onDeleteProject(project)}
+        />
       )}
     </div>
   );
@@ -1887,9 +1519,12 @@ const SessionRow = memo(function SessionRow({
   onDelete,
 }: SessionRowProps) {
   const fam = modelFamily(s.model);
-  // No title of any kind on disk → sessionTitle() falls back to the placeholder,
-  // which the row prints in the muted italic of the mock.
-  const untitled = !(s.customTitle?.trim() || s.aiTitle?.trim() || s.firstUserMessage?.trim());
+  // No name of any kind on disk → sessionTitle() falls back to the placeholder,
+  // which the row prints in the muted italic of the mock. Asked through
+  // `sessionName` rather than re-listing the fields: a row that re-derives the
+  // precedence is a row that misses the next record Claude Code adds — a
+  // `/rename`d session printed its name in the "Untitled" italic.
+  const untitled = sessionName(s) === null;
   return (
     <div
       role="button"
@@ -1916,7 +1551,16 @@ const SessionRow = memo(function SessionRow({
       >
         <PinIcon filled={pinned} />
       </button>
-      <span className="idx">{String(rank).padStart(2, '0')}</span>
+      {/* The session's `/color`, worn by the ordinal itself — see `.cl-scolor`
+          in index.css for why it is not a dot here: the row already has the
+          green LIVE one and the model's, and a third read as a traffic light.
+          Nothing is added when the session carries no colour. */}
+      <span
+        className={`idx${s.agentColor ? ` is-coloured ${s.agentColor}` : ''}`}
+        title={s.agentColor ? `Session colour: ${s.agentColor}` : undefined}
+      >
+        {String(rank).padStart(2, '0')}
+      </span>
       <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
       {live && <LiveTag />}
       <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
@@ -2088,6 +1732,66 @@ function SessionRows({
           onDeleted={() => setDeleteFor(null)}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * The Overview's session list, drawn to design 3b: a title with the running
+ * chip beside it and one mono line of figures underneath, rows divided by
+ * hairlines. Deliberately *not* `SessionRows` with a variant flag — the pin,
+ * the coloured ordinal, the tags and the kebab belong to the Sessions view,
+ * which owns the list as a workspace; the landing reads three recent sessions
+ * and hands the rest over with "View all". A flag on the shared component is
+ * how that view changes by accident.
+ */
+function RecentSessionRows({
+  sessions,
+  onOpen,
+}: {
+  sessions: SessionSummary[];
+  onOpen: (s: SessionSummary) => void;
+}) {
+  const { data: activeSessions = [] } = useActiveSessions();
+  const liveIds = useMemo(
+    () => new Set(activeSessions.map(a => a.sessionId).filter(Boolean)),
+    [activeSessions]
+  );
+
+  if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>;
+
+  return (
+    <div className="cl-rsrows">
+      {sessions.map(s => {
+        const untitled = sessionName(s) === null;
+        return (
+          <div
+            key={s.filename}
+            role="button"
+            tabIndex={0}
+            className="cl-rsrow"
+            onClick={() => onOpen(s)}
+            onKeyDown={e => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                onOpen(s);
+              }
+            }}
+          >
+            <div className="head">
+              <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
+              {liveIds.has(s.filename.replace(/\.jsonl$/, '')) && <LiveTag />}
+            </div>
+            {/* One mono line, in the mock's order: messages, model, tokens,
+                when. No model dot — the row has no other colour to sit against
+                and the name already says which model it was. */}
+            <div className="meta">
+              {fmt(s.messageCount)} msg · {s.model ? fmtModel(s.model) : '—'} · {fmt(s.totalTokens)}{' '}
+              tokens · {shortWhen(s.date)}
+            </div>
+          </div>
+        );
+      })}
     </div>
   );
 }

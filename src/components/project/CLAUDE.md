@@ -22,7 +22,7 @@ Formatter puri (nessuna dipendenza React):
 - `fmtModel(m)` — ID modello → nome leggibile (`claude-sonnet-4-6` → `Sonnet 4.6`)
 - `modelColor(m)` — colore hex accent per famiglia modello
 - `formatTokens(n)` — conteggio compatto `{value, unit}` (`2.3` + `m`)
-- `modelMixKey(m)` / `buildModelMix(sessions)` — distribuzione per famiglia modello della **fascia metriche** dell'hero progetto: quota sui **token** (non sulle sessioni), famiglie a zero token scartate (mai un segmento a larghezza nulla), finestra senza uso → `[]` e la cella mostra l'empty state. Un id sconosciuto finisce in `other` invece di essere indovinato. Unit-tested in `test/project-formatters.test.ts`
+- `modelMixKey(m)` / `buildModelMix(sessions)` — distribuzione per famiglia modello della **fascia metriche** dell'hero progetto: quota sui **token** (non sulle sessioni), famiglie a zero token scartate (mai un segmento a larghezza nulla), finestra senza uso → `[]` e la cella mostra l'empty state. Le famiglie sono Fable / Opus / Sonnet / Haiku, in quest'ordine; un id sconosciuto finisce in `other` invece di essere indovinato, e lì resta anche Mythos — stessa fascia di Fable ma modello diverso, e un'etichetta sbagliata in legenda è peggio di una generica. Unit-tested in `test/project-formatters.test.ts`
 
 ---
 
@@ -69,7 +69,7 @@ Formatter puri (nessuna dipendenza React):
 - **`useThoughtStream.ts`** — **Hook: una frase alla volta, temporizzata per la lettura.** La sorgente sono i `messages` che il chiamante ha già (la lettura watcher-driven del Lens, lo stream della chat live) — nessuna IPC e nessun watcher in più. La **coda vive in un ref e a renderizzare è l'orologio**: lo stato React è solo la frase a schermo e l'unico posto che la scrive è la callback del timer (`pump`). Non è un aggiramento della regola `react-hooks/set-state-in-effect` ma la forma onesta della cosa — una riga temporizzata è un sistema esterno con un clock, e questo hook lo pilota e lo ascolta; derivarla dai `messages` con un `setState` nel corpo dell'effect avrebbe anche ri-renderizzato a ogni raffica del watcher di una sessione che non aveva niente da dire. `until` è **assoluto**: l'effect ri-gira a ogni append, e re-armare il timer deve re-armare lo **stesso** istante, altrimenti una sessione attiva congelerebbe una frase a schermo (coperto da `test/thought-stream.test.tsx`, l'unico test che cade se la scadenza diventa relativa)
 - **`ThoughtLine.tsx`** — La riga di commento, resa da `ChatControlPill` **dentro `.cl-pill-wrap`** e posizionata in assoluto sopra di esso. Il posto **è** il progetto: erediterebbe — ed eredita — ogni offset di fondo che il wrap già porta (Lens nudo, composer, composer locked) senza ridichiararne uno, sta fuori dal flusso quindi non può allargare la pill su cui galleggia (il wrap è `align-items: stretch`: una frase da 58 caratteri come figlio flex la stirerebbe), e cade dentro il padding che la colonna di lettura riserva già sotto il transcript — quindi non copre nessun turno e non muove niente. Iniettarla nel transcript non è mai stata un'opzione: quella lista è finestrata con misura per riga e bottom-pinned, e righe effimere litigherebbero con entrambi
 - **`FocusMinimap.tsx`** — Minimap a filo del layout Focus (`cl-focus-rail`): un dot proporzionale per turno-messaggio, ruler adattivo (spacing/anelli scalano con la densità misurata via ResizeObserver), label in hover, scroll-spy
-- **`ChatControlPill.tsx`** — Pill flottante glass (`cl-pill`) coi controlli del transcript: filtri per tipo + toggle densità Min/Full, **agent dock** + **skill dock** (`AgentDockSheet`/`SkillDockSheet` + orb cluster), e lo sheet Export/Delete. Alza **un solo sheet alla volta** (`'agents' | 'skills' | 'export'`); registra un opener imperativo (`openExportRef`) per il bottone export per-turno. Estratto da `ChatView`. Ospita anche il **commento in corsa**: la `ThoughtLine` sopra il wrap e il toggle `Notes` (`.cl-pill-narrate`, `NarrateGlyph`) tra la densità e i dock. Il toggle compare **solo se `onToggleThoughts` è passato**, cosa che `ChatView` fa soltanto per una sessione viva nel registro: un controllo permanente per qualcosa che non può mai parlare è un controllo per niente
+- **`ChatControlPill.tsx`** — Pill flottante glass (`cl-pill`) coi controlli del transcript: filtri per tipo + toggle densità Min/Full, **agent dock** + **skill dock** (`AgentDockSheet`/`SkillDockSheet` + orb cluster), e lo sheet Export/Delete. Alza **un solo sheet alla volta** (`'agents' | 'skills' | 'models' | 'export'`); registra un opener imperativo (`openExportRef`) per il bottone export per-turno. Estratto da `ChatView`. Ospita anche il **commento in corsa**: la `ThoughtLine` sopra il wrap e il toggle `Notes` (`.cl-pill-narrate`, `NarrateGlyph`) tra la densità e i dock. Il toggle compare **solo se `onToggleThoughts` è passato**, cosa che `ChatView` fa soltanto per una sessione viva nel registro: un controllo permanente per qualcosa che non può mai parlare è un controllo per niente. Prima cella della pill: il **chip del modello** (`.cl-pill-model`) — con cosa si sta parlando adesso e a che **effort** — che è identità, non un controllo, quindi sta a sinistra di tutto il resto e lo etichetta. Il valore non è una proprietà della sessione: `/model` lo cambia a conversazione in corso e il transcript lo registra solo scrivendo un `model` diverso sui turni successivi, quindi il chip stampa **l'ultima** tratta di `collectModelRuns` (`chat/utils.ts`) e mai la prima. Una chat che ha cambiato modello — o effort, che si muove per conto suo: su questa macchina 3 transcript cambiano effort a modello fermo — porta `+N` e un caret: diventa un dock come agents/skills, e il `ModelDockSheet` elenca ogni tratta col turno da cui parte e quanti turni ci sono girati, con il locate che ci salta. Le etichette contano **tratte**, non modelli (`Model & effort · N runs`, tooltip "model or effort changed N times"): una tratta può nascere da un cambio di solo effort, e chiamarla modello sarebbe falso proprio nel caso che esiste sul disco. Tinta da `modelColor()` via `--mt`, la stessa dimensione-dato che codifica il chip per-turno: nessuna tinta nuova. L'effort arriva dalla **riga** di transcript, non da `message` (vedi `transcript-extras`), quindi manca sui transcript che non lo scrivono e il chip semplicemente non lo stampa invece di inventare un default
 - **`useTranscriptModel.ts`** → `useTranscriptModel`, `TranscriptModel` — **Hook: derivazione del transcript Focus.** Da `processed` + `detailsFilter` + resolver tinta agent ricava `descriptors`/`visibleItems`/`minimapItems`/`renderItems`/`rows`/`rowIndexByTurn`/`filterCounts` (tutto memoizzato; la logica pesante — `buildRenderItems`/`buildRenderRows`/`computeFilterCounts` — è in `utils.ts`, unit-tested). `rows` sono le righe già risolte che il virtualizer itera, `rowIndexByTurn` traduce numero di turno → indice di riga per lo scroll
 - **`ChatView.tsx`** — **Viewer read-only, disk-backed** di una sessione esistente — layout **"Focus"** (`cl-chat-workspace--focus`). `displayMessages = messages` (il read di `useChatSession`, memoizzato per stabilità referenziale), watcher-driven; **niente composer, niente stream** — la chat SDK live è una vista separata (`LiveChatView`) che non legge mai il disco. La derivazione del transcript è in `useTranscriptModel`, pill/minimap nei rispettivi file. Solo `TopBar` (back + titolo + toggle Chat/Timeline + tag + badge **"Live in terminal"** se la sessione è viva nel registro; il vecchio bottone "Continue chat" è stato rimosso — l'ingresso alla chat SDK è l'azione **"Chat"** sulla riga sessione, che apre direttamente `LiveChatView` in resume mode) sopra una **colonna di lettura centrata** (`cl-chat-reading`, ~820px). Il linguaggio visivo della superficie di lettura è la variante **"Nastro"** (design handoff _Lens variants_, sostituisce le "isole di vetro"): niente card e niente vetro — ogni turno è un **pallino di ruolo da 9px appeso a un filo verticale** (`.cl-turn-spine`, riabilitato con extra specificità perché ogni riga virtualizzata è figlio unico e il `:last-child` di base lo spegnerebbe ovunque), il corpo poggia sulla carta e si chiude con una **riga sottile allineata alla colonna di testo**; i tool scendono a **chip inline che vanno a capo** (`cl-tool-stack` in flex-wrap; un chip aperto — o che porta la striscia d'errore collassata, via `:has()` — si prende l'intera riga per avere spazio al pannello input/result); il codice inline perde la pastiglia. Un **turno di continuazione** (assistant senza testo dopo un altro assistant) non ha né pallino né riga: il filo lo attraversa intero, così una sequenza di turni tool-only in densità Full non diventa una scaletta di filetti. `.cl-transcript-inner` in `cl-chat-reading` ha `gap: 0` — il ritmo lo dà il padding del corpo, e un gap flex spezzerebbe il filo nella live chat (il transcript finestrato posiziona le righe in assoluto e il gap non lo vede). Coerentemente, `cl-pill` e `cl-turns-capsule` sono passate da vetro a **carta opaca + hairline**. La **Mission Control rail** (`terminal/MissionRail.tsx`) è andata oltre Nastro fino al design **1d · Feed**: niente più blocchi per specie, un solo **flusso cronologico** di eventi con le sezioni demolite a **filtri** (vedi il doc del componente). I due numeri della riga vitals (context %, spend) sono **hover target** che fanno scendere una readout card (`terminal/VitalsPopover.tsx`): recuperano i dati che i vecchi blocchi CONTEXT WINDOW / SPEND stampavano fissi (`used · left · total`, `cache −$x · y% saved`, rimasti per una release come `title` nativi) e ci aggiungono la **composizione** — cache read / fresh input / cache write per il contesto, il mix di token per la spesa — come part-of-whole su rampa monocroma accent (`color-mix` contro `--cl-paper`, così la scala si inverte da sola nel tema dark). Le card sono `pointer-events: none` (non contengono controlli: catturare il cursore le terrebbe aperte dopo che il puntatore ha lasciato il numero) e i trigger sono `tabIndex`+`onFocus`, così il secondo livello è raggiungibile da tastiera. È chrome condivisa con la vista Terminal: cambia anche lì, di proposito — le due metà di Mission Control devono leggersi come una superficie sola. La riga vitals è anche **l'unico posto** dove la spesa della sessione è stampata: la `TopBar` di `TerminalMissionControl` portava lo stesso `fmtCost` a poche centinaia di pixel di distanza, e due copie della stessa cifra si leggono come due letture diverse — lì resta solo l'indicatore RUNNING. Col rail collassato la cifra non è a schermo (è dentro il rail, un toggle di distanza). I controlli vivono nella **pill flottante** (`ChatControlPill` → `cl-pill`): filtri per tipo (All/Tools/Thinking/Questions/Plan) + toggle densità Min/Full + **agent/skill dock** + sheet Export/Delete (alza **un solo sheet alla volta**). Transcript a **tutta larghezza** + **minimap a filo** a destra (`FocusMinimap` → `cl-focus-rail`, dot per turno, scroll-spy). La lista è **finestrata** (`@tanstack/react-virtual`): solo le righe attorno al viewport sono montate, con misura dinamica per riga (`measureElement` — le altezze dipendono dal contenuto) dentro un sizer `.cl-vlist` alto quanto l'intera sessione, così scrollbar, bottom-pinning e minimap continuano a vedere tutto il transcript. Conseguenze progettuali: `isContinuation` è pre-derivato in `buildRenderRows` (niente lookahead sui vicini), lo **scroll-spy legge la geometria del virtualizer** invece di un IntersectionObserver sui nodi montati, `jumpToTurn` usa `scrollToIndex` (e sgancia il bottom-pinning, altrimenti la misura successiva riporterebbe in fondo) e un cambio di densità **non** azzera le misure: `rowVirtualizer.measure()` sembra corretto (lo stesso turno ha altezze diverse in MIN e FULL) ma manda la posizione di lettura a spasso — collassa la lista sulle stime e l'ancoraggio finisce per essere calcolato su un layout inesistente. Le righe montate si rimisurano da sole e quelle sopra il viewport, tenendo la dimensione precedente, tengono ferme le offset; le sole mai visitate restano approssimate finché non entrano in vista. Per la stessa ragione **non** si usa `anchorTo: 'end'`: questo feed ha già un'ancora di fondo (il pin di `useAutoScroll`) e le due inseguono coordinate diverse — il DOM, che include i 140px di padding sotto la lista, contro `getTotalSize()`. Il `content-visibility: auto` su `.cl-transcript-inner > .cl-turn` resta ai transcript non finestrati (live chat, pannello sub-agente) e **non deve** raggiungere le righe virtualizzate: una riga fuori schermo riporterebbe `contain-intrinsic-size` invece dell'altezza reale. Trade-off accettati: ricerca nativa del browser e selezione testo attraverso righe smontate non funzionano; gli highlight fuori finestra vengono ridipinti quando la riga rientra (il MutationObserver di `useHighlightLayer`). Mantiene tutte le affordance di lettura: export, highlights, timeline (`SessionGraphView`), tag, delete, transcript sub-agente. Overlay `ToolDetailPanel`/`SubagentTranscriptPanel` (e Timeline) **non smontano il workspace**: resta montato nascosto (`chatHidden` → `display:none`) per preservare scroll/highlight-layer/scroll-spy quando l'overlay si chiude (al ritorno un view anchored è ri-pinnato dal ResizeObserver, uno detached torna al turno attivo). `ChatView` è **keyed per `session.filename`** in `ProjectOverview`. `embedded` (Terminal/Lens) è un sotto-caso di chrome (niente TopBar/minimap)
 
@@ -540,8 +540,11 @@ next prompt`. Ora il digest porta `delegates`, la riga NOW stampa il **nome
   `status: 'unknown'` (registry scritto **prima** del primo stato).
 - **Il nome del processo non si mostra, il titolo della conversazione sì.** Il
   `name` del registry (`claudelens-b4`) è il progetto più due caratteri casuali.
-  Il titolo viene da `{"type":"ai-title"}` nel transcript, letto una volta dalla
-  **testa** del file (`readSessionTitle`) perché il cursore parte da EOF.
+  Il titolo viene dai record del transcript — `agent-name` (`/rename`),
+  `custom-title` (il vecchio `/title`), `ai-title` (generato), in quest'ordine —
+  letti una volta dai **due estremi** del file (`readSessionTitle`) perché il
+  cursore parte da EOF: il rinomina sta dove l'utente l'ha scritto, cioè ben
+  oltre una testa di 256 KB.
 - **Ordine**: la band viene prima della griglia per costruzione; dentro la
   griglia, prima chi lavora, poi chi è pronto, poi chi ha finito, e a parità di
   stato guida chi è in quello stato da più tempo.
@@ -558,6 +561,58 @@ routing degli agent — band inclusa —, riga macchina, sottopath, ribbon e sua
 separazione dalla riga NOW, corsia vuota vs assente, totale di macchina in
 testata, bande del gauge di contesto, spesa e stima, frase dell'header,
 teardown, modello del ribbon).
+
+---
+
+### `search/` — Cercare dentro le conversazioni
+
+Vista `search` (deep view, globale o scoped a un progetto). L'app legge ogni
+conversazione mai avuta con Claude Code e finora non c'era modo di chiedere
+**dove** è successo qualcosa: `SearchPopover` cerca **nomi** (path di progetto,
+titoli di sessione, skill, agent, MCP), non contenuti — una query che lì non
+trova niente non ha ricevuto risposta, semplicemente non ha fatto match.
+
+| File             | Esporta      | Descrizione                                                                                                                                                                                                                     |
+| ---------------- | ------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SearchView.tsx` | `SearchView` | Campo + risultati raggruppati per sessione (progetto · titolo · id corto · data · conteggio match), snippet con la run evidenziata. Chrome standard delle deep view (`TopBar` + `cl-hero` + `Lens` + `cl-hband` + `cl-section`) |
+
+Decisioni, tutte con un costo dichiarato:
+
+- **La query si sottomette, non si strema.** Ogni run è una passata su tutta la
+  storia su disco (vedi `electron/modules/session-search.ts`), quindi battere a
+  macchina non deve farne partire una: si preme Invio, e il campo è **seedato**
+  con le parole già scritte nel popover, così arrivare qui mostra risultati
+  invece di chiedere un secondo Invio.
+- **La query NON è invalidata da `data:changed`** (`useConversationSearch` non
+  sta nel set di `useDataChangedRefetch`): un result set è l'istantanea di una
+  scansione, e rieseguirla a ogni append di ogni sessione viva metterebbe una
+  passata sull'intera storia dietro ogni riga scritta — esattamente il costo che
+  le cache dei reader esistono per togliere.
+- **L'evidenziazione usa gli offset che la scansione ha riportato**, non ricerca
+  di nuovo la query nello snippet: il match è stato trovato da una regex
+  case-insensitive, e una `indexOf` naive qui disegnerebbe il box sulla parola
+  sbagliata su ogni folding che le due non risolvono allo stesso modo.
+- **Aprire un hit risolve la `SessionSummary` vera** dalla lista del progetto
+  (`qc.fetchQuery(['sessions:project', hash])`) e **rifiuta** se la sessione non
+  c'è più: `ChatView` è guidata da quella riga, con i suoi costi e token, e
+  fabbricarne una a zeri metterebbe cifre inventate nella testata. Un transcript
+  cancellato dopo la scansione non è una sessione apribile, e dirlo batte
+  navigare su una vista vuota.
+- **Il deep-link al turno viaggia per `uuid`, mai per posizione** (`ChatView`
+  prop `focusMessageUuid`): la vista transcript legge via Agent SDK, che
+  **tronca alla compaction**, mentre la scansione legge il file — un match nella
+  storia pre-`/compact` è reale e lì irraggiungibile. Con un indice il
+  disallineamento sarebbe stato silenzioso (atterraggio sul turno sbagliato);
+  con lo uuid o il messaggio si trova, o la vista lo **dichiara** e non finge.
+- **Lo scope parte dal progetto aperto** (è la storia in cui uno sta) e la
+  pagina dei risultati lo allarga con una checkbox; il conteggio in testata dice
+  quanti transcript sono stati letti e quanti parsati, e una scansione tagliata
+  da un cap lo dichiara invece di presentare un campione come la risposta.
+
+**Ingresso**: il piede di `SearchPopover` — `⌘↵ search conversations`
+(`.cl-search-more`), che compare da 2 caratteri in su (il pavimento della
+scansione lato main). Deliberatamente **non** su Invio semplice: il primo
+risultato del popover resta a un tasto di distanza.
 
 ---
 
@@ -632,74 +687,174 @@ Subtab "Teams": mostra i **team di agenti** di Claude Code 2.x (teammate in-proc
 
 ### `overview/`
 
-- **`GlobalHomeView.tsx`** — Home globale: progetti **pinnati**, panoramica MCP, link a sezioni globali. Vedi sotto
+- **`GlobalHomeView.tsx`** — Home globale: benvenuto + sessioni live + margine con progetti **pinnati** e configurazione. Vedi sotto
 - **`Lens.tsx`** — Componente "lente" usata per inquadrare le metriche/sezioni della overview
 - **`ProjectDescription.tsx`** — La riga di prosa sotto il nome nell'hero: che cos'è questo progetto. Default **derivato dal CLAUDE.md** del progetto (`useProjectDescription` → IPC `projects:getDescription`, ladder empirica in `electron/modules/project-description.ts`), sovrascrivibile in place. **L'edit non tocca il CLAUDE.md**: la formulazione dell'utente vive nelle prefs di ClaudeLens (`useProjectDescriptions` → `cl-project-descriptions`, chiave = hash progetto) e svuotare il campo **cancella l'override** invece di salvare una descrizione vuota, così il file torna a fare da sorgente. **La frase stessa è il controllo**: si clicca il testo per modificarlo — niente bottone Edit né tag `from CLAUDE.md` di fianco, che spendevano spazio dell'hero per dire quello che dicono già il click e il tooltip (che nomina il file sorgente, o dichiara l'override). L'hover è l'unica affordance, una tinta e non un box. Senza né override né derivato resta un invito `+ Add a description`. Non montata nell'hero compatto dei Teams. Coperta da `test/project-description-view.test.tsx`
 - **`ProjectOverviewContent.tsx`** — Vista di un progetto: hero + **fascia metriche** + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp). Vedi sotto
 - **`ProjectRail.tsx`** — **Rail verticale** di navigazione del progetto (design 5a) — ha sostituito `ProjectSubtabs`. Vedi sotto
 - **`DuplicateProjectsNotice.tsx`** → `DuplicateProjectsBadge`, `DuplicateProjectsView` — Badge compatto nella home globale + vista dedicata dei progetti duplicati (cwd rewrite + merge). Vedi sotto
 
-**Home globale — la lista progetti è una shortlist, non un indice.**
-`GlobalHomeView` mostra **solo i progetti pinnati**: il filtro Pinned/All è
-stato rimosso (con il suo CSS `.cl-pinfilter`) perché l'indice completo ha già
-il suo ingresso, la **lente** in alto a destra con `⌘F`, e una home che elenca
-150 progetti non è una home. L'ordine è **fisso per nome**, senza barra SORT BY
-(`.cl-sortbar` resta, la usa `McpServerGrid`): gli ordinamenti per uso
-riordinavano la lista mentre si lavorava, cioè l'unica cosa che una shortlist
-navigata a memoria non deve fare. **Senza pin la sezione non esiste** — un empty
-state che invita a pinnare sarebbe un elemento permanente per un'azione una
-tantum; si pinna dalla lente o dall'hero del progetto (`cl-eyebrow-pin`). La
-paginazione resta (5 per pagina) e la didascalia dichiara il range solo quando
-c'è più di una pagina. Nota per gli screenshot: `screenshotFixtures.ts` semina
-già un pin (`cl-pinned-projects`), quindi SCREENSHOT_MODE continua a mostrare la
-sezione.
+**Home globale — un benvenuto, non una dashboard. Design handoff _ClaudeLens
+Home v6_, opzione 6b.** `GlobalHomeView` ha sostituito interamente il layout a
+sezioni verticali (hero → fascia cifre → live processes → pinned → config a
+card → grid MCP) con una stanza a **due colonne** (`.cl-ghome-split`, grid
+`minmax(0,1fr) 320px`) che occupa tutta l'altezza del corpo app: `.cl-ghome`
+diventa `flex:1` per crescere dentro `.cl-main`, lo stesso opt-in che qualsiasi
+vista può prendere (vedi il commento su `.cl-main` più sopra). **Fascia cifre,
+tabella dei processi live con PID/cwd e griglia MCP sono state rimosse, non
+spostate** — il mock 6b non le prevede e la richiesta a monte era esplicitamente
+di allontanarsi da "sembra già una dashboard o un monitoring". Il CSS morto che
+le serviva (`.cl-stats--home`, `.cl-tile-grid--cards`, `.cl-proc`/`.cl-proc-list`
 
-**Fascia cifre sotto l'hero — design handoff _Global Home varianti_, opzione 1a.**
-Tra l'hero e la prima sezione c'è una striscia di 4 celle
-(`.cl-stats.cl-stats--home`): Projects · Tokens · Spend · **Live now**, con
-l'ultima cella come **slab scuro fisso in entrambi i temi** (il trattamento che
-`.cl-stat:last-child` già portava) e il dot sage `.cl-live-dot` a fianco della
-cifra. Riusa l'anatomia `.cl-stats`/`.cl-stat` che vive in `index.css` da
-Studio/Agents Live; il modificatore `--home` cambia una cosa sola: la **cifra
-viene prima e la label sotto**, perché qui i quattro numeri _sono_ l'affermazione
-e vanno letti prima per riga e poi per colonna, mentre le altre strisce
-etichettano una lista che le segue. I qualificatori (`$`, l'unità, i centesimi)
-sono lo stesso display face a metà altezza e **a filo** della cifra, così
-`$99.78` resta un numero e non tre token — la nota mono di `.cl-stat .num small`
-li avrebbe staccati.
-I totali sono su **tutto l'install** (somma di `cost:getSummary`), non sulla
-shortlist pinnata sotto: Tokens e Spend sono la sola risposta della home a
-"quanto è costato tutto questo", che prima non stava da nessuna parte. Projects
-e Live now ripetono di proposito due cifre della meta-riga dell'hero — è il
-ritmo editoriale del mock (frase d'inventario → strato numerico), non una svista.
-Con nessun processo vivo il dot **non pulsa**: un alone attorno a uno zero
-sarebbe l'elemento più urlato della striscia senza significare nulla.
+- il suo `@keyframes clPulseGreen`, e il blocco di reset `.cl-ghome .cl-sec-head`
+  /`.cl-section`/`.cl-stats`/`.cl-row`/`.cl-tile-grid` di design 1a) è stato tolto
+  da `index.css` insieme al markup: nessuna di quelle classi rende più nulla sotto
+  `.cl-ghome`. `McpServerGrid` come componente resta — lo monta ancora
+  `GlobalMcpView` — solo non più qui.
 
-**Configuration a card + ritmo delle sezioni.** Sempre da 1a, la sezione
-Configuration non è più la lista a due colonne divisa da hairline: è una
-**griglia 3-up di card bordate** (`.cl-tile-grid--cards`, un modificatore di
-`.cl-tile-grid` — la lista resta il default per Skills, Plugins, memoria,
-CLAUDE.md e tutti gli altri usi). Sulla card il conteggio **scende sotto la
-descrizione** invece di stare nella terza colonna: appartiene alla frase che
-qualifica, e da colonna destra leggeva come una cella di tabella. Per la stessa
-ragione la descrizione perde il mono — quello era il device della lista per
-tenere allineate due colonne di testo, su una card è solo prosa breve. Glifo:
-tile arrotondata `--cl-r-tile`, piena accent sulla prima card.
-Il resto del corpo home è scopato sotto **`.cl-ghome`**: il filetto d'inchiostro
-**risale sotto la testata** (1.5px, 12px sotto il titolo) invece di stare in
-cima alla lista, dove i 24px di `.cl-sec-head` lo staccavano dal titolo che
-dovrebbe sottolineare. Con quel filetto a portare la separazione, la hairline di
-chiusura di `.cl-section` e quella della striscia cifre diventano una terza e
-una quarta riga fra due blocchi e vengono spente; le righe pinnate passano da
-`border-top` a `border-bottom` così l'ultima resta chiusa prima del pager.
-Nessuna di queste regole esce dalla home.
-**Attenzione ai token di raggio**: `--cl-r-card`/`--cl-r-tile` erano _usati_ da
-`.cl-plan-card` e `.cl-ask-card` ma **mai dichiarati** in `index.css` (vivono
-nel design system), e una var non definita invalida l'intera dichiarazione a
-computed-value time — quelle due card rendevano squadrate, e le card della
-Configuration hanno fatto lo stesso finché i token non sono stati dichiarati in
-`:root`. Le elevazioni (`--cl-elev-card`) restano non dichiarate di proposito:
-lì i call site passano un fallback esplicito.
+**Colonna di benvenuto.** Eyebrow ridotta a `~/.claude` (il contatore progetti
+viveva nella fascia cifre rimossa), titolo statico `Welcome back.` sul
+consueto `.cl-h-name.static`, e sotto una **sola frase dinamica**
+(`welcomeLine()`) che sostituisce sia la fascia cifre sia la tabella dei
+processi: conta quante sessioni sono vive e chiama per nome quella in attesa
+("`X` is waiting on you") invece di limitarsi a un numero — un nome è l'unica
+cosa che un conteggio non può dire. Sotto, **al massimo due righe**
+(`HERO_ROWS`) delle sessioni effettivamente live, deduplicate per cwd
+(`liveRowsFromProcs`: più processi sullo stesso progetto restano una riga sola,
+e `waiting` vince su `busy`/`idle` se convivono). Il tetto a due righe è
+deliberato — un benvenuto che cresce senza limite con l'occupazione di
+`~/.claude` smette di essere un benvenuto — ed è per questo che la frase sopra,
+non l'elenco, è la fonte di verità sul totale: quel che eccede le due righe
+resta comunque contato lì.
+
+**Colonna margine — pinned + configuration.** Niente più sezioni separate sotto
+la piega: `.cl-ghome-aside` (border-left, piena altezza) porta **Pinned** come
+indice numerato (`01`, `02`, …, solo nome — niente stato live, sessioni, token o
+spesa per riga: quel dettaglio viveva nella card `.cl-row.has-pin` che questa
+vista non usa più) e **Configuration** come lista compatta di monogrammi
+(`.cl-ghome-mono`, 20px, variante `.accent` per CLAUDE.md) invece della griglia
+3-up di card di design 1a. **Mostra tutti i pin**, non una pagina alla volta: la
+paginazione (`PROJECTS_PAGE_SIZE`) è sparita insieme alle card, e la lista
+scrolla da sola dentro la colonna (`.cl-ghome-pinned-list`, `flex:1;
+overflow-y:auto`) così Configuration e la didascalia di chiusura restano ferme
+in fondo. **Pinnare/spinnare non si fa più dalla home** (niente
+`cl-pin-row`/`PinIcon` qui): resta raggiungibile da dove lo era già prima di 1a
+— la lente (`⌘F`) o `cl-eyebrow-pin` sull'hero del progetto. Senza pin, la
+colonna non sparisce (a differenza della vecchia sezione "solo se c'è qualcosa
+da mostrare"): mostra un invito muto (`.cl-ghome-pinned-empty`), perché ora è
+una colonna strutturale sempre presente, non una sezione opzionale.
+`DuplicateProjectsBadge` resta montato: è l'unico ingresso a
+`DuplicateProjectsView` nell'app, quindi anche se il mock 6b non lo disegna va
+tenuto — si limita a non renderizzare nulla quando non ci sono duplicati. Non è
+più la fascia piena a tutta larghezza in `--cl-warn-soft` sopra lo split
+(`.cl-ghome-notice`, sparita): quella forma faceva del suggerimento di
+manutenzione la cosa più rumorosa del benvenuto. Ora è una **pill di notifica**
+(`.cl-ghome-dup`) larga quanto il contenuto, **in coda alla colonna welcome** —
+dentro `.cl-ghome-welcome-inner`, non da fratello, altrimenti combatterebbe con
+`justify-content:center`. Nello stesso posto era stata provata una riga mono
+nuda, senza fondo: scartata perché si leggeva come una didascalia e non attirava
+lo sguardo — il problema era la forma, non la posizione. La pill tiene l'ambra e apre con un
+**badge del conteggio pieno**, la forma che a colpo d'occhio dice "c'è qualcosa
+in sospeso". L'ambra sta fra 0.70 e 0.78 di lightness in entrambi i temi, quindi
+l'inchiostro del badge è un mix scuro del token stesso (`color-mix(… 22%,
+black)`) invece di una seconda tinta.
+
+**Il titolo dell'hero è rimpicciolito solo qui** (`.cl-ghome-welcome
+.cl-h-name`, `clamp(40px, 6vw, 84px)`). `.cl-h-name` arriva a 132px perché
+altrove sta in un hero a tutta pagina; dentro la colonna welcome (680px)
+"Welcome back" finiva troncato in "Welcome…" dalla guardia
+`text-overflow:ellipsis` di `.label-name`, che esiste per i nomi di progetto —
+dati utente di lunghezza ignota. Qui il titolo è una stringa fissa: la guardia
+non serve e viene disattivata (va a capo invece di troncare, come fallback alle
+larghezze in cui non ci sta), e la misura più bassa è quella che lo tiene su una
+riga.
+
+**La colonna margine non ha più la didascalia di chiusura.** `Global · ~ ·
+shared across all projects` (`.cl-ghome-aside-foot`) andava a capo su due righe
+in 240px di colonna per ripetere quello che dicono già il tab GLOBAL e
+l'eyebrow `~/.claude` del benvenuto; l'unica informazione sua era lo **scope**
+delle voci sotto — che `Skills 0` conta le skill globali, non quelle del
+progetto. Quello scope è finito nell'etichetta della sezione (`GLOBAL
+CONFIGURATION`), dove costa zero righe. Con la didascalia via, gli spazi si
+stringono: `gap` dell'aside 44 → 30px, `padding-top` di `.cl-ghome-config` 44 →
+30px (erano 88px cumulativi fra l'ultimo pin e l'etichetta successiva, un vuoto
+che la colonna non poteva permettersi), padding 64/44 → 48/40.
+`.cl-ghome-pinned` resta `flex:1`, quindi Configuration continua a stare in
+fondo da sé.
+
+I due bordi vanno misurati **dal testo, non dal box**, ed è lì che la colonna
+pendeva: in fondo l'ultima riga di Configuration porta 8px di padding suoi, così
+40px di padding-bottom danno 48px di aria sotto il testo, mentre in cima
+l'etichetta non ha niente sopra di sé e 56px di padding erano 56px veri. Ora il
+padding-top è 48 e i due margini ottici pareggiano. Per la stessa ragione lo
+stacco etichetta → prima riga è scritto **a somma costante** nei due blocchi:
+`.cl-ghome-pinned-list` ha `margin-top:14` sopra righe con 10px di padding,
+`.cl-ghome-config-list` ne ha 16 sopra righe con 8 — 24px in entrambi i casi,
+che a occhio è la cosa che conta.
+
+**Il benvenuto distingueva due stati su tre, e per questo mentiva.**
+`liveRowsFromProcs` leggeva `waiting` e metteva tutto il resto in un unico
+secchio che la frase chiamava «working right now»: due sessioni aperte e ferme
+al prompt venivano annunciate come due progetti al lavoro. Il registro di
+`~/.claude/sessions` gli stati li distingue da sempre e il Monitor li legge
+tutti e tre (`isReady`/`doingOf` in `monitor/MonitorView.tsx`); ora lo fa anche
+la home, con le stesse regole: `busy` → **working**, `waiting` → **waiting**,
+`idle` e `unknown` → **open** (una sessione che non ha mai riportato niente non
+è stata osservata lavorare, esattamente come là). Conseguenze:
+
+- La frase si compone per clausole invece di avere un caso per ogni forma:
+  quante lavorano, chi aspetta te, e quante sono soltanto aperte — col nome
+  proprio ovunque una clausola appartenga a un progetto solo, perché il nome è
+  l'unica cosa che un conteggio non sa dire.
+- Le righe escono **ordinate per priorità** (waiting > working > open), così le
+  due che l'hero ha spazio di mostrare sono le due che contano; la stessa
+  priorità decide quale stato vince quando una cwd ha più processi.
+- La riga `open` è l'unica **non tinta** — contorno e basta, nome smorzato:
+  era lo stato dipinto come lavoro, ed è quello che non deve più sembrarlo. La
+  sua azione è `resume →` — il verbo di Claude Code stesso per tornare su una
+  sessione ferma — mentre `working` prende `watch →` e `waiting` resta
+  `answer →`. `watch` e non `open`: una sessione che gira non la apri, la
+  guardi, e `open` è già la parola con cui la frase sopra chiama l'altro stato
+  («2 projects are open»), due significati a due righe di distanza.
+- La parte pura sta in **`overview/live-rows.ts`**, non nella vista: il file
+  della vista esporta un componente e basta (regola fast-refresh, come
+  `CreateFormKit`), e così le frasi si asseriscono direttamente —
+  `test/global-home-live.test.ts`.
+
+**Sotto i 980px lo split si impila, e la colonna margine deve smettere di
+comportarsi da colonna.** Due cose si rompono se resta com'è a due colonne.
+`.cl-ghome-pinned` è `flex:1 1 0%` — corretto per una stanza di altezza data,
+dove i pin scrollano in place accanto al benvenuto — ma impilato l'`aside` ha
+altezza propria (il suo contenuto), e con quel flex-basis la dimensione
+ipotetica della lista è **zero**: `overflow-y:auto` la nascondeva del tutto e
+in schermata si vedeva la label PINNED, poi il filetto di Configuration, e in
+mezzo niente, con nove progetti pinnati sul disco. Nella media query pinned
+torna `flex:none` con `overflow-y:visible`: i pin prendono l'altezza che
+serve e scrolla la pagina. Seconda: la **lente** è ancorata all'angolo in
+basso a destra della colonna di benvenuto, che impilata è larga tutto — cioè
+proprio dietro le righe live, che si fermano a `620px` (`max-width` di
+`.cl-ghome-welcome-inner`); rimpicciolisce a 320px e si sposta fuori dalla loro
+strada, e **sotto i 760px sparisce** (`display:none`), larghezza sotto la quale
+la colonna non tiene più testo e lente insieme. La colonna di benvenuto perde
+anche il centraggio verticale (`justify-content:flex-start`): impilata non ha
+più un'altezza da riempire e il centraggio si limitava a spingere il titolo giù
+lasciando un buco sopra.
+
+**Le righe live sono card, quindi hanno aria tra loro** (`.cl-ghome-working`,
+`gap:10px` — era `2px`, che le faceva leggere come un blocco unico spezzato da
+una fessura). Conseguenza diretta: `data-live='warn'` non poteva più restare
+senza fondo. Aveva solo il pallino colorato, e a 2px di gap una riga non tinta
+era semplicemente sobria, mentre a 10px tra due card `accent-soft` diventa un
+**buco** — la riga che ti sta chiedendo qualcosa che sembra la card mancante.
+Prende lo stesso trattamento di `ok` nella tinta di stato (`--cl-warn-soft`,
+hover `color-mix` verso `--cl-warn`, action su `--cl-ink-2`).
+
+**Token di raggio.** `--cl-r-card` (usato da `.cl-ghome-working-row`) e
+`--cl-r-tile` sono dichiarati in `:root`: una var non definita invalida l'intera
+dichiarazione a computed-value time, e questo aveva già reso squadrate
+`.cl-plan-card`/`.cl-ask-card` prima che i token fossero aggiunti. Le elevazioni
+(`--cl-elev-card`) restano non dichiarate di proposito: lì i call site passano
+un fallback esplicito.
 
 **Trigger di ricerca — pill nella top bar.** `.cl-lens-btn` non è più il tondo
 da 28px: è il pill di 1a (lente + `Search projects, sessions…` + chip `⌘F`).
@@ -709,6 +864,99 @@ rail progetto — quindi resta uno solo, dov'era, e vale su ogni vista. Sotto i
 1080px label e chip spariscono e torna il tondo. Lo stato aperto **tinge invece
 di riempire**: un pieno terracotta largo 230px sarebbe l'elemento più urlato
 della chrome, e il popover sotto dice già che la ricerca è aperta.
+
+**Hover della top bar — una risposta sola.** Le tre superfici della barra
+(scope nav, pill della lente, ingranaggio) rispondevano al puntatore in tre modi
+diversi, tutti scritti a mano. Ora usano gli stessi due token: la tinta
+`--cl-glass-hover-bg` (la stessa di altre 12 superfici) e la durata
+`--cl-hover-ms` (120ms), col testo che va a `--cl-accent-ink`. Cosa se n'è
+andato, e perché:
+
+- **Il pill di vetro dei tab** (`.cl-scope button::before`) era un bottone
+  modellato — gradiente radiale bianco, rim interno, ombra portata, molla
+  `scale(0.92 → 1)` con overshoot su 360ms. Era l'hover più rumoroso dell'app
+  sull'elemento più quieto, e l'ultimo utente di un idioma che nient'altro
+  segue; l'override dark serviva solo a rifare lo stesso gradiente con altri
+  numeri, e sparisce col gradiente. Al suo posto **l'hover anticipa la tab
+  attiva** invece di inventarsi una forma propria: la stessa underline, a un
+  terzo dell'inchiostro (`--cl-accent` al 35%), col testo che va a `--cl-ink`.
+  Un vocabolario solo per "dove sei" e "dove stai passando".
+- **La fascia è piatta.** Non era vetro: compositava bianco al 42% sopra
+  `.cl-app`, che è `--cl-paper` — bianco su bianco — e poi sfocava e saturava
+  una finestra opaca sotto cui non scorre niente (l'header è fratello flex
+  dell'area di scroll, non un layer sopra). Quello che si vedeva davvero era
+  l'ombra interna inferiore a fare da bordo, accanto a un `border-bottom` vero
+  che era bianco puro, cioè invisibile. Ora: la carta che era già, e una
+  hairline onesta. Stesso trattamento per la pill della lente e l'ingranaggio,
+  che avevano il loro vetro (bianco 18% + blur + rim) sulla stessa barra bianca.
+  **Altezza (52px), gap e tipografia mono restano quelli di prima**: provati a
+  46px e in sans, la barra perdeva presenza.
+- I bottoni della nav ora **prendono l'altezza piena della barra**
+  (`align-items: stretch` sul grid, `height` implicita sul flex), così
+  l'underline atterra sulla hairline qualunque sia la misura della fascia;
+  brand e blocco destro si ricentrano da sé con `align-self: center`.
+- **L'hover della lente impersonava lo stato aperto**: si dava la stessa lavata
+  accento _e_ un bordo terracotta, che è il segnale esclusivo di `.on`. Ora
+  l'hover tinge e basta — il bordo resta la firma dell'aperto.
+- **L'hover dell'ingranaggio era bianco su bianco** (`oklch(1 0 0 / 0.32)` su una
+  barra già bianca): invisibile. Ora è la stessa tinta della pill accanto.
+- Il **brand** non aveva hover pur essendo un bottone (va a Global): ora vira ad
+  accent-ink come tutto il resto.
+
+La stessa passata è stata estesa al resto dell'app, ma **a due famiglie, non a
+una**: l'app ha due hover legittimi — quello **neutro** delle superfici a lista
+fitta (voci di menu, righe del tag picker, chip di provenance, opzioni di
+export, filtri della ricerca, pill del narratore) e quello **accento** dei
+controlli azionabili (pin, menu di riga sessione, remove degli highlight).
+Appiattirli in uno sarebbe stato una regressione, non una normalizzazione, così
+il neutro ha preso un token suo (`--cl-hover-bg`) e l'accento riusa
+`--cl-glass-hover-bg`. Ogni sito resta nella sua famiglia: i valori si spostano
+di un punto o due (accento 12–14% → accent-soft 78%, ink 4% → 5%), quindi la
+resa è **quasi** identica, non identica. Quello che sparisce davvero sono **tre
+override dark** (`.cl-menu-item`, `.cl-tag-picker-row`, `.cl-search-filters
+button`) che esistevano solo perché il valore light non era theme-aware, e un
+`rgba(193, 95, 60, 0.12)` che era `#C15F3C` battuto a mano invece del token.
+
+**Due esclusioni volute.** `.cl-term-btn` gira sulla palette propria del
+terminale (`--t-*`), non su `--cl-*`. E `.cl-btn--primary:hover` non è una
+tinta ma uno stato composto (background + border-mix + box-shadow): ripuntare
+il solo fondo lo desincronizzerebbe dal bordo accanto, quindi o si cambiano
+tutti e tre o non si tocca.
+
+**Il popover di ricerca è stato stretto senza togliergli informazioni.** Il
+recupero grosso non è nei padding ma nel **path**: ogni riga stampava
+`/Users/<utente>/Projects/…`, un prefisso identico su tutte le righe che, stando
+in testa, mandava sotto l'ellissi proprio la coda — l'unica parte che distingue
+una riga dall'altra (nello screenshot del bug si leggeva
+`/Users/giuliodigiamberardino/Projects/Cl…`). Ora passa da `homeRelativePath`
+(`shared/projectName.ts`, coperto in `test/project-formatters.test.ts`), che
+riconosce la home **per forma** — `/Users/<x>`, `/home/<x>`, `C:\Users\<x>` —
+perché nel renderer non c'è `os.homedir()` e questi path sono per costruzione
+quelli dell'utente corrente; `/Users/Shared` è escluso, è una cartella vera. Si
+applica **al render** (`.ppath`), non nei costruttori delle righe: così vale per
+tutte e cinque le famiglie con due call site invece di cinque, e una `detail`
+che è una descrizione e non un path attraversa la funzione intatta.
+
+**Due informazioni sono state tolte perché ridette altrove.** Una riga di
+sessione portava il **path del progetto**: identico per tutte le sessioni dello
+stesso progetto e troncato a `~/Projec…`, cioè zero informazione occupando la
+metà della riga. Al suo posto c'è il **nome** del progetto — di una sessione
+conta _in che progetto_ sta, e quello è il modo corto di dirlo. E il **tag di
+tipo** (`SESSION`, `MCP`, …) era il terzo posto in cui la stessa cosa veniva
+detta, dopo l'intestazione di sezione sotto cui la riga sta e la tile colorata
+del glifo alla sua sinistra: via il tag, il glifo resta a distinguere i tipi
+nelle sezioni miste (i pin). Le due colonne liberate vanno al titolo, che prima
+si troncava a `Kernel alarm bro…`.
+
+Il resto è ritmo verticale — header, filtri, sezioni, righe, piede tutti più
+stretti di 2–5px, con le gutter portate da 18 a 16px: valgono circa una riga e
+mezzo di risultati in più a parità di `max-height`. Due cose che erano rimaste
+indietro: la **tile del glifo** delle entity era l'ultimo chip di vetro
+modellato dell'app (fondo bianco 52%, bordo bianco, inset highlight, su una
+superficie già quasi bianca) e ora è la stessa tile della home globale — 20px,
+`1px solid var(--cl-line)`, fondo trasparente; e l'**highlight di riga** era
+un'altra lavata accento scritta a mano con override dark al seguito, ora è
+`--cl-glass-hover-bg`.
 
 **Chrome del progetto — design handoff _Sessions Varianti_ (rail 5a + contenuto 5b).**
 La navigazione di progetto non è più una fascia orizzontale di subtab: è una
@@ -732,20 +980,55 @@ due trigger per lo stesso popover erano ridondanti. Per la stessa ragione il
 collapse ha perso label e chip `⌘B`: era l'elemento più pesante della colonna
 per un controllo che la scorciatoia già copre.
 
-Il contenuto segue **5b**: l'hero perde la meta-riga e guadagna una **fascia
-metriche** (`.cl-hband`) di celle divise da hairline — Sessions/{retention}d con
-delta sulla finestra precedente, Tokens, Messages, **distribuzione modelli** come
-barra part-of-whole + legenda (`buildModelMix` in `../utils.ts`, quota sui
-**token** e non sulle sessioni: la cella sta accanto alla cifra dei token e ciò
-che la barra codifica è dove è finito il lavoro; unit-tested). La fascia ha
-**assorbito la vecchia stat strip a 4 celle** della Overview: le sparkline del
-periodo di retention sono scese dentro le prime due celle, media/costo sono
-diventati la riga piccola, e la cella "live" è migrata nel piede del rail (era
-duplicata in due punti). Il nome display scende a `clamp(40px, 4.2vw, 72px)`
-perché una cifra da 26px sotto un titolo da 132px non è una gerarchia.
-Le sessioni sono **righe** (`.cl-srow`): pin, indice, titolo, tag, spazio
-elastico, il gruppo cifre `msg · modello · token · data` e in coda il **kebab
-delle azioni**. Due elementi di 5b sono caduti qui, per la stessa ragione:
+Il contenuto segue **5b** per la struttura e **3b** (design handoff _Project
+Overview Redesign_, turni 1a → 2a → 3b) per il trattamento dell'hero progetto:
+
+- **nome e descrizione sulla stessa linea di base** (2a), dentro un wrapper
+  `.cl-h-title` che va flex **solo** sotto `.cl-hero--band` — l'hero Teams
+  (`.cl-hero--compact`) monta lo stesso wrapper con un figlio solo e resta un
+  blocco. In edit la descrizione va a capo su tutta la riga (`flex: 1 0 100%`):
+  la textarea vuole la sua misura di lettura, non lo spazio accanto a un nome da
+  64px;
+- **fascia metriche a quattro colonne piatte** (`.cl-hband` dentro
+  `.cl-hero--band`): etichetta + cifra, separate da spazio e non da hairline —
+  Sessions/{retention}d, Tokens, Spend, **distribuzione modelli** come barra
+  part-of-whole + legenda (`buildModelMix` in `../utils.ts`, quota sui **token**
+  e non sulle sessioni: la cella sta accanto alla cifra dei token e ciò che la
+  barra codifica è dove è finito il lavoro; unit-tested). La finestra di
+  retention è dichiarata **una volta sola**, sulla prima colonna, e governa la
+  riga. Con la riscrittura sono caduti **la sparkline del periodo, il delta
+  sulla finestra precedente e la riga piccola di ogni cella** (`% cache read`,
+  `msg avg`, `N older · N total`) — è il punto dell'esercizio, non un effetto
+  collaterale. È caduto anche il `last … ago` accanto all'etichetta, che il mock
+  non porta: lo dice ora la prima riga della lista sotto, che da 3b è la
+  sessione **più recente** e non più una pinnata. Resta la **card di
+  composizione dei token** in hover sulla cifra, portalata su `<body>` e
+  annunciata dal filetto punteggiato sotto il numero;
+- **una sola azione** (3b): `Open in Claude Code` come pillola terracotta e
+  `SDK chat →` come etichetta accanto, **in flusso sotto le metriche**
+  (`.cl-hero-cta-row`) invece che flottanti in alto a destra — due bottoni di
+  vetro quasi identici non dicevano quale delle due cose la pagina serva.
+  Restano due `<button>` con il `title` che dichiara **su quale budget pesa
+  ciascuno** (crediti Agent SDK vs. piano di abbonamento): è l'unico posto in
+  cui l'app lo scrive, e le stringhe sono hoistate (`SDK_CHAT_TITLE`,
+  `CLAUDE_CODE_TITLE`) perché l'hero Teams disegna la stessa coppia in forma
+  compatta e il testo non deve divergere;
+- **niente `<Lens />`**: al posto degli anelli concentrici l'hero prende un
+  wash caldo che sfuma sulla carta (`--cl-hero-wash`, tinta accent a 40°, più
+  spenta nel tema dark dove un accent-soft a tutta fascia legge come campo di
+  colore). Il bordo inferiore in ink resta: il wash finisce in carta e senza
+  quel filetto la pagina non avrebbe più alcun confine lì.
+
+`.cl-hband`/`.cl-hcell` sono **condivise** con `SearchView` e
+`DuplicateProjectsNotice`, che continuano a disegnare le celle divise da
+hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
+resta a `clamp(40px, 4.2vw, 64px)` perché una cifra da 30px sotto un titolo da
+132px non è una gerarchia.
+Le sessioni della **vista Sessions** (non della landing, che da 3b ha una riga
+tutta sua — vedi sotto) sono **righe** (`.cl-srow`): pin, **indice (che porta il
+colore della sessione)**, titolo, tag, spazio elastico, il gruppo cifre
+`msg · modello · token · data` e in coda il **kebab delle azioni**. Due elementi
+di 5b sono caduti qui, per la stessa ragione:
 
 - **il filetto puntinato** che portava l'occhio dal titolo alle cifre. Esisteva
   anche come spazio morto riservato (`min-width: 196px`) sotto le azioni, che
@@ -765,6 +1048,37 @@ delle azioni**. Due elementi di 5b sono caduti qui, per la stessa ragione:
   senza toccare il layout della riga. La `+ tag` non anchora più il `TagPicker`
   a sé: l'ancora è il kebab, misurato all'apertura.
 
+Il **colore della sessione** — quello che l'utente le ha dato con `/color`, il
+modo di Claude Code di distinguere a colpo d'occhio due run concorrenti, letto
+da `agent-color` nel transcript — è **portato dall'indice di riga**, non da un
+segno suo. È l'unico punto dell'app dove vive una tinta fuori dai 40° del brand,
+e a ragione: quel colore è **un dato**, l'etichetta dell'utente, non un accento
+nostro — una sessione blu dipinta in terracotta sarebbe un'altra informazione.
+
+**Perché l'indice e non un pallino.** Il pallino è stato provato per primo, in
+testa al titolo, ed era il terzo tondo della riga: il verde di LIVE e quello del
+modello dicono già due cose diverse, e un terzo accanto a loro si leggeva come
+un semaforo. L'indice invece è mono, decorativo, già smorzato a `--cl-ink-4` e
+sta esattamente dove l'occhio entra nella riga: tingerlo non aggiunge **nessuna
+geometria** a una lista fatta di soli filetti. Era stata considerata anche la
+**sfumatura di fondo** suggerita dall'utente e scartata per la ragione già
+scritta sopra per le righe pinnate — in dark è una macchia e litiga con la tinta
+dell'hover. La tinta batte l'accento dell'indice pinnato (specificità
+`.is-coloured`): "pinnata" resta detto dalla puntina piena in testa alla riga,
+mentre il colore è l'unica cosa che dice **quale** sessione è questa.
+
+Il nome sceglie una **classe** (`.cl-srow .idx.is-coloured.blue`), mai uno
+`style` inline: il valore arriva da un record non documentato, `cost-tracker` lo
+restringe agli otto nomi che `/color` accetta, e uno che passasse comunque non
+tinge niente. I token `--cl-agent-*` sono perciò tarati **per il testo**, non
+per un tondo: ognuno passa 4.5:1 sul proprio fondo (peggior caso chiaro 4.64, il
+giallo — che infatti si legge ambra).
+
+Il **pallino** (`SessionColorDot`, `.cl-scolor`, 7px) sopravvive dove non c'è un
+indice da tingere e nessun altro tondo con cui confondersi: il crumb della
+`ChatView`, così il colore è sotto gli occhi anche mentre si legge la sessione,
+non solo nella lista da cui la si è scelta.
+
 La riga pinnata **non ha alcun trattamento di superficie**. Due sono stati
 provati e **bocciati entrambi**, per lo stesso motivo: erano la cosa più urlata
 di una lista il cui linguaggio è fatto di hairline. Il **wash terracotta a
@@ -782,62 +1096,96 @@ caricamento resta progressivo, prende solo l'idioma del pager del mock.
 La data della riga è formattata **en-US** come il resto dell'app: era l'ultimo
 `it-IT` rimasto in una UI english-only (`10 ago` accanto a colonne inglesi).
 
-**Landing di progetto — design handoff _Overview Redesign_, opzione 1c**
-(`section === 'overview'`). Le sessioni sono **un blocco solo**, non due: la
-sezione **Pinned sessions** e la striscia **Recent** (`RecentSessionsStrip`,
-`.cl-mrow`, entrambe rimosse col loro CSS) erano la stessa lista letta due
-volte, e la seconda doveva rinunciare a pin, tag e cluster di cifre per
-giustificare di stare sotto una sezione che li portava. Ora: testata
-`Sessions · N pinned · M total · View all` e **tre righe `.cl-srow` piene**
-(`LANDING_SESSIONS`), **pinnate per prime** — non avendo più una sezione
-propria, è la testa della terna che tiene raggiungibile dalla landing una
-conversazione pinnata e quindi magari vecchia. Il `rankOf` resta l'indice vero
-nella storia completa, così i numeri di riga non mentono. Il caption conta sul
-totale della storia (`sessions.length`).
+**Landing di progetto — design handoff _Project Overview Redesign_, 3b**
+(`section === 'overview'`). La landing è **l'hero e una lista sola**. Le
+sezioni **Memory** (griglia di index card `.cl-mem-cards`/`.cl-mcard`,
+`renderMemCard`) e **CLAUDE.md**, e la **striscia di config** in fondo
+(`.cl-config-strip`: Skills / Agents / MCP / Rules), sono cadute con il loro
+CSS: erano anteprime di cose che il rail già conta a un clic — `Memory`,
+`Skills`, `Agents`, `MCP` ci stanno con il badge, e `Rules` non aveva nemmeno
+una destinazione propria (portava a `project-mcp`, dove le regole
+condizionali vivono). Restava un'eccezione vera, ed è l'unica cosa che si è
+spostata invece di sparire: la **cascata CLAUDE.md** era l'unico ingresso a
+`project-claudemd`, e il rail non ha una voce CLAUDE.md — quindi il blocco
+(`.cl-md-cascade`/`.cl-md-layer`, `claudeMdPathParts`,
+`CLAUDE_MD_SCOPE_LABEL`, l'ordinamento della cascata) è emigrato in
+**`ProjectConfigView`**, che per questo prende ora un `onNavigate`. Ci sta di
+casa: sono istruzioni risolte a livelli, esattamente come le impostazioni
+sopra di esse.
 
-La **memoria** è la sezione che 1c cambia di più, ed era la più penalizzata:
-una definition-list a 3 colonne (`.cl-mem`/`.cl-mem-row`, rimosse) dove un
-topic si leggeva come una riga di tabella — niente tipo, niente tag, niente
-gerarchia. Diventa una **griglia di index card** (`.cl-mem-cards`/`.cl-mcard`,
-`renderMemCard`): header con glifo iniziale + tipo + età relativa, nome come
-titolo, **tre righe di prosa** in `--font-reading` (`memPreview` accetta ora un
-`max`, qui `MEM_CARD_PREVIEW_MAX`) e i tag a piede card. La prima card prende
-il wash accent, come la prima tile di Skills/Agents. I tag sono **read-only**
-qui: aggiungerli/rimuoverli resta nella subtab Memory, che possiede la lista
-intera (e il `TagPicker`). Cap a `LANDING_MEM_CARDS` (due file da tre), con
-`View all` verso la subtab.
-Il caption è `N topics · <due tipi più frequenti>`: un breakdown completo
-sfora la testata su qualsiasi memoria vera, e i due tipi dominanti sono ciò che
-dice che cosa questo progetto ricorda. **Una sola visualizzazione, newest
-first**: il segmented `Newest / By type` (stato locale `memCardView`, con il suo
-`landingMemGroups`) è stato **rimosso**. La landing mostra sei card di una
-storia che ne conta decine — a quella taglia il raggruppamento per tipo era un
-controllo su un campione, e la subtab a cui `View all` porta possiede la lista
-intera con l'ordinamento e il group-by che le appartengono
-(`memSort`/`memGroupBy`, tuttora suoi). La variante `.cl-seg--paper` **resta**:
-la usa la toolbar della subtab.
-**Non implementata** di 1c: la card tratteggiata "New topic" — l'app non ha
-(ancora) nessun ingresso di creazione memoria, solo l'IPC `memory:createTopic`
-e l'hook `useCreateTopic` inutilizzato; sarebbe una feature, non un cambio di
-layout. Fuori scope anche la «context chain» che collassa CLAUDE.md sotto
-l'hero.
+**Passata di rifinitura sull'hero 3b** (dopo il primo screenshot in app, che
+il mock non poteva mostrare: finestra larga, progetto live, un solo modello).
 
-La sezione **CLAUDE.md** ha invece lasciato la tile-grid per una **cascata a
-una colonna** (`.cl-md-cascade`/`.cl-md-layer`): ogni layer è un file con lo
-stesso nome, quindi lo scope da solo non distingue una riga dall'altra — con
-sei layer quattro righe si chiamavano `Subdir` e il path stava nella riga
-smorzata sotto. Ora **il path è il nome della riga**, spezzato da
-`claudeMdPathParts` in genitori smorzati + segmento identificante in evidenza +
-nome file smorzato (`src/components/`**`project/`**`CLAUDE.md`), e la parola
-generica scende a **chip di larghezza fissa** che allinea tutti i path sulla
-stessa colonna. L'ordine segue la cascata che la testata annuncia (global →
-project → local → subdir, i subdir per profondità poi alfabetici): la riga di
-intestazione fa da legenda solo se la lista la segue, mentre prima partiva dal
-project. L'accento passa quindi **dalla prima riga al layer `project`**, che
-resta quello che si apre più spesso. Una **barra proporzionale** dà la scala
-(36 righe contro 882) che una colonna di cifre lascia fare a mente; sotto i
-760px sparisce. Una colonna sola perché la cascata è una sequenza ordinata e la
-griglia a due colonne la faceva leggere a zig-zag.
+- il **wash** è sceso a metà croma (`--cl-hero-wash`, 0.018 invece di 0.035) e
+  arriva a carta al **58%**: il filetto d'inchiostro in fondo deve dividere
+  carta da carta. Chiudere il gradiente sul filetto disegnava un secondo bordo
+  colorato appena sopra — la banda dura che si vedeva per tutta la larghezza;
+- l'**aura `is-live`** (due campi accent animati, `::before`/`::after`) è
+  **spenta sotto `.cl-hero--band`**: sopra il wash era un secondo campo sul
+  primo, ed è ciò che smacchiava la fascia. Un alone sfocato non ha comunque
+  un bordo da leggere, quindi non dichiara granché; la `.cl-live-bar` non vive
+  in questo hero (è di `AgentsLiveView`), perciò il segnale si è spostato nel
+  **pip dell'eyebrow**, che con `is-live` diventa verde e pulsa come quello del
+  rail — e si ferma sotto `prefers-reduced-motion`;
+- la descrizione siede con l'**ultima** riga sulla baseline del nome
+  (`align-items: last baseline`, col valore semplice sotto come fallback: un
+  engine che non lo parsa scarterebbe la dichiarazione e stirerebbe la riga).
+  Con `baseline` era la prima riga a sedersi, e una descrizione su due righe
+  restava appesa in alto;
+- **una misura sola** per hero e lista (`--cl-measure`, 1080px): le cifre
+  dell'hero si fermavano a due terzi della finestra mentre la lista correva
+  fino al bordo, e su un monitor largo la riga mono di una sessione restava
+  sola contro mezzo schermo di carta;
+- la **barra dei modelli** scende a 6px per 220px e ogni segmento ha
+  `min-width: 2px`: con 99,6% Opus disegnava un blocco viola pieno mentre la
+  legenda sotto diceva `Sonnet <1%` — la barra smentiva le sue stesse parole;
+- il **path nell'eyebrow** esce dall'uppercase (`.cl-eyebrow .path`): è un dato
+  case-sensitive, e `/USERS/…` è una stringa che non risolve, stampata
+  nell'unico punto in cui la pagina dice dove sta il progetto;
+- via **l'anello** attorno al chevron del nome: un cerchio d'inchiostro da 36px
+  accanto a un titolo da 64px è una seconda cosa che chiede attenzione sulla
+  stessa riga. Resta il glifo, che si accende in accent all'hover;
+- `LANDING_SESSIONS` passa a **5**: il mock disegnava tre righe in un frame
+  alto 720px, su una finestra vera la pagina finiva a metà.
+
+Seconda passata, sullo stesso hero visto in app con un progetto reale:
+
+- il gradiente del wash è **verticale** (`to bottom`), non più a 168°. La linea
+  di un gradiente inclinato è lunga `|W·sin a| + |H·cos a|`: su un hero
+  1500×500 anche 168° la stirava a ~820px, quindi gli stop cadevano molto più
+  in basso di dove si leggono e il wash non arrivava mai a carta prima del
+  filetto. Verticale, le percentuali dicono quello che sembrano dire;
+- **`gap: 0`** sul nome: il gap della riga metteva uno spazio tra il nome e il
+  suo punto, e il titolo si leggeva `Personal .` — un refuso, in 64px. Il punto
+  appartiene alla parola; solo il chevron è una cosa a parte e prende il suo
+  `margin-left`;
+- la descrizione è **clampata a due righe** (con `line-clamp`, testo intero nel
+  `title` insieme alla provenienza): la terza riga sale sopra l'altezza delle
+  maiuscole del nome e la frase comincia a competere con ciò che descrive;
+- **la barra dei modelli sparisce quando una famiglia sola tiene la finestra**
+  (meno di due quote ≥ 1%): un part-of-whole ha bisogno di più di una parte
+  visibile, e con 99,6% Opus disegnava un rettangolo viola pieno — "tutto" —
+  mentre la legenda sotto diceva `Sonnet <1%`. Le etichette **restano** quelle
+  di `pctLabels` (i floor sommano sempre a 100, `<1` per le quote non nulle:
+  è unit-tested, non si tocca); è la barra a farsi da parte.
+
+La lista è **`RecentSessionRows`** con la sua `.cl-rsrow`, **non**
+`SessionRows` con un flag: titolo + `LiveTag` sulla stessa base, una riga mono
+`N msg · modello · N tokens · quando` sotto, righe divise da hairline e
+nient'altro. Pin, indice colorato, tag, expiry e kebab restano su `.cl-srow`
+nella vista Sessions, che possiede la lista come spazio di lavoro; una
+variante sul componente condiviso è il modo in cui quella vista cambia per
+sbaglio. La testata prende il modificatore **`.cl-sec-head--rule`** (la `h2`
+scende a etichetta mono uppercase, filetto d'inchiostro sotto) perché la base
+è condivisa da una decina di viste, e a destra c'è `All {N} →`.
+
+L'ordine è la **recenza**, non più le pinnate per prime (1c): la testata dice
+"Recent sessions" e la fascia non stampa più `last … ago`, quindi la prima
+riga è diventata l'unico posto in cui la pagina dichiara quando il progetto è
+stato toccato — una pinnata di tre settimane fa in quella posizione farebbe
+mentire la pagina. Le pinnate hanno comunque la **loro sezione** nella vista
+Sessions, che è dove si agisce su di esse.
+
 La sezione **Teams** conserva l'hero compatto (`cl-hero--compact`) e la
 vecchia meta-riga: è una vista operativa, non una landing di progetto.
 Il **filtro per tag** (`sessions/TagBar`) non è più una banda sotto il titolo:
@@ -868,7 +1216,8 @@ pagina, pur essendo da leggere una volta sola. Ora la vista prende la chrome
 delle altre deep view (`TopBar` + `cl-hero` + `Lens` + `cl-section`, come
 `PluginsView`) e la spiegazione scende in un `<details className="set-disc">`
 chiuso — il testo resta, smette di dominare.
-La **fascia metriche** (`.cl-hband`, riusata dall'hero progetto) dichiara la
+La **fascia metriche** (`.cl-hband`, nella sua forma condivisa a celle divise
+da hairline — l'hero progetto la sovrascrive, vedi 3b) dichiara la
 scala del problema, che prima nessuno diceva: Projects, Folders
 (`N primary · N duplicate`), **Sessions to move** e **Memory to merge** —
 i due totali sommano solo le cartelle **non** primarie, cioè esattamente ciò che

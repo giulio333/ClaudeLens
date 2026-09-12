@@ -95,6 +95,28 @@ export function pathToHash(realPath: string): string {
 }
 
 /**
+ * Il nome cartella che Claude Code dà a un progetto: ogni carattere non
+ * alfanumerico divento '-'. Non è l'inverso di `hashToPath` (che è lossy) ma la
+ * direzione che *si può* calcolare, quindi l'unico modo di verificare se un cwd
+ * letto da un transcript appartiene davvero alla cartella che lo contiene.
+ *
+ * Verificata su 50 cartelle reali: combacia ovunque tranne che sui transcript
+ * che cambiano cwd a metà sessione (vedi `resolveRealPath`).
+ *
+ * Deliberatamente distinta da `pathToHash`, che converte i soli '/' e quindi
+ * non produrrebbe mai il '--claude' di un path che contiene '/.claude'.
+ *
+ * Esiste una terza fold, lato renderer: `provisionalProjectHash`
+ * (`src/components/project/shared/projectHash.ts`), che conia una chiave
+ * temporanea per una sessione che non ha ancora scritto un transcript. È più
+ * stretta (non piega gli spazi) e dichiaratamente approssimata — non allinearle
+ * senza leggere il commento che ha sopra.
+ */
+export function encodeProjectHash(realPath: string): string {
+  return realPath.replace(/[^A-Za-z0-9]/g, '-');
+}
+
+/**
  * True if `p` looks like an absolute path on any platform. Used to validate the
  * `cwd` read from .jsonl files: POSIX paths start with '/', Windows paths start
  * with a drive letter ('C:\...' / 'C:/...') or a UNC prefix ('\\server\share').
@@ -144,12 +166,30 @@ export function resolveRealPath(projectsDir: string, hash: string): string {
       .map(full => ({ full, mtime: safeMtime(full) }))
       .sort((a, b) => b.mtime - a.mtime);
 
+    // Un transcript può contenere PIÙ cwd: una sessione aperta nel repo e poi
+    // spostata in un git worktree scrive prima il cwd del repo padre e poi
+    // quello del worktree. Prendere il primo dava a `…ClaudeLens--claude-
+    // worktrees-<branch>` il path del padre — tre cartelle con lo stesso
+    // realPath, che la vista Duplicates mostrava come tre duplicati identici
+    // (e che il `dir` hint dell'SDK, il dialog di purge e la scoperta dei
+    // workflow di Studio puntavano tutti al repo sbagliato).
+    //
+    // Il cwd giusto è quello che ricodifica nel nome della cartella che lo
+    // contiene: l'encoding è una funzione, quindi al più un cwd può combaciare
+    // e non serve alcun criterio di spareggio. La preferenza NON è un requisito
+    // — un cwd che non combacia resta meglio del fallback lossy di hashToPath.
+    let firstSeen: string | null = null;
     for (const { full } of files) {
-      const cwd = readCwdFromJsonl(full);
-      if (cwd) {
-        cwdCache.set(hash, cwd);
-        return cwd;
+      const { match, first } = readCwdFromJsonl(full, hash);
+      if (match) {
+        cwdCache.set(hash, match);
+        return match;
       }
+      if (first && !firstSeen) firstSeen = first;
+    }
+    if (firstSeen) {
+      cwdCache.set(hash, firstSeen);
+      return firstSeen;
     }
   } catch {
     // ignore, ricade nel fallback
@@ -176,24 +216,38 @@ function safeMtime(filePath: string): number {
 // 1,4 MB. Senza fallback quei progetti ricadrebbero sul lossy `hashToPath`.
 const CWD_HEAD_BYTES = 64 * 1024;
 
-function findCwdInJsonl(content: string): string | null {
+/**
+ * I cwd di un transcript: `match` è quello che ricodifica in `hash` (al più uno,
+ * vedi `encodeProjectHash`), `first` il primo incontrato — il ripiego di sempre
+ * quando nessuno combacia. La scansione si ferma appena trova il match.
+ */
+interface CwdScan {
+  match: string | null;
+  first: string | null;
+}
+
+function findCwdInJsonl(content: string, hash: string): CwdScan {
+  let first: string | null = null;
   for (const line of content.split('\n')) {
     if (!line) continue;
     const idx = line.indexOf('"cwd"');
     if (idx === -1) continue;
     try {
       const obj = JSON.parse(line);
-      if (typeof obj.cwd === 'string' && isAbsolutePath(obj.cwd)) return obj.cwd;
+      if (typeof obj.cwd !== 'string' || !isAbsolutePath(obj.cwd)) continue;
+      if (encodeProjectHash(obj.cwd) === hash) return { match: obj.cwd, first: first ?? obj.cwd };
+      if (!first) first = obj.cwd;
     } catch {
       // riga malformata, continua
     }
   }
-  return null;
+  return { match: null, first };
 }
 
-function readCwdFromJsonl(filePath: string): string | null {
+function readCwdFromJsonl(filePath: string, hash: string): CwdScan {
   let fd: number | undefined;
   let readWholeFile = false;
+  let fromHead: CwdScan = { match: null, first: null };
   try {
     fd = openSync(filePath, 'r');
     const buf = Buffer.allocUnsafe(CWD_HEAD_BYTES);
@@ -205,8 +259,13 @@ function readCwdFromJsonl(filePath: string): string | null {
     // sull'ultimo '\n' scarta anche l'eventuale carattere UTF-8 spezzato dal
     // confine del buffer ('\n' non compare mai dentro una sequenza multi-byte).
     const complete = readWholeFile ? chunk : chunk.slice(0, chunk.lastIndexOf('\n') + 1);
-    const fromHead = findCwdInJsonl(complete);
-    if (fromHead) return fromHead;
+    fromHead = findCwdInJsonl(complete, hash);
+    // L'escalation è gated sul MATCH, non sul primo cwd trovato: nella testa di
+    // un transcript da worktree il cwd c'è già ma è quello del repo padre, e
+    // fermarsi lì è esattamente il bug. I progetti a cwd singolo continuano a
+    // fermarsi a 64 KB — la lettura piena la pagano solo le cartelle che
+    // davvero cambiano cwd a metà file.
+    if (fromHead.match) return fromHead;
   } catch {
     // testa illeggibile: ritenta con la lettura piena, che ha il suo catch
   } finally {
@@ -220,14 +279,18 @@ function readCwdFromJsonl(filePath: string): string | null {
   }
 
   // La testa era già tutto il file: rileggerlo non troverebbe nulla di nuovo.
-  if (readWholeFile) return null;
+  if (readWholeFile) return fromHead;
 
   try {
-    return findCwdInJsonl(readFileSync(filePath, 'utf-8'));
+    const full = findCwdInJsonl(readFileSync(filePath, 'utf-8'), hash);
+    // Il `first` della testa vince su quello della lettura piena solo perché
+    // sono lo stesso: la testa è un prefisso del file. Tenerlo evita di
+    // dipendere da quale delle due scansioni ha visto per prima il ripiego.
+    return { match: full.match, first: fromHead.first ?? full.first };
   } catch {
     // file illeggibile
   }
-  return null;
+  return fromHead;
 }
 
 /**

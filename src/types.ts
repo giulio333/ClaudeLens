@@ -59,6 +59,7 @@ export interface ClaudeMdHierarchy {
 // Ri-esportati qui così il renderer continua a importarli da './types'.
 export type {
   ChatContentBlock,
+  AdvisorConsult,
   ChatMessage,
   MessageUsage,
   ToolActivity,
@@ -101,6 +102,12 @@ export interface SubagentMeta {
   messageCount: number;
 }
 
+/** The eight names `/color` can stamp on a session. Mirrors `AGENT_COLORS` in
+ *  `electron/modules/cost-tracker.ts`, which is where the value is validated —
+ *  the renderer only ever sees one of these or nothing. */
+export type AgentColor =
+  'red' | 'blue' | 'green' | 'yellow' | 'purple' | 'orange' | 'pink' | 'cyan';
+
 export interface SessionSummary {
   filename: string;
   date: string;
@@ -114,9 +121,12 @@ export interface SessionSummary {
   messageCount: number;
   model?: string;
   models: Record<string, number>;
+  /** The name the user typed with `/rename`; outranks both titles. */
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   template?: string;
 }
 
@@ -126,6 +136,75 @@ export interface ExportSaveResult {
 }
 
 export type ArtifactKind = 'session' | 'subagents' | 'tasks' | 'plan';
+
+// ── Conversation search ──────────────────────────────────────────────────────
+// Manually mirrored from electron/modules/session-search.ts: that module pulls
+// in `fs`/`glob`, so it can't be imported from the renderer the way the shared
+// chat types are. Keep the two in step.
+
+export interface ConversationSearchHit {
+  /** The message the match is in. The renderer joins on this, never on a
+   *  position: the transcript view reads through the SDK, which truncates at the
+   *  compaction boundary, so a hit on disk may have no turn to scroll to. */
+  messageUuid: string;
+  role: 'user' | 'assistant';
+  timestamp: string;
+  kind: 'text' | 'thinking';
+  snippet: string;
+  /** Offset and length of the match inside `snippet`, for highlighting. */
+  matchStart: number;
+  matchLength: number;
+}
+
+export interface ConversationSearchSession {
+  projectHash: string;
+  /** Absent when the project's cwd could only be guessed from its folder name. */
+  projectPath?: string;
+  sessionId: string;
+  sessionTitle?: string;
+  mtime: number;
+  /** Total matches in this session; `hits` is the sample that is shown. */
+  hitCount: number;
+  hits: ConversationSearchHit[];
+}
+
+export interface ConversationSearchResult {
+  results: ConversationSearchSession[];
+  scanned: number;
+  parsed: number;
+  truncated: boolean;
+  prefiltered: boolean;
+  elapsedMs: number;
+}
+
+export interface ConversationSearchRequest {
+  text: string;
+  projectHash?: string;
+  includeThinking?: boolean;
+  maxSessions?: number;
+  maxHitsPerSession?: number;
+}
+
+/**
+ * One `[[wikilink]]` a message cites, answered by `electron/modules/vault-index.ts`.
+ * `rel` is relative to the project root and `/`-separated; `null` means no file
+ * in the project answers to that name — the transcript is citing a source that
+ * is not there.
+ */
+export interface VaultLinkHit {
+  target: string;
+  rel: string;
+  /** `fuzzy` = matched on a path suffix, not on the whole name. */
+  match: 'exact' | 'fuzzy';
+}
+
+export interface VaultLinkMiss {
+  target: string;
+  rel: null;
+  match: null;
+}
+
+export type VaultLinkAnswer = VaultLinkHit | VaultLinkMiss;
 
 export interface SessionArtifact {
   kind: ArtifactKind;
@@ -747,15 +826,17 @@ export interface TraceMark {
  *  `sessionId` in the renderer: the registry says busy/waiting, this says at what. */
 export interface SessionActivity {
   sessionId: string;
-  /** The name this conversation goes by — the user's `/title` (`custom-title`)
-   *  if they set one, else the one Claude generated (`ai-title`); null until a
-   *  title record has been seen. The only human name a session has — the
-   *  registry's `name` is the project plus two random characters. */
+  /** The name this conversation goes by — the one the user typed with `/rename`
+   *  (`agent-name`) or, in older transcripts, `/title` (`custom-title`), else
+   *  the one Claude generated (`ai-title`); null until a title record has been
+   *  seen. The only human name a session has — the registry's `name` is the
+   *  project plus two random characters. */
   title: string | null;
-  /** Which record `title` came from; null while `title` is. The two do not rank
-   *  equally — `ai-title` is rewritten on later turns — so the main process
-   *  carries the source to keep a `/title` from being overwritten by it. */
-  titleSource: 'custom' | 'ai' | null;
+  /** Which record `title` came from; null while `title` is. The three do not
+   *  rank equally — `ai-title` is rewritten on later turns — so the main process
+   *  carries the source to keep a name the user typed from being overwritten by
+   *  it. Mirrors `SessionTitleSource` in `electron/modules/transcript-tail.ts`. */
+  titleSource: 'agent' | 'custom' | 'ai' | null;
   transcriptPath: string | null;
   /** 'thinking' | 'busy' | 'idle'; null when nothing has been read yet. */
   activity: string | null;

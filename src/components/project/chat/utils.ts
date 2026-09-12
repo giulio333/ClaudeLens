@@ -1,4 +1,5 @@
 import {
+  AdvisorConsult,
   ChatMessage,
   ChatContentBlock,
   MemoryTopic,
@@ -39,6 +40,9 @@ export type ProcessedMessage = {
   toolGroups: ToolGroup[]; // solo per messaggi assistant con tool_use
   command?: ClaudeSlashCommand; // se il messaggio è un Claude Code command (XML tag flow)
   notification?: TaskNotification; // set when the message is a harness task-notification
+  /** Set when the turn consulted the `advisor` tool. The advice itself is
+   *  encrypted in the transcript, so this is a marker, never content. */
+  advisor?: AdvisorConsult;
 };
 
 export type MemoryType = 'user' | 'feedback' | 'project' | 'reference';
@@ -194,10 +198,21 @@ export function buildProcessedMessages(messages: ChatMessage[]): ProcessedMessag
       }));
     }
 
-    result.push({ msg, toolGroups, command });
+    // The advisor consult of this turn, if any. It stays on the message that
+    // holds it — an advisor-only message renders as a slim marker in the
+    // stream (see buildRenderItems), not as a turn of its own.
+    const advisor = msg.content.find(b => b.type === 'advisor') as AdvisorConsult | undefined;
+
+    result.push({ msg, toolGroups, command, advisor });
   }
 
   return result;
+}
+
+/** True when a turn holds nothing but its advisor consult — the usual shape,
+ *  since Claude Code persists the consult's two blocks as rows of their own. */
+export function isAdvisorOnly(p: ProcessedMessage): boolean {
+  return !!p.advisor && p.msg.content.every(b => b.type === 'advisor');
 }
 
 // Strip codici ANSI escape (es. \x1b[1m...\x1b[22m) usati dal terminale.
@@ -387,7 +402,11 @@ export type MinimapItem = TurnDescriptor & { n: number; time: string };
  *  — a standalone "tools hidden" badge. */
 export type RenderItem =
   | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
-  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] };
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
+  /** An advisor consult, drawn as a slim marker at its position in the stream
+   *  (both density modes): there is no advice to read, so it never earns a
+   *  bubble. */
+  | { kind: 'advisor'; key: string; consult: AdvisorConsult };
 
 /** The per-type counts that drive the filter chips in the control pill. */
 export type TurnFilterCounts = {
@@ -506,7 +525,11 @@ export function describeTurn(
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
-    showQuestions;
+    showQuestions ||
+    // Mirrors MessageBubble: a consult riding a turn whose own content is
+    // hidden still renders — as the header chip (an advisor-ONLY message never
+    // reaches here, it becomes a marker item instead).
+    !!p.advisor;
   // Minimal mode collapses a tool-only turn into a single badge; it's not a
   // standalone message, so the minimap skips it — but it still counts as visible.
   const toolsOnly = !hasVisibleContent && !showTools && hasTools;
@@ -831,6 +854,83 @@ export function correlateSessionSkills(
     });
   });
   return out;
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Il modello in uso — e a che effort.
+//
+// Non è una proprietà della sessione: `/model` lo cambia a conversazione in
+// corso, e il transcript registra il cambio soltanto scrivendo un `model`
+// diverso sui turni successivi. La risposta quindi è sempre "quello dell'ultimo
+// turno assistant", e una sessione che ha cambiato deve poterlo dire: stampare
+// un nome solo per un transcript che ne ha girati due è la versione di questo
+// campo che disinforma.
+//
+// L'effort sta accanto al modello perché cambia con la stessa libertà e vale la
+// stessa domanda ("con cosa sto parlando adesso"). Arriva dalla riga di
+// transcript via `transcript-extras`, non da `message`.
+// ──────────────────────────────────────────────────────────────────────────
+
+/** Il placeholder che Claude Code scrive per i comandi builtin (`/context`,
+ *  `/usage`, …): una riga assistant senza turno di modello dietro. */
+const SYNTHETIC_MODEL = '<synthetic>';
+
+/** Il modello su cui un turno è girato davvero — assente per un turno utente e
+ *  per il placeholder `<synthetic>`, che non è girato su nessuno. */
+export function turnModel(msg: ChatMessage): string | undefined {
+  if (msg.role !== 'assistant') return undefined;
+  return msg.model && msg.model !== SYNTHETIC_MODEL ? msg.model : undefined;
+}
+
+/** Il modello su cui la conversazione è ADESSO: l'ultimo turno che ne ha uno.
+ *  Semina il picker del composer, così una risposta parte dallo stesso modello
+ *  su cui la chat sta girando, esattamente come farebbe un resume da terminale. */
+export function currentModel(messages: ChatMessage[]): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const model = turnModel(messages[i]);
+    if (model) return model;
+  }
+  return undefined;
+}
+
+export type ModelRun = {
+  /** Chiave stabile (il turno su cui la tratta si apre). */
+  key: string;
+  /** Indice 1-based del primo turno della tratta — per il salto dal dock. */
+  turnN: number;
+  model: string;
+  /** Effort dei turni della tratta; assente sui transcript che non lo scrivono. */
+  effort?: string;
+  /** Quanti turni assistant ci sono girati. */
+  turns: number;
+};
+
+/**
+ * Le tratte consecutive di turni su una stessa coppia modello+effort, dalla più
+ * vecchia alla più recente; l'ultima è quella in cui la conversazione si trova.
+ *
+ * La tratta si spezza su ENTRAMBI i campi, non sul solo modello: l'effort si
+ * muove per conto suo — su questa macchina 3 transcript cambiano effort a
+ * modello fermo — e una tratta che dichiarasse un effort valido per una parte
+ * soltanto dei suoi turni direbbe una cosa falsa su tutti gli altri. Per la
+ * stessa ragione chi conta i MODELLI usati non può contare le tratte. I
+ * turni `<synthetic>` non spezzano nulla — non sono girati su un modello, quindi
+ * un `/context` in mezzo a dieci turni non li conta per due tratte.
+ */
+export function collectModelRuns(processed: ProcessedMessage[]): ModelRun[] {
+  const runs: ModelRun[] = [];
+  processed.forEach((p, idx) => {
+    const model = turnModel(p.msg);
+    if (!model) return;
+    const effort = p.msg.effort;
+    const open = runs[runs.length - 1];
+    if (open && open.model === model && open.effort === effort) {
+      open.turns += 1;
+      return;
+    }
+    runs.push({ key: `${idx + 1}-${model}`, turnN: idx + 1, model, effort, turns: 1 });
+  });
+  return runs;
 }
 
 export const TOOL_ICON: Record<string, string> = {
@@ -1273,6 +1373,16 @@ export function buildRenderItems(
     run = null;
   };
   descriptors.forEach((d, idx) => {
+    const p = processed[idx];
+    const consult = p?.advisor;
+    if (consult && isAdvisorOnly(p)) {
+      // Never folded into a neighbouring turn: the consult sits between two
+      // halves of the same assistant message, and in minimal mode both of them
+      // can collapse — the marker would vanish with them.
+      flush();
+      items.push({ kind: 'advisor', key: `advisor-${idx}`, consult });
+      return;
+    }
     if (d.toolsOnly) {
       // toolsOnly guarantees the turn holds only standard tools (no question/agent).
       const groups = processed[idx].toolGroups;

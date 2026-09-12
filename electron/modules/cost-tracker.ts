@@ -32,11 +32,35 @@ export interface SessionSummary {
   messageCount: number;
   model?: string; // modello dominante (retrocompatibilità)
   models: Record<string, number>; // conteggio messaggi per modello
+  /** The name the user typed with `/rename`. Outranks both titles — see
+   *  `readAgentName`. */
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  /** The colour the user stamped on the session with `/color` — see AGENT_COLORS. */
+  agentColor?: AgentColor;
   template?: string;
 }
+
+// The eight names `/color` accepts. Claude Code writes the choice to the
+// transcript as its own record — `{"type":"agent-color","agentColor":"blue"}` —
+// and declares it **last-wins**: the row is re-appended on later turns, and a
+// session recoloured mid-run carries every colour it ever had, the current one
+// last. Anything outside this set is ignored rather than trusted: the record is
+// undocumented, and its value ends up selecting a CSS custom property, so an
+// unknown string must not travel there.
+export const AGENT_COLORS = [
+  'red',
+  'blue',
+  'green',
+  'yellow',
+  'purple',
+  'orange',
+  'pink',
+  'cyan',
+] as const;
+export type AgentColor = (typeof AGENT_COLORS)[number];
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
 // Source: the official pricing page, https://docs.claude.com/en/docs/about-claude/pricing
@@ -47,7 +71,7 @@ export interface SessionSummary {
 // rate (2x) is deliberately not modelled: a transcript records a single
 // `cache_creation_input_tokens` figure and does not say which TTL produced it,
 // so picking the shorter — and far more common — one is the honest default.
-export const PRICING_LAST_UPDATED = '2026-08-08';
+export const PRICING_LAST_UPDATED = '2026-09-07';
 
 interface ModelPricing {
   input: number;
@@ -67,7 +91,10 @@ const PRICING: Record<string, ModelPricing> = {
   'claude-3-5-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20240620': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
-  // Sonnet 4.x  (Sonnet 5 is scheduled — see SCHEDULED below)
+  // Sonnet 3.7 — retired; a transcript can still carry it
+  'claude-3-7-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  'claude-3-7-sonnet-20250219': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  // Sonnet 4.x  (Sonnet 5 is in SCHEDULED below — one rate, see the note there)
   'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
@@ -85,6 +112,12 @@ const PRICING: Record<string, ModelPricing> = {
   // land on the conservative Sonnet default at a third of their real price.
   'claude-fable-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
   'claude-mythos-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
+  // Fable 5.1 / Mythos 5.1 — same $10/$50 tier as 5, but the ONE model pair
+  // whose cache read is not 0.1x the input price: it is 0.025x ($0.25/MTok).
+  // Priced by the family fallback they would be charged 4x for every cache
+  // read, which on an agentic session is most of the input bill.
+  'claude-fable-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+  'claude-mythos-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
 };
 
 /** A published rate that changes on a date. `from` is the first day (UTC,
@@ -94,13 +127,20 @@ interface PriceSchedule {
   prices: ModelPricing;
 }
 
-// Sonnet 5 launched on introductory pricing that expires. A single static rate
-// would misprice one side of the cutover, and this app reconstructs HISTORICAL
-// cost — so each session is priced at the rate in force when it ran.
+// A dated rate change, for when one is actually published: this app
+// reconstructs HISTORICAL cost, so each session is priced at the rate in force
+// when it ran rather than at today's.
+//
+// Sonnet 5 is the standing example and the cautionary one. It launched on
+// introductory pricing announced as expiring on 2026-08-31, and this table
+// carried the scheduled rise to $3/$15 on 2026-09-01 — which never happened:
+// the pricing page now states the $2/$10 rate "is now the standard price. The
+// previously scheduled increase ... will not occur." An announced future rate
+// is not a fact until the day it takes effect, so a scheduled entry gets
+// re-verified against the pricing page BEFORE its `from` date arrives; the one
+// left here billed every Sonnet 5 session at 1.5x for a week.
 const SCHEDULED: Record<string, PriceSchedule[]> = {
   'claude-sonnet-5': [
-    { from: '2026-09-01', prices: { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 } },
-    // Introductory pricing, in effect through 2026-08-31.
     { from: '0000-01-01', prices: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 } },
   ],
 };
@@ -145,11 +185,14 @@ function getPricing(model: string | undefined, at?: string): ModelPricing {
   const m = model.toLowerCase();
   if (m.includes('haiku')) return PRICING['claude-haiku-4-5'];
   if (m.includes('opus')) return PRICING['claude-opus-5'];
-  if (m.includes('fable')) return PRICING['claude-fable-5'];
-  if (m.includes('mythos')) return PRICING['claude-mythos-5'];
-  if (m.includes('sonnet')) return PRICING['claude-sonnet-4-6'];
+  if (m.includes('fable')) return PRICING['claude-fable-5-1'];
+  if (m.includes('mythos')) return PRICING['claude-mythos-5-1'];
+  if (m.includes('sonnet'))
+    return scheduledPricing('claude-sonnet-5', at) ?? PRICING['claude-sonnet-4-6'];
 
-  // Default conservativo: Sonnet
+  // Default conservativo: Sonnet — deliberately the 4.6 rate and NOT the family
+  // anchor above. An id with no family word tells us nothing, and the honest
+  // way to be wrong about a model we cannot name is upwards.
   return PRICING['claude-sonnet-4-6'];
 }
 
@@ -294,17 +337,23 @@ interface ParsedSession {
   date: string;
   model: string | undefined; // modello dominante
   models: Record<string, number>;
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   template?: string;
 }
 
 interface LineData {
   date: string;
+  agentName: string | undefined;
   customTitle: string | undefined;
   aiTitle: string | undefined;
   firstUserMessage: string | undefined;
+  // Three states, not two: `undefined` = not a colour record at all, `null` =
+  // a record that clears the colour (`/color default`), a name = set it.
+  agentColor: AgentColor | null | undefined;
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
@@ -358,6 +407,29 @@ function extractFirstUserText(json: Record<string, unknown>): string | undefined
   return stripped;
 }
 
+// The name the user gave the conversation with `/rename`, if this line is that
+// record. It is the CURRENT way to name a session — `/title`, which wrote
+// `custom-title`, no longer exists — so it outranks both the legacy custom title
+// and the generated one, which is also the precedence Claude Code itself
+// resolves (`registry name ?? customTitle ?? aiTitle`). Unlike the colour there
+// is no clearing form: `/rename` either sets a non-empty name or does nothing.
+function readAgentName(json: any): string | undefined {
+  if (json.type !== 'agent-name') return undefined;
+  const raw = typeof json.agentName === 'string' ? json.agentName.trim() : '';
+  return raw || undefined;
+}
+
+// The colour record, if this line is one. Returns `null` for a record that
+// clears the colour (an empty value, or the `default` the slash command offers)
+// so the fold can distinguish "cleared" from "this line says nothing about
+// colour" — a colour set and then removed must not keep showing.
+function readAgentColor(json: any): AgentColor | null | undefined {
+  if (json.type !== 'agent-color') return undefined;
+  const raw = typeof json.agentColor === 'string' ? json.agentColor.trim().toLowerCase() : '';
+  if (!raw || raw === 'default') return null;
+  return (AGENT_COLORS as readonly string[]).includes(raw) ? (raw as AgentColor) : undefined;
+}
+
 // Extracts the relevant fields from an already-parsed JSONL object. Returns null
 // for well-formed lines that carry nothing we track (kept separate from JSON
 // parse failures, which the caller counts and logs).
@@ -371,8 +443,21 @@ function extractLineData(json: any): LineData | null {
     json.type === 'custom-title' ? (json.customTitle as string | undefined) : undefined;
   const aiTitle = json.type === 'ai-title' ? (json.aiTitle as string | undefined) : undefined;
   const firstUserMessage = extractFirstUserText(json as Record<string, unknown>);
+  const agentName = readAgentName(json);
+  const agentColor = readAgentColor(json);
   const usage = json.message?.usage;
-  if (!usage && !date && !customTitle && !aiTitle && !firstUserMessage) return null;
+  // `agentColor === null` is a meaningful line (the colour was cleared), so the
+  // guard tests for `undefined` rather than falsiness.
+  if (
+    !usage &&
+    !date &&
+    !customTitle &&
+    !aiTitle &&
+    !agentName &&
+    !firstUserMessage &&
+    agentColor === undefined
+  )
+    return null;
 
   const model: string | undefined = json.message?.model;
   // Claude Code writes one JSONL line per content block of an assistant turn
@@ -389,9 +474,11 @@ function extractLineData(json: any): LineData | null {
   const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
   return {
     date,
+    agentName,
     customTitle,
     aiTitle,
     firstUserMessage,
+    agentColor,
     inputTokens: num(usage?.input_tokens),
     outputTokens: num(usage?.output_tokens),
     cacheWriteTokens: num(usage?.cache_creation_input_tokens),
@@ -412,9 +499,11 @@ interface SessionAccumulator {
   messageCount: number;
   date: string;
   modelCounts: Record<string, number>;
+  agentName?: string;
   customTitle?: string;
   aiTitle?: string;
   firstUserMessage?: string;
+  agentColor?: AgentColor;
   dropped: number;
   // Usage identities already counted, so a repeated content-block line for the
   // same turn isn't double-counted (issue #56) — carried across increments.
@@ -455,8 +544,22 @@ const parseStats = {
 
 export function getParseStats() {
   let cachedFiles = 0;
-  for (const byFile of parseCache.values()) cachedFiles += byFile.size;
-  return { ...parseStats, cachedFiles };
+  // `retainedPartialBytes` is what the cache costs in `external` memory, and it
+  // is the number whose absence let a `subarray` view pin whole transcripts
+  // unnoticed. Distinct backing stores, not view lengths: small copies come out
+  // of Node's shared 8 KB buffer pool, so billing every entry for its
+  // `buffer.byteLength` would count that one slab once per cached file.
+  const backings = new Set<ArrayBufferLike>();
+  let retainedPartialBytes = 0;
+  for (const byFile of parseCache.values()) {
+    cachedFiles += byFile.size;
+    for (const { partial } of byFile.values()) {
+      if (backings.has(partial.buffer)) continue;
+      backings.add(partial.buffer);
+      retainedPartialBytes += partial.buffer.byteLength;
+    }
+  }
+  return { ...parseStats, cachedFiles, retainedPartialBytes };
 }
 
 export function resetParseCache() {
@@ -561,8 +664,12 @@ function foldLine(line: string, acc: SessionAccumulator): void {
   const parsed = extractLineData(json);
   if (!parsed) return;
 
+  if (parsed.agentName) acc.agentName = parsed.agentName;
   if (parsed.customTitle) acc.customTitle = parsed.customTitle;
   if (parsed.aiTitle) acc.aiTitle = parsed.aiTitle;
+  // Last wins, clear included — a transcript recoloured mid-run holds every
+  // colour it ever had and only the final record is the session's colour.
+  if (parsed.agentColor !== undefined) acc.agentColor = parsed.agentColor ?? undefined;
   if (!acc.firstUserMessage && parsed.firstUserMessage)
     acc.firstUserMessage = parsed.firstUserMessage;
   if (parsed.date) acc.date = parsed.date;
@@ -600,9 +707,11 @@ function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
     date: acc.date || new Date(mtimeMs).toISOString(),
     model: entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : undefined,
     models: { ...acc.modelCounts },
+    agentName: acc.agentName,
     customTitle: acc.customTitle,
     aiTitle: acc.aiTitle,
     firstUserMessage: acc.firstUserMessage,
+    agentColor: acc.agentColor,
   };
 }
 
@@ -670,7 +779,14 @@ async function parseSession(filePath: string): Promise<ParsedSession> {
     }
   }
 
-  entry.partial = combined.subarray(start);
+  // A *copy* of the trailing partial line, not a view onto it. `subarray` shares
+  // the backing ArrayBuffer, so parking that view in a process-lifetime cache
+  // pins everything `combined` was read from — on a full parse, the entire
+  // transcript. Measured on a real `~/.claude` (92 transcripts, 419 MB of
+  // JSONL): the main process held 333 MB of `external` memory and its RSS fell
+  // from 520 MB to 179 MB the moment the cache was cleared by hand. The bytes
+  // we actually need are the ones after the last newline, usually a few dozen.
+  entry.partial = Buffer.from(combined.subarray(start));
   entry.consumed += chunk.length;
   entry.mtimeMs = st.mtimeMs;
   cacheSet(filePath, entry);
@@ -846,9 +962,11 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           messageCount: s.messageCount,
           model: s.model,
           models: s.models,
+          agentName: s.agentName,
           customTitle: s.customTitle,
           aiTitle: s.aiTitle,
           firstUserMessage: s.firstUserMessage,
+          agentColor: s.agentColor,
           template: s.template,
         };
       } catch {

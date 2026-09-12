@@ -12,7 +12,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
-and the chat `utils`.
+`vault-index`, `wikilinks`, and the chat `utils`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, the read
@@ -20,7 +20,13 @@ cache's invalidation, and the merge of the rows the SDK read does not return
 (#245/#246 — a message absorbed mid-turn lands in chronological place and a
 slash-command skill gets its `skillPath`, both from one extra pass over the
 same file). CI (`.github/workflows/ci.yml`) runs format:check +
-typecheck + lint + test + build on every push/PR. **Test order is randomised**
+typecheck + lint + test + build on every push/PR, **on Node 22 and 24 both** —
+`engines` says `>=22`, so a claim the suite only holds on one of them is a claim
+the project does not make. Pinning 22 alone is what hid #258: two assertions were
+bounded by the literal `64 * 1024`, which happened to equal Node 22's
+`Buffer.poolSize`, and went red on 24 — where that pool is exactly 65536 — while
+CI stayed green. A bound that has to describe an allocation belongs to
+`Buffer.poolSize`, never to a number that matches it today. **Test order is randomised**
 (`sequence.shuffle` in `vitest.config.ts`): every `it` has to be an independent
 claim, and three files had quietly stopped being that — one test created the
 workflow the next edited, another appended to a transcript a later one measured,
@@ -37,7 +43,13 @@ the main process, and `tsconfig.test.json` for `test/` — the suite used to be 
 one part of the repo tsc never looked at.
 
 **Renderer tests** run in jsdom against a fake preload bridge
-(`test/helpers/fake-electron-api.ts`). `window.electronAPI` is the renderer's
+(`test/helpers/fake-electron-api.ts`). **Mount them the way `src/main.tsx`
+mounts — inside `React.StrictMode`**: Testing Library's `render` does not, and
+that gap is not cosmetic. StrictMode runs every effect, its cleanup, and the
+effect again to prove a component survives a remount, and the wikilink chips
+shipped with a provider whose one-way `dispose` made that rehearsal permanent —
+on screen every citation stayed in the neutral "we do not know" state while all
+ten of its tests were green. `window.electronAPI` is the renderer's
 single seam to the main process, so replacing it makes hooks and components run
 unmodified with no Electron, no SDK and no `~/.claude` on disk: request/response
 methods are `vi.fn()`s returning the `{ data, error }` envelope, `on*` channels
@@ -51,7 +63,11 @@ union, the widen-on-unknown-payload fallback), `telemetry-report-error` (what
 reaches `telemetry:trackError` and what the browser-noise filter drops first)
 `settings-cli-version` (Settings → General prints `claude --version`, never
 the SDK handshake's bundled `claude_code_version`, and says so when the read
-fails instead of falling back to it), `project-description-view` (the hero's
+fails instead of falling back to it), `search-view` (the results page of conversation search: the scan is
+submitted and never streamed from keystrokes, the highlight is drawn at the
+offsets the scan reported rather than re-found here, opening a hit resolves the
+real `SessionSummary` from the project's list and refuses when the session is
+gone, and a truncated scan says so), `project-description-view` (the hero's
 description line: an edit goes to the prefs and never to the project's
 CLAUDE.md, and clearing it falls back to the derived sentence) `thought-stream` (the running commentary of #236: only calls that arrive after
 the view opened are narrated, a sentence holds the line for its own dwell and
@@ -67,7 +83,18 @@ a `startWatch` answer belonging to a superseded session changes nothing) and
 absorbed mid-turn wears the "sent mid-turn" chip and an ordinary one does not,
 and a slash command carrying a `skillPath` renders the skill card instead of
 the plain command one — the claim the old `isSkill` tests only appeared to
-make, since they fed the `isMeta` row the read path stopped returning).
+make, since they fed the `isMeta` row the read path stopped returning; and an
+`advisor` consult is a stream marker of its own in both density modes, stating
+the reviewer model, the wall time and the spend, or degrading to the bare label
+when the turn holds two consults and the shared `usage` cannot be split) and
+`markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
+has is a button carrying the path it resolved to, one nothing answers to is
+dashed and inert, the backticked form Claude writes just as often is caught too,
+a fenced block keeps its brackets and asks nothing, a failed lookup does NOT
+read as missing, a name that was missing is asked about again once the answer
+could have changed while a name that was found never is, and outside a
+`VaultLinksProvider` the text renders exactly as before — which is what keeps the memory views' own wikilinks from resolving
+against the project tree).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
@@ -162,6 +189,19 @@ Before creating a GitHub Release, always run these steps **in order**:
 3. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
 4. Create the GitHub Release with a `## Highlights` section at the top
 
+**A dependency bump can break packaging without CI noticing — that is what
+`package-smoke` is for.** `npm run build` is tsc + Vite and says nothing about
+whether the app can be PACKAGED: Electron 44 landed with electron-builder's
+bundled `node-abi` unaware of its ABI, every platform job died on `Could not
+detect abi for version 44.3.0`, and v2.2.20 was published with no binaries at
+all — because nothing between the dependency PR and the tag ever invoked
+electron-builder. The fix is an `overrides` pin on `node-abi` in `package.json`
+(electron-builder ships a range that lags new Electron majors), and the guard is
+the `package-smoke` job: `electron-builder --dir` resolves the ABI, packs the
+asar and runs the entry-point check without spending the minutes an installer
+costs. When an Electron major lands and packaging fails on the ABI, bump that
+pin rather than reverting Electron.
+
 **Binaries are built and attached by CI, not locally**: pushing the `v*` tag
 (which `gh release create` does) triggers `.github/workflows/release.yml` — it
 packages macOS DMG (x64 + arm64), Windows exe (windows-2022 runner) and Linux
@@ -188,7 +228,7 @@ ClaudeLens is an Electron app that reads Claude Code's local data from `~/.claud
 
 **Main process** (`electron/main.ts`):
 
-- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*` (incl. `sessions:sendMessage`/`sessions:stopMessage`/`sessions:endChat` — chat runs through the **Agent SDK** in **streaming input mode**: one long-lived `ChatSession` per chat view drives a single persistent `query()` whose `prompt` is a push-generator (`modules/chat-runner.ts`), so successive turns ride the same warm session instead of re-resuming each time. `sendMessage` pushes the message into the live session when its id matches (applying `setModel`/`setPermissionMode` first), else resumes the transcript into a fresh session; `startMessage` starts a _new_ session with a **pre-generated `sessionId`** (`crypto.randomUUID`), emitting `sessions:chatStarted` immediately (no race); `stopMessage` is a native `interrupt()` (ends the turn, keeps the session warm); `endChat` disposes the session when the view unmounts. Streams over `sessions:chatChunk` (text deltas) + `sessions:chatToolActivity` (live "using tool" indicator: tool-input generation start + `tool_progress` heartbeats) + `sessions:chatMessage` (each fully-formed assistant/tool-result message as the SDK emits it, so the renderer builds the live turn — tools included — straight from the stream, not from a mid-stream disk re-read) + `chatDone` (per-turn end, carrying the SDK's `ChatTurnSummary` — cost/tokens/model read from the `result`, so the live chat shows running metadata without touching disk) / `chatError`. **Every stream payload is an envelope tagged with the producing `sessionId`** (`Chat*Event` in `electron/shared/chat-types.ts` — the single type definition shared with the renderer, re-exported by `src/types.ts`; permission requests carry the id too), so the renderer's `useLiveChat` drops stale events from a superseded session instead of trusting arrival order. Tool approvals go through the SDK's `canUseTool`: a non-auto-approved tool fires `sessions:permissionRequest` → the renderer's Allow/Always/Deny dialog (requests are **queued** renderer-side — concurrent `canUseTool` calls, e.g. parallel read-only tools, are answered one at a time; `AskUserQuestion` gets a dedicated answer form returning `{ questions, answers }` in the allowed input) → `sessions:permissionResponse` resolves the SDK's pending `PermissionResult` (`pendingPermissions` Map; `stopMessage`/`endChat`/supersede deny all pending). One `ChatSession` in flight at a time; if the live query dies on its own (fatal stream error — not a deliberate dispose) the main emits a final `chatDone` so the composer doesn't stay stuck on "Stop"), `rules:*`, `tasks:*`, `plans:*`, `workflows:*`, `teams:*`, `agents:*`, `skills:*`, `plugins:*` (installed plugins + their skills/agents/commands), `mcp:*`, `projects:*` (duplicate detect/merge + `projects:planPurge`/`projects:purge`, the delete path — see `modules/project-purger.ts` — + `projects:getDescription`, the one-line project description derived from the project's CLAUDE.md, see `modules/project-description.ts`), `live:*` (Live views: `live:getActiveSessions` + `live:getSessions` for the registry and the background-agent roster, `live:getActivity` for the Monitor's per-session tail digest — see `modules/session-tails.ts`), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`, `config:*` (effective config via Agent SDK), `telemetry:*` (anonymous usage telemetry — `telemetry:isEnabled`/`telemetry:setEnabled` opt-out toggle + `telemetry:track` for renderer-fired feature events), `updates:*` (`updates:check` — GitHub-releases update check, see `modules/update-checker.ts`), `clipboard:*` (`clipboard:readText`/`writeText` via Electron's own `clipboard` module — the packaged renderer runs from `file://`, where `navigator.clipboard`'s read path needs a permission the app never grants; used only by the terminal pane's Windows/Linux copy-paste bindings)
+- Registers IPC handlers grouped by namespace: `memory:*`, `cost:*`, `claudeMd:*`, `sessions:*` (incl. `sessions:sendMessage`/`sessions:stopMessage`/`sessions:endChat` — chat runs through the **Agent SDK** in **streaming input mode**: one long-lived `ChatSession` per chat view drives a single persistent `query()` whose `prompt` is a push-generator (`modules/chat-runner.ts`), so successive turns ride the same warm session instead of re-resuming each time. `sendMessage` pushes the message into the live session when its id matches (applying `setModel`/`setPermissionMode` first), else resumes the transcript into a fresh session; `startMessage` starts a _new_ session with a **pre-generated `sessionId`** (`crypto.randomUUID`), emitting `sessions:chatStarted` immediately (no race); `stopMessage` is a native `interrupt()` (ends the turn, keeps the session warm); `endChat` disposes the session when the view unmounts. Streams over `sessions:chatChunk` (text deltas) + `sessions:chatToolActivity` (live "using tool" indicator: tool-input generation start + `tool_progress` heartbeats) + `sessions:chatMessage` (each fully-formed assistant/tool-result message as the SDK emits it, so the renderer builds the live turn — tools included — straight from the stream, not from a mid-stream disk re-read) + `chatDone` (per-turn end, carrying the SDK's `ChatTurnSummary` — cost/tokens/model read from the `result`, so the live chat shows running metadata without touching disk) / `chatError`. **Every stream payload is an envelope tagged with the producing `sessionId`** (`Chat*Event` in `electron/shared/chat-types.ts` — the single type definition shared with the renderer, re-exported by `src/types.ts`; permission requests carry the id too), so the renderer's `useLiveChat` drops stale events from a superseded session instead of trusting arrival order. Tool approvals go through the SDK's `canUseTool`: a non-auto-approved tool fires `sessions:permissionRequest` → the renderer's Allow/Always/Deny dialog (requests are **queued** renderer-side — concurrent `canUseTool` calls, e.g. parallel read-only tools, are answered one at a time; `AskUserQuestion` gets a dedicated answer form returning `{ questions, answers }` in the allowed input) → `sessions:permissionResponse` resolves the SDK's pending `PermissionResult` (`pendingPermissions` Map; `stopMessage`/`endChat`/supersede deny all pending). One `ChatSession` in flight at a time; if the live query dies on its own (fatal stream error — not a deliberate dispose) the main emits a final `chatDone` so the composer doesn't stay stuck on "Stop"), `rules:*`, `tasks:*`, `plans:*`, `workflows:*`, `teams:*`, `agents:*`, `skills:*`, `plugins:*` (installed plugins + their skills/agents/commands), `mcp:*`, `projects:*` (duplicate detect/merge + `projects:planPurge`/`projects:purge`, the delete path — see `modules/project-purger.ts` — + `projects:getDescription`, the one-line project description derived from the project's CLAUDE.md, see `modules/project-description.ts`), `live:*` (Live views: `live:getActiveSessions` + `live:getSessions` for the registry and the background-agent roster, `live:getActivity` for the Monitor's per-session tail digest — see `modules/session-tails.ts`), `ai:*`, `export:*`, `markdownFile:*`, `settings:*`, `config:*` (effective config via Agent SDK), `telemetry:*` (anonymous usage telemetry — `telemetry:isEnabled`/`telemetry:setEnabled` opt-out toggle + `telemetry:track` for renderer-fired feature events), `updates:*` (`updates:check` — GitHub-releases update check, see `modules/update-checker.ts`), `search:*` (`search:conversations` — full-text search over the transcripts, see `modules/session-search.ts`), `vault:*` (`vault:resolveLinks`/`vault:openFile` — the `[[wikilinks]]` a message cites, resolved against the project's own files so the chat can say whether a source Claude named is really there; the index stays in main and only the handful of names one message cites crosses IPC, see `modules/vault-index.ts`), `clipboard:*` (`clipboard:readText`/`writeText` via Electron's own `clipboard` module — the packaged renderer runs from `file://`, where `navigator.clipboard`'s read path needs a permission the app never grants; used only by the terminal pane's Windows/Linux copy-paste bindings)
 - Watches `~/.claude/projects/`, `~/.claude/tasks/`, `~/.claude/plans/`, `~/.claude/teams/`, `~/.claude/workflows/`, each known project's `.claude/workflows/` and `~/.claude/plugins/installed_plugins.json` with chokidar (**depth 5** — depth 3 would stop at `{hash}/{sessionId}/subagents/` and never see the workflow sub-agent transcripts nested one level further, at `subagents/workflows/<runId>/agent-*.jsonl`; team inboxes are `ignored`); emits `data:changed` to renderer on any change, **carrying the namespaces the changed path can affect** (`modules/data-change-scope.ts` — a pure path classifier; `null` = "unknown", which the renderer must read as "invalidate everything"). The renderer unions the scopes across its debounce window and invalidates only those query keys, so a transcript append during a live chat no longer re-reads skills/agents/plugins/MCP (#148). A separate chokidar watch on `~/.claude/sessions/` (the live-session registry, rewritten on session status transitions) pushes the fresh `ActiveSession[]` over its own `live:activeSessions` channel (debounced read) instead of `data:changed`, so registry churn doesn't invalidate every React Query cache. That same registry read also reconciles the **Monitor's tail cursors** (`modules/session-tails.ts`), and the projects watcher above doubles as their event source — a second consumer on the existing `change` handler, so watching what every live session is doing costs no watcher of its own; its digests ride a third channel, `live:sessionActivity`
 - Serializes `Map` → plain object before IPC (Maps are not transferable)
 
@@ -207,7 +247,7 @@ One entry per module, with the rationale and the gotchas, lives in
 - `useIPC.ts` — all React Query hooks + `window.electronAPI` type declarations; `unwrap()` raises on error
 - Mutations (`useCreateTopic`, `useUpdateTopic`, `useDeleteTopic`) invalidate `['memory:project', hash]` on success
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
-- Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`
+- Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`. An `advisor` consult (the harness's reviewer-model tool) is persisted as two rows of one assistant message — a `server_tool_use` and an `advisor_tool_result` whose payload is encrypted (`advisor_redacted_result`) — so it can never be rendered as content: `session-reader` folds the pair into a single `advisor` block carrying the reviewer model, its token spend (from the `advisor_message` entry of `usage.iterations`, omitted when one message holds two consults, since that usage object is repeated verbatim on every row) and the wall time between the two rows, and the renderer draws it as a slim stream marker rather than a turn
 
 ## Brand palette (Claude Code official)
 

@@ -709,6 +709,7 @@ export function AgentsLiveView({
                       { value: 'opus', label: 'Opus' },
                       { value: 'sonnet', label: 'Sonnet' },
                       { value: 'haiku', label: 'Haiku' },
+                      { value: 'fable', label: 'Fable' },
                     ]}
                   />
                   <label className="cl-dispatch-name-wrap">

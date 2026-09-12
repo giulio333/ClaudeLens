@@ -18,8 +18,16 @@ updates:
         exclude-patterns:
           # Tailwind CSS 4 requires a manual migration — keep it out of automation.
           - 'tailwindcss'
+          # TypeScript 7 is ahead of the lint toolchain: typescript-eslint 8.x
+          # pins peer `typescript@>=4.8.4 <6.1.0`, so a TS 7 bump makes
+          # `npm ci` fail with ERESOLVE and takes the whole major group down
+          # with it. Let it back in once typescript-eslint supports TS 7.
+          - 'typescript'
     ignore:
       - dependency-name: 'tailwindcss'
+        update-types:
+          - version-update:semver-major
+      - dependency-name: 'typescript'
         update-types:
           - version-update:semver-major
     labels:

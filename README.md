@@ -117,6 +117,18 @@ ClaudeLens checks the [Releases](https://github.com/giulio333/ClaudeLens/release
       <img src="docs/screenshots/agentview_dark.png" alt="ClaudeLens — Agent View Dark" style="max-width:100%;height:auto;"/>
     </td>
   </tr>
+  <tr>
+    <td align="center"><sub><b>Live Monitor — Light</b></sub></td>
+    <td align="center"><sub><b>Live Monitor — Dark</b></sub></td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="docs/screenshots/monitor_light.png" alt="ClaudeLens — Live Monitor Light" style="max-width:100%;height:auto;"/>
+    </td>
+    <td align="center">
+      <img src="docs/screenshots/monitor_dark.png" alt="ClaudeLens — Live Monitor Dark" style="max-width:100%;height:auto;"/>
+    </td>
+  </tr>
 </table>
 
 ---
