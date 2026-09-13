@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo, useState } from 'react';
 import { MemoryTopic } from '../../../hooks/useIPC';
 import { MEMORY_TYPE_TINT } from '../chat/utils';
 import {
@@ -8,18 +8,8 @@ import {
   MemoryGraph,
   MemoryGraphNode,
 } from './graph';
-import { MemoryPeekCard, PeekAnchor } from './MemoryPeekCard';
-
-/**
- * Quanto bisogna sostare su un nodo prima che compaia la card.
- *
- * Il punto è distinguere "sto attraversando la mappa" da "voglio sapere cosa
- * c'è qui": i nodi sono fitti e senza attesa la card lampeggerebbe a ogni
- * spostamento del cursore. 420ms sta nella finestra dei tooltip di sistema
- * (400–500ms), abbastanza da non scattare di passaggio e non tanto da dover
- * aspettare quando ci si ferma davvero.
- */
-const PEEK_DELAY_MS = 420;
+import { MemoryPeekCard } from './MemoryPeekCard';
+import { useMemoryPeek } from './useMemoryPeek';
 
 /**
  * La sezione memoria come **mappa delle relazioni**: un sistema di orbite per
@@ -53,8 +43,7 @@ export function MemoryGraphView({
 }) {
   const [showAffinity, setShowAffinity] = useState(true);
   const [hover, setHover] = useState<string | null>(null);
-  const [peek, setPeek] = useState<PeekAnchor | null>(null);
-  const peekTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const { peek, schedulePeek, cancelPeek } = useMemoryPeek(graph);
 
   const layout = useMemo(() => layoutMemoryGraph(graph), [graph]);
   const nodeBy = useMemo(() => new Map(graph.nodes.map(n => [n.filename, n])), [graph]);
@@ -63,57 +52,6 @@ export function MemoryGraphView({
     () => new Map(layout.islands.map(i => [i.clusterId, i])),
     [layout.islands]
   );
-  const clusterLabelOf = useMemo(() => {
-    const byId = new Map(graph.clusters.map(c => [c.id, c.label]));
-    return (node: MemoryGraphNode) => byId.get(node.clusterId) ?? null;
-  }, [graph]);
-
-  const cancelPeek = useCallback(() => {
-    if (peekTimer.current) clearTimeout(peekTimer.current);
-    peekTimer.current = null;
-    setPeek(null);
-  }, []);
-
-  /** `immediate` per il focus da tastiera: lì l'intenzione è già dichiarata. */
-  const schedulePeek = useCallback(
-    (node: MemoryGraphNode, target: SVGGElement, immediate = false) => {
-      if (peekTimer.current) clearTimeout(peekTimer.current);
-      const open = () =>
-        setPeek({
-          node,
-          rect: target.getBoundingClientRect(),
-          clusterLabel: clusterLabelOf(node),
-        });
-      if (immediate) {
-        peekTimer.current = null;
-        open();
-        return;
-      }
-      peekTimer.current = setTimeout(open, PEEK_DELAY_MS);
-    },
-    [clusterLabelOf]
-  );
-
-  // Timer pendente allo smontaggio, e la card ancorata a coordinate di viewport:
-  // uno scroll la lascerebbe ferma mentre il nodo scorre via, quindi si chiude.
-  useEffect(() => {
-    if (!peek) return;
-    const close = () => cancelPeek();
-    window.addEventListener('scroll', close, true);
-    window.addEventListener('resize', close);
-    return () => {
-      window.removeEventListener('scroll', close, true);
-      window.removeEventListener('resize', close);
-    };
-  }, [peek, cancelPeek]);
-
-  useEffect(
-    () => () => {
-      if (peekTimer.current) clearTimeout(peekTimer.current);
-    },
-    []
-  );
-
   const clip = (s: string) =>
     s.length > LABEL_MAX_CHARS ? `${s.slice(0, LABEL_MAX_CHARS - 1)}…` : s;
 
