@@ -3479,63 +3479,71 @@ body {
   background: transparent;
 }
 
-/* ── tools as inline chips ────────────────────────────────────────────
-   The stack becomes a wrapping row of pills (glyph + name + target). A chip
-   that opens — or one carrying a collapsed error strip — claims the full row
-   so its panel has a proper width to unfold into. */
+/* ── tools, open ──────────────────────────────────────────────────────
+   The stack is a column of windows: a shell run as its terminal, a file tool
+   as its editor, everything else as a card with its body already showing. It
+   used to be a wrapping row of pills that opened on click — a menu in front of
+   every tool, when the run is what the reader came to see. */
 .cl-chat-reading .cl-tool-stack {
   max-width: none;
   margin-top: 12px;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
 }
 .cl-chat-reading .cl-tool-stack .cl-tool-card {
   min-width: 0;
   max-width: 100%;
+}
+/* The strips MIN density keeps on screen — agent dispatches, skills — stay
+   chips: a wrapping row of pills, and one that opens claims the full row so
+   its panel has a width to unfold into. */
+.cl-chat-reading .cl-tool-stack--chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card {
   border-radius: 999px;
   background: transparent;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-main {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-main {
   grid-template-columns: 15px minmax(0, 1fr) auto;
   gap: 7px;
   padding: 5px 10px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-mono {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-mono {
   width: 15px;
   height: 15px;
   border-radius: 4px;
   font-size: 8px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-id {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-id {
   flex-direction: row;
   align-items: baseline;
   gap: 7px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-name {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-name {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-weight: 600;
   white-space: nowrap;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-preview {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-preview {
   font-size: 10.5px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-status {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-status {
   font-size: 10px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open,
-.cl-chat-reading .cl-tool-stack .cl-tool-card:has(.cl-tool-card-result) {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card.is-open,
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card:has(.cl-tool-card-result) {
   flex: 1 0 100%;
   border-radius: 12px;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card.is-open {
   background: color-mix(in oklch, var(--tint) 5%, var(--cl-paper));
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card.is-open .cl-tool-card-preview {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card.is-open .cl-tool-card-preview {
   white-space: normal;
 }
-.cl-chat-reading .cl-tool-stack .cl-tool-card-result {
+.cl-chat-reading .cl-tool-stack--chips .cl-tool-card-result {
   background: transparent;
 }
 
@@ -6041,6 +6049,12 @@ button.cl-pill-model[data-on] {
   display: grid;
   gap: 1px;
 }
+/* open windows, not bordered chips sharing an edge — on every surface that
+   mounts a transcript, the sub-agent panel included, not only the reading
+   column below */
+.cl-tool-stack {
+  gap: 8px;
+}
 .cl-tool-card {
   overflow: hidden;
   border: 1px solid var(--cl-line);
@@ -6055,9 +6069,13 @@ button.cl-pill-model[data-on] {
   display: flex;
   align-items: stretch;
 }
-.cl-tool-card.is-open {
+.cl-tool-card--chip.is-open {
   border-color: color-mix(in oklch, var(--tint) 45%, var(--cl-line));
   background: color-mix(in oklch, var(--tint) 6%, var(--cl-paper));
+}
+/* a window tool (terminal, editor) stands in the stack with no card around it */
+.cl-tool-window {
+  min-width: 0;
 }
 .cl-tool-card-main {
   flex: 1;
@@ -6441,6 +6459,102 @@ button.cl-pill-model[data-on] {
   font-family: var(--font-mono);
   font-size: 10.5px;
   font-style: italic;
+}
+
+/* ── a file tool as an editor window (Read / Write / Edit) ────────────────
+   Same window as the terminal — lights, centred title, status strip, the fixed
+   dark surface — because a read and an edit are the other half of the same
+   session, and the reader should tell them apart by what is IN the window (a
+   gutter of line numbers, `+`/`−` rows) rather than by a different chrome. The
+   verb in the title bar takes the tool's own tint (`TOOL_TINT`: cyan for
+   Read/Write, violet for Edit and for anything under `~/.claude/memory`).
+
+   A `Read` prints its rows with the line numbers Claude Code gave them (a read
+   with `offset` starts where the file does), a `Write` from 1, an `Edit` as a
+   diff with no numbers at all — `old_string` says what changed, not where. */
+.cl-term-kind {
+  flex: 0 0 auto;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in oklch, var(--tint, var(--t-accent)) 45%, var(--t-line));
+  border-radius: 3px;
+  background: color-mix(in oklch, var(--tint, var(--t-accent)) 18%, var(--t-bg));
+  color: color-mix(in oklch, var(--tint, var(--t-accent)) 70%, var(--t-ink));
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  line-height: 1.4;
+  align-self: center;
+}
+.cl-term-kind.is-memory {
+  --tint: var(--cl-violet);
+}
+.cl-term--file .cl-term-title {
+  align-items: center;
+}
+/* a file's meta is a path, and a path is long: unlike the terminal's `5 steps`
+   it has to give way, or the file name — the one thing to read — is what gets
+   squeezed out */
+.cl-term--file .cl-term-title .meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-file-body {
+  padding: 6px 0 8px;
+}
+/* the row carries the mono font so `--gutter` (in `ch`) is measured against the
+   digits it has to hold, not against the body's sans */
+.cl-file-row {
+  display: grid;
+  grid-template-columns: var(--gutter, 3ch) minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+  width: max-content;
+  min-width: 100%;
+  padding: 0 12px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cl-file-ln {
+  color: var(--t-mute);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.62;
+  text-align: right;
+  user-select: none;
+}
+.cl-file-code {
+  display: block;
+  color: var(--t-ink);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1.62;
+  white-space: pre;
+}
+.cl-file-code.hljs {
+  padding: 0;
+  background: transparent !important;
+  color: inherit;
+  font: inherit;
+}
+/* the diff rows: whole-row tint, gutter mark in the row's own colour */
+.cl-file-row.is-add {
+  background: color-mix(in oklch, var(--t-prompt) 12%, transparent);
+}
+.cl-file-row.is-add .cl-file-ln {
+  color: var(--t-prompt);
+}
+.cl-file-row.is-del {
+  background: color-mix(in oklch, var(--t-danger) 12%, transparent);
+}
+.cl-file-row.is-del .cl-file-ln {
+  color: var(--t-danger);
+}
+.cl-file-row.is-del .cl-file-code {
+  color: var(--t-dim);
 }
 
 /* ── status strip ── */
@@ -8643,49 +8757,56 @@ button.cl-pill-model[data-on] {
   }
 }
 
+/* L'orbita del dettaglio condivide i segni della mappa (`cl-memgraph-*`: nodo
+   vuoto, anello dell'hub, etichetta, orbita). Qui vive solo ciò che la mappa
+   non ha: la card, le frecce, e il fondo su cui il nodo vuoto è ritagliato. */
 .cl-memorbit {
   border: 1px solid var(--cl-line);
   border-radius: 12px;
   background: var(--cl-paper-2);
-  padding: 6px 10px;
+  padding: 8px;
 }
+/* Largo quanto il viewBox e non di più: la rail è 320px e il canvas è tarato
+   su quella; quando la rail collassa sotto il corpo, a tutta larghezza, il
+   disegno non si gonfia. */
 .cl-memorbit svg {
   display: block;
-  width: 100%;
+  width: 280px;
+  max-width: 100%;
   height: auto;
+  margin-inline: auto;
   overflow: visible;
 }
-.cl-memorbit-ring {
-  fill: none;
-  stroke: var(--cl-line);
-  stroke-dasharray: 2 5;
+/* Il nodo è vuoto sul fondo che lo porta: qui la card, non la pagina. */
+.cl-memorbit .cl-memgraph-dot {
+  fill: var(--cl-paper-2);
+}
+.cl-memorbit .cl-memgraph-node.is-focus {
+  cursor: default;
 }
 .cl-memorbit-link {
   stroke: var(--cl-accent);
-  stroke-width: 1.2;
-  opacity: 0.45;
+  stroke-width: 1.6;
+  opacity: 0.55;
+  transition:
+    opacity 0.14s ease,
+    stroke-width 0.14s ease;
+}
+.cl-memorbit-link.is-lit {
+  opacity: 0.95;
+  stroke-width: 2;
 }
 .cl-memorbit-arrowhead {
   fill: var(--cl-accent);
   opacity: 0.6;
 }
-.cl-memorbit-node {
-  cursor: pointer;
+.cl-memorbit-arrowhead.is-lit {
+  opacity: 1;
 }
-.cl-memorbit-node.is-focus {
-  cursor: default;
-}
-.cl-memorbit-node.is-focus .cl-memorbit-dot {
-  stroke: var(--cl-accent);
-  stroke-width: 3;
-}
-.cl-memorbit-node:hover .cl-memorbit-dot,
-.cl-memorbit-node:focus-visible .cl-memorbit-dot {
-  stroke: var(--cl-accent);
-  stroke-width: 2.5;
-}
-.cl-memorbit-node:focus {
-  outline: none;
+.cl-memorbit-none {
+  padding: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
 }
 
 /* ════════════════════════════════════════════════════════════════════════

@@ -64,19 +64,15 @@ function transcript(diff?: BashEditDiff): ChatMessage[] {
  *  mount/unmount/remount rehearsal is what catches a component that only works
  *  the first time it is drawn.
  *
- *  The tool card opens on click, as it does for a reader — the run, and with it
- *  the diff, lives in the expanded card. */
+ *  The run is on screen as soon as the turn is — the terminal window is the
+ *  tool's card, nothing to click open — so the diff under it is too. */
 function mount(diff?: BashEditDiff) {
   const [processed] = buildProcessedMessages(transcript(diff));
-  const rendered = render(
+  return render(
     <StrictMode>
       <MessageBubble processed={processed} detailsFilter="all" onOpenToolDetail={() => {}} />
     </StrictMode>
   );
-  act(() => {
-    rendered.container.querySelector<HTMLButtonElement>('.cl-tool-card-main')?.click();
-  });
-  return rendered;
 }
 
 const rowsOf = (container: HTMLElement, kind: string) =>

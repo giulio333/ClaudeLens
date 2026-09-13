@@ -33,7 +33,7 @@ function Code({ code }: { code: string }) {
   );
 }
 
-function IconButton({
+export function IconButton({
   label,
   onClick,
   children,
@@ -55,7 +55,7 @@ function IconButton({
   );
 }
 
-function CopyButton({ text, label }: { text: string; label: string }) {
+export function CopyButton({ text, label }: { text: string; label: string }) {
   const [copied, setCopied] = useState(false);
   return (
     <IconButton
@@ -98,6 +98,44 @@ function CopyButton({ text, label }: { text: string; label: string }) {
         </svg>
       )}
     </IconButton>
+  );
+}
+
+export function ExpandIcon() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M9 3H3v6" />
+      <path d="M15 21h6v-6" />
+      <path d="M3 3l7 7" />
+      <path d="M21 21l-7-7" />
+    </svg>
+  );
+}
+
+export function CloseIcon() {
+  return (
+    <svg
+      width="13"
+      height="13"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.9"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M6 6l12 12M18 6 6 18" />
+    </svg>
   );
 }
 
@@ -206,38 +244,12 @@ function TerminalWindow({
           {command && <CopyButton text={command} label="Copy command" />}
           {onExpand && (
             <IconButton label="Open fullscreen" onClick={onExpand}>
-              <svg
-                width="12"
-                height="12"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                aria-hidden
-              >
-                <path d="M9 3H3v6" />
-                <path d="M15 21h6v-6" />
-                <path d="M3 3l7 7" />
-                <path d="M21 21l-7-7" />
-              </svg>
+              <ExpandIcon />
             </IconButton>
           )}
           {onClose && (
             <IconButton label="Close fullscreen" onClick={onClose}>
-              <svg
-                width="13"
-                height="13"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="1.9"
-                strokeLinecap="round"
-                aria-hidden
-              >
-                <path d="M6 6l12 12M18 6 6 18" />
-              </svg>
+              <CloseIcon />
             </IconButton>
           )}
         </span>
@@ -365,8 +377,28 @@ export function CommandSheet({
   );
 }
 
-/** The same window on top of everything, output unclamped and scrolling on its
- *  own — the answer to "the output is too big to read inside a chat bubble". */
+/** A window on top of everything, unclamped and scrolling on its own — the
+ *  answer to "the output is too big to read inside a chat bubble". Shared by
+ *  the terminal and the editor window: same backdrop, same Escape. */
+export function SheetModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') onClose();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [onClose]);
+
+  return createPortal(
+    <div className="cl-term-modal" role="dialog" aria-modal="true" onClick={onClose}>
+      <div className="cl-term-modal-hold" onClick={e => e.stopPropagation()}>
+        {children}
+      </div>
+    </div>,
+    document.body
+  );
+}
+
 function FullscreenTerminal({
   title,
   meta,
@@ -382,30 +414,19 @@ function FullscreenTerminal({
   diff?: BashEditDiff;
   onClose: () => void;
 }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') onClose();
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
-
-  return createPortal(
-    <div className="cl-term-modal" role="dialog" aria-modal="true" onClick={onClose}>
-      <div className="cl-term-modal-hold" onClick={e => e.stopPropagation()}>
-        <TerminalWindow
-          title={title}
-          meta={meta}
-          command={command}
-          run={run}
-          diff={diff}
-          clamped={false}
-          onClose={onClose}
-          full
-        />
-      </div>
-    </div>,
-    document.body
+  return (
+    <SheetModal onClose={onClose}>
+      <TerminalWindow
+        title={title}
+        meta={meta}
+        command={command}
+        run={run}
+        diff={diff}
+        clamped={false}
+        onClose={onClose}
+        full
+      />
+    </SheetModal>
   );
 }
 

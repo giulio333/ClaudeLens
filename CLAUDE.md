@@ -93,6 +93,16 @@ file is marked rather than printed, `unavailable` says so instead of drawing an
 empty diff — which would read as "nothing changed" — a long diff folds at 24
 lines and unfolds on ask, and a command that edited nothing renders exactly as
 before) and
+`tool-group-card` (a tool call is open by default and the window tools ARE
+their window: a shell run is its terminal with no card header, an `Edit` is an
+editor window drawing `old_string → new_string` as a diff with the result's
+"updated successfully" folded into the status strip and an error printed under
+the attempted change, a `Read` draws the rows with the line numbers Claude Code
+printed and an unnumbered result as it is, a `Write` numbers from 1 and reads
+`created` off the result, every other tool keeps its header with the body
+already showing, and the agent strip MIN keeps on screen is still a chip that
+opens on click; the pure half — the line LCS, the `N→` parsing, the short dir —
+is `file-view`) and
 `markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
 has is a button carrying the path it resolved to, one nothing answers to is
 dashed and inert, the backticked form Claude writes just as often is caught too,

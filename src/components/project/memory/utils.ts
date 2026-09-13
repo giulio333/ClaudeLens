@@ -28,7 +28,13 @@ export function parseMemoryContent(raw: string): {
   const body = raw.replace(/^---\n[\s\S]*?\n---\n?/, '').trim();
   const wordCount = body.split(/\s+/).filter(Boolean).length;
   const charCount = body.length;
-  const linkCount = (body.match(/\[([^\]]+)\]\(([^)]+)\)/g) ?? []).length;
+  // Markdown `[text](url)` e `[[wikilink]]` insieme: il secondo è la notazione
+  // con cui una memoria cita un'altra — quella che l'orbita disegna — e una
+  // tape che diceva "Links 0" accanto a un'orbita con tre archi contava solo
+  // il primo.
+  const linkCount =
+    (body.match(/\[([^\]]+)\]\(([^)]+)\)/g) ?? []).length +
+    (body.match(/\[\[([^\]\n]+)\]\]/g) ?? []).length;
   const headings = extractHeadings(body);
 
   return { body, wordCount, charCount, linkCount, headings };
