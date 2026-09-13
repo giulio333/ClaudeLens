@@ -1,15 +1,10 @@
 import Markdown from '../../Markdown';
 import type { ReactNode } from 'react';
-import {
-  ToolGroup,
-  isMemoryFile,
-  resolveToolIcon,
-  stripLineNumbers,
-  fileExt,
-  SKILL_TOOL,
-} from './utils';
+import { ToolGroup, isMemoryFile, resolveToolIcon, SKILL_TOOL } from './utils';
 import { PathChip, SectionLabel, CodeBlock, UrlChip } from './atoms';
 import { CommandBlock, CommandOutput, CommandSheet } from './CommandBlock';
+import { FileSheet } from './FileWindow';
+import { isFileTool } from './file-view';
 import { ownsToolBody, ownsOutputHead, isShellOutput } from './shell';
 import {
   parseHttpFailure,
@@ -392,51 +387,6 @@ export function ToolInput({
    *  the tool's description — so the body must not repeat it. */
   inline?: boolean;
 }) {
-  if (name === 'Read') {
-    const fp = input.file_path as string;
-    const ext = fileExt(fp);
-    return (
-      <div className="space-y-3">
-        <PathChip path={fp} />
-        {ext && (
-          <span className="inline-block text-[10px] font-mono bg-[var(--cl-accent-soft)]/20 text-[var(--cl-accent-ink)] border border-[var(--cl-accent)]/40 rounded px-2 py-0.5">
-            .{ext}
-          </span>
-        )}
-      </div>
-    );
-  }
-
-  if (name === 'Write' || name === 'Edit') {
-    const fp = input.file_path as string;
-    const content = input.content as string | undefined;
-    const oldStr = input.old_string as string | undefined;
-    const newStr = input.new_string as string | undefined;
-    return (
-      <div className="space-y-3">
-        <PathChip path={fp} />
-        {content !== undefined && (
-          <>
-            <SectionLabel label="Written content" meta={`${content.split('\n').length} lines`} />
-            <CodeBlock code={content} lang={fileExt(fp)} />
-          </>
-        )}
-        {oldStr !== undefined && (
-          <>
-            <SectionLabel label="Replaced text" />
-            <CodeBlock
-              code={oldStr}
-              lang={fileExt(fp)}
-              className="border-[var(--cl-danger)] opacity-75"
-            />
-            <SectionLabel label="New text" />
-            <CodeBlock code={newStr ?? ''} lang={fileExt(fp)} className="border-[var(--cl-ok)]" />
-          </>
-        )}
-      </div>
-    );
-  }
-
   if (name === 'Bash') {
     return <CommandBlock input={input} showDescription={!inline} />;
   }
@@ -707,15 +657,7 @@ function SearchSources({ links }: { links: WebLink[] }) {
   );
 }
 
-export function ToolOutput({
-  name,
-  input,
-  result,
-}: {
-  name: string;
-  input: Record<string, unknown>;
-  result: ToolGroup['result'];
-}) {
+export function ToolOutput({ name, result }: { name: string; result: ToolGroup['result'] }) {
   // Shell output first: the block owns its own head, so it also has to own the
   // pending / empty / error states the generic guards below would swallow.
   if (isShellOutput(name)) return <CommandOutput result={result} />;
@@ -732,24 +674,6 @@ export function ToolOutput({
         <pre className="text-[12px] text-[var(--cl-danger)] font-mono whitespace-pre-wrap break-words leading-relaxed">
           {raw}
         </pre>
-      </div>
-    );
-  }
-
-  if (name === 'Read' && raw.match(/^\s*\d+→/m)) {
-    const stripped = stripLineNumbers(raw);
-    const fp = input.file_path as string;
-    const ext = fileExt(fp);
-    return (
-      <div className="space-y-2">
-        <div className="flex items-center gap-2">
-          {ext && (
-            <span className="text-[10px] font-mono bg-[var(--cl-paper-3)] border border-[var(--cl-line)] text-[var(--cl-ink-3)] rounded px-2 py-0.5">
-              .{ext}
-            </span>
-          )}
-        </div>
-        <CodeBlock code={stripped} lang={ext} />
       </div>
     );
   }
@@ -997,6 +921,11 @@ export function ToolDetailPanel({
             <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
               <CommandSheet input={input} result={result} showCommand showDescription />
             </section>
+          ) : isFileTool(name) ? (
+            // Same for a file: the editor window carries input and result.
+            <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+              <FileSheet name={name} input={input} result={result} />
+            </section>
           ) : (
             <>
               <section className="cl-tool-detail-panel">
@@ -1011,7 +940,7 @@ export function ToolDetailPanel({
                     meta={result ? `${result.content.split('\n').length} lines` : undefined}
                   />
                 )}
-                <ToolOutput name={name} input={input} result={result} />
+                <ToolOutput name={name} result={result} />
               </section>
             </>
           )}

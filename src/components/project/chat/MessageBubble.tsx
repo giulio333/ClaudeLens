@@ -926,7 +926,7 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {showAgentStrip && (
-          <div className="cl-tool-stack">
+          <div className="cl-tool-stack cl-tool-stack--chips">
             {agentGroups.map(group => {
               const link = agentLink(group);
               return (
@@ -934,6 +934,7 @@ export const MessageBubble = memo(function MessageBubble({
                   key={group.use.id}
                   group={group}
                   showDetails
+                  collapsible
                   tint={agentTintColor(
                     agentColorOf?.(
                       (group.use.input as Record<string, unknown>).subagent_type as string
@@ -956,12 +957,13 @@ export const MessageBubble = memo(function MessageBubble({
         )}
 
         {showSkillStrip && (
-          <div className="cl-tool-stack">
+          <div className="cl-tool-stack cl-tool-stack--chips">
             {skillGroups.map(group => (
               <ToolGroupCard
                 key={group.use.id}
                 group={group}
                 showDetails
+                collapsible
                 detailLabel="View output"
                 onViewDetail={() => onOpenToolDetail(group)}
               />
