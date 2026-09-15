@@ -5,12 +5,24 @@ import type { MemoryGraphNode } from './graph';
 /** Larghezza fissa: rende il clamp orizzontale deterministico. */
 const CARD_W = 288;
 /** Stima d'ingombro verticale, usata solo per scegliere sopra/sotto. */
-const CARD_H_GUESS = 158;
+const CARD_H_GUESS = 190;
+
+/**
+ * Dove la card sta rispetto a ciò su cui si sosta. Sulla mappa è centrata sul
+ * nodo e preferisce stargli sopra (copre meno grafo sotto il cursore); su una
+ * riga d'elenco parte dal bordo sinistro del titolo e preferisce stargli
+ * sotto, come un'espansione della riga.
+ */
+export interface PeekPlacement {
+  align: 'center' | 'start';
+  side: 'above' | 'below';
+}
 
 export interface PeekAnchor {
   node: MemoryGraphNode;
   rect: DOMRect;
   clusterLabel: string | null;
+  placement?: PeekPlacement;
 }
 
 /**
@@ -28,16 +40,17 @@ export interface PeekAnchor {
  * qui, dove i nodi sono fitti, impedirebbe di passare al nodo accanto.
  */
 export function MemoryPeekCard({ anchor }: { anchor: PeekAnchor }) {
-  const { node, rect, clusterLabel } = anchor;
+  const { node, rect, clusterLabel, placement } = anchor;
   const topic = node.topic;
+  const { align, side } = placement ?? { align: 'center', side: 'above' };
 
-  // Sopra il nodo se c'è spazio, altrimenti sotto: la card non deve mai uscire
-  // dalla finestra, e sopra è la posizione che copre meno grafo sotto il cursore.
-  const above = rect.top > CARD_H_GUESS + 12;
-  const left = Math.min(
-    Math.max(8, rect.left + rect.width / 2 - CARD_W / 2),
-    Math.max(8, window.innerWidth - CARD_W - 8)
-  );
+  // Dal lato preferito se c'è spazio, altrimenti dall'altro: la card non deve
+  // mai uscire dalla finestra.
+  const roomAbove = rect.top > CARD_H_GUESS + 12;
+  const roomBelow = window.innerHeight - rect.bottom > CARD_H_GUESS + 12;
+  const above = side === 'above' ? roomAbove || !roomBelow : !roomBelow && roomAbove;
+  const wanted = align === 'start' ? rect.left : rect.left + rect.width / 2 - CARD_W / 2;
+  const left = Math.min(Math.max(8, wanted), Math.max(8, window.innerWidth - CARD_W - 8));
 
   const cited =
     node.inDeg === 0

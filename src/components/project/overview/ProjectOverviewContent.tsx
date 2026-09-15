@@ -45,6 +45,8 @@ import { WorkflowsSection } from '../workflows/WorkflowsSection';
 import { TeamsSection } from '../teams/TeamsSection';
 import { MemoryGraphView } from '../memory/MemoryGraphView';
 import { buildMemoryGraph, relationSummary } from '../memory/graph';
+import { MemoryPeekCard, type PeekPlacement } from '../memory/MemoryPeekCard';
+import { useMemoryPeek } from '../memory/useMemoryPeek';
 import { MEMORY_TYPE_TINT } from '../chat/utils';
 import { ProjectConfigView } from '../settings/ProjectConfigView';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
@@ -108,12 +110,12 @@ function relIso(iso: string): string {
   return `${Math.floor(diff / (86400 * 7))}w`;
 }
 
-// Compact absolute date for memory tiles, so the date-sorted grid reads in order
-// even across the two-column zig-zag layout (e.g. "27 giu 26").
+// Compact absolute date for memory rows, so the date-sorted list reads in order
+// (e.g. "Jun 27, 2026"). en-US like every other date in the app.
 function tileDate(iso: string): string {
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '';
-  return d.toLocaleDateString('it-IT', { day: '2-digit', month: 'short', year: '2-digit' });
+  return d.toLocaleDateString('en-US', { month: 'short', day: '2-digit', year: 'numeric' });
 }
 
 function shortWhen(iso: string): string {
@@ -172,27 +174,14 @@ function pctOf(part: number, whole: number): number {
   return whole > 0 ? (part / whole) * 100 : 0;
 }
 
-const MEM_PREVIEW_MAX = 70;
+/** Where a memory row's hover card sits: see `PeekPlacement`. Module-level so
+ *  the hook's callbacks keep their identity across renders. */
+const MEM_ROW_PEEK: PeekPlacement = { align: 'start', side: 'below' };
 /** How many sessions the project landing shows before handing over to the
  *  Sessions subtab (design 3b, "All N →" in the head). Five, where the mock
  *  drew three: it was drawn in a 720px-tall frame, and on a real window three
  *  rows end the page halfway down. */
 const LANDING_SESSIONS = 5;
-
-// Ripulisce la sintassi markdown e tronca per un'anteprima pulita.
-function memPreview(raw: string, max: number = MEM_PREVIEW_MAX): string {
-  const clean = raw
-    .replace(/```[\s\S]*?```/g, ' ') // blocchi di codice
-    .replace(/`([^`]+)`/g, '$1') // codice inline
-    .replace(/!\[[^\]]*\]\([^)]*\)/g, ' ') // immagini
-    .replace(/\[\[([^\]]+)\]\]/g, '$1') // wikilink
-    .replace(/\[([^\]]+)\]\([^)]*\)/g, '$1') // link markdown
-    .replace(/^#{1,6}\s+/gm, '') // heading
-    .replace(/[*_~>#]/g, '') // enfasi e marcatori
-    .replace(/\s+/g, ' ') // collassa whitespace
-    .trim();
-  return clean.length > max ? clean.slice(0, max).trimEnd() + '…' : clean;
-}
 
 export function ProjectView({
   project,
@@ -227,8 +216,10 @@ export function ProjectView({
     renameTag: renameMemTag,
   } = useMemoryTags(project.hash);
   const [memTagFilter, setMemTagFilter] = useState<string | null>(null);
-  // Sort the memory grid by file creation date.
-  const [memSort, setMemSort] = useState<'newest' | 'oldest'>('newest');
+  // The type legend over the list doubles as a filter: a key with counts next
+  // to it that did nothing on click would be the only inert chips in the app.
+  // Independent of the tag filter (both apply); "all" clears both.
+  const [memTypeFilter, setMemTypeFilter] = useState<MemoryTopic['type'] | null>(null);
   // Optional grouping of the topic grid into sections by managed tag or by type
   // (a topic with several tags appears under each; untagged topics get their own
   // trailing group). Filters + sort still apply within each group.
@@ -399,22 +390,39 @@ export function ProjectView({
     () => buildMemoryGraph(memTopics, memoryContents),
     [memTopics, memoryContents]
   );
+  const memNodeBy = useMemo(() => new Map(memGraph.nodes.map(n => [n.filename, n])), [memGraph]);
+  // La stessa card di hover della mappa e dell'orbita: la riga porta solo il
+  // titolo, e la descrizione si legge sostando — come su un nodo del grafo.
+  // Qui parte dal bordo del titolo e sta sotto la riga, come un'espansione.
+  const {
+    peek: memPeek,
+    schedulePeek: scheduleMemPeek,
+    cancelPeek: cancelMemPeek,
+  } = useMemoryPeek(memGraph, MEM_ROW_PEEK);
   const activeMemTag =
     memTagFilter && memTags.some(t => t.name === memTagFilter) ? memTagFilter : null;
-  // Set of types actually present among topics — used by the "Group by Type" option.
-  const presentMemTypes = useMemo(() => {
-    const seen = new Set(memTopics.map(t => t.type));
-    return (['project', 'reference', 'feedback', 'user'] as const).filter(t => seen.has(t));
+  // Types actually present among topics, in the map's order — the legend over
+  // the list and the "Group by Type" option both read them.
+  const memTypeCounts = useMemo(() => {
+    const counts = new Map<MemoryTopic['type'], number>();
+    for (const t of memTopics) counts.set(t.type, (counts.get(t.type) ?? 0) + 1);
+    return counts;
   }, [memTopics]);
+  const presentMemTypes = useMemo(
+    () => (['project', 'reference', 'feedback', 'user'] as const).filter(t => memTypeCounts.has(t)),
+    [memTypeCounts]
+  );
+  const activeMemType = memTypeFilter && memTypeCounts.has(memTypeFilter) ? memTypeFilter : null;
   const visibleMemTopics = useMemo(() => {
     let list = memTopics;
+    if (activeMemType) list = list.filter(t => t.type === activeMemType);
     if (activeMemTag) list = list.filter(t => tagsForMemory(t.filename).includes(activeMemTag));
-    return [...list].sort((a, b) => {
-      const ta = Date.parse(a.createdAt) || 0;
-      const tb = Date.parse(b.createdAt) || 0;
-      return memSort === 'newest' ? tb - ta : ta - tb;
-    });
-  }, [memTopics, activeMemTag, tagsForMemory, memSort]);
+    // Newest first, and only that: the toggle to flip it was a control in the
+    // head for a question nobody asked of a memory list.
+    return [...list].sort(
+      (a, b) => (Date.parse(b.createdAt) || 0) - (Date.parse(a.createdAt) || 0)
+    );
+  }, [memTopics, activeMemType, activeMemTag, tagsForMemory]);
   // Group-by is only meaningful when there's something to group on; a stale mode
   // (e.g. 'tag' after the last tag is removed) degrades to a flat grid.
   const canGroupByTag = memTags.length > 0;
@@ -424,18 +432,22 @@ export function ProjectView({
       ? memGroupBy
       : 'none';
   const memGroups = useMemo(() => {
+    type Group = { key: string; label: string; tint?: string; topics: MemoryTopic[] };
     if (activeMemGroup === 'type') {
       return presentMemTypes
-        .map(ty => ({
+        .map<Group>(ty => ({
           key: ty,
           label: ty,
+          // The group head wears the type's dot: it is the same key the rows and
+          // the legend use, so a section reads as "these rows" and not as a word.
+          tint: MEMORY_TYPE_TINT[ty],
           topics: visibleMemTopics.filter(t => t.type === ty),
         }))
         .filter(g => g.topics.length > 0);
     }
     if (activeMemGroup === 'tag') {
       const groups = memTags
-        .map(tag => ({
+        .map<Group>(tag => ({
           key: `tag:${tag.name}`,
           label: `#${tag.name}`,
           topics: visibleMemTopics.filter(t => tagsForMemory(t.filename).includes(tag.name)),
@@ -449,26 +461,40 @@ export function ProjectView({
     return [];
   }, [activeMemGroup, presentMemTypes, memTags, visibleMemTopics, tagsForMemory]);
   /**
-   * Una memoria come riga (design 2b): il grafo detto a parole.
+   * Una memoria come riga: una riga sola, e la card di hover per il resto.
    *
-   * Il pallino porta il tipo (`MEMORY_TYPE_TINT`, la stessa tinta della mappa)
-   * al posto del glifo con l'iniziale, che ripeteva la prima lettera del nome
-   * scritto accanto; sotto la descrizione la riga dice la relazione — chi la
-   * cita, che cosa cita, se è l'hub del gruppo — cioè l'arco che la mappa
-   * disegna. Chi non ha relazioni non porta la riga: il conteggio sta in fondo
-   * all'elenco, come la fascia dichiarata della mappa.
+   * Il titolo con i suoi tag accanto, come una riga di sessione porta i suoi
+   * hashtag; a destra, solo quando c'è, `cited by N` — l'unica misura di
+   * relazione che si legge a colpo d'occhio — e la data. La descrizione non
+   * sta nella riga: si legge **sostando** sul titolo, nella stessa
+   * `MemoryPeekCard` che la mappa apre su un nodo (tipo, nome, descrizione
+   * intera, `cited by · cites · cluster`), così l'elenco è una colonna di
+   * titoli che si scorre con l'occhio e la memoria si apre a richiesta. Il
+   * pallino porta il tipo (`MEMORY_TYPE_TINT`, la stessa tinta della mappa; la
+   * legenda sopra l'elenco è la sua chiave) ed è anellato quando la memoria è
+   * l'hub del proprio gruppo. La forma precedente (design 2b) metteva sotto il
+   * titolo la descrizione in mono, l'arco intero a parole — `↑ cited by 4 ·
+   * cluster hub ↓ cites <nome> +2` — e i tag su una quarta riga, col tipo
+   * ripetuto a destra: quattro registri mono da 10px uno sull'altro, che era
+   * il "troppo incastrato" da cui è nato il ridisegno.
    */
   const renderMemRow = (t: MemoryTopic) => {
     const tTags = tagsForMemory(t.filename);
     const rel = relationSummary(memGraph, t.filename);
+    const node = memNodeBy.get(t.filename);
     const tint = MEMORY_TYPE_TINT[t.type];
-    const open = () =>
+    const open = () => {
+      cancelMemPeek();
       onNavigate({
         type: 'memory-topic',
         topic: t,
         content: topicContent(t.filename),
         hash: project.hash,
       });
+    };
+    // La card si ancora al titolo, non alla riga intera: centrata sulla riga
+    // finirebbe a metà schermo, lontana da ciò su cui si sta sostando.
+    const anchorOf = (row: HTMLElement) => row.querySelector('.t-name') ?? row;
     return (
       <div
         key={t.filename}
@@ -481,78 +507,60 @@ export function ProjectView({
             e.preventDefault();
             open();
           }
+          if (e.key === 'Escape') cancelMemPeek();
         }}
+        onMouseEnter={e => node && scheduleMemPeek(node, anchorOf(e.currentTarget))}
+        onMouseLeave={cancelMemPeek}
+        onFocus={e => node && scheduleMemPeek(node, anchorOf(e.currentTarget), true)}
+        onBlur={cancelMemPeek}
       >
         <span
           className={`dot${rel.isHub ? ' is-hub' : ''}`}
           style={{ background: tint, color: tint }}
-          title={rel.isHub ? `Hub of the "${rel.clusterLabel}" cluster` : t.type}
+          title={rel.isHub ? `${t.type} · hub of the "${rel.clusterLabel}" cluster` : t.type}
         />
-        <div style={{ minWidth: 0 }}>
-          <div className="t-name">
-            <SlugName text={t.name} />
-          </div>
-          <div className="t-desc">{t.description ? memPreview(t.description) : '—'}</div>
-          {(rel.inDeg > 0 || rel.outDeg > 0) && (
-            <div className="t-rel">
-              {rel.inDeg > 0 && (
-                <span>
-                  ↑ cited by {rel.inDeg}
-                  {rel.isHub && <span className="hub"> · cluster hub</span>}
-                </span>
-              )}
-              {rel.outDeg > 0 && (
-                <span className="out" title={rel.cites.join(', ')}>
-                  ↓ cites <b>{rel.cites[0]}</b>
-                  {rel.cites.length > 1 && ` +${rel.cites.length - 1}`}
-                </span>
-              )}
-            </div>
-          )}
-          <div
-            className="cl-tile-tags"
-            onClick={e => e.stopPropagation()}
-            style={{
-              display: 'flex',
-              flexWrap: 'wrap',
-              gap: 4,
-              marginTop: 5,
-              alignItems: 'center',
-            }}
-          >
-            {tTags.map(name => (
-              <TagChip
-                key={name}
-                name={name}
-                tone="soft"
-                variant="plain"
-                removable
-                onRemove={() => toggleTagOnMemory(t.filename, name)}
-                style={{ fontSize: 10, height: 18 }}
-              />
-            ))}
-            <button
-              type="button"
-              className="cl-row-tag-add"
-              aria-label="Add tag"
-              title="Add tag"
-              data-haspicker={memPickerFor?.filename === t.filename}
-              onClick={e => {
-                e.stopPropagation();
-                const rect = e.currentTarget.getBoundingClientRect();
-                setMemPickerFor({ filename: t.filename, rect });
-              }}
-            >
-              + tag
-            </button>
+        <div className="t-main">
+          <div className="t-head">
+            <span className="t-name">
+              <SlugName text={t.name} />
+            </span>
+            <span className="t-tags" onClick={e => e.stopPropagation()}>
+              {tTags.map(name => (
+                <TagChip
+                  key={name}
+                  name={name}
+                  tone="soft"
+                  variant="plain"
+                  removable
+                  onRemove={() => toggleTagOnMemory(t.filename, name)}
+                />
+              ))}
+              <button
+                type="button"
+                className="cl-row-tag-add"
+                aria-label="Add tag"
+                title="Add tag"
+                data-haspicker={memPickerFor?.filename === t.filename}
+                onClick={e => {
+                  e.stopPropagation();
+                  const rect = e.currentTarget.getBoundingClientRect();
+                  setMemPickerFor({ filename: t.filename, rect });
+                }}
+              >
+                + tag
+              </button>
+            </span>
           </div>
         </div>
-        <span className="t-meta">
-          <span className="type" style={{ color: tint }}>
-            {t.type}
-          </span>
-          {t.createdAt && <span className="when">{tileDate(t.createdAt)}</span>}
+        <span className="t-cited">
+          {rel.inDeg > 0 && (
+            <>
+              cited by {rel.inDeg}
+              {rel.isHub && ' · hub'}
+            </>
+          )}
         </span>
+        <span className="t-when">{t.createdAt ? tileDate(t.createdAt) : ''}</span>
       </div>
     );
   };
@@ -922,20 +930,16 @@ export function ProjectView({
         <section className="cl-section" style={{ paddingTop: 38 }}>
           <div className="cl-sec-head">
             <h2>Project memory</h2>
+            {/* Gli stessi totali che apre la mappa, nella riga del titolo e non
+                in una fascia propria: passare da una vista all'altra deve
+                cambiare la forma, non i dati. */}
             <span className="ct">
-              MEMORY.md · {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
+              {memoryCount} {memoryCount === 1 ? 'topic' : 'topics'}
+              {memTopics.length > 1 &&
+                ` · ${memGraph.links.length} ${memGraph.links.length === 1 ? 'link' : 'links'} · ${
+                  memGraph.clusters.length
+                } ${memGraph.clusters.length === 1 ? 'cluster' : 'clusters'}`}
             </span>
-            {memTopics.length > 1 && memLayout === 'list' && (
-              <button
-                type="button"
-                className="cl-sort-toggle"
-                onClick={() => setMemSort(s => (s === 'newest' ? 'oldest' : 'newest'))}
-                title="Sort by creation date"
-              >
-                Created · {memSort === 'newest' ? 'Newest first' : 'Oldest first'}
-                <span aria-hidden>⇅</span>
-              </button>
-            )}
             {memTopics.length > 1 && (
               <div className="cl-seg cl-seg--paper" style={{ marginLeft: 'auto' }}>
                 <button
@@ -970,24 +974,38 @@ export function ProjectView({
             />
           ) : (
             <>
-              {/* Gli stessi totali che apre la mappa: passare da una vista
-                  all'altra deve cambiare la forma, non i dati. */}
+              {/* Una riga sola sopra l'elenco: la legenda dei tipi (che è anche
+                  un filtro, e la chiave dei pallini delle righe), i tag gestiti
+                  e, a destra, il group-by. Prima erano tre fasce con tre
+                  filetti — totali, tag, group-by — prima della prima riga. */}
               {memTopics.length > 1 && (
-                <div className="cl-memgraph-bar">
-                  <span className="cl-memgraph-stats">
-                    <b>{memGraph.links.length}</b> links · <b>{memGraph.clusters.length}</b>{' '}
-                    clusters · <b>{memGraph.nodes.length - memGraph.loners.length}</b>/
-                    {memGraph.nodes.length} connected
-                  </span>
-                </div>
-              )}
-              {(() => {
-                const showGroupBy =
-                  (canGroupByTag || canGroupByType) && visibleMemTopics.length > 0;
-                if (memTags.length === 0 && !showGroupBy) return null;
-                return (
-                  <div className="cl-mem-toolbar">
-                    {memTags.length > 0 ? (
+                <div className="cl-mem-toolbar">
+                  <div className="cl-mem-filters">
+                    <button
+                      type="button"
+                      className={`cl-tagbar-all${!activeMemType && !activeMemTag ? ' on' : ''}`}
+                      onClick={() => {
+                        setMemTypeFilter(null);
+                        setMemTagFilter(null);
+                      }}
+                    >
+                      all <span className="ct">{memTopics.length}</span>
+                    </button>
+                    <div className="cl-mem-types" role="group" aria-label="Filter by type">
+                      {presentMemTypes.map(ty => (
+                        <button
+                          key={ty}
+                          type="button"
+                          className={`cl-mem-type${activeMemType === ty ? ' on' : ''}`}
+                          aria-pressed={activeMemType === ty}
+                          onClick={() => setMemTypeFilter(activeMemType === ty ? null : ty)}
+                        >
+                          <i style={{ background: MEMORY_TYPE_TINT[ty] }} />
+                          {ty} <span className="ct">{memTypeCounts.get(ty)}</span>
+                        </button>
+                      ))}
+                    </div>
+                    {memTags.length > 0 && (
                       <TagBar
                         tags={memTags}
                         counts={memTagCounts}
@@ -996,43 +1014,42 @@ export function ProjectView({
                         onSelect={setMemTagFilter}
                         onRename={renameMemTag}
                         onDelete={deleteMemTag}
+                        showAll={false}
                       />
-                    ) : (
-                      <span />
-                    )}
-                    {showGroupBy && (
-                      <div className="cl-mem-groupby">
-                        <span className="lbl">Group by</span>
-                        <button
-                          type="button"
-                          className={`cl-tagbar-all${activeMemGroup === 'none' ? ' on' : ''}`}
-                          onClick={() => setMemGroupBy('none')}
-                        >
-                          None
-                        </button>
-                        {canGroupByTag && (
-                          <button
-                            type="button"
-                            className={`cl-tagbar-all${activeMemGroup === 'tag' ? ' on' : ''}`}
-                            onClick={() => setMemGroupBy('tag')}
-                          >
-                            Tag
-                          </button>
-                        )}
-                        {canGroupByType && (
-                          <button
-                            type="button"
-                            className={`cl-tagbar-all${activeMemGroup === 'type' ? ' on' : ''}`}
-                            onClick={() => setMemGroupBy('type')}
-                          >
-                            Type
-                          </button>
-                        )}
-                      </div>
                     )}
                   </div>
-                );
-              })()}
+                  {(canGroupByTag || canGroupByType) && (
+                    <div className="cl-mem-groupby">
+                      <span className="lbl">Group by</span>
+                      <button
+                        type="button"
+                        className={`cl-tagbar-all${activeMemGroup === 'none' ? ' on' : ''}`}
+                        onClick={() => setMemGroupBy('none')}
+                      >
+                        None
+                      </button>
+                      {canGroupByTag && (
+                        <button
+                          type="button"
+                          className={`cl-tagbar-all${activeMemGroup === 'tag' ? ' on' : ''}`}
+                          onClick={() => setMemGroupBy('tag')}
+                        >
+                          Tag
+                        </button>
+                      )}
+                      {canGroupByType && (
+                        <button
+                          type="button"
+                          className={`cl-tagbar-all${activeMemGroup === 'type' ? ' on' : ''}`}
+                          onClick={() => setMemGroupBy('type')}
+                        >
+                          Type
+                        </button>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
               {memTopics.length === 0 ? (
                 <div className="cl-empty">No memory topics yet.</div>
               ) : visibleMemTopics.length === 0 ? (
@@ -1043,7 +1060,10 @@ export function ProjectView({
                 memGroups.map(g => (
                   <div key={g.key} className="cl-mem-group">
                     <div className="cl-mem-group-head">
-                      <span className="lbl">{g.label}</span>
+                      <span className="lbl">
+                        {g.tint && <i style={{ background: g.tint }} />}
+                        {g.label}
+                      </span>
                       <span className="ct">{g.topics.length}</span>
                     </div>
                     <div className="cl-mem-rows">{g.topics.map(renderMemRow)}</div>
@@ -1055,7 +1075,7 @@ export function ProjectView({
               {memTopics.length > 1 && (
                 <div className="cl-mem-relnote">
                   {memGraph.loners.length === 0
-                    ? 'No unconnected memory'
+                    ? `All ${memGraph.nodes.length} connected`
                     : `${memGraph.loners.length} unconnected`}
                   {' · '}
                   {memGraph.affinities.length === 0
@@ -1074,6 +1094,7 @@ export function ProjectView({
                   onClose={() => setMemPickerFor(null)}
                 />
               )}
+              {memPeek && <MemoryPeekCard anchor={memPeek} />}
             </>
           )}
         </section>
