@@ -14,7 +14,6 @@ import {
 } from '../../../hooks/useIPC';
 import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
-import { useThoughtsShown } from '../../../hooks/useThoughtsShown';
 import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
@@ -232,10 +231,9 @@ export function ChatView({
   // above the control pill. Fed by the same watcher-driven read the transcript
   // uses — nothing extra is fetched — and it narrates only calls that arrive
   // AFTER this view opened, so re-reading a finished session says nothing.
-  // The toggle is offered only while the session is live, because that is the
-  // only state in which there is anything to narrate.
-  const { shown: thoughtsShown, toggle: toggleThoughts } = useThoughtsShown();
-  const thought = useThoughtStream(displayMessages, thoughtsShown);
+  // Always on: the line costs no layout and says nothing when there is nothing
+  // to say, so a toggle for it was a control for nothing.
+  const thought = useThoughtStream(displayMessages, true);
 
   // Sub-agents dispatched in this session, correlated to their internal
   // transcript files. Drives the right-hand activity rail.
@@ -698,8 +696,6 @@ export function ChatView({
       modelRuns={modelRuns}
       onLocateModel={jumpToTurn}
       thought={thought}
-      thoughtsShown={thoughtsShown}
-      onToggleThoughts={liveInTerminal ? toggleThoughts : undefined}
     />
   );
 
