@@ -1039,8 +1039,8 @@ hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
 resta a `clamp(40px, 4.2vw, 64px)` perché una cifra da 30px sotto un titolo da
 132px non è una gerarchia.
 Le sessioni — nella **vista Sessions** e, dalla stessa riga, nella landing
-(vedi sotto) — sono **righe** (`.cl-srow`): pin, **indice (che porta il
-colore della sessione)**, titolo, tag, spazio elastico, il gruppo cifre
+(vedi sotto) — sono **righe** (`.cl-srow`): pin, indice, **titolo (che porta
+il colore della sessione)**, tag, spazio elastico, il gruppo cifre
 `msg · modello · token · data` e in coda il **kebab delle azioni**. Due elementi
 di 5b sono caduti qui, per la stessa ragione:
 
@@ -1064,24 +1064,29 @@ di 5b sono caduti qui, per la stessa ragione:
 
 Il **colore della sessione** — quello che l'utente le ha dato con `/color`, il
 modo di Claude Code di distinguere a colpo d'occhio due run concorrenti, letto
-da `agent-color` nel transcript — è **portato dall'indice di riga**, non da un
+da `agent-color` nel transcript — è **portato dal titolo**, non da un
 segno suo. È l'unico punto dell'app dove vive una tinta fuori dai 40° del brand,
 e a ragione: quel colore è **un dato**, l'etichetta dell'utente, non un accento
 nostro — una sessione blu dipinta in terracotta sarebbe un'altra informazione.
 
-**Perché l'indice e non un pallino.** Il pallino è stato provato per primo, in
-testa al titolo, ed era il terzo tondo della riga: il verde di LIVE e quello del
-modello dicono già due cose diverse, e un terzo accanto a loro si leggeva come
-un semaforo. L'indice invece è mono, decorativo, già smorzato a `--cl-ink-4` e
-sta esattamente dove l'occhio entra nella riga: tingerlo non aggiunge **nessuna
-geometria** a una lista fatta di soli filetti. Era stata considerata anche la
-**sfumatura di fondo** suggerita dall'utente e scartata per la ragione già
-scritta sopra per le righe pinnate — in dark è una macchia e litiga con la tinta
-dell'hover. La tinta batte l'accento dell'indice pinnato (specificità
-`.is-coloured`): "pinnata" resta detto dalla puntina piena in testa alla riga,
-mentre il colore è l'unica cosa che dice **quale** sessione è questa.
+**Perché il titolo, e non un pallino né l'indice.** Il pallino è stato provato
+per primo, in testa al titolo, ed era il terzo tondo della riga: il verde di
+LIVE e quello del modello dicono già due cose diverse, e un terzo accanto a
+loro si leggeva come un semaforo. Poi l'**indice di riga** — mono, decorativo,
+già smorzato a `--cl-ink-4`, tingerlo non aggiungeva nessuna geometria — ed
+era troppo silenzioso: un `01` colorato non si leggeva come il colore della
+sessione, tanto che l'utente ha segnalato l'indicatore come **sparito** e ha
+chiesto il titolo. Il titolo è l'unica cosa della riga che si legge comunque,
+e i token `--cl-agent-*` sono tarati per il testo (sotto), quindi a 16px
+reggono. Era stata considerata anche la **sfumatura di fondo** suggerita
+dall'utente e scartata per la ragione già scritta sopra per le righe pinnate —
+in dark è una macchia e litiga con la tinta dell'hover. La tinta batte
+l'accento dell'hover (specificità `.is-coloured.<nome>` > `:hover .title`): il
+fondo della riga dice già "questa", il colore è l'unica cosa che dice **quale**
+sessione è questa; e tinge anche l'italico di _Untitled_, che tiene il suo peso
+smorzato. L'indice torna neutro, e in accent solo quando pinnato.
 
-Il nome sceglie una **classe** (`.cl-srow .idx.is-coloured.blue`), mai uno
+Il nome sceglie una **classe** (`.cl-srow .title.is-coloured.blue`), mai uno
 `style` inline: il valore arriva da un record non documentato, `cost-tracker` lo
 restringe agli otto nomi che `/color` accetta, e uno che passasse comunque non
 tinge niente. I token `--cl-agent-*` sono perciò tarati **per il testo**, non
@@ -1089,7 +1094,7 @@ per un tondo: ognuno passa 4.5:1 sul proprio fondo (peggior caso chiaro 4.64, il
 giallo — che infatti si legge ambra).
 
 Il **pallino** (`SessionColorDot`, `.cl-scolor`, 7px) sopravvive dove non c'è un
-indice da tingere e nessun altro tondo con cui confondersi: il crumb della
+titolo da tingere e nessun altro tondo con cui confondersi: il crumb della
 `ChatView`, così il colore è sotto gli occhi anche mentre si legge la sessione,
 non solo nella lista da cui la si è scelta.
 
@@ -1184,7 +1189,7 @@ Seconda passata, sullo stesso hero visto in app con un progetto reale:
   è unit-tested, non si tocca); è la barra a farsi da parte.
 
 La lista è **`SessionRows`**, le stesse righe `.cl-srow` della vista
-Sessions — pin, indice colorato, LIVE, expiry, tag, cifre in colonna e kebab
+Sessions — pin, indice, titolo colorato, LIVE, expiry, tag, cifre in colonna e kebab
 compresi — senza `pageSize` (la testata dice già `All {N} →`, un footer
 "1–5 of 5" sotto conterebbe le stesse cinque due volte) e senza `rankOf`
 (sono le prime cinque della lista, l'ordinale sequenziale è già il rango
