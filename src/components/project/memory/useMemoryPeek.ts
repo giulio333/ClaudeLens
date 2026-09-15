@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { MemoryGraph, MemoryGraphNode } from './graph';
-import type { PeekAnchor } from './MemoryPeekCard';
+import type { PeekAnchor, PeekPlacement } from './MemoryPeekCard';
 
 /**
  * Quanto bisogna sostare su un nodo prima che compaia la card.
@@ -14,12 +14,13 @@ import type { PeekAnchor } from './MemoryPeekCard';
 const PEEK_DELAY_MS = 420;
 
 /**
- * Lo stato della card di hover, condiviso dalla mappa e dall'orbita del
- * dettaglio: stessa attesa, stessa chiusura su scroll e resize, stesso "subito"
- * per il focus da tastiera. Un lettore che sosta su un nodo deve ottenere la
- * stessa risposta nelle due viste — e la seconda l'aveva persa per strada.
+ * Lo stato della card di hover, condiviso dalla mappa, dall'orbita del
+ * dettaglio e dall'elenco: stessa attesa, stessa chiusura su scroll e resize,
+ * stesso "subito" per il focus da tastiera. Un lettore che sosta su una memoria
+ * deve ottenere la stessa risposta in ogni vista — e la seconda l'aveva persa
+ * per strada.
  */
-export function useMemoryPeek(graph: MemoryGraph) {
+export function useMemoryPeek(graph: MemoryGraph, placement?: PeekPlacement) {
   const [peek, setPeek] = useState<PeekAnchor | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const clusterLabelOf = useMemo(() => {
@@ -33,15 +34,18 @@ export function useMemoryPeek(graph: MemoryGraph) {
     setPeek(null);
   }, []);
 
-  /** `immediate` per il focus da tastiera: lì l'intenzione è già dichiarata. */
+  /** `immediate` per il focus da tastiera: lì l'intenzione è già dichiarata.
+   *  `target` è ciò a cui la card si ancora: il `<g>` di un nodo sulla mappa e
+   *  nell'orbita, il titolo di una riga nell'elenco. */
   const schedulePeek = useCallback(
-    (node: MemoryGraphNode, target: SVGGElement, immediate = false) => {
+    (node: MemoryGraphNode, target: Element, immediate = false) => {
       if (timer.current) clearTimeout(timer.current);
       const open = () =>
         setPeek({
           node,
           rect: target.getBoundingClientRect(),
           clusterLabel: clusterLabelOf(node),
+          placement,
         });
       if (immediate) {
         timer.current = null;
@@ -50,7 +54,7 @@ export function useMemoryPeek(graph: MemoryGraph) {
       }
       timer.current = setTimeout(open, PEEK_DELAY_MS);
     },
-    [clusterLabelOf]
+    [clusterLabelOf, placement]
   );
 
   // La card è ancorata a coordinate di viewport: uno scroll la lascerebbe

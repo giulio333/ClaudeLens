@@ -10,6 +10,7 @@ export function TagBar({
   onSelect,
   onRename,
   onDelete,
+  showAll = true,
 }: {
   tags: SessionTag[];
   counts: Record<string, number>;
@@ -18,6 +19,9 @@ export function TagBar({
   onSelect: (tag: string | null) => void;
   onRename?: (oldName: string, newName: string) => boolean;
   onDelete?: (name: string) => void;
+  /** `false` when the caller draws its own "all" — a bar that filters on more
+   *  than tags (the memory list also filters by type) has one "all" for both. */
+  showAll?: boolean;
 }) {
   if (tags.length === 0) return null;
   const manageable = !!(onRename || onDelete);
@@ -25,13 +29,15 @@ export function TagBar({
     <div className="cl-tagbar">
       {/* "all" and every tag are one radio group, so they are one species with
           no divider between them — the active wash says which one is on. */}
-      <button
-        type="button"
-        className={`cl-tagbar-all${activeTag === null ? ' on' : ''}`}
-        onClick={() => onSelect(null)}
-      >
-        all <span className="ct">{totalCount}</span>
-      </button>
+      {showAll && (
+        <button
+          type="button"
+          className={`cl-tagbar-all${activeTag === null ? ' on' : ''}`}
+          onClick={() => onSelect(null)}
+        >
+          all <span className="ct">{totalCount}</span>
+        </button>
+      )}
       <div className="cl-tagbar-list">
         {tags.map(t =>
           manageable ? (

@@ -8397,20 +8397,81 @@ button.cl-pill-model[data-on] {
   color: var(--cl-accent-ink);
   background: var(--cl-accent-soft);
 }
-/* One filter on the left (managed tags), the view control on the right (group by),
-   sharing a single hairline instead of stacking. */
+/* One line over the memory list: the filters on the left (the type legend,
+   which is also the key to the rows' dots, then the managed tags), the view
+   control on the right (group by). No hairline of its own — the rows' ink rule
+   right under it is the line. It used to be three bands (graph totals, tags,
+   group by) with three hairlines before the first row. */
 .cl-mem-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 20px 28px;
+  gap: 10px 28px;
   flex-wrap: wrap;
-  padding: 10px 0 16px;
-  border-bottom: 1px solid var(--cl-line-soft);
-  margin-bottom: 4px;
+  padding: 0 0 14px;
 }
-.cl-mem-toolbar > .cl-tagbar {
+.cl-mem-filters {
+  display: flex;
+  align-items: center;
+  gap: 2px 6px;
+  flex-wrap: wrap;
+  min-width: 0;
   flex: 1 1 auto;
+}
+.cl-mem-types {
+  display: inline-flex;
+  gap: 2px;
+  flex-wrap: wrap;
+}
+/* The tags are a second filter, not more options of the first: a hairline
+   between the two groups says so. */
+.cl-mem-types + .cl-tagbar {
+  margin-left: 6px;
+  padding-left: 12px;
+  border-left: 1px solid var(--cl-line);
+}
+/* Same species as `.cl-tagbar-all` (size, weight, radius), with the type's dot
+   in front: the legend that makes a coloured dot in a row mean something. The
+   active one takes the neutral hover wash and not the accent one — the accent
+   wash is "all", and a tint dot inside a terracotta wash was two colours saying
+   one thing. */
+.cl-mem-type {
+  font-family: var(--font-mono);
+  font-weight: 500;
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: var(--cl-ink-3);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  padding: 4px 8px 4px 7px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition:
+    color 120ms,
+    background 120ms;
+}
+.cl-mem-type i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex: none;
+}
+.cl-mem-type .ct {
+  font-size: 9.5px;
+  color: var(--cl-ink-4);
+  margin-left: -2px;
+}
+.cl-mem-type:hover,
+.cl-mem-type.on {
+  color: var(--cl-ink);
+  background: var(--cl-hover-bg);
+}
+.cl-mem-type.on {
+  box-shadow: inset 0 0 0 1px var(--cl-line);
 }
 .cl-mem-toolbar .cl-mem-groupby {
   margin: 0 0 0 auto;
@@ -8421,7 +8482,6 @@ button.cl-pill-model[data-on] {
   align-items: center;
   gap: 6px;
   flex-wrap: wrap;
-  margin: 2px 0 18px;
 }
 .cl-mem-groupby .lbl {
   font-family: var(--font-mono);
@@ -8432,22 +8492,30 @@ button.cl-pill-model[data-on] {
   margin-right: 4px;
 }
 .cl-mem-group {
-  margin-bottom: 30px;
+  margin-top: 26px;
 }
+/* No hairline under the group head: the rows' ink rule right below it is
+   the underline, and two rules 8px apart read as a table with an empty row. */
 .cl-mem-group-head {
   display: flex;
   align-items: baseline;
-  gap: 10px;
-  margin: 0 0 14px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid var(--cl-line-soft);
+  gap: 8px;
+  margin: 0 0 8px;
 }
 .cl-mem-group-head .lbl {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
   font-family: var(--font-mono);
   font-size: 11px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
   color: var(--cl-ink-2);
+}
+.cl-mem-group-head .lbl i {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 .cl-mem-group-head .ct {
   font-family: var(--font-mono);
@@ -8719,8 +8787,11 @@ button.cl-pill-model[data-on] {
   line-height: 1.5;
   color: var(--cl-ink-3);
   display: -webkit-box;
-  -webkit-line-clamp: 3;
-  line-clamp: 3;
+  /* Five lines, not three: since the list row stopped printing the
+     description this card is the only place it is read without opening the
+     memory, and three lines at this width cut a 130-character one. */
+  -webkit-line-clamp: 5;
+  line-clamp: 5;
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
@@ -11698,10 +11769,13 @@ button.cl-sw-member:focus-visible,
 /* ════════════════════════════════════════════════════════════════════════
    MEMORY LIST ROWS (design 2b) — il grafo detto a parole, senza canvas.
    Righe, non tile: il glifo con l'iniziale diceva la stessa lettera del nome
-   che gli sta accanto, mentre il pallino dice il tipo — che è un dato. Sotto
-   il titolo la riga porta la relazione ("↑ cited by 2 · ↓ cites …"), cioè lo
-   stesso fatto che la mappa disegna come arco: le due viste rispondono alla
-   stessa domanda in due forme, non con due dati diversi.
+   che gli sta accanto, mentre il pallino dice il tipo — che è un dato, e la
+   legenda sopra l'elenco è la sua chiave. Una riga sola: titolo coi tag
+   accanto e, a destra, "cited by N" quando c'è — la misura di relazione che
+   la mappa disegna come diametro del nodo — e la data. La descrizione si
+   legge sostando sul titolo, nella stessa card di hover della mappa
+   (`.cl-mempeek`); il resto dell'arco (che cosa cita) sta nel dettaglio,
+   dove c'è l'orbita per disegnarlo.
    ════════════════════════════════════════════════════════════════════════ */
 .cl-mem-rows {
   border-top: 1px solid var(--cl-ink);
@@ -11709,10 +11783,10 @@ button.cl-sw-member:focus-visible,
 }
 .cl-mem-row {
   display: grid;
-  grid-template-columns: 10px 1fr auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto auto;
   gap: 16px;
-  align-items: start;
-  padding: 17px 4px;
+  align-items: center;
+  padding: 9px 4px 10px;
   border-bottom: 1px solid var(--cl-line-soft);
   cursor: pointer;
   transition: background 100ms;
@@ -11730,7 +11804,6 @@ button.cl-sw-member:focus-visible,
   width: 8px;
   height: 8px;
   border-radius: 50%;
-  margin-top: 7px;
 }
 /* L'hub del proprio gruppo porta l'anello che ha sulla mappa: è lo stesso
    segno, così una memoria riconosciuta in una vista si riconosce nell'altra. */
@@ -11740,72 +11813,67 @@ button.cl-sw-member:focus-visible,
   outline: 1.4px solid currentColor;
   outline-offset: 2.4px;
 }
+.cl-mem-row .t-main {
+  min-width: 0;
+}
+.cl-mem-row .t-head {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 2px 8px;
+}
 .cl-mem-row .t-name {
   font-size: 15px;
   font-weight: 600;
   letter-spacing: -0.01em;
+  line-height: 1.45;
   color: var(--cl-ink);
   overflow-wrap: anywhere;
 }
-.cl-mem-row .t-desc {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-3);
-  margin-top: 3px;
-  line-height: 1.5;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 2;
-  line-clamp: 2;
-  overflow: hidden;
-}
-.cl-mem-row .t-rel {
-  display: flex;
+.cl-mem-row .t-tags {
+  display: inline-flex;
+  align-items: center;
   flex-wrap: wrap;
-  align-items: baseline;
-  gap: 4px 10px;
-  margin-top: 5px;
+  gap: 6px;
+  position: relative;
+  top: -1px;
+}
+.cl-mem-row .t-tags .cl-tag--plain {
+  font-size: 10.5px;
+}
+.cl-mem-row .t-tags .cl-row-tag-add {
+  margin-left: 0;
+}
+/* Two right-hand columns: the citations (empty on a row nobody cites — the
+   cell stays so the dates still line up) and the date. */
+.cl-mem-row .t-cited,
+.cl-mem-row .t-when {
   font-family: var(--font-mono);
   font-size: 10.5px;
   letter-spacing: 0.02em;
-  color: var(--cl-accent-ink);
+  white-space: nowrap;
+  text-align: right;
 }
-.cl-mem-row .t-rel .out {
-  color: var(--cl-ink-3);
-}
-.cl-mem-row .t-rel .out b {
+.cl-mem-row .t-cited {
   color: var(--cl-ink-2);
   font-weight: 500;
 }
-.cl-mem-row .t-rel .hub {
+.cl-mem-row .t-when {
   color: var(--cl-ink-4);
-}
-.cl-mem-row .t-meta {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 4px;
-  text-align: right;
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.04em;
-  white-space: nowrap;
-}
-.cl-mem-row .t-meta .type {
-  font-weight: 500;
-}
-.cl-mem-row .t-meta .when {
-  color: var(--cl-ink-4);
-  font-weight: 400;
   font-size: 10px;
-  letter-spacing: 0.02em;
+  min-width: 82px;
 }
 .cl-mem-row:hover .cl-row-tag-add,
 .cl-mem-row:focus-within .cl-row-tag-add {
   opacity: 1;
 }
-/* Riepilogo del grafo sopra le righe e debito di connessione sotto: la lista
-   porta gli stessi totali della mappa, altrimenti passare da una vista
+/* The × on an inline tag shows on row hover, as it does on a session row —
+   that rule is bound to `.cl-row`, which these rows are not. */
+.cl-mem-row:hover .cl-tag--plain .remove {
+  opacity: 0.7;
+}
+/* Il debito di connessione sotto le righe (i totali stanno nella testata): la
+   lista porta gli stessi numeri della mappa, altrimenti passare da una vista
    all'altra sembrerebbe cambiare i dati e non la forma. */
 .cl-mem-relnote {
   margin-top: 12px;
