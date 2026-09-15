@@ -20,6 +20,15 @@
      data keeps JetBrains Mono. */
   --font-reading: 'Inter', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
 
+  /* ── Reading geometry — the two numbers that decide how much of the window
+     the transcript uses. Kept apart because they answer different questions:
+     `--cl-read-col` is how wide the column is (what the tool windows, diffs,
+     terminals and tables get), `--cl-read-measure` is how long a line of
+     running prose is allowed to be (what the eye gets). Widening the column
+     alone only grows the empty space to the right of the paragraphs. */
+  --cl-read-col: 1560px;
+  --cl-read-measure: 95ch;
+
   /* ── Editorial tokens — LIGHT (paper / ink) ──
      Brand palette (Claude Code official):
        #FFFFFF white · #F4F3EE paper · #B1ADA1 warm gray · #C15F3C terracotta accent
@@ -3247,7 +3256,7 @@ body {
   padding: 18px 24px 60px;
 }
 .cl-subagent-feed .cl-transcript-inner {
-  max-width: 820px;
+  max-width: var(--cl-read-col);
   margin: 0 auto;
 }
 /* Dispatch prompt — rendered as the transcript's opening turn (same rail
@@ -3272,7 +3281,7 @@ body {
   color: var(--cl-ink-2);
   white-space: pre-wrap;
   word-break: break-word;
-  max-width: 72ch;
+  max-width: var(--cl-read-measure);
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -3286,11 +3295,15 @@ body {
   grid-template-columns: 1fr;
 }
 
-/* centred reading column — ~78% of the feed so it fills the window while
-   leaving the right gutter for the minimap (and room for the agent rail). */
+/* Centred reading column. The gutter is a fixed 80px a side rather than a
+   percentage: the only thing it has to clear is the 64px focus rail, which is
+   absolutely positioned over the feed's LEFT edge (the comment that used to
+   live here still reserved a gutter on the right for it, from before the rail
+   moved). A percentage gutter grows with the window and was giving back a
+   third of a wide screen for nothing. */
 .cl-chat-reading {
-  width: 78%;
-  max-width: 1180px;
+  width: calc(100% - 160px);
+  max-width: var(--cl-read-col);
   margin: 0 auto;
 }
 .cl-chat-reading .cl-transcript-inner {
@@ -3328,10 +3341,13 @@ body {
 .cl-chat-reading .cl-transcript-inner::before {
   display: none; /* the thread is per-turn, not one page-long spine */
 }
-/* Reading measure: narrower than the island layout, generous side air. The
-   140px foot clears the floating control pill (composer variants add more). */
+/* The column above is the only width constraint; this inner box just carries
+   the padding. The 140px foot clears the floating control pill (composer
+   variants add more). Running prose keeps its own measure further down — it is
+   capped in `ch`, so the column can be as wide as the window allows without
+   stretching a paragraph past what the eye can track. */
 .cl-chat-reading .cl-transcript-inner {
-  max-width: 820px;
+  max-width: none;
   margin: 0 auto;
   padding: 18px 34px 140px;
   /* Turns must abut: the rhythm comes from the body's own padding and its
@@ -3826,13 +3842,14 @@ body {
 }
 /* Embedded Lens (Terminal ↔ Lens split): no composer (so `data-composer` is
    absent) — the mission rail lives in its own flex column. Clip any horizontal
-   overflow so a turn can never bleed under the rail; the reading column keeps
-   a slightly wider run but leaves the left gutter for the TURNS capsule. */
+   overflow so a turn can never bleed under the rail. The column now keeps the
+   base rule: the 86% this view used to set was within a few pixels of the fixed
+   80px gutter at any feed width it actually gets, so it bought nothing. What
+   was squeezing this view was the 820px cap on the inner box, not the gutter.
+   Wide tool output still scrolls inside its own window (`.cl-term-body`, the
+   code fences), so the clip below only catches what already overflowed. */
 .cl-chat-workspace--focus:not([data-composer]) .cl-chat-feed {
   overflow-x: hidden;
-}
-.cl-chat-workspace--focus:not([data-composer]) .cl-chat-reading {
-  width: 86%;
 }
 .cl-composer {
   position: absolute;
@@ -3844,15 +3861,27 @@ body {
   background: linear-gradient(to top, var(--cl-paper) 62%, transparent);
 }
 .cl-composer-inner {
-  /* Aligned with the reading column (.cl-transcript-inner: 880px − 24px
-     side padding) so input and transcript share one text edge. */
-  width: 100%;
-  max-width: 880px;
-  padding: 0 24px;
+  /* Aligned with the transcript's text edge, not centred on its own: the same
+     column geometry as `.cl-chat-reading`, plus the 30px turn rail the prose
+     sits after (34 + 30 = 64 on the left). The sheet then stops at the reading
+     measure, so a wide window widens the transcript without stretching the
+     input across the whole screen — what is typed lands where it is read. */
+  width: calc(100% - 160px);
+  max-width: var(--cl-read-col);
+  padding: 0 34px 0 64px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
+  align-items: flex-start;
   gap: 7px;
+}
+/* Sheet, error and lock notice all stop at the same run as the prose above —
+   they belong to the text column, not to the window. The `ch` resolves in the
+   UI sans here and in Inter up there, so the right edges differ by a few dozen
+   pixels; the left edge, which is the one the eye reads, is exact. */
+.cl-composer-inner > * {
+  width: 100%;
+  max-width: var(--cl-read-measure);
 }
 /* Live (provisional) assistant turn — streamed inline in the reading column.
    Inherits the assistant markdown prose via cl-message-text--assistant; we only
@@ -5431,8 +5460,8 @@ button.cl-pill-model[data-on] {
 }
 .cl-message-text--user {
   width: 100%;
-  /* Reading measure — prompts cap at ~75ch like the assistant prose below. */
-  max-width: 75ch;
+  /* Reading measure — prompts cap like the assistant prose below. */
+  max-width: var(--cl-read-measure);
   margin: 0;
   padding: 0;
   border: 0;
@@ -5461,12 +5490,12 @@ button.cl-pill-model[data-on] {
   letter-spacing: -0.006em;
   text-rendering: optimizeLegibility;
 }
-/* Reading measure: running text caps at ~75ch; code fences, tables and other
-   block furniture keep the full column width. */
+/* Reading measure: running text caps at `--cl-read-measure`; code fences,
+   tables and other block furniture keep the full column width. */
 .cl-message-text--assistant
   .prose-lens
   > :where(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6) {
-  max-width: 75ch;
+  max-width: var(--cl-read-measure);
 }
 /* Structure stays in the UI voice: headings inside the transcript prose keep
    Space Grotesk so Inter is reserved for running text. */
@@ -6692,8 +6721,14 @@ button.cl-pill-model[data-on] {
   .cl-focus-rail {
     display: none;
   }
+  /* The rail is gone, so nothing needs clearing on the left: the gutter drops
+     to plain air and the composer loses the 30px rail offset with it. */
   .cl-chat-reading {
-    width: 88%;
+    width: calc(100% - 56px);
+  }
+  .cl-composer-inner {
+    width: calc(100% - 56px);
+    padding: 0 28px;
   }
   .cl-pill-filter {
     padding: 7px 9px;
@@ -6716,7 +6751,11 @@ button.cl-pill-model[data-on] {
     padding: 18px 18px 40px;
   }
   .cl-chat-reading {
-    width: 94%;
+    width: calc(100% - 20px);
+  }
+  .cl-composer-inner {
+    width: calc(100% - 20px);
+    padding: 0 10px;
   }
   .cl-chat-reading .cl-transcript-inner {
     padding-left: 18px;
