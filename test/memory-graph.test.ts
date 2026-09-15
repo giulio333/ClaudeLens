@@ -460,10 +460,10 @@ describe('memorie indicizzate per path', () => {
 
   it('does not couple two external memories on the segments of their shared path', () => {
     // I token di affinità partono dal basename: dal path intero entrerebbero
-    // `users`, `projects`, `kernel`… che ogni memoria condivisa ha identici.
+    // `users`, `projects`, `core`… che ogni memoria condivisa ha identici.
     const topics = [
       topic(external('accesso-macchine-bench-acme'), { name: 'Accesso', description: '' }),
-      topic(external('tracker-progetti-per-componente'), { name: 'Jira', description: '' }),
+      topic(external('tracker-progetti-per-componente'), { name: 'Tracker', description: '' }),
     ];
     const g = buildMemoryGraph(topics, {});
     expect(g.affinities).toEqual([]);

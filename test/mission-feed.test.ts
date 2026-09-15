@@ -347,9 +347,9 @@ const REDIRECT = `REDIRECT DETECTED: The URL redirects to a different host.
 Original URL: https://docs.claude.com/en/docs/claude-code/skills
 Redirect URL: https://code.claude.com/docs/en/skills
 Status: 301 Moved Permanently`;
-const SEARCH_OK = `Web search results for query: "guide migration 2026"
+const SEARCH_OK = `Web search results for query: "vitest 5 migration"
 
-Links: [{"title":"A","url":"https://www.pmi.it/a"},{"title":"B","url":"https://www.docs.example/b"},{"title":"C","url":"https://migration.org/c"},{"title":"D","url":"https://www.pmi.it/d"}]
+Links: [{"title":"A","url":"https://vitest.dev/a"},{"title":"B","url":"https://github.com/b"},{"title":"C","url":"https://docs.example/c"},{"title":"D","url":"https://vitest.dev/d"}]
 
 Synthesis.`;
 
@@ -482,16 +482,21 @@ describe('mission feed — web activity', () => {
   });
 
   it('carries a search by its query, its result count and its sources', () => {
-    const call = webCall('s1', 'WebSearch', { query: 'guide migration 2026' }, { content: SEARCH_OK });
+    const call = webCall(
+      's1',
+      'WebSearch',
+      { query: 'vitest 5 migration' },
+      { content: SEARCH_OK }
+    );
     const [event] = buildMissionFeed(
       input({ processed: [turn(4, [call])], ownTools: [call], web: buildWebActivity([call]) })
     );
     expect(event).toMatchObject({
       kind: 'WEB',
-      title: 'guide migration 2026',
+      title: 'vitest 5 migration',
       right: '4 LINKS',
-      // Distinct hosts, two of them, `+N` for the rest — pmi.it appears twice.
-      meta: 'pmi.it · docs.example · +1',
+      // Distinct hosts, two of them, `+N` for the rest — vitest.dev appears twice.
+      meta: 'vitest.dev · github.com · +1',
       expandable: false,
     });
   });

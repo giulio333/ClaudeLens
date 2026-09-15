@@ -16,7 +16,7 @@ import {
 const projects: Project[] = [
   { hash: '-Users-x-ClaudeLens', realPath: '/Users/x/ClaudeLens' },
   { hash: '-Users-x-Personal', realPath: '/Users/x/Personal' },
-  { hash: '-Users-x-Acme', realPath: '/Users/x/Acme' },
+  { hash: '-Users-x-Backend', realPath: '/Users/x/Backend' },
 ];
 const byPath = new Map(projects.map(p => [p.realPath, p]));
 
@@ -51,7 +51,7 @@ describe('liveRowsFromProcs — the three states', () => {
   });
 
   it('orders rows by what matters, so the hero shows the top two', () => {
-    const out = rows(at('ClaudeLens', 'idle'), at('Personal', 'busy'), at('Acme', 'waiting'));
+    const out = rows(at('ClaudeLens', 'idle'), at('Personal', 'busy'), at('Backend', 'waiting'));
     expect(out.map(r => r.live)).toEqual(['waiting', 'working', 'open']);
   });
 
@@ -95,7 +95,9 @@ describe('welcomeLine', () => {
 
   it('counts the waiting ones past the first', () => {
     expect(
-      welcomeLine(rows(at('ClaudeLens', 'busy'), at('Personal', 'waiting'), at('Acme', 'waiting')))
+      welcomeLine(
+        rows(at('ClaudeLens', 'busy'), at('Personal', 'waiting'), at('Backend', 'waiting'))
+      )
     ).toBe('ClaudeLens is working right now. 2 are waiting on you.');
   });
 

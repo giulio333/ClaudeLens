@@ -7,8 +7,8 @@ import {
   PROJECT_DESCRIPTION_MAX,
 } from '../electron/modules/project-description';
 
-// The fixtures below are the openings of REAL CLAUDE.md files (this machine's
-// projects), abridged only where the body is irrelevant. The derivation exists
+// The fixtures below keep the shape of real CLAUDE.md openings, with every name
+// and sentence replaced, abridged where the body is irrelevant. The derivation exists
 // because the obvious rule — first heading, else first sentence — answers
 // "CLAUDE.md" and "This file provides guidance to Claude Code…" on the two that
 // were written by `/init`, so idealised fixtures would prove nothing.
@@ -52,18 +52,18 @@ Version 0.2.0, alpha. Requires Python >= 3.11.
 ## Language
 `;
 
-const Acme = `# CLAUDE.md
+const ACME = `# CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
 ## Project Overview
 
-**Acme** (Asset Control and Monitoring Engine) is a Windows-native C++ integration platform for heterogeneous security devices (cameras, alarm panels, I/O modules). It runs as a Windows service.
+**Acme** (Asset Control and Monitoring Engine) is a Windows-native C++ integration platform for heterogeneous field devices (sensors, control panels, I/O modules). It runs as a Windows service.
 
 ## Build Commands
 `;
 
-const Acme2 = `# Acme — Contesto per Claude Code
+const ACME2 = `# Acme — Contesto per Claude Code
 
 ## Cos'è questo progetto
 
@@ -100,16 +100,16 @@ describe('deriveProjectDescription — real CLAUDE.md files', () => {
   });
 
   it('reads a bold-led sentence under "Project Overview", stripped of markdown', () => {
-    const got = deriveProjectDescription(Acme, { projectName: 'Acme' });
+    const got = deriveProjectDescription(ACME, { projectName: 'Acme' });
     expect(got?.source).toBe('section');
     expect(got?.text).toBe(
-      'Acme (Asset Control and Monitoring Engine) is a Windows-native C++ integration platform for heterogeneous security devices (cameras…'
+      'Acme (Asset Control and Monitoring Engine) is a Windows-native C++ integration platform for heterogeneous field devices (sensors, control…'
     );
     expect(got?.text.length).toBeLessThanOrEqual(PROJECT_DESCRIPTION_MAX);
   });
 
   it('recognises an Italian descriptive heading when there is no lead paragraph', () => {
-    const got = deriveProjectDescription(Acme2, { projectName: 'Acme2.0' });
+    const got = deriveProjectDescription(ACME2, { projectName: 'Acme2.0' });
     expect(got?.source).toBe('section');
     expect(got?.text).toBe(
       "Questo è un vault Obsidian che documenta l'architettura di Acme, un sistema distribuito per la gestione di sottosistemi fisici."
