@@ -440,6 +440,7 @@ export function MissionRail({
   onOpenSkillDef,
   onOpenAgentDef,
   onOpenTeam,
+  showVitals = true,
 }: {
   hash: string;
   /** Null until the CLI registers itself in `~/.claude/sessions/` (a few seconds). */
@@ -457,6 +458,16 @@ export function MissionRail({
   onOpenAgentDef: (agent: Agent) => void;
   /** Open a team's detail (the existing TeamDetailView, hosted in the parent's overlay). */
   onOpenTeam: (teamName: string) => void;
+  /** Whether this rail carries the vitals line — context %, spend, and the
+   *  session's diff.
+   *
+   *  It doesn't, in the Lens: there the floating control pill sits under the
+   *  transcript with all three, so printing them here too would put the same
+   *  number on screen twice a few hundred pixels apart — which is exactly why
+   *  the terminal's own TopBar stopped printing the spend. The Terminal tab
+   *  has no pill, so there the line stays and this rail remains the only place
+   *  any of the three is stated. */
+  showVitals?: boolean;
 }) {
   const filename = sessionId ? `${sessionId}.jsonl` : null;
   const { data: messages, isError, error, refetch } = useChatSession(hash, filename);
@@ -802,71 +813,87 @@ export function MissionRail({
             say, folded into one line so the events keep the emphasis. The two
             headline figures are hover targets: the detail the old blocks
             printed permanently now drops as a card below the band. Focusable,
-            so the cards are reachable without a pointer. */}
-        <div
-          className="font-mono flex items-baseline"
-          style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
-        >
-          <span
-            className="cl-vitals-trigger flex items-baseline"
-            style={{ gap: 9 }}
-            tabIndex={0}
-            aria-label="Context window detail"
-            onMouseEnter={() => setVital('ctx')}
-            onMouseLeave={() => setVital(null)}
-            onFocus={() => setVital('ctx')}
-            onBlur={() => setVital(null)}
+            so the cards are reachable without a pointer.
+
+            The whole line belongs to the Terminal tab (`showVitals`). In the
+            Lens all three facts — context, spend, and what the session did to
+            the working tree — are in the floating control pill, next to the
+            transcript they describe; printing them here as well would put the
+            same number on screen twice a few hundred pixels apart, which is
+            exactly why the terminal's TopBar stopped printing the spend. */}
+        {showVitals && (
+          <div
+            className="font-mono flex items-baseline"
+            style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
           >
             <span
-              style={{
-                font: '700 21px/1 var(--font-sans)',
-                letterSpacing: '-0.03em',
-                color: ctxDanger ? 'var(--cl-danger)' : 'var(--cl-ink)',
-              }}
+              className="cl-vitals-trigger flex items-baseline"
+              style={{ gap: 9 }}
+              tabIndex={0}
+              aria-label="Context window detail"
+              onMouseEnter={() => setVital('ctx')}
+              onMouseLeave={() => setVital(null)}
+              onFocus={() => setVital('ctx')}
+              onBlur={() => setVital(null)}
             >
-              {ctx ? pct : '—'}
-              <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>
+              <span
+                style={{
+                  font: '700 21px/1 var(--font-sans)',
+                  letterSpacing: '-0.03em',
+                  color: ctxDanger ? 'var(--cl-danger)' : 'var(--cl-ink)',
+                }}
+              >
+                {ctx ? pct : '—'}
+                <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>
+              </span>
+              <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
             </span>
-            <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
-          </span>
-          <span style={{ fontSize: 9.5, color: 'var(--cl-line)' }}>·</span>
-          <span
-            className="cl-vitals-trigger"
-            tabIndex={0}
-            aria-label="Session spend detail"
-            onMouseEnter={() => setVital('spend')}
-            onMouseLeave={() => setVital(null)}
-            onFocus={() => setVital('spend')}
-            onBlur={() => setVital(null)}
-            style={{ font: '700 15px/1 var(--font-sans)', color: 'var(--cl-accent-ink)' }}
-          >
-            {summary ? fmtCost(summary.estimatedCost) : '—'}
-          </span>
-          <span style={{ flex: 1 }} />
-          <span style={{ fontSize: 9.5, color: 'var(--cl-ok)' }}>+{fmt(totals.added)}</span>
-          <span style={{ fontSize: 9.5, color: 'var(--cl-danger)' }}>−{fmt(totals.removed)}</span>
-          <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
-            {changes.length} {changes.length === 1 ? 'file' : 'files'}
-          </span>
+            <span style={{ fontSize: 9.5, color: 'var(--cl-line)' }}>·</span>
+            <span
+              className="cl-vitals-trigger"
+              tabIndex={0}
+              aria-label="Session spend detail"
+              onMouseEnter={() => setVital('spend')}
+              onMouseLeave={() => setVital(null)}
+              onFocus={() => setVital('spend')}
+              onBlur={() => setVital(null)}
+              style={{ font: '700 15px/1 var(--font-sans)', color: 'var(--cl-accent-ink)' }}
+            >
+              {summary ? fmtCost(summary.estimatedCost) : '—'}
+            </span>
+            <span style={{ flex: 1 }} />
+            <span style={{ fontSize: 9.5, color: 'var(--cl-ok)' }}>+{fmt(totals.added)}</span>
+            <span style={{ fontSize: 9.5, color: 'var(--cl-danger)' }}>−{fmt(totals.removed)}</span>
+            <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+              {changes.length} {changes.length === 1 ? 'file' : 'files'}
+            </span>
+          </div>
+        )}
+
+        {showVitals && vital === 'ctx' && <ContextPopover ctx={ctx} />}
+        {showVitals && vital === 'spend' && <SpendPopover summary={summary} />}
+      </div>
+
+      {/* The context fill, edge to edge — a 2px rule that doubles as a gauge.
+          It is the context figure's gauge, so it leaves with the figure: what
+          stays behind is the plain hairline the band needs to end on, not a
+          two-pixel bar that would still look like a reading of something. */}
+      {showVitals ? (
+        <div className="shrink-0" style={{ height: 2, background: 'var(--cl-line-soft)' }}>
+          <div
+            style={{
+              width: `${pct}%`,
+              height: '100%',
+              transition: 'width 0.4s ease',
+              background: ctxDanger
+                ? 'var(--cl-danger)'
+                : 'linear-gradient(90deg, color-mix(in oklch, var(--cl-accent) 70%, white), var(--cl-accent))',
+            }}
+          />
         </div>
-
-        {vital === 'ctx' && <ContextPopover ctx={ctx} />}
-        {vital === 'spend' && <SpendPopover summary={summary} />}
-      </div>
-
-      {/* the context fill, edge to edge — a 2px rule that doubles as a gauge */}
-      <div className="shrink-0" style={{ height: 2, background: 'var(--cl-line-soft)' }}>
-        <div
-          style={{
-            width: `${pct}%`,
-            height: '100%',
-            transition: 'width 0.4s ease',
-            background: ctxDanger
-              ? 'var(--cl-danger)'
-              : 'linear-gradient(90deg, color-mix(in oklch, var(--cl-accent) 70%, white), var(--cl-accent))',
-          }}
-        />
-      </div>
+      ) : (
+        <div className="shrink-0" style={{ height: 1, background: 'var(--cl-line-soft)' }} />
+      )}
 
       {/* filters — the sections, demoted from headings to a choice */}
       <div

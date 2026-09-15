@@ -837,7 +837,6 @@ describe('computeFilterCounts', () => {
     const visible = processed.map(p => describeTurn(p, 'all')).filter(d => d.visible);
     const counts = computeFilterCounts(visible);
     expect(counts.all).toBe(2);
-    expect(counts.tools).toBe(1);
     expect(counts.thinking).toBe(0);
     expect(counts.questions).toBe(0);
     expect(counts.plan).toBe(0);

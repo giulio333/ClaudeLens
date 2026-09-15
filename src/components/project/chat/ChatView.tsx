@@ -11,12 +11,15 @@ import {
   useProjectAgents,
   useAllSkills,
   usePlugins,
+  useEffectiveConfig,
 } from '../../../hooks/useIPC';
 import { SessionSummary, Skill, Agent } from '../../../hooks/useIPC';
 import { sessionTitle } from '../utils';
 import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
+  AGENT_TOOLS,
+  isMemoryFile,
   buildProcessedMessages,
   buildSkillIndex,
   correlateSessionAgents,
@@ -40,6 +43,10 @@ import { VaultLinksProvider } from '../../VaultLinks';
 import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
 import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
+import { deriveContext } from '../terminal/context-window';
+import { buildFileChanges } from '../terminal/mission-feed';
+import { findMatchingTurns, stepToHit } from './find';
+import { useFindLayer } from './useFindLayer';
 import { FocusMinimap } from './FocusMinimap';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
@@ -118,6 +125,16 @@ export function ChatView({
   const { data: projectAgents } = useProjectAgents(project.realPath);
   const { data: allSkills } = useAllSkills(project.realPath);
   const { data: plugins } = usePlugins();
+  // Context occupancy for the pill's vitals cell. The raw `model` setting (e.g.
+  // `opus[1m]`) carries the 1M marker the transcript's resolved id drops, and it
+  // is what sizes the window — the same read Mission Control makes, through the
+  // same query, so the two can never disagree about how full the window is.
+  const { data: effectiveConfig } = useEffectiveConfig(project.realPath);
+  const rawModel =
+    typeof effectiveConfig?.effective?.model === 'string'
+      ? (effectiveConfig.effective.model as string)
+      : undefined;
+  const ctx = useMemo(() => deriveContext(messages, rawModel), [messages, rawModel]);
 
   // Resolve a dispatched sub-agent's identity color from its definition
   // (`subagent_type` → agent.color). Project agents win over globals on name
@@ -301,6 +318,45 @@ export function ChatView({
   // Synced in a *layout* effect, declared above them: a density change rebuilds
   // the rows, and an anchoring effect reading last render's map would scroll to
   // the row a turn used to occupy.
+  // What this session did to the working tree, for the pill's diff cell. Same
+  // derivation Mission Control's band used — the memory files are excluded
+  // because they are a topic each, not a diff, and counting them would
+  // double-count the session's line totals.
+  const changes = useMemo(() => {
+    const ownTools = processed
+      .flatMap(p => p.toolGroups)
+      .filter(g => !AGENT_TOOLS.has(g.use.name))
+      .filter(g => !isMemoryFile(g.use.input as Record<string, unknown>));
+    const files = buildFileChanges(ownTools);
+    return files.reduce(
+      (acc, c) => ({
+        added: acc.added + c.added,
+        removed: acc.removed + c.removed,
+        files: acc.files + 1,
+      }),
+      { added: 0, removed: 0, files: 0 }
+    );
+  }, [processed]);
+
+  // ── Find in transcript ────────────────────────────────────────────────
+  // The list is windowed, so the browser's own Ctrl+F only ever sees the rows
+  // around the viewport. `findMatchingTurns` scans the DATA (all of it) for the
+  // turns that match; `useFindLayer` paints the occurrences in whatever rows are
+  // mounted. Hits are filtered to turns the stream actually has a row for — a
+  // turn the current density folds away cannot be scrolled to, and offering it
+  // as a destination would be a step that does nothing.
+  const [findQuery, setFindQuery] = useState('');
+  // Where the find last SENT the reader. Deliberately not `activeTurn`: the
+  // scroll-spy writes that on every scroll, so the counter would drop from
+  // "3/12 turns" to "12 turns" the moment the reader scrolled off the hit, and
+  // look broken. Stepping still starts from `activeTurn` — "next" means next
+  // after where I am reading — which is the half that should follow the scroll.
+  const [findCursor, setFindCursor] = useState<number | null>(null);
+  const findHits = useMemo(() => {
+    const matched = findMatchingTurns(processed, findQuery, detailsFilter);
+    return matched.filter(n => rowIndexByTurn.has(n));
+  }, [processed, findQuery, detailsFilter, rowIndexByTurn]);
+
   const rowIndexByTurnRef = useRef(rowIndexByTurn);
   useLayoutEffect(() => {
     rowIndexByTurnRef.current = rowIndexByTurn;
@@ -334,8 +390,6 @@ export function ChatView({
   const matchesFilter = useCallback(
     (d: TurnDescriptor) => {
       switch (activeFilter) {
-        case 'tools':
-          return d.hasTools;
         case 'thinking':
           return d.hasThinking && detailsFilter === 'all';
         case 'questions':
@@ -535,6 +589,14 @@ export function ChatView({
     api: highlightsApi,
     enabled: !chatHidden,
   });
+  // Paints the find's occurrences over the mounted rows. The active turn is
+  // passed as a uuid because that is what the DOM carries (`data-hl-block`).
+  useFindLayer({
+    container: transcriptEl,
+    query: findQuery,
+    activeUuid: findCursor !== null ? (processed[findCursor - 1]?.msg.uuid ?? null) : null,
+    enabled: !chatHidden,
+  });
 
   // Stable callbacks so MessageBubble's memo holds (only selected/mode change).
   const handleToggleSelect = useCallback((uuid: string) => {
@@ -614,11 +676,7 @@ export function ChatView({
     }
     if (item.kind !== 'turn') {
       return (
-        <ToolsHiddenBadge
-          count={item.count}
-          files={item.files}
-          dimmed={activeFilter !== 'all' && activeFilter !== 'tools'}
-        />
+        <ToolsHiddenBadge count={item.count} files={item.files} dimmed={activeFilter !== 'all'} />
       );
     }
     const p = processed[item.idx];
@@ -636,10 +694,7 @@ export function ChatView({
         dimmed={
           activeFilter !== 'all' &&
           descriptors[item.idx]?.visible &&
-          !matchesFilter(descriptors[item.idx]) &&
-          // A turn carrying a folded "tools hidden" chip counts as a tools turn
-          // under the Tools filter — keep it lit.
-          !(activeFilter === 'tools' && !!item.hiddenCount)
+          !matchesFilter(descriptors[item.idx])
         }
         isContinuation={row.isContinuation}
         hiddenToolCount={item.hiddenCount}
@@ -654,6 +709,25 @@ export function ChatView({
 
   const controlPill = (showTranscriptControls: boolean) => (
     <ChatControlPill
+      vitals={{ ctx, session }}
+      changes={changes}
+      find={{
+        query: findQuery,
+        setQuery: q => {
+          setFindQuery(q);
+          // A new query invalidates where the old one had got to.
+          setFindCursor(null);
+        },
+        hits: findHits.length,
+        // Which hit the find is on, 1-based, or 0 before the first step.
+        position: findCursor === null ? 0 : findHits.indexOf(findCursor) + 1,
+        onStep: direction => {
+          const next = stepToHit(findHits, activeTurn, direction);
+          if (next === null) return;
+          setFindCursor(next);
+          jumpToTurn(next);
+        },
+      }}
       showTranscriptControls={showTranscriptControls && processed.length > 0}
       filter={activeFilter}
       setFilter={setTurnFilter}

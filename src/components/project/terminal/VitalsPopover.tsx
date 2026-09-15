@@ -32,12 +32,40 @@ import { READOUT_RAMP } from '../shared/readout';
  *  `--cl-paper` (not white) so the ramp flips correctly in the dark theme. */
 const RAMP = READOUT_RAMP;
 
-/** Mission Control pins the card across the rail; the surface itself is shared. */
-const card: CSSProperties = { position: 'absolute', top: 'calc(100% + 8px)', left: 20, right: 20 };
+/**
+ * Where the card hangs. The surface is shared; the anchor is not.
+ *
+ * `rail` pins it across Mission Control, below the band it belongs to.
+ * `pill` is the floating control pill at the BOTTOM of the window, so there
+ * the card has to rise from the figure instead of dropping onto the edge of
+ * the screen — and its entry animation has to reverse with it, or the card
+ * slides into itself.
+ */
+export type VitalsPlacement = 'rail' | 'pill';
 
-function Shell({ title, meta, children }: { title: string; meta?: string; children: ReactNode }) {
+const PLACEMENT: Record<VitalsPlacement, CSSProperties> = {
+  rail: { position: 'absolute', top: 'calc(100% + 8px)', left: 20, right: 20 },
+  pill: { position: 'absolute', bottom: 'calc(100% + 10px)', left: 0, width: 300 },
+};
+
+function Shell({
+  title,
+  meta,
+  placement = 'rail',
+  children,
+}: {
+  title: string;
+  meta?: string;
+  placement?: VitalsPlacement;
+  children: ReactNode;
+}) {
   return (
-    <ReadoutShell title={title} meta={meta} style={card}>
+    <ReadoutShell
+      title={title}
+      meta={meta}
+      style={PLACEMENT[placement]}
+      className={placement === 'pill' ? 'cl-vitals-pop--up' : undefined}
+    >
       {children}
     </ReadoutShell>
   );
@@ -57,10 +85,16 @@ function Waiting({ text }: { text: string }) {
 
 /** CONTEXT WINDOW: occupancy, the used/left/total figures the old block
  *  spelled out, and what fills the window on the latest turn. */
-export function ContextPopover({ ctx }: { ctx: ContextState | null }) {
+export function ContextPopover({
+  ctx,
+  placement,
+}: {
+  ctx: ContextState | null;
+  placement?: VitalsPlacement;
+}) {
   if (!ctx) {
     return (
-      <Shell title="CONTEXT WINDOW">
+      <Shell title="CONTEXT WINDOW" placement={placement}>
         <Waiting text="waiting for the first turn…" />
       </Shell>
     );
@@ -73,7 +107,7 @@ export function ContextPopover({ ctx }: { ctx: ContextState | null }) {
   const meta = [ctx.model ? fmtModel(ctx.model) : null, windowLabel].filter(Boolean).join(' · ');
 
   return (
-    <Shell title="CONTEXT WINDOW" meta={meta}>
+    <Shell title="CONTEXT WINDOW" meta={meta} placement={placement}>
       <div className="flex items-center" style={{ gap: 11, marginTop: 11 }}>
         <span
           style={{
@@ -121,10 +155,16 @@ export function ContextPopover({ ctx }: { ctx: ContextState | null }) {
 /** SESSION SPEND: the billed figure, what the cache took off it, and the
  *  token mix underneath. Mirrors the context card so the two read as one
  *  instrument rather than two tooltips. */
-export function SpendPopover({ summary }: { summary: SessionSummary | undefined }) {
+export function SpendPopover({
+  summary,
+  placement,
+}: {
+  summary: SessionSummary | undefined;
+  placement?: VitalsPlacement;
+}) {
   if (!summary) {
     return (
-      <Shell title="SESSION SPEND">
+      <Shell title="SESSION SPEND" placement={placement}>
         <Waiting text="no cost recorded yet…" />
       </Shell>
     );
@@ -141,6 +181,7 @@ export function SpendPopover({ summary }: { summary: SessionSummary | undefined 
     <Shell
       title="SESSION SPEND"
       meta={`${summary.messageCount} ${summary.messageCount === 1 ? 'msg' : 'msgs'}`}
+      placement={placement}
     >
       <div className="flex items-center" style={{ gap: 11, marginTop: 11 }}>
         <span

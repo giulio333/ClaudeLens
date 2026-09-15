@@ -783,6 +783,10 @@ export function TerminalMissionControl({
             onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
             onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}
             onOpenTeam={teamName => setOverlay({ kind: 'team', teamName })}
+            // The Lens has the control pill, which carries context % and spend
+            // with their readout cards; the Terminal has no pill, so there the
+            // rail's band stays and is the only place either figure is stated.
+            showVitals={view === 'terminal'}
           />
         )}
       </div>

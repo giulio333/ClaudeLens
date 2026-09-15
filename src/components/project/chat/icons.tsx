@@ -77,3 +77,45 @@ export function LocateGlyph() {
     </svg>
   );
 }
+
+/** Find-in-transcript trigger and the two step arrows. The magnifier is the
+ *  same 24-grid stroke figure as the rest of this file — the top bar's lens is
+ *  a different drawing for a different search (projects and sessions, not this
+ *  transcript), and borrowing it would have said they were the same thing. */
+export function FindGlyph() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <circle cx="11" cy="11" r="6" />
+      <path d="M20 20l-4.4-4.4" />
+    </svg>
+  );
+}
+
+export function FindStepGlyph({ up }: { up: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.4"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={up ? undefined : { transform: 'rotate(180deg)' }}
+    >
+      <path d="M7 14l5-5 5 5" />
+    </svg>
+  );
+}
