@@ -189,9 +189,25 @@ export interface MemoryGraph {
 
 const TYPE_PREFIX = /^(feedback|project|reference|user)[-_]/;
 
+/**
+ * Il nome del file, senza il path che una riga di `MEMORY.md` può portargli
+ * davanti.
+ *
+ * Una riga d'indice può indicizzare per path — `sub/topic.md`, o il link
+ * assoluto con cui si condivide una memoria fra due progetti — e `filename` è
+ * quel target grezzo. Tutto ciò che qui si deriva dal nome (l'etichetta, i
+ * token di affinità) deve partire da questo: `-Users-…-ACME-CORE-4-0`, letto
+ * come un nome di file, si sbriciolava in "Users user Projects
+ * ACME CORE 4 0" sotto la mappa.
+ */
+export function baseName(filename: string): string {
+  const cut = filename.lastIndexOf('/');
+  return cut === -1 ? filename : filename.slice(cut + 1);
+}
+
 /** Etichetta di disegno: `feedback_ui_language.md` → `ui language`. */
 export function graphLabel(filename: string): string {
-  return filename.replace(/\.md$/, '').replace(TYPE_PREFIX, '').replace(/[-_]/g, ' ');
+  return baseName(filename).replace(/\.md$/, '').replace(TYPE_PREFIX, '').replace(/[-_]/g, ' ');
 }
 
 const normalize = (s: string) =>
@@ -216,6 +232,14 @@ function makeResolver(topics: MemoryTopic[]) {
   // I filename prima: sono l'identità del file, i `name` del frontmatter solo
   // un alias (e possono ripetersi).
   for (const t of topics) byKey.set(normalize(t.filename), t.filename);
+  // Una memoria indicizzata per path si cita comunque col suo nome —
+  // `[[accesso-macchine-bench-acme]]`, non col path intero. L'alias sul basename
+  // la fa risolvere `exact`; arriva dopo i filename interi, che restano
+  // l'identità, e non sovrascrive mai una chiave già presa.
+  for (const t of topics) {
+    const k = normalize(baseName(t.filename));
+    if (k && !byKey.has(k)) byKey.set(k, t.filename);
+  }
   for (const t of topics) {
     const k = normalize(t.name ?? '');
     if (k && !byKey.has(k)) byKey.set(k, t.filename);
@@ -253,7 +277,11 @@ const AFFINITY_STOPWORDS = new Set(
 );
 
 function affinityTokens(topic: MemoryTopic): Set<string> {
-  const text = `${topic.filename.replace(/\.md$/, '').replace(TYPE_PREFIX, '')} ${
+  // Il basename, mai il target grezzo: da un link assoluto entrerebbero come
+  // parole di contenuto i segmenti del path (l'utente, la cartella del
+  // progetto…), che ogni memoria condivisa ha identici — e l'affinità li
+  // accoppierebbe tutti fra loro proprio per quello.
+  const text = `${baseName(topic.filename).replace(/\.md$/, '').replace(TYPE_PREFIX, '')} ${
     topic.name ?? ''
   } ${topic.description ?? ''}`;
   return new Set(

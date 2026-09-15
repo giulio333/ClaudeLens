@@ -1,5 +1,5 @@
 import { stat } from 'fs/promises';
-import { join } from 'path';
+import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'path';
 import { glob } from 'glob';
 import { assertWithin } from '../utils';
 import { parseFrontmatter, getString } from './frontmatter';
@@ -14,6 +14,7 @@ export interface MemoryTopic {
   updatedAt: string;
   isProjectLevel?: boolean; // true = in {realPath}/.claude/memory/ (committed to repo)
   originSessionId?: string; // sessione (.jsonl UUID) che ha generato la memoria, se dichiarata nel frontmatter
+  isExternal?: boolean; // true = il file vive nella memory dir di un ALTRO progetto (link assoluto in MEMORY.md)
 }
 
 type TopicType = 'user' | 'feedback' | 'project' | 'reference';
@@ -27,10 +28,14 @@ interface TopicFrontmatter {
 
 // Inferenza di fallback: il prefisso del filename codifica il tipo per i topic
 // scritti da ClaudeLens. Usato solo quando il frontmatter non dichiara `type`.
+// Sul basename e non sul target grezzo: una riga d'indice può portare un path
+// (`sub/topic.md`, o un link assoluto alla memory dir di un altro progetto), e
+// nessun prefisso combacerebbe mai.
 function typeFromFilename(file: string): TopicType {
-  if (file.startsWith('feedback_')) return 'feedback';
-  if (file.startsWith('project_')) return 'project';
-  if (file.startsWith('reference_')) return 'reference';
+  const name = basename(file);
+  if (name.startsWith('feedback_')) return 'feedback';
+  if (name.startsWith('project_')) return 'project';
+  if (name.startsWith('reference_')) return 'reference';
   return 'user';
 }
 
@@ -104,14 +109,14 @@ interface TopicFile {
 }
 
 /**
- * Read one topic file. `readTextFile` (async + timeout) instead of `readFileSync`
- * because a memory dir can sit on a real project path (`{realPath}/.claude/memory`)
- * — on iCloud Drive a dataless file materializes on first read and can stall for
- * seconds, which a sync read would pay for by freezing the whole main process.
+ * Read one topic file, by absolute path. `readTextFile` (async + timeout) instead
+ * of `readFileSync` because a memory dir can sit on a real project path
+ * (`{realPath}/.claude/memory`) — on iCloud Drive a dataless file materializes on
+ * first read and can stall for seconds, which a sync read would pay for by
+ * freezing the whole main process.
  * Returns null when the file is gone or unreadable (the caller keeps going).
  */
-async function readTopicFile(memoryDir: string, filename: string): Promise<TopicFile | null> {
-  const filePath = join(memoryDir, filename);
+async function readTopicFile(filePath: string): Promise<TopicFile | null> {
   const [content, stamps] = await Promise.all([
     readTextFile(filePath).catch(() => null),
     stat(filePath).then(
@@ -130,32 +135,82 @@ async function readTopicFile(memoryDir: string, filename: string): Promise<Topic
   };
 }
 
-/** Whether a link target from `MEMORY.md` still resolves inside the memory dir. */
-function isInside(memoryDir: string, relPath: string): boolean {
-  try {
-    assertWithin(memoryDir, join(memoryDir, relPath));
-    return true;
-  } catch {
-    return false;
+/** Dove un target di `MEMORY.md` va letto davvero, o `null` se non va letto. */
+interface IndexTarget {
+  path: string;
+  /** Il file sta nella memory dir di un ALTRO progetto: qui si legge, non si scrive. */
+  external: boolean;
+}
+
+/**
+ * Risolve il target di una riga d'indice al file da aprire.
+ *
+ * Un target **relativo** resta confinato nella memory dir, come sempre.
+ *
+ * Un target **assoluto** esiste perché l'utente condivide a mano una memoria fra
+ * due progetti — il `MEMORY.md` di ACME_CORE indicizza sei memorie che vivono
+ * nella dir di ACME_CORE_4.0. Prima finiva in `join(memoryDir, '/Users/…')`,
+ * che NON resetta su un path assoluto: concatena, e il path inventato che ne
+ * usciva passava il controllo di contenimento, non esisteva, e lasciava la
+ * memoria senza corpo — quindi senza wikilink, quindi per sempre fra le
+ * "unconnected" della mappa.
+ *
+ * Il permesso è stretto di proposito: solo un `.md` dentro la `memory/` di un
+ * progetto **fratello** (`<projects>/<altro progetto>/memory/…`), e solo per la
+ * memory dir utente. Per quella di progetto (`{realPath}/.claude/memory`, che sta
+ * nel repo ed è scritta da chiunque committi) i link assoluti restano rifiutati:
+ * un `MEMORY.md` versionato non deve poter far aprire all'app un file scelto da
+ * lui altrove nell'albero.
+ */
+function resolveIndexTarget(
+  memoryDir: string,
+  target: string,
+  allowSiblingProjects: boolean
+): IndexTarget | null {
+  if (!isAbsolute(target)) {
+    const path = join(memoryDir, target);
+    try {
+      assertWithin(memoryDir, path);
+    } catch {
+      return null;
+    }
+    return { path, external: false };
   }
+
+  if (!allowSiblingProjects) return null;
+  const path = resolve(target);
+  if (!path.endsWith('.md')) return null;
+  // `~/.claude/projects` quando `memoryDir` è `~/.claude/projects/{hash}/memory`.
+  const projectsRoot = dirname(dirname(memoryDir));
+  try {
+    assertWithin(projectsRoot, path);
+  } catch {
+    return null;
+  }
+  // Forma richiesta: `<projects>/<un solo segmento>/memory/…`. Il contenimento
+  // da solo aprirebbe qualunque file sotto la root, transcript compresi.
+  const segments = relative(projectsRoot, path).split(sep);
+  if (segments.length < 3 || segments[1] !== 'memory') return null;
+  return { path, external: relative(memoryDir, path).startsWith('..') };
 }
 
 /** Build a topic entry from an already-read file (or from nothing, for an index line whose file is missing). */
 function toTopic(
   filename: string,
   file: TopicFile | null,
-  overrides: { name?: string; description?: string }
+  overrides: { name?: string; description?: string; isExternal?: boolean }
 ): MemoryTopic {
   const fm: TopicFrontmatter = file?.fm ?? {};
   const now = new Date().toISOString();
   return {
-    name: overrides.name ?? fm.name ?? filename,
-    description: overrides.description ?? fm.description ?? `(from ${filename})`,
+    name: overrides.name ?? fm.name ?? basename(filename),
+    description: overrides.description ?? fm.description ?? `(from ${basename(filename)})`,
     type: fm.type ?? typeFromFilename(filename),
     filename,
     createdAt: file?.createdAt ?? now,
     updatedAt: file?.updatedAt ?? now,
     originSessionId: fm.originSessionId,
+    ...(overrides.isExternal ? { isExternal: true as const } : {}),
   };
 }
 
@@ -168,27 +223,41 @@ function toTopic(
 async function indexFromMarkdown(
   memoryDir: string,
   indexContent: string,
-  byFile: Map<string, TopicFile>
-): Promise<MemoryTopic[]> {
+  byFile: Map<string, TopicFile>,
+  allowSiblingProjects: boolean
+): Promise<{ index: MemoryTopic[]; extra: Map<string, TopicFile> }> {
   const lines = parseIndexLines(indexContent);
 
-  // An index line may point outside the flat `*.md` listing (e.g. `sub/topic.md`).
-  // Read only those, once each, in parallel — everything else is already in hand.
-  // A link that escapes the memory dir is never read: it stays "missing", so the
-  // entry still shows up in the UI but no outside file is ever opened.
-  const unlisted = [...new Set(lines.map(l => l.file).filter(f => !byFile.has(f)))].filter(f =>
-    isInside(memoryDir, f)
+  // An index line may point outside the flat `*.md` listing (e.g. `sub/topic.md`,
+  // or the memory dir of a sibling project). Read only those, once each, in
+  // parallel — everything else is already in hand. A link `resolveIndexTarget`
+  // refuses is never read: it stays "missing", so the entry still shows up in the
+  // UI but no outside file is ever opened.
+  const targets = new Map<string, IndexTarget>();
+  for (const f of new Set(lines.map(l => l.file))) {
+    if (byFile.has(f)) continue;
+    const target = resolveIndexTarget(memoryDir, f, allowSiblingProjects);
+    if (target) targets.set(f, target);
+  }
+  const read = await Promise.all(
+    [...targets].map(async ([f, t]) => [f, await readTopicFile(t.path)] as const)
   );
-  const extra = new Map(
-    await Promise.all(unlisted.map(async f => [f, await readTopicFile(memoryDir, f)] as const))
-  );
+  // Chiave = il target grezzo della riga d'indice, cioè `MemoryTopic.filename`:
+  // è con quello che il renderer cerca il corpo in `MemoryData.topics`.
+  const extra = new Map<string, TopicFile>();
+  for (const [f, file] of read) if (file) extra.set(f, file);
 
-  return lines.map(line => {
+  const index = lines.map(line => {
     const file = byFile.get(line.file) ?? extra.get(line.file) ?? null;
     // Preferisce il nome dalla frontmatter del file topic se il link text è un filename
     const name = line.linkText.endsWith('.md') && file?.fm.name ? file.fm.name : line.linkText;
-    return toTopic(line.file, file, { name, description: line.description });
+    return toTopic(line.file, file, {
+      name,
+      description: line.description,
+      isExternal: targets.get(line.file)?.external,
+    });
   });
+  return { index, extra };
 }
 
 /** No `MEMORY.md`: index the topic files that declare a `name` in their frontmatter. */
@@ -237,7 +306,7 @@ async function readMemoryDir(
   const topicNames = files.filter(f => f !== indexName).sort();
 
   const [read, indexContent] = await Promise.all([
-    Promise.all(topicNames.map(async f => [f, await readTopicFile(memoryDir, f)] as const)),
+    Promise.all(topicNames.map(async f => [f, await readTopicFile(join(memoryDir, f))] as const)),
     indexName ? readTextFile(join(memoryDir, indexName)).catch(() => null) : null,
   ]);
 
@@ -246,10 +315,11 @@ async function readMemoryDir(
     if (file) byFile.set(filename, file);
   }
 
-  const rawIndex =
+  const fromIndex =
     indexContent !== null
-      ? await indexFromMarkdown(memoryDir, indexContent, byFile)
-      : autoIndex(byFile);
+      ? await indexFromMarkdown(memoryDir, indexContent, byFile, !isProjectLevel)
+      : null;
+  const rawIndex = fromIndex?.index ?? autoIndex(byFile);
 
   const index = isProjectLevel
     ? rawIndex.map(t => ({ ...t, isProjectLevel: true as const }))
@@ -257,7 +327,12 @@ async function readMemoryDir(
 
   // Chiave = filename: univoco e sempre allineato a MemoryTopic.filename.
   // Il name della frontmatter può divergere dal link text di MEMORY.md.
-  const topics = new Map([...byFile].map(([filename, file]) => [filename, file.content]));
+  // I file che l'indice ha fatto leggere fuori dal listato piatto entrano qui:
+  // senza di loro una memoria indicizzata per path avrebbe una scheda vuota e
+  // nessun `[[wikilink]]` da mettere sulla mappa.
+  const topics = new Map(
+    [...byFile, ...(fromIndex?.extra ?? [])].map(([filename, file]) => [filename, file.content])
+  );
 
   const memoryMd =
     indexContent !== null

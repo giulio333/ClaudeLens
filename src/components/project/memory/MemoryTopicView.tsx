@@ -142,13 +142,14 @@ function MemoryMetaPanel({
   hash,
   originSession,
   onOpenSession,
-  readOnly,
+  sourceNote,
 }: {
   topic: MemoryTopic;
   hash: string;
   originSession?: SessionSummary;
   onOpenSession?: (session: SessionSummary) => void;
-  readOnly: boolean;
+  /** Perché questa memoria è read-only, o `null` se non lo è. */
+  sourceNote: string | null;
 }) {
   const createdAt = topic.createdAt ?? null;
   const updatedAt = topic.updatedAt ?? null;
@@ -198,10 +199,10 @@ function MemoryMetaPanel({
             <span className="cl-mem-meta-mono">{topic.filename}</span>
           </div>
         </div>
-        {readOnly && (
+        {sourceNote && (
           <div className="cl-mem-meta-row">
             <div className="k">Source</div>
-            <div className="v">Committed to repo · read-only</div>
+            <div className="v">{sourceNote}</div>
           </div>
         )}
       </div>
@@ -248,16 +249,31 @@ export function MemoryTopicView({
     ? sessions?.find(s => s.filename === `${topic.originSessionId}.jsonl`)
     : undefined;
 
-  const readOnly = !!topic.isProjectLevel;
+  // Una memoria indicizzata per path assoluto vive nella memory dir di un ALTRO
+  // progetto: si legge qui, ma la si modifica dove sta (il write path accetta
+  // solo un filename nudo, e offrire Save/Delete significherebbe offrire un
+  // bottone che non può che fallire).
+  const readOnly = !!topic.isProjectLevel || !!topic.isExternal;
+  // Due read-only con due ragioni diverse: dire "committed to repo" di una
+  // memoria che sta nella dir di un altro progetto manderebbe a cercarla nel
+  // posto sbagliato.
+  const sourceNote = topic.isExternal
+    ? "Another project's memory dir · read-only here"
+    : topic.isProjectLevel
+      ? 'Committed to repo · read-only'
+      : null;
+  // Il target grezzo può già essere un path: `memory/` davanti a un path
+  // assoluto scriverebbe `memory//Users/…`.
+  const location = topic.isExternal ? topic.filename : `memory/${topic.filename}`;
 
   const config: EntityConfig = {
     kind: 'memory',
     name: topic.name,
     titleGlyph: '.md',
     scopeLabel: 'Project',
-    path: `memory/${topic.filename}`,
+    path: location,
     description: topic.description || undefined,
-    eyebrow: `${topic.type} · memory/${topic.filename}`,
+    eyebrow: `${topic.type} · ${location}`,
     kindLabel: 'memory',
     backLabel: 'Memory',
     crumbs: [{ label: TYPE_LABEL[topic.type] ?? topic.type }, { label: topic.name, accent: true }],
@@ -314,7 +330,7 @@ export function MemoryTopicView({
           hash={hash}
           originSession={originSession}
           onOpenSession={onOpenSession}
-          readOnly={readOnly}
+          sourceNote={sourceNote}
         />
       </>
     ),
