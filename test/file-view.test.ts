@@ -8,6 +8,7 @@ import {
   contentRows,
   diffStat,
   fileName,
+  highlightRows,
   lineDiff,
   lineRange,
   numberedRows,
@@ -15,6 +16,7 @@ import {
   splitLines,
   writeOutcome,
 } from '../src/components/project/chat/file-view';
+import { highlightLines } from '../src/components/project/chat/code-lang';
 
 describe('splitLines', () => {
   it('does not open an empty line after a trailing newline', () => {
@@ -131,5 +133,54 @@ describe('writeOutcome', () => {
     expect(writeOutcome('File created successfully at: /p/new.ts')).toBe('created');
     expect(writeOutcome('The file /p/x.ts has been updated successfully.')).toBe('written');
     expect(writeOutcome(undefined)).toBe('written');
+  });
+});
+
+describe('highlightLines', () => {
+  it('cuts one fragment per line, each balanced, a string open across the cut kept open', () => {
+    const lines = highlightLines('x = """a\nb\n"""\ny = 1', 'python');
+    expect(lines).toHaveLength(4);
+    for (const l of lines ?? []) {
+      expect(l.split('<span').length).toBe(l.split('</span>').length);
+    }
+    expect(lines?.[1]).toBe('<span class="hljs-string">b</span>');
+    expect(lines?.[3]).not.toContain('hljs-string');
+  });
+
+  it('keeps an empty line as an empty fragment and escapes the text', () => {
+    expect(highlightLines('a\n\nb', 'python')).toEqual(['a', '', 'b']);
+    expect(highlightLines('"<"', 'python')?.[0]).toContain('&lt;');
+  });
+});
+
+describe('highlightRows', () => {
+  // The screenshot that found this: a docstring highlighted row by row, whose
+  // second row was tokenised as code — `dell'app` opened a string, `40` was a
+  // number and `del` the keyword.
+  const docstring =
+    'old = """da un\n' +
+    "segno suo. È l'unico punto dell'app dove vive una tinta fuori dai 40 del brand,\n" +
+    '"""\n' +
+    'assert s.count(old) == 1';
+
+  it('keeps a docstring a string on every row it spans', () => {
+    const html = highlightRows(contentRows(docstring), 'python');
+    expect(html[1]).toContain('hljs-string');
+    expect(html[1]).not.toContain('hljs-keyword');
+    expect(html[1]).not.toContain('hljs-number');
+    expect(html[3]).toContain('hljs-keyword');
+  });
+
+  it('highlights each side of an edit as its own text', () => {
+    const rows = lineDiff('x = """a\nb del\n"""', 'x = """a\nc del\n"""');
+    expect(rows.map(r => r.kind)).toEqual(['ctx', 'del', 'add', 'ctx']);
+    const html = highlightRows(rows, 'python');
+    for (const h of html) expect(h).toContain('hljs-string');
+    for (const h of html) expect(h).not.toContain('hljs-keyword');
+  });
+
+  it('is null per row without a language', () => {
+    expect(highlightRows(contentRows('a\nb'), null)).toEqual([null, null]);
+    expect(highlightRows([], 'python')).toEqual([]);
   });
 });

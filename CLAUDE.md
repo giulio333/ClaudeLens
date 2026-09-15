@@ -101,7 +101,10 @@ the attempted change, a `Read` draws the rows with the line numbers Claude Code
 printed and an unnumbered result as it is, a `Write` numbers from 1 and reads
 `created` off the result, every other tool keeps its header with the body
 already showing, and the agent strip MIN keeps on screen is still a chip that
-opens on click; the pure half — the line LCS, the `N→` parsing, the short dir —
+opens on click; the pure half — the line LCS, the `N→` parsing, the short dir,
+and the row highlighting, which colours each side of a diff whole so a `"""`
+docstring stays a string on every row it spans, over `code-lang`'s
+`highlightLines`, the cut of hljs' HTML into one balanced fragment per line —
 is `file-view`) and
 `markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
 has is a button carrying the path it resolved to, one nothing answers to is
