@@ -7,6 +7,15 @@ on:
   push:
     tags:
       - 'v*'
+  # Rebuild the binaries of a tag that already has a Release — after a history
+  # rewrite moved the tag, or when the assets had to be removed — without
+  # deleting and re-pushing the tag: `gh workflow run release.yml -f tag=vX.Y.Z`.
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Existing v* tag whose binaries are rebuilt and re-attached'
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -36,6 +45,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v7
+        with:
+          # On a tag push this is the tag itself; on a manual run, the tag asked for.
+          ref: ${{ inputs.tag || github.ref }}
 
       - name: Setup Node
         uses: actions/setup-node@v7
@@ -157,6 +169,9 @@ jobs:
       - name: Create Release
         uses: softprops/action-gh-release@v3
         with:
+          # Explicit on a manual run, where github.ref is the default branch and
+          # the action would otherwise publish a release for it.
+          tag_name: ${{ inputs.tag || github.ref_name }}
           files: artifacts/**/*
           generate_release_notes: true
           fail_on_unmatched_files: true
