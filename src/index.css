@@ -16405,12 +16405,12 @@ select.cl-opt-input {
   background: color-mix(in oklch, var(--cl-accent) 88%, var(--cl-paper));
 }
 
-/* ── LANDING SESSION LIST (design 3b) ──────────────────────────────────────
-   The Overview's list, which the mock draws as three quiet records: a title
-   with the running chip beside it, one mono line of figures underneath, rows
-   divided by hairlines and nothing else. The workspace row — pin, coloured
-   ordinal, tags, expiry, kebab — stays on `.cl-srow` in the Sessions view,
-   which is where a session is acted on rather than just read.
+/* ── LANDING SESSION LIST ─────────────────────────────────────────────────
+   The Overview's list is `.cl-srows`, the same rows as the Sessions view. It
+   had its own two-line record for a while (design 3b, `.cl-rsrow`: title with
+   the running chip beside it, one mono line of figures underneath) and the
+   two lists read as two different things for the same session; what stays of
+   3b is the head below — the mono label with an ink rule under it.
    ═══════════════════════════════════════════════════════════════════════ */
 .cl-section--landing > * {
   max-width: var(--cl-measure);
@@ -16419,7 +16419,8 @@ select.cl-opt-input {
   align-items: baseline;
   padding-bottom: 12px;
   margin-bottom: 0;
-  border-bottom: 1px solid var(--cl-ink);
+  /* same weight as the rule `.cl-srows` opens with in the Sessions view */
+  border-bottom: 1.5px solid var(--cl-ink);
 }
 /* The head steps down to the mono label of the mock: the figures and the
    session titles are the type on this page, and a 24px heading over an 18px
@@ -16433,53 +16434,10 @@ select.cl-opt-input {
   color: var(--cl-ink-4);
 }
 
-.cl-rsrow {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  padding: 18px 0;
-  border-bottom: 1px solid var(--cl-line-soft);
-  cursor: pointer;
-  outline: none;
-  transition: background 120ms;
-  /* the row bleeds its hover into the gutter, so the band of colour lines up
-     with the section rule above it rather than floating inside it */
-  margin: 0 -10px;
-  padding-left: 10px;
-  padding-right: 10px;
-}
-.cl-rsrow:hover,
-.cl-rsrow:focus-visible {
-  background: var(--cl-paper-2);
-}
-/* The row has no outline, so the hover tint would be the only focus indicator —
-   and in dark mode paper and paper-2 are 0.04 of lightness apart, which is a
-   hover, not an "you are here". The accent edge says it in both themes; inset
-   so it never moves the row. */
-.cl-rsrow:focus-visible {
-  box-shadow: inset 2px 0 0 var(--cl-accent);
-}
-.cl-rsrow .head {
-  display: flex;
-  align-items: baseline;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-.cl-rsrow .title {
-  font-size: 18px;
-  font-weight: 500;
-  letter-spacing: -0.018em;
-  color: var(--cl-ink);
-}
-.cl-rsrow .title.is-untitled {
-  font-style: italic;
-  color: var(--cl-ink-4);
-}
-.cl-rsrow .meta {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  color: var(--cl-ink-4);
+/* The head already draws the ink rule that `.cl-srows` opens with; two of them
+   stacked were a 2.5px bar under RECENT SESSIONS. */
+.cl-sec-head--rule + .cl-srows {
+  border-top: none;
 }
 
 /* Below this the four cells cannot sit on one line. Free wrapping left the

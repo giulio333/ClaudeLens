@@ -1038,8 +1038,8 @@ Overview Redesign_, turni 1a → 2a → 3b) per il trattamento dell'hero progett
 hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
 resta a `clamp(40px, 4.2vw, 64px)` perché una cifra da 30px sotto un titolo da
 132px non è una gerarchia.
-Le sessioni della **vista Sessions** (non della landing, che da 3b ha una riga
-tutta sua — vedi sotto) sono **righe** (`.cl-srow`): pin, **indice (che porta il
+Le sessioni — nella **vista Sessions** e, dalla stessa riga, nella landing
+(vedi sotto) — sono **righe** (`.cl-srow`): pin, **indice (che porta il
 colore della sessione)**, titolo, tag, spazio elastico, il gruppo cifre
 `msg · modello · token · data` e in coda il **kebab delle azioni**. Due elementi
 di 5b sono caduti qui, per la stessa ragione:
@@ -1183,15 +1183,24 @@ Seconda passata, sullo stesso hero visto in app con un progetto reale:
   di `pctLabels` (i floor sommano sempre a 100, `<1` per le quote non nulle:
   è unit-tested, non si tocca); è la barra a farsi da parte.
 
-La lista è **`RecentSessionRows`** con la sua `.cl-rsrow`, **non**
-`SessionRows` con un flag: titolo + `LiveTag` sulla stessa base, una riga mono
-`N msg · modello · N tokens · quando` sotto, righe divise da hairline e
-nient'altro. Pin, indice colorato, tag, expiry e kebab restano su `.cl-srow`
-nella vista Sessions, che possiede la lista come spazio di lavoro; una
-variante sul componente condiviso è il modo in cui quella vista cambia per
-sbaglio. La testata prende il modificatore **`.cl-sec-head--rule`** (la `h2`
-scende a etichetta mono uppercase, filetto d'inchiostro sotto) perché la base
-è condivisa da una decina di viste, e a destra c'è `All {N} →`.
+La lista è **`SessionRows`**, le stesse righe `.cl-srow` della vista
+Sessions — pin, indice colorato, LIVE, expiry, tag, cifre in colonna e kebab
+compresi — senza `pageSize` (la testata dice già `All {N} →`, un footer
+"1–5 of 5" sotto conterebbe le stesse cinque due volte) e senza `rankOf`
+(sono le prime cinque della lista, l'ordinale sequenziale è già il rango
+vero). Per un po' ha avuto un record tutto suo (`RecentSessionRows`,
+`.cl-rsrow`: titolo + `LiveTag` su una base, una riga mono
+`N msg · modello · N tokens · quando` sotto), tenuto separato di proposito
+perché "una variante sul componente condiviso è il modo in cui la vista
+Sessions cambia per sbaglio" — ma la stessa sessione si leggeva in due forme
+diverse a un click di distanza, e l'utente l'ha visto prima di ogni altra cosa.
+Ora c'è una riga sola: chi tocca `.cl-srow` tocca entrambe le liste, ed è
+il punto. La testata prende il modificatore **`.cl-sec-head--rule`** (la `h2`
+scende a etichetta mono uppercase, filetto d'inchiostro da 1.5px sotto — lo
+stesso peso con cui `.cl-srows` si apre in Sessions, e infatti
+`.cl-sec-head--rule + .cl-srows` spegne il proprio `border-top`, altrimenti i
+due filetti si sommavano in una barra) perché la base è condivisa da una
+decina di viste, e a destra c'è `All {N} →`.
 
 L'ordine è la **recenza**, non più le pinnate per prime (1c): la testata dice
 "Recent sessions" e la fascia non stampa più `last … ago`, quindi la prima
