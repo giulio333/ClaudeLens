@@ -870,7 +870,18 @@ export function ProjectView({
               All {fmt(sessions.length)}
             </button>
           </div>
-          <RecentSessionRows sessions={landingSessions} onOpen={openTerminal} />
+          {/* The same rows as the Sessions view, on purpose: the landing used to
+              draw its own two-line record (design 3b, `RecentSessionRows`) and
+              the two lists read as two different things for the same session.
+              No `pageSize` — the head already says `All {N} →`, a "1–5 of 5"
+              footer under it would count the same five twice. */}
+          <SessionRows
+            sessions={landingSessions}
+            projectHash={project.hash}
+            cleanupDays={cleanupDays}
+            onOpen={openTerminal}
+            onOpenChat={openChat}
+          />
         </section>
       )}
 
@@ -1817,66 +1828,6 @@ function SessionRows({
           onDeleted={() => setDeleteFor(null)}
         />
       )}
-    </div>
-  );
-}
-
-/**
- * The Overview's session list, drawn to design 3b: a title with the running
- * chip beside it and one mono line of figures underneath, rows divided by
- * hairlines. Deliberately *not* `SessionRows` with a variant flag — the pin,
- * the coloured ordinal, the tags and the kebab belong to the Sessions view,
- * which owns the list as a workspace; the landing reads three recent sessions
- * and hands the rest over with "View all". A flag on the shared component is
- * how that view changes by accident.
- */
-function RecentSessionRows({
-  sessions,
-  onOpen,
-}: {
-  sessions: SessionSummary[];
-  onOpen: (s: SessionSummary) => void;
-}) {
-  const { data: activeSessions = [] } = useActiveSessions();
-  const liveIds = useMemo(
-    () => new Set(activeSessions.map(a => a.sessionId).filter(Boolean)),
-    [activeSessions]
-  );
-
-  if (sessions.length === 0) return <div className="cl-empty">No sessions yet.</div>;
-
-  return (
-    <div className="cl-rsrows">
-      {sessions.map(s => {
-        const untitled = sessionName(s) === null;
-        return (
-          <div
-            key={s.filename}
-            role="button"
-            tabIndex={0}
-            className="cl-rsrow"
-            onClick={() => onOpen(s)}
-            onKeyDown={e => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onOpen(s);
-              }
-            }}
-          >
-            <div className="head">
-              <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
-              {liveIds.has(s.filename.replace(/\.jsonl$/, '')) && <LiveTag />}
-            </div>
-            {/* One mono line, in the mock's order: messages, model, tokens,
-                when. No model dot — the row has no other colour to sit against
-                and the name already says which model it was. */}
-            <div className="meta">
-              {fmt(s.messageCount)} msg · {s.model ? fmtModel(s.model) : '—'} · {fmt(s.totalTokens)}{' '}
-              tokens · {shortWhen(s.date)}
-            </div>
-          </div>
-        );
-      })}
     </div>
   );
 }
