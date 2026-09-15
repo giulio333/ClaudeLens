@@ -20,16 +20,25 @@ export function ReadoutShell({
   title,
   meta,
   style,
+  className,
   children,
 }: {
   title: string;
   meta?: string;
   /** Positioning — the surface itself is fixed, where it hangs is the host's. */
   style?: CSSProperties;
+  /** Appended to `cl-vitals-pop`. The entry animation is a drop, which is only
+   *  right for a card that hangs below its figure; a host that hangs one ABOVE
+   *  passes `cl-vitals-pop--up` so it rises instead of sliding into itself. */
+  className?: string;
   children: ReactNode;
 }) {
   return (
-    <div role="tooltip" className="cl-vitals-pop" style={{ ...READOUT_SURFACE, ...style }}>
+    <div
+      role="tooltip"
+      className={className ? `cl-vitals-pop ${className}` : 'cl-vitals-pop'}
+      style={{ ...READOUT_SURFACE, ...style }}
+    >
       <div className="font-mono flex items-baseline" style={{ gap: 8 }}>
         <span style={{ fontSize: 9, letterSpacing: '0.2em', color: 'var(--cl-ink-4)' }}>
           {title}

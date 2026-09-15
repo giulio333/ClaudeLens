@@ -391,7 +391,7 @@ export function skillInitial(command: string): string {
 // ──────────────────────────────────────────────────────────────────────────
 
 /** The transcript type filter exposed in the control pill. */
-export type TurnFilter = 'all' | 'tools' | 'thinking' | 'questions' | 'plan';
+export type TurnFilter = 'all' | 'thinking' | 'questions' | 'plan';
 
 /** A navigable turn enriched for the minimap rail (1-based index + clock time). */
 export type MinimapItem = TurnDescriptor & { n: number; time: string };
@@ -411,7 +411,6 @@ export type RenderItem =
 /** The per-type counts that drive the filter chips in the control pill. */
 export type TurnFilterCounts = {
   all: number;
-  tools: number;
   thinking: number;
   questions: number;
   plan: number;
@@ -1405,7 +1404,6 @@ export function buildRenderItems(
 export function computeFilterCounts(visible: TurnDescriptor[]): TurnFilterCounts {
   return {
     all: visible.length,
-    tools: visible.filter(d => d.hasTools).length,
     thinking: visible.filter(d => d.hasThinking).length,
     questions: visible.filter(d => d.hasQuestion).length,
     plan: visible.filter(d => d.hasPlan).length,

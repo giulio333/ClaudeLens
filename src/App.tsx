@@ -57,6 +57,37 @@ export default function App() {
                 yChannelSelector="G"
               />
             </filter>
+            {/* Two lenses, two scales. The droplet above is tuned for a ~30px
+                control (`.cl-btn`): tight noise, high displacement, one visible
+                bulge per button. Tiled across the ~600px control pill it reads
+                as grain, not as glass. This one halves the frequency and the
+                scale and softens the map twice as hard, so a bar gets ONE slow
+                warp across its whole run — the way a thick, slightly uneven
+                slab bends what lies under it. */}
+            <filter
+              id="cl-liquid-bar"
+              x="-10%"
+              y="-40%"
+              width="120%"
+              height="180%"
+              colorInterpolationFilters="sRGB"
+            >
+              <feTurbulence
+                type="fractalNoise"
+                baseFrequency="0.004 0.009"
+                numOctaves="2"
+                seed="11"
+                result="noise"
+              />
+              <feGaussianBlur in="noise" stdDeviation="7" result="softNoise" />
+              <feDisplacementMap
+                in="SourceGraphic"
+                in2="softNoise"
+                scale="12"
+                xChannelSelector="R"
+                yChannelSelector="G"
+              />
+            </filter>
           </defs>
         </svg>
 

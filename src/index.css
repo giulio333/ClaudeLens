@@ -416,6 +416,24 @@ body {
     transform: translateY(0);
   }
 }
+/* Hung above its figure rather than below it — the control pill is at the
+   bottom of the window — so the card has to rise into place. Sliding down from
+   a card that is already above the trigger reads as the card falling INTO the
+   pill. */
+.cl-vitals-pop--up {
+  transform-origin: bottom left;
+  animation-name: cl-vitals-in-up;
+}
+@keyframes cl-vitals-in-up {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
 @media (prefers-reduced-motion: reduce) {
   .cl-vitals-pop {
     animation: none;
@@ -4553,23 +4571,157 @@ body {
 .cl-slash-menu button.is-active .cl-slash-name {
   color: var(--cl-accent);
 }
-/* Nastro: opaque paper + hairline, the soft lift is the only depth left. */
+/* ──────────────────────────────────────────────────────────
+   CONTROL PILL — ground glass, not a painted strip.
+
+   "Nastro" took this surface to opaque paper, and at 92% it stopped being a
+   thing lying ON the transcript and became a piece of the page that happened
+   to float. It is the instrument's control surface and the session runs
+   underneath it, so it goes back to glass — but glass with THICKNESS, not the
+   uniform white-at-60%-plus-blur any card gets: the body bends what passes
+   below (`#cl-liquid-bar`, the bar-scale displacement lens; the droplet
+   `.cl-btn` uses is tuned for 30px and grains out across 600) and the tint
+   diffuses it.
+
+   The tint is the load-bearing part, and it is VERTICAL: dense across the
+   band the glyphs occupy, thin at the top and bottom edges and at the rounded
+   ends. The bar is transparent exactly where nothing is written. That is not
+   only the look — the pill's labels are 9.5–10px uppercase mono at
+   `--cl-ink-3`/`--cl-ink-4`, and `--cl-ink-4` is already darkened just to
+   clear AA on white (see its own comment in the token block). Under it the
+   backdrop is often a dark tool window, so the glyph band never drops below
+   82% paper and the transparency is spent above and below it; the backdrop's
+   `brightness` lift (and its darken in the dark theme) buys the rest.
+
+   THREE LAYERS, ONE FILTER: `::before` filters the backdrop, `::after` tints
+   and lights it, the children ride on top. Nesting a second `backdrop-filter`
+   inside the first is how a refraction layer silently becomes a no-op — the
+   inner one samples the outer one's already-blurred output and has nothing
+   left to bend. Same reason the blur stays moderate: `url()` last in the
+   chain, and past ~14px there is no gradient left for the displacement.
+   ────────────────────────────────────────────────────────── */
 .cl-pill {
+  position: relative;
   display: flex;
   align-items: center;
+  justify-content: center;
+  /* The bar earned cells this round (find, diff) and gave two back; at a narrow
+     window that still does not fit on one line. It wraps to a second row rather
+     than running past the reading column — the stadium shape survives a taller
+     box, an overflowing toolbar does not survive anything. */
+  flex-wrap: wrap;
   gap: 8px;
+  row-gap: 6px;
+  max-width: min(var(--cl-read-col), calc(100vw - 40px));
   padding: 7px;
   border-radius: 999px;
-  background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
-  border: 1px solid var(--cl-line);
-  box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
-  -webkit-backdrop-filter: blur(26px);
-  backdrop-filter: blur(26px);
+  /* The hairline is a shadow, not a border, so the two layers below can sit at
+     `inset: 0` and still paint under it. */
+  box-shadow:
+    /* Two-stop contour. A single hairline on a translucent body reads as a
+       smudge — one dark line inside, one white line outside, which is the pair
+       a raised edge actually produces and the only thing that gives the bar a
+       definite outline where it crosses white paper. */
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 13%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 16px 34px -20px oklch(0.2 0.02 60 / 0.4),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
 }
+.cl-pill::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(11px) saturate(1.85) brightness(1.06) url(#cl-liquid-bar);
+  backdrop-filter: blur(11px) saturate(1.85) brightness(1.06) url(#cl-liquid-bar);
+}
+.cl-pill::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  border-radius: inherit;
+  pointer-events: none;
+  background:
+    /* top specular — the convex highlight hugging the upper edge */
+    linear-gradient(180deg, oklch(1 0 0 / 0.5) 0%, oklch(1 0 0 / 0.1) 9%, transparent 28%),
+    /* bottom caustic — the brighter rim light thick glass catches underneath */
+    linear-gradient(0deg, oklch(1 0 0 / 0.28) 0%, transparent 15%),
+    /* the tint: dense through the glyph band, thin at both edges */
+    linear-gradient(
+        180deg,
+        color-mix(in oklch, var(--cl-paper) 40%, transparent) 0%,
+        color-mix(in oklch, var(--cl-paper) 82%, transparent) 30%,
+        color-mix(in oklch, var(--cl-paper) 82%, transparent) 70%,
+        color-mix(in oklch, var(--cl-paper) 44%, transparent) 100%
+      );
+}
+.cl-pill > * {
+  position: relative;
+  z-index: 2;
+}
+:root[data-theme='dark'] .cl-pill {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 18px 38px -20px oklch(0 0 0 / 0.66),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
+}
+:root[data-theme='dark'] .cl-pill::before {
+  /* Dark glass darkens its backdrop instead of lifting it: the ink on top is
+     light, so the contrast is bought at the other end of the ramp. */
+  -webkit-backdrop-filter: blur(11px) saturate(1.5) brightness(0.78) url(#cl-liquid-bar);
+  backdrop-filter: blur(11px) saturate(1.5) brightness(0.78) url(#cl-liquid-bar);
+}
+:root[data-theme='dark'] .cl-pill::after {
+  background:
+    linear-gradient(180deg, oklch(1 0 0 / 0.13) 0%, oklch(1 0 0 / 0.03) 9%, transparent 28%),
+    linear-gradient(0deg, oklch(1 0 0 / 0.06) 0%, transparent 15%),
+    linear-gradient(
+      180deg,
+      color-mix(in oklch, var(--cl-paper) 44%, transparent) 0%,
+      color-mix(in oklch, var(--cl-paper) 80%, transparent) 30%,
+      color-mix(in oklch, var(--cl-paper) 80%, transparent) 70%,
+      color-mix(in oklch, var(--cl-paper) 48%, transparent) 100%
+    );
+}
+/* Someone who has asked the OS for less transparency gets the strip back: the
+   refraction and the gradient are the whole effect, so both go, rather than
+   thinning into a surface that is neither. */
+@media (prefers-reduced-transparency: reduce) {
+  .cl-pill {
+    box-shadow:
+      0 0 0 1px var(--cl-line),
+      var(--cl-glass-lift);
+  }
+  .cl-pill::before {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  .cl-pill::after,
+  :root[data-theme='dark'] .cl-pill::after {
+    background: var(--cl-paper);
+  }
+  .cl-pill-div,
+  :root[data-theme='dark'] .cl-pill-div {
+    background: var(--cl-line);
+    box-shadow: none;
+  }
+}
+/* Etched, not drawn: a single ink hairline goes muddy once there is a backdrop
+   showing through it, so the divider is a dark line with a light one behind —
+   the same pair a groove in a solid surface produces. */
 .cl-pill-div {
   width: 1px;
   height: 18px;
-  background: color-mix(in oklch, var(--cl-ink) 16%, transparent);
+  background: color-mix(in oklch, var(--cl-ink) 15%, transparent);
+  box-shadow: 1px 0 0 oklch(1 0 0 / 0.5);
+}
+:root[data-theme='dark'] .cl-pill-div {
+  background: oklch(0 0 0 / 0.38);
+  box-shadow: 1px 0 0 oklch(1 0 0 / 0.07);
 }
 .cl-pill-filters {
   display: flex;
@@ -4592,6 +4744,7 @@ body {
   cursor: pointer;
   transition:
     background 0.14s,
+    box-shadow 0.14s,
     color 0.14s;
 }
 .cl-pill-filter:hover {
@@ -4601,8 +4754,12 @@ body {
   font-weight: 600;
   color: var(--cl-ink-4);
 }
+/* On a translucent body a flat wash has no edge to hold it: every selected
+   state in the pill gains a few points of tint and a hairline ring, so "this
+   one is on" survives whatever is scrolling underneath. */
 .cl-pill-filter[data-on] {
-  background: color-mix(in oklch, var(--cl-accent) 18%, transparent);
+  background: color-mix(in oklch, var(--cl-accent) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 34%, transparent);
   color: var(--cl-accent-ink);
 }
 .cl-pill-filter[data-on] b {
@@ -4621,12 +4778,16 @@ body {
   cursor: pointer;
   transition:
     background 0.14s,
+    box-shadow 0.14s,
     color 0.14s;
 }
 .cl-pill-more:hover,
 .cl-pill-more[data-on] {
-  background: color-mix(in oklch, var(--cl-ink) 12%, transparent);
+  background: color-mix(in oklch, var(--cl-ink) 15%, transparent);
   color: var(--cl-ink);
+}
+.cl-pill-more[data-on] {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 18%, transparent);
 }
 
 /* export / delete sheet — raised above the pill, never covers the transcript */
@@ -4711,14 +4872,16 @@ body {
   cursor: pointer;
   transition:
     background 0.14s,
+    box-shadow 0.14s,
     color 0.14s;
 }
 .cl-pill-dock:hover {
-  background: color-mix(in oklch, var(--cl-violet) 12%, transparent);
+  background: color-mix(in oklch, var(--cl-violet) 15%, transparent);
   color: var(--cl-violet-ink);
 }
 .cl-pill-dock[data-on] {
-  background: color-mix(in oklch, var(--cl-violet) 18%, transparent);
+  background: color-mix(in oklch, var(--cl-violet) 26%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-violet) 34%, transparent);
   color: var(--cl-violet-ink);
 }
 .cl-dock-orbs {
@@ -4950,11 +5113,15 @@ button.cl-pill-model {
   cursor: pointer;
   transition:
     background 0.14s,
+    box-shadow 0.14s,
     color 0.14s;
 }
 button.cl-pill-model:hover,
 button.cl-pill-model[data-on] {
-  background: color-mix(in oklch, var(--mt, var(--cl-accent)) 12%, transparent);
+  background: color-mix(in oklch, var(--mt, var(--cl-accent)) 16%, transparent);
+}
+button.cl-pill-model[data-on] {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--mt, var(--cl-accent)) 30%, transparent);
 }
 .cl-pill-model-dot {
   width: 6px;
@@ -4972,6 +5139,218 @@ button.cl-pill-model[data-on] {
 .cl-pill-model-switched {
   color: var(--mt, var(--cl-accent));
   font-weight: 600;
+}
+
+/* ──────────────────────────────────────────────────────────
+   PILL VITALS — context occupancy and session spend, the two figures Mission
+   Control's band used to carry. They join the model chip in the pill's
+   leftmost group, which is the group that says what this session IS; the
+   divider after them is where the controls start.
+
+   They keep the pill's register — mono, ~10px, uppercase-adjacent — rather
+   than the band's 21px display figures. This is a control surface, not a
+   dashboard, and a headline number here would outshout every command next to
+   it. What the size gives up, the gauge gives back: the percentage is the one
+   figure in this bar with a CEILING, so the bar under it says how close the
+   session is to it, which no number on its own can. It is deliberately the
+   only quantitative graphic in the pill.
+   ────────────────────────────────────────────────────────── */
+.cl-pill-ctx,
+.cl-pill-spend {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  line-height: 1;
+  color: var(--cl-ink-2);
+  /* The dotted underline the rail's triggers wear would cut through a chip;
+     here the same "there is more here" is said by the surface lifting. */
+  border-bottom: 0;
+  transition: background var(--cl-hover-ms);
+}
+.cl-pill-ctx:hover,
+.cl-pill-ctx:focus-visible,
+.cl-pill-spend:hover,
+.cl-pill-spend:focus-visible {
+  /* Not `--cl-hover-bg` (ink 5%): that was tuned against opaque paper, and over
+     the pill's glass it is a ~4% wash on a cell whose entire affordance is
+     "hover me". Same register as the pill's other neutral control. */
+  background: color-mix(in oklch, var(--cl-ink) 15%, transparent);
+  border-bottom-color: transparent;
+  outline: none;
+}
+.cl-pill-gauge {
+  width: 26px;
+  height: 3px;
+  flex: none;
+  border-radius: 999px;
+  overflow: hidden;
+  background: color-mix(in oklch, var(--cl-ink) 14%, transparent);
+}
+.cl-pill-gauge i {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+  background: var(--cl-accent);
+  transition: width 0.4s ease;
+}
+.cl-pill-ctx-n {
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink);
+}
+.cl-pill-ctx-n em {
+  font-style: normal;
+  font-size: 8.5px;
+  color: var(--cl-ink-4);
+}
+.cl-pill-ctx-u {
+  font-weight: 500;
+  text-transform: lowercase;
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+/* A window this full is the one thing in the pill about to cost the reader
+   something, so the figure and its gauge turn together. */
+.cl-pill-ctx[data-danger] .cl-pill-ctx-n {
+  color: var(--cl-danger);
+}
+.cl-pill-ctx[data-danger] .cl-pill-gauge i {
+  background: var(--cl-danger);
+}
+.cl-pill-spend {
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-accent-ink);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-pill-ctx,
+  .cl-pill-spend,
+  .cl-pill-gauge i {
+    transition: none;
+  }
+}
+
+/* The session's diff — what it DID, in the identity group next to what it is
+   and what it cost. Added and removed carry the only two semantic colours in
+   the pill; the file count is the quiet third. */
+.cl-pill-diff {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
+  padding: 5px 9px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  line-height: 1;
+  cursor: default;
+}
+.cl-pill-diff b {
+  font-weight: 600;
+}
+.cl-pill-diff .add {
+  color: var(--cl-ok);
+}
+.cl-pill-diff .del {
+  color: var(--cl-danger);
+}
+.cl-pill-diff .files {
+  color: var(--cl-ink-3);
+}
+.cl-pill-diff .files span {
+  font-weight: 500;
+  color: var(--cl-ink-4);
+}
+
+/* ──────────────────────────────────────────────────────────
+   FIND IN TRANSCRIPT — the pill's search box.
+
+   Collapsed it is a magnifier the width of any other round control; typing
+   opens it into a box that keeps the pill's height and hairline register. It
+   does NOT claim ⌘F: that key belongs to the top bar's project/session search,
+   and two things answering one key is a bug nobody can see.
+
+   The count says "N turns" in full, never a bare `2/12` — this find navigates
+   turns, and `2/12` reads as "match 2 of 12" to every person who has used a
+   find box.
+   ────────────────────────────────────────────────────────── */
+.cl-pill-find {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 4px 5px 4px 10px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--cl-ink) 7%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 12%, transparent);
+  color: var(--cl-ink-3);
+}
+.cl-pill-find:focus-within {
+  background: color-mix(in oklch, var(--cl-accent) 10%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 34%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-pill-find input {
+  width: 112px;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1;
+  color: var(--cl-ink);
+}
+.cl-pill-find input::placeholder {
+  color: var(--cl-ink-4);
+  letter-spacing: 0.02em;
+}
+.cl-pill-find-count {
+  min-width: 46px;
+  text-align: right;
+  font-family: var(--font-mono);
+  font-size: 9px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+}
+.cl-pill-find-step,
+.cl-pill-find-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  transition: background var(--cl-hover-ms);
+}
+.cl-pill-find-close {
+  font-size: 11px;
+  line-height: 1;
+}
+.cl-pill-find-step:hover:not(:disabled),
+.cl-pill-find-close:hover {
+  background: color-mix(in oklch, var(--cl-ink) 15%, transparent);
+  color: var(--cl-ink);
+}
+.cl-pill-find-step:disabled {
+  opacity: 0.32;
+  cursor: default;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-pill-find-step,
+  .cl-pill-find-close {
+    transition: none;
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -5554,6 +5933,27 @@ button.cl-pill-model[data-on] {
 }
 [data-theme='dark'] ::highlight(cl-hl-pink) {
   background-color: rgba(216, 128, 166, 0.3);
+}
+
+/* ── Find-in-transcript paint ────────────────────────────────────────────
+   Same API, separate registry names, so the two layers never erase each other
+   (each hook deletes only the names it owns). Two weights and NOT two hues: a
+   fifth colour here would read as a fifth kind of highlight — something the
+   reader had marked — when all it means is "this is the turn you were sent to".
+   The quiet one is the same amber as a highlight at a third of the weight, the
+   active one is the brand accent, which nothing else in the reading column
+   uses as a text ground. */
+::highlight(cl-find) {
+  background-color: rgba(224, 168, 64, 0.26);
+}
+::highlight(cl-find-active) {
+  background-color: rgba(193, 95, 60, 0.36);
+}
+[data-theme='dark'] ::highlight(cl-find) {
+  background-color: rgba(224, 168, 64, 0.2);
+}
+[data-theme='dark'] ::highlight(cl-find-active) {
+  background-color: rgba(216, 122, 86, 0.36);
 }
 
 /* A highlightable block hints text-selection affordance without nagging. */
