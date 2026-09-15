@@ -1647,17 +1647,20 @@ const SessionRow = memo(function SessionRow({
       >
         <PinIcon filled={pinned} />
       </button>
-      {/* The session's `/color`, worn by the ordinal itself — see `.cl-scolor`
-          in index.css for why it is not a dot here: the row already has the
-          green LIVE one and the model's, and a third read as a traffic light.
-          Nothing is added when the session carries no colour. */}
+      <span className="idx">{String(rank).padStart(2, '0')}</span>
+      {/* The session's `/color`, worn by the title — see `.cl-scolor` in
+          index.css for why it is neither a dot (the row already has the green
+          LIVE one and the model's) nor the ordinal (tried: a tinted "01" was
+          too quiet to read as the session's colour at all). Nothing is added
+          when the session carries no colour. */}
       <span
-        className={`idx${s.agentColor ? ` is-coloured ${s.agentColor}` : ''}`}
+        className={`title${untitled ? ' is-untitled' : ''}${
+          s.agentColor ? ` is-coloured ${s.agentColor}` : ''
+        }`}
         title={s.agentColor ? `Session colour: ${s.agentColor}` : undefined}
       >
-        {String(rank).padStart(2, '0')}
+        {sessionTitle(s)}
       </span>
-      <span className={`title${untitled ? ' is-untitled' : ''}`}>{sessionTitle(s)}</span>
       {live && <LiveTag />}
       <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
       {/* rendered only when there are tags: an empty flex item would still take

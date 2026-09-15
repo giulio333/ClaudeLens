@@ -200,7 +200,7 @@
    — so rendering a blue session in terracotta would be rendering something
    else.
    They are sized for TEXT, not for a dot: the sessions list wears the colour on
-   its row ordinal, so every one of them clears 4.5:1 on its own ground (worst
+   its row title, so every one of them clears 4.5:1 on its own ground (worst
    case light 4.64 — yellow, which is why it reads as amber and not as yellow;
    worst case dark 6.82). Same pairing as every other token here: light dark and
    saturated, dark lifted in L with chroma eased, hues untouched. */
@@ -259,37 +259,40 @@
 .cl-scolor.pink {
   background: var(--cl-agent-pink);
 }
-/* On a sessions row the colour is worn by the ROW ORDINAL, not by a dot of its
-   own. The row already carries two dots — the green LIVE one and the model's —
-   and a third beside them read as a traffic light, three marks competing to say
-   three unrelated things. The ordinal is mono, decorative, and otherwise
-   `--cl-ink-4`: tinting it adds no geometry at all to a list whose whole
-   language is hairlines, and the number is exactly where the eye enters the
-   row. It outranks the pinned ordinal's accent — pinned is still said by the
-   filled pin glyph at the head of the row, while the colour is the only thing
-   that says WHICH session this is. */
-.cl-srow .idx.is-coloured.red {
+/* On a sessions row the colour is worn by the TITLE, not by a dot of its own.
+   The row already carries two dots — the green LIVE one and the model's — and
+   a third beside them read as a traffic light, three marks competing to say
+   three unrelated things. The row ordinal was tried first (mono, decorative,
+   otherwise `--cl-ink-4`, so tinting it added no geometry) and was too quiet:
+   a coloured "01" did not read as the session's colour at all, and the user
+   reported the indicator as missing. The title is the one thing on the row
+   that is read anyway, and the tokens above clear 4.5:1 as text, which is what
+   a 16px title needs. The rules outrank the hover's accent on purpose — the
+   row background already says "this one", while the colour is the only thing
+   that says WHICH session this is — and the untitled italic, which keeps its
+   muted weight and takes the tint. */
+.cl-srow .title.is-coloured.red {
   color: var(--cl-agent-red);
 }
-.cl-srow .idx.is-coloured.orange {
+.cl-srow .title.is-coloured.orange {
   color: var(--cl-agent-orange);
 }
-.cl-srow .idx.is-coloured.yellow {
+.cl-srow .title.is-coloured.yellow {
   color: var(--cl-agent-yellow);
 }
-.cl-srow .idx.is-coloured.green {
+.cl-srow .title.is-coloured.green {
   color: var(--cl-agent-green);
 }
-.cl-srow .idx.is-coloured.cyan {
+.cl-srow .title.is-coloured.cyan {
   color: var(--cl-agent-cyan);
 }
-.cl-srow .idx.is-coloured.blue {
+.cl-srow .title.is-coloured.blue {
   color: var(--cl-agent-blue);
 }
-.cl-srow .idx.is-coloured.purple {
+.cl-srow .title.is-coloured.purple {
   color: var(--cl-agent-purple);
 }
-.cl-srow .idx.is-coloured.pink {
+.cl-srow .title.is-coloured.pink {
   color: var(--cl-agent-pink);
 }
 
