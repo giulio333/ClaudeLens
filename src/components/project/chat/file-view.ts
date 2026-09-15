@@ -7,6 +7,7 @@
  */
 
 import { writeAction } from './utils';
+import { highlightLines } from './code-lang';
 
 export type FileRowKind = 'ctx' | 'add' | 'del';
 
@@ -167,4 +168,30 @@ export function fileName(path: string): string {
  *  same sentence; one parser for text Claude Code writes, not two. */
 export function writeOutcome(resultText: string | undefined): 'created' | 'written' {
   return writeAction(resultText) === 'new' ? 'created' : 'written';
+}
+
+/**
+ * The rows' HTML, one fragment per row — `null` per row when there is no
+ * language to colour them in. The rows are highlighted as the texts they came
+ * from, not one at a time: a `"""` docstring keeps its colour across the rows
+ * it spans, where highlighting each row alone tokenises its second row as
+ * code. An edit's rows interleave two texts, so each side is highlighted whole
+ * — the new one (`ctx` + `add`), then the old (`ctx` + `del`) — and a row takes
+ * the fragment of its side; a `ctx` row, on both, keeps the new side's.
+ */
+export function highlightRows(rows: FileRow[], language: string | null): (string | null)[] {
+  const html: (string | null)[] = rows.map(() => null);
+  if (!language) return html;
+  const paint = (own: 'add' | 'del') => {
+    const idx = rows.flatMap((r, i) => (r.kind === own || r.kind === 'ctx' ? [i] : []));
+    if (idx.length === 0) return;
+    const lines = highlightLines(idx.map(i => rows[i].text).join('\n'), language);
+    if (!lines || lines.length !== idx.length) return;
+    idx.forEach((i, k) => {
+      if (rows[i].kind === own || html[i] === null) html[i] = lines[k];
+    });
+  };
+  paint('add');
+  if (rows.some(r => r.kind === 'del')) paint('del');
+  return html;
 }

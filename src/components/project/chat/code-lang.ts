@@ -68,3 +68,42 @@ export function resolveLang(hint?: string): string | null {
   const lang = EXT_TO_LANG[key] ?? key;
   return hljs.getLanguage(lang) ? lang : null;
 }
+
+/**
+ * `text` highlighted as one piece and handed back one HTML fragment per line,
+ * the spans still open at a line break closed there and reopened on the next
+ * line. A surface that draws lines one by one (numbered, tinted, clamped)
+ * cannot highlight them one by one: a `"""` docstring or a block comment is
+ * one token across many lines, and the second line highlighted alone is code —
+ * a `'` in it opens a string that never closes. hljs escapes the text, so the
+ * only `<` in its output are its own spans and a fragment is as safe to inject
+ * as the whole. `null` when hljs refuses the language.
+ */
+export function highlightLines(text: string, language: string): string[] | null {
+  let html: string;
+  try {
+    html = hljs.highlight(text, { language, ignoreIllegals: true }).value;
+  } catch {
+    return null;
+  }
+  const lines: string[] = [];
+  const open: string[] = [];
+  let line = '';
+  let last = 0;
+  const token = /<span[^>]*>|<\/span>|\n/g;
+  let m: RegExpExecArray | null;
+  while ((m = token.exec(html)) !== null) {
+    line += html.slice(last, m.index);
+    last = m.index + m[0].length;
+    if (m[0] === '\n') {
+      lines.push(line + '</span>'.repeat(open.length));
+      line = open.join('');
+    } else {
+      if (m[0] === '</span>') open.pop();
+      else open.push(m[0]);
+      line += m[0];
+    }
+  }
+  lines.push(line + html.slice(last) + '</span>'.repeat(open.length));
+  return lines;
+}

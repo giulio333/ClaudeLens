@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
-import hljs from 'highlight.js/lib/common';
 import { ToolGroup, isMemoryFile, fileExt, TOOL_TINT } from './utils';
 import { resolveLang } from './code-lang';
 import { CopyButton, IconButton, ExpandIcon, CloseIcon, SheetModal } from './CommandBlock';
@@ -8,6 +7,7 @@ import {
   contentRows,
   diffStat,
   fileName,
+  highlightRows,
   lineDiff,
   lineRange,
   numberedRows,
@@ -26,20 +26,12 @@ type FileKind = 'Read' | 'Write' | 'Edit';
  *  a turn of six reads must not be six tall dark slabs. */
 const ROW_CLAMP: Record<FileKind, number> = { Read: 12, Write: 24, Edit: 24 };
 
-function highlightLine(text: string, language: string | null): string | null {
-  if (!language || !text) return null;
-  try {
-    return hljs.highlight(text, { language }).value;
-  } catch {
-    return null;
-  }
-}
+const NO_ROWS: FileRow[] = [];
 
-/** One line of the file. Highlighted on its own, like the terminal highlights
- *  each prompt row: a multi-line construct loses its state across rows, which
- *  is the price of rows that can be clamped, tinted and numbered one by one. */
-function Line({ row, language }: { row: FileRow; language: string | null }) {
-  const html = useMemo(() => highlightLine(row.text, language), [row.text, language]);
+/** One line of the file, with the fragment `highlightRows` cut for it — the
+ *  file is highlighted whole and split, never row by row, so a docstring that
+ *  spans rows stays a string on every one of them. */
+function Line({ row, html }: { row: FileRow; html: string | null }) {
   return (
     <div className={`cl-file-row is-${row.kind}`}>
       <span className="cl-file-ln" aria-hidden>
@@ -161,8 +153,15 @@ function EditorWindow({
   onClose?: () => void;
   full?: boolean;
 }) {
-  const rows = sheet.rows ?? [];
-  const shown = clamped ? rows.slice(0, ROW_CLAMP[sheet.kind]) : rows;
+  const rows = sheet.rows ?? NO_ROWS;
+  const shown = useMemo(
+    () => (clamped ? rows.slice(0, ROW_CLAMP[sheet.kind]) : rows),
+    [rows, clamped, sheet.kind]
+  );
+  // Only the rows on screen: hljs scans forward, so the clamped prefix gets
+  // the same fragments the whole file would, and a 2000-line write folded to
+  // 24 rows does not pay for 2000.
+  const html = useMemo(() => highlightRows(shown, language), [shown, language]);
   const tint = memory ? 'var(--cl-violet)' : (TOOL_TINT[sheet.kind] ?? 'var(--cl-ink-3)');
   // Gutter wide enough for the largest number it has to hold.
   const digits = Math.max(2, ...rows.map(r => String(r.line ?? '').length));
@@ -202,7 +201,7 @@ function EditorWindow({
 
       <div className={`cl-term-body cl-file-body${clamped ? ' is-clamped' : ''}`}>
         {shown.map((row, i) => (
-          <Line key={i} row={row} language={language} />
+          <Line key={i} row={row} html={html[i]} />
         ))}
         {sheet.rows && sheet.rows.length === 0 && sheet.state !== 'error' && (
           <div className="cl-term-note">

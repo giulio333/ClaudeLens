@@ -221,6 +221,24 @@ describe('a Write', () => {
     expect(container.querySelector('.cl-term-state')?.textContent).toBe('created · 2 lines');
   });
 
+  it('colours the file by its extension, a docstring kept a string across its rows', () => {
+    const { container } = mount(
+      transcript(
+        'Write',
+        {
+          file_path: '/p/edit.py',
+          content: 'old = """da un\nsegno suo. È l\'unico punto dell\'app, dai 40 del brand\n"""\n',
+        },
+        { content: 'File created successfully at: /p/edit.py' }
+      )
+    );
+    const rows = container.querySelectorAll('.cl-file-code');
+    expect(rows).toHaveLength(3);
+    expect(rows[1].querySelector('.hljs-string')).not.toBeNull();
+    expect(rows[1].querySelector('.hljs-keyword')).toBeNull();
+    expect(rows[1].querySelector('.hljs-number')).toBeNull();
+  });
+
   it('marks a memory file', () => {
     const { container } = mount(
       transcript(
