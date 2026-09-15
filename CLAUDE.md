@@ -231,7 +231,9 @@ packages macOS DMG (x64 + arm64), Windows exe (windows-2022 runner) and Linux
 AppImage on native runners (~9 min) and uploads all of them to the existing
 Release without overwriting its notes. Don't run `npm run electron:build` or
 attach assets by hand; just wait for the workflow and verify the assets landed
-(`gh release view vX.Y.Z --json assets`).
+(`gh release view vX.Y.Z --json assets`). The same workflow rebuilds the binaries
+of a tag that already has a Release, without touching the tag:
+`gh workflow run release.yml -f tag=vX.Y.Z`.
 
 **macOS signing is wired but conditional** (`docs/macos-signing.md`). The mac job
 signs with a Developer ID certificate and notarizes when the repo has the five
