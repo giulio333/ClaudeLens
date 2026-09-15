@@ -6,16 +6,29 @@ import { createTopic, updateTopic, deleteTopic } from '../electron/modules/memor
 
 let tmp: string;
 let memoryDir: string;
+// Una seconda dir progetto accanto alla prima: è la forma che ha un progetto
+// che condivide a mano una memoria con un altro. Creata solo dai test che la
+// usano, e ripulita qui — l'ordine dei test è randomizzato, una dir lasciata in
+// giro diventerebbe il fixture di qualcun altro.
+let sibling: string | null = null;
+
+function makeSibling(): string {
+  sibling = mkdtempSync(join(tmpdir(), 'cl-mem-sib-'));
+  mkdirSync(join(sibling, 'memory'), { recursive: true });
+  return join(sibling, 'memory');
+}
 
 beforeEach(() => {
   tmp = mkdtempSync(join(tmpdir(), 'cl-mem-'));
   // readMemory reads from `{projectPath}/memory/`
   memoryDir = join(tmp, 'memory');
   mkdirSync(memoryDir, { recursive: true });
+  sibling = null;
 });
 
 afterEach(() => {
   rmSync(tmp, { recursive: true, force: true });
+  if (sibling) rmSync(sibling, { recursive: true, force: true });
 });
 
 function writeTopicFile(
@@ -221,6 +234,85 @@ describe('readMemory', () => {
     // Type comes from the nested file's frontmatter, not from the 'user' default.
     expect(data.index[0].type).toBe('project');
     expect(data.index[0].description).toBe('indexed nested');
+    // E il suo corpo arriva al renderer: la lettura c'era già, ma finiva solo
+    // nella frontmatter e il body veniva buttato via.
+    expect(data.topics.get('sub/nested.md')).toContain('nested body');
+  });
+
+  it("reads a memory another project's memory dir holds, linked by absolute path", async () => {
+    // Forma reale: il MEMORY.md di un progetto indicizza per path assoluto le
+    // memorie che condivide con un altro. Prima il path finiva in
+    // `join(memoryDir, '/Users/…')` — che concatena invece di resettare — e il
+    // file non veniva mai letto: nessun corpo, nessun wikilink, quindi per
+    // sempre fra le "unconnected" della mappa.
+    const otherMemory = makeSibling();
+    const shared = join(otherMemory, 'accesso-macchine-bench-acme.md');
+    writeFileSync(
+      shared,
+      '---\nname: Accesso macchine\ndescription: d\ntype: project\n---\n\nvedi [[trappola-istanza]]\n',
+      'utf-8'
+    );
+    writeFileSync(
+      join(memoryDir, 'MEMORY.md'),
+      `- [Accesso macchine bench Acme](${shared}) — SSH sulle due macchine\n`,
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp);
+    expect(data.index).toHaveLength(1);
+    expect(data.index[0].name).toBe('Accesso macchine bench Acme');
+    expect(data.index[0].description).toBe('SSH sulle due macchine');
+    // 'project' arriva dal frontmatter del file condiviso: è la prova che è
+    // stato letto davvero (il fallback sul prefisso direbbe 'user').
+    expect(data.index[0].type).toBe('project');
+    expect(data.index[0].isExternal).toBe(true);
+    // Il corpo è indicizzato col target grezzo, cioè con `filename`: è così che
+    // il renderer lo cerca, ed è da lì che il grafo legge i `[[wikilink]]`.
+    expect(data.topics.get(shared)).toContain('[[trappola-istanza]]');
+  });
+
+  it('refuses an absolute link that is not another memory dir', async () => {
+    // Il contenimento da solo aprirebbe qualunque file sotto la root dei
+    // progetti — i transcript compresi. La forma richiesta è
+    // `<projects>/<un progetto>/memory/<file>.md`.
+    const otherMemory = makeSibling();
+    const outside = join(otherMemory, '..', 'notes.md');
+    writeFileSync(
+      outside,
+      '---\nname: Outside\ndescription: secret\ntype: reference\n---\n\nsecret body\n',
+      'utf-8'
+    );
+    writeFileSync(join(memoryDir, 'MEMORY.md'), `- [Notes](${outside}) — fuori\n`, 'utf-8');
+
+    const data = await readMemory(tmp);
+    expect(data.index).toHaveLength(1);
+    expect(data.index[0].type).toBe('user');
+    expect(data.index[0].isExternal).toBeUndefined();
+    expect(data.topics.size).toBe(0);
+  });
+
+  it('refuses an absolute link written in a project-level MEMORY.md', async () => {
+    // Quel file sta nel repo ed è scritto da chiunque committi: un link
+    // assoluto lì farebbe aprire all'app un file scelto da lui altrove.
+    const otherMemory = makeSibling();
+    const shared = join(otherMemory, 'shared.md');
+    writeFileSync(
+      shared,
+      '---\nname: Shared\ndescription: d\ntype: project\n---\n\nbody\n',
+      'utf-8'
+    );
+    const repo = join(tmp, 'repo');
+    mkdirSync(join(repo, '.claude', 'memory'), { recursive: true });
+    writeFileSync(
+      join(repo, '.claude', 'memory', 'MEMORY.md'),
+      `- [Shared](${shared}) — dal repo\n`,
+      'utf-8'
+    );
+
+    const data = await readMemory(tmp, repo);
+    expect(data.projectLevelIndex).toHaveLength(1);
+    expect(data.projectLevelIndex[0].type).toBe('user');
+    expect(data.projectLevelTopics.size).toBe(0);
   });
 
   it('never opens a topic link that escapes the memory dir', async () => {

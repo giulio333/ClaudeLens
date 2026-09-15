@@ -9,6 +9,8 @@ export interface MemoryTopic {
   updatedAt: string;
   isProjectLevel?: boolean;
   originSessionId?: string;
+  /** Il file vive nella memory dir di un altro progetto: si legge, non si scrive. */
+  isExternal?: boolean;
 }
 
 export interface TopicInput {

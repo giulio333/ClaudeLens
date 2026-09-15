@@ -430,4 +430,42 @@ describe('graphLabel', () => {
   it('leaves a filename with no type prefix alone', () => {
     expect(graphLabel('notes.md')).toBe('notes');
   });
+
+  it('labels a memory indexed by path with its name, not with the path', () => {
+    // Una riga di MEMORY.md può indicizzare per path assoluto la memory dir di
+    // un altro progetto: letto come un nome di file, l'hash del progetto
+    // (`-Users-…-ACME-CORE-4-0`) si sbriciolava in parole sotto la mappa.
+    expect(
+      graphLabel(
+        '/Users/x/.claude/projects/-Users-x-Projects-ACME-CORE-4-0/memory/accesso-macchine-bench-acme.md'
+      )
+    ).toBe('accesso macchine bench acme');
+    expect(graphLabel('sub/feedback_ui_language.md')).toBe('ui language');
+  });
+});
+
+describe('memorie indicizzate per path', () => {
+  const external = (name: string) =>
+    `/Users/x/.claude/projects/-Users-x-Projects-ACME-CORE-4-0/memory/${name}.md`;
+
+  it('resolves a wikilink written with the name of a memory indexed by path', () => {
+    const topics = [topic('a.md'), topic(external('accesso-macchine-bench-acme'))];
+    const g = buildMemoryGraph(topics, {
+      'a.md': 'vedi [[accesso-macchine-bench-acme]]',
+    });
+    expect(g.links).toEqual([
+      { from: 'a.md', to: external('accesso-macchine-bench-acme'), resolved: 'exact' },
+    ]);
+  });
+
+  it('does not couple two external memories on the segments of their shared path', () => {
+    // I token di affinità partono dal basename: dal path intero entrerebbero
+    // `users`, `projects`, `kernel`… che ogni memoria condivisa ha identici.
+    const topics = [
+      topic(external('accesso-macchine-bench-acme'), { name: 'Accesso', description: '' }),
+      topic(external('tracker-progetti-per-componente'), { name: 'Jira', description: '' }),
+    ];
+    const g = buildMemoryGraph(topics, {});
+    expect(g.affinities).toEqual([]);
+  });
 });
