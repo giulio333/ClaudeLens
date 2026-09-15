@@ -26,8 +26,9 @@ import type { MemoryTopic } from '../src/types';
  *    partizione cambiava su 2 archivi su 6. Un grafo che si riorganizza a ogni
  *    apertura non si può imparare a memoria — che è tutto il punto della vista.
  *
- * Si auto-salta dove quelle cartelle non esistono (CI, altre macchine): è una
- * sonda per chi sviluppa qui, non un test che possa rompersi altrove.
+ * Opt-in come lo sweep del census: gira solo con `CLAUDELENS_MEMORY_CORPUS=1`
+ * (`npm run graph:probe`). Il risultato dipende dagli archivi di questa macchina
+ * e la stampa nomina i progetti reali: non va mai incollata in qualcosa di pubblico.
  */
 
 const PROJECTS = join(homedir(), '.claude', 'projects');
@@ -149,7 +150,7 @@ function modularity(g: MemoryGraph): number {
   return inside / m - expected;
 }
 
-const ARCHIVES = discoverArchives();
+const ARCHIVES = process.env.CLAUDELENS_MEMORY_CORPUS ? discoverArchives() : [];
 
 describe.skipIf(ARCHIVES.length === 0)('memory graph on every local archive', () => {
   it('found archives to probe', () => {

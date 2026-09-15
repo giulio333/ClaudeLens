@@ -9,13 +9,13 @@ import {
 } from '../src/components/project/chat/web';
 import type { ToolGroup } from '../src/components/project/chat/utils';
 
-/** Verbatim shape of a real WebSearch result (query echo · one-line Links JSON ·
- *  synthesis · harness reminder). */
-const SEARCH_RESULT = `Web search results for query: "guide Vitest migration rinnovo giugno 2026"
+/** Shape of a real WebSearch result (query echo · one-line Links JSON · synthesis ·
+ *  harness reminder); the content itself is synthetic. */
+const SEARCH_RESULT = `Web search results for query: "Vitest 5 migration guide 2026"
 
-Links: [{"title":"Rinnovo guide Vitest-migration, i nuovi minimi in vigore","url":"https://www.vitest.dev/economia/lavoro/495251/rinnovo.html"},{"title":"guide Vitest-migration - Uilm","url":"https://www.docs.example/contratti-nazionali/guide/"},{"title":"migration","url":"https://www.vitest.dev/altro/2026/riepilogo.html"}]
+Links: [{"title":"Migrating to Vitest 5, what changes","url":"https://vitest.dev/guide/migration.html"},{"title":"Vitest 5 release notes - GitHub","url":"https://github.com/vitest-dev/vitest/releases"},{"title":"Vitest","url":"https://vitest.dev/"}]
 
-Il 4 giugno 2026 le parti hanno sottoscritto l'ipotesi di accordo.
+La guida elenca i breaking change e il codemod da applicare.
 
 REMINDER: You MUST include the sources above in your response to the user using markdown hyperlinks.`;
 
@@ -101,15 +101,15 @@ describe('web — url labels', () => {
 describe('web — search results', () => {
   it('splits the echoed query, the sources and the synthesis', () => {
     const parsed = parseWebSearchResult(SEARCH_RESULT);
-    expect(parsed.query).toBe('guide Vitest migration rinnovo giugno 2026');
+    expect(parsed.query).toBe('Vitest 5 migration guide 2026');
     expect(parsed.links).toHaveLength(3);
     expect(parsed.links[0]).toEqual({
-      title: 'Rinnovo guide Vitest-migration, i nuovi minimi in vigore',
-      url: 'https://www.vitest.dev/economia/lavoro/495251/rinnovo.html',
+      title: 'Migrating to Vitest 5, what changes',
+      url: 'https://vitest.dev/guide/migration.html',
     });
     expect(parsed.error).toBeNull();
     // The synthesis survives; the harness-facing reminder and the query echo do not.
-    expect(parsed.body).toBe("Il 4 giugno 2026 le parti hanno sottoscritto l'ipotesi di accordo.");
+    expect(parsed.body).toBe('La guida elenca i breaking change e il codemod da applicare.');
   });
 
   it('keeps quotes that belong to the query itself', () => {
