@@ -19,10 +19,8 @@ import Markdown from '../../Markdown';
  *  degraded state but the honest text for a call that carries no note (every
  *  Read/Edit/Write, and most tools other than Bash).
  *
- *  Deliberately NOT behind the narration toggle (`cl-thoughts-hidden`): that
- *  preference hides the paced commentary line, a surface this app added, while
- *  this is a chip that already existed saying the best true thing it can. And
- *  the live chat has no pill to turn it back on from. */
+ *  Not the paced commentary line (`ThoughtLine`, a surface this app added):
+ *  this is a chip that already existed saying the best true thing it can. */
 export function LiveTurn({
   text,
   tool,

@@ -3783,33 +3783,6 @@ body {
   }
 }
 
-/* The commentary toggle, sitting with the other transcript controls. */
-.cl-pill-narrate {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 5px 11px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  color: var(--cl-ink-4);
-  cursor: pointer;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  transition:
-    background 0.14s,
-    color 0.14s;
-}
-.cl-pill-narrate:hover {
-  color: var(--cl-ink-2);
-  background: var(--cl-hover-bg);
-}
-.cl-pill-narrate[data-on] {
-  color: var(--cl-accent-ink);
-}
-
 /* The in-flight chip carries a sentence now, not just a tool name: prose in
    mono reads as a command. The meta half stays mono — it IS an identifier. */
 .cl-live-tool.is-note b {
