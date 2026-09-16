@@ -217,8 +217,37 @@ describe('a Write', () => {
       )
     );
     expect(gutter(container)).toEqual(['1', '2']);
-    expect(rowsOf(container, 'add')).toEqual(['export const x = 1;', 'export const y = 2;']);
+    expect(rowsOf(container, 'ctx')).toEqual(['export const x = 1;', 'export const y = 2;']);
     expect(container.querySelector('.cl-term-state')?.textContent).toBe('created · 2 lines');
+  });
+
+  it('is the file and not a diff of it, so no row wears the added-line wash', () => {
+    const { container } = mount(
+      transcript(
+        'Write',
+        { file_path: '/p/new.ts', content: 'export const x = 1;\n' },
+        { content: 'File created successfully at: /p/new.ts' }
+      )
+    );
+    expect(container.querySelectorAll('.cl-file-row.is-add')).toHaveLength(0);
+  });
+
+  it('names the file whole and carries the real path on the shortened one', () => {
+    const path =
+      '/Users/me/.claude/projects/-Users-me-Projects-Acme2.0/' +
+      '11111111-2222-3333-4444-555555555555/scratchpad/build_plan.py';
+    const { container } = mount(
+      transcript('Write', { file_path: path, content: 'x = 1\n' }, { content: 'ok' })
+    );
+    const bar = container.querySelector('.cl-term-title');
+    // The name never gives way to the path — the whole point of shortening it.
+    expect(bar?.querySelector('b')?.textContent).toBe('build_plan.py');
+    // Of a path whose three last segments are 90 characters of opaque id, the
+    // bar keeps the one segment that says something; the whole path is on the
+    // button, which copies it.
+    const where = bar?.querySelector('button.meta');
+    expect(where?.textContent).toBe('…/scratchpad');
+    expect(where?.getAttribute('title')).toContain(path);
   });
 
   it('colours the file by its extension, a docstring kept a string across its rows', () => {
@@ -251,6 +280,61 @@ describe('a Write', () => {
       'Write',
       'memory',
     ]);
+  });
+});
+
+describe('a markdown file', () => {
+  const plan = '# Test plan\n\nCopre le modifiche **SK-34**.\n';
+
+  it('opens as the document it is when a turn wrote it, not as its source', () => {
+    const { container } = mount(
+      transcript(
+        'Write',
+        { file_path: '/p/docs/plan.md', content: plan },
+        { content: 'File created successfully at: /p/docs/plan.md' }
+      )
+    );
+    const body = container.querySelector('.cl-file-body');
+    expect(body?.classList.contains('is-preview')).toBe(true);
+    // Rendered: the heading is a heading and the bold is bold — not two rows of
+    // `#` and `**`.
+    expect(body?.querySelector('h1')?.textContent).toBe('Test plan');
+    expect(body?.querySelector('strong')?.textContent).toBe('SK-34');
+    expect(container.querySelectorAll('.cl-file-row')).toHaveLength(0);
+    // The window is still the window: same verb, same status strip.
+    expect(container.querySelector('.cl-term-kind')?.textContent).toBe('Write');
+    expect(container.querySelector('.cl-term-state')?.textContent).toBe('created · 3 lines');
+  });
+
+  it('hands the source back on ask, and takes it again', () => {
+    const { container } = mount(
+      transcript('Write', { file_path: '/p/docs/plan.md', content: plan }, { content: 'ok' })
+    );
+    const mode = () => container.querySelector<HTMLButtonElement>('.cl-term-mode');
+    expect(mode?.()?.textContent).toBe('Source');
+    act(() => mode()?.click());
+    expect(container.querySelector('.cl-file-body')?.classList.contains('is-preview')).toBe(false);
+    expect(rowsOf(container, 'ctx')[0]).toBe('# Test plan');
+    expect(mode()?.textContent).toBe('Preview');
+    act(() => mode()?.click());
+    expect(container.querySelector('.cl-file-body h1')?.textContent).toBe('Test plan');
+  });
+
+  it('is read as a slice, so a Read opens on its numbered rows', () => {
+    const { container } = mount(
+      transcript('Read', { file_path: '/p/docs/plan.md' }, { content: '   12→# Test plan' })
+    );
+    expect(container.querySelector('.cl-file-body')?.classList.contains('is-preview')).toBe(false);
+    expect(gutter(container)).toEqual(['12']);
+    // …with the document one click away.
+    expect(container.querySelector('.cl-term-mode')?.textContent).toBe('Preview');
+  });
+
+  it('is offered for no other extension: a .py has one reading', () => {
+    const { container } = mount(
+      transcript('Write', { file_path: '/p/a.py', content: 'x = 1\n' }, { content: 'ok' })
+    );
+    expect(container.querySelector('.cl-term-mode')).toBeNull();
   });
 });
 

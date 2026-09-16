@@ -119,9 +119,13 @@ export function numberedRows(output: string): FileRow[] | null {
   return numbered > 0 ? rows : null;
 }
 
-/** The whole content as rows starting at line 1 — a `Write`, where every line
- *  is new. */
-export function contentRows(content: string, kind: FileRowKind = 'add'): FileRow[] {
+/** The whole content as rows starting at line 1 — a `Write`. The rows are
+ *  plain, not `add`: a write is the file, not a diff of it, which is what the
+ *  gutter already says by printing the line number instead of a `+`. Marking
+ *  them `add` painted the every-line-is-new wash of a diff over the whole
+ *  window — 12% green under the syntax colours of every row, on a surface the
+ *  highlight palette is tuned for. */
+export function contentRows(content: string, kind: FileRowKind = 'ctx'): FileRow[] {
   return splitLines(content).map((text, i) => ({ kind, text, line: i + 1 }));
 }
 
@@ -148,14 +152,32 @@ export function diffStat(rows: FileRow[]): { added: number; removed: number } {
 
 /** The directory of a path, shortened to its last `keep` segments so a title
  *  bar can show where a file sits without the home prefix eating the width:
- *  `/Users/me/Projects/app/src/components/chat` → `…/src/components/chat`. */
-export function shortDir(path: string, keep = 3): string {
+ *  `/Users/me/Projects/app/src/components/chat` → `…/src/components/chat`.
+ *
+ *  Then whole segments are dropped from the head until what is left fits `max`
+ *  characters — roughly what the bar can hold beside a file name. The end of a
+ *  path is the part that says something, and the CSS ellipsis cuts the other
+ *  end: a scratchpad under `~/.claude/projects/{hash}/{sessionId}/` has three
+ *  last segments of 90-odd characters, so the bar was dropping `scratchpad` —
+ *  the only one that meant anything — and keeping the project hash. The last
+ *  segment is always kept, however long it is. `max` is the knob the title bar
+ *  actually rides on — `keep` only decides how much `max` gets to choose from. */
+export function shortDir(path: string, keep = 3, max = 40): string {
   const parts = path.split(/[\\/]/);
   parts.pop();
   const segments = parts.filter(Boolean);
   if (segments.length === 0) return '/';
-  if (segments.length <= keep) return `/${segments.join('/')}`;
-  return `…/${segments.slice(-keep).join('/')}`;
+  let kept = segments.slice(-keep);
+  while (kept.length > 1 && kept.join('/').length > max) kept = kept.slice(1);
+  const dir = kept.join('/');
+  return kept.length === segments.length ? `/${dir}` : `…/${dir}`;
+}
+
+/** Markdown by extension. A written `.md` is prose by construction, printed as
+ *  if it were source — the same call the app already made for a fetched page,
+ *  which renders as the markdown it is rather than as a mono block. */
+export function isMarkdownPath(path: string): boolean {
+  return /\.(md|markdown|mdx)$/i.test(path);
 }
 
 export function fileName(path: string): string {
