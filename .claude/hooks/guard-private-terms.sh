@@ -57,9 +57,11 @@ case "$CMD" in
     git log --branches --not --remotes -p --format= 2>/dev/null | grep '^+' | scan "an unpushed commit" || status=1
     ;;
   *"gh pr "*|*"gh issue "*|*"gh release "*|*"gh api "*)
-    # Local temp paths carry the machine's own names (the scratchpad dir embeds
-    # the home path) and never reach GitHub: drop those tokens before scanning.
-    printf '%s' "$CMD" | tr ' ' '\n' | grep -v -E '/tmp/|^~/|^\$HOME/' | tr '\n' ' ' \
+    # Local paths carry the machine's own names — the scratchpad dir and the home
+    # dir both embed the user name — and never reach GitHub, so those tokens are
+    # dropped before scanning. What is left is what the command actually sends.
+    printf '%s' "$CMD" | tr ' ' '\n' \
+      | grep -v -E "/tmp/|^~/|^\\\$HOME/|$HOME" | tr '\n' ' ' \
       | scan "the gh command" || status=1
     ;;
 esac
