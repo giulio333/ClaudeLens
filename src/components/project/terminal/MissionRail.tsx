@@ -440,6 +440,7 @@ export function MissionRail({
   onOpenSkillDef,
   onOpenAgentDef,
   onOpenTeam,
+  onLocateTurn,
   showVitals = true,
 }: {
   hash: string;
@@ -458,6 +459,10 @@ export function MissionRail({
   onOpenAgentDef: (agent: Agent) => void;
   /** Open a team's detail (the existing TeamDetailView, hosted in the parent's overlay). */
   onOpenTeam: (teamName: string) => void;
+  /** Scroll the Lens transcript to a turn. A QUESTIONS row lands here rather
+   *  than in an overlay: the ask, its options and the answer that was picked are
+   *  already drawn in the transcript, and a generic tool panel would show less. */
+  onLocateTurn: (turnN: number) => void;
   /** Whether this rail carries the vitals line — context %, spend, and the
    *  session's diff.
    *
@@ -729,6 +734,8 @@ export function MissionRail({
       if (skillHasViewableOutput(s.skill.group)) onOpenTool(s.skill.group!);
       else if (s.skill.skill) onOpenSkillDef(s.skill.skill);
       else if (s.skill.group) onOpenTool(s.skill.group);
+    } else if (s.kind === 'question') {
+      onLocateTurn(s.turnN);
     } else if (s.kind === 'memory' || s.kind === 'change' || s.kind === 'web') {
       if (e.items.length > 0) onOpenTool(e.items[e.items.length - 1]);
     }

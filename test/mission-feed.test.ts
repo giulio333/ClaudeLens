@@ -561,6 +561,7 @@ describe('mission feed — filters', () => {
       AGENTS: 0,
       TEAMS: 1,
       SKILLS: 0,
+      QUESTIONS: 0,
       MEMORY: 0,
       WEB: 0,
       CHANGES: 1,
@@ -578,5 +579,131 @@ describe('mission feed — age labels', () => {
     expect(shortAgo(NOW - 2 * 86_400_000, NOW)).toBe('2d');
     expect(shortAgo(0, NOW)).toBe('—');
     expect(shortAgo(NOW - 86_400_000, NOW, true)).toBe('now');
+  });
+});
+
+/** One `AskUserQuestion` call. `answer` undefined = still waiting for the user;
+ *  `answer: null` = the user closed it and kept talking (the rejection result
+ *  Claude Code writes). */
+function ask(
+  id: string,
+  questions: { question: string; header?: string; options: string[] }[],
+  answer?: Record<string, string> | null
+): ToolGroup {
+  const use = {
+    type: 'tool_use',
+    id,
+    name: 'AskUserQuestion',
+    input: {
+      questions: questions.map(q => ({
+        question: q.question,
+        header: q.header,
+        multiSelect: false,
+        options: q.options.map(label => ({ label })),
+      })),
+    },
+  };
+  if (answer === undefined) return { use } as unknown as ToolGroup;
+  const content =
+    answer === null
+      ? 'The tool use was rejected. (No answer provided)'
+      : `Your questions have been answered: ${Object.entries(answer)
+          .map(([q, a]) => `"${q}"="${a}"`)
+          .join(', ')}.`;
+  return {
+    use,
+    result: { type: 'tool_result', tool_use_id: id, content, isError: false },
+  } as unknown as ToolGroup;
+}
+
+describe('mission feed — questions', () => {
+  const asked = ask(
+    'q1',
+    [{ question: 'Which approach?', header: 'Approach', options: ['Fixed cells', 'Remove three'] }],
+    { 'Which approach?': 'Fixed cells' }
+  );
+
+  it('draws one row per call, titled by the question and carrying the answer', () => {
+    const [e] = buildMissionFeed(input({ processed: [turn(3, [asked])], ownTools: [asked] }));
+    expect(e.kind).toBe('QUESTIONS');
+    expect(e.title).toBe('Which approach?');
+    expect(e.meta).toBe('Fixed cells');
+    expect(e.right).toBe('ANSWERED');
+    expect(e.at).toBe(T0 + 3 * 60_000);
+  });
+
+  it('routes the row to the turn the question was asked on', () => {
+    const [e] = buildMissionFeed(
+      input({ processed: [turn(1, []), turn(3, [asked])], ownTools: [asked] })
+    );
+    expect(e.source).toMatchObject({ kind: 'question', turnN: 2 });
+  });
+
+  it('separates a question the user closed without answering from an answered one', () => {
+    const dismissed = ask('q2', [{ question: 'Ship it?', options: ['Yes', 'No'] }], null);
+    const [e] = buildMissionFeed(
+      input({ processed: [turn(1, [dismissed])], ownTools: [dismissed] })
+    );
+    expect(e.right).toBe('NO ANSWER');
+    expect(e.meta).toBe('kept talking');
+  });
+
+  it('reads a call with no result yet as pending, never as answered', () => {
+    const pending = ask('q3', [{ question: 'Ship it?', options: ['Yes', 'No'] }]);
+    const [e] = buildMissionFeed(input({ processed: [turn(1, [pending])], ownTools: [pending] }));
+    expect(e.right).toBe('PENDING');
+    expect(e.meta).toBe('waiting for reply');
+  });
+
+  it('keeps the first question as the title and says how many the call carried', () => {
+    const two = ask(
+      'q4',
+      [
+        { question: 'Which approach?', options: ['A', 'B'] },
+        { question: 'Which surface?', options: ['Pill', 'Rail'] },
+      ],
+      { 'Which approach?': 'A', 'Which surface?': 'Rail' }
+    );
+    const [e] = buildMissionFeed(input({ processed: [turn(1, [two])], ownTools: [two] }));
+    expect(e.title).toBe('Which approach?');
+    expect(e.meta).toBe('2 questions · A · Rail');
+    // The row truncates at 380px, so the full ask stays recoverable in the tooltip.
+    expect(e.hint).toContain('Which surface?');
+  });
+
+  it('never floats a pending ask as live — it leads only when it is the newest row', () => {
+    const pending = ask('q6', [{ question: 'Ship it?', options: ['Yes', 'No'] }]);
+    const write = group('w', 'Write', { file_path: '/Users/dev/proj/a.ts', content: 'x' });
+
+    // Still open and last written: it leads because it is newest, not because we
+    // claimed it was current.
+    const open = buildMissionFeed(
+      input({
+        processed: [turn(1, [write]), turn(9, [pending])],
+        ownTools: [write],
+        changes: buildFileChanges([write]),
+      })
+    );
+    expect(open[0].kind).toBe('QUESTIONS');
+    expect(open[0].live).toBe(false);
+
+    // A result the CLI never wrote, with the session having gone on for half an
+    // hour after: it sorts by its own time like everything else.
+    const stale = buildMissionFeed(
+      input({
+        processed: [turn(1, [pending]), turn(30, [write])],
+        ownTools: [write],
+        changes: buildFileChanges([write]),
+      })
+    );
+    expect(stale.map(e => e.kind)).toEqual(['CHANGES', 'QUESTIONS']);
+  });
+
+  it('ignores a call whose input carries no readable question', () => {
+    const empty = { use: { type: 'tool_use', id: 'q5', name: 'AskUserQuestion', input: {} } };
+    const feed = buildMissionFeed(
+      input({ processed: [turn(1, [empty as unknown as ToolGroup])], ownTools: [] })
+    );
+    expect(feed).toEqual([]);
   });
 });
