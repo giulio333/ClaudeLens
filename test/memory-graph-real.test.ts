@@ -28,7 +28,7 @@ import type { MemoryTopic } from '../src/types';
  *
  * Opt-in come lo sweep del census: gira solo con `CLAUDELENS_MEMORY_CORPUS=1`
  * (`npm run graph:probe`). Il risultato dipende dagli archivi di questa macchina
- * e la stampa nomina i progetti reali: non va mai incollata in qualcosa di pubblico.
+ * e non è quindi una rete di regressione: è una sonda per chi sviluppa qui.
  */
 
 const PROJECTS = join(homedir(), '.claude', 'projects');

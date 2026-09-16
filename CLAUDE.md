@@ -152,8 +152,8 @@ months). Two instruments, answering two different questions, driven by the
   unconditional; they are the regression gate.
 - `npm run graph:probe` (`test/memory-graph-real.test.ts`) — the memory graph
   measured on every archive under `~/.claude/projects`, opt-in
-  (`CLAUDELENS_MEMORY_CORPUS=1`) for the same reason, and for one more: its
-  output names the real projects, so it is never pasted anywhere public.
+  (`CLAUDELENS_MEMORY_CORPUS=1`) for the same reason: its outcome depends on
+  what this machine happens to hold, so it is a probe, not a gate.
 
 The manifest is what keeps this usable past its second run: it records
 **decisions**, not observations — every shape is `read` (naming the module),
@@ -292,16 +292,15 @@ to ~`#7c7669` so meta text/labels meet WCAG AA contrast (~4.6:1) on white.
 
 ## Key conventions
 
-**The repo is public; the data it reads is not.** No real project name, memory
-or session content goes into tracked files, commit messages, PR or issue bodies
-or release notes — fixtures are synthetic even when they copy the _shape_ of a
-real row, and comments name archives as "Acme2.0", never as what they are. The
-`PreToolUse` hook `.claude/hooks/guard-private-terms.sh` refuses a commit, push,
-PR, issue or release whose text matches a denylist kept **outside** the repo
-(`~/.config/claudelens/private-terms.regex`, one extended regex per line — the
-list is the index of what must stay private, so it is never tracked; without it
-the hook is a no-op). `removeComments` in `tsconfig.electron.json` keeps
-main-process comments out of the packaged asar, where they used to ship verbatim.
+**Fixtures are synthetic.** The app reads whatever sits in a contributor's own
+`~/.claude`, so nothing in the repo is copied from it: a fixture keeps the
+_shape_ of a real row — same path depth, same extensions, same odd characters —
+with names that stand for nothing, and comments name an archive as "Acme2.0".
+The `PreToolUse` hook `.claude/hooks/guard-private-terms.sh` checks what a
+commit, push, PR, issue or release adds against a word list kept **outside** the
+repo (`~/.config/claudelens/private-terms.regex`, one extended regex per line,
+never tracked; without it the hook is a no-op). `removeComments` in
+`tsconfig.electron.json` keeps main-process comments out of the packaged asar.
 
 **IPC result shape:** every handler returns `{ data: T | null, error: string | null }`. Renderer unwraps with `unwrap()` in `useIPC.ts`.
 
