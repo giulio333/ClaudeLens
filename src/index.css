@@ -348,13 +348,6 @@ body {
 .tmc-row--live:hover {
   background: color-mix(in oklch, var(--cl-violet-soft) 75%, transparent);
 }
-/* v2 Outline column rows (the session navigator). */
-.cl-otrow {
-  transition: background 140ms ease;
-}
-.cl-otrow:hover {
-  background: color-mix(in oklch, var(--cl-accent-soft) 50%, transparent);
-}
 .cl-live-dot {
   animation: cl-live-pulse 2.2s ease-out infinite;
 }

@@ -17,7 +17,6 @@ import { resolveToolIcon, toolRunStatus, type SessionAgent, type ToolGroup } fro
 import { sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
-import { SessionOutline } from './SessionOutline';
 
 /**
  * The unified Terminal ↔ Lens view ("Terminal Mission Control").
@@ -55,8 +54,6 @@ function samePath(a: string, b: string): boolean {
 const RAIL_DEFAULT = 432;
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
-// v2 Outline column — a fixed-width session navigator on the left.
-const OUTLINE_WIDTH = 266;
 
 type View = 'terminal' | 'lens';
 type Overlay =
@@ -153,56 +150,6 @@ function ViewTabs({
         {right}
       </div>
     </div>
-  );
-}
-
-/** Collapse/expand toggle for the v2 Outline column — a panel-left glyph (left
- *  pane filled when the outline is shown). Mirrors RailToggle. */
-function OutlineToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
-  const label = collapsed ? 'Show session outline' : 'Hide session outline';
-  return (
-    <button
-      type="button"
-      onClick={onToggle}
-      title={label}
-      aria-label={label}
-      aria-pressed={!collapsed}
-      className="inline-flex items-center justify-center transition-colors shrink-0"
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 999,
-        border: '1px solid var(--cl-glass-border)',
-        background: collapsed ? 'transparent' : 'var(--cl-glass-bg-strong)',
-        WebkitBackdropFilter: 'blur(12px) saturate(1.5)',
-        backdropFilter: 'blur(12px) saturate(1.5)',
-        color: collapsed ? 'var(--cl-ink-4)' : 'var(--cl-accent-ink)',
-      }}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        aria-hidden="true"
-      >
-        <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
-        <line x1="6.25" y1="3.25" x2="6.25" y2="12.75" />
-        {!collapsed && (
-          <rect
-            x="2"
-            y="3.25"
-            width="4.25"
-            height="9.5"
-            fill="currentColor"
-            stroke="none"
-            opacity="0.22"
-          />
-        )}
-      </svg>
-    </button>
   );
 }
 
@@ -321,22 +268,7 @@ export function TerminalMissionControl({
     });
   }, []);
 
-  // v2 Outline column — collapsible like the rail, defaults to shown for a
-  // resumed session (something to index), hidden for a fresh terminal.
-  const [outlineCollapsed, setOutlineCollapsed] = useState<boolean>(() => {
-    const saved = localStorage.getItem('tmc-outline-collapsed');
-    if (saved != null) return saved === '1';
-    return !resumeSessionId;
-  });
-  const toggleOutline = useCallback(() => {
-    setOutlineCollapsed(c => {
-      const next = !c;
-      localStorage.setItem('tmc-outline-collapsed', next ? '1' : '0');
-      return next;
-    });
-  }, []);
-
-  // Imperative scroll handle into the embedded Lens transcript — an outline row
+  // Imperative scroll handle into the embedded Lens transcript — a rail row
   // calls it to jump to a turn (set by ChatView, null in Terminal mode).
   const jumpToTurnRef = useRef<((n: number) => void) | null>(null);
   const jumpToTurn = useCallback(
@@ -591,20 +523,6 @@ export function TerminalMissionControl({
       />
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
-        {/* v2 Outline column — the session navigator (collapsible) */}
-        {!outlineCollapsed && (
-          <SessionOutline
-            hash={project.hash}
-            sessionId={sessionId}
-            realPath={project.realPath}
-            width={OUTLINE_WIDTH}
-            onJump={jumpToTurn}
-            onOpenTool={group => setOverlay({ kind: 'tool', group })}
-            onOpenAgent={agent => setOverlay({ kind: 'agent', agent })}
-            onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
-          />
-        )}
-
         {/* main column */}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
           {/* v2: the Terminal/Lens switch heads the focus column as centered tabs,
@@ -658,7 +576,6 @@ export function TerminalMissionControl({
                     )}
                   </div>
                 )}
-                <OutlineToggle collapsed={outlineCollapsed} onToggle={toggleOutline} />
                 <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
                 {overlay?.kind === 'tool' && (
                   <span className={`cl-tool-status ${toolRunStatus(overlay.group.result).tone}`}>
@@ -789,8 +706,8 @@ export function TerminalMissionControl({
             onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
             onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}
             onOpenTeam={teamName => setOverlay({ kind: 'team', teamName })}
-            // A QUESTIONS row locates its turn in the Lens — the same handle the
-            // outline uses, which reveals the Lens first when we're on Terminal.
+            // A QUESTIONS row locates its turn in the Lens, which reveals the
+            // Lens first when we're on Terminal.
             onLocateTurn={jumpToTurn}
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the

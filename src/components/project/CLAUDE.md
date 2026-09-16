@@ -153,8 +153,8 @@ già alla `AskQuestionCard`; filtro fra SKILLS e MEMORY). Una riga per chiamata
   non nuovi: risultato assente → pending, risultato senza risposte parsate che si
   legge come rejection → dismissed, il resto → answered. `PENDING` è l'unico
   tinto: è l'unico che sta ancora aspettando qualcuno.
-- **il click salta al turno** (`onLocateTurn` → `jumpToTurn` del frame, lo stesso
-  handle dell'outline, che rivela il Lens se si è su Terminal). Non apre un
+- **il click salta al turno** (`onLocateTurn` → `jumpToTurn` del frame, che
+  rivela il Lens se si è su Terminal). Non apre un
   pannello: la domanda con tutte le sue opzioni e quella selezionata è già
   disegnata nel transcript, e un `ToolDetailPanel` generico mostrerebbe meno.
 - **l'ask intero sta nel tooltip** (`FeedEvent.hint`): a 380px il titolo tronca,
