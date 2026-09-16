@@ -36,6 +36,10 @@ Describe behaviour, not the diff: no file-by-file walkthrough, no repetition of 
 gh pr create --title "…" --body-file <scratchpad>/pr-body.md
 ```
 
+## Nothing real from the host machine
+
+A PR is public and permanent, so nothing that exists only on the machine it was written on goes into it — not in the title, the body, the commit messages, a reply to a review or a screenshot. No absolute path from this machine's home, no name of a project, folder or file outside this repo, no line of a real transcript, memory or conversation, and no personal identifier of any kind: a person, an address, an account, an employer, a client. Evidence gathered from real data is reported by shape and count ("14 row types the reader never mentions", "3 files of 261"), never by quoting what it says; a name that has to appear is a synthetic stand-in of the same shape — `/Users/alice`, "Acme2.0". Screenshots use mock data. It is the rule the fixtures already follow, applied to the text written around the change.
+
 ## No authorship attribution
 
 The PR reads as written by the maintainer. Never add the `🤖 Generated with Claude Code` footer, a `claude.ai/code` session link, a co-author trailer, or any phrasing that says the change was produced by an assistant — not in the title, the body, or the commits. Claude Code stays in the text only as the _subject_ of the app (the CLI whose data ClaudeLens reads, its transcripts, its SDK), never as the author.
