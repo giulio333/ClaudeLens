@@ -7,11 +7,9 @@ import {
   RenderItem,
   RenderRow,
   TurnDescriptor,
-  TurnFilterCounts,
   buildRenderItems,
   buildRenderRows,
   buildRowIndexByTurn,
-  computeFilterCounts,
   describeTurn,
 } from './utils';
 
@@ -33,7 +31,6 @@ export type TranscriptModel = {
   /** Turn number → row index, for scrolling the window to a turn. */
   rowIndexByTurn: Map<number, number>;
   /** Per-type counts for the filter chips. */
-  filterCounts: TurnFilterCounts;
 };
 
 /** Derives everything the Focus transcript renders from the processed messages
@@ -90,8 +87,6 @@ export function useTranscriptModel({
 
   const rowIndexByTurn = useMemo(() => buildRowIndexByTurn(rows), [rows]);
 
-  const filterCounts = useMemo(() => computeFilterCounts(visibleItems), [visibleItems]);
-
   return {
     descriptors,
     visibleItems,
@@ -99,6 +94,5 @@ export function useTranscriptModel({
     renderItems,
     rows,
     rowIndexByTurn,
-    filterCounts,
   };
 }

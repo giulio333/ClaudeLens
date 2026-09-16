@@ -1185,10 +1185,11 @@ body {
 }
 
 /* ── Filter variant (one option of a filter rail) ──
-   The language of the chat pill's filters (.cl-pill-filter): no border, no
-   fill, the count muted beside the name, and an accent wash on the one that is
-   on. A bordered chip per tag read as four competing buttons; these are one
-   radio group. */
+   No border, no fill, the count muted beside the name, and an accent wash on the
+   one that is on. A bordered chip per tag read as four competing buttons; these
+   are one radio group. (This language came from the chat pill's own type
+   filters, `.cl-pill-filter`, which no longer exist — the pill has a fixed set
+   of cells and a chip that could read `THINKING 0` was a control for nothing.) */
 .cl-tag--filter {
   gap: 4px;
   font-size: 10.5px;
@@ -3340,11 +3341,6 @@ body {
     opacity 0.2s,
     filter 0.2s;
 }
-.cl-chat-reading .cl-turn[data-dim] {
-  opacity: 0.28;
-  filter: saturate(0.4);
-}
-
 /* ── "Nastro" (design handoff "Lens variants" → nastro) ─────────────────
    The conversation as a ribbon. No cards, no glass: every turn is a 9px role
    dot hung on a hairline thread, the body sits straight on paper and is
@@ -3675,9 +3671,6 @@ body {
 .cl-focus-tick:hover {
   opacity: 0.9;
 }
-.cl-focus-tick[data-dim] {
-  opacity: 0.14;
-}
 /* Invisible hit area keeps dense ticks easy to hover/click. */
 .cl-focus-tick::before {
   content: '';
@@ -3826,6 +3819,13 @@ body {
 }
 
 /* floating control pill — bottom centre, glass */
+/* `width: max-content` is load-bearing, not tidying. An absolutely positioned
+   box with `left: 50%` and `width: auto` is shrink-to-fit over the space LEFT of
+   its right edge — i.e. half the container — so the bar was capped at 50% of the
+   reading area and wrapped onto a second row with hundreds of pixels of free
+   space beside it. `translateX(-50%)` only moves it afterwards; it cannot give
+   back the width. Max-content is the bar on one line, and the cap below is what
+   keeps it from running past the column on a narrow window. */
 .cl-pill-wrap {
   position: absolute;
   left: 50%;
@@ -3836,6 +3836,8 @@ body {
   flex-direction: column;
   align-items: stretch;
   gap: 10px;
+  width: max-content;
+  max-width: min(var(--cl-read-col), calc(100vw - 40px));
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -4723,48 +4725,6 @@ body {
   background: oklch(0 0 0 / 0.38);
   box-shadow: 1px 0 0 oklch(1 0 0 / 0.07);
 }
-.cl-pill-filters {
-  display: flex;
-  align-items: center;
-  gap: 3px;
-}
-.cl-pill-filter {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 7px 11px;
-  border: 0;
-  border-radius: 999px;
-  background: transparent;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--cl-ink-3);
-  cursor: pointer;
-  transition:
-    background 0.14s,
-    box-shadow 0.14s,
-    color 0.14s;
-}
-.cl-pill-filter:hover {
-  color: var(--cl-ink);
-}
-.cl-pill-filter b {
-  font-weight: 600;
-  color: var(--cl-ink-4);
-}
-/* On a translucent body a flat wash has no edge to hold it: every selected
-   state in the pill gains a few points of tint and a hairline ring, so "this
-   one is on" survives whatever is scrolling underneath. */
-.cl-pill-filter[data-on] {
-  background: color-mix(in oklch, var(--cl-accent) 26%, transparent);
-  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 34%, transparent);
-  color: var(--cl-accent-ink);
-}
-.cl-pill-filter[data-on] b {
-  color: var(--cl-accent-ink);
-}
 .cl-pill-more {
   display: inline-flex;
   align-items: center;
@@ -5266,6 +5226,15 @@ button.cl-pill-model[data-on] {
   font-weight: 500;
   color: var(--cl-ink-4);
 }
+/* A session that touched nothing says so rather than leaving a gap. It does not
+   print `+0 −0 0 files` — three zeros are not a reading — and it does not take
+   the green/red of a real diff, because there is no diff to tint. */
+.cl-pill-diff.is-none {
+  color: var(--cl-ink-4);
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  opacity: 0.75;
+}
 
 /* ──────────────────────────────────────────────────────────
    FIND IN TRANSCRIPT — the pill's search box.
@@ -5356,7 +5325,6 @@ button.cl-pill-model[data-on] {
 @media (prefers-reduced-motion: reduce) {
   .cl-focus-tick,
   .cl-focus-current,
-  .cl-pill-filter,
   .cl-pill-more,
   .cl-pill-model,
   .cl-pill-dock,
@@ -5655,10 +5623,6 @@ button.cl-pill-model[data-on] {
     opacity 0.2s,
     filter 0.2s;
 }
-.cl-turn-tools-hidden[data-dim] {
-  opacity: 0.28;
-  filter: saturate(0.4);
-}
 .cl-turn-tools-hidden-badge {
   display: inline-flex;
   align-items: center;
@@ -5703,10 +5667,6 @@ button.cl-pill-model[data-on] {
   transition:
     opacity 0.2s,
     filter 0.2s;
-}
-.cl-advisor-mark[data-dim] {
-  opacity: 0.28;
-  filter: saturate(0.4);
 }
 .cl-advisor-badge {
   display: inline-flex;
@@ -7129,10 +7089,6 @@ button.cl-pill-model[data-on] {
   .cl-composer-inner {
     width: calc(100% - 56px);
     padding: 0 28px;
-  }
-  .cl-pill-filter {
-    padding: 7px 9px;
-    font-size: 9px;
   }
   .cl-tool-detail-scroll {
     padding: 20px 26px 46px;

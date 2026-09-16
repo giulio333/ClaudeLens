@@ -390,9 +390,6 @@ export function skillInitial(command: string): string {
 // children (the control pill, the minimap). Pure types, no React.
 // ──────────────────────────────────────────────────────────────────────────
 
-/** The transcript type filter exposed in the control pill. */
-export type TurnFilter = 'all' | 'thinking' | 'questions' | 'plan';
-
 /** A navigable turn enriched for the minimap rail (1-based index + clock time). */
 export type MinimapItem = TurnDescriptor & { n: number; time: string };
 
@@ -408,27 +405,11 @@ export type RenderItem =
    *  bubble. */
   | { kind: 'advisor'; key: string; consult: AdvisorConsult };
 
-/** The per-type counts that drive the filter chips in the control pill. */
-export type TurnFilterCounts = {
-  all: number;
-  thinking: number;
-  questions: number;
-  plan: number;
-};
-
 export type TurnDescriptor = {
   variant: TurnVariant;
   label: string;
   initial: string;
   color: string;
-  hasText: boolean;
-  hasThinking: boolean;
-  hasTools: boolean;
-  hasQuestion: boolean;
-  hasAgent: boolean;
-  hasPlan: boolean;
-  /** True when the turn invokes an agentic skill (a `Skill` tool_use). */
-  hasSkill: boolean;
   /** True when MessageBubble would render something for this turn+filter. */
   visible: boolean;
   /** Minimal mode only: the turn renders solely as a collapsed "tools hidden"
@@ -469,13 +450,6 @@ export function describeTurn(
       label: ROLE_META.notification.label,
       initial: ROLE_META.notification.initial,
       color: ROLE_META.notification.color,
-      hasText: false,
-      hasThinking: false,
-      hasTools: false,
-      hasQuestion: false,
-      hasAgent: false,
-      hasPlan: false,
-      hasSkill: false,
       visible: true,
       toolsOnly: false,
     };
@@ -512,10 +486,6 @@ export function describeTurn(
   const hasText = textBlocks.length > 0;
   const hasThinking = thinkingBlocks.some(b => b.thinking);
   const hasTools = standardToolGroups.length > 0;
-  const hasQuestion = showQuestions;
-  const hasAgent = agentGroups.length > 0;
-  const hasPlan = planGroups.length > 0;
-  const hasSkill = skillGroups.length > 0;
 
   const hasVisibleContent =
     hasText ||
@@ -595,13 +565,6 @@ export function describeTurn(
     label: meta.label,
     initial,
     color,
-    hasText,
-    hasThinking,
-    hasTools,
-    hasQuestion,
-    hasAgent,
-    hasPlan,
-    hasSkill,
     visible,
     toolsOnly,
   };
@@ -1397,17 +1360,6 @@ export function buildRenderItems(
   });
   flush();
   return items;
-}
-
-/** Per-type counts for the filter chips — computed over the visible turns so
- *  "Tools" still reflects collapsed tool-only turns. */
-export function computeFilterCounts(visible: TurnDescriptor[]): TurnFilterCounts {
-  return {
-    all: visible.length,
-    thinking: visible.filter(d => d.hasThinking).length,
-    questions: visible.filter(d => d.hasQuestion).length,
-    plan: visible.filter(d => d.hasPlan).length,
-  };
 }
 
 /** A transcript stream row, resolved to everything the renderer needs to draw it

@@ -261,6 +261,7 @@ export function TerminalMissionControl({
   project,
   resumeSessionId,
   attachJobId,
+  focusMessageUuid,
   onBack,
   onOpenSession,
 }: {
@@ -270,6 +271,10 @@ export function TerminalMissionControl({
   // attach`es the live worker instead of `--resume` (which the CLI rejects while
   // a session runs in the background). The LENS pane still reads by sessionId.
   attachJobId?: string;
+  /** Open the Lens scrolled to the turn holding this message — a search hit.
+   *  Handed straight to the embedded ChatView, which matches by uuid and says so
+   *  when the message is past the compaction boundary the SDK read truncates at. */
+  focusMessageUuid?: string;
   onBack: () => void;
   /** Navigate to another session's Mission Control (used by the team detail
    *  overlay's "open chat"). Remounts this view — the caller keys it by
@@ -712,6 +717,7 @@ export function TerminalMissionControl({
                   // and this bar would have no idea a tool is open to crumb it.
                   onOpenTool={group => setOverlay({ kind: 'tool', group })}
                   jumpToTurnRef={jumpToTurnRef}
+                  focusMessageUuid={focusMessageUuid}
                 />
               </div>
             )}
@@ -783,6 +789,9 @@ export function TerminalMissionControl({
             onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
             onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}
             onOpenTeam={teamName => setOverlay({ kind: 'team', teamName })}
+            // A QUESTIONS row locates its turn in the Lens — the same handle the
+            // outline uses, which reveals the Lens first when we're on Terminal.
+            onLocateTurn={jumpToTurn}
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the
             // rail's band stays and is the only place either figure is stated.

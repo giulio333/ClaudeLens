@@ -435,18 +435,10 @@ function SkillCommandCard({
 /** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
  *  A single badge with a "× N" multiplier replaces the stack of identical
  *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
-export function ToolsHiddenBadge({
-  count,
-  files = [],
-  dimmed,
-}: {
-  count: number;
-  files?: TouchedFile[];
-  dimmed?: boolean;
-}) {
+export function ToolsHiddenBadge({ count, files = [] }: { count: number; files?: TouchedFile[] }) {
   if (count <= 0) return null;
   return (
-    <div className="cl-turn-tools-hidden" data-dim={dimmed || undefined}>
+    <div className="cl-turn-tools-hidden">
       <span className="cl-turn-tools-hidden-badge">
         {count === 1 ? '1 tool hidden' : 'tools hidden'}
         {count > 1 && <span className="cl-turn-tools-hidden-x">×{count}</span>}
@@ -461,9 +453,9 @@ export function ToolsHiddenBadge({
  *  not the user, and Claude Code stores that answer encrypted
  *  (`advisor_redacted_result`) — so there is nothing to expand. The marker
  *  states that it happened, what it took and what it cost, and nothing more. */
-export function AdvisorBadge({ consult, dimmed }: { consult: AdvisorConsult; dimmed?: boolean }) {
+export function AdvisorBadge({ consult }: { consult: AdvisorConsult }) {
   return (
-    <div className="cl-advisor-mark" data-dim={dimmed || undefined}>
+    <div className="cl-advisor-mark">
       <AdvisorChip consult={consult} />
     </div>
   );
@@ -556,7 +548,6 @@ export const MessageBubble = memo(function MessageBubble({
   agentOf,
   onOpenAgent,
   turnIndex,
-  dimmed,
   isContinuation,
   innerRef,
   hiddenToolCount = 0,
@@ -580,8 +571,6 @@ export const MessageBubble = memo(function MessageBubble({
   /** Navigates to the agent detail view (deep link from an expanded agent card). */
   onOpenAgent?: (agent: Agent) => void;
   turnIndex?: number;
-  /** Faded out because it doesn't match the active type filter (kept visible for context). */
-  dimmed?: boolean;
   /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
   isContinuation?: boolean;
   /** Forwarded ref to the turn <article> so the minimap can scroll-spy / jump to it. */
@@ -711,7 +700,6 @@ export const MessageBubble = memo(function MessageBubble({
         style={{ '--turn-role-color': orbColor, '--notif-orb': orbColor } as CSSProperties}
         ref={innerRef}
         data-n={turnIndex}
-        data-dim={dimmed || undefined}
       >
         <aside className="cl-turn-rail">
           <span className="cl-turn-orb cl-turn-orb--notif" aria-label="Task event" />
@@ -739,7 +727,6 @@ export const MessageBubble = memo(function MessageBubble({
         style={{ '--turn-role-color': roleColor } as CSSProperties}
         ref={innerRef}
         data-n={turnIndex}
-        data-dim={dimmed || undefined}
       >
         <aside className="cl-turn-rail">
           <span className="cl-turn-orb" aria-label={roleLabel}>
@@ -772,7 +759,6 @@ export const MessageBubble = memo(function MessageBubble({
       style={{ '--turn-role-color': roleColor } as CSSProperties}
       ref={innerRef}
       data-n={turnIndex}
-      data-dim={dimmed || undefined}
     >
       <aside className="cl-turn-rail">
         <span className="cl-turn-orb">{roleInitial}</span>

@@ -31,6 +31,8 @@ One line naming the observed behaviour, not the fix. Specific enough to be recog
 
 Short beats complete: no logs dumped whole, no restating the architecture — link `CLAUDE.md` instead. One defect per issue; split a shared root cause into linked issues and say so ("Split out of #245"). Search `gh issue list --state all` for a duplicate first.
 
+**Nothing real from the host machine:** an issue is public and permanent, so the evidence in it is described, never pasted. **## Verified** reports what the read path returns against what the file holds — row types, subtypes, how many sessions out of how many — and not the content of any of them. No absolute path from this machine's home, no name of a project, folder or file outside this repo, no line of a real transcript or memory, no personal identifier: a person, an address, an account, an employer, a client. A name that has to appear is a synthetic stand-in of the same shape (`/Users/alice`, "Acme2.0"), and an excerpt is trimmed to the field under discussion. The same holds for every comment on the issue.
+
 **No authorship attribution:** the issue reads as written by the maintainer — no `🤖 Generated with Claude Code` footer, no `claude.ai/code` session link, no "I asked Claude to…". Claude Code appears only as the _subject_ (the CLI whose data ClaudeLens reads), never as the author; evidence is reported as observed on this machine, not as something an assistant found.
 
 ```bash

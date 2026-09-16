@@ -6,7 +6,6 @@ import {
   savePdfExport,
   useActiveSessions,
   useChatSession,
-  useSessionSubagents,
   useGlobalAgents,
   useProjectAgents,
   useAllSkills,
@@ -22,15 +21,10 @@ import {
   isMemoryFile,
   buildProcessedMessages,
   buildSkillIndex,
-  correlateSessionAgents,
-  correlateSessionSkills,
   collectModelRuns,
   ChatDetailsFilter,
   RenderRow,
-  SessionAgent,
   ToolGroup,
-  TurnDescriptor,
-  TurnFilter,
   resolveToolIcon,
   toolRunStatus,
 } from './utils';
@@ -40,7 +34,6 @@ import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { VaultLinksProvider } from '../../VaultLinks';
-import { SubagentTranscriptPanel } from './SubagentTranscriptPanel';
 import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
 import { deriveContext } from '../terminal/context-window';
@@ -120,7 +113,6 @@ export function ChatView({
     error,
     refetch,
   } = useChatSession(project.hash, session.filename);
-  const { data: subagentMetas } = useSessionSubagents(project.hash, session.filename);
   const { data: globalAgents } = useGlobalAgents();
   const { data: projectAgents } = useProjectAgents(project.realPath);
   const { data: allSkills } = useAllSkills(project.realPath);
@@ -169,7 +161,6 @@ export function ChatView({
   // One entry point for every "open this tool" in the view — inline card, session
   // graph, skill output. The host frame takes it when it owns the chrome.
   const openTool = useMemo(() => onOpenTool ?? setSelectedTool, [onOpenTool]);
-  const [transcriptAgent, setTranscriptAgent] = useState<SessionAgent | null>(null);
   const [exportPreset, setExportPreset] = useState<ChatExportPreset>('message');
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -203,7 +194,6 @@ export function ChatView({
   // each render would re-run the `processed` memo below).
   const displayMessages = useMemo(() => messages ?? [], [messages]);
 
-  const [turnFilter, setTurnFilter] = useState<TurnFilter>('all');
   const [activeTurn, setActiveTurn] = useState<number | null>(null);
   // Bottom-pinning scroll: open at the bottom, follow every content growth
   // (stream, tool cards, density, late reflows) while anchored, detach on user
@@ -252,20 +242,6 @@ export function ChatView({
   // to say, so a toggle for it was a control for nothing.
   const thought = useThoughtStream(displayMessages, true);
 
-  // Sub-agents dispatched in this session, correlated to their internal
-  // transcript files. Drives the right-hand activity rail.
-  const agents = useMemo(
-    () => correlateSessionAgents(processed, subagentMetas ?? []),
-    [processed, subagentMetas]
-  );
-
-  // Skills invoked in this session, linked to their definitions — drives the
-  // footer skill dock (sibling of the agent dock).
-  const skills = useMemo(
-    () => correlateSessionSkills(processed, allSkills ?? [], plugins ?? []),
-    [processed, allSkills, plugins]
-  );
-
   // Which model(s) this chat ran on, and at what effort — the footer chip. A
   // `/model` mid-chat makes this a list rather than a value, and the chip prints
   // the last entry, i.e. the one the conversation is actually on.
@@ -278,7 +254,7 @@ export function ChatView({
     (t: string) => agentTintColor(agentColorOf(t)),
     [agentColorOf]
   );
-  const { descriptors, minimapItems, rows, rowIndexByTurn, filterCounts } = useTranscriptModel({
+  const { minimapItems, rows, rowIndexByTurn } = useTranscriptModel({
     processed,
     detailsFilter,
     agentColor: resolveAgentTint,
@@ -375,34 +351,6 @@ export function ChatView({
     [rowVirtualizer]
   );
 
-  // Derived (not stored) so it can never get stuck: the active filter falls back
-  // to "All" when it no longer has matching turns — e.g. Thinking in minimal
-  // mode, or any chip that just dropped to 0 (and is now hidden) — otherwise the
-  // transcript would stay fully dimmed with no way back.
-  const activeFilter: TurnFilter =
-    turnFilter !== 'all' &&
-    ((turnFilter === 'thinking' && detailsFilter === 'minimal') || filterCounts[turnFilter] === 0)
-      ? 'all'
-      : turnFilter;
-
-  // Per-turn match against the active type filter (non-matching turns are dimmed,
-  // never removed, so the conversation thread stays continuous).
-  const matchesFilter = useCallback(
-    (d: TurnDescriptor) => {
-      switch (activeFilter) {
-        case 'thinking':
-          return d.hasThinking && detailsFilter === 'all';
-        case 'questions':
-          return d.hasQuestion;
-        case 'plan':
-          return d.hasPlan;
-        default:
-          return true;
-      }
-    },
-    [activeFilter, detailsFilter]
-  );
-
   // Scroll-spy: highlight the turn nearest the viewport centre. Read off the
   // virtualizer's own geometry rather than an IntersectionObserver over mounted
   // turns — with a windowed list most turns have no node to observe, and the
@@ -461,19 +409,19 @@ export function ChatView({
     }
   }, [detailsFilter, followRef, pin, scrollToTurn]);
 
-  // The feed hides (display:none) behind overlays (tool detail, sub-agent
-  // transcript) and in Timeline mode — it stays mounted so the composer keeps
+  // The feed hides (display:none) behind the tool-detail overlay and in Timeline
+  // mode — it stays mounted so the composer keeps
   // the SDK session alive, but a hidden scroller collapses and loses its scroll
   // offset anyway. On return, an anchored view is re-pinned by the resize
   // observer; a detached one gets its active turn back instead of silently
   // restarting at the top.
   useLayoutEffect(() => {
-    if (selectedTool || transcriptAgent || viewMode !== 'chat') return;
+    if (selectedTool || viewMode !== 'chat') return;
     if (!followRef.current) {
       const turn = activeTurnRef.current;
       if (turn !== null) scrollToTurn(turn);
     }
-  }, [selectedTool, transcriptAgent, viewMode, followRef, scrollToTurn]);
+  }, [selectedTool, viewMode, followRef, scrollToTurn]);
 
   const jumpToTurn = useCallback(
     (n: number) => {
@@ -531,54 +479,20 @@ export function ChatView({
     const onKey = (e: KeyboardEvent) => {
       if (e.key !== 'Escape') return;
       if (selectedTool) setSelectedTool(null);
-      else if (transcriptAgent?.agentId) setTranscriptAgent(null);
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [embedded, selectedTool, transcriptAgent]);
-
-  // The rail's "active" agent = the latest dispatch at or above the current
-  // scroll position. As you scroll past one agent's card toward the next, the
-  // highlight advances — the recorded-session echo of Claude Code's live pill.
-  const activeAgentKey = useMemo(() => {
-    if (agents.length === 0) return null;
-    if (activeTurn === null) return agents[0].key;
-    let key: string | null = null;
-    for (const a of agents) {
-      if (a.turnN <= activeTurn) key = a.key;
-      else break;
-    }
-    return key ?? agents[0].key;
-  }, [agents, activeTurn]);
-
-  const activeSkillKey = useMemo(() => {
-    if (skills.length === 0) return null;
-    if (activeTurn === null) return skills[0].key;
-    let key: string | null = null;
-    for (const s of skills) {
-      if (s.turnN <= activeTurn) key = s.key;
-      else break;
-    }
-    return key ?? skills[0].key;
-  }, [skills, activeTurn]);
+  }, [embedded, selectedTool]);
 
   const title = sessionTitle(session);
   // The detail covering the transcript, if any, and the one step back out of it.
   // The top bar's arrow, the session crumb and Esc all walk this — the panels
   // themselves draw no back button when this view owns the chrome.
-  const detailBack = selectedTool
-    ? () => setSelectedTool(null)
-    : transcriptAgent?.agentId
-      ? () => setTranscriptAgent(null)
-      : null;
+  const detailBack = selectedTool ? () => setSelectedTool(null) : null;
   // Whether an overlay / alternate mode is covering the chat workspace. The
   // workspace is then hidden (display:none) but never unmounted — see the
   // comment at the render site.
-  const chatHidden =
-    Boolean(selectedTool) ||
-    Boolean(transcriptAgent && transcriptAgent.agentId) ||
-    isError ||
-    viewMode !== 'chat';
+  const chatHidden = Boolean(selectedTool) || isError || viewMode !== 'chat';
 
   // Persistent text highlights: select text in the reading column to flag it
   // (survives across app restarts and bakes into exports). Capture + paint are
@@ -672,12 +586,10 @@ export function ChatView({
     // The advisor marker is a stream event, not a turn: it renders the same in
     // both density modes (the consult itself is the whole content).
     if (item.kind === 'advisor') {
-      return <AdvisorBadge consult={item.consult} dimmed={activeFilter !== 'all'} />;
+      return <AdvisorBadge consult={item.consult} />;
     }
     if (item.kind !== 'turn') {
-      return (
-        <ToolsHiddenBadge count={item.count} files={item.files} dimmed={activeFilter !== 'all'} />
-      );
+      return <ToolsHiddenBadge count={item.count} files={item.files} />;
     }
     const p = processed[item.idx];
     return (
@@ -691,11 +603,6 @@ export function ChatView({
         agentOf={agentOf}
         onOpenAgent={onOpenAgent}
         turnIndex={item.idx + 1}
-        dimmed={
-          activeFilter !== 'all' &&
-          descriptors[item.idx]?.visible &&
-          !matchesFilter(descriptors[item.idx])
-        }
         isContinuation={row.isContinuation}
         hiddenToolCount={item.hiddenCount}
         hiddenFiles={item.hiddenFiles}
@@ -729,10 +636,6 @@ export function ChatView({
         },
       }}
       showTranscriptControls={showTranscriptControls && processed.length > 0}
-      filter={activeFilter}
-      setFilter={setTurnFilter}
-      counts={filterCounts}
-      showThinking={detailsFilter === 'all'}
       density={detailsFilter}
       setDensity={setDetailsFilter}
       canExport={canExport}
@@ -757,16 +660,6 @@ export function ChatView({
       onExportPreset={setExportPreset}
       onExport={handleExport}
       onDelete={() => setShowDelete(true)}
-      agents={agents}
-      activeAgentKey={activeAgentKey}
-      agentColorOf={a => agentTintColor(agentColorOf(a.subagentType))}
-      onOpenAgent={setTranscriptAgent}
-      onLocateAgent={jumpToTurn}
-      skills={skills}
-      activeSkillKey={activeSkillKey}
-      onOpenSkill={skill => onOpenSkill?.(skill)}
-      onOpenSkillOutput={openTool}
-      onLocateSkill={jumpToTurn}
       modelRuns={modelRuns}
       onLocateModel={jumpToTurn}
       thought={thought}
@@ -850,19 +743,7 @@ export function ChatView({
                       ),
                     },
                   ]
-                : transcriptAgent?.agentId
-                  ? [
-                      {
-                        accent: true,
-                        label: (
-                          <span style={{ letterSpacing: '0.1em' }}>
-                            <span style={{ color: 'var(--cl-ink-4)' }}>AGENT · </span>
-                            {transcriptAgent.subagentType}
-                          </span>
-                        ),
-                      },
-                    ]
-                  : []),
+                : []),
             ]}
             right={
               detailBack ? (
@@ -963,20 +844,6 @@ export function ChatView({
             onBack={() => setSelectedTool(null)}
             chromeless={!embedded}
           />
-        ) : transcriptAgent && transcriptAgent.agentId ? (
-          <SubagentTranscriptPanel
-            hash={project.hash}
-            sessionFilename={session.filename}
-            agentId={transcriptAgent.agentId}
-            subagentType={transcriptAgent.subagentType}
-            description={transcriptAgent.description}
-            onBack={() => setTranscriptAgent(null)}
-            // Same rule as the tool panel: chromeless while this view's own bar
-            // carries the crumb and the way back. Embedded it keeps its button —
-            // an agent transcript opened from the embedded transcript is NOT
-            // hoisted to the frame (only tools are), so nothing above knows it.
-            chromeless={!embedded}
-          />
         ) : isError ? (
           <div className="cl-chat-workspace">
             <QueryError title="Failed to load transcript" error={error} onRetry={() => refetch()} />
@@ -1038,12 +905,7 @@ export function ChatView({
             onRemove={highlightLayer.removeCurrent}
           />
 
-          <FocusMinimap
-            items={minimapItems}
-            active={activeTurn}
-            matches={matchesFilter}
-            onJump={jumpToTurn}
-          />
+          <FocusMinimap items={minimapItems} active={activeTurn} onJump={jumpToTurn} />
 
           {controlPill(true)}
         </div>

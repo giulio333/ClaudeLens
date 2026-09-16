@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import type { CSSProperties } from 'react';
-import { MinimapItem, TurnDescriptor, TurnVariant } from './utils';
+import { MinimapItem, TurnVariant } from './utils';
 
 /** Turn navigator capsule (design "Lens variants · nastro") — a vertical pill
  *  floating at the LEFT edge of the reading column. Top-to-bottom: a rotated
@@ -30,12 +30,10 @@ function tickColor(it: MinimapItem): string {
 export function FocusMinimap({
   items,
   active,
-  matches,
   onJump,
 }: {
   items: MinimapItem[];
   active: number | null;
-  matches: (d: TurnDescriptor) => boolean;
   onJump: (n: number) => void;
 }) {
   const railRef = useRef<HTMLElement | null>(null);
@@ -82,7 +80,6 @@ export function FocusMinimap({
                 data-accent={
                   (!isActive && it.variant !== 'user' && it.variant !== 'claude') || undefined
                 }
-                data-dim={!matches(it) || undefined}
                 onClick={() => onJump(it.n)}
                 title={`${String(it.n).padStart(2, '0')} · ${it.label} · ${it.time}`}
                 aria-label={`Jump to turn ${it.n}, ${it.label}`}

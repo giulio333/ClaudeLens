@@ -21,8 +21,7 @@ import type { ChatDetailsFilter, ProcessedMessage } from './utils';
  * **Scope is the prose**, which is what the paint layer can reach: `text`
  * blocks, plus `thinking` when the density filter is showing it. A tool result
  * would be a hit on a turn with nothing lit in it, and thinking in MIN density
- * would be the same — `ChatView` already refuses to leave the reader in a state
- * with no visible reason for it (see the `activeFilter` fallback).
+ * would be the same: a turn the reader is sent to must have something lit in it.
  */
 
 /** Blocks a turn's prose is made of, under a given density. */

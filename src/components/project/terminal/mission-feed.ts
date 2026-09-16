@@ -1,5 +1,12 @@
 import type { Task, TeamSummary } from '../../../types';
-import { fileExt, MEMORY_TYPE_TINT } from '../chat/utils';
+import {
+  fileExt,
+  isQuestionDismissed,
+  MEMORY_TYPE_TINT,
+  parseAnswersFromResultText,
+  parseAskUserQuestions,
+  QUESTION_TOOL,
+} from '../chat/utils';
 import type {
   MemoryAction,
   MemoryActivity,
@@ -281,15 +288,17 @@ export const MEMORY_ACTION_TINT: Record<MemoryAction, string> = {
 
 /* ── the feed ─────────────────────────────────────────────────────────── */
 
-export type FeedKind = 'AGENTS' | 'TEAMS' | 'SKILLS' | 'MEMORY' | 'WEB' | 'CHANGES' | 'TASKS';
+export type FeedKind =
+  'AGENTS' | 'TEAMS' | 'SKILLS' | 'QUESTIONS' | 'MEMORY' | 'WEB' | 'CHANGES' | 'TASKS';
 
 /** Every filter the rail can offer, in the order the pills are laid out: who did
- *  the work, then what informed it (recalled, then read from outside), then what
- *  it changed and what is still planned. */
+ *  the work, then what informed it (asked of the user, recalled, then read from
+ *  outside), then what it changed and what is still planned. */
 export const FEED_KINDS: FeedKind[] = [
   'AGENTS',
   'TEAMS',
   'SKILLS',
+  'QUESTIONS',
   'MEMORY',
   'WEB',
   'CHANGES',
@@ -300,6 +309,9 @@ export const FEED_KINDS: FeedKind[] = [
 export type FeedSource =
   | { kind: 'agent'; agent: SessionAgent }
   | { kind: 'skill'; skill: SessionSkill }
+  /** The turn the question was asked on — the row locates it rather than opening
+   *  a panel: the transcript already draws the ask with all its options. */
+  | { kind: 'question'; turnN: number }
   | { kind: 'memory'; touch: MemoryTouch }
   | { kind: 'web'; visit: WebVisit }
   | { kind: 'change'; change: FileChange }
@@ -489,6 +501,79 @@ function skillEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] {
   }));
 }
 
+/**
+ * QUESTIONS — the moments the session stopped and asked the user something.
+ *
+ * It used to be a turn filter in the control pill, next to Thinking and Plan.
+ * It is not that kind of thing: an `AskUserQuestion` is a tool call, an event
+ * with a time and an outcome, exactly like a skill invocation or a fetched page
+ * — and the pill's filter could only say how many there were. Here a row names
+ * the question, carries the answer that was actually chosen, and dates it.
+ *
+ * The three states are the transcript card's, not new ones (`AskQuestionCard`
+ * in `MessageBubble`): a call with no result is **pending**, a result with no
+ * parsed answers that reads as a rejection is **dismissed** (the user closed the
+ * ask and kept talking), everything else is **answered**. Pending is the only
+ * one tinted — it is the only one that is still waiting on somebody.
+ */
+function questionEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] {
+  const events: FeedEvent[] = [];
+  input.processed.forEach((p, i) => {
+    for (const g of p.toolGroups) {
+      if (g.use.name !== QUESTION_TOOL) continue;
+      const questions = parseAskUserQuestions(g.use.input as Record<string, unknown>);
+      // A call we cannot read a question out of has nothing to put in a row; the
+      // transcript card skips it for the same reason.
+      if (questions.length === 0) continue;
+      const resultText = g.result?.content ?? '';
+      const answers = g.result ? parseAnswersFromResultText(resultText) : {};
+      const chosen = questions.map(q => answers[q.question]).filter(Boolean);
+      const state = !g.result
+        ? 'pending'
+        : chosen.length === 0 && isQuestionDismissed(resultText)
+          ? 'dismissed'
+          : 'answered';
+      // The answer is the fact worth carrying; the count only earns its place
+      // when one call asked more than one thing.
+      const meta =
+        [questions.length > 1 ? `${questions.length} questions` : null, ...chosen]
+          .filter(Boolean)
+          .join(' · ') || (state === 'pending' ? 'waiting for reply' : 'kept talking');
+      events.push({
+        id: `question:${g.use.id || `${i}`}`,
+        kind: 'QUESTIONS' as const,
+        at: turnAt[i] ?? 0,
+        // Never live, not even pending — the same line WEB's PENDING draws. A
+        // call with no result on disk may be a session waiting on you right now
+        // or a CLI killed mid-ask a week ago, and the transcript cannot tell
+        // them apart; `live` floats a row over everything and takes the live
+        // tint, which would be that claim. It does not cost salience either: a
+        // question that is genuinely still open is the last thing written, so
+        // the newest-first sort already puts it on top — because it IS newest,
+        // which is a fact, rather than because we guessed it was current.
+        live: false,
+        glyph: '?',
+        // The amber the transcript already gives an ask — the same encoding, not
+        // a tint of its own.
+        glyphTint: 'var(--cl-warn)',
+        title: questions[0].question,
+        meta,
+        // The row truncates at rail width, so the whole ask — every question and
+        // what was picked — stays recoverable without opening anything.
+        hint: questions
+          .map(q => `${q.question}${answers[q.question] ? ` → ${answers[q.question]}` : ''}`)
+          .join(' · '),
+        right: state === 'answered' ? 'ANSWERED' : state === 'pending' ? 'PENDING' : 'NO ANSWER',
+        rightTint: state === 'pending' ? 'var(--cl-warn)' : 'var(--cl-ink-4)',
+        items: [],
+        expandable: false,
+        source: { kind: 'question' as const, turnN: i + 1 },
+      });
+    }
+  });
+  return events;
+}
+
 function memoryEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
   return input.memory.touches.map(t => {
     const count = t.writes > 0 ? t.writes : t.reads;
@@ -673,6 +758,7 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
     ...agentEvents(input, turnAt),
     ...teamEvents(input),
     ...skillEvents(input, turnAt),
+    ...questionEvents(input, turnAt),
     ...memoryEvents(input, at),
     ...webEvents(input, at),
     ...changeEvents(input, at),
@@ -684,7 +770,16 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
 
 /** How many events each filter would show. */
 export function countByKind(events: FeedEvent[]): Record<FeedKind, number> {
-  const counts = { AGENTS: 0, TEAMS: 0, SKILLS: 0, MEMORY: 0, WEB: 0, CHANGES: 0, TASKS: 0 };
+  const counts = {
+    AGENTS: 0,
+    TEAMS: 0,
+    SKILLS: 0,
+    QUESTIONS: 0,
+    MEMORY: 0,
+    WEB: 0,
+    CHANGES: 0,
+    TASKS: 0,
+  };
   for (const e of events) counts[e.kind]++;
   return counts;
 }

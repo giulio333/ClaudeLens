@@ -46,6 +46,14 @@ export type View =
   | { type: 'project-memory'; project: { hash: string; realPath: string } }
   | { type: 'sessions'; project: { hash: string; realPath: string } }
   | { type: 'analytics'; project: { hash: string; realPath: string } }
+  /** A session read on its own, outside Mission Control.
+   *
+   *  **Nothing navigates here any more.** The two entry points that did — a
+   *  search hit and a memory topic's origin session — go to `terminal` now: a
+   *  bare `ChatView` has no rail, and the rail is where a session's agents,
+   *  skills and questions are listed since the control pill stopped carrying
+   *  them. The case is kept (rather than deleted with `ChatView`'s whole
+   *  `!embedded` half) so that removal can be read as its own diff. */
   | {
       type: 'chat';
       project: { hash: string; realPath: string };
@@ -74,7 +82,19 @@ export type View =
       project: { hash: string; realPath: string };
       resumeSessionId?: string;
       attachJobId?: string;
-      from?: 'agents-live';
+      from?: 'agents-live' | 'search' | 'memory-topic';
+      /** Scroll the Lens to the turn holding this message on open (a search hit).
+       *  By uuid, never by position: the transcript reads through the SDK, which
+       *  truncates at the compaction boundary, so a hit found on disk may have no
+       *  turn here — and an index would have jumped to the wrong one instead of
+       *  saying so. */
+      focusMessageUuid?: string;
+      /** The query that led here, so Back returns to the results instead of an
+       *  empty search field. */
+      searchQuery?: string;
+      /** Set when `from` is `memory-topic`: Back walks to that topic, not to the
+       *  project's session list. */
+      memoryTopic?: { topic: MemoryTopic; content: string; hash: string };
     }
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }

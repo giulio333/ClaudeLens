@@ -596,11 +596,16 @@ export default function ProjectOverview() {
                 ? setView({ type: 'sessions', project: view.scope })
                 : setView({ type: 'global-home' })
             }
+            // A hit opens inside Mission Control, not in a standalone ChatView:
+            // the rail is where this session's agents, skills and questions are
+            // listed, and the bare transcript no longer carries any of them.
+            // SearchView still resolves the real SessionSummary and refuses a
+            // session that is gone — only the destination changed.
             onOpenHit={(project, session, messageUuid) =>
               setView({
-                type: 'chat',
+                type: 'terminal',
                 project,
-                session,
+                resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
                 from: 'search',
                 searchQuery: view.query,
                 focusMessageUuid: messageUuid,
@@ -628,17 +633,30 @@ export default function ProjectOverview() {
             project={view.project}
             resumeSessionId={view.resumeSessionId}
             attachJobId={view.attachJobId}
+            focusMessageUuid={view.focusMessageUuid}
             onBack={() =>
               view.from === 'agents-live'
                 ? setView({ type: 'agents-live', project: view.project })
-                : setView({ type: 'sessions', project: view.project })
+                : view.from === 'search'
+                  ? // Back to the results, with the query that produced them: a
+                    // search is a place you come back to, and re-running it from
+                    // an empty field is the one thing a result page must not ask.
+                    setView({ type: 'search', query: view.searchQuery ?? '' })
+                  : view.from === 'memory-topic' && view.memoryTopic
+                    ? setView({ type: 'memory-topic', ...view.memoryTopic })
+                    : setView({ type: 'sessions', project: view.project })
             }
             onOpenSession={id =>
               setView({
                 type: 'terminal',
                 project: view.project,
                 resumeSessionId: id,
+                // The way back belongs to how this view was entered, not to which
+                // session it currently shows: hopping to another session still
+                // returns to the results / the topic that led here.
                 from: view.from,
+                searchQuery: view.searchQuery,
+                memoryTopic: view.memoryTopic,
               })
             }
           />
@@ -654,7 +672,14 @@ export default function ProjectOverview() {
             }
             onOpenSession={
               selected
-                ? session => setView({ type: 'chat', project: selected, session, from: 'sessions' })
+                ? session =>
+                    setView({
+                      type: 'terminal',
+                      project: selected,
+                      resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
+                      from: 'memory-topic',
+                      memoryTopic: { topic: view.topic, content: view.content, hash: view.hash },
+                    })
                 : undefined
             }
             onOpenTopic={(topic, content) =>

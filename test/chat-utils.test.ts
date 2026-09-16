@@ -3,7 +3,6 @@ import {
   buildRenderItems,
   buildRenderRows,
   buildRowIndexByTurn,
-  computeFilterCounts,
   correlateSessionAgents,
   correlateSessionSkills,
   describeTurn,
@@ -824,22 +823,6 @@ describe('buildRenderRows', () => {
   it('returns nothing for an empty transcript', () => {
     expect(buildRenderRows([], [])).toEqual([]);
     expect(buildRowIndexByTurn([]).size).toBe(0);
-  });
-});
-
-describe('computeFilterCounts', () => {
-  it('counts visible turns by type', () => {
-    const processed = buildProcessedMessages([
-      msg('user', [text('hello')]),
-      msg('assistant', [text('hi'), toolUse('t1', 'Bash', { command: 'ls' })]),
-      msg('user', [toolResult('t1', 'out')]),
-    ]);
-    const visible = processed.map(p => describeTurn(p, 'all')).filter(d => d.visible);
-    const counts = computeFilterCounts(visible);
-    expect(counts.all).toBe(2);
-    expect(counts.thinking).toBe(0);
-    expect(counts.questions).toBe(0);
-    expect(counts.plan).toBe(0);
   });
 });
 
