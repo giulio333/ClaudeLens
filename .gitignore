@@ -32,6 +32,11 @@ npm-debug.log*
 # Local working documents
 docs/ClaudeLens_Architecture_Guide_IT.docx
 
+# Conversation exports. The app writes a chat to PDF or Markdown through a save
+# dialog that opens on the last folder used, which can be this one, and an
+# export carries whatever the conversation carried. No PDF belongs in this repo.
+*.pdf
+
 # Editor
 .idea/
 *.swp

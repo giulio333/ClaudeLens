@@ -49,6 +49,16 @@ done
 # commit that must always go through.
 case "$CMD" in
   *"git commit"*)
+    # A conversation export is the one payload this scan cannot read: the app
+    # writes a chat to PDF through a save dialog that opens on the last folder
+    # used, and a PDF is compressed, so the word list matches nothing inside it.
+    # `.gitignore` covers the accident; this covers the deliberate `git add -f`.
+    exports=$(git diff --cached --name-only --diff-filter=AM | grep -i -E '\.pdf$' || true)
+    if [ -n "$exports" ]; then
+      echo "guard-private-terms: a PDF is staged — refused. Its contents cannot be scanned." >&2
+      printf '%s\n' "$exports" >&2
+      status=1
+    fi
     git diff --cached | grep '^+' | scan "the staged additions" || status=1
     printf '%s' "$CMD" | scan "the commit command" || status=1
     ;;
