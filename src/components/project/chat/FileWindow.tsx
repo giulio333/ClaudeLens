@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
+import Markdown from '../../Markdown';
 import { ToolGroup, isMemoryFile, fileExt, TOOL_TINT } from './utils';
 import { resolveLang } from './code-lang';
 import { CopyButton, IconButton, ExpandIcon, CloseIcon, SheetModal } from './CommandBlock';
@@ -8,6 +9,7 @@ import {
   diffStat,
   fileName,
   highlightRows,
+  isMarkdownPath,
   lineDiff,
   lineRange,
   numberedRows,
@@ -53,14 +55,18 @@ type Sheet = {
   rows: FileRow[] | null;
   /** Printed as it is when `rows` is null, or under them on an error. */
   note: string;
-  meta: string;
+  /** Where the file sits, short enough for a title bar. The whole path is
+   *  `path`: the fullscreen window prints it, and the bar copies it. */
+  dir: string;
+  /** `lines 436–497`, `replace all` — what the call asked for, beside the dir. */
+  flag?: string;
   state: 'ok' | 'error' | 'pending';
   status: string;
   copyText: string;
   copyLabel: string;
 };
 
-type Body = Pick<Sheet, 'rows' | 'note' | 'status' | 'copyText' | 'copyLabel'> & { flag?: string };
+type Body = Pick<Sheet, 'rows' | 'note' | 'status' | 'copyText' | 'copyLabel' | 'flag'>;
 
 const lines = (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`;
 
@@ -127,8 +133,7 @@ function buildSheet(
         ? writeBody(state, input, resultText)
         : editBody(state, input, resultText);
   const status = state === 'pending' ? 'running' : state === 'error' ? 'error' : body.status;
-  const meta = [path ? shortDir(path) : '', body.flag].filter(Boolean).join(' · ');
-  return { kind, path, meta, state, ...body, status };
+  return { kind, path, dir: path ? shortDir(path) : '', state, ...body, status };
 }
 
 /** The window: title bar (lights + tool verb + file name + where it sits), the
@@ -143,6 +148,7 @@ function EditorWindow({
   onExpand,
   onClose,
   full,
+  preview,
 }: {
   sheet: Sheet;
   language: string | null;
@@ -152,6 +158,9 @@ function EditorWindow({
   onExpand?: () => void;
   onClose?: () => void;
   full?: boolean;
+  /** Present only when the file is markdown: `on` draws the document instead of
+   *  its source. Undefined for every other file, which has no second reading. */
+  preview?: { on: boolean; onToggle: () => void };
 }) {
   const rows = sheet.rows ?? NO_ROWS;
   const shown = useMemo(
@@ -163,6 +172,11 @@ function EditorWindow({
   // 24 rows does not pay for 2000.
   const html = useMemo(() => highlightRows(shown, language), [shown, language]);
   const tint = memory ? 'var(--cl-violet)' : (TOOL_TINT[sheet.kind] ?? 'var(--cl-ink-3)');
+  const [copied, setCopied] = useState(false);
+  // The bar says where the file sits, shortened; fullscreen has the width to
+  // say it whole. Either way a click copies the real path, because a path you
+  // can read but not take is half a path.
+  const meta = [full ? sheet.path : sheet.dir, sheet.flag].filter(Boolean).join(' · ');
   // Gutter wide enough for the largest number it has to hold.
   const digits = Math.max(2, ...rows.map(r => String(r.line ?? '').length));
 
@@ -180,11 +194,36 @@ function EditorWindow({
         <span className="cl-term-title">
           <span className="cl-term-kind">{sheet.kind}</span>
           {memory && <span className="cl-term-kind is-memory">memory</span>}
-          <b title={sheet.path}>{sheet.path ? fileName(sheet.path) : '(no file)'}</b>
-          {sheet.meta && <span className="sep">—</span>}
-          {sheet.meta && <span className="meta">{sheet.meta}</span>}
+          <b>{sheet.path ? fileName(sheet.path) : '(no file)'}</b>
+          {meta && <span className="sep">—</span>}
+          {meta && sheet.path && (
+            <button
+              type="button"
+              className={`meta${copied ? ' is-copied' : ''}`}
+              title={copied ? 'Copied' : `${sheet.path} — click to copy`}
+              onClick={() => {
+                void navigator.clipboard.writeText(sheet.path).then(() => {
+                  setCopied(true);
+                  setTimeout(() => setCopied(false), 1500);
+                });
+              }}
+            >
+              {meta}
+            </button>
+          )}
+          {meta && !sheet.path && <span className="meta">{meta}</span>}
         </span>
         <span className="cl-term-actions">
+          {preview && (
+            <button
+              type="button"
+              className="cl-term-mode"
+              onClick={preview.onToggle}
+              title={preview.on ? 'Show the markdown source' : 'Render the markdown'}
+            >
+              {preview.on ? 'Source' : 'Preview'}
+            </button>
+          )}
           {sheet.copyText && <CopyButton text={sheet.copyText} label={sheet.copyLabel} />}
           {onExpand && (
             <IconButton label="Open fullscreen" onClick={onExpand}>
@@ -199,10 +238,18 @@ function EditorWindow({
         </span>
       </div>
 
-      <div className={`cl-term-body cl-file-body${clamped ? ' is-clamped' : ''}`}>
-        {shown.map((row, i) => (
-          <Line key={i} row={row} html={html[i]} />
-        ))}
+      <div
+        className={`cl-term-body cl-file-body${preview?.on ? ' is-preview' : ''}${
+          clamped ? ' is-clamped' : ''
+        }`}
+      >
+        {preview?.on ? (
+          <div className="cl-file-preview">
+            <Markdown>{sheet.copyText}</Markdown>
+          </div>
+        ) : (
+          shown.map((row, i) => <Line key={i} row={row} html={html[i]} />)
+        )}
         {sheet.rows && sheet.rows.length === 0 && sheet.state !== 'error' && (
           <div className="cl-term-note">
             {sheet.state === 'pending' ? 'still running — no result recorded yet' : 'empty file'}
@@ -223,7 +270,7 @@ function EditorWindow({
         <span className="cl-term-foot-actions">
           {onToggleClamp && (
             <button type="button" className="cl-term-link" onClick={onToggleClamp}>
-              {clamped ? `Show all ${rows.length} lines` : 'Collapse'}
+              {clamped ? (preview?.on ? 'Show all' : `Show all ${rows.length} lines`) : 'Collapse'}
             </button>
           )}
         </span>
@@ -258,6 +305,17 @@ export function FileSheet({
   const clamp = ROW_CLAMP[kind];
   const clamped = !expanded && total > clamp;
 
+  // A markdown file has a second reading: the document it is. A write of one is
+  // the document the turn produced, so that is the one that opens; a read is a
+  // slice of a file, numbered where it started, so its rows stay and the
+  // document is one click away. An edit is a diff and has no second reading.
+  const markdown = kind !== 'Edit' && sheet.state === 'ok' && isMarkdownPath(sheet.path);
+  const [asDocument, setAsDocument] = useState(kind === 'Write');
+  const preview =
+    markdown && sheet.copyText
+      ? { on: asDocument, onToggle: () => setAsDocument(d => !d) }
+      : undefined;
+
   return (
     <>
       <EditorWindow
@@ -267,6 +325,7 @@ export function FileSheet({
         clamped={clamped}
         onToggleClamp={total > clamp ? () => setExpanded(e => !e) : undefined}
         onExpand={total > 0 || sheet.note ? () => setFull(true) : undefined}
+        preview={preview}
       />
       {full && (
         <SheetModal onClose={() => setFull(false)}>
@@ -277,6 +336,7 @@ export function FileSheet({
             clamped={false}
             onClose={() => setFull(false)}
             full
+            preview={preview}
           />
         </SheetModal>
       )}

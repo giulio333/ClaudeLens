@@ -9,6 +9,7 @@ import {
   diffStat,
   fileName,
   highlightRows,
+  isMarkdownPath,
   lineDiff,
   lineRange,
   numberedRows,
@@ -98,10 +99,10 @@ describe('lineRange', () => {
 });
 
 describe('contentRows / diffStat', () => {
-  it('numbers a written file from 1, every line new', () => {
+  it('numbers a written file from 1, its rows plain and not a diff', () => {
     expect(contentRows('a\nb\n')).toEqual([
-      { kind: 'add', text: 'a', line: 1 },
-      { kind: 'add', text: 'b', line: 2 },
+      { kind: 'ctx', text: 'a', line: 1 },
+      { kind: 'ctx', text: 'b', line: 2 },
     ]);
   });
 
@@ -120,6 +121,38 @@ describe('shortDir / fileName', () => {
   it('prints a short path whole', () => {
     expect(shortDir('/etc/hosts')).toBe('/etc');
     expect(shortDir('x.ts')).toBe('/');
+  });
+
+  it('drops segments from the head, not the tail, when three are too long', () => {
+    // A scratchpad under the archive: the last three segments are the project
+    // hash, the session id and `scratchpad` — 90-odd characters, of which only
+    // the last one says anything.
+    const scratch =
+      '/Users/me/.claude/projects/-Users-me-Projects-Acme2.0/' +
+      '11111111-2222-3333-4444-555555555555/scratchpad/build.py';
+    expect(shortDir(scratch)).toBe('…/scratchpad');
+  });
+
+  it('drops a segment only when what is left would not fit', () => {
+    // `keep` says three segments, `max` says 40 characters — and `max` is the
+    // one that decides here: the last two join to exactly 40, so both survive;
+    // one character more and the head of the pair goes.
+    const fits = `/a/bbbb/${'x'.repeat(20)}/${'y'.repeat(19)}/f.ts`;
+    expect(shortDir(fits)).toBe(`…/${'x'.repeat(20)}/${'y'.repeat(19)}`);
+    const over = `/a/bbbb/${'x'.repeat(21)}/${'y'.repeat(19)}/f.ts`;
+    expect(shortDir(over)).toBe(`…/${'y'.repeat(19)}`);
+  });
+
+  it('keeps the last segment however long it is', () => {
+    expect(shortDir(`/a/${'x'.repeat(60)}/f.ts`)).toBe(`…/${'x'.repeat(60)}`);
+  });
+
+  it('knows markdown by its extension', () => {
+    expect(isMarkdownPath('/p/plan.md')).toBe(true);
+    expect(isMarkdownPath('/p/README.MD')).toBe(true);
+    expect(isMarkdownPath('/p/notes.mdx')).toBe(true);
+    expect(isMarkdownPath('/p/mdfile.ts')).toBe(false);
+    expect(isMarkdownPath('/p/md')).toBe(false);
   });
 
   it('names the file', () => {

@@ -6631,6 +6631,14 @@ button.cl-pill-model[data-on] {
   border: 1px solid var(--t-line);
   border-radius: 9px;
   background: var(--t-bg);
+  /* the window brings its own ink as well as its own surface: it is dark in
+     both themes, so anything inside it that does not name a colour has to fall
+     back to the window's ink and never to the page's — which on paper is
+     near-black, on this background invisible. That is exactly what made a
+     written markdown file unreadable: hljs leaves prose untokenized, so every
+     run with no span took the page's ink and only the headings and the
+     `**bold**` were left on screen. */
+  color: var(--t-ink);
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.05),
     0 10px 26px -20px oklch(0.15 0.02 45 / 0.55);
@@ -6860,15 +6868,93 @@ button.cl-pill-model[data-on] {
 }
 /* a file's meta is a path, and a path is long: unlike the terminal's `5 steps`
    it has to give way, or the file name — the one thing to read — is what gets
-   squeezed out */
+   squeezed out. Which is what happened: `b` declares no `flex`, so it inherited
+   `0 1 auto` and shrank alongside the path, and a title bar said
+   `build_report_ht… — …/-Users-…-Acme2.0/1f2e3d4c-…`. The name is the one
+   thing that never yields; it clips only when it alone is wider than the bar */
+.cl-term--file .cl-term-title b {
+  flex: 0 0 auto;
+  max-width: 100%;
+}
 .cl-term--file .cl-term-title .meta {
   flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
+/* the path is a button: it carries the whole path, not the shortened one, and
+   a click takes it — reading it was already possible, taking it was not */
+.cl-term--file .cl-term-title button.meta {
+  appearance: none;
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
+  letter-spacing: inherit;
+  color: inherit;
+  /* `copy` draws the cursor with a `+` badge glued to it, which reads as "drop
+     something here" more than as "take this" — a clickable thing takes the
+     pointer, and what the click does the tooltip says */
+  cursor: pointer;
+}
+.cl-term--file .cl-term-title button.meta:hover {
+  color: var(--t-dim);
+}
+.cl-term--file .cl-term-title button.meta.is-copied {
+  color: var(--t-prompt);
+}
 .cl-file-body {
   padding: 6px 0 8px;
+}
+/* ── the document, for a markdown file ──
+   A written `.md` is prose by construction, and printing it as source is the
+   same mistake the app already corrected for a fetched page. The window keeps
+   its chrome — same title bar, same status strip, the verb still says WRITE —
+   and the body becomes a sheet of paper: the document is not code, so it does
+   not belong on the dark surface the highlight palette is tuned for, and the
+   prose renders exactly as it does in the transcript (`.prose-lens`), fenced
+   blocks included, which is the point of rendering it at all. */
+.cl-file-body.is-preview {
+  padding: 0;
+}
+.cl-file-preview {
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  padding: 14px 20px 18px;
+}
+/* the clamp is the rows' one, measured in pixels because a rendered document
+   has no rows to count: still the fade of `.cl-term-body.is-clamped`, so both
+   readings of the same file fold the same way */
+.cl-file-body.is-preview.is-clamped {
+  max-height: 420px;
+  /* only while folded: the body scrolls (`.cl-term-body`) and that is what the
+     fullscreen window stands on — `hidden` here would hand a 400-line document
+     to a 92vh modal with no way down it */
+  overflow: hidden;
+}
+/* the mode switch: a word, not an icon — "Preview" and "Source" are the two
+   readings, and no glyph says which one you would get */
+.cl-term-mode {
+  flex: 0 0 auto;
+  margin-right: 2px;
+  padding: 2px 7px;
+  border: 1px solid var(--t-line);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--t-dim);
+  font-family: var(--font-mono);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    color 0.12s ease,
+    border-color 0.12s ease;
+}
+.cl-term-mode:hover {
+  border-color: color-mix(in oklch, var(--tint, var(--t-accent)) 45%, var(--t-line));
+  color: var(--t-ink);
 }
 /* the row carries the mono font so `--gutter` (in `ch`) is measured against the
    digits it has to hold, not against the body's sans */
@@ -6899,13 +6985,21 @@ button.cl-pill-model[data-on] {
   line-height: 1.62;
   white-space: pre;
 }
+/* github-dark-dimmed paints `.hljs` with its own slab and its own cool-grey ink;
+   both go, and `inherit` now means the window's ink (pinned on `.cl-term`),
+   which is the only reason this can say `inherit` at all — it sits on the same
+   element as `.cl-file-code`, so it wins on specificity and the `--t-ink` there
+   never applies. */
 .cl-file-code.hljs {
   padding: 0;
   background: transparent !important;
   color: inherit;
   font: inherit;
 }
-/* the diff rows: whole-row tint, gutter mark in the row's own colour */
+/* the diff rows: whole-row tint, gutter mark in the row's own colour. Only an
+   `Edit` has them — a write is the file, not a diff of it, so its rows are
+   `ctx` (`contentRows`); when they were `add` this wash lay under all 225 rows
+   of a written file and took the contrast of every syntax colour with it */
 .cl-file-row.is-add {
   background: color-mix(in oklch, var(--t-prompt) 12%, transparent);
 }
