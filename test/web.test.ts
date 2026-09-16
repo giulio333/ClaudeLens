@@ -63,9 +63,7 @@ function webGroup(
 
 describe('web — url labels', () => {
   it('names a page by its last path segment and drops query/fragment noise', () => {
-    expect(webPageLabel('https://electron.build/archivio/getting-started/')).toBe(
-      'getting-started'
-    );
+    expect(webPageLabel('https://docs.example.org/guide/getting-started/')).toBe('getting-started');
     expect(webPageLabel('https://x.it/wp-content/Changelog-2026-07.pdf?v=2#page3')).toBe(
       'Changelog-2026-07.pdf'
     );
@@ -91,9 +89,7 @@ describe('web — url labels', () => {
 
   it('reads a scheme-less host, and never returns an empty label', () => {
     expect(webHost('code.claude.com/docs/en/skills')).toBe('code.claude.com');
-    expect(webHost('www-2025.electron.build/x')).toBe(
-      'www-2025.electron.build'
-    );
+    expect(webHost('www-2025.docs.example.org/x')).toBe('www-2025.docs.example.org');
     expect(webPageLabel('not a url at all')).toBe('not a url at all');
   });
 });

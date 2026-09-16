@@ -341,7 +341,7 @@ function webCall(
   } as unknown as ToolGroup;
 }
 
-const PAGE = 'https://electron.build/archivio/getting-started/';
+const PAGE = 'https://docs.example.org/guide/getting-started/';
 const REDIRECT = `REDIRECT DETECTED: The URL redirects to a different host.
 
 Original URL: https://docs.claude.com/en/docs/claude-code/skills
@@ -370,7 +370,7 @@ describe('mission feed — web activity', () => {
     const other = webCall(
       'f3',
       'WebFetch',
-      { url: 'https://electron.build/uploads/Changelog-2026.pdf', prompt: 'x' },
+      { url: 'https://docs.example.org/uploads/Changelog-2026.pdf', prompt: 'x' },
       { content: '# Notice' }
     );
     const visits = buildWebActivity([first, second, other]);
@@ -387,19 +387,19 @@ describe('mission feed — web activity', () => {
     expect(page).toMatchObject({
       kind: 'WEB',
       right: 'FETCHED',
-      meta: 'electron.build · ×2',
+      meta: 'docs.example.org · ×2',
       expandable: true,
       danger: false,
       at: T0 + 3 * 60_000,
     });
     // The full URL and the ask are the tooltip's job — the row can't hold them.
-    expect(page.hint).toContain('electron.build/archivio/getting-started');
+    expect(page.hint).toContain('docs.example.org/guide/getting-started');
     expect(page.hint).toContain('Riporta le date');
     // Two calls of one source differ only in what they asked for, so the
     // disclosure carries the ask, not the tool name twice.
     expect(page.items.map(webItemNote)).toEqual(['Riporta le date', 'Elenca i PDF']);
     // A second page of the same host is a second source, never a second call.
-    expect(feed.find(e => e.title === 'Changelog-2026.pdf')!.meta).toBe('electron.build');
+    expect(feed.find(e => e.title === 'Changelog-2026.pdf')!.meta).toBe('docs.example.org');
   });
 
   it('keeps one row for one page fetched under two spellings', () => {
