@@ -2,7 +2,11 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { writeFileSync, readFileSync, unlinkSync } from 'node:fs';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
-import { parseClaudeVersion, updatePackageJson } from '../scripts/prepare-release.js';
+import {
+  parseClaudeVersion,
+  updatePackageJson,
+  newestWhatsNewVersion,
+} from '../scripts/prepare-release.js';
 
 describe('parseClaudeVersion', () => {
   it('extracts semver from normal output', () => {
@@ -65,5 +69,28 @@ describe('updatePackageJson', () => {
   it('returns the updated package object', () => {
     const pkg = updatePackageJson(tmpPath, '3.0.0');
     expect(pkg.claudeCodeVersion).toBe('3.0.0');
+  });
+});
+
+describe('newestWhatsNewVersion', () => {
+  it('picks the highest of several entries regardless of source order', () => {
+    const src = `
+      { version: '2.2.20', highlights: [] },
+      { version: '2.2.23', highlights: [] },
+      { version: '2.2.9', highlights: [] },
+    `;
+    expect(newestWhatsNewVersion(src)).toBe('2.2.23');
+  });
+
+  it('compares numerically, not lexicographically (2.2.9 < 2.2.10)', () => {
+    const src = `
+      { version: '2.2.9', highlights: [] },
+      { version: '2.2.10', highlights: [] },
+    `;
+    expect(newestWhatsNewVersion(src)).toBe('2.2.10');
+  });
+
+  it('returns null when the source has no entry at all', () => {
+    expect(newestWhatsNewVersion('export const WHATS_NEW = [];')).toBeNull();
   });
 });

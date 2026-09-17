@@ -558,7 +558,7 @@ const INBOUND_CLAMP = 12;
  *  renames itself once it has a topic — so it labels the strip and nothing
  *  hangs off it; the pid, which the receiver verified off the socket, is what
  *  the title attribute reports. */
-function InboundMessage({
+export function InboundMessage({
   origin,
   text,
   timestamp,

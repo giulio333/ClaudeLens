@@ -868,6 +868,34 @@ export function useSkipUpdateVersion() {
   });
 }
 
+// Per-version dismissal of the "What's New" popup (src/data/whats-new.ts),
+// same shape as the app-update skip: seeing it marks the CURRENT app version
+// as seen, so the next release (whose version differs) shows it again.
+const WHATS_NEW_SEEN_KEY = 'cl-whatsnew-seen-version';
+
+export function useWhatsNewSeenVersion() {
+  return useQuery({
+    queryKey: ['prefs:whatsnew-seen'],
+    queryFn: async (): Promise<string | null> => {
+      const all = await unwrap(window.electronAPI.prefs.getAll());
+      const v = all[WHATS_NEW_SEEN_KEY];
+      return typeof v === 'string' ? v : null;
+    },
+    staleTime: Infinity,
+  });
+}
+
+export function useMarkWhatsNewSeen() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (version: string) =>
+      unwrap(window.electronAPI.prefs.set(WHATS_NEW_SEEN_KEY, version)),
+    onSuccess: (_data, version) => {
+      qc.setQueryData(['prefs:whatsnew-seen'], version);
+    },
+  });
+}
+
 // Installed Claude Code CLI version (`claude --version`), read once per run.
 // Feeds the launch notice that suggests updating when the CLI is older than
 // the `claudeCodeVersion` this build expects. A failed read throws — the

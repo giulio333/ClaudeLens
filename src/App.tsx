@@ -5,6 +5,7 @@ import { ThemeProvider } from './hooks/ThemeProvider';
 import ProjectOverview from './tabs/ProjectOverview';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { UpdateBanner } from './components/UpdateBanner';
+import { WhatsNewDialog } from './components/WhatsNewDialog';
 
 export default function App() {
   useDataChangedRefetch();
@@ -99,6 +100,8 @@ export default function App() {
 
         {/* Passive "new release on GitHub" notice — bottom-left, per-version skip. */}
         <UpdateBanner />
+        {/* "What's new" — centered, shown once per app version. */}
+        <WhatsNewDialog />
       </div>
     </ThemeProvider>
   );

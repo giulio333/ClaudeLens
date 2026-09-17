@@ -18221,6 +18221,120 @@ select.cl-opt-input {
   text-decoration: underline;
 }
 
+/* ── What's New: a welcome moment, not a confirm dialog ─────────────────────
+   Shown once per app version, on first launch after an update. Every other
+   dialog in the app (SendConfirmDialog, PermissionRequestDialog, …) is a
+   small, transactional card — a decision to make. This one has no decision:
+   it exists only to hand the release's one new thing to the user, so it gets
+   the room a "look what's new" moment asks for, and the same warm-wash
+   opening the project hero and the global home already use. */
+.cl-whatsnew-card {
+  width: min(820px, 100%);
+  max-height: min(90vh, 820px);
+  overflow-y: auto;
+  background: var(--cl-paper);
+  border-radius: 28px;
+  box-shadow:
+    0 40px 100px -20px oklch(0 0 0 / 0.35),
+    0 1px 0 oklch(1 0 0 / 0.06) inset;
+  padding: 64px 64px 48px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+:root[data-theme='dark'] .cl-whatsnew-card {
+  box-shadow:
+    0 32px 80px -16px oklch(0 0 0 / 0.6),
+    0 1px 0 oklch(1 0 0 / 0.05) inset;
+}
+.cl-whatsnew-mark {
+  position: relative;
+  width: 60px;
+  height: 60px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 20px;
+}
+/* The one bold flourish in an otherwise quiet, typographic screen: a soft
+   accent halo behind the app's own icon, the same terracotta the CTA below
+   uses — never a second colour introduced just for this moment. */
+.cl-whatsnew-mark::before {
+  content: '';
+  position: absolute;
+  inset: -14px;
+  border-radius: 50%;
+  background: radial-gradient(
+    circle,
+    color-mix(in oklch, var(--cl-accent) 22%, transparent) 0%,
+    color-mix(in oklch, var(--cl-accent) 0%, transparent) 72%
+  );
+}
+.cl-whatsnew-mark img {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  object-fit: contain;
+}
+.cl-whatsnew-eyebrow {
+  font: 600 11px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.09em;
+  color: var(--cl-accent-ink);
+  margin-bottom: 18px;
+}
+.cl-whatsnew-title {
+  font-size: clamp(24px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  color: var(--cl-ink);
+  margin: 0 0 10px;
+}
+.cl-whatsnew-desc {
+  font-size: 15px;
+  line-height: 1.55;
+  color: var(--cl-ink-3);
+  max-width: 42ch;
+  margin: 0 0 32px;
+}
+/* The frame around the preview — a short real exchange (`.cl-transcript-inner`
+   + unmodified `MessageBubble` turns) presented like an artifact worth a
+   look, not an inline snippet: elevated off the card's own background, with
+   its own scroll if a future release's exchange runs long. The transcript
+   keeps its real turn markup (rail, orb, spine) but this host is a small
+   framed preview rather than a reading column, so its padding and the
+   spine's offset are trimmed to match — never the ~150px of gutter the real
+   Lens reserves for a full-width session. */
+.cl-whatsnew-frame {
+  width: 100%;
+  max-height: 280px;
+  overflow-y: auto;
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+  border-radius: 16px;
+  text-align: left;
+  box-shadow: 0 1px 0 oklch(1 0 0 / 0.5) inset;
+  margin-bottom: 36px;
+}
+:root[data-theme='dark'] .cl-whatsnew-frame {
+  box-shadow: none;
+}
+.cl-whatsnew-frame .cl-transcript-inner {
+  max-width: none;
+  padding: 22px 22px 6px 24px;
+  gap: 20px;
+}
+.cl-whatsnew-frame .cl-transcript-inner::before {
+  left: 46px;
+  top: 22px;
+  bottom: 6px;
+}
+.cl-whatsnew-ok {
+  min-width: 220px;
+  justify-content: center;
+}
+
 /* ── Harness notice: one line, and nobody said it ───────────────────────────
    A session going idle, an agent finishing, a turn resumed after a usage
    limit. Modelled on the advisor marker: it explains the turn that follows

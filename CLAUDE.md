@@ -212,10 +212,11 @@ misjudges one destroys the only evidence of it.
 
 Before creating a GitHub Release, always run these steps **in order**:
 
-1. `node scripts/prepare-release.js` — detects the locally installed Claude Code version and writes it into `claudeCodeVersion` in `package.json` (displayed in Settings → General → "Claude Code required")
-2. Bump the app `version` field in `package.json` (semver, e.g. `2.1.1` → `2.1.2`)
-3. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
-4. Create the GitHub Release with a `## Highlights` section at the top
+1. `node scripts/prepare-release.js` — detects the locally installed Claude Code version and writes it into `claudeCodeVersion` in `package.json` (displayed in Settings → General → "Claude Code required"). It also warns (never blocks) when `src/data/whats-new.ts` has no entry newer than the version currently in `package.json` — the reminder to do step 2 below, for a release that has something worth showing
+2. If this release has a feature worth telling the user about, add an entry to `src/data/whats-new.ts` **keyed to the version you're about to bump to** (one entry per release with content; skip it for a fix-only release) — this is what the "What's new" popup (`src/components/WhatsNewDialog.tsx`) shows on first launch after the update. English, one sentence per highlight (the UI is english-only — see `src/components/project/CLAUDE.md`), one or two highlights max, and the `visual` must be an actual ClaudeLens component (a key into `WhatsNewDialog.tsx`'s `VISUALS` map, e.g. the real `InboundMessage` from `MessageBubble.tsx`) rather than a screenshot, which goes stale the next time that surface's CSS changes
+3. Bump the app `version` field in `package.json` (semver, e.g. `2.1.1` → `2.1.2`)
+4. Commit both changes together (e.g., `chore: bump to v2.1.2, claude-code 2.1.191`)
+5. Create the GitHub Release with a `## Highlights` section at the top
 
 **A dependency bump can break packaging without CI noticing — that is what
 `package-smoke` is for.** `npm run build` is tsc + Vite and says nothing about
