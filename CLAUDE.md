@@ -86,7 +86,12 @@ the plain command one — the claim the old `isSkill` tests only appeared to
 make, since they fed the `isMeta` row the read path stopped returning; and an
 `advisor` consult is a stream marker of its own in both density modes, stating
 the reviewer model, the wall time and the spend, or degrading to the bare label
-when the turn holds two consults and the shared `usage` cannot be split) and
+when the turn holds two consults and the shared `usage` cannot be split; and the
+provenance work of #274 — a message from another session is drawn with the
+sender on it and its body alone, an agent inside this session is told apart from
+an external one, a mid-turn arrival is marked, a long dispatch opens folded and
+unfolds on ask across the StrictMode remount, and a harness notice is a one-line
+marker rather than a turn) and
 `bash-edit-diff-view` (the diff of what a shell command changed, #265: the hunk
 is drawn under the run with added and removed lines apart, a created or deleted
 file is marked rather than printed, `unavailable` says so instead of drawing an

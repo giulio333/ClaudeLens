@@ -11,7 +11,8 @@
 //    the SDK read drops.
 
 import { describe, it, expect, afterEach } from 'vitest';
-import { cleanup, render } from '@testing-library/react';
+import { StrictMode } from 'react';
+import { cleanup, render, fireEvent } from '@testing-library/react';
 import { AdvisorBadge, MessageBubble } from '../src/components/project/chat/MessageBubble';
 import {
   buildProcessedMessages,
@@ -33,10 +34,15 @@ function userMessage(text: string, extra: Partial<ChatMessage> = {}): ChatMessag
   };
 }
 
+// Mounted the way `src/main.tsx` mounts: StrictMode runs every effect, its
+// cleanup and the effect again, which is the rehearsal a component with state
+// of its own — the inbound message's fold — has to survive.
 function mount(message: ChatMessage) {
   const [processed] = buildProcessedMessages([message]);
   return render(
-    <MessageBubble processed={processed} detailsFilter="minimal" onOpenToolDetail={() => {}} />
+    <StrictMode>
+      <MessageBubble processed={processed} detailsFilter="minimal" onOpenToolDetail={() => {}} />
+    </StrictMode>
   );
 }
 
@@ -145,5 +151,95 @@ describe('an advisor consult', () => {
     );
 
     expect(container.querySelector('.cl-advisor-badge')?.textContent).toContain('advisor');
+  });
+});
+
+// ─── A message this session did not type (#274) ──────────────────────────────
+
+const LONG_BODY = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n');
+
+describe('a message from another session', () => {
+  it('names the sender and says it is another session', () => {
+    const { container } = mount(
+      userMessage('the fork inventory is done, nothing pushed', {
+        inbound: { from: 'session', name: 'alice-7c', pid: 4242, msgId: 'm-1' },
+      })
+    );
+
+    expect(container.querySelector('.cl-inbound-from')?.textContent).toBe('alice-7c');
+    expect(container.querySelector('.cl-inbound-what')?.textContent).toBe('another session');
+    expect(container.querySelector('.cl-inbound-body')?.textContent).toContain(
+      'the fork inventory is done'
+    );
+    // Not a user bubble: the strip is what tells the reader it was not them.
+    expect(container.querySelector('.cl-message-text--user')).toBeNull();
+  });
+
+  it('tells an agent inside this session apart from another session', () => {
+    const { container } = mount(
+      userMessage('teammate reporting in', {
+        inbound: { from: 'agent', name: 'worker-b' },
+      })
+    );
+    expect(container.querySelector('.cl-inbound-what')?.textContent).toBe('agent in this session');
+    expect(container.querySelector('.cl-inbound--agent')).not.toBeNull();
+  });
+
+  it('marks one that arrived while a turn was running', () => {
+    const { container } = mount(
+      userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', queued: true } })
+    );
+    expect(container.querySelector('.cl-inbound-queued')?.textContent).toBe('mid-turn');
+  });
+
+  it('opens folded and unfolds on ask, surviving the StrictMode remount', () => {
+    const { container } = mount(
+      userMessage(LONG_BODY, { inbound: { from: 'session', name: 'alice-7c' } })
+    );
+
+    const body = () => container.querySelector('.cl-inbound-body')?.textContent ?? '';
+    expect(body()).toContain('line 12');
+    expect(body()).not.toContain('line 13');
+
+    const more = container.querySelector('.cl-inbound-more') as HTMLButtonElement;
+    expect(more.textContent).toBe('Show all 30 lines');
+    fireEvent.click(more);
+    expect(body()).toContain('line 30');
+  });
+
+  it('draws a short one without a fold control at all', () => {
+    const { container } = mount(
+      userMessage('two words', { inbound: { from: 'session', name: 'alice-7c' } })
+    );
+    expect(container.querySelector('.cl-inbound-more')).toBeNull();
+  });
+});
+
+describe('a harness notice', () => {
+  it('is a one-line marker with its subject, never a turn', () => {
+    const { container } = mount(
+      userMessage('"alice-7c" is idle now — it finished a turn at 21:23.', {
+        notice: {
+          kind: 'session-idle',
+          subject: 'alice-7c',
+          text: '"alice-7c" is idle now — it finished a turn at 21:23.',
+        },
+      })
+    );
+
+    expect(container.querySelector('.cl-notice-badge')?.textContent).toContain('session idle');
+    expect(container.querySelector('.cl-notice-subject')?.textContent).toBe('alice-7c');
+    expect(container.querySelector('.cl-notice-text')?.textContent).toContain('is idle now');
+    expect(container.querySelector('.cl-inbound')).toBeNull();
+    expect(container.querySelector('.cl-message-text--user')).toBeNull();
+  });
+
+  it('says an agent finished, not that a session did', () => {
+    const { container } = mount(
+      userMessage('Done, the sweep found nothing.', {
+        notice: { kind: 'agent-idle', subject: 'worker-b', text: 'Done, the sweep found nothing.' },
+      })
+    );
+    expect(container.querySelector('.cl-notice-badge')?.textContent).toContain('agent done');
   });
 });

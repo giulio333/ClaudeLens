@@ -2,6 +2,7 @@ import { memo, useState } from 'react';
 import type { CSSProperties, Ref } from 'react';
 import Markdown from '../../Markdown';
 import { AdvisorConsult, ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC';
+import type { InboundOrigin, SessionNotice } from '../../../types';
 import {
   ProcessedMessage,
   ToolGroup,
@@ -538,6 +539,96 @@ function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: numb
 // Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
 // `onOpenToolDetail` setter, bubbles don't re-render on header-collapse / export
 // state changes — only when their own props actually change.
+/** Lines of an inbound message drawn before it folds. A dispatch from another
+ *  session runs long — the corpus has one of 48 lines — and it is not this
+ *  session's work, so it opens summarised and unfolds on ask. */
+const INBOUND_CLAMP = 12;
+
+/** A message this session did not type: sent by another Claude Code session on
+ *  the machine, or by an agent running inside this one.
+ *
+ *  It keeps the geometry of a user turn — it IS an input to the turn that
+ *  follows, and reading it as anything else loses the plot — but never its
+ *  identity: the strip says who sent it, and `⇢` says it came in. What is drawn
+ *  is `origin.body`, the message alone: the row's own text wraps it in a
+ *  `<cross-session-message>` tag and some 700 characters of safety preamble
+ *  addressed to Claude, and neither is something a reader should see.
+ *
+ *  The name is the sender's own claim and it moves — a background session
+ *  renames itself once it has a topic — so it labels the strip and nothing
+ *  hangs off it; the pid, which the receiver verified off the socket, is what
+ *  the title attribute reports. */
+function InboundMessage({
+  origin,
+  text,
+  timestamp,
+}: {
+  origin: InboundOrigin;
+  text: string;
+  timestamp: string;
+}) {
+  const [full, setFull] = useState(false);
+  const lines = text.split('\n');
+  const clamped = !full && lines.length > INBOUND_CLAMP;
+  const shown = clamped ? lines.slice(0, INBOUND_CLAMP).join('\n') : text;
+  const what = origin.from === 'agent' ? 'agent in this session' : 'another session';
+  const identity =
+    origin.from === 'agent'
+      ? 'An agent running inside this session sent this message.'
+      : origin.pid != null
+        ? `Another Claude Code session sent this message. Verified sender pid ${origin.pid}; the name is the sender's own and can change.`
+        : "Another Claude Code session sent this message. The name is the sender's own and can change.";
+
+  return (
+    <div className={`cl-inbound${origin.from === 'agent' ? ' cl-inbound--agent' : ''}`}>
+      <div className="cl-inbound-strip" title={identity}>
+        <span className="cl-inbound-arrow" aria-hidden>
+          ⇢
+        </span>
+        <span className="cl-inbound-from">{origin.name ?? what}</span>
+        <span className="cl-inbound-what">{what}</span>
+        {origin.queued && (
+          <span className="cl-inbound-queued" title="It arrived while a turn was running">
+            mid-turn
+          </span>
+        )}
+        {timestamp && <time className="cl-inbound-time">{timestamp}</time>}
+      </div>
+      <div className="cl-inbound-body">
+        <Markdown>{shown}</Markdown>
+      </div>
+      {lines.length > INBOUND_CLAMP && (
+        <button type="button" className="cl-inbound-more" onClick={() => setFull(f => !f)}>
+          {clamped ? `Show all ${lines.length} lines` : 'Collapse'}
+        </button>
+      )}
+    </div>
+  );
+}
+
+/** A line the harness put in the transcript that nobody said: a session going
+ *  idle, an agent finishing, a turn resumed after a usage limit. It explains
+ *  why the next turn happened, so it is not hidden — but it is not a message,
+ *  so it is a marker, the way an `advisor` consult is. */
+function NoticeMarker({ notice, timestamp }: { notice: SessionNotice; timestamp: string }) {
+  const label =
+    notice.kind === 'session-idle'
+      ? 'session idle'
+      : notice.kind === 'agent-idle'
+        ? 'agent done'
+        : 'resumed';
+  return (
+    <div className="cl-notice-mark">
+      <span className="cl-notice-badge" title={notice.text}>
+        {label}
+        {notice.subject && <span className="cl-notice-subject">{notice.subject}</span>}
+      </span>
+      <span className="cl-notice-text">{notice.text}</span>
+      {timestamp && <time className="cl-notice-time">{timestamp}</time>}
+    </div>
+  );
+}
+
 export const MessageBubble = memo(function MessageBubble({
   processed,
   detailsFilter,
@@ -710,6 +801,51 @@ export const MessageBubble = memo(function MessageBubble({
         </aside>
         <section className="cl-turn-body">
           <TaskNotificationCard notification={notification} timestamp={ts} />
+        </section>
+      </article>
+    );
+  }
+
+  // A harness notice: one line on the rail, never a turn. Same treatment as the
+  // advisor marker — it happened, it explains the next turn, nobody said it.
+  if (msg.notice) {
+    return (
+      <article
+        className={`cl-turn cl-turn--notice${isContinuation ? ' cl-turn--continuation' : ''}`}
+        ref={innerRef}
+        data-n={turnIndex}
+      >
+        <aside className="cl-turn-rail">
+          <span className="cl-turn-orb cl-turn-orb--notif" aria-label="Session event" />
+          <span className="cl-turn-spine" aria-hidden />
+        </aside>
+        <section className="cl-turn-body">
+          <NoticeMarker notice={msg.notice} timestamp={timestamp} />
+        </section>
+      </article>
+    );
+  }
+
+  // A message from another session, or from an agent inside this one: a turn of
+  // its own, with the sender on it. It is an input to what follows, like a user
+  // turn — but it was not this user, and the strip is what says so.
+  if (msg.inbound) {
+    const body = textBlocks.map(b => b.text).join('\n\n');
+    return (
+      <article
+        className={`cl-turn cl-turn--inbound${isContinuation ? ' cl-turn--continuation' : ''}`}
+        ref={innerRef}
+        data-n={turnIndex}
+      >
+        <aside className="cl-turn-rail">
+          <span className="cl-turn-orb cl-turn-orb--inbound" aria-label="Incoming message">
+            ⇢
+          </span>
+          <span className="cl-turn-index">{turnNumber}</span>
+          <span className="cl-turn-spine" aria-hidden />
+        </aside>
+        <section className="cl-turn-body">
+          <InboundMessage origin={msg.inbound} text={body} timestamp={timestamp} />
         </section>
       </article>
     );

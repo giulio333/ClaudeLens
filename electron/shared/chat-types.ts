@@ -94,6 +94,47 @@ export interface MessageUsage {
   cacheWriteTokens: number;
 }
 
+/** Who sent a message this session did not type: another Claude Code session on
+ *  this machine, or an agent running inside this one. Claude Code writes both
+ *  as `origin.kind: "peer"` on the delivered row, so `from` is derived rather
+ *  than copied — a session is identified by a unix socket and a pid the
+ *  receiver verified off it, an agent by the task id of its dispatch. */
+export interface InboundOrigin {
+  from: 'session' | 'agent';
+  /** Display name the sender carried at send time. Sender-supplied, and a
+   *  background session renames itself as soon as it has a topic, so this
+   *  labels the message and never identifies the sender. */
+  name?: string;
+  /** Pid the receiver verified off the socket — sessions only, and the only
+   *  part of the sender's identity that was checked rather than claimed. */
+  pid?: number;
+  /** Equal to the `msg_id` the sender's `SendMessage` result carries in its own
+   *  transcript: the one join between the two halves of a message. */
+  msgId?: string;
+  /** Session fingerprints the exchange has already passed through — absent on a
+   *  message that opens a chain, one entry longer on each reply. */
+  hopChain?: string[];
+  /** The message reached a session that was mid-turn, so Claude Code queued it
+   *  and the running turn absorbed it. */
+  queued?: true;
+}
+
+/** A line the harness put in the transcript that is not conversation: a peer
+ *  session that went idle, an agent that finished, a turn resumed after a usage
+ *  limit. Drawn as a one-line marker — it explains why a turn happened, and it
+ *  is not something anyone said.
+ *
+ *  A finished background task is NOT here: `parseTaskNotification` already
+ *  turns `<task-notification>` into its own card, and a second mechanism for
+ *  the same row would render it twice. */
+export interface SessionNotice {
+  kind: 'session-idle' | 'agent-idle' | 'auto-continuation';
+  /** What the notice is about: a task id, a session or agent name. */
+  subject?: string;
+  /** One readable line, taken from the payload's own words. */
+  text: string;
+}
+
 export interface ChatMessage {
   uuid: string;
   role: 'user' | 'assistant';
@@ -111,6 +152,15 @@ export interface ChatMessage {
    *  `<command-name>`/`tool_result` row that invoked a skill, and it is what
    *  tells a `/foo` skill apart from a built-in command (#246). */
   skillPath?: string;
+  /** Set when the message came from another session, or from an agent inside
+   *  this one, instead of from the user. Claude Code delivers it as an `isMeta`
+   *  user row (receiver idle) or as a `queued_command` attachment (receiver
+   *  mid-turn) — the SDK read returns neither, so it arrives through
+   *  `transcript-extras`, like `queued` and `skillPath` (#274). */
+  inbound?: InboundOrigin;
+  /** Set when the row is a harness notice rather than a message. Mutually
+   *  exclusive with `inbound`: nobody said it. */
+  notice?: SessionNotice;
   /** Reasoning effort the turn ran at (`medium` | `high` | `xhigh` | `max`).
    *  Claude Code writes it on the transcript ROW, next to `uuid`, not inside
    *  `message` — so the SDK read never returns it and it arrives through
