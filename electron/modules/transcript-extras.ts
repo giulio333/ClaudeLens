@@ -32,6 +32,8 @@ import type {
   BashEditHunk,
   ChatContentBlock,
   ChatMessage,
+  InboundOrigin,
+  SessionNotice,
 } from '../shared/chat-types';
 
 /** Prima riga dell'espansione che Claude Code inietta dopo una skill. */
@@ -40,6 +42,15 @@ const SKILL_EXPANSION_PREFIX = 'Base directory for this skill:';
 export interface TranscriptExtras {
   /** Prosa dell'utente digitata a turno in corso e assorbita in esso. */
   queued: ChatMessage[];
+  /** Righe che l'SDK non restituisce affatto e che non sono dell'utente: i
+   *  messaggi arrivati da un'altra sessione o da un agente interno, e le notizie
+   *  dell'harness che viaggiano su righe `isMeta`. Vanno inserite al loro posto
+   *  cronologico come i `queued` (#274). */
+  injected: ChatMessage[];
+  /** uuid della riga → notizia, per le righe che l'SDK RESTITUISCE ma che non
+   *  sono conversazione (la notifica di un task, l'idle di un sub-agente): si
+   *  timbrano sul messaggio esistente invece di crearne uno. */
+  noticeByUuid: Map<string, SessionNotice>;
   /** uuid della riga `user` che ha invocato una skill → base dir della skill.
    *  Il `parentUuid` dell'espansione è sempre quella riga: la `<command-name>`
    *  per una slash command, il `tool_result` per il tool `Skill`. */
@@ -52,6 +63,8 @@ export interface TranscriptExtras {
 
 const EMPTY: TranscriptExtras = {
   queued: [],
+  injected: [],
+  noticeByUuid: new Map(),
   skillPathByParentUuid: new Map(),
   effortByUuid: new Map(),
   bashEditDiffByToolUseId: new Map(),
@@ -234,6 +247,111 @@ export async function readTranscriptExtras(filePath: string): Promise<Transcript
   return parseTranscriptExtras(raw);
 }
 
+// ─── Provenienza: chi ha messo una riga utente nel transcript (#274) ─────────
+//
+// Claude Code scrive su ogni riga utente un `origin` che dice da dove viene:
+// `human` (l'ha digitata l'utente), `peer` (un'altra sessione, o un agente
+// dentro questa), `task-notification`, `auto-continuation`, `coordinator`.
+// Nessun lettore lo guardava, quindi un messaggio di un'altra sessione o
+// spariva — le sue righe sono `isMeta`, e l'SDK non le restituisce — o si
+// vedeva come una bolla utente con dentro l'involucro XML.
+//
+// Due forme, decise da cosa stava facendo chi riceve, non da che sessione è:
+//   - ricevente fermo    → riga `user` con `isMeta` e l'`origin` completo;
+//   - ricevente nel turno → `attachment` `queued_command`, con lo stesso
+//     `origin` sotto `attachment.origin` e — ed è questo a renderlo la fonte
+//     giusta — il timestamp dell'ARRIVO, mentre la `remove` della coda porta
+//     quello dell'assorbimento, anche minuti dopo.
+
+/** Il testo che l'harness avvolge attorno a un messaggio consegnato. Le righe
+ *  di coda lo ripetono, quindi riconoscerlo è ciò che impedisce di mostrare due
+ *  volte lo stesso messaggio: una dall'attachment e una dalla `remove`. */
+const DELIVERED_WRAPPERS = ['<cross-session-message', '<agent-message', '<teammate-message'];
+const IDLE_NOTICE_PREFIX = '[Cross-session idle notice]';
+
+/** Una riga di coda il cui testo è un messaggio consegnato dall'harness: la
+ *  gestisce il ramo della provenienza, non quello della coda. */
+function isDelivered(content: string): boolean {
+  return (
+    DELIVERED_WRAPPERS.some(w => content.includes(w)) || content.startsWith(IDLE_NOTICE_PREFIX)
+  );
+}
+
+/**
+ * L'`origin` di una riga consegnata, quando dice che il messaggio arriva da
+ * qualcun altro.
+ *
+ * `kind: "peer"` vale sia per un'altra sessione sia per un sub-agente di questa,
+ * e distinguerli non è un dettaglio: un agente interno mostrato come sessione
+ * esterna è una bugia sul confine di fiducia. Il discriminante è `senderTaskId`,
+ * che solo un agente porta; una sessione porta invece un socket e un pid che il
+ * ricevente ha verificato — l'unico pezzo di identità controllato, mentre `name`
+ * lo dichiara il mittente e cambia da solo quando una sessione di background si
+ * dà un titolo.
+ */
+function parseInbound(
+  raw: unknown,
+  queued: boolean
+): { origin: InboundOrigin; body: string } | null {
+  if (!raw || typeof raw !== 'object') return null;
+  const o = raw as Record<string, unknown>;
+  if (o.kind !== 'peer') return null;
+  const body = typeof o.body === 'string' ? o.body.trim() : '';
+  if (!body) return null;
+  const agent = typeof o.senderTaskId === 'string' && o.senderTaskId.length > 0;
+  const name = typeof o.name === 'string' && o.name ? o.name : undefined;
+  const pid = !agent && typeof o.verifiedPeerPid === 'number' ? o.verifiedPeerPid : undefined;
+  const msgId = typeof o.msg_id === 'string' && o.msg_id ? o.msg_id : undefined;
+  const hops = Array.isArray(o.hopChain)
+    ? o.hopChain.filter((h): h is string => typeof h === 'string')
+    : undefined;
+  return {
+    body,
+    origin: {
+      from: agent ? 'agent' : 'session',
+      ...(name ? { name } : {}),
+      ...(pid !== undefined ? { pid } : {}),
+      ...(msgId ? { msgId } : {}),
+      ...(hops && hops.length > 0 ? { hopChain: hops } : {}),
+      ...(queued ? { queued: true as const } : {}),
+    },
+  };
+}
+
+/** L'avviso che una sessione a cui si era chiesto di farlo sapere è tornata
+ *  ferma. È l'unica forma della famiglia senza `origin`: si riconosce dal
+ *  prefisso e da nient'altro. */
+function parseIdleNotice(text: string): SessionNotice | null {
+  if (!text.startsWith(IDLE_NOTICE_PREFIX)) return null;
+  const rest = text.slice(IDLE_NOTICE_PREFIX.length).trim();
+  const subject = rest.match(/^"([^"]+)"/)?.[1];
+  const line = rest.split('\n')[0].trim();
+  if (!line) return null;
+  return { kind: 'session-idle', ...(subject ? { subject } : {}), text: line };
+}
+
+/** Il rapporto di fine lavoro di un sub-agente: un `<teammate-message>` che
+ *  contiene un JSON `idle_notification`. Non è prosa, e oggi si vede come bolla
+ *  utente col JSON dentro. Un `<teammate-message>` che NON è una idle
+ *  notification è un messaggio vero e passa dal ramo `origin`. */
+function parseAgentIdleNotice(text: string): SessionNotice | null {
+  const m = text.match(
+    /<teammate-message teammate_id="([^"]+)"[^>]*>\s*([\s\S]*?)\s*<\/teammate-message>/
+  );
+  if (!m) return null;
+  let payload: unknown;
+  try {
+    payload = JSON.parse(m[2]);
+  } catch {
+    return null;
+  }
+  if (!payload || typeof payload !== 'object') return null;
+  const p = payload as Record<string, unknown>;
+  if (p.type !== 'idle_notification') return null;
+  const result = typeof p.result === 'string' ? p.result.trim() : '';
+  return { kind: 'agent-idle', subject: m[1], text: result || 'finished' };
+}
+
 /**
  * La metà pura di `readTranscriptExtras`, su testo già in memoria.
  *
@@ -250,6 +368,8 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const skillPathByParentUuid = new Map<string, string>();
   const effortByUuid = new Map<string, string>();
   const bashEditDiffByToolUseId = new Map<string, BashEditDiff>();
+  const injected: ChatMessage[] = [];
+  const noticeByUuid = new Map<string, SessionNotice>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
   // l'ora dell'assorbimento, la `enqueue` quella della digitazione.
   const enqueuedAt = new Map<string, string>();
@@ -266,7 +386,16 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
     const isBashEdit = line.includes('"bashEditDiff"');
-    if (!isQueue && !isSkillExpansion && !isBashEdit) continue;
+    // Il prefiltro resta stretto apposta: `"origin"` da solo sta su ogni riga
+    // che l'utente ha digitato (1297 su 1500 nel corpus di prova), e questo
+    // modulo passa su ogni transcript che supera il prefiltro di
+    // `session-search`. Si cercano i soli valori discriminanti.
+    const isProvenance =
+      line.includes('"kind":"peer"') ||
+      line.includes('"kind":"auto-continuation"') ||
+      line.includes(IDLE_NOTICE_PREFIX) ||
+      line.includes('<teammate-message');
+    if (!isQueue && !isSkillExpansion && !isBashEdit && !isProvenance) continue;
 
     let json: Record<string, unknown>;
     try {
@@ -284,13 +413,103 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       continue;
     }
 
+    // Una riga di coda che PARLA di un messaggio consegnato resta affare del
+    // ramo della coda: qui si guardano le righe che il messaggio lo portano.
+    if (isProvenance && json.type !== 'queue-operation') {
+      const uuid = typeof json.uuid === 'string' && json.uuid ? json.uuid : '';
+      const timestamp = String(json.timestamp ?? '');
+      const attachment = json.attachment as Record<string, unknown> | undefined;
+
+      // Ricevente nel turno: l'attachment è la fonte migliore delle righe di
+      // coda che lo circondano — stesso `origin`, testo già pulito, e il
+      // timestamp dell'arrivo invece che quello dell'assorbimento.
+      if (json.type === 'attachment' && attachment && attachment.type === 'queued_command') {
+        const parsed = parseInbound(attachment.origin, true);
+        if (parsed) {
+          injected.push({
+            uuid: uuid || `inbound-${timestamp}-${injected.length}`,
+            role: 'user',
+            timestamp: String(attachment.timestamp ?? timestamp),
+            content: [{ type: 'text', text: parsed.body }],
+            inbound: parsed.origin,
+          });
+        }
+        continue;
+      }
+
+      if (json.type !== 'user') continue;
+      const origin = json.origin as Record<string, unknown> | undefined;
+
+      // Ricevente fermo: la riga `user` porta tutto, ed è `isMeta`, quindi
+      // l'SDK non la restituisce e questa passata è l'unica che la vede.
+      const parsed = parseInbound(origin, false);
+      if (parsed) {
+        injected.push({
+          uuid: uuid || `inbound-${timestamp}-${injected.length}`,
+          role: 'user',
+          timestamp,
+          content: [{ type: 'text', text: parsed.body }],
+          inbound: parsed.origin,
+        });
+        continue;
+      }
+
+      const text = rawFirstText(json.message).trim();
+      const notice =
+        parseIdleNotice(text) ??
+        parseAgentIdleNotice(text) ??
+        (origin && origin.kind === 'auto-continuation' && text
+          ? ({ kind: 'auto-continuation', text: text.split('\n')[0].trim() } as SessionNotice)
+          : null);
+      if (!notice) continue;
+      // `isMeta` decide da che parte esce: l'SDK restituisce le righe che non lo
+      // sono (la notifica di un task, il rapporto di un sub-agente), e quelle si
+      // timbrano sul messaggio già in lista invece di duplicarlo.
+      if (json.isMeta === true) {
+        injected.push({
+          uuid: uuid || `notice-${timestamp}-${injected.length}`,
+          role: 'user',
+          timestamp,
+          content: [{ type: 'text', text: notice.text }],
+          notice,
+        });
+      } else if (uuid) {
+        noticeByUuid.set(uuid, notice);
+      }
+      continue;
+    }
+
     if (isQueue && json.type === 'queue-operation') {
       const content = typeof json.content === 'string' ? json.content.trim() : '';
       const timestamp = String(json.timestamp ?? '');
       if (!content) continue;
+      // L'ora della `enqueue` si prende sempre, anche per ciò che questo ramo
+      // non materializza: è l'unica che dice QUANDO il messaggio è arrivato.
       if (json.operation === 'enqueue') {
         if (!enqueuedAt.has(content)) enqueuedAt.set(content, timestamp);
-      } else if (json.operation === 'remove') {
+        continue;
+      }
+      // Un messaggio consegnato dall'harness passa di qui come qualsiasi altra
+      // cosa in coda, ma ha già la sua riga (l'attachment, o la `user` isMeta):
+      // materializzarlo anche qui lo mostrerebbe due volte, e con l'ora
+      // sbagliata — la `remove` porta l'assorbimento, non l'arrivo (#275).
+      // Le notizie dell'harness sono l'eccezione: una riga propria non sempre
+      // ce l'hanno, e perderle è peggio che datarle all'assorbimento.
+      if (isDelivered(content)) {
+        const notice = parseIdleNotice(content) ?? parseAgentIdleNotice(content);
+        if (notice && json.operation === 'remove') {
+          const arrivedAt = enqueuedAt.get(content) ?? timestamp;
+          injected.push({
+            uuid: `notice-${arrivedAt}-${injected.length}`,
+            role: 'user',
+            timestamp: arrivedAt,
+            content: [{ type: 'text', text: notice.text }],
+            notice,
+          });
+        }
+        continue;
+      }
+      if (json.operation === 'remove') {
         const typedAt = enqueuedAt.get(content) ?? timestamp;
         queued.push({
           // Le righe di coda non hanno uuid: ne serve uno stabile tra due
@@ -313,7 +532,14 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
   }
 
-  return { queued, skillPathByParentUuid, effortByUuid, bashEditDiffByToolUseId };
+  return {
+    queued,
+    injected,
+    noticeByUuid,
+    skillPathByParentUuid,
+    effortByUuid,
+    bashEditDiffByToolUseId,
+  };
 }
 
 /**
@@ -349,9 +575,18 @@ export function mergeTranscriptExtras(
   messages: ChatMessage[],
   extras: TranscriptExtras
 ): ChatMessage[] {
-  const { queued, skillPathByParentUuid, effortByUuid, bashEditDiffByToolUseId } = extras;
+  const {
+    queued,
+    injected,
+    noticeByUuid,
+    skillPathByParentUuid,
+    effortByUuid,
+    bashEditDiffByToolUseId,
+  } = extras;
   if (
     queued.length === 0 &&
+    injected.length === 0 &&
+    noticeByUuid.size === 0 &&
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0
@@ -368,25 +603,32 @@ export function mergeTranscriptExtras(
   const stamped =
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
-    bashEditDiffByToolUseId.size === 0
+    bashEditDiffByToolUseId.size === 0 &&
+    noticeByUuid.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
           const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
+          const notice = noticeByUuid.get(msg.uuid);
           const content = stampBashEditDiffs(msg.content, bashEditDiffByToolUseId);
-          if (!skillPath && !effort && content === msg.content) return msg;
+          if (!skillPath && !effort && !notice && content === msg.content) return msg;
           return {
             ...msg,
             ...(content === msg.content ? {} : { content }),
             ...(skillPath ? { skillPath } : {}),
             ...(effort ? { effort } : {}),
+            ...(notice ? { notice } : {}),
           };
         });
-  if (queued.length === 0) return stamped;
+  if (queued.length === 0 && injected.length === 0) return stamped;
 
   const alreadyShown = new Set(messages.filter(m => m.role === 'user').map(m => messageText(m)));
+  // Le righe iniettate non passano dal filtro per testo: non sono dell'utente e
+  // l'SDK non le restituisce affatto, quindi un testo uguale a quello di un
+  // messaggio utente è una coincidenza, non un doppione.
   const pending = queued
     .filter(m => !alreadyShown.has(messageText(m)))
+    .concat(injected)
     .sort((a, b) => a.timestamp.localeCompare(b.timestamp));
   if (pending.length === 0) return stamped;
 

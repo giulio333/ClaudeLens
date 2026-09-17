@@ -150,6 +150,19 @@ export const ATTACHMENT_TYPES = {
   read_truncation_notice: ignored(
     'a banner saying a Read was truncated; the tool_result shows the truncation'
   ),
+  bash_output_audience_note: ignored(
+    "annotates a Bash call with who its output was shown to; the row carries nothing but that call's toolUseID"
+  ),
+  batching_reminder_sent: ignored(
+    'a prompt-side nudge to batch tool calls, with the model it went to; harness coaching, not session content'
+  ),
+  silent_turn_reminder: ignored(
+    'as batching_reminder_sent: a nudge to speak up when a turn goes quiet'
+  ),
+  output_style: ignored(
+    'the active output style and the reminder it injects per turn — the class of `language` and `model`; prompt_snapshot is the general case if "what prompt did this turn run with" is ever wanted'
+  ),
+  output_style_instructions: ignored("as output_style, carrying the style's whole system prompt"),
 
   // ── candidate ───────────────────────────────────────────────────────────
   edited_text_file: candidate(
@@ -178,6 +191,19 @@ export const ATTACHMENT_TYPES = {
   ),
   opened_file_in_ide: candidate('IDE context: which file the user had open'),
   selected_lines_in_ide: candidate('IDE context: the lines the user had selected, with content'),
+
+  // Hooks have no representation anywhere in the app, and a hook is not a
+  // spectator: its stdout is injected into the turn, so a turn can act on
+  // something the transcript never shows.
+  hook_success: candidate(
+    'a hook that ran: hookEvent, hookName, command, exitCode, durationMs, stdout/stderr. Nothing records that a hook fired'
+  ),
+  hook_additional_context: candidate(
+    'what a hook injected into the turn — content the model read and the viewer does not show (the #245 class)'
+  ),
+  thinking_stripped: candidate(
+    'thinking blocks were dropped from the turn (scope: "all"); what is left renders as if nothing was cut'
+  ),
 };
 
 /**
@@ -415,6 +441,58 @@ export const FIELDS = {
 
   'user.toolUseResult.tmux_window_name': ignored('as tmux_session_name'),
   'user.toolUseResult.tmux_pane_id': ignored('as tmux_session_name'),
+
+  // ── who put a user row in the transcript ────────────────────────────────
+  // `origin` says where a user row came from, and session-reader reads none of
+  // it: five kinds observed — human, task-notification, peer,
+  // auto-continuation, coordinator — all rendered as the same user bubble, and
+  // the isMeta ones (peer, auto-continuation) dropped outright. The same object
+  // appears under `attachment.attachment.origin.*` instead when the receiver
+  // was mid-turn and the message was queued, so a reader that only looks at
+  // `user` rows sees a message from an idle receiver and loses it from a busy one.
+  'user.origin.kind': candidate(
+    "the row's provenance: human | task-notification | peer | auto-continuation | coordinator. One field that would stop a background-task notice and another agent's message from both reading as something the user typed"
+  ),
+  'user.origin.body': candidate(
+    'the message on its own, without the <cross-session-message> wrapper and the ~700 characters of safety preamble the content string carries — the only clean source for rendering it'
+  ),
+  'user.origin.msg_id': candidate(
+    "the same id the sender's SendMessage tool_result reports, in another session's transcript: the one join key between the two halves of a message"
+  ),
+  'user.origin.from': candidate(
+    "the sender's address — a unix socket for another session, a bare agent name for an in-process one"
+  ),
+  'user.origin.verifiedPeerPid': candidate(
+    'the pid the receiver verified off the socket; with `from`, the only identity that is checked rather than claimed'
+  ),
+  'user.origin.name': candidate(
+    "the sender's display name at send time: sender-supplied, and unstable — a background session renames itself once it has a topic, which is enough to make a reply to that name fail. A label, never an identity"
+  ),
+  'user.origin.hopChain': candidate(
+    'ordered session fingerprints the exchange has already passed through: absent on a message that opens a chain, inherited-and-appended by each reply. Threads a conversation that spans three sessions and two projects'
+  ),
+  'user.origin.fromMode': unknown(
+    '"prompting" in every row observed; a second value would say what it distinguishes'
+  ),
+  'attachment.attachment.origin.senderTaskId': candidate(
+    'present only when the sender is an agent inside this session; its absence, with `from: uds:…` and verifiedPeerPid, is what separates another session from a sub-agent — both are written as kind "peer"'
+  ),
+  'attachment.attachment.isMeta': candidate(
+    'marks an attachment as harness-injected rather than typed; matters once attachment rows are read at all'
+  ),
+
+  'assistant.errorDetails': candidate(
+    'the raw API error behind a failed turn (a 429 body, say); the pair of isApiErrorMessage and apiErrorStatus, which are candidates already'
+  ),
+  'system.commandRun': candidate(
+    'which slash command ran, with its arguments — the part of the local_command row that says what happened'
+  ),
+  'user.mcpMeta.structuredContent': ignored(
+    "the payload an MCP server returns: its keys are that server's schema, not Claude Code's format, so they enter the baseline as noise and mean nothing to a reader"
+  ),
+  'attachment.attachment.removed': ignored(
+    'on an `instructions` attachment: a CLAUDE.md that left the cascade mid-session; claude-md-reader reads the files themselves'
+  ),
 };
 
 /** The census axes, in report order. Each names its table and a label. */

@@ -234,6 +234,8 @@ describe('mergeTranscriptExtras', () => {
     diffs: [string, BashEditDiff][] = []
   ) => ({
     queued,
+    injected: [],
+    noticeByUuid: new Map(),
     skillPathByParentUuid: new Map(skills),
     effortByUuid: new Map(efforts),
     bashEditDiffByToolUseId: new Map(diffs),
@@ -476,6 +478,8 @@ describe('parseBashEditDiff', () => {
 describe('mergeTranscriptExtras — bashEditDiff', () => {
   const diffExtras = (diffs: [string, BashEditDiff][]) => ({
     queued: [],
+    injected: [],
+    noticeByUuid: new Map(),
     skillPathByParentUuid: new Map<string, string>(),
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(diffs),
@@ -525,5 +529,268 @@ describe('mergeTranscriptExtras — bashEditDiff', () => {
     expect(mergeTranscriptExtras(messages, diffExtras([['toolu_bash1', diff]]))[0]).toBe(
       messages[0]
     );
+  });
+});
+
+// ─── Messages from another session, and harness notices (#274) ───────────────
+
+/** The wrapper Claude Code puts around a message from another session, with the
+ *  safety preamble that follows it in the row's own `content`. Neither belongs
+ *  on screen: `origin.body` is the message itself. */
+function crossSessionContent(body: string, hopChain?: string[]): string {
+  const hops = hopChain ? ` hop-chain="${hopChain.join(',')}"` : '';
+  return (
+    'Another Claude session sent a message:\n' +
+    `<cross-session-message from="uds:/tmp/cc-socks/4242.sock"${hops} from-name="alice-7c" from-mode="prompting">\n` +
+    `${body}\n</cross-session-message>\n\n` +
+    'This came from another Claude session — not typed by your user, but very likely working on their behalf.'
+  );
+}
+
+/** Delivered to a session that was idle: one `user` row, `isMeta`, carrying the
+ *  whole `origin`. */
+function peerUserRow(
+  uuid: string,
+  body: string,
+  timestamp: string,
+  origin: Record<string, unknown> = {}
+) {
+  return {
+    type: 'user',
+    uuid,
+    timestamp,
+    isMeta: true,
+    promptSource: 'system',
+    origin: {
+      kind: 'peer',
+      from: 'uds:/tmp/cc-socks/4242.sock',
+      verifiedPeerPid: 4242,
+      msg_id: 'm-1',
+      name: 'alice-7c',
+      fromMode: 'prompting',
+      body,
+      ...origin,
+    },
+    message: { role: 'user', content: crossSessionContent(body) },
+  };
+}
+
+/** Delivered to a session that was mid-turn: the attachment carries the arrival
+ *  time and the same `origin`; the queue pair around it is bookkeeping. */
+function peerAttachmentRow(
+  uuid: string,
+  body: string,
+  timestamp: string,
+  origin: Record<string, unknown> = {}
+) {
+  return {
+    type: 'attachment',
+    uuid,
+    timestamp,
+    attachment: {
+      type: 'queued_command',
+      prompt: crossSessionContent(body),
+      commandMode: 'prompt',
+      isMeta: true,
+      timestamp,
+      origin: {
+        kind: 'peer',
+        from: 'uds:/tmp/cc-socks/4242.sock',
+        verifiedPeerPid: 4242,
+        msg_id: 'm-2',
+        name: 'alice-7c',
+        fromMode: 'prompting',
+        body,
+        ...origin,
+      },
+    },
+  };
+}
+
+describe('a message from another session', () => {
+  it('is recovered when it reached an idle session, without its wrapper', async () => {
+    const p = writeJsonl([
+      peerUserRow('p1', 'the fork inventory is done, nothing pushed', '2026-09-08T10:00:00.000Z'),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected).toHaveLength(1);
+    expect(injected[0].content).toEqual([
+      { type: 'text', text: 'the fork inventory is done, nothing pushed' },
+    ]);
+    expect(injected[0].inbound).toMatchObject({ from: 'session', name: 'alice-7c', pid: 4242 });
+    expect(injected[0].inbound?.queued).toBeUndefined();
+  });
+
+  it('is recovered when it reached a busy session, dated to its arrival', async () => {
+    const p = writeJsonl([
+      queueRow('enqueue', crossSessionContent('ping', ['a1']), '2026-09-08T10:00:00.000Z'),
+      peerAttachmentRow('p2', 'ping', '2026-09-08T10:00:00.000Z'),
+      queueRow(
+        'remove',
+        crossSessionContent('ping'),
+        '2026-09-08T10:00:45.000Z',
+        'absorbed_mid_turn'
+      ),
+    ]);
+    const { injected, queued } = await readTranscriptExtras(p);
+    // One delivery, one row: the queue pair around it must not produce a second.
+    expect(injected).toHaveLength(1);
+    expect(queued).toHaveLength(0);
+    expect(injected[0].inbound?.queued).toBe(true);
+    // The arrival, not the absorption 45 seconds later.
+    expect(injected[0].timestamp).toBe('2026-09-08T10:00:00.000Z');
+  });
+
+  it('tells an agent inside this session apart from another session', async () => {
+    const p = writeJsonl([
+      peerUserRow('p3', 'teammate reporting in', '2026-09-08T10:00:00.000Z', {
+        from: 'worker-b',
+        senderTaskId: 'aworker-b-9f',
+        name: 'worker-b',
+        verifiedPeerPid: undefined,
+      }),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].inbound).toMatchObject({ from: 'agent', name: 'worker-b' });
+    expect(injected[0].inbound?.pid).toBeUndefined();
+  });
+
+  it('keeps the join key and the hop chain', async () => {
+    const p = writeJsonl([
+      peerUserRow('p4', 'replying as agreed', '2026-09-08T10:00:00.000Z', {
+        msg_id: 'm-9',
+        hopChain: ['a1', 'b2'],
+      }),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].inbound?.msgId).toBe('m-9');
+    expect(injected[0].inbound?.hopChain).toEqual(['a1', 'b2']);
+  });
+
+  it('leaves a message the user typed mid-turn exactly as it was', async () => {
+    const p = writeJsonl([
+      queueRow('enqueue', 'aggiungi anche il grafico', '2026-09-08T10:00:00.000Z'),
+      queueRow(
+        'remove',
+        'aggiungi anche il grafico',
+        '2026-09-08T10:00:30.000Z',
+        'absorbed_mid_turn'
+      ),
+    ]);
+    const { injected, queued } = await readTranscriptExtras(p);
+    expect(injected).toHaveLength(0);
+    expect(queued).toHaveLength(1);
+    expect(queued[0].inbound).toBeUndefined();
+  });
+});
+
+describe('harness notices', () => {
+  it('leaves a background task notification alone: the renderer already cards it', async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'n1',
+        timestamp: '2026-09-08T10:00:00.000Z',
+        promptSource: 'sdk',
+        origin: { kind: 'task-notification' },
+        message: {
+          role: 'user',
+          content:
+            '<task-notification>\n<task-id>bx12</task-id>\n<status>completed</status>\n</task-notification>',
+        },
+      },
+    ]);
+    const { injected, noticeByUuid } = await readTranscriptExtras(p);
+    expect(injected).toHaveLength(0);
+    expect(noticeByUuid.size).toBe(0);
+  });
+
+  it('recovers the idle notice, which carries no origin at all', async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'n2',
+        timestamp: '2026-09-08T10:00:00.000Z',
+        isMeta: true,
+        promptSource: 'system',
+        message: {
+          role: 'user',
+          content:
+            '[Cross-session idle notice] "alice-7c", which you asked to be notified about, is idle now — it finished a turn at 21:23.',
+        },
+      },
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected).toHaveLength(1);
+    expect(injected[0].notice).toMatchObject({ kind: 'session-idle', subject: 'alice-7c' });
+    expect(injected[0].inbound).toBeUndefined();
+  });
+
+  it("reads an agent's idle notification as a notice, not as prose", async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'n3',
+        timestamp: '2026-09-08T10:00:00.000Z',
+        message: {
+          role: 'user',
+          content:
+            'Another Claude session sent a message:\n<teammate-message teammate_id="worker-b" color="blue">\n{"type":"idle_notification","from":"worker-b","idleReason":"available","result":"Done, the sweep found nothing."}\n</teammate-message>',
+        },
+      },
+    ]);
+    const { noticeByUuid } = await readTranscriptExtras(p);
+    expect(noticeByUuid.get('n3')).toEqual({
+      kind: 'agent-idle',
+      subject: 'worker-b',
+      text: 'Done, the sweep found nothing.',
+    });
+  });
+});
+
+describe('mergeTranscriptExtras with what the SDK cannot see', () => {
+  it('puts an inbound message in chronological place and stamps a notice by uuid', async () => {
+    const sdk: ChatMessage[] = [
+      msg('u1', 'user', 'start', '2026-09-08T10:00:00.000Z'),
+      msg('n1', 'user', '<teammate-message teammate_id="worker-b">…', '2026-09-08T10:00:20.000Z'),
+      msg('a1', 'assistant', 'done', '2026-09-08T10:00:30.000Z'),
+    ];
+    const merged = mergeTranscriptExtras(sdk, {
+      queued: [],
+      injected: [
+        {
+          uuid: 'p1',
+          role: 'user',
+          timestamp: '2026-09-08T10:00:10.000Z',
+          content: [{ type: 'text', text: 'from the other session' }],
+          inbound: { from: 'session', name: 'alice-7c' },
+        },
+      ],
+      noticeByUuid: new Map([
+        ['n1', { kind: 'agent-idle', subject: 'worker-b', text: 'finished' } as const],
+      ]),
+      skillPathByParentUuid: new Map(),
+      effortByUuid: new Map(),
+      bashEditDiffByToolUseId: new Map(),
+    });
+    expect(merged.map(m => m.uuid)).toEqual(['u1', 'p1', 'n1', 'a1']);
+    expect(merged[1].inbound?.name).toBe('alice-7c');
+    expect(merged[2].notice?.kind).toBe('agent-idle');
+  });
+});
+
+describe('a notice absorbed while a turn was running', () => {
+  it('is still a notice, dated to when it arrived', async () => {
+    const line =
+      '[Cross-session idle notice] "alice-7c", which you asked to be notified about, is idle now.';
+    const p = writeJsonl([
+      queueRow('enqueue', line, '2026-09-08T10:00:00.000Z'),
+      queueRow('remove', line, '2026-09-08T10:00:40.000Z', 'absorbed_mid_turn'),
+    ]);
+    const { injected, queued } = await readTranscriptExtras(p);
+    expect(queued).toHaveLength(0);
+    expect(injected).toHaveLength(1);
+    expect(injected[0].notice?.kind).toBe('session-idle');
+    expect(injected[0].timestamp).toBe('2026-09-08T10:00:00.000Z');
   });
 });

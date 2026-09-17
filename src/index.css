@@ -18143,3 +18143,124 @@ select.cl-opt-input {
     gap: 12px;
   }
 }
+
+/* ── Inbound message: from another session, or from an agent in this one ──────
+   It keeps the geometry of a user turn — it IS an input to the turn that
+   follows — and takes its distance from one with a strip that names the sender
+   and a rule down its left side. No new hue: the accent at low chroma for a
+   session, a step further towards ink for an agent inside this session, so the
+   two are told apart without inventing a colour for either (#274). */
+.cl-turn--inbound .cl-turn-orb--inbound {
+  background: color-mix(in oklab, var(--cl-accent) 12%, var(--cl-paper));
+  border: 1px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
+  color: var(--cl-accent-ink);
+  font-size: 12px;
+  line-height: 1;
+}
+.cl-inbound {
+  border-left: 2px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
+  padding: 0 0 2px 12px;
+}
+.cl-inbound--agent {
+  border-left-color: color-mix(in oklab, var(--cl-ink-3) 42%, transparent);
+}
+.cl-inbound-strip {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font: 500 10px/1.6 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
+  padding-bottom: 6px;
+}
+.cl-inbound--agent .cl-inbound-strip {
+  color: var(--cl-ink-3);
+}
+.cl-inbound-arrow {
+  font-size: 12px;
+  line-height: 1;
+}
+.cl-inbound-from {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+/* What the sender IS, next to what it calls itself: the name is the sender's
+   own claim and it changes, this does not. */
+.cl-inbound-what,
+.cl-inbound-time {
+  color: var(--cl-ink-4);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.cl-inbound-time {
+  margin-left: auto;
+}
+.cl-inbound-queued {
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--cl-ink-4);
+  letter-spacing: 0.06em;
+}
+.cl-inbound-body {
+  color: var(--cl-ink-2);
+}
+.cl-inbound-more {
+  margin-top: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 11px/1 var(--font-mono);
+  color: var(--cl-accent-ink);
+  cursor: pointer;
+}
+.cl-inbound-more:hover {
+  text-decoration: underline;
+}
+
+/* ── Harness notice: one line, and nobody said it ───────────────────────────
+   A session going idle, an agent finishing, a turn resumed after a usage
+   limit. Modelled on the advisor marker: it explains the turn that follows
+   without pretending to be one. */
+.cl-turn--notice .cl-turn-body {
+  padding: 2px 0 10px;
+}
+.cl-notice-mark {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font: 400 11px/1.5 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-notice-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  font-weight: 500;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-3);
+  padding: 3px 9px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  background: var(--cl-paper-2);
+}
+.cl-notice-subject {
+  color: var(--cl-ink-4);
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+.cl-notice-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-notice-time {
+  margin-left: auto;
+  flex-shrink: 0;
+}

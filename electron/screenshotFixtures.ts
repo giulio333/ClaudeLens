@@ -11,6 +11,8 @@ const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 const NOW = new Date();
 const NOTES_DEMO_ID = 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10';
 const NOTES_DEMO_PROJECT = '-Users-alice-projects-webapp';
+const BASH_DIFF_DEMO_ID = 'b4e9d3f2-5c7e-4f3b-8d2a-6e9f0a1b2c3d';
+const INBOUND_DEMO_ID = 'c5f0e4a3-6d8f-4a4c-9e3b-7f0a1b2c3d4e';
 
 // Helper per date relative a NOW, così chat/memory/agent non "invecchiano":
 // restano sempre coerenti con le sessioni (anch'esse ancorate a NOW).
@@ -147,13 +149,30 @@ function getSessionList(hash: string) {
   const count = sessionCountFor(hash);
   const pad = (n: number) => String(n).padStart(2, '0');
   return Array.from({ length: count }, (_, i) => {
-    const t = SESSION_TEMPLATES[i % SESSION_TEMPLATES.length];
+    const bashDemo = hash === NOTES_DEMO_PROJECT && i === 1;
+    const inboundDemo = hash === NOTES_DEMO_PROJECT && i === 2;
+    const t = bashDemo
+      ? { ...SESSION_TEMPLATES[1], title: 'Increase the API timeout', msgs: 3 }
+      : inboundDemo
+        ? {
+            ...SESSION_TEMPLATES[2],
+            title: 'Split the release sweep with a second session',
+            msgs: 6,
+          }
+        : SESSION_TEMPLATES[i % SESSION_TEMPLATES.length];
     // i < 8 → usa l'offset originale del template; oltre → un giorno in più ciascuno
     const dayOffset = i < SESSION_TEMPLATES.length ? t.days : i;
     const d = new Date(now.getTime() - dayOffset * 86_400_000);
     const filename = `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}T${pad(d.getHours())}${pad(d.getMinutes())}${pad(d.getSeconds())}_${String(i).padStart(6, '0')}.jsonl`;
     return {
-      filename: hash === NOTES_DEMO_PROJECT && i === 0 ? `${NOTES_DEMO_ID}.jsonl` : filename,
+      filename:
+        hash === NOTES_DEMO_PROJECT && i === 0
+          ? `${NOTES_DEMO_ID}.jsonl`
+          : bashDemo
+            ? `${BASH_DIFF_DEMO_ID}.jsonl`
+            : inboundDemo
+              ? `${INBOUND_DEMO_ID}.jsonl`
+              : filename,
       date: d.toISOString(),
       inputTokens: t.input,
       outputTokens: t.output,
@@ -308,6 +327,180 @@ const MOCK_CHAT = [
           content:
             "import jwt from 'jsonwebtoken';\n\nconst SECRET = process.env.JWT_SECRET!;\n\nexport const signToken = (userId: string) =>\n  jwt.sign({ userId }, SECRET, { expiresIn: '7d' });\n\nexport const verifyToken = (token: string) =>\n  jwt.verify(token, SECRET) as { userId: string };\n",
         },
+      },
+    ],
+  },
+];
+
+// A compact, completed shell edit for screenshots; the command is never executed.
+const BASH_DIFF_CHAT: ChatMessage[] = [
+  {
+    uuid: 'bash-diff-user',
+    role: 'user',
+    timestamp: daysAgo(1),
+    content: [{ type: 'text', text: 'Increase the API timeout from 5 to 15 seconds.' }],
+  },
+  {
+    uuid: 'bash-diff-assistant',
+    role: 'assistant',
+    timestamp: daysAgo(1),
+    model: 'claude-sonnet-4-6',
+    content: [
+      { type: 'text', text: 'Updating the timeout in the API client.' },
+      {
+        type: 'tool_use',
+        id: 'bash-diff-tool',
+        name: 'Bash',
+        input: {
+          command: "sed -i '' 's/timeout: 5000/timeout: 15000/' src/api/client.ts",
+          description: 'Increase the API client timeout',
+        },
+      },
+    ],
+  },
+  {
+    uuid: 'bash-diff-result',
+    role: 'user',
+    timestamp: daysAgo(1),
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'bash-diff-tool',
+        content: '',
+        isError: false,
+        bashEditDiff: {
+          changedFiles: ['src/api/client.ts'],
+          moreFiles: 0,
+          files: [
+            {
+              filePath: 'src/api/client.ts',
+              hunks: [
+                {
+                  oldStart: 3,
+                  oldLines: 4,
+                  newStart: 3,
+                  newLines: 4,
+                  lines: [
+                    ' export const api = createClient({',
+                    "   baseURL: '/api',",
+                    '-  timeout: 5000,',
+                    '+  timeout: 15000,',
+                    ' });',
+                  ],
+                },
+              ],
+            },
+          ],
+        },
+      },
+    ],
+  },
+];
+
+// A session that worked alongside another one: what #274 draws. Every sender
+// here is invented — the point is the shape, not anyone's traffic.
+const INBOUND_CHAT: ChatMessage[] = [
+  {
+    uuid: 'inbound-user',
+    role: 'user',
+    timestamp: daysAgo(2),
+    content: [
+      {
+        type: 'text',
+        text: 'Split the release sweep with the other session: you take the binaries, it takes the forks.',
+      },
+    ],
+  },
+  {
+    uuid: 'inbound-assistant-1',
+    role: 'assistant',
+    timestamp: daysAgo(2),
+    model: 'claude-sonnet-4-6',
+    content: [
+      {
+        type: 'text',
+        text: 'Asked it to take the forks. Starting on the binaries here.',
+      },
+    ],
+  },
+  {
+    uuid: 'inbound-peer',
+    role: 'user',
+    timestamp: daysAgo(2),
+    inbound: { from: 'session', name: 'alice-7c', pid: 4242, msgId: 'm-1' },
+    content: [
+      {
+        type: 'text',
+        text: [
+          'Forks done, nothing pushed anywhere. Three things you need.',
+          '',
+          '1) **Published binaries**: clean, no rebuild needed. I mounted the arm64 image and scanned it with all 38 patterns: 0 matches. The tag tree is clean too.',
+          '',
+          "2) **Pre-sweep build on this machine**: still installed, same build as the image in the downloads folder. I have NOT replaced it — deleting a build is the user's call, not mine, and the app is running right now.",
+          '',
+          '3) **Forks**, read-only, tip of each default branch:',
+          '',
+          '| fork | head | last push | files |',
+          '| --- | --- | --- | --- |',
+          '| fork-one | 523950b | 11 Sep | 20 |',
+          '| fork-two | e6a7ab4 | 31 May | 4 |',
+          '| fork-three | b289c7f | 23 Jun | 3 |',
+          '',
+          'The three older ones carry only the first two patterns. Nothing opened on their repos; the shallow clones I measured with are deleted.',
+          '',
+          'Nothing new for the denylist: everything I found is already covered.',
+        ].join('\n'),
+      },
+    ],
+  },
+  {
+    uuid: 'inbound-notice-agent',
+    role: 'user',
+    timestamp: daysAgo(2),
+    notice: {
+      kind: 'agent-idle',
+      subject: 'sweep-runner',
+      text: 'Scan finished, no matches left.',
+    },
+    content: [{ type: 'text', text: 'Scan finished, no matches left.' }],
+  },
+  {
+    uuid: 'inbound-agent',
+    role: 'user',
+    timestamp: daysAgo(2),
+    inbound: { from: 'agent', name: 'sweep-runner', queued: true },
+    content: [
+      {
+        type: 'text',
+        text: 'Swept the packaged bundle as well as the source tree: 0 matches in both. Nothing to fix.',
+      },
+    ],
+  },
+  {
+    uuid: 'inbound-notice-session',
+    role: 'user',
+    timestamp: daysAgo(2),
+    notice: {
+      kind: 'session-idle',
+      subject: 'alice-7c',
+      text: '"alice-7c", which you asked to be notified about, is idle now — it finished a turn at 08:53.',
+    },
+    content: [
+      {
+        type: 'text',
+        text: '"alice-7c", which you asked to be notified about, is idle now — it finished a turn at 08:53.',
+      },
+    ],
+  },
+  {
+    uuid: 'inbound-assistant-2',
+    role: 'assistant',
+    timestamp: daysAgo(2),
+    model: 'claude-sonnet-4-6',
+    content: [
+      {
+        type: 'text',
+        text: 'Both halves are in: binaries clean here, forks clean there. Nothing to rebuild, and the installed build stays for you to decide on.',
       },
     ],
   },
@@ -2247,6 +2440,12 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   // a few recent demo calls, and stop ticking once the view stops reading.
   const notesDemos = new Map<number, { readAt: number; messages: ChatMessage[] }>();
   ipcMain.handle('sessions:getChat', (event, hash: string, filename: string) => {
+    if (hash === NOTES_DEMO_PROJECT && filename === `${BASH_DIFF_DEMO_ID}.jsonl`) {
+      return ok(BASH_DIFF_CHAT);
+    }
+    if (hash === NOTES_DEMO_PROJECT && filename === `${INBOUND_DEMO_ID}.jsonl`) {
+      return ok(INBOUND_CHAT);
+    }
     if (hash !== NOTES_DEMO_PROJECT || filename !== `${NOTES_DEMO_ID}.jsonl`) {
       return ok(MOCK_CHAT);
     }
