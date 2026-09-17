@@ -19,7 +19,7 @@ export interface WhatsNewRelease {
 
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
-    version: '2.2.22',
+    version: '2.2.23',
     highlights: [
       {
         title: 'Cross-session messages',
