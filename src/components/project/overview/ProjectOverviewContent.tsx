@@ -336,6 +336,15 @@ export function ProjectView({
     sessions.forEach((s, i) => m.set(s.filename, i + 1));
     return m;
   }, [sessions]);
+  // BOTH lists of the Sessions view number their rows from this map, never from
+  // their own position: the pinned section is a subset of the same order, so a
+  // sequential index there and another one below restarted at 01 and the same
+  // number named two different sessions one section apart. The index is the
+  // rank, which is why the unpinned list skips the numbers shown above it.
+  const rankOf = useCallback(
+    (s: SessionSummary) => sessionRank.get(s.filename) ?? 0,
+    [sessionRank]
+  );
   // Pinned sessions live exclusively in their own section; the regular list
   // shows only the unpinned ones so a pinned session never appears twice.
   const unpinnedSessions = useMemo(
@@ -893,7 +902,7 @@ export function ProjectView({
             cleanupDays={cleanupDays}
             onOpen={openTerminal}
             onOpenChat={openChat}
-            rankOf={s => sessionRank.get(s.filename) ?? 0}
+            rankOf={rankOf}
             style={{ paddingTop: 38 }}
           />
           <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
@@ -931,6 +940,7 @@ export function ProjectView({
                 pageSize={60}
                 onOpen={openTerminal}
                 onOpenChat={openChat}
+                rankOf={rankOf}
               />
             )}
           </section>
@@ -1725,7 +1735,11 @@ function SessionRows({
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
   // When provided, overrides the sequential row number with the session's true
-  // position in the full list (used by the pinned section, which gets a subset).
+  // position in the full list. Every list that shows a SUBSET of a larger order
+  // passes it — both lists of the Sessions view do, since numbering the pinned
+  // ones by rank and the rest by position made the same number appear twice on
+  // one screen. Omitted only where the subset is a prefix (the landing's first
+  // five), where the sequential index already is the rank.
   rankOf?: (s: SessionSummary) => number;
   // When set, only the first `pageSize` rows mount, behind a "Show more" button
   // (the full Sessions view, with hundreds of rows). Omitted for the small

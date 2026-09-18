@@ -1213,6 +1213,19 @@ caricamento resta progressivo, prende solo l'idioma del pager del mock.
 La data della riga è formattata **en-US** come il resto dell'app: era l'ultimo
 `it-IT` rimasto in una UI english-only (`10 ago` accanto a colonne inglesi).
 
+**L'indice è il rango, e le due liste lo prendono dalla stessa mappa**
+(`sessionRank`, posizione 1-based nella lista completa ordinata per attività,
+passata a entrambe come `rankOf`). Le pinnate stanno in una sezione propria e
+sono tolte da quella sotto: numerando la prima per rango e la seconda per
+posizione, `02` stava sia su una pinnata sia su una sessione tre righe più
+giù — lo stesso numero per due sessioni nella stessa schermata. Da qui la
+**conseguenza voluta**: la lista non pinnata salta i numeri che la sezione
+sopra si è presa (`01`, `04`, `06`, …), e il conteggio in testata (`15 total`)
+resta quello delle righe di quella lista, non dell'ultimo indice stampato.
+`rankOf` si omette solo dove il sottoinsieme è un **prefisso** dell'ordine —
+le prime cinque della landing — perché lì l'ordinale sequenziale è già il
+rango.
+
 **Landing di progetto — design handoff _Project Overview Redesign_, 3b**
 (`section === 'overview'`). La landing è **l'hero e una lista sola**. Le
 sezioni **Memory** (griglia di index card `.cl-mem-cards`/`.cl-mcard`,
