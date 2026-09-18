@@ -6,6 +6,7 @@ import {
   parseAnswersFromResultText,
   parseAskUserQuestions,
   QUESTION_TOOL,
+  writeAction,
 } from '../chat/utils';
 import type {
   MemoryAction,
@@ -90,6 +91,10 @@ export type FileChange = {
   added: number;
   removed: number;
   hasError: boolean;
+  /** A `Write` in this file's items actually created it (vs. overwriting or
+   *  editing an existing one) — the row's action badge reads this, not the
+   *  tool name: a file both written and later edited still counts as edit. */
+  created: boolean;
 };
 
 /** Per-file aggregate of every mutating tool run — the session's work product. */
@@ -109,6 +114,7 @@ export function buildFileChanges(groups: ToolGroup[]): FileChange[] {
         added: 0,
         removed: 0,
         hasError: false,
+        created: false,
       };
       byPath.set(path, fc);
     }
@@ -119,6 +125,7 @@ export function buildFileChanges(groups: ToolGroup[]): FileChange[] {
       fc.removed += stats.removed;
     }
     fc.hasError ||= !!g.result?.isError;
+    if (g.use.name === 'Write' && writeAction(g.result?.content) === 'new') fc.created = true;
   }
   return [...byPath.values()];
 }
@@ -331,6 +338,9 @@ export type FeedEvent = {
   glyphTint: string;
   /** File extension for CHANGES rows — the badge draws the real language icon. */
   ext?: string;
+  /** CHANGES rows only: which action the row's icon draws — a file created by
+   *  `Write` vs. one only edited. Absent for every other species. */
+  actionGlyph?: 'edit' | 'write';
   title: string;
   meta: string;
   /** Third tooltip line: the fact the row had to truncate — a page's full URL and
@@ -702,6 +712,7 @@ function changeEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
       glyph: '',
       glyphTint: 'var(--cl-ink-3)',
       ext: fileExt(fc.name),
+      actionGlyph: fc.created ? 'write' : 'edit',
       title: fc.name,
       meta: fc.items.length > 1 ? `${fc.items.length} edits · ${area}` : area,
       right: fc.hasError ? 'FAILED' : '',

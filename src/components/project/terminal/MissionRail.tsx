@@ -247,6 +247,43 @@ function FeedGlyph({ e }: { e: FeedEvent }) {
   );
 }
 
+/** CHANGES rows only: pencil for an edit, plus for a file `Write` created —
+ *  both in the accent that already tints the row's diff numbers, so the verb
+ *  reads before the +/− does. */
+function ActionGlyph({ kind }: { kind: 'edit' | 'write' }) {
+  return (
+    <span
+      aria-hidden
+      className="inline-flex items-center justify-center shrink-0"
+      style={{ width: 13, height: 13, color: 'var(--cl-accent)' }}
+      title={kind === 'edit' ? 'Edit' : 'Write (created)'}
+    >
+      <svg
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth={2}
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        width={13}
+        height={13}
+      >
+        {kind === 'edit' ? (
+          <>
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
+          </>
+        ) : (
+          <>
+            <path d="M12 5v14" />
+            <path d="M5 12h14" />
+          </>
+        )}
+      </svg>
+    </span>
+  );
+}
+
 /** One event in the stream: time · badge · title/meta · status. A single click
  *  target — it either opens the event's destination or, when the event bundles
  *  several operations (or a task carries detail), discloses them below. */
@@ -295,15 +332,17 @@ function FeedRow({
       <FeedGlyph e={e} />
       <span className="min-w-0">
         <span
-          className="truncate"
-          style={{
-            display: 'block',
-            font: '500 12px/1.3 var(--font-sans)',
-            color: e.danger ? 'var(--cl-danger)' : 'var(--cl-ink)',
-          }}
+          className="flex items-center"
+          style={{ gap: 5, font: '500 12px/1.3 var(--font-sans)' }}
         >
-          {e.title}
-          {e.expandable && <span style={{ color: 'var(--cl-ink-4)' }}> {open ? '▾' : '▸'}</span>}
+          {e.actionGlyph && <ActionGlyph kind={e.actionGlyph} />}
+          <span
+            className="truncate"
+            style={{ color: e.danger ? 'var(--cl-danger)' : 'var(--cl-ink)' }}
+          >
+            {e.title}
+            {e.expandable && <span style={{ color: 'var(--cl-ink-4)' }}> {open ? '▾' : '▸'}</span>}
+          </span>
         </span>
         {e.meta && (
           <span
