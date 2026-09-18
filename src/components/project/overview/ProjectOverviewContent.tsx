@@ -37,6 +37,7 @@ import { McpServerGrid } from '../mcp/McpServerGrid';
 import { AgentsLiveView } from '../agents-live/AgentsLiveView';
 import { TasksSection } from '../tasks/TasksSection';
 import { projectDisplayName } from '../shared/projectName';
+import { EmptyState } from '../shared/EmptyState';
 import { ReadoutShell, ReadoutCell, ReadoutPart, ReadoutRule } from '../shared/ReadoutCard';
 import { READOUT_RAMP } from '../shared/readout';
 import { kTok } from '../terminal/mission-feed';
@@ -1072,7 +1073,11 @@ export function ProjectView({
                 </div>
               )}
               {memTopics.length === 0 ? (
-                <div className="cl-empty">No memory topics yet.</div>
+                <EmptyState
+                  icon="note"
+                  title="No memory topics yet."
+                  hint="Claude writes one here the first time it learns something worth remembering about this project."
+                />
               ) : visibleMemTopics.length === 0 ? (
                 <div className="cl-empty">No topics match these filters.</div>
               ) : activeMemGroup === 'none' ? (
@@ -1576,6 +1581,10 @@ type SessionRowProps = {
   tags: string[];
   cleanupDays: number;
   pickerOpen: boolean;
+  // This session's cost relative to the priciest session in the same list
+  // (0–1) — a per-row intensity bar, not a plotted series (a summary only
+  // carries one cost figure per session, never a message-by-message trail).
+  costRatio: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
   onTogglePin: (filename: string) => void;
@@ -1599,6 +1608,7 @@ function sessionRowEqual(a: SessionRowProps, b: SessionRowProps): boolean {
     a.live !== b.live ||
     a.cleanupDays !== b.cleanupDays ||
     a.pickerOpen !== b.pickerOpen ||
+    a.costRatio !== b.costRatio ||
     a.tags.length !== b.tags.length
   ) {
     return false;
@@ -1617,6 +1627,7 @@ const SessionRow = memo(function SessionRow({
   tags,
   cleanupDays,
   pickerOpen,
+  costRatio,
   onOpen,
   onOpenChat,
   onTogglePin,
@@ -1704,6 +1715,19 @@ const SessionRow = memo(function SessionRow({
           <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
         </span>
         <span className="toks">{fmt(s.totalTokens)}</span>
+        {/* Cost relative to the priciest session in this list — a column-width
+            bar, not a stat: the figure itself is the tooltip, the bar is a
+            glance-able "how does this one compare". Empty on a free session
+            instead of a zero-width sliver nobody would notice. */}
+        <span
+          className="cl-srow-cost"
+          title={s.estimatedCost > 0 ? `${fmtCost(s.estimatedCost)} this session` : undefined}
+        >
+          <span
+            className="cl-srow-cost-fill"
+            style={{ width: `${Math.round(costRatio * 100)}%` }}
+          />
+        </span>
         <span className="when">{shortWhen(s.date)}</span>
       </span>
 
@@ -1787,6 +1811,9 @@ function SessionRows({
 
   const visible = shown >= sessions.length ? sessions : sessions.slice(0, shown);
   const remaining = sessions.length - visible.length;
+  // Scaled against the whole list, not just the mounted page: "Show more"
+  // must not rescale rows already on screen.
+  const maxCost = sessions.reduce((m, s) => Math.max(m, s.estimatedCost), 0);
 
   return (
     <div className="cl-srows">
@@ -1800,6 +1827,7 @@ function SessionRows({
           tags={tagsForSession(s.filename)}
           cleanupDays={cleanupDays}
           pickerOpen={pickerFor?.filename === s.filename}
+          costRatio={maxCost > 0 ? s.estimatedCost / maxCost : 0}
           onOpen={onOpen}
           onOpenChat={onOpenChat}
           onTogglePin={handleTogglePin}

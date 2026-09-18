@@ -10,6 +10,7 @@ import {
 } from './graph';
 import { MemoryPeekCard } from './MemoryPeekCard';
 import { useMemoryPeek } from './useMemoryPeek';
+import { EmptyState } from '../shared/EmptyState';
 
 /**
  * La sezione memoria come **mappa delle relazioni**: un sistema di orbite per
@@ -159,7 +160,14 @@ export function MemoryGraphView({
     );
   };
 
-  if (!graph.nodes.length) return <div className="cl-empty">No memory topics yet.</div>;
+  if (!graph.nodes.length)
+    return (
+      <EmptyState
+        icon="note"
+        title="No memory topics yet."
+        hint="Claude writes one here the first time it learns something worth remembering about this project."
+      />
+    );
 
   const linkedCount = graph.nodes.length - graph.loners.length;
   const loners = graph.loners.map(f => nodeBy.get(f)).filter((n): n is MemoryGraphNode => !!n);
@@ -182,9 +190,10 @@ export function MemoryGraphView({
       </div>
 
       {graph.clusters.length === 0 ? (
-        <div className="cl-empty">
-          No memory declares a [[wikilink]] to another one yet — nothing to orbit.
-        </div>
+        <EmptyState
+          icon="orbit"
+          title="No memory declares a [[wikilink]] to another one yet — nothing to orbit."
+        />
       ) : (
         <svg
           className="cl-memgraph-svg"

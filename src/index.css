@@ -5674,6 +5674,8 @@ button.cl-pill-model[data-on] {
   border-radius: 999px;
   background: color-mix(in oklab, var(--cl-accent) 6%, transparent);
   cursor: default;
+  position: relative;
+  overflow: hidden;
 }
 .cl-advisor-badge::before {
   content: '';
@@ -5682,6 +5684,37 @@ button.cl-pill-model[data-on] {
   border-radius: 50%;
   background: var(--cl-accent);
   flex-shrink: 0;
+}
+/* One-shot sweep on mount: the only stream marker whose whole event happened
+   off-screen (the reviewer round trip), so the badge earns a single flourish
+   to say "something just landed" — never repeating, never a loading state. */
+.cl-advisor-badge::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    100deg,
+    transparent 30%,
+    color-mix(in oklab, var(--cl-accent) 35%, transparent) 50%,
+    transparent 70%
+  );
+  background-size: 220% 100%;
+  background-position: 120% 0;
+  animation: cl-advisor-sweep 1.1s ease-out 0.05s 1;
+  pointer-events: none;
+}
+@keyframes cl-advisor-sweep {
+  from {
+    background-position: 120% 0;
+  }
+  to {
+    background-position: -20% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-advisor-badge::after {
+    animation: none;
+  }
 }
 /* Model · duration · tokens — quieter than the label they follow. */
 .cl-advisor-detail {
@@ -12956,6 +12989,35 @@ button.cl-sw-member:focus-visible,
   font-family: var(--font-mono);
 }
 
+/* Dressed-up empty state — a glyph above a sentence, for the "nothing here
+   yet" landings worth more than a grey mono line (memory lists, the memory
+   graph). Centered, generous padding: it is the whole of what the section has
+   to show, not a row among rows. */
+.cl-emptystate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--cl-ink-4);
+  text-align: center;
+}
+.cl-emptystate svg {
+  color: var(--cl-ink-4);
+  opacity: 0.7;
+}
+.cl-emptystate-title {
+  font-size: 13px;
+  font-family: var(--font-mono);
+  color: var(--cl-ink-3);
+}
+.cl-emptystate-hint {
+  font-size: 12px;
+  font-family: var(--font-mono);
+  color: var(--cl-ink-4);
+  max-width: 46ch;
+}
+
 /* ── Skill explorer: supporting files grouped by role ── */
 .cl-skill-ref-tag {
   font-family: var(--font-mono);
@@ -17310,6 +17372,27 @@ select.cl-opt-input {
   text-align: right;
   font-variant-numeric: tabular-nums;
 }
+/* Cost intensity bar: this session's spend against the priciest one in the
+   same list — a glance-able rank, not a second cost figure (the number
+   itself lives in the tooltip). Monochrome accent ramp, same idiom as the
+   part-of-whole cells elsewhere (VitalsPopover, the hero's model mix). */
+.cl-srow-cost {
+  display: inline-flex;
+  align-items: center;
+  width: 40px;
+  height: 5px;
+  border-radius: 999px;
+  background: color-mix(in oklab, var(--cl-ink-4) 16%, transparent);
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.cl-srow-cost-fill {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  border-radius: inherit;
+  background: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-4));
+}
 .cl-srow .meta .when {
   width: 104px;
   text-align: right;
@@ -17400,6 +17483,9 @@ select.cl-opt-input {
   }
   .cl-srow .meta .when {
     width: auto;
+  }
+  .cl-srow-cost {
+    display: none;
   }
 }
 
