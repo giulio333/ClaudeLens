@@ -5,13 +5,17 @@ import { stripFramingTags } from '../utils';
 import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
 import {
   mergeTranscriptExtras,
+  parseArtifactPublish,
   parseBashEditDiff,
   readTranscriptExtras,
   rowEffort,
+  withArtifactPublish,
   withBashEditDiff,
 } from './transcript-extras';
 import type {
   AdvisorConsult,
+  ArtifactPublish,
+  BashEditDiff,
   ChatContentBlock,
   ChatMessage,
   MessageUsage,
@@ -196,6 +200,21 @@ export interface ReadChatOptions {
   includeSidechain?: boolean;
 }
 
+/** I due dati che stanno sulla RIGA e non dentro `message`, attaccati al blocco
+ *  di risultato a cui appartengono. Separati per non fare due copie dei blocchi
+ *  quando la riga porta entrambi — e per non farne nessuna quando non porta né
+ *  l'uno né l'altro, che è ogni riga tranne una manciata. */
+function withRowExtras(
+  blocks: ChatContentBlock[],
+  bashEditDiff: BashEditDiff | undefined,
+  artifact: ArtifactPublish | undefined
+): ChatContentBlock[] {
+  let out = blocks;
+  if (bashEditDiff) out = withBashEditDiff(out, bashEditDiff);
+  if (artifact) out = withArtifactPublish(out, artifact);
+  return out;
+}
+
 export function readChatSession(filePath: string, options: ReadChatOptions = {}): ChatMessage[] {
   if (!existsSync(filePath)) return [];
 
@@ -278,13 +297,16 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       // the SDK path, which gets only `message`, has to recover it with a
       // second pass (see `transcript-extras`).
       const bashEditDiff = parseBashEditDiff(json.toolUseResult);
+      // Stessa riga, stessa ragione: la pagina che una publish dell'`Artifact`
+      // tool ha prodotto (titolo, link, versione) sta su `toolUseResult`.
+      const artifact = parseArtifactPublish(json.toolUseResult);
 
       const message: ChatMessage = {
         uuid,
         role,
         timestamp: String(json.timestamp ?? ''),
         model: msg.model as string | undefined,
-        content: bashEditDiff ? withBashEditDiff(blocks, bashEditDiff) : blocks,
+        content: withRowExtras(blocks, bashEditDiff, artifact),
         usage: parseUsage(msg),
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).

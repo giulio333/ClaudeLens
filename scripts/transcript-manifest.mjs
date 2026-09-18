@@ -354,8 +354,32 @@ export const FIELDS = {
   'user.toolUseResult.failed_mcp_servers': candidate(
     'name + errorCode + error of an MCP server that failed to connect for the session (one row so far, on a ToolSearch result). The mcp:* views list what is configured; nothing today records that a server was down while a session ran, which is the first thing a missing tool call looks like'
   ),
-  'user.toolUseResult.seq': unknown(
-    "7, in the single Artifact publish result observed, beside that result's own `version`. An integer with no second specimen to compare it against; a session that publishes twice would say whether it counts publishes within one artifact"
+  // The `Artifact` tool's publish result — the page a session published on
+  // claude.ai. Read since the chat and Mission Control started drawing it: the
+  // prose of the result names the page too, but inside a kilobyte of
+  // instructions written for the harness, so every one of these fields is what
+  // the card shows instead of parsing that prose.
+  'user.toolUseResult.artifact_id': read('transcript-extras + chat/artifact'),
+  'user.toolUseResult.url': read('transcript-extras + chat/artifact'),
+  'user.toolUseResult.title': read('transcript-extras + chat/artifact'),
+  'user.toolUseResult.updated': read('transcript-extras + chat/artifact'),
+  'user.toolUseResult.audience': read('transcript-extras + chat/artifact'),
+  // Settled: `seq` is the version ordinal. On the 8 publish results in the
+  // corpus that carry both it and the `(Version N)` of the prose the two agree
+  // every time, and the lone `seq: 7` that this entry used to call unexplained
+  // is the seventh version of a page whose six earlier publishes, in that same
+  // session, carry neither `seq` nor a `(Version N)` of their own. Absent on
+  // older transcripts, where no version is shown
+  // rather than one counted from the publishes a session happens to hold.
+  'user.toolUseResult.seq': read('transcript-extras + chat/artifact'),
+  'user.toolUseResult.version': ignored(
+    'the publish build id (`1789753451-a182`), not a number a reader could place: `seq` is the version a page is on, and printing both would put two different answers to "which version" side by side'
+  ),
+  'user.toolUseResult.contract': ignored(
+    "the artifact runtime's version the page was stored against — a property of the platform, not of the page"
+  ),
+  'user.toolUseResult.liveSubscription': ignored(
+    'whether the publishing session is watching the page for versions published elsewhere. It describes that session, is already stale by the time a transcript is read, and says nothing about the page'
   ),
   'attachment.attachment.managedCommit': unknown(
     'false in all 13 `remote_session_change` rows, as is its `managedPr` twin. A cloud session that actually produced a commit or a PR would say whether these mark one the managed environment created rather than one the user pushed — and so whether a remote-session view has to tell the two apart'

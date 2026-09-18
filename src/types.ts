@@ -62,6 +62,7 @@ export interface ClaudeMdHierarchy {
 export type {
   ChatContentBlock,
   AdvisorConsult,
+  ArtifactPublish,
   BashEditDiff,
   BashEditFile,
   BashEditHunk,

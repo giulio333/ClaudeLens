@@ -6,6 +6,8 @@ import { CommandSheet } from './CommandBlock';
 import { FileSheet } from './FileWindow';
 import { isFileTool } from './file-view';
 import { ownsToolBody, ownsOutputHead } from './shell';
+import { ArtifactCard } from './ArtifactCard';
+import { artifactAction, artifactOf, isArtifactTool } from './artifact';
 
 /**
  * A tool call and its result, in the transcript.
@@ -20,6 +22,13 @@ import { ownsToolBody, ownsOutputHead } from './shell';
  * `collapsible` is for the strips MIN density keeps on screen (agent dispatches,
  * skills): there the card is a chip that opens on click, because MIN is the
  * density that hides tool bodies.
+ *
+ * The `Artifact` tool splits in two here. A call that PUBLISHED a page is that
+ * page — `ArtifactCard` draws it with its title and a real link, the way the
+ * window tools are their window. A call that published nothing (a quickstart, a
+ * read, a listing) is plumbing, and is forced into the chip form whatever the
+ * density: its answer is a kilobyte of prose written for the harness, and
+ * printing it in full was most of what made a published page unreadable.
  */
 export function ToolGroupCard({
   group,
@@ -43,6 +52,7 @@ export function ToolGroupCard({
 }) {
   const [open, setOpen] = useState(false);
   const { use, result } = group;
+  const artifact = isArtifactTool(use.name) ? artifactOf(group) : undefined;
 
   // The window tools own their whole body — title bar, content, status strip —
   // so a card header on top would say "Bash" above a window titled "bash".
@@ -58,6 +68,7 @@ export function ToolGroupCard({
       </div>
     );
   }
+  if (artifact) return <ArtifactCard group={group} page={artifact} compact={collapsible} />;
   if (!collapsible && isFileTool(use.name)) {
     return (
       <div className="cl-tool-window">
@@ -66,6 +77,9 @@ export function ToolGroupCard({
     );
   }
 
+  // A call that published nothing is a chip even in full density: see the note
+  // on the component.
+  const asChip = collapsible || isArtifactTool(use.name);
   const isMemory = isMemoryFile(use.input as Record<string, unknown>);
   const monogram = isMemory
     ? 'M'
@@ -79,17 +93,20 @@ export function ToolGroupCard({
   const displayName = AGENT_TOOLS.has(use.name)
     ? (use.input.subagent_type as string) || use.name
     : use.name;
-  const inputPreview =
+  const genericPreview =
     (use.input.description as string) ??
     (use.input.command as string) ??
     (use.input.file_path as string) ??
     (use.input.pattern as string) ??
     (use.input.prompt as string) ??
     '';
+  // What an Artifact call that produced no page was for: the action names it,
+  // where the file path or the description would name the page it did not make.
+  const inputPreview = isArtifactTool(use.name) ? artifactAction(group) : genericPreview;
   const resultPreview = result ? (result.content.split('\n')[0]?.slice(0, 120) ?? '') : null;
   const hasBody = showDetails || !!result || !!onViewDetail;
-  const expanded = collapsible ? open && hasBody : hasBody;
-  const toggles = collapsible && hasBody;
+  const expanded = asChip ? open && hasBody : hasBody;
+  const toggles = asChip && hasBody;
   // Right-edge status glyph: resolved result → ✓/✕; a chip that can open hints
   // so instead (caret when open, arrow when collapsed).
   const status = result ? (result.isError ? '✕' : '✓') : toggles ? (open ? '▾' : '→') : '';
@@ -114,7 +131,7 @@ export function ToolGroupCard({
 
   return (
     <div
-      className={`cl-tool-card${isMemory ? ' cl-tool-card--memory' : ''}${collapsible ? ' cl-tool-card--chip' : ''}${expanded ? ' is-open' : ''}`}
+      className={`cl-tool-card${isMemory ? ' cl-tool-card--memory' : ''}${asChip ? ' cl-tool-card--chip' : ''}${expanded ? ' is-open' : ''}`}
       style={{ '--tint': tint } as CSSProperties}
     >
       <div className="cl-tool-card-row">

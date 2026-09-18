@@ -27,6 +27,7 @@
 // decide `mergeTranscriptExtras`, che ha sotto gli occhi i messaggi dell'SDK.
 import { readTextFile } from './safe-fs';
 import type {
+  ArtifactPublish,
   BashEditDiff,
   BashEditFile,
   BashEditHunk,
@@ -59,6 +60,11 @@ export interface TranscriptExtras {
   effortByUuid: Map<string, string>;
   /** `tool_use_id` del risultato Bash → i file che quel comando ha modificato. */
   bashEditDiffByToolUseId: Map<string, BashEditDiff>;
+  /** `tool_use_id` del risultato `Artifact` → la pagina che quella publish ha
+   *  prodotto. Stessa sorte di `bashEditDiff`: sta su `toolUseResult`, che
+   *  l'SDK non restituisce, e senza di essa la publish è una tool call generica
+   *  con l'URL sepolto nel testo. */
+  artifactByToolUseId: Map<string, ArtifactPublish>;
 }
 
 const EMPTY: TranscriptExtras = {
@@ -68,6 +74,7 @@ const EMPTY: TranscriptExtras = {
   skillPathByParentUuid: new Map(),
   effortByUuid: new Map(),
   bashEditDiffByToolUseId: new Map(),
+  artifactByToolUseId: new Map(),
 };
 
 /**
@@ -145,6 +152,55 @@ function parseHunks(raw: unknown): BashEditHunk[] {
 }
 
 const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v) ? v : 0);
+
+/**
+ * La pagina che una publish dell'`Artifact` tool ha prodotto, dal `toolUseResult`
+ * della riga di risultato.
+ *
+ * Si legge solo ciò che Claude Code scrive come dato: niente è recuperato dalla
+ * prosa del risultato, che di quella pagina parla ma mescolandola a un kilobyte
+ * di istruzioni sulle live subscription. `url` e `artifact_id` insieme sono il
+ * discriminante: una `read`, una `list` o una quickstart rispondono senza
+ * pubblicare niente, e una card che le disegnasse come pagine direbbe il falso.
+ *
+ * `seq` è l'ordinale di versione — sugli 8 risultati del corpus che portano
+ * entrambi coincide sempre con il `(Version N)` della prosa — ma manca sui
+ * transcript più vecchi: lì resta assente, invece di essere dedotto dal numero
+ * di publish visibili, che conterebbe solo quelle di questa sessione.
+ */
+export function parseArtifactPublish(toolUseResult: unknown): ArtifactPublish | undefined {
+  if (!toolUseResult || typeof toolUseResult !== 'object') return undefined;
+  const r = toolUseResult as Record<string, unknown>;
+  const id = str(r.artifact_id);
+  const url = str(r.url);
+  if (!id || !url) return undefined;
+  return {
+    id,
+    url,
+    title: str(r.title) ?? '',
+    updated: r.updated === true,
+    ...(typeof r.seq === 'number' && Number.isFinite(r.seq) ? { seq: r.seq } : {}),
+    ...(str(r.audience) ? { audience: str(r.audience) } : {}),
+    ...(str(r.path) ? { path: str(r.path) } : {}),
+    ...(str(r.icon) ? { icon: str(r.icon) } : {}),
+  };
+}
+
+const str = (v: unknown): string | undefined =>
+  typeof v === 'string' && v.length > 0 ? v : undefined;
+
+/**
+ * Attacca la pagina all'unico `tool_result` dei blocchi già deserializzati —
+ * gemella di `withBashEditDiff`, per lo stesso motivo: il dato sta sulla riga,
+ * non sul blocco.
+ */
+export function withArtifactPublish(
+  blocks: ChatContentBlock[],
+  artifact: ArtifactPublish
+): ChatContentBlock[] {
+  if (blocks.filter(b => b.type === 'tool_result').length !== 1) return blocks;
+  return blocks.map(b => (b.type === 'tool_result' ? { ...b, artifact } : b));
+}
 
 /**
  * Il `tool_use_id` dell'UNICO `tool_result` di una riga.
@@ -368,6 +424,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const skillPathByParentUuid = new Map<string, string>();
   const effortByUuid = new Map<string, string>();
   const bashEditDiffByToolUseId = new Map<string, BashEditDiff>();
+  const artifactByToolUseId = new Map<string, ArtifactPublish>();
   const injected: ChatMessage[] = [];
   const noticeByUuid = new Map<string, SessionNotice>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
@@ -386,6 +443,10 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
     const isBashEdit = line.includes('"bashEditDiff"');
+    // `artifact_id` sta solo sul risultato di una publish: una `read` o una
+    // `list` dell'Artifact tool non lo scrivono, quindi il prefiltro è già il
+    // discriminante e non c'è da deserializzare il resto del corpus.
+    const isArtifact = line.includes('"artifact_id"');
     // Il prefiltro resta stretto apposta: `"origin"` da solo sta su ogni riga
     // che l'utente ha digitato (1297 su 1500 nel corpus di prova), e questo
     // modulo passa su ogni transcript che supera il prefiltro di
@@ -395,7 +456,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       line.includes('"kind":"auto-continuation"') ||
       line.includes(IDLE_NOTICE_PREFIX) ||
       line.includes('<teammate-message');
-    if (!isQueue && !isSkillExpansion && !isBashEdit && !isProvenance) continue;
+    if (!isQueue && !isSkillExpansion && !isBashEdit && !isArtifact && !isProvenance) continue;
 
     let json: Record<string, unknown>;
     try {
@@ -410,6 +471,15 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       const diff = parseBashEditDiff(json.toolUseResult);
       const toolUseId = soleToolResultId(json.message);
       if (diff && toolUseId) bashEditDiffByToolUseId.set(toolUseId, diff);
+      continue;
+    }
+
+    if (isArtifact) {
+      // Come sopra: la pagina sta sulla riga, quindi con due `tool_result` non
+      // si saprebbe a quale appartiene e si preferisce non mostrarla.
+      const artifact = parseArtifactPublish(json.toolUseResult);
+      const toolUseId = soleToolResultId(json.message);
+      if (artifact && toolUseId) artifactByToolUseId.set(toolUseId, artifact);
       continue;
     }
 
@@ -539,6 +609,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     skillPathByParentUuid,
     effortByUuid,
     bashEditDiffByToolUseId,
+    artifactByToolUseId,
   };
 }
 
@@ -549,6 +620,19 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
  * blocco: è la stessa ragione per cui `session-search` non paga una copia per
  * ogni messaggio di ogni transcript che passa il prefiltro.
  */
+function stampArtifacts(
+  content: ChatContentBlock[],
+  byToolUseId: Map<string, ArtifactPublish>
+): ChatContentBlock[] {
+  if (byToolUseId.size === 0) return content;
+  const needs = (b: ChatContentBlock): boolean =>
+    b.type === 'tool_result' && !b.artifact && byToolUseId.has(b.toolUseId);
+  if (!content.some(needs)) return content;
+  return content.map(b =>
+    needs(b) ? { ...b, artifact: byToolUseId.get((b as { toolUseId: string }).toolUseId) } : b
+  );
+}
+
 function stampBashEditDiffs(
   content: ChatContentBlock[],
   byToolUseId: Map<string, BashEditDiff>
@@ -582,6 +666,7 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid,
     effortByUuid,
     bashEditDiffByToolUseId,
+    artifactByToolUseId,
   } = extras;
   if (
     queued.length === 0 &&
@@ -589,7 +674,8 @@ export function mergeTranscriptExtras(
     noticeByUuid.size === 0 &&
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
-    bashEditDiffByToolUseId.size === 0
+    bashEditDiffByToolUseId.size === 0 &&
+    artifactByToolUseId.size === 0
   ) {
     return messages;
   }
@@ -604,13 +690,17 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0 &&
+    artifactByToolUseId.size === 0 &&
     noticeByUuid.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
           const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
           const notice = noticeByUuid.get(msg.uuid);
-          const content = stampBashEditDiffs(msg.content, bashEditDiffByToolUseId);
+          const content = stampArtifacts(
+            stampBashEditDiffs(msg.content, bashEditDiffByToolUseId),
+            artifactByToolUseId
+          );
           if (!skillPath && !effort && !notice && content === msg.content) return msg;
           return {
             ...msg,

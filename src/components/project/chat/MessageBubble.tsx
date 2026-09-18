@@ -25,6 +25,7 @@ import {
 import { fmtModel, modelColor } from '../utils';
 import { agentTintColor } from '../shared/entityOptions';
 import { ToolGroupCard } from './ToolGroupCard';
+import { artifactOf, isArtifactTool } from './artifact';
 import { FileIcon } from './fileIcons';
 import { blockKey, isPersistableMessageUuid } from './highlights';
 
@@ -698,6 +699,9 @@ export const MessageBubble = memo(function MessageBubble({
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name));
   const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name));
   const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL);
+  // Only the calls that really published a page: a quickstart or a listing is
+  // plumbing, and MIN is the density that hides plumbing.
+  const artifactGroups = toolGroups.filter(g => isArtifactTool(g.use.name) && artifactOf(g));
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL);
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
@@ -715,6 +719,10 @@ export const MessageBubble = memo(function MessageBubble({
   // Agentic skills get a dedicated minimal strip too (raw tool card in full),
   // so a skill reads as a first-class unit instead of a hidden tool.
   const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0;
+  // A published page is an outcome of the turn, like a delegated agent or a
+  // skill run — and the one outcome that outlives the session, so MIN keeps it
+  // as a single line: the page's name and its link, nothing else.
+  const showArtifactStrip = detailsFilter === 'minimal' && artifactGroups.length > 0;
   // Questions are first-class content: always visible regardless of filter.
   const showQuestions = questionGroups.length > 0;
 
@@ -725,6 +733,7 @@ export const MessageBubble = memo(function MessageBubble({
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
+    showArtifactStrip ||
     showQuestions ||
     // An advisor consult sharing a message with hidden content: the header chip
     // is then the only thing left to render, and dropping the turn would lose it.
@@ -1089,6 +1098,14 @@ export const MessageBubble = memo(function MessageBubble({
                 detailLabel="View output"
                 onViewDetail={() => onOpenToolDetail(group)}
               />
+            ))}
+          </div>
+        )}
+
+        {showArtifactStrip && (
+          <div className="cl-tool-stack cl-tool-stack--chips">
+            {artifactGroups.map(group => (
+              <ToolGroupCard key={group.use.id} group={group} showDetails collapsible />
             ))}
           </div>
         )}

@@ -23,6 +23,8 @@ export type ChatContentBlock =
       isError: boolean;
       /** Files the command edited, when Claude Code recorded them (Bash only). */
       bashEditDiff?: BashEditDiff;
+      /** The page an `Artifact` publish produced, when Claude Code recorded it. */
+      artifact?: ArtifactPublish;
     }
   | AdvisorConsult;
 
@@ -50,6 +52,36 @@ export interface BashEditFile {
    *  printed: a created file's hunk is the whole file. */
   created?: boolean;
   deleted?: boolean;
+}
+
+/** A page published by the `Artifact` tool, as Claude Code records it on the
+ *  result row (`toolUseResult`).
+ *
+ *  The tool is a recurring species in these transcripts, and without this the
+ *  publish reads as a generic tool call: the page's title, its link and which
+ *  version this was all sit inside a kilobyte of prose about live
+ *  subscriptions, and the URL is text rather than a link. Every field here is
+ *  one Claude Code already writes — nothing is recovered from that prose. */
+export interface ArtifactPublish {
+  /** The artifact's own id: stable across every publish to the same page. */
+  id: string;
+  url: string;
+  title: string;
+  /** `false` on the publish that created the page, `true` on a republish. */
+  updated: boolean;
+  /** Which version of the page this publish produced, counting from 1 — the
+   *  `(Version N)` of the result prose, on all eight rows that carry both.
+   *  Absent on transcripts written before Claude Code recorded it, and then no
+   *  version is shown rather than one guessed from the publishes we can see. */
+  seq?: number;
+  /** `owner`: nobody but the owner can open the page yet. `users`: it is shared. */
+  audience?: string;
+  /** The local file that was published. It lives in the session scratchpad,
+   *  which is reaped within a day or so — so it names the source, never a file
+   *  the app can still expect to read. */
+  path?: string;
+  /** The word chosen for the page's browser-tab icon; first publish only. */
+  icon?: string;
 }
 
 /** One unified-diff hunk: the `@@ -oldStart,oldLines +newStart,newLines @@`

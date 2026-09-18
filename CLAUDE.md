@@ -12,14 +12,15 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
-`vault-index`, `wikilinks`, and the chat `utils` and `find`.
+`vault-index`, `wikilinks`, `artifact`, and the chat `utils` and `find`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, the read
 cache's invalidation, and the merge of the rows the SDK read does not return
 (#245/#246 — a message absorbed mid-turn lands in chronological place and a
 slash-command skill gets its `skillPath`, both from one extra pass over the
-same file). CI (`.github/workflows/ci.yml`) runs format:check +
+same file — and the page an `Artifact` publish produced, which lives on the
+`toolUseResult` the SDK read never returns at all). CI (`.github/workflows/ci.yml`) runs format:check +
 typecheck + lint + test + build on every push/PR, **on Node 22 and 24 both** —
 `engines` says `>=22`, so a claim the suite only holds on one of them is a claim
 the project does not make. Pinning 22 alone is what hid #258: two assertions were
@@ -111,6 +112,13 @@ and the row highlighting, which colours each side of a diff whole so a `"""`
 docstring stays a string on every row it spans, over `code-lang`'s
 `highlightLines`, the cut of hljs' HTML into one balanced fragment per line —
 is `file-view`) and
+`artifact-card` (the `Artifact` tool: a call that published a page is drawn
+as that page — its own title, a real link, the version it produced — while one
+that published nothing stays a chip whatever the density, because its answer is
+a kilobyte of prose written for the harness; nothing is claimed where the
+transcript is silent, so an older publish with no `seq` shows no version and one
+with no `audience` says nothing about who can open it; and MIN keeps a published
+page as one line beside the agent, skill and plan strips) and
 `markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
 has is a button carrying the path it resolved to, one nothing answers to is
 dashed and inert, the backticked form Claude writes just as often is caught too,

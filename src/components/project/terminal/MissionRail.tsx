@@ -28,6 +28,7 @@ import {
   SessionAgent,
 } from '../chat/utils';
 import { FileIcon } from '../chat/fileIcons';
+import { buildArtifactActivity } from '../chat/artifact';
 import { QueryError } from '../../QueryError';
 import { fmtCost, fmt } from '../utils';
 import { deriveContext } from './context-window';
@@ -643,6 +644,10 @@ export function MissionRail({
   // the rail could see them: a research session's sources used to leave no trace
   // at all, and a fetch that only got a redirect left even less.
   const web = useMemo(() => buildWebActivity(ownTools), [ownTools]);
+  // PAGES — what the session published with the `Artifact` tool. One row per
+  // page, however many times it was republished: nothing else in the rail could
+  // see them, and a published page outlives the session that made it.
+  const artifacts = useMemo(() => buildArtifactActivity(ownTools), [ownTools]);
   // CHANGES excludes the memory files: they are a topic each, not a diff, and
   // reporting them twice would double-count the session's line totals.
   const changes = useMemo(
@@ -689,6 +694,7 @@ export function MissionRail({
         memory: memoryActivity,
         web,
         changes,
+        artifacts,
         tasks,
         teams: teamRows,
         realPath,
@@ -702,6 +708,7 @@ export function MissionRail({
       memoryActivity,
       web,
       changes,
+      artifacts,
       tasks,
       teamRows,
       realPath,
@@ -777,6 +784,10 @@ export function MissionRail({
       onLocateTurn(s.turnN);
     } else if (s.kind === 'memory' || s.kind === 'change' || s.kind === 'web') {
       if (e.items.length > 0) onOpenTool(e.items[e.items.length - 1]);
+    } else if (s.kind === 'artifact') {
+      // The page, not the tool call that made it: the call's answer is prose
+      // written for the harness, and the row already says everything it holds.
+      window.open(s.artifact.url, '_blank', 'noopener');
     }
     // A task with no detail has nothing to open — its row is already the fact.
   };

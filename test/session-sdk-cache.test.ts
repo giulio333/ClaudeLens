@@ -206,6 +206,56 @@ function writeFixtures(): void {
           content: [{ type: 'text', text: 'built, changelog included' }],
         },
       },
+      // A publish of the `Artifact` tool. The page it produced sits on
+      // `toolUseResult`, which the SDK read does not return at all — so this
+      // pair is what proves the second pass stamps it back onto the result
+      // block instead of leaving the chat with a generic tool card.
+      {
+        parentUuid: 'x2',
+        isSidechain: false,
+        type: 'assistant',
+        uuid: 'x3',
+        cwd: CWD,
+        timestamp: '2026-06-17T11:01:10.000Z',
+        message: {
+          model: 'claude-opus-4-8',
+          id: 'msg_x3',
+          type: 'message',
+          role: 'assistant',
+          content: [
+            {
+              type: 'tool_use',
+              id: 'toolu_pub1',
+              name: 'Artifact',
+              input: { action: 'publish', description: 'Release checklist' },
+            },
+          ],
+        },
+      },
+      {
+        parentUuid: 'x3',
+        isSidechain: false,
+        type: 'user',
+        uuid: 'x4',
+        cwd: CWD,
+        timestamp: '2026-06-17T11:01:12.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_pub1', content: 'Published … (Version 2)' },
+          ],
+        },
+        toolUseResult: {
+          url: 'https://claude.ai/artifact/AbCdEf',
+          path: '/tmp/scratch/page.html',
+          artifact_id: 'page-1',
+          title: 'Release checklist',
+          updated: true,
+          audience: 'owner',
+          seq: 2,
+          version: '1789753451-a182',
+        },
+      },
     ])
   );
 }
@@ -310,7 +360,7 @@ describe('readChatSessionViaSdk — the rows the SDK read cannot see', () => {
     expect(queued).toHaveLength(1);
     expect(queued[0].content).toEqual([{ type: 'text', text: 'metti anche il changelog' }]);
     // At the moment it was typed: after the command, before the answer.
-    expect(messages.map(m => m.uuid)).toEqual([messages[0].uuid, queued[0].uuid, 'x2']);
+    expect(messages.map(m => m.uuid)).toEqual([messages[0].uuid, queued[0].uuid, 'x2', 'x3', 'x4']);
   });
 
   it('marks the slash command that expanded into a skill', async () => {
@@ -321,6 +371,23 @@ describe('readChatSessionViaSdk — the rows the SDK read cannot see', () => {
     // The expansion itself stays out of the transcript — it is Claude Code
     // talking to the model, not a turn.
     expect(messages.some(m => m.uuid === 'xmeta')).toBe(false);
+  });
+
+  it('puts the published page back on the result the SDK returned bare', async () => {
+    const messages = await readChatSessionViaSdk(SESSION_EXTRAS, source);
+    const result = messages
+      .flatMap(m => m.content)
+      .find(b => b.type === 'tool_result' && b.toolUseId === 'toolu_pub1');
+
+    expect(result?.type === 'tool_result' && result.artifact).toEqual({
+      id: 'page-1',
+      url: 'https://claude.ai/artifact/AbCdEf',
+      title: 'Release checklist',
+      updated: true,
+      seq: 2,
+      audience: 'owner',
+      path: '/tmp/scratch/page.html',
+    });
   });
 
   it('serves both passes from one cache entry, until the file changes', async () => {

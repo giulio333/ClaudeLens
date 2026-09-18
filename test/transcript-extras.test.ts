@@ -2,8 +2,9 @@ import {
   readTranscriptExtras,
   mergeTranscriptExtras,
   parseBashEditDiff,
+  parseArtifactPublish,
 } from '../electron/modules/transcript-extras';
-import type { BashEditDiff, ChatMessage } from '../electron/shared/chat-types';
+import type { ArtifactPublish, BashEditDiff, ChatMessage } from '../electron/shared/chat-types';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -239,6 +240,7 @@ describe('mergeTranscriptExtras', () => {
     skillPathByParentUuid: new Map(skills),
     effortByUuid: new Map(efforts),
     bashEditDiffByToolUseId: new Map(diffs),
+    artifactByToolUseId: new Map(),
   });
 
   it('leaves the transcript untouched when there is nothing to add', () => {
@@ -483,6 +485,7 @@ describe('mergeTranscriptExtras — bashEditDiff', () => {
     skillPathByParentUuid: new Map<string, string>(),
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(diffs),
+    artifactByToolUseId: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -772,6 +775,7 @@ describe('mergeTranscriptExtras with what the SDK cannot see', () => {
       skillPathByParentUuid: new Map(),
       effortByUuid: new Map(),
       bashEditDiffByToolUseId: new Map(),
+      artifactByToolUseId: new Map(),
     });
     expect(merged.map(m => m.uuid)).toEqual(['u1', 'p1', 'n1', 'a1']);
     expect(merged[1].inbound?.name).toBe('alice-7c');
@@ -792,5 +796,149 @@ describe('a notice absorbed while a turn was running', () => {
     expect(injected).toHaveLength(1);
     expect(injected[0].notice?.kind).toBe('session-idle');
     expect(injected[0].timestamp).toBe('2026-09-08T10:00:00.000Z');
+  });
+});
+
+/** The row Claude Code writes when the `Artifact` tool published a page: the
+ *  page's identity sits on `toolUseResult`, the prose in the result block. */
+function artifactResultRow(
+  uuid: string,
+  toolUseId: string,
+  toolUseResult: unknown,
+  timestamp = '2026-09-08T10:00:03.000Z'
+) {
+  return {
+    type: 'user',
+    uuid,
+    timestamp,
+    message: {
+      role: 'user',
+      content: [
+        { type: 'tool_result', tool_use_id: toolUseId, content: 'Published … (Version 2)' },
+      ],
+    },
+    toolUseResult,
+  };
+}
+
+const publishResult = {
+  url: 'https://claude.ai/artifact/AbCdEf',
+  path: '/tmp/scratch/page.html',
+  artifact_id: '0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9',
+  title: 'Release checklist',
+  updated: true,
+  audience: 'owner',
+  seq: 2,
+  version: '1789753451-a182',
+  contract: '0.0.0',
+  liveSubscription: 'connected',
+};
+
+describe('parseArtifactPublish', () => {
+  it('reads the page a publish produced', () => {
+    expect(parseArtifactPublish(publishResult)).toEqual({
+      id: '0a1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9',
+      url: 'https://claude.ai/artifact/AbCdEf',
+      title: 'Release checklist',
+      updated: true,
+      seq: 2,
+      audience: 'owner',
+      path: '/tmp/scratch/page.html',
+    });
+  });
+
+  it('keeps the icon of the publish that created the page', () => {
+    const first = parseArtifactPublish({ ...publishResult, updated: false, seq: 1, icon: 'edit' });
+    expect(first?.updated).toBe(false);
+    expect(first?.icon).toBe('edit');
+  });
+
+  it('leaves the version out rather than guessing one', () => {
+    // Older transcripts carry no `seq`. A card that invented "v1" there would
+    // be wrong on exactly the pages that were published most often.
+    const old = parseArtifactPublish({ ...publishResult, seq: undefined });
+    expect(old?.seq).toBeUndefined();
+    expect(old?.url).toBe('https://claude.ai/artifact/AbCdEf');
+  });
+
+  it('is not fooled by another tool result', () => {
+    expect(parseArtifactPublish(undefined)).toBeUndefined();
+    expect(parseArtifactPublish({ stdout: 'ok' })).toBeUndefined();
+    // A read or a listing answers with no page of its own: nothing to show.
+    expect(parseArtifactPublish({ artifact_id: 'x' })).toBeUndefined();
+    expect(parseArtifactPublish({ url: 'https://claude.ai/artifact/x' })).toBeUndefined();
+  });
+});
+
+describe('readTranscriptExtras — artifact', () => {
+  it('recovers the published page the SDK read never returns', async () => {
+    const p = writeJsonl([
+      userRow('u1', 'publish it'),
+      artifactResultRow('r1', 'toolu_art1', publishResult),
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.artifactByToolUseId.get('toolu_art1')?.title).toBe('Release checklist');
+    expect(extras.artifactByToolUseId.get('toolu_art1')?.seq).toBe(2);
+  });
+
+  it('skips a row whose page cannot be pinned to one tool call', async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'r1',
+        timestamp: '2026-09-08T10:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_a', content: 'ok' },
+            { type: 'tool_result', tool_use_id: 'toolu_b', content: 'ok' },
+          ],
+        },
+        toolUseResult: publishResult,
+      },
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.artifactByToolUseId.size).toBe(0);
+  });
+});
+
+describe('mergeTranscriptExtras — artifact', () => {
+  const artifactExtras = (entries: [string, ArtifactPublish][]) => ({
+    queued: [],
+    injected: [],
+    noticeByUuid: new Map(),
+    skillPathByParentUuid: new Map<string, string>(),
+    effortByUuid: new Map<string, string>(),
+    bashEditDiffByToolUseId: new Map(),
+    artifactByToolUseId: new Map(entries),
+  });
+
+  const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
+    uuid,
+    role: 'user',
+    timestamp: '2026-09-08T10:00:03.000Z',
+    content: [{ type: 'tool_result', toolUseId, content: 'Published …', isError: false }],
+  });
+
+  const page: ArtifactPublish = {
+    id: 'a1',
+    url: 'https://claude.ai/artifact/AbCdEf',
+    title: 'Release checklist',
+    updated: true,
+    seq: 2,
+  };
+
+  it('stamps the page on the tool_result it belongs to, and on no other', () => {
+    const messages = [resultMsg('r1', 'toolu_art1'), resultMsg('r2', 'toolu_other')];
+    const merged = mergeTranscriptExtras(messages, artifactExtras([['toolu_art1', page]]));
+
+    const stamped = merged[0].content[0];
+    expect(stamped.type === 'tool_result' && stamped.artifact?.title).toBe('Release checklist');
+    expect(merged[1]).toBe(messages[1]);
+  });
+
+  it('returns the messages by reference when there is no page to add', () => {
+    const messages = [resultMsg('r1', 'toolu_art1')];
+    expect(mergeTranscriptExtras(messages, artifactExtras([]))).toBe(messages);
   });
 });
