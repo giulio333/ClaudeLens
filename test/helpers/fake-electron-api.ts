@@ -24,6 +24,11 @@
 
 import { vi } from 'vitest';
 import type {
+  PromptTemplate,
+  PromptTemplateInput,
+  PromptCandidates,
+} from '../../electron/shared/playbook-types';
+import type {
   ChatChunkEvent,
   ChatDoneEvent,
   ChatErrorEvent,
@@ -275,6 +280,27 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   };
 
   return {
+    playbook: {
+      getTemplates: vi.fn(async (_hash: string) => ok<PromptTemplate[]>([])),
+      getCandidates: vi.fn(async (_hash: string) =>
+        ok<PromptCandidates>({ candidates: [], scannedSessions: 0, truncated: false })
+      ),
+      create: vi.fn(async (_hash: string, input: PromptTemplateInput) =>
+        ok<PromptTemplate>({ ...input, id: 'template-1', createdAt: '', updatedAt: '' })
+      ),
+      promote: vi.fn(async (_hash: string, input: PromptTemplateInput) =>
+        ok<PromptTemplate>({ ...input, id: 'template-1', createdAt: '', updatedAt: '' })
+      ),
+      update: vi.fn(async (_hash: string, id: string, input: PromptTemplateInput) =>
+        ok<PromptTemplate>({ ...input, id, createdAt: '', updatedAt: '' })
+      ),
+      delete: vi.fn(async (_hash: string, _id: string) => ok(null)),
+      dismiss: vi.fn(async (_hash: string, _text: string) => ok(null)),
+    },
+    clipboard: {
+      readText: vi.fn(async () => ok('')),
+      writeText: vi.fn(async (_text: string) => ok(null)),
+    },
     sessions,
     search,
     vault,

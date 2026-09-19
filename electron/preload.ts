@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
+import type { PromptTemplateInput } from './shared/playbook-types';
 
 // Subscribe to a renderer IPC channel with a *named* handler and return an
 // unsubscribe disposer. Unlike `removeAllListeners(channel)` (the old pattern),
@@ -68,6 +69,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     resolveLinks: (root: string, targets: string[]) =>
       ipcRenderer.invoke('vault:resolveLinks', root, targets),
     openFile: (root: string, rel: string) => ipcRenderer.invoke('vault:openFile', root, rel),
+  },
+  playbook: {
+    getTemplates: (hash: string) => ipcRenderer.invoke('playbook:getTemplates', hash),
+    getCandidates: (hash: string) => ipcRenderer.invoke('playbook:getCandidates', hash),
+    create: (hash: string, input: PromptTemplateInput) =>
+      ipcRenderer.invoke('playbook:create', hash, input),
+    promote: (hash: string, input: PromptTemplateInput) =>
+      ipcRenderer.invoke('playbook:promote', hash, input),
+    update: (hash: string, id: string, input: PromptTemplateInput) =>
+      ipcRenderer.invoke('playbook:update', hash, id, input),
+    delete: (hash: string, id: string) => ipcRenderer.invoke('playbook:delete', hash, id),
+    dismiss: (hash: string, text: string) => ipcRenderer.invoke('playbook:dismiss', hash, text),
   },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),

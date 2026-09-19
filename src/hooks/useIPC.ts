@@ -1,6 +1,11 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useEffect } from 'react';
 import { keysForScope, scopesFromPayload } from './dataChangeScopes';
+import type {
+  PromptTemplate,
+  PromptTemplateInput,
+  PromptCandidates,
+} from '../../electron/shared/playbook-types';
 
 import type {
   MemoryTopic,
@@ -219,6 +224,19 @@ export interface MergePlan {
 declare global {
   interface Window {
     electronAPI: {
+      playbook: {
+        getTemplates: (hash: string) => Promise<IpcResult<PromptTemplate[]>>;
+        getCandidates: (hash: string) => Promise<IpcResult<PromptCandidates>>;
+        create: (hash: string, input: PromptTemplateInput) => Promise<IpcResult<PromptTemplate>>;
+        promote: (hash: string, input: PromptTemplateInput) => Promise<IpcResult<PromptTemplate>>;
+        update: (
+          hash: string,
+          id: string,
+          input: PromptTemplateInput
+        ) => Promise<IpcResult<PromptTemplate>>;
+        delete: (hash: string, id: string) => Promise<IpcResult<null>>;
+        dismiss: (hash: string, text: string) => Promise<IpcResult<null>>;
+      };
       memory: {
         listProjects: () => Promise<IpcResult<Array<{ hash: string; realPath: string }>>>;
         getProject: (hash: string) => Promise<IpcResult<MemoryData>>;
@@ -480,6 +498,56 @@ async function unwrap<T>(promise: Promise<IpcResult<T>>): Promise<T> {
   const result = await promise;
   if (result.error) throw new Error(result.error);
   return result.data as T;
+}
+
+type PlaybookChange =
+  | { kind: 'create' | 'promote'; input: PromptTemplateInput }
+  | { kind: 'update'; id: string; input: PromptTemplateInput }
+  | { kind: 'delete'; id: string }
+  | { kind: 'dismiss'; text: string };
+
+/** Mounted only inside the open Playbook panel: no session watcher or focus refetch. */
+export function usePromptPlaybook(hash: string) {
+  const client = useQueryClient();
+  const templates = useQuery({
+    queryKey: ['playbook:templates', hash],
+    queryFn: () => unwrap(window.electronAPI.playbook.getTemplates(hash)),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const candidates = useQuery({
+    queryKey: ['playbook:candidates', hash],
+    queryFn: () => unwrap(window.electronAPI.playbook.getCandidates(hash)),
+    staleTime: 0,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+  const change = useMutation({
+    mutationFn: async (action: PlaybookChange) => {
+      const api = window.electronAPI.playbook;
+      switch (action.kind) {
+        case 'create':
+        case 'promote':
+          return unwrap(api[action.kind](hash, action.input));
+        case 'update':
+          return unwrap(api.update(hash, action.id, action.input));
+        case 'delete':
+          return unwrap(api.delete(hash, action.id));
+        case 'dismiss':
+          return unwrap(api.dismiss(hash, action.text));
+      }
+    },
+    onSuccess: () => {
+      void client.invalidateQueries({ queryKey: ['playbook:templates', hash] });
+      void client.invalidateQueries({ queryKey: ['playbook:candidates', hash] });
+    },
+  });
+  return { templates, candidates, change };
+}
+
+export function copyPromptText(text: string): Promise<null> {
+  return unwrap(window.electronAPI.clipboard.writeText(text));
 }
 
 export function useMemoryProjects() {

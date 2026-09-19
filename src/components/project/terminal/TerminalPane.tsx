@@ -1,9 +1,18 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type Ref,
+} from 'react';
 import { Terminal } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../../../hooks/useTheme';
 import { trackEvent } from '../../../lib/telemetry';
+import { createTerminalPromptController, type TerminalPromptHandle } from './terminal-prompt';
 
 /**
  * The terminal "dumb pipe": an xterm.js emulator wired to the interactive
@@ -75,12 +84,14 @@ const TERMINAL_SURFACE: Record<'light' | 'dark', string> = {
 };
 
 export function TerminalPane({
+  ref,
   cwd,
   resumeSessionId,
   attachJobId,
   onPid,
   onStatus,
 }: {
+  ref?: Ref<TerminalPromptHandle>;
   cwd: string;
   resumeSessionId?: string;
   /** Live background-agent job id: `claude attach` it instead of `--resume`. */
@@ -96,6 +107,16 @@ export function TerminalPane({
   const termRef = useRef<Terminal | null>(null);
   const fitRef = useRef<FitAddon | null>(null);
   const idRef = useRef<string | null>(null);
+  const promptRef = useRef<ReturnType<typeof createTerminalPromptController> | null>(null);
+  useImperativeHandle(
+    ref,
+    () => ({
+      pastePrompt: (text, signal) =>
+        promptRef.current?.pastePrompt(text, signal) ??
+        Promise.reject(new Error('The terminal is not mounted yet. Try again.')),
+    }),
+    []
+  );
   // Bumped on every cleanup so a `terminal.create` that resolves *after* this
   // pane is gone can tell its generation is stale and kill the orphan PTY rather
   // than leak it — covers the navigate-away race and StrictMode's dev double-mount.
@@ -108,6 +129,7 @@ export function TerminalPane({
   // the renderer learns its terminal id. Park unmatched chunks here and flush
   // them once the id arrives.
   const earlyRef = useRef<Array<{ id: string; data: string }>>([]);
+  const earlyExitRef = useRef(new Map<string, number>());
   const onPidRef = useRef(onPid);
   const [status, setStatus] = useState<TerminalStatus>('starting');
   const [exitCode, setExitCode] = useState<number | null>(null);
@@ -137,18 +159,24 @@ export function TerminalPane({
       const term = termRef.current;
       if (!term || idRef.current) return;
       const gen = genRef.current;
+      promptRef.current?.setState('starting');
       setStatus('starting');
       setError(null);
       setExitCode(null);
-      const res = await window.electronAPI.terminal.create({
-        cwd,
-        // A live bg agent attaches by job id; --resume would be rejected while it
-        // runs in the background. Never send both.
-        resumeSessionId: attachJobId ? undefined : resume,
-        attachJobId: attachJobId || undefined,
-        cols: term.cols,
-        rows: term.rows,
-      });
+      const res = await window.electronAPI.terminal
+        .create({
+          cwd,
+          // A live bg agent attaches by job id; --resume would be rejected while it
+          // runs in the background. Never send both.
+          resumeSessionId: attachJobId ? undefined : resume,
+          attachJobId: attachJobId || undefined,
+          cols: term.cols,
+          rows: term.rows,
+        })
+        .catch((cause: unknown) => ({
+          data: null,
+          error: cause instanceof Error ? cause.message : 'Failed to start the claude CLI.',
+        }));
       // Stale generation: the pane unmounted (or StrictMode re-mounted) while the
       // PTY was being created, so the cleanup ran before there was an id to kill.
       // Kill the just-spawned process now instead of leaking an orphan `claude`.
@@ -157,6 +185,7 @@ export function TerminalPane({
         return;
       }
       if (res.error || !res.data) {
+        promptRef.current?.setState('error');
         setError(res.error || 'Failed to start the claude CLI.');
         setStatus('error');
         return;
@@ -168,13 +197,27 @@ export function TerminalPane({
         if (chunk.id === res.data.id) term.write(chunk.data);
       }
       earlyRef.current = [];
+      const earlyExit = earlyExitRef.current.get(res.data.id);
+      earlyExitRef.current.clear();
+      if (earlyExit !== undefined) {
+        idRef.current = null;
+        onPidRef.current(null);
+        promptRef.current?.setState('exited');
+        setExitCode(earlyExit);
+        setStatus('exited');
+        return;
+      }
       setStatus('running');
+      promptRef.current?.setState('running');
       term.focus();
     },
     [cwd, attachJobId]
   );
 
-  useEffect(() => {
+  // Initialize xterm with its DOM during commit so the imperative prompt handle
+  // is usable as soon as a parent flushSync mount returns, without waiting for a
+  // passive effect or guessing readiness from an animation frame.
+  useLayoutEffect(() => {
     const el = containerRef.current;
     if (!el) return;
 
@@ -190,6 +233,7 @@ export function TerminalPane({
     term.open(el);
     fit.fit();
     termRef.current = term;
+    promptRef.current = createTerminalPromptController(term);
     fitRef.current = fit;
 
     term.onData(data => {
@@ -245,8 +289,13 @@ export function TerminalPane({
       if (id === idRef.current) termRef.current?.write(data);
     });
     const disposeExit = window.electronAPI.terminal.onExit((id, code) => {
+      if (idRef.current === null) {
+        earlyExitRef.current.set(id, code);
+        return;
+      }
       if (id !== idRef.current) return;
       idRef.current = null;
+      promptRef.current?.setState('exited');
       onPidRef.current(null);
       setExitCode(code);
       setStatus('exited');
@@ -272,6 +321,10 @@ export function TerminalPane({
       // Invalidate this mount's generation: any in-flight create now resolves as
       // stale and kills its own PTY (see startSession), so none leaks.
       genRef.current += 1;
+      promptRef.current?.dispose();
+      promptRef.current = null;
+      earlyRef.current = [];
+      earlyExitRef.current = new Map();
       ro.disconnect();
       el.removeEventListener('contextmenu', onContextMenu);
       // Drop this pane's PTY IPC listeners so they stop writing into its

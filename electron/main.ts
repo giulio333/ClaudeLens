@@ -39,6 +39,14 @@ import {
 } from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { searchSessions, type SearchRequest } from './modules/session-search';
+import { scanPromptCandidates } from './modules/playbook-reader';
+import {
+  readPlaybook,
+  createPromptTemplate,
+  updatePromptTemplate,
+  deletePromptTemplate,
+  dismissPrompt,
+} from './modules/playbook-store';
 import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
@@ -963,6 +971,27 @@ ipcMain.handle('config:getEffective', async (_event, cwd?: string) => {
     return err(e);
   }
 });
+
+// The store belongs to ClaudeLens; historical transcripts stay read-only.
+const PLAYBOOK_DIR = join(os.homedir(), '.claudelens', 'playbook');
+const playbookHandlers: Record<string, (...args: unknown[]) => Promise<unknown>> = {
+  getTemplates: async hash => (await readPlaybook(PLAYBOOK_DIR, hash)).templates,
+  getCandidates: hash => scanPromptCandidates(PROJECTS_DIR, PLAYBOOK_DIR, hash),
+  create: (hash, input) => createPromptTemplate(PLAYBOOK_DIR, hash, input),
+  promote: (hash, input) => createPromptTemplate(PLAYBOOK_DIR, hash, input),
+  update: (hash, id, input) => updatePromptTemplate(PLAYBOOK_DIR, hash, id, input),
+  delete: (hash, id) => deletePromptTemplate(PLAYBOOK_DIR, hash, id),
+  dismiss: (hash, text) => dismissPrompt(PLAYBOOK_DIR, hash, text),
+};
+for (const [name, handler] of Object.entries(playbookHandlers)) {
+  ipcMain.handle(`playbook:${name}`, async (_event, ...args: unknown[]) => {
+    try {
+      return ok(await handler(...args));
+    } catch (error) {
+      return err(error);
+    }
+  });
+}
 
 ipcMain.handle('sessions:listByProject', async (_event, hash: string) => {
   try {
