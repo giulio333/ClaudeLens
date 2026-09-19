@@ -9,7 +9,7 @@
 
 import { existsSync, readdirSync, statSync } from 'fs';
 import { join } from 'path';
-import { CLAUDE_DIR, isAbsolutePath, resolveRealPath } from '../utils';
+import { CLAUDE_DIR, discoverKnownProjectPaths, isAbsolutePath } from '../utils';
 import type { Blueprint, BlueprintIssue } from './studio-compiler';
 import { validateBlueprint, blueprintSteps, countCodeNodes } from './studio-compiler';
 import { parseWorkflowScript } from './studio-script';
@@ -95,21 +95,9 @@ export function parseScriptMeta(source: string): {
   };
 }
 
-/** Project cwds known to ClaudeLens, whether or not Studio files exist yet. */
-export function discoverKnownProjectPaths(): string[] {
-  const projectsDir = join(CLAUDE_DIR, 'projects');
-  const paths = new Set<string>();
-  try {
-    for (const entry of readdirSync(projectsDir, { withFileTypes: true })) {
-      if (!entry.isDirectory()) continue;
-      const realPath = resolveRealPath(projectsDir, entry.name);
-      if (isAbsolutePath(realPath)) paths.add(realPath);
-    }
-  } catch {
-    return [];
-  }
-  return [...paths].sort();
-}
+// Lives in utils now — the skills and agents writers need the same allowlist —
+// and stays exported here for the callers that learned it under this name.
+export { discoverKnownProjectPaths };
 
 /**
  * Known project cwds that already have local workflows. Doubles as the

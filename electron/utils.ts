@@ -1,5 +1,6 @@
 import {
   readFileSync,
+  readdirSync,
   statSync,
   realpathSync,
   existsSync,
@@ -71,6 +72,42 @@ export function assertWithin(baseDir: string, target: string): void {
   const resolved = canonicalize(target);
   if (resolved !== base && !resolved.startsWith(base + sep)) {
     throw new Error(`Refusing to write outside ${base}: ${resolve(target)}`);
+  }
+}
+
+/** Project cwds known to ClaudeLens: every folder of `~/.claude/projects`,
+ *  resolved to the real path its transcripts name (or the lossy guess when none
+ *  does), whether or not it holds anything else yet. It is the same resolution
+ *  `memory:listProjects` hands the renderer as `realPath`, which is what makes
+ *  it usable as an allowlist: a path the renderer sends back is one of these
+ *  strings, character for character. */
+export function discoverKnownProjectPaths(): string[] {
+  const projectsDir = join(CLAUDE_DIR, 'projects');
+  const paths = new Set<string>();
+  try {
+    for (const entry of readdirSync(projectsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const realPath = resolveRealPath(projectsDir, entry.name);
+      if (isAbsolutePath(realPath)) paths.add(realPath);
+    }
+  } catch {
+    return [];
+  }
+  return [...paths].sort();
+}
+
+/**
+ * A `projectPath` arrives from the renderer, so a write scoped to it accepts
+ * only a cwd the projects registry knows — the property the guard is for.
+ * `$HOME`, the anchor it replaces, was a proxy for that property, and it
+ * refused every project in /opt, /srv, a mounted volume or a WSL /mnt checkout,
+ * and — since CLAUDE_DIR follows CLAUDE_CONFIG_DIR — the app's own relocated
+ * root (#256). Pair with assertWithin on the target: this proves the project,
+ * that proves the filename.
+ */
+export function assertKnownProjectPath(projectPath: string): void {
+  if (typeof projectPath !== 'string' || !discoverKnownProjectPaths().includes(projectPath)) {
+    throw new Error(`Unknown project path "${projectPath}".`);
   }
 }
 

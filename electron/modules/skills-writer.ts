@@ -1,7 +1,6 @@
 import { writeFileSync, mkdirSync, existsSync } from 'fs';
 import { join } from 'path';
-import os from 'os';
-import { CLAUDE_DIR, validateEntityName, assertWithin } from '../utils';
+import { CLAUDE_DIR, validateEntityName, assertWithin, assertKnownProjectPath } from '../utils';
 import { SKILL_FIELDS, emitFields } from './entity-fields';
 
 export interface SkillInput {
@@ -32,12 +31,13 @@ function buildSkillMarkdown(input: SkillInput): string {
 
 export function createSkill(input: SkillInput, projectPath?: string): string {
   const name = validateEntityName(input.name);
+  // skillsDir is derived from the renderer-supplied projectPath, so
+  // assertWithin(skillsDir, …) alone can't stop an absolute projectPath from
+  // redirecting the write: the path itself has to be one the registry knows.
+  // Without a projectPath the root is CLAUDE_DIR, which nothing supplied.
+  if (projectPath) assertKnownProjectPath(projectPath);
   const skillsDir = join(projectPath ? join(projectPath, '.claude') : CLAUDE_DIR, 'skills');
   const skillDir = join(skillsDir, name);
-  // Anchor containment on a trusted root (home): skillsDir is derived from the
-  // renderer-supplied projectPath, so the assertWithin(skillsDir, …) alone can't
-  // stop an absolute projectPath redirecting the write outside the user's tree.
-  assertWithin(os.homedir(), skillDir);
   assertWithin(skillsDir, skillDir);
   if (existsSync(join(skillDir, 'SKILL.md'))) {
     throw new Error(`A skill named "${name}" already exists.`);

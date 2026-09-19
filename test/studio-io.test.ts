@@ -1,16 +1,28 @@
 import { describe, it, expect, afterAll, beforeEach } from 'vitest';
-import { mkdtempSync, mkdirSync, rmSync, readFileSync, existsSync, writeFileSync } from 'fs';
-import { homedir } from 'os';
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  readFileSync,
+  existsSync,
+  writeFileSync,
+  realpathSync,
+} from 'fs';
+import { homedir, tmpdir } from 'os';
 import { join } from 'path';
 import type { Blueprint } from '../electron/modules/studio-compiler';
 
-const configDir = mkdtempSync(join(homedir(), '.cl-studio-test-'));
+// Under the OS temp dir, not under home: a relocated CLAUDE_CONFIG_DIR outside
+// $HOME is the case #256 reported for the global write, which used to be
+// anchored on the home directory. Every global save below is that regression.
+const configDir = realpathSync(mkdtempSync(join(tmpdir(), 'cl-studio-test-')));
 process.env.CLAUDE_CONFIG_DIR = configDir;
 
 const reader = await import('../electron/modules/studio-reader');
 const writer = await import('../electron/modules/studio-writer');
 const scriptParser = await import('../electron/modules/studio-script');
 const compiler = await import('../electron/modules/studio-compiler');
+const { encodeProjectHash, invalidateCwdCache } = await import('../electron/utils');
 
 afterAll(() => {
   delete process.env.CLAUDE_CONFIG_DIR;
@@ -610,10 +622,26 @@ describe('project-local workflows (.claude/workflows in the project cwd)', () =>
 
   // One project-scope blueprint, present for every test in the block: the
   // listing reads it, the overwrite edits it and the delete removes it, so
-  // whichever runs first cannot be the one that creates it.
+  // whichever runs first cannot be the one that creates it. The project is
+  // filed in the registry first — a project write accepts only a cwd the
+  // registry knows (#256) — and the cwd cache is cleared with it, since the
+  // registry test below rewrites the same folder.
   beforeEach(async () => {
     rmSync(projectWorkflows, { recursive: true, force: true });
+    const hashDir = join(configDir, 'projects', encodeProjectHash(projectDir));
+    mkdirSync(hashDir, { recursive: true });
+    writeFileSync(join(hashDir, 'session.jsonl'), `${JSON.stringify({ cwd: projectDir })}\n`);
+    invalidateCwdCache();
     await writer.saveBlueprint(blueprint('proj-flow'), undefined, projectDir);
+  });
+
+  it('refuses a project the registry does not know', async () => {
+    const unknown = join(configDir, 'unknown-project');
+    mkdirSync(unknown, { recursive: true });
+    await expect(writer.saveBlueprint(blueprint('evil-flow'), undefined, unknown)).rejects.toThrow(
+      /Unknown project/
+    );
+    expect(existsSync(join(unknown, '.claude'))).toBe(false);
   });
 
   it('saves and reads back a blueprint in the project scope', async () => {
