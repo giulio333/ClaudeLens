@@ -8829,6 +8829,60 @@ button.cl-pill-model[data-on] {
   overflow-y: auto;
   display: flex;
   flex-direction: column;
+  scroll-timeline: --cl-ghome-pins block;
+}
+/* A row is ~40px, so the edge of the scroll box cut a pin through the middle
+   of its glyphs and read as a rendering fault rather than as "there is more".
+   These two strips say it instead: paper fading into the list, stuck to the
+   top and bottom of the scroll box, over the row that is going out of view.
+   Not a `mask-image` — that would fade the scrollbar's ends along with the
+   rows, and the thumb would dissolve instead of stopping. And they cannot be
+   on all the time: the strips sit inside the scroll box, so at either end of
+   the scroll they would veil a pin that is fully in view. The scroll timeline
+   is what turns them off there — the top strip is transparent at rest and
+   solid 28px in, the bottom one the mirror — and a list too short to scroll
+   has no timeline at all, which leaves both at their base opacity of 0. */
+.cl-ghome-pinned-list::before,
+.cl-ghome-pinned-list::after {
+  content: '';
+  position: sticky;
+  z-index: 1;
+  flex: none;
+  height: 28px;
+  pointer-events: none;
+  opacity: 0;
+  animation: linear both;
+  animation-timeline: --cl-ghome-pins;
+}
+.cl-ghome-pinned-list::before {
+  top: 0;
+  margin-bottom: -28px;
+  background: linear-gradient(to bottom, var(--cl-paper), transparent);
+  animation-name: cl-ghome-pins-in;
+  animation-range: 0 28px;
+}
+.cl-ghome-pinned-list::after {
+  bottom: 0;
+  margin-top: -28px;
+  background: linear-gradient(to top, var(--cl-paper), transparent);
+  animation-name: cl-ghome-pins-out;
+  animation-range: calc(100% - 28px) 100%;
+}
+@keyframes cl-ghome-pins-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+@keyframes cl-ghome-pins-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
 }
 .cl-ghome-pinned-row {
   display: grid;
@@ -8967,6 +9021,11 @@ button.cl-pill-model[data-on] {
   .cl-ghome-pinned-list {
     flex: none;
     overflow-y: visible;
+  }
+  /* nothing scrolls here, and a sticky strip would ride the page instead */
+  .cl-ghome-pinned-list::before,
+  .cl-ghome-pinned-list::after {
+    display: none;
   }
 }
 
