@@ -285,6 +285,157 @@ describe('buildChatExportDocument (command / notification turns)', () => {
   });
 });
 
+// #279: an export used to know two roles, so a message another session sent
+// printed under the same "User" heading as something the user typed, and a
+// harness notice printed as if the user had said that too. The view has told
+// them apart since #274; these pin that the export does as well.
+describe('buildChatExportDocument (inbound messages and notices)', () => {
+  // Both go through `buildProcessedMessages`, like the command and notification
+  // fixtures: an inbound row is a user row with a text block, and the claim is
+  // that the real path hands it to the export with its origin intact.
+  function inboundTurn(
+    origin: ChatMessage['inbound'],
+    text = 'please also run the linter'
+  ): ProcessedMessage[] {
+    return buildProcessedMessages([
+      {
+        uuid: 'in-1',
+        role: 'user',
+        timestamp: '2026-06-23T10:32:00Z',
+        content: [{ type: 'text', text }],
+        inbound: origin,
+      },
+    ]);
+  }
+
+  function noticeTurn(notice: NonNullable<ChatMessage['notice']>): ProcessedMessage[] {
+    return buildProcessedMessages([
+      {
+        uuid: 'no-1',
+        role: 'user',
+        timestamp: '2026-06-23T10:33:00Z',
+        content: [{ type: 'text', text: notice.text }],
+        notice,
+      },
+    ]);
+  }
+
+  it('reaches the export as one turn with its origin intact', () => {
+    const processed = inboundTurn({ from: 'session', name: 'alice-7c' });
+    expect(processed).toHaveLength(1);
+    expect(processed[0].msg.inbound?.name).toBe('alice-7c');
+    expect(processed[0].command).toBeUndefined();
+    expect(processed[0].notification).toBeUndefined();
+  });
+
+  it('attributes a message from another session to its sender, never to the user', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: inboundTurn({ from: 'session', name: 'alice-7c', pid: 4242 }),
+      preset: 'message',
+    });
+    expect(doc.markdown).toContain('### 01 From alice-7c (another session)');
+    expect(doc.markdown).not.toContain('### 01 User');
+    expect(doc.markdown).toContain('please also run the linter');
+    expect(doc.html).toContain('class="turn is-inbound"');
+    expect(doc.html).toContain('alice-7c');
+    expect(doc.html).toContain('<span class="turn-from">another session</span>');
+    expect(doc.html).not.toContain('class="turn is-user"');
+    expect(doc.html).not.toContain('<span class="turn-who">User</span>');
+  });
+
+  it('says when the sender was an agent inside this session', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: inboundTurn({ from: 'agent', name: 'reviewer' }),
+      preset: 'message',
+    });
+    expect(doc.markdown).toContain('From reviewer (agent in this session)');
+    expect(doc.html).toContain('<span class="turn-from">agent in this session</span>');
+  });
+
+  it('names the origin alone when the sender carried no name', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: inboundTurn({ from: 'session' }),
+      preset: 'message',
+    });
+    expect(doc.markdown).toContain('### 01 From another session');
+    expect(doc.html).toContain('another session</span>');
+    expect(doc.html).not.toContain('<span class="turn-from">');
+  });
+
+  it('marks an inbound message that arrived mid-turn — the flag is on the origin, not the row', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: inboundTurn({ from: 'session', name: 'alice-7c', queued: true }),
+      preset: 'message',
+    });
+    expect(doc.markdown).toContain('From alice-7c (another session) (sent mid-turn)');
+    expect(doc.html).toContain('<span class="turn-queued">sent mid-turn</span>');
+  });
+
+  it('renders an inbound body as markdown, like the view, and escapes the sender name', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: inboundTurn({ from: 'session', name: '<b>x</b>' }, 'run *all* of them'),
+      preset: 'message',
+    });
+    expect(doc.html).toContain('<em>all</em>');
+    expect(doc.html).not.toContain('<b>x</b>');
+    expect(doc.html).toContain('&lt;b&gt;x&lt;/b&gt;');
+    expect(doc.markdown).not.toContain('From <b>x</b>');
+  });
+
+  it('skips a harness notice in the "message" preset, like a task notification', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: noticeTurn({
+        kind: 'session-idle',
+        subject: 'alice-7c',
+        text: 'alice-7c went idle',
+      }),
+      preset: 'message',
+    });
+    expect(doc.markdown).not.toContain('went idle');
+    expect(doc.markdown).not.toContain('User');
+    expect(doc.html).not.toContain('went idle');
+  });
+
+  it('renders a notice as a one-line session event in tool-showing presets, never as the user', () => {
+    const doc = buildChatExportDocument({
+      session,
+      processed: noticeTurn({
+        kind: 'session-idle',
+        subject: 'alice-7c',
+        text: 'alice-7c went idle',
+      }),
+      preset: 'docs',
+    });
+    expect(doc.markdown).toContain('### 01 Session event');
+    expect(doc.markdown).toContain('*Session event (session idle · alice-7c): alice-7c went idle*');
+    expect(doc.markdown).not.toContain('### 01 User');
+    // The row's text block IS the notice, so it prints once, not twice.
+    expect(doc.markdown.match(/went idle/g)).toHaveLength(1);
+    expect(doc.html).toContain('class="turn is-notice"');
+    expect(doc.html).toContain('<span class="turn-who">Session event</span>');
+    expect(doc.html).toContain('session idle');
+    expect(doc.html.match(/went idle/g)).toHaveLength(1);
+    expect(doc.html).not.toContain('class="turn is-user"');
+  });
+
+  it('labels the other notice kinds the way the view does', () => {
+    const docs = (kind: 'agent-idle' | 'auto-continuation') =>
+      buildChatExportDocument({
+        session,
+        processed: noticeTurn({ kind, text: 'the harness did a thing' }),
+        preset: 'audit',
+      });
+    expect(docs('agent-idle').markdown).toContain('*Session event (agent done): the harness');
+    expect(docs('auto-continuation').markdown).toContain('*Session event (resumed): the harness');
+  });
+});
+
 describe('buildChatExportDocument (fidelity)', () => {
   it('preserves blank-line runs inside a fenced code block in the Markdown export', () => {
     const code = ['```python', 'a = 1', '', '', '', 'b = 2', '```'].join('\n');

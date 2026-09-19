@@ -8,7 +8,7 @@ import rehypeHighlight from 'rehype-highlight';
 // external stylesheet. Light theme: the export sheet is always light, unlike
 // the UI which ships github-dark-dimmed.
 import hljsLightCss from 'highlight.js/styles/github.css?raw';
-import { ChatContentBlock, SessionSummary } from '../../../types';
+import { ChatContentBlock, InboundOrigin, SessionNotice, SessionSummary } from '../../../types';
 import { fmt, fmtCost, fmtDate, fmtModel, sessionTitle } from '../utils';
 import { ClaudeSlashCommand, ProcessedMessage, TaskNotification, ToolGroup } from './utils';
 import {
@@ -157,6 +157,45 @@ function roleLabel(role: 'user' | 'assistant'): string {
   return role === 'user' ? 'User' : 'Claude';
 }
 
+/** The view's own words for where an inbound message came from
+ *  (`MessageBubble.tsx`, `InboundMessage`). */
+function inboundWhat(origin: InboundOrigin): string {
+  return origin.from === 'agent' ? 'agent in this session' : 'another session';
+}
+
+/** The view's label for a harness notice (`NoticeMarker`). */
+function noticeLabel(notice: SessionNotice): string {
+  return notice.kind === 'session-idle'
+    ? 'session idle'
+    : notice.kind === 'agent-idle'
+      ? 'agent done'
+      : 'resumed';
+}
+
+/** Who a turn is attributed to. An inbound message keeps `role: 'user'` — it
+ *  IS an input to the turn that follows — but it was not this user, and the
+ *  sender is what the heading has to say (#279). A notice is a harness event,
+ *  same category as a task notification: nobody said it. Unescaped: the name
+ *  is the sender's own claim and crossed a session boundary to get here, so
+ *  each branch escapes it where it lands, like a tool name. */
+function turnWho(processed: ProcessedMessage): string {
+  const { msg } = processed;
+  if (processed.notification) return 'Task event';
+  if (msg.notice) return 'Session event';
+  if (msg.inbound) {
+    const what = inboundWhat(msg.inbound);
+    return msg.inbound.name ? `From ${msg.inbound.name} (${what})` : `From ${what}`;
+  }
+  return roleLabel(msg.role);
+}
+
+/** A message absorbed into the running turn is marked in the export too:
+ *  without it the export reads as if Claude answered something nobody asked
+ *  (#245). An inbound message carries the flag on its origin, not on the row. */
+function sentMidTurn(processed: ProcessedMessage): boolean {
+  return Boolean(processed.msg.queued || processed.msg.inbound?.queued);
+}
+
 function toolStatus(group: ToolGroup): string {
   if (!group.result) return 'no result';
   return group.result.isError ? 'error' : 'ok';
@@ -190,9 +229,12 @@ function turnHasVisibleContent(processed: ProcessedMessage, options: ExportOptio
   const { msg, toolGroups } = processed;
   // A slash-command turn always shows (the command IS the user's message); a
   // task-notification is a background-agent system event, surfaced only when
-  // the preset shows tool activity (the "message" preset strips it).
+  // the preset shows tool activity (the "message" preset strips it). A harness
+  // notice — a peer gone idle, an agent finished, a turn resumed — is the same
+  // category: it explains why the next turn happened, and nobody said it. An
+  // inbound message is conversation and is never filtered here.
   if (processed.command) return true;
-  if (processed.notification) return showsTools(options);
+  if (processed.notification || msg.notice) return showsTools(options);
   if (textBlocks(msg.content).some(b => b.text.trim())) return true;
   if (options.includeThinking && thinkingBlocks(msg.content).some(b => b.thinking.trim()))
     return true;
@@ -246,6 +288,13 @@ function notificationMarkdown(notification: TaskNotification): string[] {
   return [`*Task event (${notification.status}): ${notification.summary}*`, ''];
 }
 
+/** Markdown one-liner for a harness notice. The row's text block IS the
+ *  notice's text, so this replaces it rather than adding to it. */
+function noticeMarkdown(notice: SessionNotice): string[] {
+  const subject = notice.subject ? ` · ${notice.subject}` : '';
+  return [`*Session event (${noticeLabel(notice)}${subject}): ${notice.text}*`, ''];
+}
+
 function buildTurnMarkdown(
   processed: ProcessedMessage,
   index: number,
@@ -253,18 +302,17 @@ function buildTurnMarkdown(
   highlights: Highlight[]
 ): string[] {
   const { msg, toolGroups } = processed;
-  const who = processed.notification ? 'Task event' : roleLabel(msg.role);
-  // A message absorbed into the running turn is marked here too: without it the
-  // export reads as if Claude answered something nobody asked (#245).
-  const provenance = msg.queued ? ' (sent mid-turn)' : '';
+  const who = escapeHtml(turnWho(processed));
+  const provenance = sentMidTurn(processed) ? ' (sent mid-turn)' : '';
   const heading = `### ${String(index + 1).padStart(2, '0')} ${who}${provenance}${turnTime(msg.timestamp) ? ` - ${turnTime(msg.timestamp)}` : ''}`;
   const lines = [heading, ''];
 
-  // Command / notification turns replace their raw text blocks (which carry
-  // Claude Code's internal XML framing) with the same compact representation
-  // the live view renders.
+  // Command / notification / notice turns replace their raw text blocks (which
+  // carry Claude Code's internal XML framing, or repeat the notice) with the
+  // same compact representation the live view renders.
   if (processed.command) return [...lines, ...commandMarkdown(processed.command, options)];
   if (processed.notification) return [...lines, ...notificationMarkdown(processed.notification)];
+  if (msg.notice) return [...lines, ...noticeMarkdown(msg.notice)];
 
   if (options.includeThinking) {
     for (const block of thinkingBlocks(msg.content)) {
@@ -459,6 +507,18 @@ function renderCommandHtml(command: ClaudeSlashCommand, options: ExportOptions):
   `;
 }
 
+/** HTML for a harness notice — the one-line marker the live view draws, in
+ *  the same card as a task event. */
+function renderNoticeHtml(notice: SessionNotice): string {
+  const subject = notice.subject ? ` <code>${escapeHtml(notice.subject)}</code>` : '';
+  return `
+    <div class="tool-note">
+      <span>${escapeHtml(noticeLabel(notice))}${subject}</span>
+      <em>${escapeHtml(notice.text)}</em>
+    </div>
+  `;
+}
+
 function renderNotificationHtml(notification: TaskNotification): string {
   return `
     <div class="tool-note">
@@ -477,14 +537,16 @@ function renderTurnHtml(
 ): string {
   const { msg, toolGroups } = processed;
   const time = turnTime(msg.timestamp);
-  const role = processed.notification ? 'Task event' : roleLabel(msg.role);
-  // Command / notification turns replace their raw text blocks (Claude Code's
-  // internal XML framing) with the live view's compact representation.
+  // Command / notification / notice turns replace their raw text blocks (Claude
+  // Code's internal XML framing, or the notice's own line) with the live view's
+  // compact representation.
   const specialHtml = processed.command
     ? renderCommandHtml(processed.command, options)
     : processed.notification
       ? renderNotificationHtml(processed.notification)
-      : null;
+      : msg.notice
+        ? renderNoticeHtml(msg.notice)
+        : null;
   const textHtml =
     specialHtml !== null
       ? ''
@@ -498,9 +560,10 @@ function renderTurnHtml(
             // User prompts render verbatim in the live view (a plain <p>, not markdown),
             // so the export mirrors that: escape + <br>, no markdown interpretation —
             // a literal "*x*" or "# y" typed in a prompt stays literal. Assistant text
-            // is markdown, matching <Markdown> on screen.
+            // is markdown, matching <Markdown> on screen — and so is an inbound
+            // message, which the view draws through <Markdown> too.
             const html =
-              msg.role === 'user'
+              msg.role === 'user' && !msg.inbound
                 ? materializeHighlightSentinels(escapeHtml(wrapped).replace(/\n/g, '<br>'))
                 : materializeHighlightSentinels(markdownToHtml(wrapped));
             return `<div class="message-text">${html}</div>`;
@@ -525,12 +588,25 @@ function renderTurnHtml(
       : '';
 
   // Clean reading column matching the ClaudeLens chat view: a small textual
-  // header (role · time · model) over the message body — no colored rail.
+  // header (role · time · model) over the message body — no colored rail. An
+  // inbound message wears the view's strip instead of a role: the sender's
+  // name, then where it came from; a notice is a harness event, not a turn.
+  const variant = msg.notice
+    ? 'is-notice'
+    : msg.inbound
+      ? 'is-inbound'
+      : msg.role === 'user'
+        ? 'is-user'
+        : 'is-assistant';
+  const who = msg.inbound
+    ? `<span class="turn-who">⇢ ${escapeHtml(msg.inbound.name ?? inboundWhat(msg.inbound))}</span>` +
+      (msg.inbound.name ? `<span class="turn-from">${inboundWhat(msg.inbound)}</span>` : '')
+    : `<span class="turn-who">${escapeHtml(turnWho(processed))}</span>`;
   return `
-    <article class="turn ${msg.role === 'user' ? 'is-user' : 'is-assistant'}">
+    <article class="turn ${variant}">
       <header class="turn-head">
-        <span class="turn-who">${escapeHtml(role)}</span>
-        ${msg.queued ? '<span class="turn-queued">sent mid-turn</span>' : ''}
+        ${who}
+        ${sentMidTurn(processed) ? '<span class="turn-queued">sent mid-turn</span>' : ''}
         ${time ? `<span class="turn-sep">·</span><time>${escapeHtml(time)}</time>` : ''}
         ${model ? `<span class="turn-sep">·</span>${model}` : ''}
       </header>
@@ -615,7 +691,11 @@ function buildHtml(input: BuildChatExportInput, options: ExportOptions): string 
     }
     .turn-who { font-weight: 700; text-transform: uppercase; letter-spacing: 0.07em; }
     .turn.is-assistant .turn-who { color: #a9462a; }
-    .turn.is-user .turn-who { color: #2f2b27; }
+    .turn.is-user .turn-who, .turn.is-inbound .turn-who { color: #2f2b27; }
+    .turn.is-notice .turn-who { color: #7c7669; }
+    /* Where an inbound message came from: another session, or an agent inside
+       this one. The name before it is the sender's own claim. */
+    .turn-from { color: #7c7669; }
     .turn-sep { color: #c9c3b6; }
     .turn-head time { color: #9a948a; }
     .turn-model { color: #7c7669; }
