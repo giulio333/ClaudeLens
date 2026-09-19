@@ -39,6 +39,8 @@ import {
 } from './modules/session-reader';
 import { readSessionSubagentsViaSdk } from './modules/subagents-reader';
 import { searchSessions, type SearchRequest } from './modules/session-search';
+import { readExchange } from './modules/session-exchange';
+import type { ExchangeRequest } from './shared/exchange-types';
 import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
@@ -1087,6 +1089,29 @@ ipcMain.handle('search:conversations', async (_event, request: unknown) => {
     const outcome = await searchSessions(
       PROJECTS_DIR,
       req,
+      hash => resolveProjectPathForPlan(hash) ?? undefined
+    );
+    return ok(outcome);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// ── exchange:* — the conversation a message between sessions belongs to ─────
+//
+// Joins the two halves of a `SendMessage` on `msg_id` across every transcript
+// on disk (`modules/session-exchange.ts`, #280). Cross-project by construction,
+// and answered in the main process for the reason search is: the transcripts
+// stay here, and only the resolved exchange crosses IPC. The request names a
+// session and a message id and reaches no filesystem path of its own.
+ipcMain.handle('exchange:get', async (_event, request: unknown) => {
+  try {
+    const req = (request && typeof request === 'object' ? request : {}) as Partial<ExchangeRequest>;
+    if (typeof req.sessionId !== 'string' || !req.sessionId) throw new Error('sessionId required');
+    if (typeof req.msgId !== 'string' || !req.msgId) throw new Error('msgId required');
+    const outcome = await readExchange(
+      PROJECTS_DIR,
+      { sessionId: req.sessionId, msgId: req.msgId },
       hash => resolveProjectPathForPlan(hash) ?? undefined
     );
     return ok(outcome);

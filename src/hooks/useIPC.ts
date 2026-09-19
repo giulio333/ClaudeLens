@@ -16,6 +16,8 @@ import type {
   SessionSummary,
   ConversationSearchRequest,
   ConversationSearchResult,
+  ExchangeOutcome,
+  ExchangeRequest,
   VaultLinkAnswer,
   SubagentMeta,
   SessionArtifacts,
@@ -266,6 +268,9 @@ declare global {
         conversations: (
           request: ConversationSearchRequest
         ) => Promise<IpcResult<ConversationSearchResult>>;
+      };
+      exchange: {
+        get: (request: ExchangeRequest) => Promise<IpcResult<ExchangeOutcome | null>>;
       };
       vault: {
         resolveLinks: (root: string, targets: string[]) => Promise<IpcResult<VaultLinkAnswer[]>>;
@@ -668,6 +673,24 @@ export function useConversationSearch(request: ConversationSearchRequest | null)
     staleTime: 60_000,
     // The scan already reports what it could not read; a retry would just run
     // the whole pass again for the same answer.
+    retry: false,
+  });
+}
+
+/**
+ * The exchange a message received from another session belongs to (#280).
+ *
+ * Unlike search, this IS refetched on `data:changed` (`exchange:get` sits under
+ * the `sessions` scope): an exchange is live — the other side may answer while
+ * it is on screen — and the reader remembers each transcript under its stamp,
+ * so a refetch stats the corpus and re-reads only what grew.
+ */
+export function useExchange(request: ExchangeRequest | null) {
+  return useQuery({
+    queryKey: ['exchange:get', request],
+    queryFn: () => unwrap(window.electronAPI.exchange.get(request!)),
+    enabled: request !== null,
+    // The answer says what it rests on; a retry would run the same pass again.
     retry: false,
   });
 }

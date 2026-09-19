@@ -10,7 +10,7 @@
 //    because the only signal for it (`isSkill`) is set from a transcript row
 //    the SDK read drops.
 
-import { describe, it, expect, afterEach } from 'vitest';
+import { describe, it, expect, afterEach, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { cleanup, render, fireEvent } from '@testing-library/react';
 import { AdvisorBadge, MessageBubble } from '../src/components/project/chat/MessageBubble';
@@ -37,11 +37,16 @@ function userMessage(text: string, extra: Partial<ChatMessage> = {}): ChatMessag
 // Mounted the way `src/main.tsx` mounts: StrictMode runs every effect, its
 // cleanup and the effect again, which is the rehearsal a component with state
 // of its own — the inbound message's fold — has to survive.
-function mount(message: ChatMessage) {
+function mount(message: ChatMessage, extra: Partial<Parameters<typeof MessageBubble>[0]> = {}) {
   const [processed] = buildProcessedMessages([message]);
   return render(
     <StrictMode>
-      <MessageBubble processed={processed} detailsFilter="minimal" onOpenToolDetail={() => {}} />
+      <MessageBubble
+        processed={processed}
+        detailsFilter="minimal"
+        onOpenToolDetail={() => {}}
+        {...extra}
+      />
     </StrictMode>
   );
 }
@@ -212,6 +217,41 @@ describe('a message from another session', () => {
       userMessage('two words', { inbound: { from: 'session', name: 'alice-7c' } })
     );
     expect(container.querySelector('.cl-inbound-more')).toBeNull();
+  });
+
+  it('offers the exchange it belongs to, by its message id', () => {
+    const onOpenExchange = vi.fn();
+    const { container } = mount(
+      userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', msgId: 'm-1' } }),
+      { onOpenExchange }
+    );
+
+    const link = container.querySelector('.cl-inbound-exchange') as HTMLButtonElement;
+    expect(link?.textContent).toBe('Show exchange');
+    fireEvent.click(link);
+    expect(onOpenExchange).toHaveBeenCalledWith('m-1');
+  });
+
+  it('offers no exchange for an agent inside this session, nor without an id to join on', () => {
+    const onOpenExchange = vi.fn();
+    const agent = mount(
+      userMessage('done', { inbound: { from: 'agent', name: 'worker-b', msgId: 'm-2' } }),
+      { onOpenExchange }
+    );
+    expect(agent.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    agent.unmount();
+
+    const noId = mount(userMessage('ping', { inbound: { from: 'session', name: 'alice-7c' } }), {
+      onOpenExchange,
+    });
+    expect(noId.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    noId.unmount();
+
+    // And nothing to click when nobody is listening.
+    const nobody = mount(
+      userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', msgId: 'm-1' } })
+    );
+    expect(nobody.container.querySelector('.cl-inbound-exchange')).toBeNull();
   });
 });
 

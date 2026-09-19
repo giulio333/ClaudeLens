@@ -18475,6 +18475,167 @@ select.cl-opt-input {
 .cl-inbound-more:hover {
   text-decoration: underline;
 }
+/* The way to the exchange this message belongs to (#280): a link on the strip,
+   after the time, in the strip's own voice — it is a where-to, not a control. */
+.cl-inbound-exchange {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 10px/1.6 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: none;
+  color: var(--cl-accent-ink);
+  cursor: pointer;
+}
+.cl-inbound-exchange:hover {
+  text-decoration: underline;
+}
+
+/* ── Exchange: both halves of a conversation between two sessions (#280) ─────
+   The page an inbound message opens. The two parties are cards in the hero;
+   the messages below take the inbound bubble's own grammar — the rule down the
+   left, the strip that names the sender — so a message reads the same here as
+   it did in the transcript it came from. A message sent by the session the page
+   was opened from steps in from the left and takes the ink-toned rule an agent
+   inside the session wears: the same "not the other side" signal, reused. */
+.cl-exchange-parties {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+  margin-top: 18px;
+  max-width: 640px;
+}
+.cl-exchange-party {
+  border: 1px solid var(--cl-line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  background: var(--cl-paper-2);
+  min-width: 0;
+}
+.cl-exchange-party--here {
+  border-color: color-mix(in oklab, var(--cl-accent) 34%, transparent);
+}
+.cl-exchange-party-name {
+  font: 700 14px/1.4 var(--font-sans);
+  color: var(--cl-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-exchange-party-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 10px;
+  margin-top: 4px;
+  font: 500 10.5px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-exchange-party-here {
+  color: var(--cl-accent-ink);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+.cl-exchange-party-missing {
+  border: 1px dashed var(--cl-line);
+  border-radius: 999px;
+  padding: 0 7px;
+}
+.cl-exchange-thread {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 760px;
+}
+.cl-exchange-msg {
+  border-left: 2px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
+  padding: 0 0 4px 12px;
+}
+.cl-exchange-msg--own {
+  border-left-color: color-mix(in oklab, var(--cl-ink-3) 42%, transparent);
+  margin-left: 40px;
+}
+.cl-exchange-msg--entry {
+  background: color-mix(in oklab, var(--cl-accent) 6%, transparent);
+  border-radius: 0 8px 8px 0;
+  padding-top: 6px;
+  padding-right: 10px;
+}
+.cl-exchange-strip {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 8px;
+  font: 500 10px/1.6 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
+  padding-bottom: 6px;
+}
+.cl-exchange-msg--own .cl-exchange-strip {
+  color: var(--cl-ink-3);
+}
+.cl-exchange-arrow {
+  font-size: 12px;
+  line-height: 1;
+}
+.cl-exchange-from {
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.cl-exchange-to,
+.cl-exchange-time {
+  color: var(--cl-ink-4);
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  text-transform: none;
+}
+.cl-exchange-time {
+  margin-left: auto;
+}
+.cl-exchange-queued,
+.cl-exchange-entry {
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  padding: 1px 7px;
+  color: var(--cl-ink-4);
+  letter-spacing: 0.06em;
+}
+.cl-exchange-entry {
+  border-color: color-mix(in oklab, var(--cl-accent) 34%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-exchange-summary {
+  font: 600 13px/1.5 var(--font-sans);
+  color: var(--cl-ink);
+  margin-bottom: 4px;
+}
+.cl-exchange-body {
+  color: var(--cl-ink-2);
+}
+.cl-exchange-hops {
+  margin-top: 6px;
+  font: 500 10.5px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-exchange-actions {
+  display: flex;
+  gap: 14px;
+  margin-top: 6px;
+}
+.cl-exchange-open {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 11px/1 var(--font-mono);
+  color: var(--cl-accent-ink);
+  cursor: pointer;
+}
+.cl-exchange-open:hover {
+  text-decoration: underline;
+}
 
 /* ── What's New: a welcome moment, not a confirm dialog ─────────────────────
    Shown once per app version, on first launch after an update. Every other

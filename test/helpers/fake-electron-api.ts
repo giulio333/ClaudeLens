@@ -45,6 +45,8 @@ import type {
   SessionSummary,
   ConversationSearchRequest,
   ConversationSearchResult,
+  ExchangeOutcome,
+  ExchangeRequest,
   PurgePlan,
   PurgeResult,
   VaultLinkAnswer,
@@ -264,6 +266,13 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     ),
   };
 
+  // The exchange a message between sessions belongs to (#280). `null` is the
+  // honest default — "not in that transcript" — and a test that wants a thread
+  // scripts one.
+  const exchange = {
+    get: vi.fn(async (_request: ExchangeRequest) => ok<ExchangeOutcome | null>(null)),
+  };
+
   // The `[[wikilinks]]` a message cites, resolved against the project's files.
   // "Nothing resolves" is the honest default — a test that wants a chip to be
   // found scripts the answer, so the two verdicts are never confused by accident.
@@ -277,6 +286,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   return {
     sessions,
     search,
+    exchange,
     vault,
     telemetry,
     updates,

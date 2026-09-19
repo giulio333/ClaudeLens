@@ -467,40 +467,34 @@ export const FIELDS = {
   'user.toolUseResult.tmux_pane_id': ignored('as tmux_session_name'),
 
   // ── who put a user row in the transcript ────────────────────────────────
-  // `origin` says where a user row came from, and session-reader reads none of
-  // it: five kinds observed — human, task-notification, peer,
-  // auto-continuation, coordinator — all rendered as the same user bubble, and
-  // the isMeta ones (peer, auto-continuation) dropped outright. The same object
-  // appears under `attachment.attachment.origin.*` instead when the receiver
-  // was mid-turn and the message was queued, so a reader that only looks at
-  // `user` rows sees a message from an idle receiver and loses it from a busy one.
-  'user.origin.kind': candidate(
-    "the row's provenance: human | task-notification | peer | auto-continuation | coordinator. One field that would stop a background-task notice and another agent's message from both reading as something the user typed"
-  ),
-  'user.origin.body': candidate(
-    'the message on its own, without the <cross-session-message> wrapper and the ~700 characters of safety preamble the content string carries — the only clean source for rendering it'
-  ),
-  'user.origin.msg_id': candidate(
-    "the same id the sender's SendMessage tool_result reports, in another session's transcript: the one join key between the two halves of a message"
-  ),
-  'user.origin.from': candidate(
-    "the sender's address — a unix socket for another session, a bare agent name for an in-process one"
-  ),
-  'user.origin.verifiedPeerPid': candidate(
-    'the pid the receiver verified off the socket; with `from`, the only identity that is checked rather than claimed'
-  ),
-  'user.origin.name': candidate(
-    "the sender's display name at send time: sender-supplied, and unstable — a background session renames itself once it has a topic, which is enough to make a reply to that name fail. A label, never an identity"
-  ),
-  'user.origin.hopChain': candidate(
-    'ordered session fingerprints the exchange has already passed through: absent on a message that opens a chain, inherited-and-appended by each reply. Threads a conversation that spans three sessions and two projects'
-  ),
+  // `origin` says where a user row came from. Read since #274 by
+  // transcript-extras (the inbound bubble: kind, body, from, verifiedPeerPid,
+  // name) and since #280 by session-exchange too, which joins the receiver's
+  // `msg_id`/`hopChain` with the sender's `toolUseResult.msg_id` across every
+  // transcript on disk. The same object appears under
+  // `attachment.attachment.origin.*` when the receiver was mid-turn and the
+  // message was queued; both readers read both forms.
+  'user.origin.kind': read('transcript-extras'),
+  'user.origin.body': read('transcript-extras + session-exchange'),
+  'user.origin.msg_id': read('transcript-extras + session-exchange'),
+  'user.origin.from': read('transcript-extras'),
+  'user.origin.verifiedPeerPid': read('transcript-extras + session-exchange'),
+  'user.origin.name': read('transcript-extras + session-exchange'),
+  'user.origin.hopChain': read('transcript-extras + session-exchange'),
+  // The sender's half of a message between sessions (#280): the id the
+  // receiver's `origin.msg_id` joins on, and the assistant row that made the
+  // `SendMessage` call — the turn the exchange page opens on the sender's side.
+  'user.toolUseResult.msg_id': read('session-exchange'),
+  'user.sourceToolAssistantUUID': read('session-exchange'),
   'user.origin.fromMode': unknown(
     '"prompting" in every row observed; a second value would say what it distinguishes'
   ),
-  'attachment.attachment.origin.senderTaskId': candidate(
-    'present only when the sender is an agent inside this session; its absence, with `from: uds:…` and verifiedPeerPid, is what separates another session from a sub-agent — both are written as kind "peer"'
-  ),
+  // Present only when the sender is an agent inside this session; its absence,
+  // with `from: uds:…` and verifiedPeerPid, is what separates another session
+  // from a sub-agent — both are written as kind "peer". `parseInbound` reads it
+  // on both delivery forms, and session-exchange keeps an agent out of a thread.
+  'attachment.attachment.origin.senderTaskId': read('transcript-extras + session-exchange'),
+  'user.origin.senderTaskId': read('transcript-extras + session-exchange'),
   'attachment.attachment.isMeta': candidate(
     'marks an attachment as harness-injected rather than typed; matters once attachment rows are read at all'
   ),

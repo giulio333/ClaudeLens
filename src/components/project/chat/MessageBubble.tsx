@@ -563,10 +563,15 @@ export function InboundMessage({
   origin,
   text,
   timestamp,
+  onOpenExchange,
 }: {
   origin: InboundOrigin;
   text: string;
   timestamp: string;
+  /** Open the exchange this message belongs to (#280). Offered only for a
+   *  message from another SESSION that carries a `msgId` — the join key — so
+   *  an agent's dispatch, which threads with nothing, gets no link. */
+  onOpenExchange?: (msgId: string) => void;
 }) {
   const [full, setFull] = useState(false);
   const lines = text.split('\n');
@@ -594,6 +599,16 @@ export function InboundMessage({
           </span>
         )}
         {timestamp && <time className="cl-inbound-time">{timestamp}</time>}
+        {onOpenExchange && origin.from === 'session' && origin.msgId && (
+          <button
+            type="button"
+            className="cl-inbound-exchange"
+            title="The conversation between these two sessions, both sides in order"
+            onClick={() => onOpenExchange(origin.msgId!)}
+          >
+            Show exchange
+          </button>
+        )}
       </div>
       <div className="cl-inbound-body">
         <Markdown>{shown}</Markdown>
@@ -639,6 +654,7 @@ export const MessageBubble = memo(function MessageBubble({
   onOpenSkill,
   agentOf,
   onOpenAgent,
+  onOpenExchange,
   turnIndex,
   isContinuation,
   innerRef,
@@ -662,6 +678,8 @@ export const MessageBubble = memo(function MessageBubble({
   agentOf?: (subagentType: string) => Agent | undefined;
   /** Navigates to the agent detail view (deep link from an expanded agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Opens the exchange an inbound message belongs to, by its `msgId` (#280). */
+  onOpenExchange?: (msgId: string) => void;
   turnIndex?: number;
   /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
   isContinuation?: boolean;
@@ -854,7 +872,12 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
-          <InboundMessage origin={msg.inbound} text={body} timestamp={timestamp} />
+          <InboundMessage
+            origin={msg.inbound}
+            text={body}
+            timestamp={timestamp}
+            onOpenExchange={onOpenExchange}
+          />
         </section>
       </article>
     );

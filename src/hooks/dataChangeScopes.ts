@@ -14,7 +14,13 @@
 export const SCOPE_KEYS = new Map<string, string[]>([
   [
     'sessions',
-    ['sessions:project', 'sessions:chat', 'sessions:subagents', 'sessions:subagentTranscript'],
+    [
+      'sessions:project',
+      'sessions:chat',
+      'sessions:subagents',
+      'sessions:subagentTranscript',
+      'exchange:get',
+    ],
   ],
   ['cost', ['cost:summary', 'cost:project']],
   ['plans', ['plans:project', 'plans:unlinked']],

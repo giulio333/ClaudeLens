@@ -16,6 +16,7 @@ import { View } from '../components/project/types';
 import { reportViewOpened } from '../lib/telemetry';
 import { STUDIO_ENABLED } from '../lib/features';
 import { SearchView } from '../components/project/search/SearchView';
+import { ExchangeView } from '../components/project/exchange/ExchangeView';
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog';
 import {
   SearchPopover,
@@ -584,6 +585,7 @@ export default function ProjectOverview() {
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
+            onOpenExchange={entry => setView({ type: 'exchange', project: view.project, ...entry })}
           />
         );
       case 'search':
@@ -644,7 +646,11 @@ export default function ProjectOverview() {
                     setView({ type: 'search', query: view.searchQuery ?? '' })
                   : view.from === 'memory-topic' && view.memoryTopic
                     ? setView({ type: 'memory-topic', ...view.memoryTopic })
-                    : setView({ type: 'sessions', project: view.project })
+                    : view.from === 'exchange' && view.exchange
+                      ? // Back to the exchange, which may sit in another project
+                        // than the turn it opened: the entry carries its own.
+                        setView({ type: 'exchange', ...view.exchange })
+                      : setView({ type: 'sessions', project: view.project })
             }
             onOpenSession={id =>
               setView({
@@ -657,6 +663,33 @@ export default function ProjectOverview() {
                 from: view.from,
                 searchQuery: view.searchQuery,
                 memoryTopic: view.memoryTopic,
+                exchange: view.exchange,
+              })
+            }
+            onOpenExchange={entry => setView({ type: 'exchange', project: view.project, ...entry })}
+          />
+        );
+      case 'exchange':
+        return (
+          <ExchangeView
+            key={`${view.sessionId}/${view.msgId}`}
+            project={view.project}
+            sessionId={view.sessionId}
+            msgId={view.msgId}
+            onBack={() =>
+              setView({ type: 'terminal', project: view.project, resumeSessionId: view.sessionId })
+            }
+            // A turn opens inside Mission Control, like a search hit: the view
+            // resolves the real SessionSummary first and refuses a session that
+            // is gone. The exchange rides along so Back returns here.
+            onOpenTurn={(project, session, messageUuid) =>
+              setView({
+                type: 'terminal',
+                project,
+                resumeSessionId: session.filename.replace(/\.jsonl$/, ''),
+                from: 'exchange',
+                exchange: { project: view.project, sessionId: view.sessionId, msgId: view.msgId },
+                focusMessageUuid: messageUuid,
               })
             }
           />

@@ -211,6 +211,7 @@ export function TerminalMissionControl({
   focusMessageUuid,
   onBack,
   onOpenSession,
+  onOpenExchange,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
@@ -227,6 +228,9 @@ export function TerminalMissionControl({
    *  overlay's "open chat"). Remounts this view — the caller keys it by
    *  resumeSessionId — so a live PTY dies: gate behind a confirm here. */
   onOpenSession?: (resumeSessionId: string) => void;
+  /** Open the exchange a message received from another session belongs to
+   *  (#280) — handed to the embedded ChatView, whose inbound bubble offers it. */
+  onOpenExchange?: (entry: { sessionId: string; msgId: string }) => void;
 }) {
   const { resolved } = useTheme();
   // Opening an existing session defaults to LENS (read-only, nothing spawned); a
@@ -628,6 +632,7 @@ export function TerminalMissionControl({
                   onBack={onBack}
                   onOpenSkill={skill => setOverlay({ kind: 'skill-def', skill })}
                   onOpenAgent={agent => setOverlay({ kind: 'agent-def', agent })}
+                  onOpenExchange={onOpenExchange}
                   // A tool opened from the embedded transcript is hoisted to this
                   // frame's overlay — the same one the rail opens. Otherwise it
                   // would mount inside a ChatView whose top bar isn't on screen,
