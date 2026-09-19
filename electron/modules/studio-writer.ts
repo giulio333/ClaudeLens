@@ -5,8 +5,7 @@
 
 import { writeFileSync, mkdirSync, existsSync, rmSync } from 'fs';
 import { dirname } from 'path';
-import os from 'os';
-import { assertWithin } from '../utils';
+import { assertWithin, assertKnownProjectPath } from '../utils';
 import { readTextFile } from './safe-fs';
 import {
   type Blueprint,
@@ -33,9 +32,15 @@ function validateBlueprintName(name: string): string {
 }
 
 function checkedScriptPath(identifier: string, projectPath?: string | null): string {
+  // Same rule as the skills and agents writers (#256): a projectPath is
+  // renderer-supplied, so it has to be one the registry knows — main.ts checks
+  // that too, narrowed to the projects Studio lists, and the writer states it
+  // for itself. The global branch has no supplied input at all, and
+  // WORKFLOWS_DIR follows CLAUDE_CONFIG_DIR, so anchoring it on $HOME refused a
+  // relocated config dir and proved nothing the check below does not.
   const dir = projectPath ? projectWorkflowsDir(projectPath) : WORKFLOWS_DIR;
+  if (projectPath) assertKnownProjectPath(projectPath);
   const path = scriptPathFor(identifier, projectPath);
-  if (!projectPath) assertWithin(os.homedir(), path);
   assertWithin(dir, path);
   return path;
 }

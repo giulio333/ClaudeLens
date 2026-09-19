@@ -1,11 +1,15 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtempSync, rmSync, existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { describe, it, expect, beforeEach, afterEach, afterAll } from 'vitest';
+import {
+  mkdtempSync,
+  rmSync,
+  existsSync,
+  readFileSync,
+  writeFileSync,
+  mkdirSync,
+  realpathSync,
+} from 'fs';
 import { tmpdir, homedir } from 'os';
 import { join } from 'path';
-import { createSkill } from '../electron/modules/skills-writer';
-import { createAgent } from '../electron/modules/agents-writer';
-import { readAgentFile } from '../electron/modules/agents-reader';
-import { readSkillDir } from '../electron/modules/skills-reader';
 import {
   serializeSkill,
   serializeAgent,
@@ -13,6 +17,37 @@ import {
   SKILL_OPTION_DEFS,
   AGENT_OPTION_DEFS,
 } from '../src/components/project/shared/entityOptions';
+
+// The config dir and every sandbox project live under the OS temp dir, which is
+// OUTSIDE $HOME — that is the claim of #256: the writers used to anchor
+// containment on the home directory, which refused every project in /opt or on
+// a mounted volume and, since CLAUDE_DIR follows CLAUDE_CONFIG_DIR, a relocated
+// config dir too. `realpathSync` because macOS hands out `/var/folders/…` for a
+// dir that resolves to `/private/var/folders/…`, and the allowlist compares the
+// path the registry resolved with the one the caller passes, as strings.
+// CLAUDE_DIR is read once, when utils loads, so the env var goes first and the
+// modules that carry it are imported after it.
+const configDir = realpathSync(mkdtempSync(join(tmpdir(), 'cl-entity-cfg-')));
+process.env.CLAUDE_CONFIG_DIR = configDir;
+
+const { createSkill } = await import('../electron/modules/skills-writer');
+const { createAgent } = await import('../electron/modules/agents-writer');
+const { readAgentFile } = await import('../electron/modules/agents-reader');
+const { readSkillDir } = await import('../electron/modules/skills-reader');
+const { encodeProjectHash, invalidateCwdCache } = await import('../electron/utils');
+
+afterAll(() => {
+  delete process.env.CLAUDE_CONFIG_DIR;
+  rmSync(configDir, { recursive: true, force: true });
+});
+
+/** Files `cwd` under `<configDir>/projects/<hash>/` the way a Claude Code
+ *  session would, which is what makes it a project ClaudeLens knows. */
+function registerProject(cwd: string): void {
+  const hashDir = join(configDir, 'projects', encodeProjectHash(cwd));
+  mkdirSync(hashDir, { recursive: true });
+  writeFileSync(join(hashDir, 'session.jsonl'), `${JSON.stringify({ cwd })}\n`);
+}
 
 // The renderer edit path serializes an entity to raw markdown that is written
 // verbatim (markdownFile:write), then read back with js-yaml. These helpers pass
@@ -25,13 +60,17 @@ const asAgent = (a: { name: string; rawContent: string }) =>
 const asRecord = (o: unknown) => o as Record<string, unknown>;
 
 // createSkill/createAgent honor a projectPath by writing under
-// {projectPath}/.claude/(skills|agents). The writers anchor containment on the
-// home dir (project agents/skills are always under $HOME by convention), so the
-// sandbox project must live under home too.
+// {projectPath}/.claude/(skills|agents), and accept only a projectPath the
+// projects registry knows — so each sandbox project is registered, and the cwd
+// cache `resolveRealPath` keeps per hash is cleared with it, since the suite
+// is shuffled and a stale entry would answer for a dir that no longer exists.
 let proj: string;
 
 beforeEach(() => {
-  proj = mkdtempSync(join(homedir(), '.cl-entity-test-'));
+  invalidateCwdCache();
+  rmSync(join(configDir, 'projects'), { recursive: true, force: true });
+  proj = realpathSync(mkdtempSync(join(tmpdir(), 'cl-entity-proj-')));
+  registerProject(proj);
 });
 
 afterEach(() => {
@@ -83,6 +122,44 @@ describe('createSkill (issue #58)', () => {
   });
 });
 
+// #256: the guard's job is "this is a project ClaudeLens knows", and $HOME was
+// a proxy for it. Every `proj` above already sits outside home; these state
+// the two refusals the issue reported, and the one that has to stay.
+describe('containment root (issue #256)', () => {
+  it('creates a skill and an agent in a known project outside $HOME', () => {
+    expect(proj.startsWith(realpathSync(homedir()))).toBe(false);
+    const skill = createSkill({ name: 'probe', content: 'Body' }, proj);
+    const agent = createAgent({ name: 'probe', content: 'Body' }, proj);
+    expect(skill).toBe(join(proj, '.claude', 'skills', 'probe', 'SKILL.md'));
+    expect(agent).toBe(join(proj, '.claude', 'agents', 'probe.md'));
+    expect(existsSync(skill)).toBe(true);
+    expect(existsSync(agent)).toBe(true);
+  });
+
+  it('writes a global skill and agent into a CLAUDE_CONFIG_DIR outside $HOME', () => {
+    const skill = createSkill({ name: 'global-probe', content: 'Body' });
+    const agent = createAgent({ name: 'global-probe', content: 'Body' });
+    expect(skill).toBe(join(configDir, 'skills', 'global-probe', 'SKILL.md'));
+    expect(agent).toBe(join(configDir, 'agents', 'global-probe.md'));
+    expect(existsSync(skill)).toBe(true);
+    expect(existsSync(agent)).toBe(true);
+  });
+
+  it('still refuses a project the registry does not know, wherever it lives', () => {
+    // Under the config dir itself, so a root-based check would have let it in.
+    const unknown = join(configDir, 'not-a-project');
+    mkdirSync(unknown, { recursive: true });
+    expect(() => createSkill({ name: 'x', content: 'b' }, unknown)).toThrow(/Unknown project/);
+    expect(() => createAgent({ name: 'x', content: 'b' }, unknown)).toThrow(/Unknown project/);
+    expect(existsSync(join(unknown, '.claude'))).toBe(false);
+  });
+
+  it('a known project cannot be redirected by a traversal name', () => {
+    expect(() => createSkill({ name: '../../escape', content: 'b' }, proj)).toThrow(/Invalid name/);
+    expect(existsSync(join(proj, 'escape'))).toBe(false);
+  });
+});
+
 describe('createAgent (issue #58)', () => {
   it('writes <name>.md under .claude/agents', () => {
     const filePath = createAgent({ name: 'reviewer', content: 'Body' }, proj);
@@ -100,14 +177,14 @@ describe('createAgent (issue #58)', () => {
     expect(() => createAgent({ name: 'dup', content: 'second' }, proj)).toThrow(/already exists/);
   });
 
-  it('refuses a projectPath that escapes the home directory', () => {
-    const outside = mkdtempSync(join(tmpdir(), 'cl-outside-'));
+  it('refuses a projectPath the projects registry does not know', () => {
+    const unknown = realpathSync(mkdtempSync(join(tmpdir(), 'cl-unknown-')));
     try {
-      expect(() => createAgent({ name: 'x', content: 'b' }, outside)).toThrow(/outside/);
-      expect(() => createSkill({ name: 'x', content: 'b' }, outside)).toThrow(/outside/);
-      expect(existsSync(join(outside, '.claude'))).toBe(false);
+      expect(() => createAgent({ name: 'x', content: 'b' }, unknown)).toThrow(/Unknown project/);
+      expect(() => createSkill({ name: 'x', content: 'b' }, unknown)).toThrow(/Unknown project/);
+      expect(existsSync(join(unknown, '.claude'))).toBe(false);
     } finally {
-      rmSync(outside, { recursive: true, force: true });
+      rmSync(unknown, { recursive: true, force: true });
     }
   });
 
