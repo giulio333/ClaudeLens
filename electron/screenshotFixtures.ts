@@ -11,6 +11,7 @@ const ok = <T>(data: T): IpcResult<T> => ({ data, error: null });
 const NOW = new Date();
 const NOTES_DEMO_ID = 'a3f8c2e1-4b6d-4e2a-9c1f-7d5e8b3a2c10';
 const NOTES_DEMO_PROJECT = '-Users-alice-projects-webapp';
+const ARTIFACT_DEMO_ID = 'c5fae403-6d8f-4a4c-9e3b-7fa0b1c2d3e4';
 const BASH_DIFF_DEMO_ID = 'b4e9d3f2-5c7e-4f3b-8d2a-6e9f0a1b2c3d';
 const INBOUND_DEMO_ID = 'c5f0e4a3-6d8f-4a4c-9e3b-7f0a1b2c3d4e';
 
@@ -151,6 +152,7 @@ function getSessionList(hash: string) {
   return Array.from({ length: count }, (_, i) => {
     const bashDemo = hash === NOTES_DEMO_PROJECT && i === 1;
     const inboundDemo = hash === NOTES_DEMO_PROJECT && i === 2;
+    const artifactDemo = hash === NOTES_DEMO_PROJECT && i === 3;
     const t = bashDemo
       ? { ...SESSION_TEMPLATES[1], title: 'Increase the API timeout', msgs: 3 }
       : inboundDemo
@@ -159,7 +161,14 @@ function getSessionList(hash: string) {
             title: 'Split the release sweep with a second session',
             msgs: 6,
           }
-        : SESSION_TEMPLATES[i % SESSION_TEMPLATES.length];
+        : artifactDemo
+          ? {
+              ...SESSION_TEMPLATES[3],
+              title: 'Release checklist',
+              model: 'claude-sonnet-4-6',
+              msgs: 3,
+            }
+          : SESSION_TEMPLATES[i % SESSION_TEMPLATES.length];
     // i < 8 → usa l'offset originale del template; oltre → un giorno in più ciascuno
     const dayOffset = i < SESSION_TEMPLATES.length ? t.days : i;
     const d = new Date(now.getTime() - dayOffset * 86_400_000);
@@ -172,7 +181,9 @@ function getSessionList(hash: string) {
             ? `${BASH_DIFF_DEMO_ID}.jsonl`
             : inboundDemo
               ? `${INBOUND_DEMO_ID}.jsonl`
-              : filename,
+              : artifactDemo
+                ? `${ARTIFACT_DEMO_ID}.jsonl`
+                : filename,
       date: d.toISOString(),
       inputTokens: t.input,
       outputTokens: t.output,
@@ -326,6 +337,63 @@ const MOCK_CHAT = [
           file_path: '/Users/alice/projects/webapp/src/auth/jwt.ts',
           content:
             "import jwt from 'jsonwebtoken';\n\nconst SECRET = process.env.JWT_SECRET!;\n\nexport const signToken = (userId: string) =>\n  jwt.sign({ userId }, SECRET, { expiresIn: '7d' });\n\nexport const verifyToken = (token: string) =>\n  jwt.verify(token, SECRET) as { userId: string };\n",
+        },
+      },
+    ],
+  },
+];
+
+// Synthetic publish metadata only: no page is uploaded and the URL is a demo placeholder.
+const ARTIFACT_CHAT: ChatMessage[] = [
+  {
+    uuid: 'artifact-demo-user',
+    role: 'user',
+    timestamp: daysAgo(5),
+    content: [
+      {
+        type: 'text',
+        text: 'Create a release checklist page with the final checks before shipping.',
+      },
+    ],
+  },
+  {
+    uuid: 'artifact-demo-assistant',
+    role: 'assistant',
+    timestamp: daysAgo(5),
+    model: 'claude-sonnet-4-6',
+    content: [
+      { type: 'text', text: 'The checklist is ready: tests, release notes, and a rollback plan.' },
+      {
+        type: 'tool_use',
+        id: 'artifact-demo-publish',
+        name: 'Artifact',
+        input: {
+          action: 'publish',
+          path: '/tmp/demo/release-checklist.html',
+          title: 'Release checklist',
+          description: 'Final checks before shipping the next release.',
+        },
+      },
+    ],
+  },
+  {
+    uuid: 'artifact-demo-result',
+    role: 'user',
+    timestamp: daysAgo(5),
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'artifact-demo-publish',
+        content: 'Published release-checklist.html (Version 1).',
+        isError: false,
+        artifact: {
+          id: 'demo-release-checklist',
+          url: 'https://claude.ai/artifact/demo-release-checklist',
+          title: 'Release checklist',
+          updated: false,
+          seq: 1,
+          audience: 'owner',
+          path: '/tmp/demo/release-checklist.html',
         },
       },
     ],
@@ -2440,6 +2508,9 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   // a few recent demo calls, and stop ticking once the view stops reading.
   const notesDemos = new Map<number, { readAt: number; messages: ChatMessage[] }>();
   ipcMain.handle('sessions:getChat', (event, hash: string, filename: string) => {
+    if (hash === NOTES_DEMO_PROJECT && filename === `${ARTIFACT_DEMO_ID}.jsonl`) {
+      return ok(ARTIFACT_CHAT);
+    }
     if (hash === NOTES_DEMO_PROJECT && filename === `${BASH_DIFF_DEMO_ID}.jsonl`) {
       return ok(BASH_DIFF_CHAT);
     }
