@@ -61,6 +61,12 @@ contextBridge.exposeInMainWorld('electronAPI', {
       maxHitsPerSession?: number;
     }) => ipcRenderer.invoke('search:conversations', request),
   },
+  exchange: {
+    // The conversation a message received from another session belongs to,
+    // joined on `msg_id` across every transcript on disk (#280).
+    get: (request: { sessionId: string; msgId: string }) =>
+      ipcRenderer.invoke('exchange:get', request),
+  },
   vault: {
     // The `[[wikilinks]]` a message cites, resolved against the project's own
     // files. One call per message, carrying only the names that message names —

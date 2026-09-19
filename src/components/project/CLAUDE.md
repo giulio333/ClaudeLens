@@ -730,6 +730,54 @@ risultato del popover resta a un tasto di distanza.
 
 ---
 
+### `exchange/` — Le due metà di uno scambio fra sessioni
+
+Vista `exchange` (#280). Un messaggio mandato da una sessione a un'altra si
+leggeva già da entrambe le parti, ma una alla volta: il mittente lo ha come
+tool card `SendMessage`, il ricevente come bolla inbound (#274), e ricostruire
+lo scambio voleva dire sapere quali sessioni aprire e leggerle in ordine. Il
+join sta nel main (`electron/modules/session-exchange.ts`, `exchange:get`); qui
+c'è solo la pagina.
+
+| File               | Esporta        | Descrizione                                                                                                                                                                                                                                                                               |
+| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `ExchangeView.tsx` | `ExchangeView` | Hero con le due parti (nome dichiarato · progetto · titolo sessione, `this session` sulla ricevente) e fascia Messages / Transcripts read / Took; sotto, i messaggi come conversazione (`.cl-exchange-msg`), quello di partenza marcato (`aria-current`), ognuno con i due turni apribili |
+
+Decisioni:
+
+- **L'ingresso è la bolla inbound**: `InboundMessage` offre `Show exchange`
+  solo per un messaggio di **sessione** che porta un `msgId` — un agente
+  interno (`from: 'agent'`) non ha con che legarsi, e un messaggio senza id
+  nemmeno. Il callback risale `MessageBubble` → `ChatView` (che vi aggiunge il
+  proprio `sessionId`, la ricevente) → `TerminalMissionControl`/`ProjectOverview`,
+  come `onOpenSkill`; `ChatView` lo memoizza perché la bolla è `memo`.
+- **Lo scambio è la conversazione fra due sessioni**, tutti i messaggi fra la
+  coppia in ordine di arrivo — non la hop chain, che è un percorso causale e
+  spezza una conversazione umana in più catene (vedi il modulo main). La catena
+  si disegna comunque, **come percorso e con le ripetizioni** (`via A → B → A`):
+  una sessione che compare due volte è un rilancio, non un errore.
+- **Un mittente senza transcript è detto tale**, mai vestito da sessione
+  apribile: la card dice `transcript not found`, il nome resta quello dichiarato
+  (etichetta, non identità), e la riga non offre `Open sending turn`. Dove il
+  messaggio è atterrato resta apribile.
+- **Aprire un turno risolve la `SessionSummary` vera** dalla lista del suo
+  progetto e rifiuta se la sessione non c'è più — la regola di `SearchView`,
+  per la stessa ragione. La destinazione è Mission Control con
+  `focusMessageUuid` (`sentTurnUuid` sul lato mittente: la riga assistant che
+  ha fatto la chiamata; `receivedUuid` sul lato ricevente: la bolla inbound) e
+  `from: 'exchange'` + `exchange` per tornare **qui**, anche da un progetto
+  diverso da quello della sessione aperta.
+- **La query È invalidata da `data:changed`** (`exchange:get` sta nello scope
+  `sessions`), al contrario della ricerca: uno scambio è vivo, l'altra parte può
+  rispondere mentre la pagina è aperta, e il reader ricorda ogni transcript sotto
+  il suo stamp, quindi un refetch è uno `stat` per file e la rilettura di ciò
+  che è cresciuto.
+
+Coperta da `test/exchange-view.test.tsx` (StrictMode, fake bridge) e, per il
+bottone sulla bolla, da `test/message-bubble-markers.test.tsx`.
+
+---
+
 ### `sessions/`
 
 - **`TagBar.tsx`** — Barra dei tag di una sessione (lista + add)

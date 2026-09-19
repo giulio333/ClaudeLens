@@ -9,6 +9,14 @@ import {
   InstalledPlugin,
 } from '../../hooks/useIPC';
 
+/** What identifies an exchange page: the receiving session and the message id
+ *  the two transcripts are joined on. */
+export interface ExchangeEntry {
+  project: { hash: string; realPath: string };
+  sessionId: string;
+  msgId: string;
+}
+
 export type View =
   | { type: 'global-home' }
   | { type: 'overview' }
@@ -82,7 +90,7 @@ export type View =
       project: { hash: string; realPath: string };
       resumeSessionId?: string;
       attachJobId?: string;
-      from?: 'agents-live' | 'search' | 'memory-topic';
+      from?: 'agents-live' | 'search' | 'memory-topic' | 'exchange';
       /** Scroll the Lens to the turn holding this message on open (a search hit).
        *  By uuid, never by position: the transcript reads through the SDK, which
        *  truncates at the compaction boundary, so a hit found on disk may have no
@@ -95,7 +103,15 @@ export type View =
       /** Set when `from` is `memory-topic`: Back walks to that topic, not to the
        *  project's session list. */
       memoryTopic?: { topic: MemoryTopic; content: string; hash: string };
+      /** Set when `from` is `exchange`: Back returns to that exchange, which may
+       *  belong to another project than the session on screen. */
+      exchange?: ExchangeEntry;
     }
+  /** The conversation a message from another session belongs to (#280), opened
+   *  from the inbound bubble that carries its `msgId`. `project` and `sessionId`
+   *  are the RECEIVER's — the chat the page was opened from — and where Back
+   *  returns. */
+  | ({ type: 'exchange' } & ExchangeEntry)
   | { type: 'memory-topic'; topic: MemoryTopic; content: string; hash: string }
   | { type: 'ai-assistant'; project: { hash: string; realPath: string } }
   | { type: 'live-monitor'; project: { hash: string; realPath: string } }

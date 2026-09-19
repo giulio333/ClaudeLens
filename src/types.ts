@@ -82,6 +82,15 @@ export type {
   PermissionDecision,
 } from '../electron/shared/chat-types';
 
+// The exchange a message between sessions belongs to (#280) — shared with the
+// main process the same way, see electron/shared/exchange-types.ts.
+export type {
+  ExchangeRequest,
+  ExchangeParty,
+  ExchangeMessage,
+  ExchangeOutcome,
+} from '../electron/shared/exchange-types';
+
 // A normalized session-lifecycle notification pushed from the main process over
 // `notifications:event`. Mirrors electron/modules/notifications/types.ts (the two
 // tsconfigs don't share imports). The renderer renders it as a transient toast.

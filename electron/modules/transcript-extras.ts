@@ -210,7 +210,7 @@ export function withArtifactPublish(
  * riga ne ha sempre esattamente uno (ed è sempre un `Bash`), e con qualunque
  * altro numero si preferisce non mostrarlo che mostrarlo sul tool sbagliato.
  */
-function soleToolResultId(message: unknown): string | undefined {
+export function soleToolResultId(message: unknown): string | undefined {
   const content = (message as Record<string, unknown> | undefined)?.content;
   if (!Array.isArray(content)) return undefined;
   const ids = content
@@ -344,8 +344,12 @@ function isDelivered(content: string): boolean {
  * ricevente ha verificato — l'unico pezzo di identità controllato, mentre `name`
  * lo dichiara il mittente e cambia da solo quando una sessione di background si
  * dà un titolo.
+ *
+ * Esportata perché `session-exchange` legge la stessa riga con la stessa regola:
+ * le due metà di un messaggio si uniscono su `msg_id`, e chi le unisce non deve
+ * poter divergere da chi le disegna su cosa sia un mittente.
  */
-function parseInbound(
+export function parseInbound(
   raw: unknown,
   queued: boolean
 ): { origin: InboundOrigin; body: string } | null {

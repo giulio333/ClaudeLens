@@ -73,6 +73,7 @@ export function ChatView({
   onBack,
   onOpenSkill,
   onOpenAgent,
+  onOpenExchange,
   onOpenTool,
   embedded = false,
   jumpToTurnRef,
@@ -85,6 +86,9 @@ export function ChatView({
   onOpenSkill?: (skill: Skill) => void;
   /** Deep-link to an agent detail view (from an inline agent card). */
   onOpenAgent?: (agent: Agent) => void;
+  /** Open the exchange an inbound message belongs to (#280): this session is
+   *  the receiver, `msgId` the join key the bubble carries. */
+  onOpenExchange?: (entry: { sessionId: string; msgId: string }) => void;
   /** Hand a tool detail to the host frame instead of opening it here. Set by the
    *  unified Terminal/Lens view, whose own top bar carries the crumb and the way
    *  back: opened locally, the panel would sit under a bar that doesn't know it
@@ -228,6 +232,13 @@ export function ChatView({
   const canExport = processed.length > 0 && !isLoading;
 
   const sessionId = useMemo(() => session.filename.replace(/\.jsonl$/, ''), [session.filename]);
+
+  // Stable, so a memoized bubble does not re-render for a new closure each
+  // pass; undefined when nobody listens, which is what hides the link.
+  const openExchange = useMemo(
+    () => onOpenExchange && ((msgId: string) => onOpenExchange({ sessionId, msgId })),
+    [onOpenExchange, sessionId]
+  );
 
   // Live in a terminal right now? (Active-sessions registry; SDK-spawned
   // sessions — including this view's own composer — are excluded from it.)
@@ -602,6 +613,7 @@ export function ChatView({
         onOpenSkill={onOpenSkill}
         agentOf={agentOf}
         onOpenAgent={onOpenAgent}
+        onOpenExchange={openExchange}
         turnIndex={item.idx + 1}
         isContinuation={row.isContinuation}
         hiddenToolCount={item.hiddenCount}
