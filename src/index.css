@@ -13158,6 +13158,178 @@ button.cl-sw-member:focus-visible,
   font-family: var(--font-mono);
 }
 
+/* ════════════════════════════════════════════════════════════════════════
+   Plugins — brainstormed away from the tile grid (design 2b's pattern) and
+   from a card-per-plugin catalogue: a plugin is a container, and what a
+   reader actually wants is what's inside it. Two pieces per marketplace
+   group:
+   - a skyline: a plain row of bars, one per plugin, no labels of its own —
+     a glance at relative richness before reading a single name. Height is
+     a square-root curve against the richest plugin on the whole page
+     (`skylineHeight` in `plugins/utils.ts`), so one plugin with 19
+     components doesn't flatten every other bar to a sliver, and an
+     MCP-only plugin still reads as a bar (the floor), not a gap.
+   - full-width rows below, always expanded — no card, no click-to-reveal.
+     Component names print as plain mono type with a soft dot separator,
+     not boxed tags: a first pass used bordered/background chips and it
+     read as the same "SaaS card" cliché the rest of the redesign was
+     trying to get away from. The "+N" overflow is the one accent-tinted
+     thing in the row — an invitation to open the plugin, not a dead end.
+   ════════════════════════════════════════════════════════════════════════ */
+.cl-plugin-body {
+  padding-top: 6px;
+}
+.cl-plugin-mp-group {
+  margin-bottom: 34px;
+}
+.cl-plugin-mp-group:last-child {
+  margin-bottom: 4px;
+}
+.cl-plugin-mp-label {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  margin-bottom: 14px;
+}
+.cl-plugin-mp-count {
+  text-transform: none;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink-4);
+}
+
+.cl-plugin-skyline {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 3px solid var(--cl-ink);
+  margin-bottom: 4px;
+}
+.cl-plugin-bar {
+  width: 22px;
+  flex-shrink: 0;
+  border: 1.5px solid var(--cl-ink);
+  border-bottom: none;
+  border-radius: 3px 3px 0 0;
+  position: relative;
+  background: var(--cl-paper);
+}
+.cl-plugin-bar-fill {
+  position: absolute;
+  left: -1.5px;
+  right: -1.5px;
+  bottom: 0;
+  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
+  border-top: 1.5px solid color-mix(in oklch, var(--cl-accent) 55%, transparent);
+}
+
+.cl-plugin-row {
+  display: flex;
+  gap: 16px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--cl-line);
+  width: 100%;
+  text-align: left;
+  background: none;
+  border-left: none;
+  border-right: none;
+  border-top: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.cl-plugin-mp-group .cl-plugin-row:last-child {
+  border-bottom: none;
+  padding-bottom: 4px;
+}
+.cl-plugin-glyph {
+  width: 46px;
+  height: 46px;
+  flex-shrink: 0;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  font-weight: 800;
+  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
+  color: var(--cl-accent-ink);
+}
+.cl-plugin-glyph.is-empty {
+  background: var(--cl-paper-2);
+  color: var(--cl-ink-4);
+}
+.cl-plugin-main {
+  flex: 1;
+  min-width: 0;
+}
+.cl-plugin-top {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.cl-plugin-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--cl-ink);
+}
+.cl-plugin-ver {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-4);
+}
+.cl-plugin-desc {
+  font-size: 12.5px;
+  color: var(--cl-ink-3);
+  line-height: 1.5;
+  max-width: 66ch;
+  margin: 4px 0 9px;
+}
+.cl-plugin-comp-group {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  row-gap: 4px;
+  margin-bottom: 5px;
+}
+.cl-plugin-comp-group:last-child {
+  margin-bottom: 0;
+}
+.cl-plugin-comp-kind {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-4);
+  width: 62px;
+  flex-shrink: 0;
+}
+.cl-plugin-tag {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.01em;
+  color: var(--cl-ink-3);
+}
+.cl-plugin-tag-sep {
+  display: inline-block;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--cl-line);
+  margin: 0 9px;
+  vertical-align: middle;
+}
+.cl-plugin-tag--more {
+  color: var(--cl-accent-ink);
+}
+.cl-plugin-comps--none {
+  font-size: 11.5px;
+  color: var(--cl-ink-4);
+  font-style: italic;
+}
+
 /* Dressed-up empty state — a glyph above a sentence, for the "nothing here
    yet" landings worth more than a grey mono line (memory lists, the memory
    graph). Centered, generous padding: it is the whole of what the section has

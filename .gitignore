@@ -41,3 +41,6 @@ docs/ClaudeLens_Architecture_Guide_IT.docx
 .idea/
 *.swp
 *.swo
+
+# Brainstorming visual companion scratch (superpowers skill)
+.superpowers/
