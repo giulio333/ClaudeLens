@@ -50,7 +50,8 @@ describe('WhatsNewDialog', () => {
     await waitFor(() => {
       screen.getByRole('dialog', { name: "What's new" });
     });
-    screen.getByText(currentRelease.highlights[0].title);
+    // By heading, not by text: the masthead's index names every feature too.
+    screen.getByRole('heading', { name: currentRelease.highlights[0].title });
   });
 
   it('gives every authored highlight its own section, with its visual', async () => {
@@ -62,12 +63,17 @@ describe('WhatsNewDialog', () => {
 
     // Not just the first one: a release that authored three features must show
     // three, or the popup silently drops what it was written to announce.
-    for (const highlight of currentRelease.highlights) screen.getByText(highlight.title);
+    for (const highlight of currentRelease.highlights)
+      screen.getByRole('heading', { name: highlight.title });
     expect(container.querySelectorAll('.cl-whatsnew-item')).toHaveLength(
       currentRelease.highlights.length
     );
     expect(container.querySelectorAll('.cl-whatsnew-frame')).toHaveLength(
       currentRelease.highlights.filter(h => h.visual).length
+    );
+    // And the masthead lists them, so nothing under the fold is a surprise.
+    expect(container.querySelectorAll('.cl-whatsnew-index button')).toHaveLength(
+      currentRelease.highlights.length
     );
   });
 

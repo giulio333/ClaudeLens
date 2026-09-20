@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
+import { useRef, type ReactNode, type RefObject } from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useWhatsNewSeenVersion, useMarkWhatsNewSeen } from '../hooks/useIPC';
 import type { ChatMessage } from '../hooks/useIPC';
@@ -199,51 +199,40 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   artifact: ArtifactVisual,
 };
 
-/** The card scrolls, and a card that opens on its first highlight gives no sign
- *  that two more are under the fold. This is that sign: a chevron pinned to the
- *  bottom of the scroll area that carries the reader to the next section and
- *  retires as soon as there is nothing left below — an affordance, not a
- *  decoration, so it is a real button and never appears when the card fits. */
-function ScrollCue({ scroller }: { scroller: RefObject<HTMLDivElement | null> }) {
-  const [more, setMore] = useState(false);
-
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const measure = () => setMore(el.scrollHeight - el.clientHeight - el.scrollTop > 24);
-    el.addEventListener('scroll', measure, { passive: true });
-    // The first measurement rides the observer rather than the effect body: the
-    // visuals are transcripts and a panel, which settle a frame or two after
-    // mount, and a cue measured before that would decide the card does not
-    // scroll and never come back.
-    const observer = new ResizeObserver(measure);
-    observer.observe(el);
-    return () => {
-      el.removeEventListener('scroll', measure);
-      observer.disconnect();
-    };
-  }, [scroller]);
-
-  function next() {
-    const el = scroller.current;
-    if (!el) return;
-    const sections = [...el.querySelectorAll<HTMLElement>('.cl-whatsnew-item')];
-    const target = sections.find(s => s.offsetTop > el.scrollTop + 24);
-    const top = target ? target.offsetTop - 24 : el.scrollHeight;
-    el.scrollTo({ top, behavior: 'smooth' });
-  }
-
+/** The names of everything in this release, under the title. A card that opens
+ *  on its first feature gives no sign the others are there; a list of them does,
+ *  and it is navigation rather than a hint — each name carries the reader to its
+ *  section. One authored highlight needs no index and gets none. */
+function ReleaseIndex({
+  highlights,
+  scroller,
+}: {
+  highlights: WhatsNewHighlight[];
+  scroller: RefObject<HTMLDivElement | null>;
+}) {
+  if (highlights.length < 2) return null;
   return (
-    <button
-      type="button"
-      className="cl-whatsnew-cue"
-      hidden={!more}
-      aria-label="Show what else is new"
-      title="Show what else is new"
-      onClick={next}
-    >
-      <span aria-hidden>▾</span>
-    </button>
+    <nav className="cl-whatsnew-index" aria-label="What's in this release">
+      {highlights.map((highlight, i) => (
+        <button
+          key={highlight.title}
+          type="button"
+          onClick={() => {
+            const box = scroller.current;
+            const el = box?.querySelectorAll<HTMLElement>('.cl-whatsnew-item')[i];
+            if (!box || !el) return;
+            // Measured against the scroller's own box, never `offsetTop`: the
+            // card is animated, so its offset parent is not the one the sections
+            // are laid out in, and the arithmetic silently landed at the end.
+            const top =
+              box.scrollTop + (el.getBoundingClientRect().top - box.getBoundingClientRect().top);
+            box.scrollTo({ top: Math.max(0, top - 24), behavior: 'smooth' });
+          }}
+        >
+          {highlight.title}
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -286,6 +275,7 @@ export function WhatsNewDialog() {
               </div>
               <div className="cl-whatsnew-eyebrow">ClaudeLens {release.version}</div>
               <h2 className="cl-whatsnew-title">What&rsquo;s new</h2>
+              <ReleaseIndex highlights={highlights} scroller={card} />
             </header>
 
             {highlights.map(highlight => (
@@ -306,7 +296,6 @@ export function WhatsNewDialog() {
             >
               Got it
             </button>
-            <ScrollCue scroller={card} />
           </motion.div>
         </motion.div>
       )}

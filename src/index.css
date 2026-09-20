@@ -19481,6 +19481,7 @@ select.cl-opt-input {
   /* A page, not a notice: wide enough to hold a real Mission Control panel at
      the size the reader will meet it, and scrolled once from top to bottom
      rather than section by section. */
+  position: relative;
   width: min(1180px, 100%);
   max-height: min(92vh, 940px);
   overflow-y: auto;
@@ -19639,47 +19640,34 @@ select.cl-opt-input {
   }
 }
 
-/* The "there is more below" affordance: pinned to the bottom of the card's own
-   scroll area (the card IS the scroller), so it rides above the content and
-   leaves with it when the last section is reached. */
-.cl-whatsnew-cue {
-  position: sticky;
-  bottom: 0;
-  align-self: center;
-  margin-top: -44px;
-  width: 36px;
-  height: 36px;
+/* The release index: the names of what is in this version, as a row of quiet
+   links. It sits in the masthead's flow — a floating cue would have to dodge
+   the card's own action, and this says how much there is rather than merely
+   that there is more. */
+.cl-whatsnew-index {
   display: flex;
-  align-items: center;
+  flex-wrap: wrap;
   justify-content: center;
-  border: 1px solid var(--cl-line);
-  border-radius: 50%;
-  background: var(--cl-paper);
-  color: var(--cl-ink-3);
+  gap: 8px 28px;
+  margin-top: 18px;
+}
+.cl-whatsnew-index button {
+  border: 0;
+  padding: 0;
+  background: none;
+  font: inherit;
   font-size: 13px;
-  line-height: 1;
+  color: var(--cl-ink-3);
   cursor: pointer;
-  box-shadow: 0 6px 18px oklch(0 0 0 / 0.12);
-  animation: cl-whatsnew-cue-nudge 2.4s ease-in-out infinite;
+  border-bottom: 1px solid transparent;
 }
-.cl-whatsnew-cue:hover {
+.cl-whatsnew-index button:hover {
   color: var(--cl-ink);
-  border-color: var(--cl-ink-4);
+  border-bottom-color: var(--cl-accent);
 }
-@keyframes cl-whatsnew-cue-nudge {
-  0%,
-  70%,
-  100% {
-    transform: translateY(0);
-  }
-  85% {
-    transform: translateY(4px);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .cl-whatsnew-cue {
-    animation: none;
-  }
+.cl-whatsnew-index button:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 3px;
 }
 
 .cl-whatsnew-ok {

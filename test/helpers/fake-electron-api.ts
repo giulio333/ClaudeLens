@@ -345,22 +345,9 @@ export function installFakeElectronAPI(): FakeBridge {
   // The real `window.electronAPI` is the full 83-channel bridge; this fake covers
   // the slice under test, so the assignment is cast. Keeping the cast here — at
   // the single install point — is what lets the tests themselves stay typed.
-  const w = window as unknown as { electronAPI?: unknown; ResizeObserver?: unknown };
+  const w = window as unknown as { electronAPI?: unknown };
   const previous = w.electronAPI;
   w.electronAPI = api;
-
-  // jsdom implements no layout and therefore no ResizeObserver, while renderer
-  // code that measures its own box (the "What's new" scroll cue) legitimately
-  // observes one. A no-op stand-in keeps such a component mountable; a test
-  // that wants to assert on a resize drives the component's state directly.
-  if (typeof w.ResizeObserver === 'undefined') {
-    w.ResizeObserver = class {
-      observe() {}
-      unobserve() {}
-      disconnect() {}
-    };
-    globalThis.ResizeObserver = w.ResizeObserver as typeof ResizeObserver;
-  }
 
   return {
     api,
