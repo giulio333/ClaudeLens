@@ -25,6 +25,8 @@ export type ChatContentBlock =
       bashEditDiff?: BashEditDiff;
       /** The page an `Artifact` publish produced, when Claude Code recorded it. */
       artifact?: ArtifactPublish;
+      /** The delivery a `SendMessage` call made, when Claude Code recorded one. */
+      sent?: SentMessage;
     }
   | AdvisorConsult;
 
@@ -82,6 +84,28 @@ export interface ArtifactPublish {
   path?: string;
   /** The word chosen for the page's browser-tab icon; first publish only. */
   icon?: string;
+}
+
+/** A message the `SendMessage` tool delivered, as Claude Code records it on the
+ *  result row (`toolUseResult`) — the sender's half of a cross-session message,
+ *  whose other half is the receiver's `InboundOrigin` (#274).
+ *
+ *  What the call said — recipient, text, one-line summary — is on the call's
+ *  own input; what is here is what only the result knows: that the message was
+ *  delivered and the id it travels under, which is the one join between the two
+ *  transcripts (`session-exchange`). A call that delivered nothing — an
+ *  unreachable name, a reply to the main conversation from inside an agent —
+ *  writes no id and gets no `SentMessage`. */
+export interface SentMessage {
+  /** Equal to the `origin.msg_id` on the row it landed on in the receiver. */
+  msgId: string;
+  /** Where it went: another Claude Code session on this machine, or an agent
+   *  inside this one — a teammate's inbox, which Claude Code records with a
+   *  `routing` block. An agent's message threads with nothing: the exchange
+   *  reader keeps agents out of every thread, so no exchange is offered for it. */
+  to: 'session' | 'agent';
+  /** The one line Claude Code wrote for display, when it wrote one. */
+  display?: string;
 }
 
 /** One unified-diff hunk: the `@@ -oldStart,oldLines +newStart,newLines @@`

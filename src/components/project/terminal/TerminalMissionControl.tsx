@@ -228,8 +228,9 @@ export function TerminalMissionControl({
    *  overlay's "open chat"). Remounts this view — the caller keys it by
    *  resumeSessionId — so a live PTY dies: gate behind a confirm here. */
   onOpenSession?: (resumeSessionId: string) => void;
-  /** Open the exchange a message received from another session belongs to
-   *  (#280) — handed to the embedded ChatView, whose inbound bubble offers it. */
+  /** Open the exchange a message from or to another session belongs to
+   *  (#280) — handed to the embedded ChatView, whose bubbles offer it on both
+   *  halves, and to the rail, whose MESSAGES rows open the same page. */
   onOpenExchange?: (entry: { sessionId: string; msgId: string }) => void;
 }) {
   const { resolved } = useTheme();
@@ -714,6 +715,13 @@ export function TerminalMissionControl({
             // A QUESTIONS row locates its turn in the Lens, which reveals the
             // Lens first when we're on Terminal.
             onLocateTurn={jumpToTurn}
+            // A MESSAGES row opens the exchange the way the bubbles do: the
+            // session is this one, whichever side of the message it was on.
+            onOpenExchange={
+              onOpenExchange && sessionId
+                ? msgId => onOpenExchange({ sessionId, msgId })
+                : undefined
+            }
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the
             // rail's band stays and is the only place either figure is stated.

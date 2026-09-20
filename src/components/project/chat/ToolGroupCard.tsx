@@ -8,6 +8,8 @@ import { isFileTool } from './file-view';
 import { ownsToolBody, ownsOutputHead } from './shell';
 import { ArtifactCard } from './ArtifactCard';
 import { artifactAction, artifactOf, isArtifactTool } from './artifact';
+import { OutboundMessage } from './OutboundMessage';
+import { isMessageTool } from './sent-message';
 
 /**
  * A tool call and its result, in the transcript.
@@ -29,6 +31,11 @@ import { artifactAction, artifactOf, isArtifactTool } from './artifact';
  * read, a listing) is plumbing, and is forced into the chip form whatever the
  * density: its answer is a kilobyte of prose written for the harness, and
  * printing it in full was most of what made a published page unreadable.
+ *
+ * `SendMessage` is a message, not a tool run: `OutboundMessage` draws it as the
+ * twin of the inbound bubble, in both densities — a conversation between two
+ * sessions is what it is on either side, and a tool card with the result JSON
+ * in it was the one side that did not read as one.
  */
 export function ToolGroupCard({
   group,
@@ -37,6 +44,7 @@ export function ToolGroupCard({
   detailLabel,
   onViewDetail,
   collapsible,
+  onOpenExchange,
 }: {
   group: ToolGroup;
   showDetails: boolean;
@@ -49,6 +57,8 @@ export function ToolGroupCard({
   onViewDetail?: () => void;
   /** Closed until clicked, as a chip. Default: always open. */
   collapsible?: boolean;
+  /** Open the exchange a `SendMessage` to another session belongs to (#280). */
+  onOpenExchange?: (msgId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { use, result } = group;
@@ -69,6 +79,9 @@ export function ToolGroupCard({
     );
   }
   if (artifact) return <ArtifactCard group={group} page={artifact} compact={collapsible} />;
+  if (isMessageTool(use.name)) {
+    return <OutboundMessage group={group} compact={collapsible} onOpenExchange={onOpenExchange} />;
+  }
   if (!collapsible && isFileTool(use.name)) {
     return (
       <div className="cl-tool-window">

@@ -484,7 +484,12 @@ export const FIELDS = {
   // The sender's half of a message between sessions (#280): the id the
   // receiver's `origin.msg_id` joins on, and the assistant row that made the
   // `SendMessage` call — the turn the exchange page opens on the sender's side.
-  'user.toolUseResult.msg_id': read('session-exchange'),
+  'user.toolUseResult.msg_id': read('session-exchange + transcript-extras'),
+  // The same result, read for the outbound bubble: `routing` tells a
+  // teammate's inbox from another session, `display` is the one line Claude
+  // Code wrote to be shown.
+  'user.toolUseResult.routing': read('transcript-extras'),
+  'user.toolUseResult.display': read('transcript-extras'),
   'user.sourceToolAssistantUUID': read('session-exchange'),
   'user.origin.fromMode': unknown(
     '"prompting" in every row observed; a second value would say what it distinguishes'

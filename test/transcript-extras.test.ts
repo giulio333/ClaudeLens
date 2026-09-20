@@ -3,8 +3,14 @@ import {
   mergeTranscriptExtras,
   parseBashEditDiff,
   parseArtifactPublish,
+  parseSentMessage,
 } from '../electron/modules/transcript-extras';
-import type { ArtifactPublish, BashEditDiff, ChatMessage } from '../electron/shared/chat-types';
+import type {
+  ArtifactPublish,
+  BashEditDiff,
+  ChatMessage,
+  SentMessage,
+} from '../electron/shared/chat-types';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -241,6 +247,7 @@ describe('mergeTranscriptExtras', () => {
     effortByUuid: new Map(efforts),
     bashEditDiffByToolUseId: new Map(diffs),
     artifactByToolUseId: new Map(),
+    sentByToolUseId: new Map(),
   });
 
   it('leaves the transcript untouched when there is nothing to add', () => {
@@ -486,6 +493,7 @@ describe('mergeTranscriptExtras — bashEditDiff', () => {
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(diffs),
     artifactByToolUseId: new Map(),
+    sentByToolUseId: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -776,6 +784,7 @@ describe('mergeTranscriptExtras with what the SDK cannot see', () => {
       effortByUuid: new Map(),
       bashEditDiffByToolUseId: new Map(),
       artifactByToolUseId: new Map(),
+      sentByToolUseId: new Map(),
     });
     expect(merged.map(m => m.uuid)).toEqual(['u1', 'p1', 'n1', 'a1']);
     expect(merged[1].inbound?.name).toBe('alice-7c');
@@ -911,6 +920,7 @@ describe('mergeTranscriptExtras — artifact', () => {
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(),
     artifactByToolUseId: new Map(entries),
+    sentByToolUseId: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -940,5 +950,189 @@ describe('mergeTranscriptExtras — artifact', () => {
   it('returns the messages by reference when there is no page to add', () => {
     const messages = [resultMsg('r1', 'toolu_art1')];
     expect(mergeTranscriptExtras(messages, artifactExtras([]))).toBe(messages);
+  });
+});
+
+/* ── SendMessage: the sender's half of a cross-session message ─────────────── */
+
+/** The row Claude Code writes with a `SendMessage` result: the id both halves
+ *  carry sits on `toolUseResult`, the result block repeats it inside JSON text
+ *  the reader never parses. Shapes as observed on real transcripts, with
+ *  synthetic names. */
+function sentResultRow(uuid: string, toolUseId: string, toolUseResult: unknown) {
+  return {
+    type: 'user',
+    uuid,
+    timestamp: '2026-09-08T10:00:03.000Z',
+    message: {
+      role: 'user',
+      content: [
+        { type: 'tool_result', tool_use_id: toolUseId, content: JSON.stringify(toolUseResult) },
+      ],
+    },
+    toolUseResult,
+  };
+}
+
+const sentToSession = {
+  success: true,
+  message:
+    '“Asking what it is doing” → acme-9d (another Claude session on this machine; queued there — a [Cross-session delivery notice] follows if that session holds it or refuses it)',
+  display: '“Asking what it is doing” → sent to acme-9d — another Claude session on this machine',
+  msg_id: 'd407dea1-ab41-452f-a237-b38415ff9353',
+};
+
+const sentToTeammate = {
+  success: true,
+  message: "Message sent to worker-b's inbox",
+  msg_id: '1a05ff6b-531e-4cb2-a917-418f3ca70d4e',
+  routing: {
+    sender: 'team-lead',
+    target: '@worker-b',
+    targetColor: 'blue',
+    summary: 'Second run',
+    content: 'Heads-up: the tooling changed under you mid-run, …',
+  },
+};
+
+describe('parseSentMessage', () => {
+  it('reads a delivery to another session, with the line written for display', () => {
+    expect(parseSentMessage(sentToSession)).toEqual({
+      msgId: 'd407dea1-ab41-452f-a237-b38415ff9353',
+      to: 'session',
+      display:
+        '“Asking what it is doing” → sent to acme-9d — another Claude session on this machine',
+    });
+  });
+
+  it("tells a teammate's inbox apart from another session by its routing", () => {
+    expect(parseSentMessage(sentToTeammate)).toEqual({
+      msgId: '1a05ff6b-531e-4cb2-a917-418f3ca70d4e',
+      to: 'agent',
+    });
+  });
+
+  it('records no delivery for a call that made none', () => {
+    // An unreachable name, and a reply that queues for the main conversation
+    // from inside an agent: neither travels under an id, so there is no other
+    // half to join and nothing to claim.
+    expect(
+      parseSentMessage({
+        success: false,
+        message: "No agent named 'nobody' is reachable.",
+        display: "Not sent — no agent named 'nobody' is reachable.",
+      })
+    ).toBeUndefined();
+    expect(
+      parseSentMessage({
+        success: true,
+        message: "Message queued for the main conversation's next turn.",
+      })
+    ).toBeUndefined();
+    expect(parseSentMessage(undefined)).toBeUndefined();
+    expect(parseSentMessage({ stdout: 'ok' })).toBeUndefined();
+  });
+});
+
+describe('readTranscriptExtras — sent message', () => {
+  it('recovers the delivery the SDK read never returns, keyed by its tool_use id', async () => {
+    const p = writeJsonl([
+      userRow('u1', 'ask the other session what it is doing'),
+      sentResultRow('r1', 'toolu_send1', sentToSession),
+      sentResultRow('r2', 'toolu_send2', sentToTeammate),
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.sentByToolUseId.get('toolu_send1')).toEqual({
+      msgId: 'd407dea1-ab41-452f-a237-b38415ff9353',
+      to: 'session',
+      display: sentToSession.display,
+    });
+    expect(extras.sentByToolUseId.get('toolu_send2')?.to).toBe('agent');
+  });
+
+  it('still reads the received half of a message whose row carries the same id', async () => {
+    // `"msg_id"` is on both halves. The sender's prefilter must not swallow the
+    // receiver's row, which is the inbound bubble (#274).
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'in1',
+        timestamp: '2026-09-08T10:00:05.000Z',
+        isMeta: true,
+        origin: {
+          kind: 'peer',
+          from: 'uds:/tmp/cc-socks/21421.sock',
+          verifiedPeerPid: 21421,
+          msg_id: 'c1a5889c-9587-417e-bf97-9550b305d217',
+          name: 'acme-37',
+          fromMode: 'prompting',
+          body: 'Idle here too.',
+        },
+        message: {
+          role: 'user',
+          content: 'Another Claude session sent a message:\nIdle here too.',
+        },
+      },
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.sentByToolUseId.size).toBe(0);
+    expect(extras.injected).toHaveLength(1);
+    expect(extras.injected[0].inbound?.msgId).toBe('c1a5889c-9587-417e-bf97-9550b305d217');
+  });
+
+  it('skips a row whose delivery cannot be pinned to one tool call', async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'r1',
+        timestamp: '2026-09-08T10:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_a', content: 'ok' },
+            { type: 'tool_result', tool_use_id: 'toolu_b', content: 'ok' },
+          ],
+        },
+        toolUseResult: sentToSession,
+      },
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.sentByToolUseId.size).toBe(0);
+  });
+});
+
+describe('mergeTranscriptExtras — sent message', () => {
+  const sentExtras = (entries: [string, SentMessage][]) => ({
+    queued: [],
+    injected: [],
+    noticeByUuid: new Map(),
+    skillPathByParentUuid: new Map<string, string>(),
+    effortByUuid: new Map<string, string>(),
+    bashEditDiffByToolUseId: new Map(),
+    artifactByToolUseId: new Map(),
+    sentByToolUseId: new Map(entries),
+  });
+
+  const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
+    uuid,
+    role: 'user',
+    timestamp: '2026-09-08T10:00:03.000Z',
+    content: [{ type: 'tool_result', toolUseId, content: '{"success":true}', isError: false }],
+  });
+
+  const sent: SentMessage = { msgId: 'd407dea1-ab41-452f-a237-b38415ff9353', to: 'session' };
+
+  it('stamps the delivery on the tool_result it belongs to, and on no other', () => {
+    const messages = [resultMsg('r1', 'toolu_send1'), resultMsg('r2', 'toolu_other')];
+    const merged = mergeTranscriptExtras(messages, sentExtras([['toolu_send1', sent]]));
+
+    const stamped = merged[0].content[0];
+    expect(stamped.type === 'tool_result' && stamped.sent?.msgId).toBe(sent.msgId);
+    expect(merged[1]).toBe(messages[1]);
+  });
+
+  it('returns the messages by reference when there is no delivery to add', () => {
+    const messages = [resultMsg('r1', 'toolu_send1')];
+    expect(mergeTranscriptExtras(messages, sentExtras([]))).toBe(messages);
   });
 });

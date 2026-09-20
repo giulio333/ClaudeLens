@@ -26,6 +26,7 @@ import { fmtModel, modelColor } from '../utils';
 import { agentTintColor } from '../shared/entityOptions';
 import { ToolGroupCard } from './ToolGroupCard';
 import { artifactOf, isArtifactTool } from './artifact';
+import { isMessageTool } from './sent-message';
 import { FileIcon } from './fileIcons';
 import { blockKey, isPersistableMessageUuid } from './highlights';
 
@@ -678,7 +679,8 @@ export const MessageBubble = memo(function MessageBubble({
   agentOf?: (subagentType: string) => Agent | undefined;
   /** Navigates to the agent detail view (deep link from an expanded agent card). */
   onOpenAgent?: (agent: Agent) => void;
-  /** Opens the exchange an inbound message belongs to, by its `msgId` (#280). */
+  /** Opens the exchange a message belongs to, by its `msgId` (#280) — offered
+   *  on the inbound bubble and on a `SendMessage` to another session alike. */
   onOpenExchange?: (msgId: string) => void;
   turnIndex?: number;
   /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
@@ -721,6 +723,8 @@ export const MessageBubble = memo(function MessageBubble({
   // plumbing, and MIN is the density that hides plumbing.
   const artifactGroups = toolGroups.filter(g => isArtifactTool(g.use.name) && artifactOf(g));
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL);
+  // Messages this session sent to another, or to an agent inside it.
+  const messageGroups = toolGroups.filter(g => isMessageTool(g.use.name));
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
   // (those use the AgentDispatchCard).
@@ -741,6 +745,10 @@ export const MessageBubble = memo(function MessageBubble({
   // skill run — and the one outcome that outlives the session, so MIN keeps it
   // as a single line: the page's name and its link, nothing else.
   const showArtifactStrip = detailsFilter === 'minimal' && artifactGroups.length > 0;
+  // A message sent to another session is conversation, not plumbing: MIN keeps
+  // it as one line — who it went to, its summary, whether it left — the way it
+  // keeps the inbound half as a turn of its own.
+  const showMessageStrip = detailsFilter === 'minimal' && messageGroups.length > 0;
   // Questions are first-class content: always visible regardless of filter.
   const showQuestions = questionGroups.length > 0;
 
@@ -752,6 +760,7 @@ export const MessageBubble = memo(function MessageBubble({
     showPlanStrip ||
     showSkillStrip ||
     showArtifactStrip ||
+    showMessageStrip ||
     showQuestions ||
     // An advisor consult sharing a message with hidden content: the header chip
     // is then the only thing left to render, and dropping the turn would lose it.
@@ -1018,7 +1027,8 @@ export const MessageBubble = memo(function MessageBubble({
             const stripHidden = standardToolGroups.filter(
               g =>
                 !(showAgentStrip && AGENT_TOOLS.has(g.use.name)) &&
-                !(showSkillStrip && g.use.name === SKILL_TOOL)
+                !(showSkillStrip && g.use.name === SKILL_TOOL) &&
+                !(showMessageStrip && isMessageTool(g.use.name))
             ).length;
             return stripHidden > 0 && !showTools ? (
               <span className="cl-turn-tool-count">
@@ -1133,6 +1143,20 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         )}
 
+        {showMessageStrip && (
+          <div className="cl-tool-stack cl-tool-stack--chips">
+            {messageGroups.map(group => (
+              <ToolGroupCard
+                key={group.use.id}
+                group={group}
+                showDetails
+                collapsible
+                onOpenExchange={onOpenExchange}
+              />
+            ))}
+          </div>
+        )}
+
         {showTools && standardToolGroups.length > 0 && (
           <div className="cl-tool-stack">
             {standardToolGroups.map(group => {
@@ -1153,6 +1177,7 @@ export const MessageBubble = memo(function MessageBubble({
                   }
                   detailLabel={link?.label}
                   onViewDetail={link?.onClick}
+                  onOpenExchange={onOpenExchange}
                 />
               );
             })}
