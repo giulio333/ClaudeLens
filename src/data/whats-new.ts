@@ -9,7 +9,10 @@
 export interface WhatsNewHighlight {
   title: string;
   description: string;
-  visual?: 'cross-session-message' | 'prompt-playbook';
+  /** Where the feature lives in the app. A popup that shows a new surface
+   *  without saying where it is leaves the reader to go looking for it. */
+  where?: string;
+  visual?: 'cross-session-message' | 'prompt-playbook' | 'artifact';
 }
 
 export interface WhatsNewRelease {
@@ -23,9 +26,21 @@ export const WHATS_NEW: WhatsNewRelease[] = [
     highlights: [
       {
         title: 'Prompt Playbook',
-        description:
-          'Save the prompts you keep retyping, and reuse them in the chat or the mission rail.',
+        description: 'Save a prompt once. Reuse it anywhere.',
+        where: 'Mission Control rail, and the chat composer',
         visual: 'prompt-playbook',
+      },
+      {
+        title: 'Both halves of a message',
+        description: 'One line per message, on both sides of the wire.',
+        where: 'Any session transcript',
+        visual: 'cross-session-message',
+      },
+      {
+        title: 'A published page, not a tool call',
+        description: 'The page Claude published, with a link that works.',
+        where: 'The transcript, where the tool ran',
+        visual: 'artifact',
       },
     ],
   },

@@ -4,6 +4,7 @@ import { copyPromptText, usePromptPlaybook } from '../../../hooks/useIPC';
 import {
   MAX_PROMPT_LENGTH,
   MAX_TEMPLATE_NAME_LENGTH,
+  type PromptCandidate,
   type PromptTemplate,
 } from '../../../../electron/shared/playbook-types';
 import './prompt-playbook.css';
@@ -64,13 +65,20 @@ export function PromptPlaybookPanel({
   anchor,
   trigger,
   onClose,
+  preview,
 }: PlaybookProps & {
   id: string;
   anchor?: DOMRect;
   trigger?: RefObject<HTMLButtonElement | null>;
   onClose: (restoreFocus?: boolean) => void;
+  /** Fixed contents for a preview of the panel (the "What's new" popup): the
+   *  panel then draws these and asks `playbook:*` nothing, so a demo of the
+   *  feature can never put the reader's own prompts on screen. */
+  preview?: { templates: PromptTemplate[]; candidates: PromptCandidate[] };
 }) {
-  const { templates, candidates, change } = usePromptPlaybook(projectHash);
+  const { templates, candidates, change } = usePromptPlaybook(projectHash, !preview);
+  const savedList = preview ? preview.templates : templates.data;
+  const suggestedList = preview ? preview.candidates : candidates.data?.candidates;
   const [editor, setEditor] = useState<Editor | null>(null);
   const [tab, setTab] = useState<'saved' | 'suggested'>('saved');
   const [error, setError] = useState<string | null>(null);
@@ -231,7 +239,7 @@ export function PromptPlaybookPanel({
             tabIndex={tab === 'saved' ? 0 : -1}
             onClick={() => setTab('saved')}
           >
-            Saved <span>{templates.data?.length ?? '—'}</span>
+            Saved <span>{savedList?.length ?? '—'}</span>
           </button>
           <button
             type="button"
@@ -243,7 +251,7 @@ export function PromptPlaybookPanel({
             tabIndex={tab === 'suggested' ? 0 : -1}
             onClick={() => setTab('suggested')}
           >
-            Suggested <span>{candidates.data?.candidates.length ?? '—'}</span>
+            Suggested <span>{suggestedList?.length ?? '—'}</span>
           </button>
         </div>
       )}
@@ -303,7 +311,7 @@ export function PromptPlaybookPanel({
               aria-labelledby={`${id}-saved-tab`}
               hidden={tab !== 'saved'}
             >
-              {templates.isPending && <p role="status">Loading templates…</p>}
+              {!preview && templates.isPending && <p role="status">Loading templates…</p>}
               {templates.error && (
                 <p role="alert">
                   {templates.error.message}{' '}
@@ -312,13 +320,13 @@ export function PromptPlaybookPanel({
                   </button>
                 </p>
               )}
-              {templates.data?.length === 0 && (
+              {savedList?.length === 0 && (
                 <div className="cl-playbook-empty">
                   <strong>Your go-to prompts, kept here.</strong>
                   <p>Save a checklist or instructions you use often.</p>
                 </div>
               )}
-              {templates.data?.map(template => (
+              {savedList?.map(template => (
                 <SavedPrompt
                   key={template.id}
                   template={template}
@@ -358,7 +366,7 @@ export function PromptPlaybookPanel({
               hidden={tab !== 'suggested'}
             >
               <p className="cl-playbook-intro">Prompts you’ve used in at least 3 sessions.</p>
-              {candidates.isPending && (
+              {!preview && candidates.isPending && (
                 <p role="status">Looking through this project’s sessions…</p>
               )}
               {candidates.error && (
@@ -375,13 +383,13 @@ export function PromptPlaybookPanel({
                   {candidates.data.scannedSessions} sessions read).
                 </p>
               )}
-              {candidates.data?.candidates.length === 0 && (
+              {suggestedList?.length === 0 && (
                 <div className="cl-playbook-empty">
                   <strong>Nothing recurring yet.</strong>
                   <p>No recurring prompts found in the sessions checked.</p>
                 </div>
               )}
-              {candidates.data?.candidates.map(candidate => (
+              {suggestedList?.map(candidate => (
                 <article key={candidate.id} className="cl-playbook-entry">
                   <small className="cl-playbook-frequency">
                     Used in {candidate.sessionCount} sessions

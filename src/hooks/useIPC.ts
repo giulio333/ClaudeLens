@@ -516,11 +516,12 @@ type PlaybookChange =
   | { kind: 'dismiss'; text: string };
 
 /** Mounted only inside the open Playbook panel: no session watcher or focus refetch. */
-export function usePromptPlaybook(hash: string) {
+export function usePromptPlaybook(hash: string, enabled = true) {
   const client = useQueryClient();
   const templates = useQuery({
     queryKey: ['playbook:templates', hash],
     queryFn: () => unwrap(window.electronAPI.playbook.getTemplates(hash)),
+    enabled,
     staleTime: 0,
     refetchOnWindowFocus: false,
     retry: false,
@@ -528,6 +529,7 @@ export function usePromptPlaybook(hash: string) {
   const candidates = useQuery({
     queryKey: ['playbook:candidates', hash],
     queryFn: () => unwrap(window.electronAPI.playbook.getCandidates(hash)),
+    enabled,
     staleTime: 0,
     refetchOnWindowFocus: false,
     retry: false,

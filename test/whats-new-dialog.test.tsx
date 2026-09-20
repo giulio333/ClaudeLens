@@ -53,6 +53,24 @@ describe('WhatsNewDialog', () => {
     screen.getByText(currentRelease.highlights[0].title);
   });
 
+  it('gives every authored highlight its own section, with its visual', async () => {
+    if (!currentRelease) throw new Error('no whats-new entry authored for the running version');
+    const { container } = renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+
+    // Not just the first one: a release that authored three features must show
+    // three, or the popup silently drops what it was written to announce.
+    for (const highlight of currentRelease.highlights) screen.getByText(highlight.title);
+    expect(container.querySelectorAll('.cl-whatsnew-item')).toHaveLength(
+      currentRelease.highlights.length
+    );
+    expect(container.querySelectorAll('.cl-whatsnew-frame')).toHaveLength(
+      currentRelease.highlights.filter(h => h.visual).length
+    );
+  });
+
   it('marks the version seen and closes on "Ho capito"', async () => {
     if (!currentRelease) throw new Error('no whats-new entry authored for the running version');
     renderDialog();

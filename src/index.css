@@ -19478,19 +19478,22 @@ select.cl-opt-input {
    the room a "look what's new" moment asks for, and the same warm-wash
    opening the project hero and the global home already use. */
 .cl-whatsnew-card {
-  width: min(820px, 100%);
-  max-height: min(90vh, 820px);
+  /* A page, not a notice: wide enough to hold a real Mission Control panel at
+     the size the reader will meet it, and scrolled once from top to bottom
+     rather than section by section. */
+  width: min(1180px, 100%);
+  max-height: min(92vh, 940px);
   overflow-y: auto;
   background: var(--cl-paper);
   border-radius: 28px;
   box-shadow:
     0 40px 100px -20px oklch(0 0 0 / 0.35),
     0 1px 0 oklch(1 0 0 / 0.06) inset;
-  padding: 64px 64px 48px;
+  padding: 56px 56px 40px;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
+  align-items: stretch;
+  text-align: left;
 }
 :root[data-theme='dark'] .cl-whatsnew-card {
   box-shadow:
@@ -19526,6 +19529,9 @@ select.cl-opt-input {
   height: 36px;
   object-fit: contain;
 }
+.cl-whatsnew-masthead .cl-whatsnew-desc {
+  margin-bottom: 0;
+}
 .cl-whatsnew-eyebrow {
   font: 600 11px/1 var(--font-mono);
   text-transform: uppercase;
@@ -19545,7 +19551,7 @@ select.cl-opt-input {
   line-height: 1.55;
   color: var(--cl-ink-3);
   max-width: 42ch;
-  margin: 0 0 32px;
+  margin: 0 0 12px;
 }
 /* The frame around the preview — a short real exchange (`.cl-transcript-inner`
    + unmodified `MessageBubble` turns) presented like an artifact worth a
@@ -19556,15 +19562,16 @@ select.cl-opt-input {
    spine's offset are trimmed to match — never the ~150px of gutter the real
    Lens reserves for a full-width session. */
 .cl-whatsnew-frame {
+  /* Natural height: a preview that scrolls inside the page hides exactly the
+     part of the surface the reader needs to recognise. */
   width: 100%;
-  max-height: 280px;
-  overflow-y: auto;
+  min-width: 0;
+  overflow: hidden;
   background: var(--cl-paper-2);
   border: 1px solid var(--cl-line);
   border-radius: 16px;
   text-align: left;
   box-shadow: 0 1px 0 oklch(1 0 0 / 0.5) inset;
-  margin-bottom: 36px;
 }
 :root[data-theme='dark'] .cl-whatsnew-frame {
   box-shadow: none;
@@ -19579,23 +19586,105 @@ select.cl-opt-input {
   top: 22px;
   bottom: 6px;
 }
-/* The playbook preview: the panel's own rows, lifted out of the popover it
-   normally is — no fixed position, no second border inside the frame, and the
-   entries take the paper tone so they read against the frame's warm ground. */
-.cl-whatsnew-frame .cl-playbook {
-  position: static;
-  padding: 18px;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  box-shadow: none;
+/* The masthead is the one centred thing on the page; everything under it is a
+   left-aligned row of feature and surface, so the eye reads down one column of
+   names and across to the screen each one names. */
+.cl-whatsnew-masthead {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  margin-bottom: 44px;
 }
-.cl-whatsnew-frame .cl-playbook-entry {
-  background: var(--cl-paper);
+.cl-whatsnew-item {
+  display: grid;
+  grid-template-columns: minmax(200px, 270px) minmax(0, 1fr);
+  gap: 40px;
+  align-items: start;
+  padding-bottom: 44px;
+}
+.cl-whatsnew-item + .cl-whatsnew-item {
+  border-top: 1px solid var(--cl-line);
+  padding-top: 44px;
+}
+.cl-whatsnew-copy {
+  /* The words stay with their screen while a tall preview scrolls past. */
+  position: sticky;
+  top: 0;
+  padding-top: 2px;
+}
+.cl-whatsnew-subtitle {
+  font-size: 21px;
+  font-weight: 600;
+  letter-spacing: -0.012em;
+  color: var(--cl-ink);
+  margin: 0 0 10px;
+}
+.cl-whatsnew-where {
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--cl-accent-ink);
+  margin: 0;
+}
+@media (max-width: 900px) {
+  .cl-whatsnew-card {
+    padding: 40px 24px 32px;
+  }
+  .cl-whatsnew-item {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 20px;
+  }
+  .cl-whatsnew-copy {
+    position: static;
+  }
+}
+
+/* The "there is more below" affordance: pinned to the bottom of the card's own
+   scroll area (the card IS the scroller), so it rides above the content and
+   leaves with it when the last section is reached. */
+.cl-whatsnew-cue {
+  position: sticky;
+  bottom: 0;
+  align-self: center;
+  margin-top: -44px;
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid var(--cl-line);
+  border-radius: 50%;
+  background: var(--cl-paper);
+  color: var(--cl-ink-3);
+  font-size: 13px;
+  line-height: 1;
+  cursor: pointer;
+  box-shadow: 0 6px 18px oklch(0 0 0 / 0.12);
+  animation: cl-whatsnew-cue-nudge 2.4s ease-in-out infinite;
 }
+.cl-whatsnew-cue:hover {
+  color: var(--cl-ink);
+  border-color: var(--cl-ink-4);
+}
+@keyframes cl-whatsnew-cue-nudge {
+  0%,
+  70%,
+  100% {
+    transform: translateY(0);
+  }
+  85% {
+    transform: translateY(4px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-whatsnew-cue {
+    animation: none;
+  }
+}
+
 .cl-whatsnew-ok {
   min-width: 220px;
+  align-self: center;
   justify-content: center;
 }
 
