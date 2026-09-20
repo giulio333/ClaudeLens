@@ -572,6 +572,8 @@ const pluginDef = (name: string, skills: Skill[]): InstalledPlugin => ({
   skills,
   agents: [],
   commands: [],
+  mcpServers: [],
+  hooks: [],
 });
 
 // An agentic skill invocation: the model's `Skill` tool_use + its tool_result.
