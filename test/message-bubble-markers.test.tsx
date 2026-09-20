@@ -20,7 +20,7 @@ import {
   describeTurn,
 } from '../src/components/project/chat/utils';
 import type { ChatDetailsFilter } from '../src/components/project/chat/utils';
-import type { AdvisorConsult, ChatMessage } from '../src/types';
+import type { AdvisorConsult, ChatMessage, SentMessage } from '../src/types';
 
 afterEach(cleanup);
 
@@ -252,6 +252,167 @@ describe('a message from another session', () => {
       userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', msgId: 'm-1' } })
     );
     expect(nobody.container.querySelector('.cl-inbound-exchange')).toBeNull();
+  });
+});
+
+describe('a message sent to another session', () => {
+  /** The sender's half as the reader hands it over: the `SendMessage` call in
+   *  an assistant turn and its result, the delivery stamped on the result by
+   *  `transcript-extras` (or by the file reader) from `toolUseResult`. */
+  function sentTurn(opts: {
+    to?: string;
+    message?: string;
+    summary?: string;
+    sent?: SentMessage;
+    result?: 'none' | 'ok' | 'error';
+  }): ChatMessage[] {
+    const input: Record<string, unknown> = {
+      to: opts.to ?? 'alice-7c',
+      message: opts.message ?? 'what are you working on right now?',
+      ...(opts.summary ? { summary: opts.summary } : {}),
+      // Claude Code echoes the message here, cut with an ellipsis — never read.
+      content: 'what are you working on ri…',
+    };
+    const assistant: ChatMessage = {
+      uuid: 'a1',
+      role: 'assistant',
+      timestamp: '2026-09-20T09:17:58.000Z',
+      model: 'claude-opus-5',
+      content: [
+        { type: 'text', text: 'Asking.' },
+        { type: 'tool_use', id: 'toolu_send1', name: 'SendMessage', input },
+      ],
+    };
+    if (opts.result === 'none') return [assistant];
+    const result: ChatMessage = {
+      uuid: 'r1',
+      role: 'user',
+      timestamp: '2026-09-20T09:17:59.000Z',
+      content: [
+        {
+          type: 'tool_result',
+          toolUseId: 'toolu_send1',
+          content:
+            opts.result === 'error'
+              ? 'Error: socket closed'
+              : '{"success":true,"message":"“Asking” → alice-7c (another Claude session on this machine; queued there)","msg_id":"m-1"}',
+          isError: opts.result === 'error',
+          ...(opts.sent ? { sent: opts.sent } : {}),
+        },
+      ],
+    };
+    return [assistant, result];
+  }
+
+  function mountTurn(
+    messages: ChatMessage[],
+    detailsFilter: ChatDetailsFilter,
+    extra: Partial<Parameters<typeof MessageBubble>[0]> = {}
+  ) {
+    // The result-only user message is absorbed into the assistant turn.
+    const [processed] = buildProcessedMessages(messages);
+    return render(
+      <StrictMode>
+        <MessageBubble
+          processed={processed}
+          detailsFilter={detailsFilter}
+          onOpenToolDetail={() => {}}
+          {...extra}
+        />
+      </StrictMode>
+    );
+  }
+
+  const delivered: SentMessage = { msgId: 'm-1', to: 'session' };
+
+  it('is drawn as a message — to whom, its summary, its text — not as a tool card', () => {
+    const { container } = mountTurn(
+      sentTurn({ summary: 'Asking what it is doing', sent: delivered }),
+      'all'
+    );
+
+    const bubble = container.querySelector('.cl-outbound');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.querySelector('.cl-inbound-from')?.textContent).toBe('alice-7c');
+    expect(bubble?.querySelector('.cl-outbound-summary')?.textContent).toBe(
+      'Asking what it is doing'
+    );
+    expect(bubble?.querySelector('.cl-inbound-body')?.textContent).toContain(
+      'what are you working on right now?'
+    );
+    expect(bubble?.querySelector('.cl-outbound-state')?.textContent).toBe('SENT');
+    // The generic card, with the result JSON in it, is gone.
+    expect(container.querySelector('.cl-tool-card')).toBeNull();
+    expect(container.textContent).not.toContain('"success":true');
+  });
+
+  it('stays on screen in minimal density, as one line, and never reads the echo', () => {
+    const { container } = mountTurn(
+      sentTurn({ summary: 'Asking what it is doing', sent: delivered }),
+      'minimal'
+    );
+
+    const bubble = container.querySelector('.cl-outbound.is-compact');
+    expect(bubble).not.toBeNull();
+    expect(bubble?.textContent).toContain('alice-7c');
+    expect(bubble?.textContent).toContain('Asking what it is doing');
+    expect(bubble?.querySelector('.cl-inbound-body')).toBeNull();
+    expect(container.textContent).not.toContain('ri…');
+  });
+
+  it('offers the exchange for a delivery to another session, and not for an agent', () => {
+    const onOpenExchange = vi.fn();
+    const session = mountTurn(sentTurn({ sent: delivered }), 'all', { onOpenExchange });
+    const link = session.container.querySelector('.cl-inbound-exchange') as HTMLButtonElement;
+    expect(link?.textContent).toBe('Show exchange');
+    fireEvent.click(link);
+    expect(onOpenExchange).toHaveBeenCalledWith('m-1');
+    session.unmount();
+
+    const agent = mountTurn(
+      sentTurn({ to: 'worker-b', sent: { msgId: 'm-2', to: 'agent' } }),
+      'all',
+      { onOpenExchange }
+    );
+    expect(agent.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    expect(agent.container.querySelector('.cl-inbound--agent')).not.toBeNull();
+    const whats = [...agent.container.querySelectorAll('.cl-inbound-what')].map(e => e.textContent);
+    expect(whats).toEqual(['to', 'agent in this session']);
+  });
+
+  it('says what the transcript knows about a call that delivered nothing', () => {
+    const pending = mountTurn(sentTurn({ result: 'none' }), 'all');
+    expect(pending.container.querySelector('.cl-outbound-state')?.textContent).toBe('SENDING');
+    expect(pending.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    pending.unmount();
+
+    const failed = mountTurn(sentTurn({ result: 'error' }), 'all');
+    expect(failed.container.querySelector('.cl-outbound-state')?.textContent).toBe('FAILED');
+    // The tool's own answer is there, folded, for whoever wants it.
+    const more = failed.container.querySelector('.cl-inbound-more') as HTMLButtonElement;
+    expect(more?.textContent).toBe('Show what the tool answered');
+    expect(failed.container.textContent).not.toContain('socket closed');
+    fireEvent.click(more);
+    expect(failed.container.textContent).toContain('socket closed');
+    failed.unmount();
+
+    // Answered, no id: nothing was delivered, and nothing is claimed.
+    const undelivered = mountTurn(sentTurn({}), 'all');
+    expect(undelivered.container.querySelector('.cl-outbound-state')?.textContent).toBe(
+      'NO DELIVERY'
+    );
+  });
+
+  it('opens folded and unfolds on ask, surviving the StrictMode remount', () => {
+    const { container } = mountTurn(sentTurn({ message: LONG_BODY, sent: delivered }), 'all');
+
+    const body = () => container.querySelector('.cl-inbound-body')?.textContent ?? '';
+    expect(body()).toContain('line 12');
+    expect(body()).not.toContain('line 13');
+    const more = container.querySelector('.cl-inbound-more') as HTMLButtonElement;
+    expect(more.textContent).toBe('Show all 30 lines');
+    fireEvent.click(more);
+    expect(body()).toContain('line 30');
   });
 });
 

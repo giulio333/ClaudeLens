@@ -68,6 +68,7 @@ export type {
   BashEditHunk,
   ChatMessage,
   InboundOrigin,
+  SentMessage,
   SessionNotice,
   MessageUsage,
   ToolActivity,

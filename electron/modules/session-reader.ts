@@ -7,10 +7,12 @@ import {
   mergeTranscriptExtras,
   parseArtifactPublish,
   parseBashEditDiff,
+  parseSentMessage,
   readTranscriptExtras,
   rowEffort,
   withArtifactPublish,
   withBashEditDiff,
+  withSentMessage,
 } from './transcript-extras';
 import type {
   AdvisorConsult,
@@ -18,6 +20,7 @@ import type {
   BashEditDiff,
   ChatContentBlock,
   ChatMessage,
+  SentMessage,
   MessageUsage,
 } from '../shared/chat-types';
 
@@ -200,18 +203,20 @@ export interface ReadChatOptions {
   includeSidechain?: boolean;
 }
 
-/** I due dati che stanno sulla RIGA e non dentro `message`, attaccati al blocco
- *  di risultato a cui appartengono. Separati per non fare due copie dei blocchi
- *  quando la riga porta entrambi — e per non farne nessuna quando non porta né
- *  l'uno né l'altro, che è ogni riga tranne una manciata. */
+/** I dati che stanno sulla RIGA e non dentro `message`, attaccati al blocco di
+ *  risultato a cui appartengono. Separati per non fare più copie dei blocchi
+ *  quando la riga ne porta più d'uno — e per non farne nessuna quando non ne
+ *  porta, che è ogni riga tranne una manciata. */
 function withRowExtras(
   blocks: ChatContentBlock[],
   bashEditDiff: BashEditDiff | undefined,
-  artifact: ArtifactPublish | undefined
+  artifact: ArtifactPublish | undefined,
+  sent: SentMessage | undefined
 ): ChatContentBlock[] {
   let out = blocks;
   if (bashEditDiff) out = withBashEditDiff(out, bashEditDiff);
   if (artifact) out = withArtifactPublish(out, artifact);
+  if (sent) out = withSentMessage(out, sent);
   return out;
 }
 
@@ -300,13 +305,16 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       // Stessa riga, stessa ragione: la pagina che una publish dell'`Artifact`
       // tool ha prodotto (titolo, link, versione) sta su `toolUseResult`.
       const artifact = parseArtifactPublish(json.toolUseResult);
+      // E la consegna di una `SendMessage`, con il `msg_id` che la lega al
+      // transcript in cui è arrivata.
+      const sent = parseSentMessage(json.toolUseResult);
 
       const message: ChatMessage = {
         uuid,
         role,
         timestamp: String(json.timestamp ?? ''),
         model: msg.model as string | undefined,
-        content: withRowExtras(blocks, bashEditDiff, artifact),
+        content: withRowExtras(blocks, bashEditDiff, artifact, sent),
         usage: parseUsage(msg),
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).

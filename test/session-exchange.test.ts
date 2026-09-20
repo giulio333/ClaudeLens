@@ -461,11 +461,36 @@ describe('readExchange (over real files)', () => {
     expect(outcome!.parties.map(p => p.id).sort()).toEqual([A, B].sort());
   });
 
-  it('answers null when the message is not in that transcript', async () => {
+  it('enters from the sender too: the outbound bubble opens the same exchange', async () => {
     conversation();
 
+    const fromSender = await readExchange(projectsDir, { sessionId: A, msgId: 'm1' });
+    const fromReceiver = await readExchange(projectsDir, { sessionId: B, msgId: 'm1' });
+
+    expect(fromSender).not.toBeNull();
+    expect(fromSender!.entryMsgId).toBe('m1');
+    expect(fromSender!.messages).toEqual(fromReceiver!.messages);
+  });
+
+  it('answers null when the message is not in that transcript', async () => {
+    conversation();
+    // A message this session only sent, to a name no transcript on disk
+    // received it under: one half is not a conversation.
+    transcript(ACME, C, [
+      ...sentLines({
+        session: C,
+        turnUuid: 'c-turn-1',
+        toolUseId: 'toolu_c1',
+        msgId: 'm-lost',
+        to: 'nobody-00',
+        text: 'anyone there?',
+        at: '2026-03-01T12:00:00Z',
+      }),
+    ]);
+
     expect(await readExchange(projectsDir, { sessionId: B, msgId: 'nope' })).toBeNull();
-    expect(await readExchange(projectsDir, { sessionId: A, msgId: 'm1' })).toBeNull();
+    expect(await readExchange(projectsDir, { sessionId: C, msgId: 'm1' })).toBeNull();
+    expect(await readExchange(projectsDir, { sessionId: C, msgId: 'm-lost' })).toBeNull();
   });
 
   it('ignores a transcript that carries the id somewhere else, so it is never a party', async () => {

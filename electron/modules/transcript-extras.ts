@@ -34,6 +34,7 @@ import type {
   ChatContentBlock,
   ChatMessage,
   InboundOrigin,
+  SentMessage,
   SessionNotice,
 } from '../shared/chat-types';
 
@@ -65,6 +66,12 @@ export interface TranscriptExtras {
    *  l'SDK non restituisce, e senza di essa la publish è una tool call generica
    *  con l'URL sepolto nel testo. */
   artifactByToolUseId: Map<string, ArtifactPublish>;
+  /** `tool_use_id` del risultato `SendMessage` → la consegna che ha fatto. Terza
+   *  della stessa famiglia: il `msg_id` sta su `toolUseResult`, e senza di esso
+   *  il messaggio che questa sessione ha mandato a un'altra è una tool card
+   *  generica con dentro il JSON del risultato — mentre la metà ricevuta ha la
+   *  sua bolla (#274) e la sua pagina (#280), raggiungibili solo da lì. */
+  sentByToolUseId: Map<string, SentMessage>;
 }
 
 const EMPTY: TranscriptExtras = {
@@ -75,6 +82,7 @@ const EMPTY: TranscriptExtras = {
   effortByUuid: new Map(),
   bashEditDiffByToolUseId: new Map(),
   artifactByToolUseId: new Map(),
+  sentByToolUseId: new Map(),
 };
 
 /**
@@ -188,6 +196,35 @@ export function parseArtifactPublish(toolUseResult: unknown): ArtifactPublish | 
 
 const str = (v: unknown): string | undefined =>
   typeof v === 'string' && v.length > 0 ? v : undefined;
+
+/**
+ * La consegna che una `SendMessage` ha fatto, dal `toolUseResult` della riga di
+ * risultato. Il `msg_id` è il discriminante: una chiamata che non ha consegnato
+ * — nome irraggiungibile, risposta alla conversazione principale da dentro un
+ * agente — non lo scrive, e non c'è consegna da attaccare. Il `routing` è ciò
+ * che distingue la inbox di un teammate da un'altra sessione: `session-exchange`
+ * tiene gli agenti fuori da ogni thread, e la bolla deve saperlo per non offrire
+ * uno scambio che risponderebbe null. `display` è l'unica riga che Claude Code
+ * scrive PER essere mostrata, e si porta com'è.
+ */
+export function parseSentMessage(toolUseResult: unknown): SentMessage | undefined {
+  if (!toolUseResult || typeof toolUseResult !== 'object') return undefined;
+  const r = toolUseResult as Record<string, unknown>;
+  const msgId = str(r.msg_id);
+  if (!msgId) return undefined;
+  const toAgent = !!r.routing && typeof r.routing === 'object';
+  return {
+    msgId,
+    to: toAgent ? 'agent' : 'session',
+    ...(str(r.display) ? { display: str(r.display) } : {}),
+  };
+}
+
+/** Attacca la consegna all'unico `tool_result` dei blocchi — come le due sopra. */
+export function withSentMessage(blocks: ChatContentBlock[], sent: SentMessage): ChatContentBlock[] {
+  if (blocks.filter(b => b.type === 'tool_result').length !== 1) return blocks;
+  return blocks.map(b => (b.type === 'tool_result' ? { ...b, sent } : b));
+}
 
 /**
  * Attacca la pagina all'unico `tool_result` dei blocchi già deserializzati —
@@ -429,6 +466,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const effortByUuid = new Map<string, string>();
   const bashEditDiffByToolUseId = new Map<string, BashEditDiff>();
   const artifactByToolUseId = new Map<string, ArtifactPublish>();
+  const sentByToolUseId = new Map<string, SentMessage>();
   const injected: ChatMessage[] = [];
   const noticeByUuid = new Map<string, SessionNotice>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
@@ -451,6 +489,11 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     // `list` dell'Artifact tool non lo scrivono, quindi il prefiltro è già il
     // discriminante e non c'è da deserializzare il resto del corpus.
     const isArtifact = line.includes('"artifact_id"');
+    // `"msg_id"` sta su ENTRAMBE le metà di un messaggio: sul `toolUseResult`
+    // del mittente e sull'`origin` del ricevente. Qui interessa la prima; la
+    // seconda passa dal ramo della provenienza sotto, quindi questo prefiltro
+    // non chiude la riga da solo.
+    const isSent = line.includes('"msg_id"');
     // Il prefiltro resta stretto apposta: `"origin"` da solo sta su ogni riga
     // che l'utente ha digitato (1297 su 1500 nel corpus di prova), e questo
     // modulo passa su ogni transcript che supera il prefiltro di
@@ -460,7 +503,8 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       line.includes('"kind":"auto-continuation"') ||
       line.includes(IDLE_NOTICE_PREFIX) ||
       line.includes('<teammate-message');
-    if (!isQueue && !isSkillExpansion && !isBashEdit && !isArtifact && !isProvenance) continue;
+    if (!isQueue && !isSkillExpansion && !isBashEdit && !isArtifact && !isSent && !isProvenance)
+      continue;
 
     let json: Record<string, unknown>;
     try {
@@ -485,6 +529,15 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       const toolUseId = soleToolResultId(json.message);
       if (artifact && toolUseId) artifactByToolUseId.set(toolUseId, artifact);
       continue;
+    }
+
+    if (isSent) {
+      const sent = parseSentMessage(json.toolUseResult);
+      const toolUseId = soleToolResultId(json.message);
+      if (sent && toolUseId) {
+        sentByToolUseId.set(toolUseId, sent);
+        continue;
+      }
     }
 
     // Una riga di coda che PARLA di un messaggio consegnato resta affare del
@@ -614,7 +667,21 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     effortByUuid,
     bashEditDiffByToolUseId,
     artifactByToolUseId,
+    sentByToolUseId,
   };
+}
+
+function stampSentMessages(
+  content: ChatContentBlock[],
+  byToolUseId: Map<string, SentMessage>
+): ChatContentBlock[] {
+  if (byToolUseId.size === 0) return content;
+  const needs = (b: ChatContentBlock): boolean =>
+    b.type === 'tool_result' && !b.sent && byToolUseId.has(b.toolUseId);
+  if (!content.some(needs)) return content;
+  return content.map(b =>
+    needs(b) ? { ...b, sent: byToolUseId.get((b as { toolUseId: string }).toolUseId) } : b
+  );
 }
 
 /**
@@ -671,6 +738,7 @@ export function mergeTranscriptExtras(
     effortByUuid,
     bashEditDiffByToolUseId,
     artifactByToolUseId,
+    sentByToolUseId,
   } = extras;
   if (
     queued.length === 0 &&
@@ -679,7 +747,8 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0 &&
-    artifactByToolUseId.size === 0
+    artifactByToolUseId.size === 0 &&
+    sentByToolUseId.size === 0
   ) {
     return messages;
   }
@@ -695,15 +764,19 @@ export function mergeTranscriptExtras(
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0 &&
     artifactByToolUseId.size === 0 &&
+    sentByToolUseId.size === 0 &&
     noticeByUuid.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
           const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
           const notice = noticeByUuid.get(msg.uuid);
-          const content = stampArtifacts(
-            stampBashEditDiffs(msg.content, bashEditDiffByToolUseId),
-            artifactByToolUseId
+          const content = stampSentMessages(
+            stampArtifacts(
+              stampBashEditDiffs(msg.content, bashEditDiffByToolUseId),
+              artifactByToolUseId
+            ),
+            sentByToolUseId
           );
           if (!skillPath && !effort && !notice && content === msg.content) return msg;
           return {

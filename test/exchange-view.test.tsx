@@ -280,11 +280,103 @@ describe('ExchangeView', () => {
     expect(within(rows()[0]).queryByTestId('hops')).toBeNull();
   });
 
+  it('draws the pair once and takes a side per message, instead of repeating it', async () => {
+    bridge.api.exchange.get.mockResolvedValue(ok(outcome()));
+
+    mount();
+
+    await screen.findByText('thanks, closing');
+    // The pair is stated at the top — two chips, the other side first — and
+    // the reader's own side is named as such there and nowhere else.
+    const parties = screen.getAllByTestId('party');
+    expect(parties).toHaveLength(2);
+    expect(parties[1].textContent).toContain('this session');
+    // Each message then wears its side: the one this session sent, and no other.
+    expect(rows().map(r => r.className.includes('is-own'))).toEqual([false, true, false]);
+    // And the old per-message "→ receiver" is gone: in a two-party
+    // conversation it said the same thing on every row.
+    expect(rows()[0].textContent).not.toContain('→ widgets-7c');
+  });
+
+  it('gives a run of messages from one party a single face', async () => {
+    bridge.api.exchange.get.mockResolvedValue(
+      ok(
+        outcome({
+          messages: [
+            {
+              msgId: 'm1',
+              from: A,
+              to: B,
+              timestamp: '2026-03-01T10:00:00Z',
+              text: 'first',
+              receivedUuid: 'b-in-1',
+            },
+            {
+              msgId: 'm2',
+              from: A,
+              to: B,
+              timestamp: '2026-03-01T10:00:05Z',
+              text: 'and one more thing',
+              receivedUuid: 'b-in-2',
+            },
+          ],
+        })
+      )
+    );
+
+    mount();
+
+    await screen.findByText('and one more thing');
+    const faces = rows().map(r => r.querySelector('.cl-xmsg-face')!.textContent);
+    expect(faces).toEqual(['A', '']);
+    expect(rows()[1].className).toContain('is-cont');
+  });
+
+  it('counts the sides and the span, and keeps the join figures in a title', async () => {
+    bridge.api.exchange.get.mockResolvedValue(ok(outcome({ scanned: 329, elapsedMs: 640 })));
+
+    mount();
+
+    const meta = await screen.findByText(/3 messages/);
+    expect(meta.textContent).toBe('3 messages · 2 in · 1 out · over 1m');
+    // How many transcripts the answer rests on is a fact about the join, not
+    // about the conversation: stated, but not as a headline.
+    expect(meta.getAttribute('title')).toBe('Joined across 329 transcripts in 640 ms');
+  });
+
+  it('folds a long message and unfolds it on ask', async () => {
+    const long = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n');
+    bridge.api.exchange.get.mockResolvedValue(
+      ok(
+        outcome({
+          messages: [
+            {
+              msgId: 'm1',
+              from: A,
+              to: B,
+              timestamp: '2026-03-01T10:00:00Z',
+              text: long,
+              receivedUuid: 'b-in-1',
+            },
+          ],
+        })
+      )
+    );
+
+    mount();
+
+    const row = (await screen.findAllByRole('article'))[0];
+    expect(row.textContent).toContain('line 14');
+    expect(row.textContent).not.toContain('line 15');
+    fireEvent.click(within(row).getByRole('button', { name: /show all 30 lines/i }));
+    expect(rows()[0].textContent).toContain('line 30');
+  });
+
   it('says so when the message is not in that transcript', async () => {
     bridge.api.exchange.get.mockResolvedValue(ok(null));
 
     mount({ msgId: 'nope' });
 
-    expect(await screen.findByText(/not in this transcript/i)).toBeTruthy();
+    expect(await screen.findByText(/nothing to join on/i)).toBeTruthy();
   });
 });

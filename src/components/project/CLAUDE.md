@@ -61,6 +61,8 @@ Formatter puri (nessuna dipendenza React):
 - **`ToolGroupCard.tsx`** — Una coppia `tool_use` + `tool_result` nel transcript, **aperta di default**: la run è quello che il lettore è venuto a vedere, e una riga da cliccare davanti a ogni tool era un menu a tendina davanti a ognuno. I due tool che possiedono una finestra **sono** la loro finestra — Bash la `CommandSheet` (terminale), Read/Write/Edit la `FileSheet` (editor, vedi `FileWindow.tsx`) — senza header di card sopra a ripetere il nome che la title bar già dice (per Bash la description passa in title bar, `showDescription`). Ogni altro tool tiene l'header (monogramma · nome · cosa gli è stato chiesto — un `div`, non più un `button` che non fa niente) con input e risultato già sotto, senza toggle né caret; un errore sta nel corpo aperto, non in una striscia collassata. La prop `collapsible` sopravvive **solo per le strisce che MIN tiene a schermo** (dispatch di agenti, skill — `.cl-tool-stack--chips`): lì la card resta un chip che si apre al click, perché MIN è la densità che nasconde i corpi dei tool. L'`Artifact` tool si divide qui in due: una chiamata che ha **pubblicato** una pagina è quella pagina (`ArtifactCard`), una che non ha pubblicato niente (`quickstart`, `read`, `list`) è impianto idraulico e finisce nel chip **qualunque sia la densità** — la sua risposta è un kilobyte di prosa scritta per l'harness, ed era la metà del problema. Coperto da `test/tool-group-card.test.tsx` e `test/artifact-card.test.tsx` (StrictMode)
 - **`artifact.ts`** — Lettura dell'`Artifact` tool, modulo puro (`test/artifact.test.ts`). La pagina (`ArtifactPublish`) la scrive il main process leggendo `toolUseResult`; qui si decide cosa se ne mostra. Due forme tenute apart: una **publish** ha prodotto una pagina ed è l'esito del turno, una `quickstart`/`read`/`list` ha risposto a una domanda e non ha prodotto niente — e il discriminante è **l'assenza della pagina**, non l'`action` dell'input, che un transcript vecchio può non avere. `artifactVersion` non inventa un `v1` dove il transcript tace, e `artifactIsPrivate` torna `undefined` invece di `true` quando `audience` manca: dire "privato" è un'affermazione su chi può aprire un link. `buildArtifactActivity` aggrega **per `artifact_id`**, una riga per pagina per quante volte sia stata ripubblicata: serve al rail, non alla chat, dove ogni publish sta al momento in cui è avvenuta
 - **`ArtifactCard.tsx`** — La pagina pubblicata, disegnata come esito e non come tool call: titolo suo, la `description` sotto, la versione a destra, e una striscia di stato `CREATED`/`UPDATED` + **il link vero** (`window.open` → `shell.openExternal`, come `UrlChip`) + `private`/`shared`. La prosa del risultato resta, ripiegata, dietro il caret. La grammatica visiva è quella di `.cl-tool-card` **invariata** — stesso monogramma da 22px, stessa coppia titolo/preview, stessa striscia: cambia solo la **tinta**, accent invece di neutro, perché la domanda del lettore qui è "questo turno ha prodotto qualcosa" e il colore risponde prima di qualsiasi glifo (un primo giro di pittogrammi lucide era stato scartato: in una grammatica di label mono maiuscole si leggevano come importati da un altro design system). `compact` è la riga sola che MIN tiene a schermo, accanto ad agenti, skill e piani
+- **`sent-message.ts`** — Lettura del tool `SendMessage`, modulo puro: la **metà mittente** di un messaggio fra sessioni. La ricevente aveva la sua bolla (#274) e la sua pagina (#280); questa si vedeva come tool card generica — header `SendMessage`, preview vuota, e il JSON del risultato come corpo — cioè una delle due metà di ogni conversazione fra sessioni leggibile come impianto idraulico. Ciò che la chiamata ha detto sta sull'input (`to`, `message`, `summary`; **mai `content`**, che è l'eco di `message` tagliata con un'ellissi); ciò che solo il risultato sa — che il messaggio è partito e sotto che id — è `SentMessage`, letto nel main da `toolUseResult` (`transcript-extras`), mai dalla prosa. `messageDeliveryState` distingue `sending` (nessun risultato: in volo o CLI morta a metà, il transcript non sa dirlo), `sent`/`sent-to-agent`, `not-delivered` (risposta senza id: nome irraggiungibile, o `main` da dentro un agente) e `failed`; `messageExchangeId` offre lo scambio **solo** per una consegna a un'altra sessione — la inbox di un teammate non si lega a niente (`session-exchange` tiene gli agenti fuori da ogni thread) e offrirlo risponderebbe `null`
+- **`OutboundMessage.tsx`** — La bolla della metà mittente, gemella di `InboundMessage` e con le **sue stesse classi** (`.cl-inbound-*`: la riga a sinistra, la striscia col nome, `⇢`, la piega a 12 righe) più `.cl-outbound-*` per ciò che è solo suo — lo stato di consegna in fondo alla striscia e la riga del `summary`. La striscia dice `to` dove la inbound dice il nome del mittente; la tinta segue la stessa regola (accent per un'altra sessione, ink per un agente interno). Una chiamata che non ha consegnato nulla non incolla il JSON del risultato sotto il messaggio: lo offre ripiegato (`Show what the tool answered`), come `ArtifactCard` fa con la sua prosa. `compact` è la riga sola di MIN — destinatario · summary · stato — perché un messaggio mandato è conversazione, non impianto. `ToolGroupCard` ci instrada in **entrambe** le densità (`isMessageTool`), e `MessageBubble` gli passa `onOpenExchange` dalla striscia e dallo stack. Coperto da `test/message-bubble-markers.test.tsx` (StrictMode)
 - **`FileWindow.tsx`** → `FileSheet` — Un tool su file (`Read`/`Write`/`Edit`) reso come **la finestra editor che era**, gemella della finestra terminale: stessa chrome (semafori, titolo centrato, striscia di stato, superficie dark fissa in entrambi i temi — `.cl-term.cl-term--file`), perché lettura e modifica sono l'altra metà della stessa sessione e il lettore le distingue da ciò che sta **dentro** la finestra, non da una chrome diversa. Il verbo in title bar (`READ`/`WRITE`/`EDIT`, `.cl-term-kind`) prende la tinta del tool (`TOOL_TINT`: ciano per Read/Write, viola per Edit) e un secondo tag `memory` sotto `~/.claude/…/memory`; poi **nome file in grassetto, che non cede mai** (`flex: 0 0 auto`: senza quella riga `b` ereditava `0 1 auto` e si stringeva insieme al path, e la barra diceva `build_report_ht… — …/-Users-…-Acme2.0/1f2e3d4c-…`) e, come meta, `…/dove/sta · lines 436–497` (o `replace all`) — dove `shortDir` **scarta segmenti dalla testa** finché quel che resta sta in 40 caratteri, perché l'ellissi CSS taglia l'altra estremità: di uno scratchpad dell'archivio sopravviveva l'hash del progetto e spariva `scratchpad`, l'unico segmento che diceva qualcosa. Il path **intero** non sta nella barra ma è a un gesto: la meta è un `button` che lo copia (e lo porta nel `title`), e in fullscreen è stampata per esteso — quella è la larghezza che la finestra inline non ha. Il corpo è una griglia gutter + riga (`.cl-file-row`): un **Read** stampa le righe con i numeri che Claude Code ha messo davanti (`   436→…` — reali, una lettura con `offset` parte dove parte il file), un **Write** dal numero 1 con righe **piatte** (`ctx`, non `add`: una scrittura è il file, non un diff del file — cosa che il gutter diceva già stampando il numero invece del `+`; marcarle `add` stendeva il velo verde delle righe aggiunte sotto tutte le righe di un file scritto e si portava via il contrasto di ogni colore di sintassi, su una superficie per cui la palette hljs è tarata), un **Edit** come **diff** `old_string → new_string` (righe tolte in danger, poi quelle che le sostituiscono in verde, contesto in mezzo; il gutter porta `−`/`+`, **niente numeri**: `old_string` dice cosa è cambiato, non dove). Il `The file … has been updated successfully.` del risultato **è la striscia di stato** (`updated · −1 +5`, `created · 42 lines`, `3 lines`, `running`), non un blocco RESULT; un errore (`String to replace not found`) si stampa sotto le righe come lo stderr sotto un comando, in danger, con la modifica tentata ancora sopra. Un risultato non numerato (immagine, `(no content)`) si stampa com'è. **Un file markdown ha una seconda lettura: il documento che è.** Un `.md` è prosa per costruzione e stamparlo come sorgente è lo stesso errore già corretto per una pagina fetchata: il corpo diventa un foglio di carta (`.cl-file-preview`, `--cl-paper`) dentro la stessa chrome — title bar, verbo, striscia di stato invariati — e la prosa la rende `<Markdown>` esattamente come nel transcript, fence compresi. **Un Write apre sul documento** (è quello che il turno ha prodotto), **un Read sulle sue righe numerate** (è una fetta di file, e il numero da cui parte è metà dell'informazione), un **Edit non ce l'ha**: un diff non si renderizza. Lo switch è una parola in title bar (`.cl-term-mode`, `Preview`/`Source`: nessun glifo dice quale delle due letture otterresti) e lo stato è in `FileSheet`, così inline e fullscreen mostrano la stessa. Il clamp resta quello delle righe ma misurato in pixel (420px), perché un documento renderizzato non ha righe da contare, con la stessa dissolvenza. Clamp **per specie** — 12 righe una Read, 24 una Write/Edit — con "Show all N lines" (mai uno scroller annidato): una modifica è la notizia del turno, una lettura è ciò che ha guardato strada facendo, la chiamata più frequente e meno informativa, e un turno di sei Read non deve essere sei lastre scure alte uguali (la leva da girare se "troppo"), ⤢ apre la stessa finestra a tutto schermo (`SheetModal`, condiviso col terminale), Copy copia il contenuto (o il `new_string`). Evidenziazione hljs **riga per riga** dalla estensione (`code-lang.ts`), come le righe di prompt del terminale: un costrutto multi-riga perde lo stato attraverso le righe, ed è il prezzo di righe clampabili, tinte e numerate una a una. Il diff è calcolato nel renderer da `old_string`/`new_string` — che l'SDK restituisce, quindi vale anche nella chat live — e non dallo `structuredPatch` che Claude Code scrive sulla riga `toolUseResult` (numeri di riga veri e righe di contesto): quello è l'upgrade successivo, e passa dalla seconda passata di `transcript-extras` come `bashEditDiff` (#265)
 - **`file-view.ts`** → `lineDiff`, `numberedRows`, `contentRows`, `lineRange`, `diffStat`, `shortDir`, `fileName`, `writeOutcome`, `splitLines`, `isFileTool`, `isMarkdownPath`, `FILE_TOOLS`, tipo `FileRow` — **Modulo puro** (unit-tested in `test/file-view.test.ts`) del rendering dei file tool. `lineDiff` è un LCS a livello di riga (`old_string`/`new_string` sono poche righe: la tabella quadratica non costa nulla; sopra i 400k celle degrada a "tutto tolto, tutto aggiunto", che è ancora un diff) e a parità emette la rimozione prima, così un blocco sostituito si legge `−` poi `+`. `numberedRows` legge i prefissi `N→` dell'output di Read (`null` se nessuna riga è numerata; una riga non numerata in mezzo a numerate resta senza numero). `splitLines`: `'a\nb\n'` sono due righe, non tre. `writeOutcome` legge `created`/`written` dalla frase del risultato — la stessa regola di `writeAction` in `chat/utils.ts`. `contentRows` numera dal 1 e lascia le righe `ctx`, `shortDir` tiene gli ultimi tre segmenti e poi ne scarta dalla testa finché stanno in 40 caratteri (l'ultimo resta sempre, lungo quanto è)
 - **`code-lang.ts`** → `resolveLang` — estensione → linguaggio highlight.js, estratto da `atoms.tsx` (che esporta solo componenti, regola react-refresh) per servire sia il `CodeBlock` su carta sia la finestra editor
@@ -320,6 +322,37 @@ Conseguenze da conoscere:
   sub-agente** (crumb `AGENT · <tipo>`, pannello `chromeless`). **Embedded no**:
   lì un transcript di sub-agente non viene issato al frame — solo i tool lo sono
   — quindi il pannello tiene il suo bottone, perché nulla sopra sa che è aperto.
+
+**Mission Control — il dock MESSAGES** (`terminal/mission-messages.ts` +
+`terminal/MessagesDock.tsx`): le conversazioni della sessione — con altre
+sessioni e con gli agenti dentro di sé — **fuori dal feed**, appuntate sotto di
+esso come l'`EnvironmentStrip`. Prima non comparivano affatto nel rail: che
+qualcuno avesse scritto alla sessione si scopriva scorrendo il transcript in
+cerca di `⇢`. **Perché non una specie del feed**: una riga di feed è
+un'operazione con un esito (un glifo, una riga, uno stato), un messaggio è una
+battuta di una conversazione — la domanda del lettore è "con chi sta parlando
+questa sessione e qual è stata l'ultima cosa detta", che è la forma della
+sidebar di un messenger, non quella di un log. Quindi si raggruppa per
+interlocutore: monogramma tondo nel colore che un messaggio porta nel
+transcript (accent per una sessione, ink per un agente interno), nome, cosa
+l'altra parte È, l'ultima battuta con la sua direzione (`⇣`/`⇡`) e il conteggio;
+`N received · N sent` sta nel `title`, non in una quarta colonna. **Nessuna IPC
+nuova**: entrambe le metà sono già in `processed` — la ricevuta è un turno con
+`inbound` (#274), la mandata un tool group `SendMessage` (`chat/sent-message.ts`).
+
+Il modello è puro (`buildMessageThreads`, `test/mission-messages.test.ts`) e la
+parte difficile è **chi è l'interlocutore**: il nome è una sua pretesa e cambia
+da solo, il pid che il ricevente ha verificato sul socket no. Quindi un thread è
+chiuso **sul pid** ogni volta che un lato ne dà uno (`origin.pid` in entrata,
+`uds:/tmp/cc-socks/<pid>.sock` in uscita), e un messaggio indirizzato solo per
+nome entra nel thread del processo che quel nome **ha dichiarato ricevendo** —
+altrimenti resta sotto il nome, che è onesto: niente lo legava a un processo.
+Gli agenti si chiudono sul nome, non c'è pid da verificare. L'etichetta è
+l'ultimo nome **dichiarato dall'altra parte**; quello con cui l'abbiamo
+chiamata vale solo finché non parla. Click → `onOpenExchange(msgId)` quando il
+thread ha un id da unire (una sessione dall'altra parte), altrimenti
+`onLocateTurn` sull'ultimo messaggio: un agente interno non ha uno scambio.
+Vista coperta da `test/messages-dock.test.tsx` (StrictMode).
 
 **Mission Control — la specie WEB** (`terminal/mission-feed.ts` → `buildWebActivity`,
 righe `W` in tinta `--cl-haiku`, la stessa che `TOOL_TINT` dà ai due tool web nel
@@ -739,23 +772,45 @@ lo scambio voleva dire sapere quali sessioni aprire e leggerle in ordine. Il
 join sta nel main (`electron/modules/session-exchange.ts`, `exchange:get`); qui
 c'è solo la pagina.
 
-| File               | Esporta        | Descrizione                                                                                                                                                                                                                                                                               |
-| ------------------ | -------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `ExchangeView.tsx` | `ExchangeView` | Hero con le due parti (nome dichiarato · progetto · titolo sessione, `this session` sulla ricevente) e fascia Messages / Transcripts read / Took; sotto, i messaggi come conversazione (`.cl-exchange-msg`), quello di partenza marcato (`aria-current`), ognuno con i due turni apribili |
+| File               | Esporta                                                                             | Descrizione                                                                                                                                                                                                                                                                                                                                |
+| ------------------ | ----------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `thread.ts`        | `buildThreadRows`, `summarizeExchange`, `exchangeSpan`, `messageClock`, `threadDay` | La forma dello scambio come la pagina lo disegna: da che lato sta ogni messaggio, dove finisce una parte e comincia l'altra (`startsRun`), quanto è durata la conversazione. Puro, `test/exchange-thread.test.ts`                                                                                                                          |
+| `ExchangeView.tsx` | `ExchangeView`                                                                      | La conversazione: hero con la coppia affiancata (`⇄`) e una riga di meta (`N messages · N in · N out · over 44s`), sotto il thread a due lati — l'altra parte a sinistra su paper-2, questa sessione a destra nel lavaggio accent — con il messaggio d'ingresso cerchiato (`aria-current`) e i due turni apribili come note a piè di bolla |
 
 Decisioni:
 
-- **L'ingresso è la bolla inbound**: `InboundMessage` offre `Show exchange`
-  solo per un messaggio di **sessione** che porta un `msgId` — un agente
-  interno (`from: 'agent'`) non ha con che legarsi, e un messaggio senza id
-  nemmeno. Il callback risale `MessageBubble` → `ChatView` (che vi aggiunge il
-  proprio `sessionId`, la ricevente) → `TerminalMissionControl`/`ProjectOverview`,
-  come `onOpenSkill`; `ChatView` lo memoizza perché la bolla è `memo`.
+- **Gli ingressi sono le due bolle, e le righe MESSAGES del rail**:
+  `InboundMessage` offre `Show exchange` solo per un messaggio di **sessione**
+  che porta un `msgId` — un agente interno (`from: 'agent'`) non ha con che
+  legarsi, e un messaggio senza id nemmeno; `OutboundMessage` lo offre alla
+  stessa condizione sul lato mittente (`messageExchangeId`: consegna a una
+  sessione, con id). Il callback risale `MessageBubble` → `ChatView` (che vi
+  aggiunge il proprio `sessionId`, **qualunque lato sia**: `readExchange`
+  accetta come ingresso sia la ricevente sia la mittente) →
+  `TerminalMissionControl`/`ProjectOverview`, come `onOpenSkill`; `ChatView`
+  lo memoizza perché la bolla è `memo`. `TerminalMissionControl` passa lo
+  stesso callback al rail, dove una riga MESSAGES con id apre la stessa pagina
+  e una senza (agente, nessuna consegna) localizza il turno come QUESTIONS.
 - **Lo scambio è la conversazione fra due sessioni**, tutti i messaggi fra la
   coppia in ordine di arrivo — non la hop chain, che è un percorso causale e
   spezza una conversazione umana in più catene (vedi il modulo main). La catena
   si disegna comunque, **come percorso e con le ripetizioni** (`via A → B → A`):
   una sessione che compare due volte è un rilancio, non un errore.
+- **È disegnata come una conversazione, non come una lista di righe unite.**
+  La prima versione ripeteva `mittente → destinatario` su ogni messaggio — in
+  una conversazione a due parti, dove non cambia mai — e appendeva due bottoni
+  a ciascuno: la pagina diceva quattro volte quello che poteva dire una volta.
+  Ora la coppia sta in testa (due chip affiancati con `⇄`), ogni messaggio
+  prende un lato (l'altra parte a sinistra, questa sessione a destra
+  nell'accent che l'app usa già per "mio"), una serie di messaggi della stessa
+  parte porta il volto una volta sola — come un turno di continuazione perde il
+  pallino — e i due turni apribili sono note a piè di bolla sotto una hairline.
+  Un messaggio lungo si ripiega a 14 righe come la bolla del transcript.
+- **Le cifre del join non sono titoli**: `Transcripts read` e `Took` dicevano
+  quanto è costata la risposta, non cosa c'è dentro la conversazione, e
+  stavano in una fascia grande quanto i messaggi. Restano — la pagina deve
+  poter dire su cosa si regge — nel `title` della riga di meta, che al loro
+  posto conta i due lati e la durata.
 - **Un mittente senza transcript è detto tale**, mai vestito da sessione
   apribile: la card dice `transcript not found`, il nome resta quello dichiarato
   (etichetta, non identità), e la riga non offre `Open sending turn`. Dove il

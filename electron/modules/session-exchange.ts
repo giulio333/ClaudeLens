@@ -310,8 +310,13 @@ function lastHop(half: ReceivedHalf): string | undefined {
 }
 
 /**
- * The exchange the requested message belongs to, or `null` when no transcript
- * named `sessionId` holds a received row with that `msgId`.
+ * The exchange the requested message belongs to, or `null` when the message
+ * `msgId` was not received by, nor sent from, the transcript named `sessionId`.
+ *
+ * Either half is an entry: the inbound bubble opens it from the receiver, the
+ * outbound one from the sender. A message only ever sent — its receiver's
+ * transcript gone, or never a session — is not in `messages` at all, so from
+ * the sender it answers `null` like anything else that cannot be joined.
  */
 export async function readExchange(
   projectsDir: string,
@@ -392,7 +397,9 @@ export async function readExchange(
     };
   });
 
-  const entry = messages.find(m => m.msgId === request.msgId && m.to === request.sessionId);
+  const entry = messages.find(
+    m => m.msgId === request.msgId && (m.to === request.sessionId || m.from === request.sessionId)
+  );
   if (!entry) return null;
 
   const pairKey = (m: ExchangeMessage) => [m.from, m.to].sort().join('|');

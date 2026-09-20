@@ -93,7 +93,11 @@ provenance work of #274 — a message from another session is drawn with the
 sender on it and its body alone, an agent inside this session is told apart from
 an external one, a mid-turn arrival is marked, a long dispatch opens folded and
 unfolds on ask across the StrictMode remount, and a harness notice is a one-line
-marker rather than a turn) and
+marker rather than a turn; and the sender's half — a `SendMessage` is drawn as
+a message, to whom and with its summary, in both densities, never as the tool
+card with the result JSON in it, offers the exchange only for a delivery to
+another session, and says `SENDING`/`NO DELIVERY`/`FAILED` where the transcript
+recorded no delivery) and
 `bash-edit-diff-view` (the diff of what a shell command changed, #265: the hunk
 is drawn under the run with added and removed lines apart, a created or deleted
 file is marked rather than printed, `unavailable` says so instead of drawing an
@@ -115,7 +119,10 @@ docstring stays a string on every row it spans, over `code-lang`'s
 is `file-view`) and
 `exchange-view` (the page an inbound message opens, #280: it asks for the
 exchange of the message it was opened on, draws the messages in the reader's
-order attributed to their senders with the entry marked, says a sender whose
+order attributed to their senders with the entry marked, states the pair once
+and gives each message a side instead of repeating `sender → receiver` on
+every row, wears one face per run of messages from the same party, folds a
+long message, says a sender whose
 transcript is gone is unresolved rather than dressing it up as a session,
 resolves the real `SessionSummary` before opening a turn and refuses one that
 is gone — the search-hit rule — and draws the hop chain as the path it is,
@@ -128,6 +135,17 @@ a kilobyte of prose written for the harness; nothing is claimed where the
 transcript is silent, so an older publish with no `seq` shows no version and one
 with no `audience` says nothing about who can open it; and MIN keeps a published
 page as one line beside the agent, skill and plan strips) and
+`messages-dock` (Mission Control's own surface for the conversations a session
+is having, kept out of the event feed on purpose: one card per counterpart with
+what it is and the last thing said, the summary preferred over the text for the
+preview, a thread with an id opening the exchange while an agent's locates its
+turn, a last message that did not leave saying so instead of being counted, and
+no dock at all for a session that talked to nobody — its threading half, which
+keys a conversation on the pid the receiver verified rather than on a name the
+party can change, is `mission-messages`) and
+`exchange-thread` (the pure half of that page: which side a message is on,
+where a run of one party's messages starts, the wall time the conversation
+covers — and nothing rather than "0s" for a single message) and
 `markdown-wikilinks` (the `[[wikilink]]` chips: a citation the project really
 has is a button carrying the path it resolved to, one nothing answers to is
 dashed and inert, the backticked form Claude writes just as often is caught too,

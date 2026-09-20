@@ -1,19 +1,26 @@
 import { useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import type {
-  ExchangeMessage,
-  ExchangeOutcome,
-  ExchangeParty,
-  SessionSummary,
-} from '../../../types';
+import type { ExchangeOutcome, ExchangeParty, SessionSummary } from '../../../types';
 import { useExchange } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
 import { Lens } from '../overview/Lens';
 import { projectDisplayName } from '../shared/projectName';
-import { fmtDate } from '../utils';
 import Markdown from '../../Markdown';
+import {
+  buildThreadRows,
+  messageClock,
+  summarizeExchange,
+  threadDay,
+  type ThreadRow,
+} from './thread';
 
 type Project = { hash: string; realPath: string };
+
+/** Lines a message shows before it folds. A dispatch between sessions runs
+ *  long — the corpus has one of 48 lines — and reading the conversation is not
+ *  reading every word of it, so a long one opens summarised, exactly as the
+ *  transcript's own bubble does. */
+const CLAMP = 14;
 
 /**
  * The exchange a message from another session belongs to (#280).
@@ -21,7 +28,17 @@ type Project = { hash: string; realPath: string };
  * Both halves of every message between the two sessions, in arrival order —
  * the conversation that actually happened, which until now could only be
  * reconstructed by opening each session and reading it in order, knowing which
- * sessions to open. Entered from the inbound bubble, which knows its `msgId`.
+ * sessions to open. Entered from either bubble — the inbound one on the
+ * receiver, the outbound one on the sender — and from Mission Control's
+ * messages dock.
+ *
+ * **It is drawn as a conversation, not as a list of joined rows.** The first
+ * version repeated `sender → receiver` on every message, in a two-party
+ * conversation where that never changes, and hung two buttons off each: the
+ * page said four times what it could say once. Here the pair is stated at the
+ * top, each message takes a side (the other party left, this session right),
+ * consecutive messages from one party form a run under a single face, and the
+ * two turns a message can open are footnotes inside it.
  *
  * What is drawn is what the reader could join, and nothing is claimed past
  * that: a sender whose transcript is gone is named by the name it declared
@@ -34,7 +51,7 @@ export function ExchangeView({
   onBack,
   onOpenTurn,
 }: {
-  /** The project of the session the page was opened from — the receiver. */
+  /** The project of the session the page was opened from — either side. */
   project: Project;
   sessionId: string;
   msgId: string;
@@ -61,7 +78,8 @@ export function ExchangeView({
     setOpenError(null);
     const target: Project = {
       hash: p.projectHash,
-      // Unresolved cwd: the receiver's own project is the one path we know.
+      // Unresolved cwd: the project the page was opened from is the one path
+      // we know.
       realPath: p.projectPath ?? (p.projectHash === project.hash ? project.realPath : ''),
     };
     try {
@@ -82,6 +100,10 @@ export function ExchangeView({
     }
   }
 
+  const pair = data ? pairOf(data, sessionId) : null;
+  const rows = data ? buildThreadRows(data, sessionId) : [];
+  const stats = data ? summarizeExchange(data, sessionId) : null;
+
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
       <TopBar onBack={onBack} backLabel="Session" crumbs={[{ label: 'Exchange', accent: true }]} />
@@ -91,54 +113,42 @@ export function ExchangeView({
           <Lens />
           <div className="cl-eyebrow">
             <span className="pip" />
-            <span>Between two sessions</span>
+            <span>Conversation between two sessions</span>
           </div>
           <h1 className="cl-h-name static">
-            <span className="label-name">Exchange</span>
+            <span className="label-name">{pair ? partyLabel(pair.other) : 'Exchange'}</span>
             <span className="glyph">.</span>
           </h1>
 
-          {data && (
+          {pair && stats && (
             <>
-              <div className="cl-exchange-parties">
-                {orderedParties(data, sessionId).map(p => (
-                  <PartyCard key={p.id} party={p} isHere={p.id === sessionId} />
-                ))}
+              <div className="cl-xfacing">
+                <PartyChip party={pair.other} />
+                <span className="cl-xfacing-swap" aria-hidden>
+                  ⇄
+                </span>
+                <PartyChip party={pair.here} isHere />
               </div>
-              <div className="cl-hband" style={{ marginTop: 20 }}>
-                <div className="cl-hcell">
-                  <div className="lbl">Messages</div>
-                  <div className="num">{data.messages.length}</div>
-                  <div className="sub">both directions</div>
-                </div>
-                <div className="cl-hcell">
-                  <div className="lbl">Transcripts read</div>
-                  <div className="num">{data.scanned}</div>
-                  <div className="sub">every project</div>
-                </div>
-                <div className="cl-hcell">
-                  <div className="lbl">Took</div>
-                  <div className="num">{data.elapsedMs}</div>
-                  <div className="sub">ms</div>
-                </div>
-              </div>
+              {/* What the page rests on — how many transcripts had to be read
+                  for this answer, and how long it took — is a fact about the
+                  join, not about the conversation: it belongs in a title, not
+                  in three numbers the size of headlines. */}
+              <p
+                className="cl-xmeta"
+                title={`Joined across ${data!.scanned} transcripts in ${data!.elapsedMs} ms`}
+              >
+                {stats.total} message{stats.total === 1 ? '' : 's'}
+                {' · '}
+                {stats.other} in · {stats.own} out
+                {stats.span && ` · over ${stats.span}`}
+              </p>
             </>
           )}
         </section>
 
         <section className="cl-section">
           {openError && (
-            <div
-              role="alert"
-              style={{
-                fontSize: 13,
-                color: 'var(--cl-ink-2)',
-                border: '1px solid var(--cl-line)',
-                borderRadius: 8,
-                padding: '10px 12px',
-                marginBottom: 16,
-              }}
-            >
+            <div role="alert" className="cl-xnotice">
               {openError}
             </div>
           )}
@@ -157,23 +167,23 @@ export function ExchangeView({
 
           {!isLoading && !isError && data === null && (
             <div style={{ fontSize: 13, color: 'var(--cl-ink-3)' }}>
-              This message is not in this transcript — nothing to join on. The session may have been
-              rewritten since it was opened.
+              Nothing to join on: the other half of this message is not on disk. It may have gone to
+              an agent or to a session whose transcript is gone, or this session was rewritten since
+              it was opened.
             </div>
           )}
 
           {data && (
-            <div className="cl-exchange-thread">
-              {data.messages.map(m => (
+            <div className="cl-xthread">
+              <div className="cl-xday">{threadDay(data.messages)}</div>
+              {rows.map(row => (
                 <MessageRow
                   // The row it landed on is unique by construction; the id is
                   // only as unique as the writer made it.
-                  key={m.receivedUuid || m.msgId}
-                  message={m}
-                  isEntry={m.msgId === data.entryMsgId}
-                  isOwn={m.from === sessionId}
-                  sender={party(m.from)}
-                  receiver={party(m.to)}
+                  key={row.message.receivedUuid || row.message.msgId}
+                  row={row}
+                  sender={party(row.message.from)}
+                  receiver={party(row.message.to)}
                   label={label}
                   onOpenTurn={openTurn}
                 />
@@ -186,131 +196,164 @@ export function ExchangeView({
   );
 }
 
-/** The other side first — the party the reader came here to learn about —
- *  then the session the page was opened from. */
-function orderedParties(data: ExchangeOutcome, here: string): ExchangeParty[] {
-  const entry = data.messages.find(m => m.msgId === data.entryMsgId);
-  const ids = entry ? [entry.from, entry.to] : data.parties.map(p => p.id);
+/** The two sessions this conversation is between: the other side first — the
+ *  party the reader came here to learn about — then the one the page was
+ *  opened from. Hops can name a third session; they are not parties to this
+ *  conversation and appear only on the message whose chain passed through. */
+function pairOf(
+  data: ExchangeOutcome,
+  here: string
+): { other: ExchangeParty; here: ExchangeParty } {
   const byId = new Map(data.parties.map(p => [p.id, p]));
-  return [...new Set([...ids, here])].map(id => byId.get(id) ?? { id });
+  const entry = data.messages.find(m => m.msgId === data.entryMsgId) ?? data.messages[0];
+  const ids = entry ? [entry.from, entry.to] : data.parties.map(p => p.id);
+  const otherId = ids.find(id => id !== here) ?? ids[0] ?? here;
+  return {
+    other: byId.get(otherId) ?? { id: otherId },
+    here: byId.get(here) ?? { id: here },
+  };
 }
 
 /** What a party is called on the page: the name it declared, else its
  *  session's title, else the short id. The name is the sender's own claim and
- *  it changes, so the card says what it rests on. */
+ *  it changes, so the chip says what it rests on. */
 function partyLabel(p: ExchangeParty): string {
   return p.name ?? p.sessionTitle ?? (p.sessionId ? p.sessionId.slice(0, 8) : 'unknown session');
 }
 
-function PartyCard({ party, isHere }: { party: ExchangeParty; isHere: boolean }) {
+function initial(label: string): string {
+  return label.trim().slice(0, 1).toUpperCase() || '?';
+}
+
+function PartyChip({ party, isHere }: { party: ExchangeParty; isHere?: boolean }) {
+  const name = partyLabel(party);
   const projectName = party.projectPath
     ? projectDisplayName(party.projectPath)
     : (party.projectHash ?? null);
   return (
-    <div
-      className={`cl-exchange-party${isHere ? ' cl-exchange-party--here' : ''}`}
-      data-testid="party"
-    >
-      <div className="cl-exchange-party-name">{partyLabel(party)}</div>
-      <div className="cl-exchange-party-meta">
-        {isHere && <span className="cl-exchange-party-here">this session</span>}
-        {projectName && <span>{projectName}</span>}
-        {party.sessionId ? (
-          <span title={party.sessionId}>
-            {party.sessionTitle && party.name ? party.sessionTitle : party.sessionId.slice(0, 8)}
-          </span>
-        ) : (
-          <span
-            className="cl-exchange-party-missing"
-            title={
-              party.fingerprint
-                ? `Known only by the fingerprint ${party.fingerprint} its messages carry and the name it declared.`
-                : 'Known only by the name it declared.'
-            }
-          >
-            transcript not found
-          </span>
-        )}
-      </div>
+    <div className={`cl-xparty${isHere ? ' is-here' : ''}`} data-testid="party">
+      <span className="cl-xavatar" aria-hidden>
+        {initial(name)}
+      </span>
+      <span className="cl-xparty-id">
+        <span className="cl-xparty-name">{name}</span>
+        <span className="cl-xparty-meta">
+          {isHere && <span className="cl-xparty-here">this session</span>}
+          {projectName && <span>{projectName}</span>}
+          {party.sessionId ? (
+            <span title={party.sessionId}>
+              {party.sessionTitle && party.name ? party.sessionTitle : party.sessionId.slice(0, 8)}
+            </span>
+          ) : (
+            <span
+              className="cl-xparty-missing"
+              title={
+                party.fingerprint
+                  ? `Known only by the fingerprint ${party.fingerprint} its messages carry and the name it declared.`
+                  : 'Known only by the name it declared.'
+              }
+            >
+              transcript not found
+            </span>
+          )}
+        </span>
+      </span>
     </div>
   );
 }
 
 function MessageRow({
-  message: m,
-  isEntry,
-  isOwn,
+  row,
   sender,
   receiver,
   label,
   onOpenTurn,
 }: {
-  message: ExchangeMessage;
-  isEntry: boolean;
-  /** Sent by the session the page was opened from — drawn on the other side. */
-  isOwn: boolean;
+  row: ThreadRow;
   sender: ExchangeParty;
   receiver: ExchangeParty;
   label: (id: string) => string;
   onOpenTurn: (party: ExchangeParty, uuid: string) => void;
 }) {
+  const [full, setFull] = useState(false);
+  const { message: m, isOwn, startsRun, isEntry } = row;
   const canOpenSender = !!(m.sentTurnUuid && sender.sessionId && sender.projectHash);
   const canOpenReceiver = !!(receiver.sessionId && receiver.projectHash);
+  const name = label(m.from);
+  const lines = m.text.split('\n');
+  const clamped = !full && lines.length > CLAMP;
+  const shown = clamped ? lines.slice(0, CLAMP).join('\n') : m.text;
+
   return (
     <article
-      className={`cl-exchange-msg${isOwn ? ' cl-exchange-msg--own' : ''}${isEntry ? ' cl-exchange-msg--entry' : ''}`}
+      className={`cl-xmsg${isOwn ? ' is-own' : ''}${startsRun ? '' : ' is-cont'}${isEntry ? ' is-entry' : ''}`}
       data-msg-id={m.msgId}
       aria-current={isEntry ? 'true' : undefined}
     >
-      <div className="cl-exchange-strip">
-        <span className="cl-exchange-arrow" aria-hidden>
-          ⇢
-        </span>
-        <span className="cl-exchange-from" data-testid="sender">
-          {label(m.from)}
-        </span>
-        <span className="cl-exchange-to">→ {label(m.to)}</span>
-        {m.queued && (
-          <span className="cl-exchange-queued" title="It arrived while a turn was running">
-            mid-turn
+      {/* The face is the party's, and a run of messages from one party wears
+          it once: the gutter stays for the rest of the run so the column
+          never moves. */}
+      <span className="cl-xmsg-face" aria-hidden>
+        {startsRun ? initial(name) : ''}
+      </span>
+
+      <div className="cl-xbubble">
+        <div className="cl-xbubble-head">
+          <span className="cl-xbubble-name" data-testid="sender">
+            {name}
           </span>
+          {m.queued && (
+            <span className="cl-xchip" title="It arrived while a turn was running">
+              mid-turn
+            </span>
+          )}
+          {isEntry && <span className="cl-xchip is-entry">you came from here</span>}
+          <time className="cl-xbubble-time">{messageClock(m.timestamp)}</time>
+        </div>
+
+        {m.summary && <div className="cl-xbubble-summary">{m.summary}</div>}
+        <div className="cl-xbubble-body">
+          <Markdown>{shown}</Markdown>
+        </div>
+        {lines.length > CLAMP && (
+          <button type="button" className="cl-xmore" onClick={() => setFull(f => !f)}>
+            {clamped ? `Show all ${lines.length} lines` : 'Collapse'}
+          </button>
         )}
-        {isEntry && <span className="cl-exchange-entry">you came from here</span>}
-        <time className="cl-exchange-time">{fmtDate(m.timestamp)}</time>
+
+        {(canOpenSender || canOpenReceiver) && (
+          <div className="cl-xactions">
+            {canOpenSender && (
+              <button
+                type="button"
+                className="cl-xopen"
+                onClick={() => onOpenTurn(sender, m.sentTurnUuid!)}
+              >
+                Sending turn ↗
+              </button>
+            )}
+            {canOpenReceiver && (
+              <button
+                type="button"
+                className="cl-xopen"
+                onClick={() => onOpenTurn(receiver, m.receivedUuid)}
+              >
+                Where it arrived ↗
+              </button>
+            )}
+          </div>
+        )}
       </div>
-      {m.summary && <div className="cl-exchange-summary">{m.summary}</div>}
-      <div className="cl-exchange-body">
-        <Markdown>{m.text}</Markdown>
-      </div>
+
       {m.hops && m.hops.length > 1 && (
         <div
-          className="cl-exchange-hops"
+          className="cl-xhops"
           data-testid="hops"
           title="The sessions this message's chain passed through, in order. A reply sent from inside the turn a message started inherits its chain; one appears twice when it answers an answer."
         >
           via {m.hops.map(label).join(' → ')}
         </div>
       )}
-      <div className="cl-exchange-actions">
-        {canOpenSender && (
-          <button
-            type="button"
-            className="cl-exchange-open"
-            onClick={() => onOpenTurn(sender, m.sentTurnUuid!)}
-          >
-            Open sending turn
-          </button>
-        )}
-        {canOpenReceiver && (
-          <button
-            type="button"
-            className="cl-exchange-open"
-            onClick={() => onOpenTurn(receiver, m.receivedUuid)}
-          >
-            Open where it arrived
-          </button>
-        )}
-      </div>
     </article>
   );
 }

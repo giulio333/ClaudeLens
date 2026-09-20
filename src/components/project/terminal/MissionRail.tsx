@@ -44,6 +44,8 @@ import {
 } from './mission-feed';
 import type { FeedEvent, FeedKind } from './mission-feed';
 import { ContextPopover, SpendPopover } from './VitalsPopover';
+import { MessagesDock } from './MessagesDock';
+import { buildMessageThreads } from './mission-messages';
 
 /**
  * The Mission Control rail beside the unified Terminal/Lens view — design "1d ·
@@ -481,6 +483,7 @@ export function MissionRail({
   onOpenAgentDef,
   onOpenTeam,
   onLocateTurn,
+  onOpenExchange,
   showVitals = true,
 }: {
   hash: string;
@@ -503,6 +506,11 @@ export function MissionRail({
    *  than in an overlay: the ask, its options and the answer that was picked are
    *  already drawn in the transcript, and a generic tool panel would show less. */
   onLocateTurn: (turnN: number) => void;
+  /** Open the exchange a conversation in the messages dock belongs to (#280)
+   *  — this session and the other one, both sides in order. A thread with no
+   *  id to join on (an agent inside this session) locates its latest turn
+   *  instead. */
+  onOpenExchange?: (msgId: string) => void;
   /** Whether this rail carries the vitals line — context %, spend, and the
    *  session's diff.
    *
@@ -716,6 +724,9 @@ export function MissionRail({
     ]
   );
   const counts = useMemo(() => countByKind(feed), [feed]);
+  // The conversations of the session — kept out of the feed and pinned under
+  // it as their own dock (see `MessagesDock`).
+  const threads = useMemo(() => buildMessageThreads(processed), [processed]);
   const visible = useMemo(
     () => (filter === 'ALL' ? feed : feed.filter(e => e.kind === filter)),
     [feed, filter]
@@ -1038,6 +1049,14 @@ export function MissionRail({
           </div>
         )}
       </div>
+
+      {/* MESSAGES — who the session is talking to, pinned under the stream */}
+      <MessagesDock
+        threads={threads}
+        now={now}
+        onOpenExchange={onOpenExchange}
+        onLocateTurn={onLocateTurn}
+      />
 
       {/* ENVIRONMENT — the session's standing setup, pinned under the stream */}
       <EnvironmentStrip init={init} />

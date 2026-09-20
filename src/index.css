@@ -18940,141 +18940,440 @@ select.cl-opt-input {
   text-decoration: underline;
 }
 
-/* ── Exchange: both halves of a conversation between two sessions (#280) ─────
-   The page an inbound message opens. The two parties are cards in the hero;
-   the messages below take the inbound bubble's own grammar — the rule down the
-   left, the strip that names the sender — so a message reads the same here as
-   it did in the transcript it came from. A message sent by the session the page
-   was opened from steps in from the left and takes the ink-toned rule an agent
-   inside the session wears: the same "not the other side" signal, reused. */
-.cl-exchange-parties {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-  gap: 12px;
-  margin-top: 18px;
-  max-width: 640px;
+/* ── Outbound message: the half this session sent with `SendMessage` ─────────
+   The twin of the inbound bubble, and it borrows its classes wholesale: same
+   rule, same strip, same fold. What is its own is the delivery state at the end
+   of the strip and the summary line — the one line the call gave the message,
+   which the inbound half never carries. Inside a tool stack the rule sits where
+   a card would, so the stack's own gap does the spacing. */
+.cl-outbound {
+  margin: 2px 0;
 }
-.cl-exchange-party {
+.cl-outbound.is-compact {
+  padding-bottom: 0;
+}
+.cl-outbound.is-compact .cl-inbound-strip {
+  padding-bottom: 0;
+}
+.cl-outbound-summary {
+  font: 500 12px/1.5 var(--font-sans);
+  color: var(--cl-ink);
+  padding-bottom: 4px;
+}
+.cl-outbound-summary.is-inline {
+  font: 500 11px/1.6 var(--font-sans);
+  text-transform: none;
+  letter-spacing: 0;
+  color: var(--cl-ink-2);
+  padding: 0;
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-outbound-state {
+  margin-left: auto;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+.cl-outbound-state.is-ok {
+  color: var(--cl-ok);
+}
+.cl-outbound-state.is-danger {
+  color: var(--cl-danger);
+}
+
+/* ── Messages dock: the conversations of a session, under Mission Control's
+   feed. A messenger's sidebar rather than a log: one card per counterpart, a
+   round monogram in the colour a message wears in the transcript (the accent
+   for another session, ink for an agent inside this one), the name and what it
+   is, the last line with its direction, and how many lines went by. The dock
+   sits on the same hairline the environment strip does, so the rail's foot
+   reads as one band of standing facts. */
+.cl-msgdock {
+  flex-shrink: 0;
+  border-top: 1px solid var(--cl-line);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 40%;
+}
+.cl-msgdock-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 20px 8px;
+  background: none;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  color: var(--cl-ink-2);
+}
+.cl-msgdock-title {
+  font: 700 9px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.cl-msgdock-summary {
+  font: 400 9px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+.cl-msgdock-caret {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--cl-ink-4);
+}
+.cl-msgdock-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 0 20px 12px;
+  overflow-y: auto;
+  min-height: 0;
+}
+.cl-msgdock-thread {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: 100%;
+  padding: 8px 10px;
   border: 1px solid var(--cl-line);
   border-radius: 10px;
-  padding: 10px 12px;
-  background: var(--cl-paper-2);
+  background: var(--cl-paper);
+  cursor: pointer;
+  text-align: left;
+  color: inherit;
+  transition:
+    border-color 0.15s ease,
+    background 0.15s ease;
+}
+.cl-msgdock-thread:hover {
+  border-color: color-mix(in oklab, var(--dock-tint) 45%, var(--cl-line));
+  background: color-mix(in oklab, var(--dock-tint) 4%, var(--cl-paper));
+}
+.cl-msgdock-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 11px/1 var(--font-mono);
+  color: var(--dock-tint);
+  background: color-mix(in oklab, var(--dock-tint) 12%, var(--cl-paper));
+  border: 1px solid color-mix(in oklab, var(--dock-tint) 34%, transparent);
+}
+.cl-msgdock-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.cl-msgdock-top {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
   min-width: 0;
 }
-.cl-exchange-party--here {
-  border-color: color-mix(in oklab, var(--cl-accent) 34%, transparent);
+.cl-msgdock-party {
+  font: 600 12px/1.3 var(--font-sans);
+  color: var(--cl-ink);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.cl-exchange-party-name {
-  font: 700 14px/1.4 var(--font-sans);
+.cl-msgdock-what {
+  font: 400 9px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-4);
+  white-space: nowrap;
+}
+.cl-msgdock-time {
+  margin-left: auto;
+  font: 400 9px/1.3 var(--font-mono);
+  color: var(--cl-ink-4);
+  flex-shrink: 0;
+}
+.cl-msgdock-last {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  min-width: 0;
+  font: 400 11.5px/1.4 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-msgdock-dir {
+  flex-shrink: 0;
+  color: var(--dock-tint);
+  font-size: 12px;
+}
+.cl-msgdock-preview {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-msgdock-count {
+  flex-shrink: 0;
+  font: 600 9px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-line);
+}
+.cl-msgdock-state {
+  flex-shrink: 0;
+  font: 600 8.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-3);
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-line);
+}
+.cl-msgdock-state.is-danger {
+  color: var(--cl-danger);
+  border-color: color-mix(in oklab, var(--cl-danger) 40%, transparent);
+}
+
+/* ── Exchange: the conversation between two sessions (#280) ──────────────────
+   Drawn as a conversation, not as a list of joined rows. The pair is stated
+   once at the top — two facing chips with the swap glyph between them — and
+   each message then takes a side: the other party on the left with a neutral
+   surface, this session on the right in the accent wash the app already uses
+   for "mine". A run of messages from one party wears its face once, the way a
+   continuation turn in the transcript drops its orb. Nothing new in the
+   palette: the accent at low chroma, paper-2, and the hairline. */
+.cl-xfacing {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 20px;
+  max-width: 720px;
+}
+.cl-xfacing-swap {
+  flex-shrink: 0;
+  font: 400 15px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-xparty {
+  flex: 1 1 0;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  border: 1px solid var(--cl-line);
+  border-radius: 12px;
+  padding: 10px 12px;
+  background: var(--cl-paper-2);
+}
+.cl-xparty.is-here {
+  border-color: color-mix(in oklab, var(--cl-accent) 30%, transparent);
+  background: color-mix(in oklab, var(--cl-accent) 5%, var(--cl-paper));
+}
+.cl-xavatar {
+  flex-shrink: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 12px/1 var(--font-mono);
+  color: var(--cl-ink-2);
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+}
+.cl-xparty.is-here .cl-xavatar {
+  color: var(--cl-accent-ink);
+  border-color: color-mix(in oklab, var(--cl-accent) 34%, transparent);
+  background: color-mix(in oklab, var(--cl-accent) 10%, var(--cl-paper));
+}
+.cl-xparty-id {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cl-xparty-name {
+  font: 600 13.5px/1.35 var(--font-sans);
   color: var(--cl-ink);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.cl-exchange-party-meta {
+.cl-xparty-meta {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px 10px;
-  margin-top: 4px;
-  font: 500 10.5px/1.6 var(--font-mono);
+  gap: 3px 9px;
+  font: 500 10px/1.5 var(--font-mono);
   letter-spacing: 0.04em;
   color: var(--cl-ink-4);
 }
-.cl-exchange-party-here {
+.cl-xparty-here {
   color: var(--cl-accent-ink);
   text-transform: uppercase;
   letter-spacing: 0.08em;
 }
-.cl-exchange-party-missing {
+.cl-xparty-missing {
   border: 1px dashed var(--cl-line);
   border-radius: 999px;
   padding: 0 7px;
 }
-.cl-exchange-thread {
+.cl-xmeta {
+  margin-top: 12px;
+  font: 500 11px/1.6 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-4);
+}
+
+.cl-xnotice {
+  font-size: 13px;
+  color: var(--cl-ink-2);
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 16px;
+}
+
+.cl-xthread {
   display: flex;
   flex-direction: column;
-  gap: 18px;
-  max-width: 760px;
+  gap: 10px;
+  max-width: 780px;
 }
-.cl-exchange-msg {
-  border-left: 2px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
-  padding: 0 0 4px 12px;
+.cl-xday {
+  align-self: center;
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+  padding: 3px 10px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  margin-bottom: 4px;
 }
-.cl-exchange-msg--own {
-  border-left-color: color-mix(in oklab, var(--cl-ink-3) 42%, transparent);
-  margin-left: 40px;
+
+/* One message: face in a fixed gutter, bubble beside it. The own side mirrors
+   the whole grid — the face moves to the right edge — while the text inside
+   stays left-aligned, because prose is read from the left whoever wrote it. */
+.cl-xmsg {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  align-items: start;
+  max-width: 88%;
 }
-.cl-exchange-msg--entry {
-  background: color-mix(in oklab, var(--cl-accent) 6%, transparent);
-  border-radius: 0 8px 8px 0;
-  padding-top: 6px;
-  padding-right: 10px;
+.cl-xmsg.is-own {
+  grid-template-columns: minmax(0, 1fr) 28px;
+  margin-left: auto;
 }
-.cl-exchange-strip {
+.cl-xmsg.is-cont {
+  margin-top: -6px;
+}
+.cl-xmsg-face {
+  grid-row: 1;
+  grid-column: 1;
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font: 700 11px/1 var(--font-mono);
+  color: var(--cl-ink-2);
+  background: var(--cl-paper-2);
+  border: 1px solid var(--cl-line);
+}
+.cl-xmsg.is-own .cl-xmsg-face {
+  grid-column: 2;
+  color: var(--cl-accent-ink);
+  background: color-mix(in oklab, var(--cl-accent) 10%, var(--cl-paper));
+  border-color: color-mix(in oklab, var(--cl-accent) 30%, transparent);
+}
+/* A continuation keeps the gutter and loses the face: the column never moves. */
+.cl-xmsg.is-cont .cl-xmsg-face {
+  border-color: transparent;
+  background: none;
+}
+.cl-xbubble {
+  grid-row: 1;
+  grid-column: 2;
+  min-width: 0;
+  border: 1px solid var(--cl-line);
+  border-radius: 12px;
+  padding: 9px 13px 10px;
+  background: var(--cl-paper-2);
+}
+.cl-xmsg.is-own .cl-xbubble {
+  grid-column: 1;
+  background: color-mix(in oklab, var(--cl-accent) 6%, var(--cl-paper));
+  border-color: color-mix(in oklab, var(--cl-accent) 22%, var(--cl-line));
+}
+/* The message the reader came from: a ring, not a wash — a wash on top of the
+   own-side wash would have been two shades of the same thing. */
+.cl-xmsg.is-entry .cl-xbubble {
+  border-color: color-mix(in oklab, var(--cl-accent) 55%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--cl-accent) 22%, transparent);
+}
+.cl-xbubble-head {
   display: flex;
   align-items: baseline;
   flex-wrap: wrap;
   gap: 8px;
-  font: 500 10px/1.6 var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
-  padding-bottom: 6px;
+  padding-bottom: 5px;
 }
-.cl-exchange-msg--own .cl-exchange-strip {
-  color: var(--cl-ink-3);
-}
-.cl-exchange-arrow {
-  font-size: 12px;
-  line-height: 1;
-}
-.cl-exchange-from {
-  font-weight: 700;
+.cl-xbubble-name {
+  font: 600 11px/1.4 var(--font-mono);
   letter-spacing: 0.04em;
-  text-transform: none;
+  color: var(--cl-ink-2);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cl-exchange-to,
-.cl-exchange-time {
-  color: var(--cl-ink-4);
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: none;
+.cl-xmsg.is-own .cl-xbubble-name {
+  color: var(--cl-accent-ink);
 }
-.cl-exchange-time {
+.cl-xbubble-time {
   margin-left: auto;
+  font: 400 10px/1.4 var(--font-mono);
+  color: var(--cl-ink-4);
+  flex-shrink: 0;
 }
-.cl-exchange-queued,
-.cl-exchange-entry {
+.cl-xchip {
+  font: 500 9px/1.5 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   border: 1px solid var(--cl-line);
   border-radius: 999px;
   padding: 1px 7px;
   color: var(--cl-ink-4);
-  letter-spacing: 0.06em;
 }
-.cl-exchange-entry {
+.cl-xchip.is-entry {
   border-color: color-mix(in oklab, var(--cl-accent) 34%, transparent);
   color: var(--cl-accent-ink);
 }
-.cl-exchange-summary {
+.cl-xbubble-summary {
   font: 600 13px/1.5 var(--font-sans);
   color: var(--cl-ink);
-  margin-bottom: 4px;
+  margin-bottom: 3px;
 }
-.cl-exchange-body {
+.cl-xbubble-body {
   color: var(--cl-ink-2);
+  font-size: 13.5px;
 }
-.cl-exchange-hops {
+.cl-xbubble-body > :last-child {
+  margin-bottom: 0;
+}
+.cl-xmore {
   margin-top: 6px;
-  font: 500 10.5px/1.6 var(--font-mono);
-  letter-spacing: 0.04em;
-  color: var(--cl-ink-4);
-}
-.cl-exchange-actions {
-  display: flex;
-  gap: 14px;
-  margin-top: 6px;
-}
-.cl-exchange-open {
   background: none;
   border: none;
   padding: 0;
@@ -19082,8 +19381,52 @@ select.cl-opt-input {
   color: var(--cl-accent-ink);
   cursor: pointer;
 }
-.cl-exchange-open:hover {
+.cl-xmore:hover {
   text-decoration: underline;
+}
+/* The two turns a message can open are footnotes of the message, not controls
+   of the page: a hairline, then two quiet links. */
+.cl-xactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  margin-top: 9px;
+  padding-top: 7px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-xopen {
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 10px/1.4 var(--font-mono);
+  letter-spacing: 0.06em;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+}
+.cl-xopen:hover {
+  color: var(--cl-accent-ink);
+  text-decoration: underline;
+}
+.cl-xhops {
+  grid-column: 2;
+  margin-top: 4px;
+  font: 500 10px/1.6 var(--font-mono);
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-xmsg.is-own .cl-xhops {
+  grid-column: 1;
+  text-align: right;
+}
+@media (max-width: 720px) {
+  .cl-xfacing {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cl-xmsg,
+  .cl-xmsg.is-own {
+    max-width: 100%;
+  }
 }
 
 /* ── What's New: a welcome moment, not a confirm dialog ─────────────────────

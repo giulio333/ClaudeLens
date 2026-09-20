@@ -3,10 +3,13 @@
 // like `chat-types.ts`. Nothing here touches `fs`, so `src/types.ts` re-exports
 // it as is.
 
-/** What the app asks for: the message the user clicked, by the transcript it
- *  landed in and its `origin.msg_id`. */
+/** What the app asks for: the message the user clicked, by the transcript the
+ *  click came from and the id both halves carry (`origin.msg_id` on the row it
+ *  landed on, `toolUseResult.msg_id` on the result of the call that sent it). */
 export interface ExchangeRequest {
-  /** The receiver's transcript id — the session whose chat is on screen. */
+  /** The transcript id of the session whose chat is on screen — either side:
+   *  the receiver when opened from the inbound bubble, the sender from the
+   *  outbound one. */
   sessionId: string;
   msgId: string;
 }
