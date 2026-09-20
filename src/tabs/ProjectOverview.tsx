@@ -47,7 +47,6 @@ import { GlobalMcpView } from '../components/project/mcp/GlobalMcpView';
 import { McpServerDetailView } from '../components/project/mcp/McpServerDetailView';
 // ─── Plugins
 import { PluginsView } from '../components/project/plugins/PluginsView';
-import { PluginDetailView } from '../components/project/plugins/PluginDetailView';
 import { StudioLibraryView } from '../components/project/studio/StudioLibraryView';
 import { CreateBlueprintPage } from '../components/project/studio/CreateBlueprintPage';
 import { BlueprintEditorView } from '../components/project/studio/BlueprintEditorView';
@@ -535,16 +534,7 @@ export default function ProjectOverview() {
           />
         );
       case 'plugins':
-        return (
-          <PluginsView
-            onBack={goGlobal}
-            onSelectPlugin={plugin => setView({ type: 'plugin-detail', plugin })}
-          />
-        );
-      case 'plugin-detail':
-        return (
-          <PluginDetailView plugin={view.plugin} onBack={() => setView({ type: 'plugins' })} />
-        );
+        return <PluginsView onBack={goGlobal} />;
       case 'studio-create':
         return (
           <CreateBlueprintPage

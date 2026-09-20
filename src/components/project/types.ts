@@ -6,7 +6,6 @@ import {
   Agent,
   McpServer,
   Plan,
-  InstalledPlugin,
 } from '../../hooks/useIPC';
 
 /** What identifies an exchange page: the receiving session and the message id
@@ -30,7 +29,6 @@ export type View =
   | { type: 'global-mcp' }
   | { type: 'mcp-detail'; server: McpServer; totalProjects: number }
   | { type: 'plugins' }
-  | { type: 'plugin-detail'; plugin: InstalledPlugin }
   | { type: 'studio' }
   | { type: 'studio-create' }
   | { type: 'studio-blueprint'; name: string; projectPath?: string }

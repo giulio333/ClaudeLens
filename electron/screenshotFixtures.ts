@@ -1819,74 +1819,323 @@ const MOCK_SUBAGENT_TRANSCRIPT = [
 ];
 
 // ─── Plugins installati (user scope) ───────────────────────────────────────────
+// The shapes a real install holds, with names that stand for nothing: an
+// official marketplace with a connector that is only an MCP server, a big
+// skills library that also registers a hook, a one-skill design plugin and a
+// tool with a local (stdio) server; a monorepo marketplace pinned to a commit
+// rather than a version; a community one; and a private team marketplace with
+// no source repo at all — every fact the page can draw, and every one it can
+// leave out.
+
+const PLUGINS_CACHE = '/Users/alice/.claude/plugins/cache';
+
+function mockSkill(dir: string, name: string, description: string) {
+  return {
+    name,
+    path: `${dir}/skills/${name}/SKILL.md`,
+    scope: 'plugin' as const,
+    content: description,
+    rawContent: `---\nname: ${name}\ndescription: ${description}\n---\n\n${description}`,
+    description,
+    userInvocable: true,
+  };
+}
+
+function mockAgent(dir: string, name: string, description: string) {
+  return {
+    name,
+    path: `${dir}/agents/${name}.md`,
+    scope: 'plugin' as const,
+    content: description,
+    rawContent: `---\ndescription: ${description}\n---\n\n${description}`,
+    description,
+    missingRequired: [],
+    filenameHasSpaces: false,
+  };
+}
+
+function mockCommand(dir: string, name: string, description: string) {
+  return {
+    name,
+    path: `${dir}/commands/${name}.md`,
+    description,
+    content: description,
+    rawContent: `---\ndescription: ${description}\n---\n\n${description}`,
+  };
+}
+
+const OFFICIAL = `${PLUGINS_CACHE}/acme-plugins-official`;
+const AGENT_SKILLS = `${PLUGINS_CACHE}/acme-agent-skills`;
+const COMMUNITY = `${PLUGINS_CACHE}/acme-community`;
+const TEAM = `${PLUGINS_CACHE}/team-plugins`;
 
 const MOCK_PLUGINS = [
   {
-    name: 'git-flow',
-    marketplace: 'anthropic-community',
+    name: 'docs-lookup',
+    marketplace: 'acme-plugins-official',
     scope: 'user' as const,
-    version: '1.4.0',
-    installPath: '/Users/alice/.claude/plugins/git-flow',
-    description: 'Conventional commits, branch helpers and PR review commands.',
-    author: 'Anthropic Community',
-    repo: 'https://github.com/anthropic-community/git-flow',
+    version: '9f3c2a7d1e04',
+    installPath: `${OFFICIAL}/docs-lookup/9f3c2a7d1e04`,
+    description:
+      'Up-to-date library documentation lookup. Connects to a hosted remote MCP server — no local runtime required — to pull version-specific docs and code examples into your context. Works anonymously out of the box; set DOCS_API_KEY for higher rate limits.',
+    author: 'Acme Docs',
+    repo: 'acme/acme-plugins-official',
+    skills: [],
+    agents: [],
+    commands: [],
+    mcpServers: [
+      {
+        name: 'docs-lookup',
+        transport: 'http' as const,
+        target: 'https://mcp.docs.example/mcp?client=claude-code-plugin',
+      },
+    ],
+    hooks: [],
+  },
+  {
+    name: 'workflows',
+    marketplace: 'acme-plugins-official',
+    scope: 'user' as const,
+    version: '6.3.0',
+    installPath: `${OFFICIAL}/workflows/6.3.0`,
+    description:
+      'Core skills library for Claude Code: planning, test-driven development, debugging and code-review habits.',
+    author: 'Jo Example',
+    repo: 'acme/acme-plugins-official',
     skills: [
-      {
-        name: 'changelog',
-        path: '/Users/alice/.claude/plugins/git-flow/skills/changelog/SKILL.md',
-        scope: 'plugin' as const,
-        content: 'Generate a changelog entry from the staged diff.',
-        rawContent:
-          '---\nname: changelog\ndescription: Generate a changelog entry from the staged diff\n---\n\nGenerate a changelog entry from the staged diff.',
-        description: 'Generate a changelog entry from the staged diff',
-        userInvocable: true,
-      },
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'plan-first',
+        'Use when you have a spec or requirements for a multi-step task, before touching code. Produces a written plan with checkpoints.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'tdd-loop',
+        'Use when implementing any feature or bugfix, before writing implementation code.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'bisect-bug',
+        'Use when encountering any bug, test failure, or unexpected behavior, before proposing fixes. Narrows the cause by halving.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'review-request',
+        'Use when completing tasks or before merging, to verify the work meets requirements.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'review-response',
+        'Use when receiving code review feedback, before implementing suggestions (e.g. when the feedback seems unclear).'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'parallel-dispatch',
+        'Use when facing 2+ independent tasks that can be worked on without shared state or sequential dependencies'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'worktree-isolation',
+        'Use when starting feature work that needs isolation from the current workspace.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'finish-branch',
+        'Use when implementation is complete, all tests pass, and you need to decide how to integrate the work.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'verify-before-done',
+        'Use when about to claim work is complete, fixed, or passing. Requires running the verification first.'
+      ),
+      mockSkill(
+        `${OFFICIAL}/workflows/6.3.0`,
+        'write-skill',
+        'Use when creating new skills, editing existing skills, or verifying skills work before deployment'
+      ),
     ],
-    agents: [
+    agents: [],
+    commands: [],
+    mcpServers: [],
+    hooks: [
       {
-        name: 'pr-reviewer',
-        path: '/Users/alice/.claude/plugins/git-flow/agents/pr-reviewer.md',
-        scope: 'plugin' as const,
-        content: 'Reviews a pull request and flags risky changes.',
-        rawContent:
-          '---\ndescription: Review a pull request\n---\n\nReviews a pull request and flags risky changes.',
-        description: 'Review a pull request',
-        missingRequired: [],
-        filenameHasSpaces: false,
-      },
-    ],
-    commands: [
-      {
-        name: 'commit',
-        path: '/Users/alice/.claude/plugins/git-flow/commands/commit.md',
-        description: 'Stage and write a conventional commit',
-        content: 'Stage changes and write a conventional commit message.',
-        rawContent:
-          '---\ndescription: Stage and write a conventional commit\n---\n\nStage changes and write a conventional commit message.',
+        event: 'SessionStart',
+        matcher: 'startup|clear|compact',
+        commands: ['"${CLAUDE_PLUGIN_ROOT}/hooks/run-hook.cmd" session-start'],
       },
     ],
   },
   {
-    name: 'test-runner',
-    marketplace: 'anthropic-community',
+    name: 'ui-design',
+    marketplace: 'acme-plugins-official',
     scope: 'user' as const,
-    version: '0.9.2',
-    installPath: '/Users/alice/.claude/plugins/test-runner',
-    description: 'Run, watch and triage test suites without leaving the session.',
-    author: 'Anthropic Community',
-    repo: 'https://github.com/anthropic-community/test-runner',
+    version: '9f3c2a7d1e04',
+    installPath: `${OFFICIAL}/ui-design/9f3c2a7d1e04`,
+    description:
+      'Guidance for distinctive, intentional visual design when building new UI or reshaping an existing one.',
+    author: 'Acme Design',
+    repo: 'acme/acme-plugins-official',
+    skills: [
+      mockSkill(
+        `${OFFICIAL}/ui-design/9f3c2a7d1e04`,
+        'ui-design',
+        'Helps with aesthetic direction, typography, and making choices that do not read as templated defaults.'
+      ),
+    ],
+    agents: [],
+    commands: [],
+    mcpServers: [],
+    hooks: [],
+  },
+  {
+    name: 'issue-tracker',
+    marketplace: 'acme-plugins-official',
+    scope: 'user' as const,
+    version: '2.1.0',
+    installPath: `${OFFICIAL}/issue-tracker/2.1.0`,
+    description: 'Read, triage and update issues from the session through a local MCP server.',
+    author: 'Acme Tools',
+    repo: 'acme/acme-plugins-official',
     skills: [],
     agents: [],
     commands: [
-      {
-        name: 'test',
-        path: '/Users/alice/.claude/plugins/test-runner/commands/test.md',
-        description: 'Run the project test suite',
-        content: 'Run the project test suite and summarize failures.',
-        rawContent:
-          '---\ndescription: Run the project test suite\n---\n\nRun the project test suite and summarize failures.',
-      },
+      mockCommand(
+        `${OFFICIAL}/issue-tracker/2.1.0`,
+        'triage',
+        'Label and prioritise the open issues assigned to you.'
+      ),
     ],
+    mcpServers: [
+      { name: 'tracker', transport: 'stdio' as const, target: 'npx -y @acme/tracker-mcp' },
+    ],
+    hooks: [],
+  },
+  {
+    name: 'office-skills',
+    marketplace: 'acme-agent-skills',
+    scope: 'user' as const,
+    version: '34040c9c5685',
+    installPath: `${AGENT_SKILLS}/office-skills/34040c9c5685`,
+    description:
+      'Collection of document processing skills covering spreadsheets, word processing, slides and PDF.',
+    repo: 'acme/skills',
+    skills: [
+      mockSkill(
+        `${AGENT_SKILLS}/office-skills/34040c9c5685`,
+        'spreadsheet',
+        'Use this skill any time a spreadsheet file is the primary input or output. This means any task where the user wants to open, read, edit or fix an .xlsx or .csv file.'
+      ),
+      mockSkill(
+        `${AGENT_SKILLS}/office-skills/34040c9c5685`,
+        'word-doc',
+        'Use this skill whenever the user wants to create, read, edit, or manipulate Word documents (.docx files) or templates (.dotx files). Triggers include any mention of a Word doc.'
+      ),
+      mockSkill(
+        `${AGENT_SKILLS}/office-skills/34040c9c5685`,
+        'slides',
+        'Use this skill any time a .pptx file is involved in any way — as input, output, or both.'
+      ),
+      mockSkill(
+        `${AGENT_SKILLS}/office-skills/34040c9c5685`,
+        'pdf-tools',
+        'Use this skill whenever the user wants to do anything with PDF files. This includes merging, splitting, rotating and OCR.'
+      ),
+    ],
+    agents: [],
+    commands: [],
+    mcpServers: [],
+    hooks: [],
+  },
+  {
+    name: 'git-flow',
+    marketplace: 'acme-community',
+    scope: 'user' as const,
+    version: '1.4.0',
+    installPath: `${COMMUNITY}/git-flow/1.4.0`,
+    description: 'Conventional commits, branch helpers and PR review commands.',
+    author: 'Acme Community',
+    repo: 'https://github.com/acme-community/git-flow',
+    skills: [
+      mockSkill(
+        `${COMMUNITY}/git-flow/1.4.0`,
+        'changelog',
+        'Generate a changelog entry from the staged diff'
+      ),
+    ],
+    agents: [
+      mockAgent(
+        `${COMMUNITY}/git-flow/1.4.0`,
+        'pr-reviewer',
+        'Reviews a pull request and flags risky changes. Reads the diff, the tests it touches and the CI result.'
+      ),
+    ],
+    commands: [
+      mockCommand(`${COMMUNITY}/git-flow/1.4.0`, 'commit', 'Stage and write a conventional commit'),
+    ],
+    mcpServers: [],
+    hooks: [],
+  },
+  {
+    name: 'test-runner',
+    marketplace: 'acme-community',
+    scope: 'user' as const,
+    version: '0.9.2',
+    installPath: `${COMMUNITY}/test-runner/0.9.2`,
+    description: 'Run, watch and triage test suites without leaving the session.',
+    author: 'Acme Community',
+    repo: 'https://github.com/acme-community/test-runner',
+    skills: [],
+    agents: [],
+    commands: [mockCommand(`${COMMUNITY}/test-runner/0.9.2`, 'test', 'Run the project test suite')],
+    mcpServers: [],
+    hooks: [],
+  },
+  {
+    name: 'ops-toolkit',
+    marketplace: 'team-plugins',
+    scope: 'user' as const,
+    version: '1.7.0',
+    installPath: `${TEAM}/ops-toolkit/1.7.0`,
+    description:
+      'Skills for working on the Acme2.0 platform: querying the legacy database, calling the REST API, probing the message brokers and driving the cluster. Includes the /purge-system command, which empties a legacy system with a dry run and an explicit confirmation.',
+    author: 'Alice Example',
+    skills: [
+      mockSkill(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'db-query',
+        'Queries the legacy SQL Server database (the three DBs on the same instance) for topology, devices, events and configuration. Reads are free; updates need an explicit confirmation.'
+      ),
+      mockSkill(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'api-explorer',
+        'Looks up and calls the legacy REST API (300+ operations). Logs in on its own with profiles from a local targets file.'
+      ),
+      mockSkill(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'broker-probe',
+        'Diagnoses the message brokers and the federation between them — queues, consumers, backlog, topics. Has its own MQTT client.'
+      ),
+      mockSkill(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'cluster-ops',
+        'Drives the cluster where the brokers and microservices run: pods, custom resources, secrets, logs and routes.'
+      ),
+      mockSkill(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'docs-portal',
+        'Searches and updates the platform documentation portal, with full-text search over the sources when the clone is present.'
+      ),
+    ],
+    agents: [],
+    commands: [
+      mockCommand(
+        `${TEAM}/ops-toolkit/1.7.0`,
+        'purge-system',
+        'Remove every device of a system on the legacy platform, after a dry run and an explicit confirmation'
+      ),
+    ],
+    mcpServers: [],
+    hooks: [],
   },
 ];
 

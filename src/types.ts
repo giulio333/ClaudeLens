@@ -579,6 +579,18 @@ export interface PluginCommand {
 }
 
 /** A plugin installed at user scope, with the components it provides. */
+export interface PluginMcpServer {
+  name: string;
+  transport: 'http' | 'sse' | 'ws' | 'stdio' | 'unknown';
+  target?: string;
+}
+
+export interface PluginHook {
+  event: string;
+  matcher?: string;
+  commands: string[];
+}
+
 export interface InstalledPlugin {
   name: string;
   marketplace: string;
@@ -591,6 +603,8 @@ export interface InstalledPlugin {
   skills: Skill[];
   agents: Agent[];
   commands: PluginCommand[];
+  mcpServers: PluginMcpServer[];
+  hooks: PluginHook[];
 }
 
 export interface SkillInput {

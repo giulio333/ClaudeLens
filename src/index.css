@@ -13235,158 +13235,376 @@ button.cl-sw-member:focus-visible,
      trying to get away from. The "+N" overflow is the one accent-tinted
      thing in the row — an invitation to open the plugin, not a dead end.
    ════════════════════════════════════════════════════════════════════════ */
-.cl-plugin-body {
-  padding-top: 6px;
+/* ── Plugins — an explorer: tree on the left, the plugin's index on the right ──
+   The tree IS the hierarchy: marketplaces as folders with a disclosure
+   chevron, the plugins they gave you hanging off a rail beneath, each with a
+   tick to the rail the way every file tree draws it. The selected plugin is a
+   tab: it takes the pane's paper and runs into it with no divider in between
+   — the two panes differ by ground alone, so nothing has to be interrupted —
+   which makes "what is on the right" a fact of the layout. The pane is an
+   index, not a card grid: the plugin named and placed in a sentence, then
+   its skills, agents and commands each under a heading that says in plain
+   words what that kind of thing is. No tracked capitals, no middle-dot meta,
+   and mono only for what you would actually type. */
+.cl-plugin-split {
+  flex: 1;
+  min-height: 0;
+  display: flex;
 }
-.cl-plugin-mp-group {
-  margin-bottom: 34px;
+.cl-plugin-tree {
+  width: 292px;
+  flex-shrink: 0;
+  overflow-y: auto;
+  background: var(--cl-paper-2);
+  padding-bottom: 24px;
 }
-.cl-plugin-mp-group:last-child {
-  margin-bottom: 4px;
+.cl-plugin-tree-head {
+  padding: 30px 22px 22px;
 }
-.cl-plugin-mp-label {
+.cl-plugin-tree-title {
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.1;
+  color: var(--cl-ink);
+}
+.cl-plugin-tree-title .glyph {
+  color: var(--cl-accent);
+}
+.cl-plugin-tree-lede {
+  margin-top: 12px;
+  font-family: var(--font-reading);
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+}
+.cl-plugin-tree-path {
+  margin-top: 12px;
   font-family: var(--font-mono);
   font-size: 11px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   color: var(--cl-ink-4);
-  margin-bottom: 14px;
 }
-.cl-plugin-mp-count {
-  text-transform: none;
-  letter-spacing: 0.02em;
+.cl-plugin-tree-kicker {
+  padding: 6px 22px 4px;
+  font-family: var(--font-reading);
+  font-size: 12px;
+  font-weight: 500;
   color: var(--cl-ink-4);
 }
 
-.cl-plugin-skyline {
-  display: flex;
-  align-items: flex-end;
-  gap: 6px;
-  padding-bottom: 10px;
-  border-bottom: 3px solid var(--cl-ink);
-  margin-bottom: 4px;
-}
-.cl-plugin-bar {
-  width: 22px;
-  flex-shrink: 0;
-  border: 1.5px solid var(--cl-ink);
-  border-bottom: none;
-  border-radius: 3px 3px 0 0;
-  position: relative;
-  background: var(--cl-paper);
-}
-.cl-plugin-bar-fill {
-  position: absolute;
-  left: -1.5px;
-  right: -1.5px;
-  bottom: 0;
-  background: color-mix(in oklch, var(--cl-accent) 14%, transparent);
-  border-top: 1.5px solid color-mix(in oklch, var(--cl-accent) 55%, transparent);
-}
-
-.cl-plugin-row {
-  display: flex;
-  gap: 16px;
-  padding: 16px 0;
-  border-bottom: 1px solid var(--cl-line);
-  width: 100%;
-  text-align: left;
-  background: none;
-  border-left: none;
-  border-right: none;
-  border-top: none;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-.cl-plugin-mp-group .cl-plugin-row:last-child {
-  border-bottom: none;
-  padding-bottom: 4px;
-}
-.cl-plugin-glyph {
-  width: 46px;
-  height: 46px;
-  flex-shrink: 0;
-  border-radius: 8px;
+/* Marketplace: a folder row. The chevron turns when it is open. */
+.cl-plugin-mp-node {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  font-weight: 800;
-  background: color-mix(in oklch, var(--cl-accent) 12%, transparent);
-  color: var(--cl-accent-ink);
-}
-.cl-plugin-glyph.is-empty {
-  background: var(--cl-paper-2);
-  color: var(--cl-ink-4);
-}
-.cl-plugin-main {
-  flex: 1;
-  min-width: 0;
-}
-.cl-plugin-top {
-  display: flex;
-  align-items: baseline;
-  gap: 10px;
-  flex-wrap: wrap;
-}
-.cl-plugin-name {
-  font-size: 15px;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 22px 7px 16px;
+  border: 0;
+  background: none;
+  font: inherit;
+  font-size: 13px;
   font-weight: 600;
   letter-spacing: -0.01em;
   color: var(--cl-ink);
+  text-align: left;
+  cursor: pointer;
 }
-.cl-plugin-ver {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  color: var(--cl-ink-4);
+.cl-plugin-mp-node:hover {
+  background: color-mix(in oklch, var(--cl-ink) 4%, transparent);
 }
-.cl-plugin-desc {
-  font-size: 12.5px;
-  color: var(--cl-ink-3);
-  line-height: 1.5;
-  max-width: 66ch;
-  margin: 4px 0 9px;
+.cl-plugin-mp-node:focus-visible,
+.cl-plugin-node:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--cl-accent) 55%, transparent);
+  outline-offset: -2px;
 }
-.cl-plugin-comp-group {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: baseline;
-  row-gap: 4px;
-  margin-bottom: 5px;
-}
-.cl-plugin-comp-group:last-child {
-  margin-bottom: 0;
-}
-.cl-plugin-comp-kind {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--cl-ink-4);
-  width: 62px;
+.cl-plugin-mp-node .tri {
   flex-shrink: 0;
+  color: var(--cl-ink-4);
+  transition: transform 140ms;
 }
-.cl-plugin-tag {
-  font-family: var(--font-mono);
+@media (prefers-reduced-motion: reduce) {
+  .cl-plugin-mp-node .tri {
+    transition: none;
+  }
+}
+.cl-plugin-mp-node[aria-expanded='true'] .tri {
+  transform: rotate(90deg);
+}
+.cl-plugin-mp-node .cl-plugin-ico,
+.cl-plugin-node .cl-plugin-ico {
+  flex-shrink: 0;
+  color: var(--cl-ink-4);
+}
+.cl-plugin-mp-node .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-plugin-mp-node .ct {
+  font-family: var(--font-reading);
   font-size: 11px;
-  letter-spacing: 0.01em;
-  color: var(--cl-ink-3);
+  font-weight: 400;
+  color: var(--cl-ink-4);
+  white-space: nowrap;
 }
-.cl-plugin-tag-sep {
-  display: inline-block;
+
+/* Children: a rail under the chevron, each plugin ticking off it. The list
+   runs to the pane's edge so the selected tab can meet the paper beyond. */
+.cl-plugin-children {
+  margin: 0 0 8px 21px;
+  padding: 2px 0 2px 10px;
+  border-left: 1px solid color-mix(in oklch, var(--cl-ink) 22%, transparent);
+}
+.cl-plugin-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 18px 7px 12px;
+  border: 0;
+  border-radius: 8px 0 0 8px;
+  background: none;
+  font: inherit;
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--cl-ink-2);
+  text-align: left;
+  cursor: pointer;
+}
+.cl-plugin-node::before {
+  content: '';
+  position: absolute;
+  left: -10px;
+  top: 50%;
+  width: 8px;
+  height: 1px;
+  background: color-mix(in oklch, var(--cl-ink) 22%, transparent);
+}
+.cl-plugin-node:hover {
+  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+}
+.cl-plugin-node.is-selected {
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  font-weight: 500;
+}
+.cl-plugin-node.is-selected .cl-plugin-ico {
+  color: var(--cl-accent);
+}
+/* The one stroke of colour in the tree: a short bar on the tab that is open. */
+.cl-plugin-node.is-selected::after {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 7px;
+  bottom: 7px;
   width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--cl-line);
-  margin: 0 9px;
-  vertical-align: middle;
+  border-radius: 2px;
+  background: var(--cl-accent);
 }
-.cl-plugin-tag--more {
+.cl-plugin-node .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-plugin-node .ct {
+  font-size: 11px;
+  color: var(--cl-ink-4);
+}
+
+/* The pane: the selected plugin's index, one reading column. */
+.cl-plugin-pane {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+  background: var(--cl-paper);
+}
+.cl-plugin-page {
+  max-width: 76ch;
+  padding: 44px 48px 72px;
+}
+.cl-plugin-title {
+  font-size: 44px;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 1.05;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+}
+.cl-plugin-summary {
+  margin-top: 14px;
+  font-family: var(--font-reading);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-2);
+}
+/* The icon disc: the accent's one job on this page. It sits behind every
+   mark that names a fact or a kind, so colour always means "a label". */
+.cl-plugin-page .disc {
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--cl-accent-soft);
   color: var(--cl-accent-ink);
 }
-.cl-plugin-comps--none {
+.cl-plugin-facts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 30px;
+  margin-top: 22px;
+}
+.cl-plugin-fact {
+  display: grid;
+  grid-template-columns: 28px auto;
+  grid-template-rows: auto auto;
+  column-gap: 10px;
+  align-items: center;
+  min-width: 0;
+}
+.cl-plugin-fact .disc {
+  grid-row: 1 / 3;
+}
+.cl-plugin-fact .lbl {
+  font-family: var(--font-reading);
   font-size: 11.5px;
+  line-height: 1.2;
   color: var(--cl-ink-4);
-  font-style: italic;
+}
+.cl-plugin-fact .val {
+  font-family: var(--font-reading);
+  font-size: 13.5px;
+  font-weight: 500;
+  line-height: 1.3;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+}
+.cl-plugin-fact .val a {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklch, var(--cl-ink) 25%, transparent);
+  text-underline-offset: 3px;
+}
+.cl-plugin-fact .val a:hover {
+  color: var(--cl-accent-ink);
+  text-decoration-color: currentColor;
+}
+.cl-plugin-none {
+  padding-top: 24px;
+  font-family: var(--font-reading);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  max-width: 52ch;
+}
+.cl-plugin-index {
+  margin-top: 36px;
+  padding-top: 8px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-plugin-kind {
+  padding: 28px 0 8px;
+}
+.cl-plugin-kind h2 {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+}
+.cl-plugin-kind h2 .n {
+  font-family: var(--font-reading);
+  font-size: 13px;
+  font-weight: 400;
+  color: var(--cl-ink-4);
+}
+.cl-plugin-kind .what {
+  margin-top: 6px;
+  padding-left: 38px;
+  max-width: 62ch;
+  font-family: var(--font-reading);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+}
+/* The list is the grid and every entry a subgrid of it, so the name column
+   is as wide as the longest name in the group (up to a cap) rather than a
+   guess that wraps `dispatching-parallel-agents` and leaves `/pdf` swimming. */
+.cl-plugin-kind ul {
+  list-style: none;
+  margin: 14px 0 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: fit-content(260px) 1fr;
+  column-gap: 24px;
+}
+.cl-plugin-kind li {
+  display: contents;
+}
+/* An entry: name in its own column so the eye can run down the names, the
+   opening sentence beside it. Two lines at most — the whole description is
+   one click away. */
+.cl-plugin-entry {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: baseline;
+  width: 100%;
+  padding: 8px 0;
+  border: 0;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-plugin-entry.is-static {
+  cursor: default;
+}
+.cl-plugin-entry:focus-visible {
+  outline: 2px solid color-mix(in oklch, var(--cl-accent) 55%, transparent);
+  outline-offset: 2px;
+}
+.cl-plugin-entry .nm {
+  font-family: var(--font-reading);
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+  transition: color 100ms;
+}
+.cl-plugin-entry .nm.typed {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.cl-plugin-entry:not(.is-static):hover .nm {
+  color: var(--cl-accent-ink);
+}
+/* An endpoint or a command line is what it is — a URL, a path — and wraps
+   at any point rather than pushing the column. */
+.cl-plugin-entry.is-static .ds {
+  overflow-wrap: anywhere;
+}
+.cl-plugin-entry .ds {
+  font-family: var(--font-reading);
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  overflow: hidden;
 }
 
 /* Dressed-up empty state — a glyph above a sentence, for the "nothing here
