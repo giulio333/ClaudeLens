@@ -10,7 +10,7 @@
 //    because the only signal for it (`isSkill`) is set from a transcript row
 //    the SDK read drops.
 
-import { describe, it, expect, afterEach, vi } from 'vitest';
+import { describe, it, expect, afterEach } from 'vitest';
 import { StrictMode } from 'react';
 import { cleanup, render, fireEvent } from '@testing-library/react';
 import { AdvisorBadge, MessageBubble } from '../src/components/project/chat/MessageBubble';
@@ -164,19 +164,32 @@ describe('an advisor consult', () => {
 const LONG_BODY = Array.from({ length: 30 }, (_, i) => `line ${i + 1}`).join('\n');
 
 describe('a message from another session', () => {
-  it('names the sender and says it is another session', () => {
+  /** Opening the row: the whole line is the disclosure, so the message body is
+   *  behind the same click a reader would make. */
+  const openRow = (container: HTMLElement) =>
+    fireEvent.click(container.querySelector('.cl-msg-toggle') as HTMLButtonElement);
+
+  it('names the sender, previews what was said, and tells who it is once opened', () => {
     const { container } = mount(
       userMessage('the fork inventory is done, nothing pushed', {
         inbound: { from: 'session', name: 'alice-7c', pid: 4242, msgId: 'm-1' },
       })
     );
 
-    expect(container.querySelector('.cl-inbound-from')?.textContent).toBe('alice-7c');
-    expect(container.querySelector('.cl-inbound-what')?.textContent).toBe('another session');
-    expect(container.querySelector('.cl-inbound-body')?.textContent).toContain(
+    expect(container.querySelector('.cl-msg--in')).not.toBeNull();
+    expect(container.querySelector('.cl-msg-dir')?.textContent).toBe('from');
+    expect(container.querySelector('.cl-msg-who')?.textContent).toBe('alice-7c');
+    expect(container.querySelector('.cl-msg-preview')?.textContent).toContain(
       'the fork inventory is done'
     );
-    // Not a user bubble: the strip is what tells the reader it was not them.
+    // The message itself is one click away, and so is who the sender is.
+    expect(container.querySelector('.cl-msg-body')).toBeNull();
+    openRow(container);
+    expect(container.querySelector('.cl-msg-body')?.textContent).toContain(
+      'the fork inventory is done'
+    );
+    expect(container.querySelector('.cl-msg-what')?.textContent).toBe('another session');
+    // Not a user bubble: the row is what tells the reader it was not them.
     expect(container.querySelector('.cl-message-text--user')).toBeNull();
   });
 
@@ -186,72 +199,44 @@ describe('a message from another session', () => {
         inbound: { from: 'agent', name: 'worker-b' },
       })
     );
-    expect(container.querySelector('.cl-inbound-what')?.textContent).toBe('agent in this session');
-    expect(container.querySelector('.cl-inbound--agent')).not.toBeNull();
+    expect(container.querySelector('.cl-msg--agent')).not.toBeNull();
+    expect(container.querySelector('.cl-msg-tag')?.textContent).toBe('agent');
+    openRow(container);
+    expect(container.querySelector('.cl-msg-what')?.textContent).toBe('agent in this session');
   });
 
   it('marks one that arrived while a turn was running', () => {
     const { container } = mount(
       userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', queued: true } })
     );
-    expect(container.querySelector('.cl-inbound-queued')?.textContent).toBe('mid-turn');
+    expect(container.querySelector('.cl-msg-tag.is-queued')?.textContent).toBe('mid-turn');
   });
 
-  it('opens folded and unfolds on ask, surviving the StrictMode remount', () => {
+  it('opens on ask and shows the whole message, surviving the StrictMode remount', () => {
     const { container } = mount(
       userMessage(LONG_BODY, { inbound: { from: 'session', name: 'alice-7c' } })
     );
 
-    const body = () => container.querySelector('.cl-inbound-body')?.textContent ?? '';
-    expect(body()).toContain('line 12');
-    expect(body()).not.toContain('line 13');
+    // Folded: one line of preview, and it is the first line of the message.
+    expect(container.querySelector('.cl-msg-preview')?.textContent).toBe('line 1');
+    expect(container.querySelector('.cl-msg-body')).toBeNull();
 
-    const more = container.querySelector('.cl-inbound-more') as HTMLButtonElement;
-    expect(more.textContent).toBe('Show all 30 lines');
-    fireEvent.click(more);
-    expect(body()).toContain('line 30');
+    openRow(container);
+    const body = container.querySelector('.cl-msg-body')?.textContent ?? '';
+    expect(body).toContain('line 1');
+    expect(body).toContain('line 30');
   });
 
-  it('draws a short one without a fold control at all', () => {
+  // The way into the exchange is Mission Control's MESSAGES dock, which groups
+  // the conversation by counterpart; a link on every message in the stream was
+  // the chrome this row exists to shed, so the row carries no control at all.
+  it('carries no control of its own — the exchange is reached from Mission Control', () => {
     const { container } = mount(
-      userMessage('two words', { inbound: { from: 'session', name: 'alice-7c' } })
-    );
-    expect(container.querySelector('.cl-inbound-more')).toBeNull();
-  });
-
-  it('offers the exchange it belongs to, by its message id', () => {
-    const onOpenExchange = vi.fn();
-    const { container } = mount(
-      userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', msgId: 'm-1' } }),
-      { onOpenExchange }
-    );
-
-    const link = container.querySelector('.cl-inbound-exchange') as HTMLButtonElement;
-    expect(link?.textContent).toBe('Show exchange');
-    fireEvent.click(link);
-    expect(onOpenExchange).toHaveBeenCalledWith('m-1');
-  });
-
-  it('offers no exchange for an agent inside this session, nor without an id to join on', () => {
-    const onOpenExchange = vi.fn();
-    const agent = mount(
-      userMessage('done', { inbound: { from: 'agent', name: 'worker-b', msgId: 'm-2' } }),
-      { onOpenExchange }
-    );
-    expect(agent.container.querySelector('.cl-inbound-exchange')).toBeNull();
-    agent.unmount();
-
-    const noId = mount(userMessage('ping', { inbound: { from: 'session', name: 'alice-7c' } }), {
-      onOpenExchange,
-    });
-    expect(noId.container.querySelector('.cl-inbound-exchange')).toBeNull();
-    noId.unmount();
-
-    // And nothing to click when nobody is listening.
-    const nobody = mount(
       userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', msgId: 'm-1' } })
     );
-    expect(nobody.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    expect(container.textContent).not.toContain('Show exchange');
+    // The only button is the row itself, which opens the message.
+    expect(container.querySelectorAll('button')).toHaveLength(1);
   });
 });
 
@@ -333,14 +318,17 @@ describe('a message sent to another session', () => {
 
     const bubble = container.querySelector('.cl-outbound');
     expect(bubble).not.toBeNull();
-    expect(bubble?.querySelector('.cl-inbound-from')?.textContent).toBe('alice-7c');
-    expect(bubble?.querySelector('.cl-outbound-summary')?.textContent).toBe(
-      'Asking what it is doing'
-    );
-    expect(bubble?.querySelector('.cl-inbound-body')?.textContent).toContain(
+    expect(bubble?.querySelector('.cl-msg--out')).not.toBeNull();
+    expect(bubble?.querySelector('.cl-msg-dir')?.textContent).toBe('to');
+    expect(bubble?.querySelector('.cl-msg-who')?.textContent).toBe('alice-7c');
+    // The one line is the summary the call gave the message.
+    expect(bubble?.querySelector('.cl-msg-preview')?.textContent).toBe('Asking what it is doing');
+    expect(bubble?.querySelector('.cl-msg-state')?.textContent).toBe('SENT');
+
+    fireEvent.click(bubble?.querySelector('.cl-msg-toggle') as HTMLButtonElement);
+    expect(bubble?.querySelector('.cl-msg-body')?.textContent).toContain(
       'what are you working on right now?'
     );
-    expect(bubble?.querySelector('.cl-outbound-state')?.textContent).toBe('SENT');
     // The generic card, with the result JSON in it, is gone.
     expect(container.querySelector('.cl-tool-card')).toBeNull();
     expect(container.textContent).not.toContain('"success":true');
@@ -356,40 +344,33 @@ describe('a message sent to another session', () => {
     expect(bubble).not.toBeNull();
     expect(bubble?.textContent).toContain('alice-7c');
     expect(bubble?.textContent).toContain('Asking what it is doing');
-    expect(bubble?.querySelector('.cl-inbound-body')).toBeNull();
+    expect(bubble?.querySelector('.cl-msg-body')).toBeNull();
     expect(container.textContent).not.toContain('ri…');
   });
 
-  it('offers the exchange for a delivery to another session, and not for an agent', () => {
-    const onOpenExchange = vi.fn();
-    const session = mountTurn(sentTurn({ sent: delivered }), 'all', { onOpenExchange });
-    const link = session.container.querySelector('.cl-inbound-exchange') as HTMLButtonElement;
-    expect(link?.textContent).toBe('Show exchange');
-    fireEvent.click(link);
-    expect(onOpenExchange).toHaveBeenCalledWith('m-1');
-    session.unmount();
-
+  it('names an agent inside this session, and offers no exchange control either', () => {
     const agent = mountTurn(
       sentTurn({ to: 'worker-b', sent: { msgId: 'm-2', to: 'agent' } }),
-      'all',
-      { onOpenExchange }
+      'all'
     );
-    expect(agent.container.querySelector('.cl-inbound-exchange')).toBeNull();
-    expect(agent.container.querySelector('.cl-inbound--agent')).not.toBeNull();
-    const whats = [...agent.container.querySelectorAll('.cl-inbound-what')].map(e => e.textContent);
-    expect(whats).toEqual(['to', 'agent in this session']);
+    expect(agent.container.textContent).not.toContain('Show exchange');
+    expect(agent.container.querySelector('.cl-msg--agent')).not.toBeNull();
+    fireEvent.click(agent.container.querySelector('.cl-msg-toggle') as HTMLButtonElement);
+    expect(agent.container.querySelector('.cl-msg-what')?.textContent).toBe(
+      'agent in this session'
+    );
   });
 
   it('says what the transcript knows about a call that delivered nothing', () => {
     const pending = mountTurn(sentTurn({ result: 'none' }), 'all');
-    expect(pending.container.querySelector('.cl-outbound-state')?.textContent).toBe('SENDING');
-    expect(pending.container.querySelector('.cl-inbound-exchange')).toBeNull();
+    expect(pending.container.querySelector('.cl-msg-state')?.textContent).toBe('SENDING');
     pending.unmount();
 
     const failed = mountTurn(sentTurn({ result: 'error' }), 'all');
-    expect(failed.container.querySelector('.cl-outbound-state')?.textContent).toBe('FAILED');
-    // The tool's own answer is there, folded, for whoever wants it.
-    const more = failed.container.querySelector('.cl-inbound-more') as HTMLButtonElement;
+    expect(failed.container.querySelector('.cl-msg-state')?.textContent).toBe('FAILED');
+    // The tool's own answer is there, under the opened message, for whoever wants it.
+    fireEvent.click(failed.container.querySelector('.cl-msg-toggle') as HTMLButtonElement);
+    const more = failed.container.querySelector('.cl-msg-more') as HTMLButtonElement;
     expect(more?.textContent).toBe('Show what the tool answered');
     expect(failed.container.textContent).not.toContain('socket closed');
     fireEvent.click(more);
@@ -398,21 +379,17 @@ describe('a message sent to another session', () => {
 
     // Answered, no id: nothing was delivered, and nothing is claimed.
     const undelivered = mountTurn(sentTurn({}), 'all');
-    expect(undelivered.container.querySelector('.cl-outbound-state')?.textContent).toBe(
-      'NO DELIVERY'
-    );
+    expect(undelivered.container.querySelector('.cl-msg-state')?.textContent).toBe('NO DELIVERY');
   });
 
-  it('opens folded and unfolds on ask, surviving the StrictMode remount', () => {
+  it('opens on ask, surviving the StrictMode remount', () => {
     const { container } = mountTurn(sentTurn({ message: LONG_BODY, sent: delivered }), 'all');
 
-    const body = () => container.querySelector('.cl-inbound-body')?.textContent ?? '';
-    expect(body()).toContain('line 12');
-    expect(body()).not.toContain('line 13');
-    const more = container.querySelector('.cl-inbound-more') as HTMLButtonElement;
-    expect(more.textContent).toBe('Show all 30 lines');
-    fireEvent.click(more);
-    expect(body()).toContain('line 30');
+    // With no summary the row previews the message's own first line.
+    expect(container.querySelector('.cl-msg-preview')?.textContent).toBe('line 1');
+    expect(container.querySelector('.cl-msg-body')).toBeNull();
+    fireEvent.click(container.querySelector('.cl-msg-toggle') as HTMLButtonElement);
+    expect(container.querySelector('.cl-msg-body')?.textContent).toContain('line 30');
   });
 });
 

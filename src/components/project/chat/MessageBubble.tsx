@@ -27,6 +27,8 @@ import { agentTintColor } from '../shared/entityOptions';
 import { ToolGroupCard } from './ToolGroupCard';
 import { artifactOf, isArtifactTool } from './artifact';
 import { isMessageTool } from './sent-message';
+import { MessageLine } from './MessageLine';
+import { previewLine } from './message-line';
 import { FileIcon } from './fileIcons';
 import { blockKey, isPersistableMessageUuid } from './highlights';
 
@@ -541,43 +543,33 @@ function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: numb
 // Memoized: with a stable `processed` (from ChatView's useMemo) and a stable
 // `onOpenToolDetail` setter, bubbles don't re-render on header-collapse / export
 // state changes — only when their own props actually change.
-/** Lines of an inbound message drawn before it folds. A dispatch from another
- *  session runs long — the corpus has one of 48 lines — and it is not this
- *  session's work, so it opens summarised and unfolds on ask. */
-const INBOUND_CLAMP = 12;
-
 /** A message this session did not type: sent by another Claude Code session on
  *  the machine, or by an agent running inside this one.
  *
  *  It keeps the geometry of a user turn — it IS an input to the turn that
- *  follows, and reading it as anything else loses the plot — but never its
- *  identity: the strip says who sent it, and `⇢` says it came in. What is drawn
- *  is `origin.body`, the message alone: the row's own text wraps it in a
- *  `<cross-session-message>` tag and some 700 characters of safety preamble
- *  addressed to Claude, and neither is something a reader should see.
+ *  follows, and reading it as anything else loses the plot — but it is drawn as
+ *  one line (`MessageLine`, shared with the half this session sends): who wrote,
+ *  the first line of what they wrote, when it landed. The message opens on ask.
+ *  What is drawn is `origin.body`, the message alone: the row's own text wraps
+ *  it in a `<cross-session-message>` tag and some 700 characters of safety
+ *  preamble addressed to Claude, and neither is something a reader should see.
+ *
+ *  The exchange it belongs to is not offered here — Mission Control's MESSAGES
+ *  dock is the way in (#280) — so the row carries no control at all.
  *
  *  The name is the sender's own claim and it moves — a background session
- *  renames itself once it has a topic — so it labels the strip and nothing
- *  hangs off it; the pid, which the receiver verified off the socket, is what
- *  the title attribute reports. */
+ *  renames itself once it has a topic — so it labels the row and nothing hangs
+ *  off it; the pid, which the receiver verified off the socket, is what the
+ *  title attribute reports. */
 export function InboundMessage({
   origin,
   text,
   timestamp,
-  onOpenExchange,
 }: {
   origin: InboundOrigin;
   text: string;
   timestamp: string;
-  /** Open the exchange this message belongs to (#280). Offered only for a
-   *  message from another SESSION that carries a `msgId` — the join key — so
-   *  an agent's dispatch, which threads with nothing, gets no link. */
-  onOpenExchange?: (msgId: string) => void;
 }) {
-  const [full, setFull] = useState(false);
-  const lines = text.split('\n');
-  const clamped = !full && lines.length > INBOUND_CLAMP;
-  const shown = clamped ? lines.slice(0, INBOUND_CLAMP).join('\n') : text;
   const what = origin.from === 'agent' ? 'agent in this session' : 'another session';
   const identity =
     origin.from === 'agent'
@@ -587,38 +579,18 @@ export function InboundMessage({
         : "Another Claude Code session sent this message. The name is the sender's own and can change.";
 
   return (
-    <div className={`cl-inbound${origin.from === 'agent' ? ' cl-inbound--agent' : ''}`}>
-      <div className="cl-inbound-strip" title={identity}>
-        <span className="cl-inbound-arrow" aria-hidden>
-          ⇢
-        </span>
-        <span className="cl-inbound-from">{origin.name ?? what}</span>
-        <span className="cl-inbound-what">{what}</span>
-        {origin.queued && (
-          <span className="cl-inbound-queued" title="It arrived while a turn was running">
-            mid-turn
-          </span>
-        )}
-        {timestamp && <time className="cl-inbound-time">{timestamp}</time>}
-        {onOpenExchange && origin.from === 'session' && origin.msgId && (
-          <button
-            type="button"
-            className="cl-inbound-exchange"
-            title="The conversation between these two sessions, both sides in order"
-            onClick={() => onOpenExchange(origin.msgId!)}
-          >
-            Show exchange
-          </button>
-        )}
-      </div>
-      <div className="cl-inbound-body">
-        <Markdown>{shown}</Markdown>
-      </div>
-      {lines.length > INBOUND_CLAMP && (
-        <button type="button" className="cl-inbound-more" onClick={() => setFull(f => !f)}>
-          {clamped ? `Show all ${lines.length} lines` : 'Collapse'}
-        </button>
-      )}
+    <div className="cl-inbound">
+      <MessageLine
+        direction="in"
+        who={origin.name ?? what}
+        what={what}
+        agent={origin.from === 'agent'}
+        title={identity}
+        preview={previewLine(text)}
+        body={text}
+        time={timestamp}
+        queued={origin.queued}
+      />
     </div>
   );
 }
@@ -655,7 +627,6 @@ export const MessageBubble = memo(function MessageBubble({
   onOpenSkill,
   agentOf,
   onOpenAgent,
-  onOpenExchange,
   turnIndex,
   isContinuation,
   innerRef,
@@ -679,9 +650,6 @@ export const MessageBubble = memo(function MessageBubble({
   agentOf?: (subagentType: string) => Agent | undefined;
   /** Navigates to the agent detail view (deep link from an expanded agent card). */
   onOpenAgent?: (agent: Agent) => void;
-  /** Opens the exchange a message belongs to, by its `msgId` (#280) — offered
-   *  on the inbound bubble and on a `SendMessage` to another session alike. */
-  onOpenExchange?: (msgId: string) => void;
   turnIndex?: number;
   /** True when this turn follows a turn from the same role — hides the orb to group consecutive messages. */
   isContinuation?: boolean;
@@ -881,12 +849,7 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
-          <InboundMessage
-            origin={msg.inbound}
-            text={body}
-            timestamp={timestamp}
-            onOpenExchange={onOpenExchange}
-          />
+          <InboundMessage origin={msg.inbound} text={body} timestamp={timestamp} />
         </section>
       </article>
     );
@@ -1146,13 +1109,7 @@ export const MessageBubble = memo(function MessageBubble({
         {showMessageStrip && (
           <div className="cl-tool-stack cl-tool-stack--chips">
             {messageGroups.map(group => (
-              <ToolGroupCard
-                key={group.use.id}
-                group={group}
-                showDetails
-                collapsible
-                onOpenExchange={onOpenExchange}
-              />
+              <ToolGroupCard key={group.use.id} group={group} showDetails collapsible />
             ))}
           </div>
         )}
@@ -1177,7 +1134,6 @@ export const MessageBubble = memo(function MessageBubble({
                   }
                   detailLabel={link?.label}
                   onViewDetail={link?.onClick}
-                  onOpenExchange={onOpenExchange}
                 />
               );
             })}

@@ -7,6 +7,8 @@ import {
   Skill,
   InstalledPlugin,
 } from '../../../hooks/useIPC';
+import { isArtifactTool } from './artifact';
+import { isMessageTool } from './sent-message';
 
 export type ChatDetailsFilter = 'all' | 'minimal';
 
@@ -470,6 +472,13 @@ export function describeTurn(
   const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name));
   const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL);
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL);
+  // A page published and a message sent are outcomes of the turn, not plumbing:
+  // MessageBubble keeps both as a one-line strip in minimal density, so the
+  // descriptor has to agree — a turn holding only one of them is NOT tools-only,
+  // and folding it into the "tools hidden" badge is what made every sent message
+  // disappear from the Lens, whose default density is minimal.
+  const artifactGroups = toolGroups.filter(g => isArtifactTool(g.use.name));
+  const messageGroups = toolGroups.filter(g => isMessageTool(g.use.name));
   const standardToolGroups = toolGroups.filter(g => g.use.name !== QUESTION_TOOL);
 
   const showThinking = detailsFilter === 'all';
@@ -481,6 +490,8 @@ export function describeTurn(
   // Agentic skills are first-class work units (like agents): surface them in
   // minimal as a dedicated strip instead of hiding them as generic tools.
   const showSkillStrip = detailsFilter === 'minimal' && skillGroups.length > 0;
+  const showArtifactStrip = detailsFilter === 'minimal' && artifactGroups.length > 0;
+  const showMessageStrip = detailsFilter === 'minimal' && messageGroups.length > 0;
   const showQuestions = questionGroups.length > 0;
 
   const hasText = textBlocks.length > 0;
@@ -494,6 +505,8 @@ export function describeTurn(
     showAgentStrip ||
     showPlanStrip ||
     showSkillStrip ||
+    showArtifactStrip ||
+    showMessageStrip ||
     showQuestions ||
     // Mirrors MessageBubble: a consult riding a turn whose own content is
     // hidden still renders — as the header chip (an advisor-ONLY message never

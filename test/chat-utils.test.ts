@@ -737,6 +737,32 @@ describe('buildRenderItems', () => {
     expect(items[0].kind === 'tools' && items[0].files.map(f => f.path)).toEqual(['/a.ts']);
   });
 
+  // A message sent to another session and a published page are outcomes of the
+  // turn, kept on screen as a one-line strip in minimal density. The descriptor
+  // has to agree with the bubble about that, or the turn is folded into the
+  // "tools hidden" badge and the strip never gets a chance — which is how every
+  // sent message disappeared from the Lens, whose default density is minimal.
+  it('keeps a turn that only sent a message, in minimal density', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('s1', 'SendMessage', { to: 'alice-7c', message: 'ping' })]),
+      msg('user', [toolResult('s1', '{"success":true}')]),
+    ]);
+    const [d] = processed.map(p => describeTurn(p, 'minimal'));
+    expect(d.toolsOnly).toBe(false);
+    expect(d.visible).toBe(true);
+    expect(buildRenderItems(processed, [d])).toEqual([{ kind: 'turn', idx: 0 }]);
+  });
+
+  it('keeps a turn that only published a page, in minimal density', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [toolUse('a1', 'Artifact', { file_path: '/tmp/page.html' })]),
+      msg('user', [toolResult('a1', 'Published')]),
+    ]);
+    const [d] = processed.map(p => describeTurn(p, 'minimal'));
+    expect(d.toolsOnly).toBe(false);
+    expect(buildRenderItems(processed, [d])).toEqual([{ kind: 'turn', idx: 0 }]);
+  });
+
   it('renders tool turns as their own rows in full mode (no folding)', () => {
     const processed = buildProcessedMessages([
       msg('assistant', [text('Working on it')]),

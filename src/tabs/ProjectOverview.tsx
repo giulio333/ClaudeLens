@@ -575,7 +575,6 @@ export default function ProjectOverview() {
             }
             onOpenSkill={skill => setView({ type: 'skill-detail', skill })}
             onOpenAgent={agent => setView({ type: 'agent-detail', agent })}
-            onOpenExchange={entry => setView({ type: 'exchange', project: view.project, ...entry })}
           />
         );
       case 'search':

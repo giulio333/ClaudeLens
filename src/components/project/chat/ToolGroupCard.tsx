@@ -44,7 +44,6 @@ export function ToolGroupCard({
   detailLabel,
   onViewDetail,
   collapsible,
-  onOpenExchange,
 }: {
   group: ToolGroup;
   showDetails: boolean;
@@ -57,8 +56,6 @@ export function ToolGroupCard({
   onViewDetail?: () => void;
   /** Closed until clicked, as a chip. Default: always open. */
   collapsible?: boolean;
-  /** Open the exchange a `SendMessage` to another session belongs to (#280). */
-  onOpenExchange?: (msgId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
   const { use, result } = group;
@@ -80,7 +77,7 @@ export function ToolGroupCard({
   }
   if (artifact) return <ArtifactCard group={group} page={artifact} compact={collapsible} />;
   if (isMessageTool(use.name)) {
-    return <OutboundMessage group={group} compact={collapsible} onOpenExchange={onOpenExchange} />;
+    return <OutboundMessage group={group} compact={collapsible} />;
   }
   if (!collapsible && isFileTool(use.name)) {
     return (

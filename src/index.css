@@ -18848,12 +18848,16 @@ select.cl-opt-input {
   }
 }
 
-/* ── Inbound message: from another session, or from an agent in this one ──────
-   It keeps the geometry of a user turn — it IS an input to the turn that
-   follows — and takes its distance from one with a strip that names the sender
-   and a rule down its left side. No new hue: the accent at low chroma for a
-   session, a step further towards ink for an agent inside this session, so the
-   two are told apart without inventing a colour for either (#274). */
+/* ── A message between sessions: one line, either direction ───────────────────
+   Both halves — the one this session received (#274) and the one it sent — used
+   to be blocks: a rule down the left, an uppercase strip, twelve lines of body
+   unfolded, plus a summary and a status line on the sent side. In the middle of
+   a transcript a message is an aside, so it is now a row that opens on ask.
+   Direction is said three times over, and the row stays legible if one of them
+   is missed: the glyph (landing down-left / leaving up-right), the word
+   `from` / `to`, and the tint — the accent for what arrives, ink for what
+   leaves, and ink at a lower weight for an agent inside this session, so the
+   two are told apart without inventing a colour (no new hue, hue 40° only). */
 .cl-turn--inbound .cl-turn-orb--inbound {
   background: color-mix(in oklab, var(--cl-accent) 12%, var(--cl-paper));
   border: 1px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
@@ -18861,58 +18865,138 @@ select.cl-opt-input {
   font-size: 12px;
   line-height: 1;
 }
-.cl-inbound {
-  border-left: 2px solid color-mix(in oklab, var(--cl-accent) 34%, transparent);
-  padding: 0 0 2px 12px;
+.cl-msg {
+  --msg-tint: var(--cl-accent);
+  --msg-ink: var(--cl-accent-ink);
 }
-.cl-inbound--agent {
-  border-left-color: color-mix(in oklab, var(--cl-ink-3) 42%, transparent);
+.cl-msg--out {
+  --msg-tint: var(--cl-ink-3);
+  --msg-ink: var(--cl-ink-2);
 }
-.cl-inbound-strip {
+.cl-msg--agent {
+  --msg-tint: var(--cl-ink-3);
+  --msg-ink: var(--cl-ink-2);
+}
+.cl-msg-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+/* The row itself is the disclosure: the whole line is the target, so there is
+   no separate caret button to aim at. */
+.cl-msg-toggle {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
   gap: 8px;
-  font: 500 10px/1.6 var(--font-mono);
+  background: none;
+  border: none;
+  border-radius: var(--cl-r-tile, 7px);
+  padding: 3px 8px 3px 5px;
+  margin-left: -5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-msg-toggle[data-static] {
+  cursor: default;
+}
+.cl-msg-toggle:hover {
+  background: var(--cl-hover-bg, color-mix(in oklab, var(--cl-ink) 5%, transparent));
+}
+.cl-msg-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--msg-tint) 13%, var(--cl-paper));
+  border: 1px solid color-mix(in oklab, var(--msg-tint) 30%, transparent);
+  color: var(--msg-ink);
+}
+.cl-msg-dir {
+  flex: 0 0 auto;
+  font: 500 9.5px/1 var(--font-mono);
   text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: color-mix(in oklab, var(--cl-accent) 70%, var(--cl-ink-3));
-  padding-bottom: 6px;
-}
-.cl-inbound--agent .cl-inbound-strip {
-  color: var(--cl-ink-3);
-}
-.cl-inbound-arrow {
-  font-size: 12px;
-  line-height: 1;
-}
-.cl-inbound-from {
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: none;
-}
-/* What the sender IS, next to what it calls itself: the name is the sender's
-   own claim and it changes, this does not. */
-.cl-inbound-what,
-.cl-inbound-time {
+  letter-spacing: 0.1em;
   color: var(--cl-ink-4);
-  font-weight: 400;
-  letter-spacing: 0.04em;
-  text-transform: none;
 }
-.cl-inbound-time {
-  margin-left: auto;
+.cl-msg-who {
+  flex: 0 0 auto;
+  font: 600 12px/1.3 var(--font-sans);
+  color: var(--cl-ink);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.cl-inbound-queued {
+.cl-msg-tag {
+  flex: 0 0 auto;
   border: 1px solid var(--cl-line);
   border-radius: 999px;
-  padding: 1px 7px;
-  color: var(--cl-ink-4);
+  padding: 0 6px;
+  font: 500 9px/1.6 var(--font-mono);
   letter-spacing: 0.06em;
+  color: var(--cl-ink-4);
 }
-.cl-inbound-body {
+/* The one line the message shows before it is asked to say more. */
+.cl-msg-preview {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 12px/1.5 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-msg-state {
+  flex: 0 0 auto;
+  font: 600 9.5px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+.cl-msg-state.is-ok {
+  color: var(--cl-ok);
+}
+.cl-msg-state.is-danger {
+  color: var(--cl-danger);
+}
+.cl-msg-time {
+  flex: 0 0 auto;
+  font: 400 10px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-msg-caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--cl-ink-4);
+}
+/* Opened: the message hangs off a rule in its own direction's tint, indented to
+   the name above it. */
+.cl-msg-open {
+  margin: 4px 0 6px 8px;
+  padding-left: 12px;
+  border-left: 2px solid color-mix(in oklab, var(--msg-tint) 34%, transparent);
+}
+.cl-msg-body {
   color: var(--cl-ink-2);
 }
-.cl-inbound-more {
+.cl-msg-what {
+  color: var(--cl-ink-4);
+}
+.cl-msg-foot {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding-top: 4px;
+  font: 400 10px/1.6 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-msg-more {
   margin-top: 6px;
   background: none;
   border: none;
@@ -18921,68 +19005,25 @@ select.cl-opt-input {
   color: var(--cl-accent-ink);
   cursor: pointer;
 }
-.cl-inbound-more:hover {
+.cl-msg-more:hover {
   text-decoration: underline;
 }
-/* The way to the exchange this message belongs to (#280): a link on the strip,
-   after the time, in the strip's own voice — it is a where-to, not a control. */
-.cl-inbound-exchange {
-  background: none;
-  border: none;
-  padding: 0;
-  font: 500 10px/1.6 var(--font-mono);
-  letter-spacing: 0.06em;
-  text-transform: none;
-  color: var(--cl-accent-ink);
-  cursor: pointer;
+/* The row ellipses instead of widening its column, so a long preview cannot
+   push the reading column out: every ancestor down to the preview has to give
+   up its `min-width: auto`, not just the preview itself. */
+.cl-inbound,
+.cl-outbound,
+.cl-msg {
+  min-width: 0;
 }
-.cl-inbound-exchange:hover {
-  text-decoration: underline;
-}
-
-/* ── Outbound message: the half this session sent with `SendMessage` ─────────
-   The twin of the inbound bubble, and it borrows its classes wholesale: same
-   rule, same strip, same fold. What is its own is the delivery state at the end
-   of the strip and the summary line — the one line the call gave the message,
-   which the inbound half never carries. Inside a tool stack the rule sits where
-   a card would, so the stack's own gap does the spacing. */
+/* Inside a tool stack the row sits where a card would, so the stack's own gap
+   does the spacing — and in the chips strip MIN keeps on screen it takes the
+   whole row: a message is a conversation, not one pill among tools. */
 .cl-outbound {
   margin: 2px 0;
 }
-.cl-outbound.is-compact {
-  padding-bottom: 0;
-}
-.cl-outbound.is-compact .cl-inbound-strip {
-  padding-bottom: 0;
-}
-.cl-outbound-summary {
-  font: 500 12px/1.5 var(--font-sans);
-  color: var(--cl-ink);
-  padding-bottom: 4px;
-}
-.cl-outbound-summary.is-inline {
-  font: 500 11px/1.6 var(--font-sans);
-  text-transform: none;
-  letter-spacing: 0;
-  color: var(--cl-ink-2);
-  padding: 0;
-  flex: 1 1 auto;
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-.cl-outbound-state {
-  margin-left: auto;
-  font-weight: 600;
-  letter-spacing: 0.1em;
-  color: var(--cl-ink-4);
-}
-.cl-outbound-state.is-ok {
-  color: var(--cl-ok);
-}
-.cl-outbound-state.is-danger {
-  color: var(--cl-danger);
+.cl-chat-reading .cl-tool-stack--chips .cl-outbound.is-compact {
+  flex: 1 0 100%;
 }
 
 /* ── Messages dock: the conversations of a session, under Mission Control's
