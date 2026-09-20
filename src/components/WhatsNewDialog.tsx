@@ -4,6 +4,8 @@ import { useWhatsNewSeenVersion, useMarkWhatsNewSeen } from '../hooks/useIPC';
 import type { ChatMessage } from '../hooks/useIPC';
 import { whatsNewFor, shouldShowWhatsNew, type WhatsNewHighlight } from '../data/whats-new';
 import { MessageBubble } from './project/chat/MessageBubble';
+import { SavedPrompt } from './project/chat/PromptPlaybook';
+import type { PromptTemplate } from '../../electron/shared/playbook-types';
 import type { ProcessedMessage } from './project/chat/utils';
 import { version as appVersion } from '../../package.json';
 
@@ -55,8 +57,50 @@ function CrossSessionMessageVisual(): ReactNode {
   );
 }
 
+// Two ordinary templates, the way the panel lists them. Nothing here comes
+// from the reader's own playbook: the popup must never mount the panel itself,
+// which would query `playbook:*` and put their real prompts in a dialog they
+// did not open.
+const PREVIEW_TEMPLATES: PromptTemplate[] = [
+  {
+    id: 'wn-tpl-1',
+    name: 'Review the diff',
+    text: 'Review the pending diff for regressions, and say which ones you verified.',
+    createdAt: '2026-09-15T09:10:00.000Z',
+    updatedAt: '2026-09-15T09:10:00.000Z',
+  },
+  {
+    id: 'wn-tpl-2',
+    name: 'Explain a failing test',
+    text: 'Run the failing test, then explain what it asserts and why it broke.',
+    createdAt: '2026-09-16T17:02:00.000Z',
+    updatedAt: '2026-09-16T17:02:00.000Z',
+  },
+];
+
+function PromptPlaybookVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame">
+      <div className="cl-playbook">
+        {PREVIEW_TEMPLATES.map(template => (
+          <SavedPrompt
+            key={template.id}
+            template={template}
+            busy={false}
+            onUse={() => {}}
+            onCopy={() => {}}
+            onEdit={() => {}}
+            onDelete={() => {}}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
+  'prompt-playbook': PromptPlaybookVisual,
 };
 
 export function WhatsNewDialog() {

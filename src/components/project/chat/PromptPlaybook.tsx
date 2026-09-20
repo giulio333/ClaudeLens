@@ -439,7 +439,10 @@ function PromptPreview({ text }: { text: string }) {
   );
 }
 
-function SavedPrompt({
+// Exported for the "What's new" popup, which renders a couple of rows from a
+// synthetic template list: a preview drawn with the shipped component cannot
+// drift from the panel, and takes no data of the user's own to do it.
+export function SavedPrompt({
   template,
   busy,
   useDisabled,

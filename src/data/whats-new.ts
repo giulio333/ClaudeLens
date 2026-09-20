@@ -9,7 +9,7 @@
 export interface WhatsNewHighlight {
   title: string;
   description: string;
-  visual?: 'cross-session-message';
+  visual?: 'cross-session-message' | 'prompt-playbook';
 }
 
 export interface WhatsNewRelease {
@@ -18,6 +18,17 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.24',
+    highlights: [
+      {
+        title: 'Prompt Playbook',
+        description:
+          'Save the prompts you keep retyping, and reuse them in the chat or the mission rail.',
+        visual: 'prompt-playbook',
+      },
+    ],
+  },
   {
     version: '2.2.23',
     highlights: [

@@ -19579,6 +19579,21 @@ select.cl-opt-input {
   top: 22px;
   bottom: 6px;
 }
+/* The playbook preview: the panel's own rows, lifted out of the popover it
+   normally is — no fixed position, no second border inside the frame, and the
+   entries take the paper tone so they read against the frame's warm ground. */
+.cl-whatsnew-frame .cl-playbook {
+  position: static;
+  padding: 18px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.cl-whatsnew-frame .cl-playbook-entry {
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+}
 .cl-whatsnew-ok {
   min-width: 220px;
   justify-content: center;
