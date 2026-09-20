@@ -315,6 +315,30 @@ One entry per module, with the rationale and the gotchas, lives in
 - `useDataChangedRefetch()` in `App.tsx` invalidates all queries when the watcher fires
 - Chat message pre-processing: user messages that are only `tool_result` are absorbed into the preceding assistant message; `tool_use` is matched to `tool_result` by ID to form `ToolGroup[]`. An `advisor` consult (the harness's reviewer-model tool) is persisted as two rows of one assistant message — a `server_tool_use` and an `advisor_tool_result` whose payload is encrypted (`advisor_redacted_result`) — so it can never be rendered as content: `session-reader` folds the pair into a single `advisor` block carrying the reviewer model, its token spend (from the `advisor_message` entry of `usage.iterations`, omitted when one message holds two consults, since that usage object is repeated verbatim on every row) and the wall time between the two rows, and the renderer draws it as a slim stream marker rather than a turn
 
+## Prompt Playbook (#282)
+
+`chat/PromptPlaybook.tsx` is shared by the SDK `ChatComposer` and Terminal Mission
+Control. Saved templates and dismissed-prompt fingerprints live in
+`~/.claudelens/playbook/<projectHash>/playbook.json`, through `playbook:*` IPC.
+Mission Control opens it inside the rail via a book icon in the header; the SDK
+composer uses a popover. Closing the rail panel preserves activity filters and
+scroll, and Escape only closes it while focus is within the panel.
+Candidates are computed only when the panel opens (or its own mutations
+invalidate it), never by the session watcher. The detector requires the same
+whitespace-normalized human prompt in three distinct sessions; it preserves the
+original text and excludes technical/agent traffic. `playbook-reader` uses both
+transcript parsers so queued human messages count, with explicit partial-scan
+reporting and bounded reads. The store serializes atomic mutations and refuses
+to overwrite corrupted data.
+
+Use appends to an SDK draft without sending; from Lens it reveals Terminal.
+`terminal-prompt.ts` waits for the real xterm bracketed-paste mode before inserting,
+rejects unsafe controls, and cancels on timeout, terminal exit, unmount or return
+to Lens. `playbook.test.ts`, `prompt-playbook-view.test.tsx`,
+`prompt-playbook-terminal.test.tsx` and `terminal-prompt*.test.*` cover the flows.
+`CLAUDELENS_PLAYBOOK_CORPUS=1 npx vitest run test/playbook-real.test.ts` is an
+opt-in read-only probe that prints aggregate counts only.
+
 ## Brand palette (Claude Code official)
 
 | Token role | HEX       | Notes                                |

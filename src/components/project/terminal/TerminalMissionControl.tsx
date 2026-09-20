@@ -17,6 +17,8 @@ import { resolveToolIcon, toolRunStatus, type SessionAgent, type ToolGroup } fro
 import { sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
+import { flushSync } from 'react-dom';
+import type { TerminalPromptHandle } from './terminal-prompt';
 
 /**
  * The unified Terminal ↔ Lens view ("Terminal Mission Control").
@@ -246,7 +248,11 @@ export function TerminalMissionControl({
   // session isn't killed when flipping back to Lens. Driven from setView (the
   // only path that changes view), so no setState-in-effect.
   const [terminalMounted, setTerminalMounted] = useState(view === 'terminal');
+  const terminalPromptRef = useRef<TerminalPromptHandle>(null);
+  const promptInsertionRef = useRef<AbortController | null>(null);
+  useEffect(() => () => promptInsertionRef.current?.abort(), []);
   const setView = useCallback((v: View) => {
+    if (v === 'lens') promptInsertionRef.current?.abort();
     setViewRaw(v);
     localStorage.setItem('tmc-view', v);
     if (v === 'terminal') setTerminalMounted(true);
@@ -294,6 +300,9 @@ export function TerminalMissionControl({
   const [ptyPid, setPtyPid] = useState<number | null>(null);
   const [termStatus, setTermStatus] = useState<TerminalStatus>('starting');
   const [overlay, setOverlay] = useState<Overlay>(null);
+  useEffect(() => {
+    if (overlay) promptInsertionRef.current?.abort();
+  }, [overlay]);
   const closeOverlay = useCallback(() => setOverlay(null), []);
 
   // Esc closes a rail detail overlay (the embedded chat handles its own Esc).
@@ -445,6 +454,25 @@ export function TerminalMissionControl({
   const sessionFilename = sessionForChat?.filename ?? null;
   const sessionTags = sessionFilename ? tagsForSession(sessionFilename) : [];
   const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
+
+  async function insertPrompt(text: string) {
+    promptInsertionRef.current?.abort();
+    const insertion = new AbortController();
+    promptInsertionRef.current = insertion;
+    try {
+      flushSync(() => {
+        setOverlay(null);
+        setView('terminal');
+      });
+      // Allow the newly visible terminal to fit before focusing it.
+      await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+      if (insertion.signal.aborted) throw new Error('Prompt insertion cancelled.');
+      if (!terminalPromptRef.current) throw new Error('The terminal is no longer open.');
+      await terminalPromptRef.current.pastePrompt(text, insertion.signal);
+    } finally {
+      if (promptInsertionRef.current === insertion) promptInsertionRef.current = null;
+    }
+  }
 
   return (
     // When TERMINAL is active the view paints the terminal's own surface color so
@@ -613,6 +641,7 @@ export function TerminalMissionControl({
                 style={{ display: view === 'terminal' ? 'block' : 'none' }}
               >
                 <TerminalPane
+                  ref={terminalPromptRef}
                   cwd={project.realPath}
                   resumeSessionId={resumeSessionId}
                   attachJobId={attachJobId}
@@ -722,6 +751,7 @@ export function TerminalMissionControl({
                 ? msgId => onOpenExchange({ sessionId, msgId })
                 : undefined
             }
+            onUsePrompt={insertPrompt}
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the
             // rail's band stays and is the only place either figure is stated.

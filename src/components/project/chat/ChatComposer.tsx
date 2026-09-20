@@ -4,6 +4,7 @@ import { fmtModel } from '../utils';
 import { PermissionRequestDialog } from './PermissionRequestDialog';
 import { useEffectiveConfig } from '../../../hooks/useIPC';
 import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC';
+import { PromptPlaybook } from './PromptPlaybook';
 
 /** The four permission modes Claude Code accepts, labelled for what they do
  *  with *interactive* approvals: the chat runs through the Agent SDK's
@@ -133,6 +134,7 @@ function ComposerSelect<T extends string>({
  *  it seeds the model picker so a reply defaults to the same model the chat
  *  was on. */
 export function ChatComposer({
+  projectHash,
   realPath,
   sessionId,
   model,
@@ -145,6 +147,7 @@ export function ChatComposer({
   onStop,
   lockNotice,
 }: {
+  projectHash?: string;
   realPath: string;
   /** Resume mode when set; new-chat mode when omitted. Drives copy only. */
   sessionId?: string;
@@ -418,6 +421,19 @@ export function ChatComposer({
                 onChange={setPermission}
                 disabled={sending}
               />
+              {projectHash && (
+                <PromptPlaybook
+                  key={projectHash}
+                  projectHash={projectHash}
+                  useDisabled={sending || !!lockNotice}
+                  useHint="Add to your draft without sending"
+                  onUse={text => {
+                    setDraft(current => (current ? `${current}\n\n${text}` : text));
+                    setSlashDismissed(true);
+                    textareaRef.current?.focus();
+                  }}
+                />
+              )}
             </span>
           </div>
         </div>

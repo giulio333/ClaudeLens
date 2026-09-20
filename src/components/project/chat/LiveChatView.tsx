@@ -182,6 +182,7 @@ export function LiveChatView({
           </main>
 
           <ChatComposer
+            projectHash={project.hash}
             realPath={project.realPath}
             // Undefined on the first send of a new chat (→ startMessage); set up
             // front when resuming, and once the SDK reports the id later sends

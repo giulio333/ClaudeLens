@@ -1,4 +1,4 @@
-import { CSSProperties, useCallback, useEffect, useMemo, useState } from 'react';
+import { CSSProperties, useCallback, useEffect, useMemo, useState, useRef, useId } from 'react';
 import {
   useActiveSessions,
   useAllSkills,
@@ -27,6 +27,7 @@ import {
   ToolGroup,
   SessionAgent,
 } from '../chat/utils';
+import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
 import { FileIcon } from '../chat/fileIcons';
 import { buildArtifactActivity } from '../chat/artifact';
 import { QueryError } from '../../QueryError';
@@ -484,6 +485,7 @@ export function MissionRail({
   onOpenTeam,
   onLocateTurn,
   onOpenExchange,
+  onUsePrompt,
   showVitals = true,
 }: {
   hash: string;
@@ -511,6 +513,7 @@ export function MissionRail({
    *  id to join on (an agent inside this session) locates its latest turn
    *  instead. */
   onOpenExchange?: (msgId: string) => void;
+  onUsePrompt: (text: string) => Promise<void>;
   /** Whether this rail carries the vitals line — context %, spend, and the
    *  session's diff.
    *
@@ -522,6 +525,13 @@ export function MissionRail({
    *  any of the three is stated. */
   showVitals?: boolean;
 }) {
+  const [playbookOpen, setPlaybookOpen] = useState(false);
+  const playbookTrigger = useRef<HTMLButtonElement>(null);
+  const playbookId = useId();
+  function closePlaybook(restoreFocus = true) {
+    setPlaybookOpen(false);
+    if (restoreFocus) playbookTrigger.current?.focus();
+  }
   const filename = sessionId ? `${sessionId}.jsonl` : null;
   const { data: messages, isError, error, refetch } = useChatSession(hash, filename);
   const { data: subagentMetas } = useSessionSubagents(hash, filename);
@@ -681,13 +691,6 @@ export function MissionRail({
   );
 
   const ctx = useMemo(() => deriveContext(messages, rawModel), [messages, rawModel]);
-
-  // Assistant turns, excluding the synthetic notes Claude Code persists for local
-  // slash-command output (not real model turns).
-  const turns = useMemo(
-    () => messages?.filter(m => m.role === 'assistant' && m.model !== '<synthetic>').length ?? 0,
-    [messages]
-  );
 
   // One `now` per render: every relative label in the feed reads the same clock,
   // so two rows a millisecond apart can't disagree about what "5m" means.
@@ -866,15 +869,31 @@ export function MissionRail({
             MISSION CONTROL
           </span>
           <span style={{ flex: 1 }} />
-          {sessionId && (
-            <span
-              className="font-mono truncate"
-              style={{ fontSize: 9.5, letterSpacing: '0.08em', color: 'var(--cl-ink-4)' }}
+          <button
+            ref={playbookTrigger}
+            type="button"
+            className="cl-playbook-rail-trigger"
+            aria-label="Playbook"
+            title="Prompt Playbook"
+            aria-expanded={playbookOpen}
+            aria-controls={playbookOpen ? playbookId : undefined}
+            onClick={() => (playbookOpen ? closePlaybook() : setPlaybookOpen(true))}
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.6"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              aria-hidden="true"
             >
-              {sessionId.slice(0, 8)}
-              {turns > 0 && ` · ${turns} turns`}
-            </span>
-          )}
+              <path d="M12 5.5C9 3.5 5.5 3.5 2 5v15c3.5-1.5 7-1.5 10 .5 3-2 6.5-2 10-.5V5c-3.5-1.5-7-1.5-10 .5Z" />
+              <path d="M12 5.5v15" />
+            </svg>
+          </button>
         </div>
 
         {/* vitals — what the CONTEXT number and the SPEND/TASKS gauges used to
@@ -889,7 +908,7 @@ export function MissionRail({
             transcript they describe; printing them here as well would put the
             same number on screen twice a few hundred pixels apart, which is
             exactly why the terminal's TopBar stopped printing the spend. */}
-        {showVitals && (
+        {showVitals && !playbookOpen && (
           <div
             className="font-mono flex items-baseline"
             style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
@@ -938,15 +957,15 @@ export function MissionRail({
           </div>
         )}
 
-        {showVitals && vital === 'ctx' && <ContextPopover ctx={ctx} />}
-        {showVitals && vital === 'spend' && <SpendPopover summary={summary} />}
+        {showVitals && !playbookOpen && vital === 'ctx' && <ContextPopover ctx={ctx} />}
+        {showVitals && !playbookOpen && vital === 'spend' && <SpendPopover summary={summary} />}
       </div>
 
       {/* The context fill, edge to edge — a 2px rule that doubles as a gauge.
           It is the context figure's gauge, so it leaves with the figure: what
           stays behind is the plain hairline the band needs to end on, not a
           two-pixel bar that would still look like a reading of something. */}
-      {showVitals ? (
+      {showVitals && !playbookOpen ? (
         <div className="shrink-0" style={{ height: 2, background: 'var(--cl-line-soft)' }}>
           <div
             style={{
@@ -963,103 +982,127 @@ export function MissionRail({
         <div className="shrink-0" style={{ height: 1, background: 'var(--cl-line-soft)' }} />
       )}
 
-      {/* filters — the sections, demoted from headings to a choice */}
+      {playbookOpen && (
+        <PromptPlaybookPanel
+          key={hash}
+          id={playbookId}
+          projectHash={hash}
+          trigger={playbookTrigger}
+          onClose={closePlaybook}
+          onUse={onUsePrompt}
+          useHint="Open Terminal and add to its input without sending"
+        />
+      )}
       <div
-        className="shrink-0 flex flex-wrap items-center"
-        style={{ gap: 6, padding: '13px 20px 12px', borderBottom: '1px solid var(--cl-line)' }}
+        style={{
+          display: playbookOpen ? 'none' : 'flex',
+          flexDirection: 'column',
+          flex: 1,
+          minHeight: 0,
+        }}
       >
-        {filters.map(f => {
-          const active = filter === f.key;
-          return (
-            <button
-              key={f.key}
-              type="button"
-              onClick={() => setFilter(f.key)}
-              aria-pressed={active}
-              className="font-mono transition-colors"
-              style={{
-                padding: '5px 10px',
-                borderRadius: 999,
-                cursor: 'pointer',
-                whiteSpace: 'nowrap',
-                fontSize: 9,
-                fontWeight: 600,
-                letterSpacing: '0.12em',
-                border: `1px solid ${active ? 'var(--cl-ink)' : 'var(--cl-line)'}`,
-                background: active ? 'var(--cl-ink)' : 'transparent',
-                color: active ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
-              }}
-            >
-              {f.label} {f.n}
-            </button>
-          );
-        })}
-      </div>
+        {/* filters — the sections, demoted from headings to a choice */}
+        <div
+          className="shrink-0 flex flex-wrap items-center"
+          style={{ gap: 6, padding: '13px 20px 12px', borderBottom: '1px solid var(--cl-line)' }}
+        >
+          {filters.map(f => {
+            const active = filter === f.key;
+            return (
+              <button
+                key={f.key}
+                type="button"
+                onClick={() => setFilter(f.key)}
+                aria-pressed={active}
+                className="font-mono transition-colors"
+                style={{
+                  padding: '5px 10px',
+                  borderRadius: 999,
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  fontSize: 9,
+                  fontWeight: 600,
+                  letterSpacing: '0.12em',
+                  border: `1px solid ${active ? 'var(--cl-ink)' : 'var(--cl-line)'}`,
+                  background: active ? 'var(--cl-ink)' : 'transparent',
+                  color: active ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
+                }}
+              >
+                {f.label} {f.n}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* the stream */}
-      <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 20px 24px' }}>
-        {!sessionId && (
-          <p className="cl-transcript-state">Waiting for the CLI session to register…</p>
-        )}
+        {/* the stream */}
+        <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 20px 24px' }}>
+          {!sessionId && (
+            <p className="cl-transcript-state">Waiting for the CLI session to register…</p>
+          )}
 
-        {sessionId && isError && (
-          <QueryError title="Failed to load session data" error={error} onRetry={() => refetch()} />
-        )}
+          {sessionId && isError && (
+            <QueryError
+              title="Failed to load session data"
+              error={error}
+              onRetry={() => refetch()}
+            />
+          )}
 
-        {sessionId && !isError && empty && filter === 'ALL' && (
-          <p className="cl-transcript-state">
-            Agents, skills and file changes will appear here as Claude works.
-          </p>
-        )}
+          {sessionId && !isError && empty && filter === 'ALL' && (
+            <p className="cl-transcript-state">
+              Agents, skills and file changes will appear here as Claude works.
+            </p>
+          )}
 
-        {/* The project has teams but this session started none — worth saying,
+          {/* The project has teams but this session started none — worth saying,
             since an empty TEAMS filter would otherwise read as "no teams". */}
-        {filter === 'TEAMS' && visible.length === 0 && projectTeamCount > 0 && (
-          <p
-            className="font-mono"
-            style={{ fontSize: 10.5, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
-          >
-            No teams in this session · {projectTeamCount} in the project
-          </p>
-        )}
-
-        {visible.map(e => {
-          const open = expanded.has(e.id);
-          return (
-            <div key={e.id}>
-              <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />
-              {open && e.items.length > 0 && (
-                <FeedOperations items={e.items} onOpenTool={onOpenTool} />
-              )}
-              {open && e.source.kind === 'task' && <TaskDetail event={e.source} />}
-            </div>
-          );
-        })}
-
-        {visible.length > 0 && (
-          <div className="flex items-center" style={{ gap: 10, padding: '16px 0 0' }}>
-            <span style={{ flex: 1, height: 1, background: 'var(--cl-line-soft)' }} />
-            <span
+          {filter === 'TEAMS' && visible.length === 0 && projectTeamCount > 0 && (
+            <p
               className="font-mono"
-              style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--cl-ink-4)' }}
+              style={{ fontSize: 10.5, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
             >
-              SESSION START
-            </span>
-            <span style={{ flex: 1, height: 1, background: 'var(--cl-line-soft)' }} />
-          </div>
-        )}
+              No teams in this session · {projectTeamCount} in the project
+            </p>
+          )}
+
+          {visible.map(e => {
+            const open = expanded.has(e.id);
+            return (
+              <div key={e.id}>
+                <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />
+                {open && e.items.length > 0 && (
+                  <FeedOperations items={e.items} onOpenTool={onOpenTool} />
+                )}
+                {open && e.source.kind === 'task' && <TaskDetail event={e.source} />}
+              </div>
+            );
+          })}
+
+          {visible.length > 0 && (
+            <div className="flex items-center" style={{ gap: 10, padding: '16px 0 0' }}>
+              <span style={{ flex: 1, height: 1, background: 'var(--cl-line-soft)' }} />
+              <span
+                className="font-mono"
+                style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--cl-ink-4)' }}
+              >
+                SESSION START
+              </span>
+              <span style={{ flex: 1, height: 1, background: 'var(--cl-line-soft)' }} />
+            </div>
+          )}
+        </div>
+
+        {/* MESSAGES — who the session is talking to, pinned under the stream */}
+        <MessagesDock
+          threads={threads}
+          now={now}
+          onOpenExchange={onOpenExchange}
+          onLocateTurn={onLocateTurn}
+        />
+
+        {/* ENVIRONMENT — the session's standing setup, pinned under the stream */}
+        <EnvironmentStrip init={init} />
       </div>
-
-      {/* MESSAGES — who the session is talking to, pinned under the stream */}
-      <MessagesDock
-        threads={threads}
-        now={now}
-        onOpenExchange={onOpenExchange}
-        onLocateTurn={onLocateTurn}
-      />
-
-      {/* ENVIRONMENT — the session's standing setup, pinned under the stream */}
-      <EnvironmentStrip init={init} />
     </aside>
   );
 }
