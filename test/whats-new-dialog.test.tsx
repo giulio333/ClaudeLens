@@ -12,12 +12,40 @@ import { createElement, StrictMode } from 'react';
 import { WhatsNewDialog } from '../src/components/WhatsNewDialog';
 import { installFakeElectronAPI, ok, type FakeBridge } from './helpers/fake-electron-api';
 import { version as appVersion } from '../package.json';
-import { WHATS_NEW } from '../src/data/whats-new';
+import type { WhatsNewRelease } from '../src/data/whats-new';
+
+// The suite used to read whatever the running package.json version authored,
+// and skip the three rendering tests when it authored nothing — which is
+// exactly a fix-only release, so on every one of those the dialog shipped with
+// no test of its rendering or its "Got it". The entry is stubbed instead: what
+// the popup does with an entry and without one are both pinned on every run,
+// whatever the version on disk says. `shouldShowWhatsNew` stays the real one.
+const stub = vi.hoisted(() => ({ release: undefined as WhatsNewRelease | undefined }));
+vi.mock('../src/data/whats-new', async importOriginal => {
+  const actual = await importOriginal<typeof import('../src/data/whats-new')>();
+  return {
+    ...actual,
+    whatsNewFor: (version: string) =>
+      stub.release && stub.release.version === version ? stub.release : undefined,
+  };
+});
+
+// Real `visual` keys: the dialog draws them through its VISUALS map, so the
+// test also proves every key the type allows still renders.
+const AUTHORED: WhatsNewRelease = {
+  version: appVersion,
+  highlights: [
+    { title: 'A first feature', description: 'What it does.', visual: 'prompt-playbook' },
+    { title: 'A second feature', description: 'Another.', visual: 'cross-session-message' },
+    { title: 'A third feature', description: 'No visual for this one.' },
+  ],
+};
 
 let bridge: FakeBridge;
 let queryClient: QueryClient;
 
 beforeEach(() => {
+  stub.release = AUTHORED;
   bridge = installFakeElectronAPI();
   queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 });
@@ -37,22 +65,9 @@ function renderDialog() {
   );
 }
 
-// The suite pins its own claim against the shipped content, not a hardcoded
-// title: it reads whatever the running package.json version authored.
-//
-// A release may author nothing — the repo's own rule is one entry per release
-// WITH something to show, skipped for a fix-only one — and that is not a
-// failure, it is the other half of the feature: the popup stays silent. So the
-// three tests that need an entry run only when there is one, and the silence is
-// asserted when there is not. Making the entry mandatory instead turned every
-// fix-only bump into three red tests about a dialog that behaved correctly.
-const currentRelease = WHATS_NEW.find(r => r.version === appVersion);
-const whenAuthored = currentRelease ? it : it.skip;
-const whenNotAuthored = currentRelease ? it.skip : it;
-
 describe('WhatsNewDialog', () => {
-  whenAuthored('shows the current version highlights when nothing was seen yet', async () => {
-    const release = currentRelease!;
+  it('shows the current version highlights when nothing was seen yet', async () => {
+    const release = AUTHORED;
     renderDialog();
     await waitFor(() => {
       screen.getByRole('dialog', { name: "What's new" });
@@ -61,8 +76,8 @@ describe('WhatsNewDialog', () => {
     screen.getByRole('heading', { name: release.highlights[0].title });
   });
 
-  whenAuthored('gives every authored highlight its own section, with its visual', async () => {
-    const release = currentRelease!;
+  it('gives every authored highlight its own section, with its visual', async () => {
+    const release = AUTHORED;
     const { container } = renderDialog();
     await waitFor(() => {
       screen.getByRole('dialog', { name: "What's new" });
@@ -82,7 +97,7 @@ describe('WhatsNewDialog', () => {
     );
   });
 
-  whenAuthored('marks the version seen and closes on "Ho capito"', async () => {
+  it('marks the version seen and closes on "Got it"', async () => {
     renderDialog();
     await waitFor(() => {
       screen.getByRole('dialog', { name: "What's new" });
@@ -98,7 +113,8 @@ describe('WhatsNewDialog', () => {
     });
   });
 
-  whenNotAuthored('stays silent on a release that authored nothing', async () => {
+  it('stays silent on a release that authored nothing', async () => {
+    stub.release = undefined;
     renderDialog();
     await waitFor(() => {
       expect(bridge.api.prefs.getAll).toHaveBeenCalled();

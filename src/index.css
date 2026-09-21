@@ -268,6 +268,90 @@
 .cl-scolor.pink {
   background: var(--cl-agent-pink);
 }
+/* Terminal/Lens session colour. The named hue remains data, never a brand
+   accent. Chrome stays clean: the only atmospheric treatment is a glow pinned
+   to the bottom of the work stage, behind the Lens control pill, fading upward. */
+.cl-session-aura.red {
+  --cl-session-color: var(--cl-agent-red);
+}
+.cl-session-identity.red {
+  color: var(--cl-agent-red);
+}
+.cl-session-aura.orange {
+  --cl-session-color: var(--cl-agent-orange);
+}
+.cl-session-identity.orange {
+  color: var(--cl-agent-orange);
+}
+.cl-session-aura.yellow {
+  --cl-session-color: var(--cl-agent-yellow);
+}
+.cl-session-identity.yellow {
+  color: var(--cl-agent-yellow);
+}
+.cl-session-aura.green {
+  --cl-session-color: var(--cl-agent-green);
+}
+.cl-session-identity.green {
+  color: var(--cl-agent-green);
+}
+.cl-session-aura.cyan {
+  --cl-session-color: var(--cl-agent-cyan);
+}
+.cl-session-identity.cyan {
+  color: var(--cl-agent-cyan);
+}
+.cl-session-aura.blue {
+  --cl-session-color: var(--cl-agent-blue);
+}
+.cl-session-identity.blue {
+  color: var(--cl-agent-blue);
+}
+.cl-session-aura.purple {
+  --cl-session-color: var(--cl-agent-purple);
+}
+.cl-session-identity.purple {
+  color: var(--cl-agent-purple);
+}
+.cl-session-aura.pink {
+  --cl-session-color: var(--cl-agent-pink);
+}
+.cl-session-identity.pink {
+  color: var(--cl-agent-pink);
+}
+.cl-session-bottom-glow {
+  position: absolute;
+  z-index: 10;
+  right: 0;
+  bottom: 0;
+  left: 0;
+  height: 100px;
+  pointer-events: none;
+  opacity: 0;
+  transform: translateY(12px);
+  background: linear-gradient(
+    to top,
+    color-mix(in oklch, var(--cl-session-color) 28%, transparent) 0,
+    color-mix(in oklch, var(--cl-session-color) 10%, transparent) 42%,
+    transparent 100%
+  );
+  transition:
+    opacity 140ms ease-in,
+    transform 140ms ease-in;
+}
+.cl-session-bottom-glow.is-active {
+  opacity: 1;
+  transform: translateY(0);
+  transition-duration: 220ms;
+  transition-timing-function: cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-session-bottom-glow,
+  .cl-session-bottom-glow.is-active {
+    transform: none;
+    transition: opacity 160ms linear;
+  }
+}
 /* On a sessions row the colour is worn by the TITLE, not by a dot of its own.
    The row already carries two dots — the green LIVE one and the model's — and
    a third beside them read as a traffic light, three marks competing to say
