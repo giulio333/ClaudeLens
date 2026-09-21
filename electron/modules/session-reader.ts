@@ -3,12 +3,13 @@ import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
 import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
+import { readTextFile } from './safe-fs';
 import {
   mergeTranscriptExtras,
   parseArtifactPublish,
   parseBashEditDiff,
   parseSentMessage,
-  readTranscriptExtras,
+  parseTranscriptExtras,
   rowEffort,
   withArtifactPublish,
   withBashEditDiff,
@@ -547,6 +548,45 @@ async function getSessionMessagesScoped(
 // stays a handful of them rather than growing with history size.
 const chatCache = new StampCache<ChatMessage[]>(4);
 
+/**
+ * I messaggi di chat che stanno nel file ma che la lettura SDK non ha
+ * restituito, rimessi al loro posto cronologico.
+ *
+ * `getSessionMessages` non legge il file riga per riga: ricostruisce UNA catena
+ * risalendo i `parentUuid` fra righe di chat, e tutto ciò che non sta su quella
+ * catena non esiste per lei. Basta una riga non-chat in mezzo perché il resto
+ * della conversazione le diventi invisibile: su un transcript osservato una
+ * riga `user` vuota aveva due figli — il ramo morto `isMeta` "Continue from
+ * where you left off." / "No response requested." e un `attachment`
+ * (`total_tokens_reminder`) sotto cui proseguiva la conversazione vera. L'SDK
+ * ha seguito il ramo morto e ha restituito 86 righe su 234: in ClaudeLens la
+ * sessione mostrava il primo messaggio dell'utente e le sole tool call, con
+ * tutte le risposte sparite. Stessa perdita, per la stessa ragione, sulla
+ * storia precedente a un `/compact`.
+ *
+ * Il recupero è per `uuid`, non per contenuto: una riga che l'SDK ha già dato
+ * non può tornare due volte, e una che ha scartato di proposito (placeholder,
+ * `isMeta`, sidechain) resta fuori perché `parseChatSessionText` applica le
+ * stesse regole.
+ */
+function withRowsTheSdkChainMissed(messages: ChatMessage[], raw: string): ChatMessage[] {
+  const seen = new Set(messages.map(m => m.uuid).filter(Boolean));
+  const missed = parseChatSessionText(raw).filter(m => m.uuid && !seen.has(m.uuid));
+  if (missed.length === 0) return messages;
+
+  // Entrambe le liste sono già in ordine cronologico: un merge lineare basta.
+  const merged: ChatMessage[] = [];
+  let next = 0;
+  for (const msg of messages) {
+    while (next < missed.length && missed[next].timestamp <= msg.timestamp) {
+      merged.push(missed[next++]);
+    }
+    merged.push(msg);
+  }
+  while (next < missed.length) merged.push(missed[next++]);
+  return merged;
+}
+
 export async function readChatSessionViaSdk(
   sessionId: string,
   source: SessionSource = {}
@@ -554,17 +594,28 @@ export async function readChatSessionViaSdk(
   const stamp = await sessionTranscriptStamp(sessionId, source);
   return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () => {
     const messages = mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp));
-    // `getSessionMessages` returns chat rows only, so a second pass over the same
-    // file recovers what it cannot see: the messages typed mid-turn (#245) and the
-    // skill expansion that identifies a `/foo` skill (#246). It rides this cache
-    // entry, whose stamp is that very file's `size:mtimeMs` — a new row there
-    // invalidates both passes together. Without a `projectDir` we don't know which
-    // file the SDK read, so the read stays SDK-only rather than guessing.
+    // `getSessionMessages` returns chat rows only, and only those on the one
+    // parent chain it walks, so a second pass over the same file recovers what
+    // it cannot see: the messages typed mid-turn (#245), the skill expansion
+    // that identifies a `/foo` skill (#246) and the chat rows its chain missed
+    // (see `withRowsTheSdkChainMissed`). It rides this cache entry, whose stamp
+    // is that very file's `size:mtimeMs` — a new row there invalidates all of
+    // them together. Without a `projectDir` we don't know which file the SDK
+    // read, so the read stays SDK-only rather than guessing.
     const transcript = source.projectDir
       ? await firstExistingTranscript(source.projectDir, sessionId)
       : null;
     if (!transcript) return messages;
-    return mergeTranscriptExtras(messages, await readTranscriptExtras(transcript));
+    let raw: string;
+    try {
+      raw = await readTextFile(transcript);
+    } catch {
+      return messages;
+    }
+    return mergeTranscriptExtras(
+      withRowsTheSdkChainMissed(messages, raw),
+      parseTranscriptExtras(raw)
+    );
   });
 }
 

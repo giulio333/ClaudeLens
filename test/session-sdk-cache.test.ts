@@ -28,6 +28,12 @@ const SESSION_NO_SUB = '66666666-7777-8888-9999-000000000000';
  *  `queue-operation` (a message absorbed mid-turn, #245) and the `isMeta` skill
  *  expansion that identifies a slash-command skill (#246). */
 const SESSION_EXTRAS = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+/** A session whose conversation continues UNDER a non-chat row: the SDK walks
+ *  one `parentUuid` chain over chat rows only, so a row it cannot see hides
+ *  everything below it. Observed in the wild (an `attachment` beside the dead
+ *  `isMeta` "Continue from where you left off." branch), where it left the app
+ *  showing the first question and nothing else. */
+const SESSION_FORK = 'cccccccc-dddd-eeee-ffff-111111111111';
 const AGENT_ID = 'abc123';
 const DISPATCH_PROMPT = 'Investigate the flaky test in the parser suite';
 const CWD = join(tmpdir(), 'cl-cache-proj');
@@ -144,6 +150,103 @@ function writeFixtures(): void {
       { type: 'mode', mode: 'normal', sessionId: SESSION_NO_SUB, cwd: CWD },
       userLine('n1', null, 'a session that dispatched nothing'),
       assistantLine('n2', 'n1', [{ type: 'text', text: 'answered directly' }]),
+    ])
+  );
+
+  // The fork that hides a conversation, rebuilt from the transcript where it was
+  // found. `fr` (a tool result) has two children: the dead `isMeta` "Continue
+  // from where you left off." branch, and an `attachment` under which the real
+  // turns go on. The SDK's chain abandons the live branch — it ends on an
+  // `isMeta` row — and answers with the dead one, so the app showed the first
+  // question, the tool calls, and nothing else.
+  writeFileSync(
+    join(projDir, `${SESSION_FORK}.jsonl`),
+    jsonl([
+      { type: 'mode', mode: 'normal', sessionId: SESSION_FORK, cwd: CWD },
+      { ...userLine('f1', null, 'first question'), timestamp: '2026-06-17T12:00:00.000Z' },
+      {
+        ...assistantLine('fa', 'f1', [
+          { type: 'tool_use', id: 'toolu_f1', name: 'Read', input: { file_path: '/tmp/x' } },
+        ]),
+        timestamp: '2026-06-17T12:00:01.000Z',
+      },
+      {
+        parentUuid: 'fa',
+        isSidechain: false,
+        type: 'user',
+        uuid: 'fr',
+        cwd: CWD,
+        timestamp: '2026-06-17T12:00:02.000Z',
+        sourceToolAssistantUUID: 'fa',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'tool_result', tool_use_id: 'toolu_f1', content: 'file body', is_error: false },
+          ],
+        },
+        toolUseResult: { stdout: 'file body' },
+      },
+      {
+        parentUuid: 'fr',
+        isSidechain: false,
+        isMeta: true,
+        type: 'user',
+        uuid: 'fmeta',
+        cwd: CWD,
+        timestamp: '2026-06-17T12:00:03.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Continue from where you left off.' }],
+        },
+      },
+      {
+        parentUuid: 'fmeta',
+        isSidechain: false,
+        isApiErrorMessage: false,
+        type: 'assistant',
+        uuid: 'fnote',
+        cwd: CWD,
+        timestamp: '2026-06-17T12:00:03.000Z',
+        message: {
+          model: '<synthetic>',
+          id: 'msg_fnote',
+          type: 'message',
+          role: 'assistant',
+          stop_reason: 'stop_sequence',
+          content: [{ type: 'text', text: 'No response requested.' }],
+        },
+      },
+      {
+        parentUuid: 'fr',
+        isSidechain: false,
+        type: 'attachment',
+        uuid: 'fatt',
+        cwd: CWD,
+        timestamp: '2026-06-17T12:00:02.100Z',
+        attachment: { type: 'total_tokens_reminder', totalTokens: 15000000 },
+      },
+      {
+        ...assistantLine('f2', 'fatt', [{ type: 'text', text: 'the real answer' }]),
+        timestamp: '2026-06-17T12:00:04.000Z',
+      },
+      { ...userLine('f3', 'f2', 'and then?'), timestamp: '2026-06-17T12:00:05.000Z' },
+      {
+        ...assistantLine('f4', 'f3', [{ type: 'text', text: 'the second real answer' }]),
+        timestamp: '2026-06-17T12:00:06.000Z',
+      },
+      {
+        parentUuid: 'f4',
+        isSidechain: false,
+        isMeta: true,
+        type: 'user',
+        uuid: 'fskill',
+        cwd: CWD,
+        timestamp: '2026-06-17T12:00:07.000Z',
+        message: {
+          role: 'user',
+          content: [{ type: 'text', text: 'Base directory for this skill: /skills/x' }],
+        },
+      },
     ])
   );
 
@@ -361,6 +464,23 @@ describe('readChatSessionViaSdk — the rows the SDK read cannot see', () => {
     expect(queued[0].content).toEqual([{ type: 'text', text: 'metti anche il changelog' }]);
     // At the moment it was typed: after the command, before the answer.
     expect(messages.map(m => m.uuid)).toEqual([messages[0].uuid, queued[0].uuid, 'x2', 'x3', 'x4']);
+  });
+
+  it('puts back the turns the SDK chain walked past', async () => {
+    const messages = await readChatSessionViaSdk(SESSION_FORK, source);
+
+    expect(messages.map(m => m.uuid)).toEqual(['f1', 'fa', 'fr', 'f2', 'f3', 'f4']);
+    expect(
+      messages
+        .filter(m => m.content[0].type === 'text')
+        .map(m => (m.content[0].type === 'text' ? m.content[0].text : ''))
+    ).toEqual(['first question', 'the real answer', 'and then?', 'the second real answer']);
+    // Recovered BEFORE the extras are stamped, so a recovered row still gets
+    // what the second pass has for it — here the skill the expansion names.
+    expect(messages.find(m => m.uuid === 'f4')?.skillPath).toBe('/skills/x');
+    // The dead branch stays out: its `isMeta` row is Claude Code talking to the
+    // model, and "No response requested." is the local-command placeholder.
+    expect(messages.some(m => m.uuid === 'fmeta' || m.uuid === 'fnote')).toBe(false);
   });
 
   it('marks the slash command that expanded into a skill', async () => {
