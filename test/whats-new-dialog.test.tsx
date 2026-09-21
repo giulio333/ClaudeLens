@@ -38,6 +38,10 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A first feature', description: 'What it does.', visual: 'prompt-playbook' },
     { title: 'A second feature', description: 'Another.', visual: 'cross-session-message' },
     { title: 'A third feature', description: 'No visual for this one.' },
+    { title: 'A published page', description: 'The card.', visual: 'artifact' },
+    { title: 'A picture', description: 'Drawn.', visual: 'chat-image' },
+    { title: 'A diff', description: 'Under the turn.', visual: 'file-changes' },
+    { title: 'A colour', description: 'On the crumb.', visual: 'session-color' },
   ],
 };
 
@@ -95,6 +99,26 @@ describe('WhatsNewDialog', () => {
     expect(container.querySelectorAll('.cl-whatsnew-index button')).toHaveLength(
       release.highlights.length
     );
+  });
+
+  it('draws the transcript visuals with the feature in them, not just a frame', async () => {
+    const { container } = renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    // The picture is decoded by the browser, never by jsdom: what can be pinned
+    // here is that it is an inline `data:` PNG and not a path the dialog would
+    // have to read through `images:read` on a machine that does not have it.
+    const img = container.querySelector<HTMLImageElement>('.cl-image-open img')!;
+    expect(img.getAttribute('src')).toMatch(/^data:image\/png;base64,/);
+    // The diff is open on the page, numbered where the fixture's patch says.
+    expect(container.querySelector('.cl-file-change.is-edited')).not.toBeNull();
+    expect(container.querySelector('.cl-diff-row')).not.toBeNull();
+    // The colour is set on the frame and worn by the crumb, glow lit.
+    expect(
+      container.querySelector('.cl-session-aura.cyan .cl-session-identity.cyan')
+    ).not.toBeNull();
+    expect(container.querySelector('.cl-session-bottom-glow.is-active')).not.toBeNull();
   });
 
   it('marks the version seen and closes on "Got it"', async () => {

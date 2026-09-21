@@ -20206,6 +20206,16 @@ select.cl-opt-input {
   top: 22px;
   bottom: 6px;
 }
+/* The stage preview: the real top bar, without the 88px gutter that clears
+   the traffic lights here — there are none — and enough floor under the last
+   turn for the bottom glow to be read as the glow it is. */
+.cl-whatsnew-frame--stage .cl-topbar {
+  padding-left: 22px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-whatsnew-frame--stage .cl-transcript-inner {
+  padding-bottom: 72px;
+}
 /* The masthead is the one centred thing on the page; everything under it is a
    left-aligned row of feature and surface, so the eye reads down one column of
    names and across to the screen each one names. */

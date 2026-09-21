@@ -8,6 +8,12 @@ import { PromptPlaybookPanel } from './project/chat/PromptPlaybook';
 import type { PromptCandidate, PromptTemplate } from '../../electron/shared/playbook-types';
 import { buildProcessedMessages, type ProcessedMessage } from './project/chat/utils';
 import type { ArtifactPublish } from '../types';
+import { TopBar } from './project/shared/TopBar';
+import {
+  SessionBottomGlow,
+  SessionColorFrame,
+  SessionColorIdentity,
+} from './project/shared/SessionColorIdentity';
 import { version as appVersion } from '../../package.json';
 
 function turn(msg: ChatMessage): ProcessedMessage {
@@ -193,10 +199,137 @@ function ArtifactVisual(): ReactNode {
   return <TranscriptFrame turns={ARTIFACT_TURN} />;
 }
 
+// A screenshot pasted into a prompt, as the transcript carries it: an `image`
+// block beside the `[Image #1]` placeholder. The picture is a synthetic 320×200
+// PNG drawn for this popup (a sidebar, a title, a button — nothing from anyone's
+// real work), inline so the dialog never reads a file: the path form goes
+// through `images:read`, and a path answers "file is gone" on every machine
+// but the one it was written on.
+const SCREENSHOT_PNG =
+  'iVBORw0KGgoAAAANSUhEUgAAAUAAAADICAIAAAAWZq/8AAAC2UlEQVR42u3dwQ1AMACG0c7k5NBdzGYAByNYwlFiARfutYEIaUj7vvwbyOPQJsKxb0UuSRUUAJYABlgCGGAJYIAFMMASwABLAAMsASwBDLAEMMASwAALYIAlgAGWAAZYAlgCGGAJYIAlgAGWAJYABlgCGGAJYIAFMMASwABLAAMsASwBDLAEMMASwABLAEsAAywBDLAEMMACGGAJYIAlgB9tXWaz4lcyYK9n+QIDLAEMsAQwwBLAEsAASwADLAEMsAAGWAIYYAlggCWAJYABlgAGWAIYYAngO8W2Mcs9gAE2gAEG2AAG2AxggA1ggAE2gAE2AxhgM4ABNoABltzEAlgCGGAJYIAFMMASwABLAAMsASwBDLAEMMASwAALYIAvG4fe6hnAABvAAANsAAMMsAEMsAEMMMAGMMAAG8AAS86BAZYABlgCGGABDLAEMMASwABLAEsAAywB7CaWucUFMMAGMMAAG8AAmwEMsAEMMMAGMMAAG8DOgSWAAZYAlgAGWAIYYAlggAUwwBLAAEsAAywB7CaWW00AA8wSwAADbAADDDDAAhhggAEG2AAGGGADGGDnwAIYYAlggCWAAZYAlgAGWAIYYAlggCWAJYABlgAGWAIYYAEMsAQwwBLAAEsASwADLAEMsAQwwBLAEsAASwADLAEMsAAGWAIYYAlggCWAJYABlgAGWAIYYAEMsAQwwBLAAEsAe7oCGGAJYIAlgAGWAJYABlgC+OeApy6a5R7AABvAAANsAANsBjDABjDAABvAAJsBDLAZwAAbwAADbAADbAYwwAYwwAAbwAADbAADbAYwwAYwwAAbwACbAQywGcAAG8AAA2wAA2wGMMAGMMAAG8AAA2wAA2wGMMAGMMAAG8AAmwHs74TSuwCWAAZYAhhgCWCABTDAEsAASwADLAEsAQywBDDAEsAAC2CAJYABlgAGWALY0xXAAEsAAywBDLAEsAQwwNLXneabNGklvzCeAAAAAElFTkSuQmCC';
+
+const IMAGE_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-i1',
+    role: 'user',
+    timestamp: '2026-09-21T09:12:00.000Z',
+    content: [
+      { type: 'text', text: '[Image #1] The button is off the grid here — can you see why?' },
+      { type: 'image', mediaType: 'image/png', data: SCREENSHOT_PNG },
+    ],
+  }),
+  turn({
+    uuid: 'wn-i2',
+    role: 'assistant',
+    model: 'claude-sonnet-5',
+    timestamp: '2026-09-21T09:12:05.000Z',
+    content: [
+      { type: 'text', text: 'Yes — the button is full-width while the text column is not.' },
+    ],
+  }),
+];
+
+function ChatImageVisual(): ReactNode {
+  return <TranscriptFrame turns={IMAGE_TURNS} />;
+}
+
+// One `Edit`, with the `structuredPatch` Claude Code records on its result row:
+// the strip numbers the hunk where the result says, so the turn shows the diff
+// exactly as the reader will meet it — open, at the foot, in MIN.
+const FILE_CHANGES_TURN: ProcessedMessage[] = buildProcessedMessages([
+  {
+    uuid: 'wn-f1',
+    role: 'assistant',
+    model: 'claude-sonnet-5',
+    timestamp: '2026-09-21T11:03:00.000Z',
+    content: [
+      { type: 'text', text: 'Capped the retry loop.' },
+      {
+        type: 'tool_use',
+        id: 'wn-edit-1',
+        name: 'Edit',
+        input: {
+          file_path: '/home/acme/app/src/retry.ts',
+          old_string: 'while (true) {',
+          new_string: 'while (attempt < MAX_ATTEMPTS) {',
+        },
+      },
+    ],
+  },
+  {
+    uuid: 'wn-f2',
+    role: 'user',
+    timestamp: '2026-09-21T11:03:02.000Z',
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-edit-1',
+        content: 'The file /home/acme/app/src/retry.ts has been updated successfully.',
+        isError: false,
+        patch: [
+          {
+            oldStart: 14,
+            oldLines: 3,
+            newStart: 14,
+            newLines: 3,
+            lines: [
+              '  let attempt = 0;',
+              '-  while (true) {',
+              '+  while (attempt < MAX_ATTEMPTS) {',
+              '    attempt += 1;',
+            ],
+          },
+        ],
+      },
+    ],
+  },
+]);
+
+function FileChangesVisual(): ReactNode {
+  return <TranscriptFrame turns={FILE_CHANGES_TURN} />;
+}
+
+// The Terminal / Lens frame with a coloured session in it: the real top bar
+// with the crumb wearing the colour, and the glow at the foot of the stage.
+// `SessionColorFrame` is what sets `--cl-session-color`; the glow is absolute,
+// so the frame is positioned here the way the stage is in Mission Control.
+function SessionColorVisual(): ReactNode {
+  return (
+    <SessionColorFrame
+      color="cyan"
+      className="cl-whatsnew-frame cl-whatsnew-frame--stage"
+      style={{ position: 'relative' }}
+    >
+      <TopBar
+        onBack={() => {}}
+        crumbs={[
+          { label: 'ACME' },
+          { label: <SessionColorIdentity color="cyan" title="acme-b4" />, accent: true },
+        ]}
+      />
+      <div className="cl-transcript-inner">
+        {PREVIEW_TURNS.slice(0, 2).map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={4 + i}
+          />
+        ))}
+      </div>
+      <SessionBottomGlow color="cyan" active />
+    </SessionColorFrame>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
   artifact: ArtifactVisual,
+  'chat-image': ChatImageVisual,
+  'file-changes': FileChangesVisual,
+  'session-color': SessionColorVisual,
 };
 
 /** The names of everything in this release, under the title. A card that opens

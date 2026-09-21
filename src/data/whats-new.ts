@@ -12,7 +12,13 @@ export interface WhatsNewHighlight {
   /** Where the feature lives in the app. A popup that shows a new surface
    *  without saying where it is leaves the reader to go looking for it. */
   where?: string;
-  visual?: 'cross-session-message' | 'prompt-playbook' | 'artifact';
+  visual?:
+    | 'cross-session-message'
+    | 'prompt-playbook'
+    | 'artifact'
+    | 'chat-image'
+    | 'file-changes'
+    | 'session-color';
 }
 
 export interface WhatsNewRelease {
@@ -21,6 +27,32 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.26',
+    highlights: [
+      {
+        title: 'Pictures, drawn',
+        description:
+          'A pasted screenshot, a Read of a .png, an image linked by path — shown, not dropped.',
+        where: 'Any session transcript',
+        visual: 'chat-image',
+      },
+      {
+        title: 'What a turn changed',
+        description:
+          'Every edited file as its diff under the turn — Bash rewrites included — without leaving MIN.',
+        where: 'The foot of a turn, in MIN density',
+        visual: 'file-changes',
+      },
+      {
+        title: 'Session colors in Lens',
+        description:
+          'The color a session wears in the terminal follows it: a dot on the crumb and a glow at the foot of the view.',
+        where: 'The Terminal / Lens frame',
+        visual: 'session-color',
+      },
+    ],
+  },
   {
     version: '2.2.24',
     highlights: [
