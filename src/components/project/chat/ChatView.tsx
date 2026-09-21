@@ -45,7 +45,7 @@ import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
-import { SessionColorDot } from '../shared/SessionColorDot';
+import { SessionColorIdentity } from '../shared/SessionColorIdentity';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
 import { useSessionTags } from '../../../hooks/useSessionTags';
@@ -714,14 +714,7 @@ export function ChatView({
                 // inline box sized to its own content would be clipped mid-word
                 // instead of ellipsised. A block-level flex row takes the
                 // button's width and hands the truncation to the title span.
-                label: session.agentColor ? (
-                  <span className="flex items-center min-w-0" style={{ gap: 7 }}>
-                    <SessionColorDot color={session.agentColor} />
-                    <span className="truncate min-w-0">{title}</span>
-                  </span>
-                ) : (
-                  title
-                ),
+                label: <SessionColorIdentity color={session.agentColor} title={title} />,
                 accent: !detailBack,
                 onClick: detailBack ?? undefined,
                 title: detailBack ? 'Back to chat (Esc)' : undefined,

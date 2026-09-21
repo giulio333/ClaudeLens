@@ -1302,6 +1302,22 @@ titolo da tingere e nessun altro tondo con cui confondersi: il crumb della
 `ChatView`, così il colore è sotto gli occhi anche mentre si legge la sessione,
 non solo nella lista da cui la si è scelta.
 
+Nel frame unificato **Terminal / Lens** lo stesso dato diventa una piccola
+**Session Aura** (`SessionColorFrame`): il pallino precede il titolo nella
+breadcrumb, che indossa a sua volta il colore. `SessionBottomGlow` porta la
+stessa tinta al fondo della sola area di lavoro: una sfumatura alta 100px, senza
+striscia piena sul bordo e trasparente salendo. Sta a `z-index:10`, quindi sotto
+la pill strumenti del Lens (`z-index:40`) e sotto i detail overlay del frame
+(`z-index:20`), e non raggiunge TopBar, selettore Terminal/Lens o Mission
+Control. Tutto sparisce quando la sessione non ha un `agentColor`. Le otto classi
+nominate riusano solo `--cl-agent-*`: niente colore arbitrario entra in CSS e
+l'accento terracotta resta un'informazione separata.
+
+Il glow resta montato quando si alternano le due viste: **Lens** aggiunge
+`.is-active` e lo fa entrare dal basso in 220ms; **Terminal** toglie la classe e
+lo spegne in 140ms. Non rimontarlo è ciò che rende possibile l'uscita animata.
+Con `prefers-reduced-motion` resta la sola dissolvenza, senza traslazione.
+
 La riga pinnata **non ha alcun trattamento di superficie**. Due sono stati
 provati e **bocciati entrambi**, per lo stesso motivo: erano la cosa più urlata
 di una lista il cui linguaggio è fatto di hairline. Il **wash terracotta a

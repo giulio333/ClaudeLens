@@ -6,6 +6,11 @@ import { TagPicker } from '../sessions/TagPicker';
 import { useTheme } from '../../../hooks/useTheme';
 import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
+import {
+  SessionBottomGlow,
+  SessionColorFrame,
+  SessionColorIdentity,
+} from '../shared/SessionColorIdentity';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
@@ -479,7 +484,8 @@ export function TerminalMissionControl({
     // the console blends into the frame with no visible seam (no slab edge);
     // LENS keeps the normal --cl-paper so the embedded chat reads as usual.
     // MissionRail keeps its own --cl-paper (set in railWrap). Holds in light + dark.
-    <div
+    <SessionColorFrame
+      color={summary?.agentColor}
       className="cl-chat"
       style={{ background: view === 'terminal' ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)' }}
     >
@@ -500,7 +506,7 @@ export function TerminalMissionControl({
           ...(title
             ? [
                 {
-                  label: title,
+                  label: <SessionColorIdentity color={summary?.agentColor} title={title} />,
                   accent: !overlayCrumb,
                   onClick: overlayCrumb ? closeOverlay : undefined,
                   title: overlayCrumb ? 'Back to session (Esc)' : undefined,
@@ -627,6 +633,7 @@ export function TerminalMissionControl({
               opens inside the chat, so the skill/tool page reads identically from
               either entry point. */}
           <div
+            className="cl-session-stage"
             style={{
               flex: 1,
               minHeight: 0,
@@ -724,6 +731,8 @@ export function TerminalMissionControl({
                 ) : null}
               </div>
             )}
+
+            <SessionBottomGlow color={summary?.agentColor} active={view === 'lens'} />
           </div>
         </main>
 
@@ -758,6 +767,6 @@ export function TerminalMissionControl({
           />
         )}
       </div>
-    </div>
+    </SessionColorFrame>
   );
 }
