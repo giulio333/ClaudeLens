@@ -107,7 +107,9 @@ function input(over: Partial<MissionFeedInput> = {}): MissionFeedInput {
 }
 
 describe('mission feed — file changes', () => {
-  it('estimates a diff per mutating tool and aggregates per file', () => {
+  // The numbers are the diff's, the same the chat prints under the turn: an
+  // Edit of `a` → `a\nb` is one line added, not two added and one removed.
+  it('counts the diff of each mutating tool and aggregates per file', () => {
     const write = group('w1', 'Write', {
       file_path: '/Users/dev/proj/src/a.ts',
       content: 'a\nb\nc',
@@ -122,7 +124,39 @@ describe('mission feed — file changes', () => {
     const [fc] = buildFileChanges([write, edit, group('r1', 'Read', { file_path: '/x' })]);
     expect(fc.name).toBe('a.ts');
     expect(fc.items).toHaveLength(2);
-    expect(fc).toMatchObject({ added: 5, removed: 1, hasError: false });
+    expect(fc).toMatchObject({ added: 4, removed: 0, hasError: false });
+  });
+
+  // An edit made from Bash leaves no Edit call: the file is on the result row
+  // (#265). It is how Claude edits in auto mode, and the rail used to show a
+  // session of those as one that changed nothing.
+  it('counts the files a Bash command rewrote off its result', () => {
+    const bash: ToolGroup = {
+      use: { type: 'tool_use', id: 'sh1', name: 'Bash', input: { command: 'sed -i s/a/b/ x' } },
+      result: {
+        type: 'tool_result',
+        toolUseId: 'sh1',
+        content: '',
+        isError: false,
+        bashEditDiff: {
+          files: [
+            {
+              filePath: '/Users/dev/proj/src/x.ts',
+              hunks: [{ oldStart: 1, oldLines: 1, newStart: 1, newLines: 1, lines: ['-a', '+b'] }],
+            },
+            { filePath: '/Users/dev/proj/src/new.ts', hunks: [], created: true },
+          ],
+          changedFiles: ['/Users/dev/proj/src/x.ts', '/Users/dev/proj/src/new.ts'],
+          moreFiles: 0,
+        },
+      },
+    };
+    const changes = buildFileChanges([bash]);
+    expect(changes.map(c => [c.name, c.added, c.removed, c.created])).toEqual([
+      ['x.ts', 1, 1, false],
+      ['new.ts', 0, 0, true],
+    ]);
+    expect(changes[0].items).toEqual([bash]);
   });
 
   it('reads the area relative to the project, and falls back outside it', () => {
@@ -227,7 +261,7 @@ describe('mission feed — row copy', () => {
     );
     expect(event.meta).toBe('2 edits · electron/modules');
     expect(event.expandable).toBe(true);
-    expect(event.rightDiff).toEqual({ added: 3, removed: 2 });
+    expect(event.rightDiff).toEqual({ added: 1, removed: 0 });
     expect(event.ext).toBe('ts');
   });
 

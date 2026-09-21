@@ -23,6 +23,11 @@ export type ChatContentBlock =
       isError: boolean;
       /** Files the command edited, when Claude Code recorded them (Bash only). */
       bashEditDiff?: BashEditDiff;
+      /** The hunks of an `Edit` or `Write`, with their line numbers, as Claude
+       *  Code records them on the result row (`toolUseResult.structuredPatch`).
+       *  The call's input says what changed, never where: this is the only
+       *  place the transcript states the line. Empty for a new file. */
+      patch?: BashEditHunk[];
       /** The page an `Artifact` publish produced, when Claude Code recorded it. */
       artifact?: ArtifactPublish;
       /** The delivery a `SendMessage` call made, when Claude Code recorded one. */

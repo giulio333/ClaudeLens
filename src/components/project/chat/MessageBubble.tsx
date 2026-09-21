@@ -14,7 +14,7 @@ import {
   isQuestionDismissed,
   describeTurn,
   touchedFiles,
-  fileCategoryTint,
+  mergeTouchedFiles,
   TouchedFile,
   skillInitial,
   AGENT_TOOLS,
@@ -29,7 +29,7 @@ import { artifactOf, isArtifactTool } from './artifact';
 import { isMessageTool } from './sent-message';
 import { MessageLine } from './MessageLine';
 import { previewLine } from './message-line';
-import { FileIcon } from './fileIcons';
+import { FileChangesStrip } from './FileChangesStrip';
 import { blockKey, isPersistableMessageUuid } from './highlights';
 
 /** Unobtrusive header button that copies a turn's plain markdown text (text
@@ -448,7 +448,7 @@ export function ToolsHiddenBadge({ count, files = [] }: { count: number; files?:
         {count === 1 ? '1 tool hidden' : 'tools hidden'}
         {count > 1 && <span className="cl-turn-tools-hidden-x">×{count}</span>}
       </span>
-      <FileChipCluster files={files} />
+      <FileChangesStrip files={files} />
     </div>
   );
 }
@@ -490,53 +490,6 @@ export function AdvisorChip({ consult }: { consult: AdvisorConsult }) {
       advisor
       {detail.length > 0 && <span className="cl-advisor-detail">{detail.join(' · ')}</span>}
     </span>
-  );
-}
-
-/** Row of file chips at the foot of a turn: one icon per file the (hidden) tools
- *  touched, tinted by file kind, with the file name on hover. */
-function FileChipCluster({ files, max = 10 }: { files: TouchedFile[]; max?: number }) {
-  if (files.length === 0) return null;
-  // One chip per distinct file (dedupe by path across the run + own tools).
-  const seen = new Set<string>();
-  const distinct: TouchedFile[] = [];
-  for (const f of files) {
-    if (!seen.has(f.path)) {
-      seen.add(f.path);
-      distinct.push(f);
-    }
-  }
-  const shown = distinct.slice(0, max);
-  const overflow = distinct.length - shown.length;
-  return (
-    <div className="cl-turn-files">
-      {shown.map((f, i) => {
-        const name = f.path.split(/[\\/]/).filter(Boolean).pop() ?? f.path;
-        return (
-          <span
-            key={i}
-            className="cl-file-chip"
-            style={{ '--ft': fileCategoryTint(f.ext) } as CSSProperties}
-            data-file={name}
-            aria-label={name}
-          >
-            <FileIcon ext={f.ext} />
-            {f.ext && <span className="cl-file-chip-ext">{f.ext}</span>}
-          </span>
-        );
-      })}
-      {overflow > 0 && (
-        <span
-          className="cl-file-chip cl-file-chip--more"
-          data-file={distinct
-            .slice(max)
-            .map(f => f.path.split(/[\\/]/).filter(Boolean).pop())
-            .join('\n')}
-        >
-          +{overflow}
-        </span>
-      )}
-    </div>
   );
 }
 
@@ -1040,8 +993,8 @@ export const MessageBubble = memo(function MessageBubble({
             const ownFiles = touchedFiles(
               standardToolGroups.filter(g => !AGENT_TOOLS.has(g.use.name))
             );
-            const allFiles = [...hiddenFiles, ...ownFiles];
-            return allFiles.length > 0 ? <FileChipCluster files={allFiles} /> : null;
+            const allFiles = mergeTouchedFiles(hiddenFiles, ownFiles);
+            return allFiles.length > 0 ? <FileChangesStrip files={allFiles} /> : null;
           })()}
 
         {showQuestions && (

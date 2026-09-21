@@ -5,8 +5,13 @@
 
 import { describe, it, expect } from 'vitest';
 import {
+  changeRows,
+  changeStat,
   contentRows,
   diffStat,
+  hunkRows,
+  markPairs,
+  spanDiff,
   fileName,
   highlightRows,
   isMarkdownPath,
@@ -215,5 +220,133 @@ describe('highlightRows', () => {
   it('is null per row without a language', () => {
     expect(highlightRows(contentRows('a\nb'), null)).toEqual([null, null]);
     expect(highlightRows([], 'python')).toEqual([]);
+  });
+});
+
+describe('hunkRows', () => {
+  // The hunks Claude Code records on a result row (`structuredPatch`,
+  // `bashEditDiff`) are the one source with line numbers: an Edit's input says
+  // what changed, never where.
+  const hunk = (lines: string[], oldStart: number, newStart: number) => ({
+    oldStart,
+    oldLines: lines.filter(l => !l.startsWith('+')).length,
+    newStart,
+    newLines: lines.filter(l => !l.startsWith('-')).length,
+    lines,
+  });
+
+  it('numbers context and added rows after the change, removed rows before', () => {
+    expect(hunkRows([hunk([' a', '-b', '-c', '+d', ' e'], 10, 10)])).toEqual([
+      { kind: 'ctx', text: 'a', line: 10 },
+      { kind: 'del', text: 'b', line: 11 },
+      { kind: 'del', text: 'c', line: 12 },
+      { kind: 'add', text: 'd', line: 11 },
+      { kind: 'ctx', text: 'e', line: 12 },
+    ]);
+  });
+
+  it('marks the break between two hunks on the first row of the second', () => {
+    const rows = hunkRows([hunk([' a', '+b'], 1, 1), hunk([' x', '-y'], 40, 41)]);
+    expect(rows.map(r => r.gap ?? false)).toEqual([false, false, true, false]);
+    // 41 − (1 + 2) = 38 lines the diff does not show.
+    expect(rows[2]).toMatchObject({ text: 'x', line: 41, skipped: 38 });
+    expect(rows[3]).toMatchObject({ text: 'y', line: 41 });
+  });
+});
+
+describe('changeRows / changeStat', () => {
+  const tool = (name: string, input: Record<string, unknown>, patch?: unknown) =>
+    ({
+      kind: 'tool',
+      group: {
+        use: { type: 'tool_use', id: 't', name, input },
+        result: { type: 'tool_result', toolUseId: 't', content: '', isError: false, patch },
+      },
+    }) as never;
+
+  it('prefers the recorded hunks of an Edit to the diff of its strings', () => {
+    const patch = [{ oldStart: 5, oldLines: 1, newStart: 5, newLines: 1, lines: ['-x', '+y'] }];
+    expect(changeRows(tool('Edit', { old_string: 'x', new_string: 'y' }, patch))).toEqual([
+      { kind: 'del', text: 'x', line: 5 },
+      { kind: 'add', text: 'y', line: 5 },
+    ]);
+    expect(changeRows(tool('Edit', { old_string: 'x', new_string: 'y' }))).toEqual([
+      { kind: 'del', text: 'x' },
+      { kind: 'add', text: 'y' },
+    ]);
+  });
+
+  it('draws a Write as its content added, and a MultiEdit as each edit in turn', () => {
+    expect(changeRows(tool('Write', { content: 'a\nb' }))).toEqual([
+      { kind: 'add', text: 'a', line: 1 },
+      { kind: 'add', text: 'b', line: 2 },
+    ]);
+    const multi = tool('MultiEdit', {
+      edits: [
+        { old_string: 'a', new_string: 'b' },
+        { old_string: 'c', new_string: 'd' },
+      ],
+    });
+    expect(changeRows(multi)?.map(r => `${r.kind}:${r.text}`)).toEqual([
+      'del:a',
+      'add:b',
+      'del:c',
+      'add:d',
+    ]);
+    expect(changeStat([multi])).toEqual({ added: 2, removed: 2 });
+  });
+
+  it('has nothing to draw for a read or a capped Bash change', () => {
+    expect(changeRows(tool('Read', { file_path: '/a' }))).toBeNull();
+    expect(changeRows({ kind: 'bash', group: {} as never, file: null })).toBeNull();
+    expect(changeStat([{ kind: 'bash', group: {} as never, file: null }])).toEqual({
+      added: 0,
+      removed: 0,
+    });
+  });
+});
+
+describe('markPairs / spanDiff', () => {
+  // A one-token change is read as one token: the removed row and the added
+  // row that replaced it carry the span they do not share.
+  it('marks the differing span of a removed row and its replacement', () => {
+    const rows = markPairs([
+      { kind: 'ctx', text: 'a' },
+      { kind: 'del', text: '  const x = old(1);' },
+      { kind: 'add', text: '  const x = fresh(1);' },
+    ]);
+    expect(rows[1].mark).toEqual([12, 15]);
+    expect(rows[2].mark).toEqual([12, 17]);
+    expect(rows[0].mark).toBeUndefined();
+  });
+
+  it('pairs a run of removed rows with a run of the same length, in order', () => {
+    const rows = markPairs([
+      { kind: 'del', text: 'a = 1' },
+      { kind: 'del', text: 'b = 2' },
+      { kind: 'add', text: 'a = 10' },
+      { kind: 'add', text: 'b = 20' },
+    ]);
+    expect(rows.map(r => r.mark)).toEqual([
+      [5, 5],
+      [5, 5],
+      [5, 6],
+      [5, 6],
+    ]);
+  });
+
+  it('leaves a rewrite alone: unequal runs, or rows that share nothing but indent', () => {
+    const rewrite = markPairs([
+      { kind: 'del', text: 'one' },
+      { kind: 'add', text: 'two' },
+      { kind: 'add', text: 'three' },
+    ]);
+    expect(rewrite.every(r => r.mark === undefined)).toBe(true);
+    expect(spanDiff('  foo()', '  bar()')).toEqual([
+      [2, 5],
+      [2, 5],
+    ]);
+    expect(spanDiff('  foo', '  bar')).toBeNull();
+    expect(spanDiff('same', 'same')).toBeNull();
   });
 });

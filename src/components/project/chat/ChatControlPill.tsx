@@ -8,6 +8,7 @@ import { ContextPopover, SpendPopover } from '../terminal/VitalsPopover';
 import { CHAT_EXPORT_PRESETS, ChatExportFormat, ChatExportPreset } from './export';
 import {
   ChevronUpGlyph,
+  DiffGlyph,
   DockCaretGlyph,
   FindGlyph,
   FindStepGlyph,
@@ -103,10 +104,12 @@ function ModelDockSheet({
  * wrong in one of the two ways.
  *
  * What stays is what a reader acts on: what the conversation is (model, context,
- * spend), what it did (the diff), and the three controls — find, density, and
- * the "more" trigger that raises the export / delete sheet. The cells that can
- * read zero say so instead of vanishing (`no changes`), the same way the context
- * cell has always printed `—` rather than a zero it has not measured.
+ * spend) and the three controls — find, density, and the "more" trigger that
+ * raises the export / delete sheet. What the session did to the working tree
+ * is not here any more: Mission Control shows it, as a total and file by file,
+ * and the diffs themselves sit under the turns. The cells that can read zero
+ * say so, the way the context cell prints `—` rather than a zero it has not
+ * measured.
  *
  * One sheet at a time above the pill: the model runs, or export.
  */
@@ -114,6 +117,8 @@ export function ChatControlPill({
   showTranscriptControls,
   density,
   setDensity,
+  diffsOpen,
+  onToggleDiffs,
   canExport,
   exporting,
   exportPreset,
@@ -131,7 +136,6 @@ export function ChatControlPill({
   modelRuns,
   onLocateModel,
   vitals,
-  changes,
   find,
   thought,
 }: {
@@ -140,6 +144,10 @@ export function ChatControlPill({
   showTranscriptControls: boolean;
   density: ChatDetailsFilter;
   setDensity: (d: ChatDetailsFilter) => void;
+  /** The diffs at the foot of the turns, all at once: on shows them, off folds
+   *  them to their one-line header. */
+  diffsOpen: boolean;
+  onToggleDiffs: () => void;
   canExport: boolean;
   exporting: ChatExportFormat | null;
   exportPreset: ChatExportPreset;
@@ -167,13 +175,6 @@ export function ChatControlPill({
    *  claim. Absent altogether (no `vitals`) the two cells simply do not exist —
    *  a host that has no session row to read them off says nothing. */
   vitals?: { ctx: ContextState | null; session: SessionSummary } | null;
-  /** What the session did to the working tree: lines added, lines removed, and
-   *  how many files carry them. The cell holds its place at zero and reads
-   *  `no changes` — `+0 −0 0 files` would be three zeros, which is not a
-   *  reading, but "this session changed nothing" is. Absent altogether (no
-   *  `changes`) the cell does not exist: a host with nothing to measure says
-   *  nothing, same rule as `vitals`. */
-  changes?: { added: number; removed: number; files: number } | null;
   /** Find-in-transcript. The reading column is windowed, so the browser's own
    *  Ctrl+F sees only the rows around the viewport; this is its replacement and
    *  the pill is where it lives. Navigation is by TURN, not by match — see
@@ -461,39 +462,6 @@ export function ChatControlPill({
             <span className="cl-pill-div" />
           </>
         )}
-        {changes && (
-          <>
-            {/* What the session DID, next to what it is and what it cost. It
-                lived over Mission Control's feed, where it read as a heading for
-                a list of events; it is neither — it is the session's product. No
-                readout card: the rail's feed already lists the files one by one,
-                and inventing a second place to see them would be two lists.
-
-                It used to disappear when nothing had been touched, on the
-                grounds that `+0 −0 0 files` is three zeros and not a reading.
-                That is still true of the three zeros — so the cell keeps its
-                place and says the thing instead: a session that changed nothing
-                is a fact about it, and a bar whose cells come and go is the
-                thing this pill stopped doing. */}
-            {changes.added > 0 || changes.removed > 0 ? (
-              <span
-                className="cl-pill-diff"
-                title={`${changes.added} lines added, ${changes.removed} removed across ${changes.files} file${changes.files === 1 ? '' : 's'}`}
-              >
-                <b className="add">+{changes.added}</b>
-                <b className="del">−{changes.removed}</b>
-                <span className="files">
-                  {changes.files} <span>{changes.files === 1 ? 'file' : 'files'}</span>
-                </span>
-              </span>
-            ) : (
-              <span className="cl-pill-diff is-none" title="This session did not change any file">
-                no changes
-              </span>
-            )}
-            <span className="cl-pill-div" />
-          </>
-        )}
         {find && (
           <>
             {findOpen || find.query ? (
@@ -596,6 +564,19 @@ export function ChatControlPill({
                   {v === 'minimal' ? 'Min' : 'Full'}
                 </button>
               ))}
+              {/* The diffs switch lives in the segment: it thins the transcript
+                  the way the density does, one kind of content at a time. A
+                  glyph, not a word — it is a switch, not a third density. */}
+              <button
+                type="button"
+                className={`cl-seg-icon${diffsOpen ? ' on' : ''}`}
+                aria-pressed={diffsOpen}
+                title={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
+                aria-label={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
+                onClick={onToggleDiffs}
+              >
+                <DiffGlyph />
+              </button>
             </div>
             <span className="cl-pill-div" />
           </>

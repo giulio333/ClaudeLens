@@ -6,8 +6,9 @@ import {
   parseAnswersFromResultText,
   parseAskUserQuestions,
   QUESTION_TOOL,
-  writeAction,
+  touchedFiles,
 } from '../chat/utils';
+import { changeStat, fileName } from '../chat/file-view';
 import { artifactIsPrivate, shortArtifactUrl } from '../chat/artifact';
 import type { ArtifactActivity } from '../chat/artifact';
 import type {
@@ -18,6 +19,7 @@ import type {
   SessionAgent,
   SessionSkill,
   ToolGroup,
+  TouchedFile,
 } from '../chat/utils';
 import {
   parseHttpFailure,
@@ -64,72 +66,54 @@ import type { WebLink, WebRedirect } from '../chat/web';
 
 const EDIT_TOOLS = new Set(['Edit', 'Write', 'MultiEdit', 'NotebookEdit']);
 
-function lines(s: unknown): number {
-  return typeof s === 'string' && s.length > 0 ? s.split('\n').length : 0;
-}
-
-/** +added/−removed estimate for a file-mutating tool, from its input alone. */
+/** +added/−removed of one file-mutating call — the diff's numbers, the same
+ *  the chat prints — or null for a call that mutates nothing. */
 export function editStats(g: ToolGroup): { added: number; removed: number } | null {
-  const input = g.use.input as Record<string, unknown>;
-  if (g.use.name === 'Write') return { added: lines(input.content), removed: 0 };
-  if (g.use.name === 'Edit')
-    return { added: lines(input.new_string), removed: lines(input.old_string) };
-  if (g.use.name === 'MultiEdit' && Array.isArray(input.edits)) {
-    let added = 0;
-    let removed = 0;
-    for (const e of input.edits as Array<Record<string, unknown>>) {
-      added += lines(e.new_string);
-      removed += lines(e.old_string);
-    }
-    return { added, removed };
-  }
-  return null;
+  return EDIT_TOOLS.has(g.use.name) ? changeStat([{ kind: 'tool', group: g }]) : null;
 }
 
 export type FileChange = {
   path: string;
   name: string;
+  /** Every call that touched the file, in order — a Bash run once, however
+   *  many of its files it appears under. */
   items: ToolGroup[];
   added: number;
   removed: number;
   hasError: boolean;
-  /** A `Write` in this file's items actually created it (vs. overwriting or
-   *  editing an existing one) — the row's action badge reads this, not the
-   *  tool name: a file both written and later edited still counts as edit. */
+  /** The file did not exist before this session: a `Write` whose result says
+   *  so, or a shell run Claude Code recorded as creating it. A file both
+   *  created and later edited still counts as created. */
   created: boolean;
+  deleted: boolean;
+  /** The file as the chat's strip sees it: the sources behind each number, so
+   *  the rail can draw the same diff the turn does. */
+  file: TouchedFile;
 };
 
-/** Per-file aggregate of every mutating tool run — the session's work product. */
+/** Per-file aggregate of every mutating call — the session's work product.
+ *  Built on the chat's `touchedFiles`, so the two agree on what a change is:
+ *  the file tools from their input, and the files a shell command rewrote from
+ *  its result (#265) — which is how Claude edits in auto mode, and what this
+ *  used to miss altogether. The numbers are the diff's (`changeStat`), the
+ *  recorded hunks when the row has them, not a count of the input's lines. */
 export function buildFileChanges(groups: ToolGroup[]): FileChange[] {
-  const byPath = new Map<string, FileChange>();
-  for (const g of groups) {
-    if (!EDIT_TOOLS.has(g.use.name)) continue;
-    const input = g.use.input as Record<string, unknown>;
-    const path = (input.file_path || input.notebook_path) as string | undefined;
-    if (!path) continue;
-    let fc = byPath.get(path);
-    if (!fc) {
-      fc = {
-        path,
-        name: path.split(/[\\/]/).pop() || path,
-        items: [],
-        added: 0,
-        removed: 0,
-        hasError: false,
-        created: false,
+  return touchedFiles(groups)
+    .filter(f => f.action !== 'read')
+    .map(f => {
+      const items: ToolGroup[] = [];
+      for (const s of f.sources) if (!items.includes(s.group)) items.push(s.group);
+      return {
+        path: f.path,
+        name: fileName(f.path),
+        items,
+        ...changeStat(f.sources),
+        hasError: items.some(g => !!g.result?.isError),
+        created: f.action === 'created',
+        deleted: f.action === 'deleted',
+        file: f,
       };
-      byPath.set(path, fc);
-    }
-    fc.items.push(g);
-    const stats = editStats(g);
-    if (stats) {
-      fc.added += stats.added;
-      fc.removed += stats.removed;
-    }
-    fc.hasError ||= !!g.result?.isError;
-    if (g.use.name === 'Write' && writeAction(g.result?.content) === 'new') fc.created = true;
-  }
-  return [...byPath.values()];
+    });
 }
 
 /** Directory of a file relative to the project root — the row's "area". Files
@@ -345,7 +329,7 @@ export type FeedEvent = {
   ext?: string;
   /** CHANGES rows only: which action the row's icon draws — a file created by
    *  `Write` vs. one only edited. Absent for every other species. */
-  actionGlyph?: 'edit' | 'write';
+  actionGlyph?: 'edit' | 'write' | 'delete';
   title: string;
   meta: string;
   /** Third tooltip line: the fact the row had to truncate — a page's full URL and
@@ -719,7 +703,7 @@ function changeEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
       glyph: '',
       glyphTint: 'var(--cl-ink-3)',
       ext: fileExt(fc.name),
-      actionGlyph: fc.created ? 'write' : 'edit',
+      actionGlyph: fc.created ? 'write' : fc.deleted ? 'delete' : 'edit',
       title: fc.name,
       meta: fc.items.length > 1 ? `${fc.items.length} edits · ${area}` : area,
       right: fc.hasError ? 'FAILED' : '',

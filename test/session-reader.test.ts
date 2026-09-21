@@ -395,6 +395,55 @@ describe('bashEditDiff on the file read path', () => {
   });
 });
 
+describe('structuredPatch on the file read path', () => {
+  // Same row-level family as `bashEditDiff`: an Edit's hunks, with the line
+  // numbers its input never states, sit on `toolUseResult.structuredPatch`.
+  const hunk = { oldStart: 12, oldLines: 3, newStart: 12, newLines: 4, lines: [' a', '-b', '+c'] };
+  const editRows = (structuredPatch: unknown) => [
+    line({
+      type: 'assistant',
+      uuid: 'a1',
+      timestamp: '2026-01-01T00:00:00Z',
+      message: {
+        role: 'assistant',
+        content: [
+          {
+            type: 'tool_use',
+            id: 'toolu_edit1',
+            name: 'Edit',
+            input: { file_path: '/p/a.ts', old_string: 'b', new_string: 'c' },
+          },
+        ],
+      },
+    }),
+    line({
+      type: 'user',
+      uuid: 'u1',
+      timestamp: '2026-01-01T00:00:01Z',
+      message: {
+        role: 'user',
+        content: [{ type: 'tool_result', tool_use_id: 'toolu_edit1', content: 'updated' }],
+      },
+      toolUseResult: { filePath: '/p/a.ts', oldString: 'b', newString: 'c', structuredPatch },
+    }),
+  ];
+  const resultBlock = (p: string) => {
+    const msgs = readChatSession(p);
+    const block = msgs[msgs.length - 1].content[0];
+    return block.type === 'tool_result' ? block : null;
+  };
+
+  it('attaches the hunks to the result of the edit', () => {
+    const p = writeJsonl('s.jsonl', editRows([hunk]));
+    expect(resultBlock(p)?.patch).toEqual([hunk]);
+  });
+
+  it('attaches nothing for the empty patch of a new file', () => {
+    const p = writeJsonl('s.jsonl', editRows([]));
+    expect(resultBlock(p)?.patch).toBeUndefined();
+  });
+});
+
 describe('findSessionFile', () => {
   it('returns the path inside the sessions/ subdir when present', async () => {
     const sessions = join(dir, 'sessions');

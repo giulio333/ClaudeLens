@@ -7,6 +7,8 @@
  */
 
 import { writeAction } from './utils';
+import type { FileChangeSource } from './utils';
+import type { BashEditHunk } from '../../../types';
 import { highlightLines } from './code-lang';
 
 export type FileRowKind = 'ctx' | 'add' | 'del';
@@ -15,8 +17,18 @@ export interface FileRow {
   kind: FileRowKind;
   text: string;
   /** Line number in the file, when known: a `Read` prints it, a `Write` starts
-   *  at 1. An `Edit` carries none — `old_string` says what changed, not where. */
+   *  at 1. An `Edit` carries none — `old_string` says what changed, not where —
+   *  unless its result row does (`hunkRows`). */
   line?: number;
+  /** First row of a hunk after the first: the file skips between the row above
+   *  and this one, and the diff draws the break — `skipped` lines of it, when
+   *  the hunk headers say how many. */
+  gap?: boolean;
+  skipped?: number;
+  /** The span of the row that differs from its counterpart — `[start, end)`
+   *  in `text` — when a removed row is paired with the added row that replaced
+   *  it (`markPairs`). What the eye should land on in a one-token change. */
+  mark?: [number, number];
 }
 
 /** Tools the editor window draws. `MultiEdit` is not one of them: it went away
@@ -216,4 +228,138 @@ export function highlightRows(rows: FileRow[], language: string | null): (string
   paint('add');
   if (rows.some(r => r.kind === 'del')) paint('del');
   return html;
+}
+
+/**
+ * The rows of hunks as Claude Code records them — `structuredPatch` on an
+ * `Edit`/`Write` result, `bashEditDiff` on a Bash one — numbered: a context or
+ * added row by its line in the file after the change, a removed row by its
+ * line before. Same lines a `diff -u` prints, with the `@@` header turned into
+ * the numbers it carries.
+ */
+export function hunkRows(hunks: BashEditHunk[]): FileRow[] {
+  const rows: FileRow[] = [];
+  hunks.forEach((h, i) => {
+    let oldNo = h.oldStart;
+    let newNo = h.newStart;
+    const prev = hunks[i - 1];
+    const skipped = prev ? h.newStart - (prev.newStart + prev.newLines) : 0;
+    h.lines.forEach((line, j) => {
+      const gap = i > 0 && j === 0 ? { gap: true, ...(skipped > 0 ? { skipped } : {}) } : {};
+      const text = line.slice(1);
+      if (line.startsWith('+')) rows.push({ kind: 'add', text, line: newNo++, ...gap });
+      else if (line.startsWith('-')) rows.push({ kind: 'del', text, line: oldNo++, ...gap });
+      else {
+        rows.push({ kind: 'ctx', text, line: newNo++, ...gap });
+        oldNo++;
+      }
+    });
+  });
+  return rows;
+}
+
+/** A change as diff rows. The result row's hunks when Claude Code recorded
+ *  them — the one source with line numbers — else what the call's input says:
+ *  the two strings of an `Edit` diffed, the content of a `Write` as added
+ *  lines, each edit of a `MultiEdit` in turn. `null` for a call with nothing
+ *  to draw (a read; a Bash change past Claude Code's cap). */
+export function changeRows(source: FileChangeSource): FileRow[] | null {
+  if (source.kind === 'bash') return source.file ? hunkRows(source.file.hunks) : null;
+  const { use, result } = source.group;
+  const input = use.input as Record<string, unknown>;
+  if (result?.patch?.length) return hunkRows(result.patch);
+  switch (use.name) {
+    case 'Edit':
+      return lineDiff(str(input.old_string), str(input.new_string));
+    case 'Write':
+      return contentRows(str(input.content), 'add');
+    case 'MultiEdit':
+      return Array.isArray(input.edits)
+        ? (input.edits as Record<string, unknown>[]).flatMap(e =>
+            lineDiff(str(e.old_string), str(e.new_string))
+          )
+        : [];
+    case 'NotebookEdit':
+      return lineDiff('', str(input.new_source));
+    default:
+      return null;
+  }
+}
+
+/** Lines added and removed across every call that touched the file. */
+export function changeStat(sources: FileChangeSource[]): { added: number; removed: number } {
+  let added = 0;
+  let removed = 0;
+  for (const s of sources) {
+    const rows = changeRows(s);
+    if (!rows) continue;
+    const stat = diffStat(rows);
+    added += stat.added;
+    removed += stat.removed;
+  }
+  return { added, removed };
+}
+
+const str = (v: unknown): string => (typeof v === 'string' ? v : '');
+
+/**
+ * Marks, on each removed row and the added row that replaced it, the span the
+ * two rows do not share — a rename, a changed argument, a flipped flag — so a
+ * one-token change is read as one token and not as two whole lines. Pairs are
+ * made inside a run of `del` rows followed by the same number of `add` rows;
+ * a run of two removed and five added rows is a rewrite and gets no marks. A
+ * pair whose rows share nothing (or everything) is left unmarked too: a mark
+ * across the whole row says less than the row's own colour.
+ */
+export function markPairs(rows: FileRow[]): FileRow[] {
+  const out = rows.slice();
+  let i = 0;
+  while (i < out.length) {
+    if (out[i].kind !== 'del') {
+      i++;
+      continue;
+    }
+    let d = i;
+    while (d < out.length && out[d].kind === 'del') d++;
+    let a = d;
+    while (a < out.length && out[a].kind === 'add') a++;
+    const dels = d - i;
+    const adds = a - d;
+    if (dels === adds) {
+      for (let k = 0; k < dels; k++) {
+        const marks = spanDiff(out[i + k].text, out[d + k].text);
+        if (marks) {
+          out[i + k] = { ...out[i + k], mark: marks[0] };
+          out[d + k] = { ...out[d + k], mark: marks[1] };
+        }
+      }
+    }
+    i = a;
+  }
+  return out;
+}
+
+/** The differing span of two strings, by common prefix and suffix, as
+ *  `[start, end)` in each. Null when the strings are equal or share nothing on
+ *  either side (then the whole row is the change, and the row's colour already
+ *  says so). */
+export function spanDiff(a: string, b: string): [[number, number], [number, number]] | null {
+  if (a === b) return null;
+  let start = 0;
+  const max = Math.min(a.length, b.length);
+  while (start < max && a[start] === b[start]) start++;
+  let endA = a.length;
+  let endB = b.length;
+  while (endA > start && endB > start && a[endA - 1] === b[endB - 1]) {
+    endA--;
+    endB--;
+  }
+  // Leading indentation alone is not "sharing": a row that shares only its
+  // spaces with the other is a different row.
+  const shared = a.slice(0, start).trim().length + a.slice(endA).trim().length;
+  if (shared === 0) return null;
+  return [
+    [start, endA],
+    [start, endB],
+  ];
 }

@@ -8,17 +8,20 @@ import {
   mergeTranscriptExtras,
   parseArtifactPublish,
   parseBashEditDiff,
+  parseEditPatch,
   parseSentMessage,
   parseTranscriptExtras,
   rowEffort,
   withArtifactPublish,
   withBashEditDiff,
+  withEditPatch,
   withSentMessage,
 } from './transcript-extras';
 import type {
   AdvisorConsult,
   ArtifactPublish,
   BashEditDiff,
+  BashEditHunk,
   ChatContentBlock,
   ChatMessage,
   SentMessage,
@@ -211,11 +214,13 @@ export interface ReadChatOptions {
 function withRowExtras(
   blocks: ChatContentBlock[],
   bashEditDiff: BashEditDiff | undefined,
+  patch: BashEditHunk[] | undefined,
   artifact: ArtifactPublish | undefined,
   sent: SentMessage | undefined
 ): ChatContentBlock[] {
   let out = blocks;
   if (bashEditDiff) out = withBashEditDiff(out, bashEditDiff);
+  if (patch) out = withEditPatch(out, patch);
   if (artifact) out = withArtifactPublish(out, artifact);
   if (sent) out = withSentMessage(out, sent);
   return out;
@@ -303,6 +308,8 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       // the SDK path, which gets only `message`, has to recover it with a
       // second pass (see `transcript-extras`).
       const bashEditDiff = parseBashEditDiff(json.toolUseResult);
+      // E gli hunk di un `Edit`/`Write`, gli unici a portare i numeri di riga.
+      const patch = parseEditPatch(json.toolUseResult);
       // Stessa riga, stessa ragione: la pagina che una publish dell'`Artifact`
       // tool ha prodotto (titolo, link, versione) sta su `toolUseResult`.
       const artifact = parseArtifactPublish(json.toolUseResult);
@@ -315,7 +322,7 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
         role,
         timestamp: String(json.timestamp ?? ''),
         model: msg.model as string | undefined,
-        content: withRowExtras(blocks, bashEditDiff, artifact, sent),
+        content: withRowExtras(blocks, bashEditDiff, patch, artifact, sent),
         usage: parseUsage(msg),
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).

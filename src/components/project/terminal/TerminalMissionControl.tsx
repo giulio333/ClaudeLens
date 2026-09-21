@@ -22,6 +22,8 @@ import { resolveToolIcon, toolRunStatus, type SessionAgent, type ToolGroup } fro
 import { sessionTitle } from '../utils';
 import { TerminalPane, STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './TerminalPane';
 import { MissionRail } from './MissionRail';
+import type { FileChange } from './mission-feed';
+import { FileChangePage } from '../chat/FileChangesStrip';
 import { flushSync } from 'react-dom';
 import type { TerminalPromptHandle } from './terminal-prompt';
 
@@ -65,6 +67,7 @@ const RAIL_MAX = 560;
 type View = 'terminal' | 'lens';
 type Overlay =
   | { kind: 'tool'; group: ToolGroup }
+  | { kind: 'change'; change: FileChange }
   | { kind: 'agent'; agent: SessionAgent }
   | { kind: 'skill-def'; skill: Skill }
   | { kind: 'agent-def'; agent: Agent }
@@ -336,6 +339,8 @@ export function TerminalMissionControl({
           kind: 'tool',
           label: overlay.group.use.name,
         };
+      case 'change':
+        return { kind: 'change', label: overlay.change.name };
       case 'agent':
         return { kind: 'agent', label: overlay.agent.subagentType || 'agent' };
       case 'skill-def':
@@ -693,6 +698,10 @@ export function TerminalMissionControl({
                     drawing its own bar would only repeat them one line lower. */}
                 {overlay.kind === 'tool' ? (
                   <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
+                ) : overlay.kind === 'change' ? (
+                  <div className="cl-file-change-scroll">
+                    <FileChangePage file={overlay.change.file} />
+                  </div>
                 ) : overlay.kind === 'skill-def' ? (
                   <SkillDetailView
                     skill={overlay.skill}
@@ -745,6 +754,7 @@ export function TerminalMissionControl({
             width={railWidth}
             onWidthChange={onWidthChange}
             onOpenTool={group => setOverlay({ kind: 'tool', group })}
+            onOpenChange={change => setOverlay({ kind: 'change', change })}
             onOpenAgent={agent => setOverlay({ kind: 'agent', agent })}
             onOpenSkillDef={skill => setOverlay({ kind: 'skill-def', skill })}
             onOpenAgentDef={agent => setOverlay({ kind: 'agent-def', agent })}

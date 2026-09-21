@@ -61,6 +61,10 @@ export interface TranscriptExtras {
   effortByUuid: Map<string, string>;
   /** `tool_use_id` del risultato Bash → i file che quel comando ha modificato. */
   bashEditDiffByToolUseId: Map<string, BashEditDiff>;
+  /** `tool_use_id` del risultato `Edit`/`Write` → gli hunk con i numeri di
+   *  riga (`toolUseResult.structuredPatch`). L'input della chiamata dice COSA è
+   *  cambiato, mai DOVE: senza questo un diff non ha numeri di riga. */
+  patchByToolUseId: Map<string, BashEditHunk[]>;
   /** `tool_use_id` del risultato `Artifact` → la pagina che quella publish ha
    *  prodotto. Stessa sorte di `bashEditDiff`: sta su `toolUseResult`, che
    *  l'SDK non restituisce, e senza di essa la publish è una tool call generica
@@ -81,6 +85,7 @@ const EMPTY: TranscriptExtras = {
   skillPathByParentUuid: new Map(),
   effortByUuid: new Map(),
   bashEditDiffByToolUseId: new Map(),
+  patchByToolUseId: new Map(),
   artifactByToolUseId: new Map(),
   sentByToolUseId: new Map(),
 };
@@ -136,6 +141,18 @@ export function parseBashEditDiff(toolUseResult: unknown): BashEditDiff | undefi
 
   if (files.length === 0 && changedFiles.length === 0 && !unavailable) return undefined;
   return { files, changedFiles, moreFiles, ...(unavailable ? { unavailable: true } : {}) };
+}
+
+/**
+ * Gli hunk di un `Edit`/`Write` dal suo `toolUseResult.structuredPatch`, con
+ * i numeri di riga che l'input della chiamata non ha. `undefined` quando non
+ * c'è o è vuoto: la `Write` di un file nuovo scrive `[]`, e lì il contenuto
+ * della chiamata è già tutto il diff.
+ */
+export function parseEditPatch(toolUseResult: unknown): BashEditHunk[] | undefined {
+  if (!toolUseResult || typeof toolUseResult !== 'object') return undefined;
+  const hunks = parseHunks((toolUseResult as Record<string, unknown>).structuredPatch);
+  return hunks.length > 0 ? hunks : undefined;
 }
 
 function parseHunks(raw: unknown): BashEditHunk[] {
@@ -237,6 +254,15 @@ export function withArtifactPublish(
 ): ChatContentBlock[] {
   if (blocks.filter(b => b.type === 'tool_result').length !== 1) return blocks;
   return blocks.map(b => (b.type === 'tool_result' ? { ...b, artifact } : b));
+}
+
+/** Gemella di `withBashEditDiff` per gli hunk di un `Edit`/`Write`. */
+export function withEditPatch(
+  blocks: ChatContentBlock[],
+  patch: BashEditHunk[]
+): ChatContentBlock[] {
+  if (blocks.filter(b => b.type === 'tool_result').length !== 1) return blocks;
+  return blocks.map(b => (b.type === 'tool_result' ? { ...b, patch } : b));
 }
 
 /**
@@ -465,6 +491,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const skillPathByParentUuid = new Map<string, string>();
   const effortByUuid = new Map<string, string>();
   const bashEditDiffByToolUseId = new Map<string, BashEditDiff>();
+  const patchByToolUseId = new Map<string, BashEditHunk[]>();
   const artifactByToolUseId = new Map<string, ArtifactPublish>();
   const sentByToolUseId = new Map<string, SentMessage>();
   const injected: ChatMessage[] = [];
@@ -485,6 +512,8 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
     const isBashEdit = line.includes('"bashEditDiff"');
+    // `structuredPatch` sta solo sul risultato di un `Edit`/`Write`.
+    const isPatch = line.includes('"structuredPatch"');
     // `artifact_id` sta solo sul risultato di una publish: una `read` o una
     // `list` dell'Artifact tool non lo scrivono, quindi il prefiltro è già il
     // discriminante e non c'è da deserializzare il resto del corpus.
@@ -503,7 +532,15 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       line.includes('"kind":"auto-continuation"') ||
       line.includes(IDLE_NOTICE_PREFIX) ||
       line.includes('<teammate-message');
-    if (!isQueue && !isSkillExpansion && !isBashEdit && !isArtifact && !isSent && !isProvenance)
+    if (
+      !isQueue &&
+      !isSkillExpansion &&
+      !isBashEdit &&
+      !isPatch &&
+      !isArtifact &&
+      !isSent &&
+      !isProvenance
+    )
       continue;
 
     let json: Record<string, unknown>;
@@ -520,6 +557,15 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       const toolUseId = soleToolResultId(json.message);
       if (diff && toolUseId) bashEditDiffByToolUseId.set(toolUseId, diff);
       continue;
+    }
+
+    if (isPatch) {
+      const patch = parseEditPatch(json.toolUseResult);
+      const toolUseId = soleToolResultId(json.message);
+      if (patch && toolUseId) {
+        patchByToolUseId.set(toolUseId, patch);
+        continue;
+      }
     }
 
     if (isArtifact) {
@@ -666,6 +712,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     skillPathByParentUuid,
     effortByUuid,
     bashEditDiffByToolUseId,
+    patchByToolUseId,
     artifactByToolUseId,
     sentByToolUseId,
   };
@@ -704,6 +751,19 @@ function stampArtifacts(
   );
 }
 
+function stampEditPatches(
+  content: ChatContentBlock[],
+  byToolUseId: Map<string, BashEditHunk[]>
+): ChatContentBlock[] {
+  if (byToolUseId.size === 0) return content;
+  const needs = (b: ChatContentBlock): boolean =>
+    b.type === 'tool_result' && !b.patch && byToolUseId.has(b.toolUseId);
+  if (!content.some(needs)) return content;
+  return content.map(b =>
+    needs(b) ? { ...b, patch: byToolUseId.get((b as { toolUseId: string }).toolUseId) } : b
+  );
+}
+
 function stampBashEditDiffs(
   content: ChatContentBlock[],
   byToolUseId: Map<string, BashEditDiff>
@@ -737,6 +797,7 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid,
     effortByUuid,
     bashEditDiffByToolUseId,
+    patchByToolUseId,
     artifactByToolUseId,
     sentByToolUseId,
   } = extras;
@@ -747,6 +808,7 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0 &&
+    patchByToolUseId.size === 0 &&
     artifactByToolUseId.size === 0 &&
     sentByToolUseId.size === 0
   ) {
@@ -763,6 +825,7 @@ export function mergeTranscriptExtras(
     skillPathByParentUuid.size === 0 &&
     effortByUuid.size === 0 &&
     bashEditDiffByToolUseId.size === 0 &&
+    patchByToolUseId.size === 0 &&
     artifactByToolUseId.size === 0 &&
     sentByToolUseId.size === 0 &&
     noticeByUuid.size === 0
@@ -773,7 +836,10 @@ export function mergeTranscriptExtras(
           const notice = noticeByUuid.get(msg.uuid);
           const content = stampSentMessages(
             stampArtifacts(
-              stampBashEditDiffs(msg.content, bashEditDiffByToolUseId),
+              stampEditPatches(
+                stampBashEditDiffs(msg.content, bashEditDiffByToolUseId),
+                patchByToolUseId
+              ),
               artifactByToolUseId
             ),
             sentByToolUseId

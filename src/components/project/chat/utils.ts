@@ -7,6 +7,7 @@ import {
   Skill,
   InstalledPlugin,
 } from '../../../hooks/useIPC';
+import type { BashEditFile } from '../../../types';
 import { isArtifactTool } from './artifact';
 import { isMessageTool } from './sent-message';
 
@@ -1228,20 +1229,85 @@ export function toolFilePath(name: string, input: Record<string, unknown>): stri
   return typeof p === 'string' && p ? p : null;
 }
 
-export type TouchedFile = { path: string; ext: string };
+/** What a turn did to a file, net of every call that touched it. */
+export type FileAction = 'read' | 'edited' | 'created' | 'deleted';
 
-/** Raccoglie i file toccati da un insieme di tool group, in ordine, deduplicati per path. */
+/** One call that touched the file: a file tool with its input, or a shell run
+ *  with the hunks Claude Code recorded for this file on its result row —
+ *  `file` is null when the run changed the path but recorded no hunks for it
+ *  (past the cap, or `unavailable`). */
+export type FileChangeSource =
+  | { kind: 'tool'; group: ToolGroup }
+  | { kind: 'bash'; group: ToolGroup; file: BashEditFile | null };
+
+export type TouchedFile = {
+  path: string;
+  ext: string;
+  action: FileAction;
+  /** Every call that touched the path, in transcript order. */
+  sources: FileChangeSource[];
+};
+
+// A file read and then edited is an edited file; one created and then edited
+// is still a new file; anything deleted at some point is gone. The rank is the
+// net effect, not the first verb seen.
+const FILE_ACTION_RANK: Record<FileAction, number> = { read: 0, edited: 1, created: 2, deleted: 3 };
+
+function fileToolAction(g: ToolGroup): FileAction {
+  if (g.use.name === 'Read') return 'read';
+  if (g.use.name === 'Write' && g.result && writeAction(g.result.content) === 'new')
+    return 'created';
+  return 'edited';
+}
+
+/** Raccoglie i file toccati da un insieme di tool group, in ordine, deduplicati
+ *  per path — i tool file (`Read`/`Write`/`Edit`/…) dal loro input, e i file
+ *  che un comando shell ha riscritto dal `bashEditDiff` del suo risultato
+ *  (#265): senza il secondo, un turno in cui Claude modifica con `sed` o un
+ *  heredoc non mostra alcun file. */
 export function touchedFiles(groups: ToolGroup[]): TouchedFile[] {
-  const seen = new Set<string>();
-  const out: TouchedFile[] = [];
+  const acc = new TouchedFilesAcc();
   for (const g of groups) {
     const p = toolFilePath(g.use.name, g.use.input as Record<string, unknown>);
-    if (p && !seen.has(p)) {
-      seen.add(p);
-      out.push({ path: p, ext: fileExt(p) });
+    if (p) acc.add(p, fileToolAction(g), { kind: 'tool', group: g });
+    const diff = g.result?.bashEditDiff;
+    if (!diff) continue;
+    const withHunks = new Set<string>();
+    for (const file of diff.files) {
+      withHunks.add(file.filePath);
+      const action = file.deleted ? 'deleted' : file.created ? 'created' : 'edited';
+      acc.add(file.filePath, action, { kind: 'bash', group: g, file });
+    }
+    for (const path of diff.changedFiles) {
+      if (!withHunks.has(path)) acc.add(path, 'edited', { kind: 'bash', group: g, file: null });
     }
   }
-  return out;
+  return acc.list();
+}
+
+/** The files of several lists as one, in order — a path in two of them is one
+ *  file with every source, the way `touchedFiles` folds two calls on one path.
+ *  Used where a turn's own files meet the run of tool-only turns folded into it. */
+export function mergeTouchedFiles(...lists: TouchedFile[][]): TouchedFile[] {
+  const acc = new TouchedFilesAcc();
+  for (const list of lists) {
+    for (const f of list) for (const s of f.sources) acc.add(f.path, f.action, s);
+  }
+  return acc.list();
+}
+
+class TouchedFilesAcc {
+  private byPath = new Map<string, TouchedFile>();
+  add(path: string, action: FileAction, source: FileChangeSource) {
+    const cur = this.byPath.get(path);
+    if (cur) {
+      cur.sources.push(source);
+      if (FILE_ACTION_RANK[action] > FILE_ACTION_RANK[cur.action]) cur.action = action;
+    } else this.byPath.set(path, { path, ext: fileExt(path), action, sources: [source] });
+  }
+  list(): TouchedFile[] {
+    return [...this.byPath.values()];
+  }
 }
 
 // Categoria d'estensione → tinta del chip file (riusa i token --cl-* esistenti,
@@ -1336,7 +1402,7 @@ export function buildRenderItems(
     const last = items[items.length - 1];
     if (last?.kind === 'turn' && processed[last.idx]?.msg.role === 'assistant') {
       last.hiddenCount = (last.hiddenCount ?? 0) + run.count;
-      last.hiddenFiles = [...(last.hiddenFiles ?? []), ...run.files];
+      last.hiddenFiles = mergeTouchedFiles(last.hiddenFiles ?? [], run.files);
     } else {
       items.push({
         kind: 'tools',
@@ -1364,7 +1430,7 @@ export function buildRenderItems(
       const files = touchedFiles(groups);
       if (run) {
         run.count += groups.length;
-        run.files.push(...files);
+        run.files = mergeTouchedFiles(run.files, files);
       } else run = { count: groups.length, firstIdx: idx, files };
     } else if (d.visible) {
       flush();
