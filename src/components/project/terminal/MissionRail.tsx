@@ -43,7 +43,7 @@ import {
   webItemNote,
   FEED_KINDS,
 } from './mission-feed';
-import type { FeedEvent, FeedKind } from './mission-feed';
+import type { FeedEvent, FeedKind, FileChange } from './mission-feed';
 import { ContextPopover, SpendPopover } from './VitalsPopover';
 import { MessagesDock } from './MessagesDock';
 import { buildMessageThreads } from './mission-messages';
@@ -254,13 +254,17 @@ function FeedGlyph({ e }: { e: FeedEvent }) {
 /** CHANGES rows only: pencil for an edit, plus for a file `Write` created —
  *  both in the accent that already tints the row's diff numbers, so the verb
  *  reads before the +/− does. */
-function ActionGlyph({ kind }: { kind: 'edit' | 'write' }) {
+function ActionGlyph({ kind }: { kind: 'edit' | 'write' | 'delete' }) {
   return (
     <span
       aria-hidden
       className="inline-flex items-center justify-center shrink-0"
-      style={{ width: 13, height: 13, color: 'var(--cl-accent)' }}
-      title={kind === 'edit' ? 'Edit' : 'Write (created)'}
+      style={{
+        width: 13,
+        height: 13,
+        color: kind === 'delete' ? 'var(--cl-danger)' : 'var(--cl-accent)',
+      }}
+      title={kind === 'edit' ? 'Edit' : kind === 'delete' ? 'Deleted' : 'Write (created)'}
     >
       <svg
         viewBox="0 0 24 24"
@@ -277,6 +281,8 @@ function ActionGlyph({ kind }: { kind: 'edit' | 'write' }) {
             <path d="M12 20h9" />
             <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z" />
           </>
+        ) : kind === 'delete' ? (
+          <path d="M5 12h14" />
         ) : (
           <>
             <path d="M12 5v14" />
@@ -479,6 +485,7 @@ export function MissionRail({
   width,
   onWidthChange,
   onOpenTool,
+  onOpenChange,
   onOpenAgent,
   onOpenSkillDef,
   onOpenAgentDef,
@@ -496,6 +503,9 @@ export function MissionRail({
   onWidthChange: (w: number) => void;
   /** Detail views need width: the parent opens them as a wide overlay. */
   onOpenTool: (group: ToolGroup) => void;
+  /** A CHANGES row opens the file's change — its diffs, the way the chat
+   *  draws them — rather than the tool call that happened to make it last. */
+  onOpenChange: (change: FileChange) => void;
   onOpenAgent: (agent: SessionAgent) => void;
   /** Deep-link a skill row to its definition (read-only overlay in the parent). */
   onOpenSkillDef: (skill: Skill) => void;
@@ -796,7 +806,9 @@ export function MissionRail({
       else if (s.skill.group) onOpenTool(s.skill.group);
     } else if (s.kind === 'question') {
       onLocateTurn(s.turnN);
-    } else if (s.kind === 'memory' || s.kind === 'change' || s.kind === 'web') {
+    } else if (s.kind === 'change') {
+      onOpenChange(s.change);
+    } else if (s.kind === 'memory' || s.kind === 'web') {
       if (e.items.length > 0) onOpenTool(e.items[e.items.length - 1]);
     } else if (s.kind === 'artifact') {
       // The page, not the tool call that made it: the call's answer is prose
@@ -1071,7 +1083,19 @@ export function MissionRail({
               <div key={e.id}>
                 <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />
                 {open && e.items.length > 0 && (
-                  <FeedOperations items={e.items} onOpenTool={onOpenTool} />
+                  <FeedOperations
+                    items={e.items}
+                    // Every call under a change row opens the same page: the
+                    // file's change, with that call's diff among the others.
+                    onOpenTool={
+                      e.source.kind === 'change'
+                        ? (() => {
+                            const change = e.source.change;
+                            return () => onOpenChange(change);
+                          })()
+                        : onOpenTool
+                    }
+                  />
                 )}
                 {open && e.source.kind === 'task' && <TaskDetail event={e.source} />}
               </div>

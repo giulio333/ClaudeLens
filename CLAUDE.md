@@ -98,6 +98,17 @@ a message, to whom and with its summary, in both densities, never as the tool
 card with the result JSON in it, offers the exchange only for a delivery to
 another session, and says `SENDING`/`NO DELIVERY`/`FAILED` where the transcript
 recorded no delivery) and
+`file-changes-strip` (the files a turn changed, at its foot in MIN density: an
+`Edit` is drawn as its diff, open by default and numbered where the result
+row's `structuredPatch` says, a live turn without those numbers falls back to
+the diff of the two strings, a file rewritten from Bash — which no `Edit` call
+ever named — is shown off its `bashEditDiff`, a `Write` that made a new file
+says `created`, a read stays an icon chip and never a diff, a file read and
+then edited is one row with every call, a capped Bash change says no diff was
+recorded rather than drawing nothing, the pill's switch folds every diff and a
+click on one reopens it alone until the switch moves again, the same strip
+sits under the badge of a folded tool run, and a Bash edit on a tool-only turn
+travels onto the turn it is folded into) and
 `bash-edit-diff-view` (the diff of what a shell command changed, #265: the hunk
 is drawn under the run with added and removed lines apart, a created or deleted
 file is marked rather than printed, `unavailable` says so instead of drawing an

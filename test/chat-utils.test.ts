@@ -949,6 +949,64 @@ describe('touchedFiles', () => {
     ] as never);
     expect(files.map(f => f.path)).toEqual(['/a/three.py']);
   });
+
+  // An edit made from Bash leaves no file tool call: the file is on the
+  // result row (`bashEditDiff`, #265), and before this it counted as nothing.
+  it('reads the files a Bash command rewrote off its result', () => {
+    const files = touchedFiles([
+      {
+        use: { id: 't', name: 'Bash', input: { command: 'sed -i s/a/b/ x.ts' } },
+        result: {
+          type: 'tool_result',
+          toolUseId: 't',
+          content: '',
+          isError: false,
+          bashEditDiff: {
+            files: [
+              { filePath: '/a/x.ts', hunks: [] },
+              { filePath: '/a/new.ts', hunks: [], created: true },
+              { filePath: '/a/gone.ts', hunks: [], deleted: true },
+            ],
+            changedFiles: ['/a/x.ts', '/a/new.ts', '/a/gone.ts', '/a/capped.ts'],
+            moreFiles: 1,
+          },
+        },
+      },
+    ] as never);
+    expect(files.map(f => [f.path, f.action])).toEqual([
+      ['/a/x.ts', 'edited'],
+      ['/a/new.ts', 'created'],
+      ['/a/gone.ts', 'deleted'],
+      ['/a/capped.ts', 'edited'],
+    ]);
+    // The capped file has a source, with no hunks to show.
+    expect(files[3].sources).toEqual([expect.objectContaining({ kind: 'bash', file: null })]);
+  });
+
+  it('names the net effect of several calls on one file, and keeps every call', () => {
+    const files = touchedFiles([
+      group('Read', { file_path: '/a/one.ts' }),
+      group('Edit', { file_path: '/a/one.ts', old_string: 'a', new_string: 'b' }),
+      group('Write', { file_path: '/a/two.ts', content: '' }),
+    ] as never);
+    expect(files.map(f => [f.action, f.sources.length])).toEqual([
+      ['edited', 2],
+      ['edited', 1],
+    ]);
+  });
+
+  it('says a Write created the file only when its result says so', () => {
+    const created = {
+      use: { id: 't', name: 'Write', input: { file_path: '/a/n.ts', content: '' } },
+      result: {
+        type: 'tool_result',
+        toolUseId: 't',
+        content: 'File created successfully at: /a/n.ts',
+        isError: false,
+      },
+    };
+    expect(touchedFiles([created] as never)[0].action).toBe('created');
+  });
 });
 
 describe('memory activity', () => {

@@ -10,6 +10,7 @@ import {
   fileName,
   highlightRows,
   isMarkdownPath,
+  hunkRows,
   lineDiff,
   lineRange,
   numberedRows,
@@ -102,10 +103,18 @@ function writeBody(
   };
 }
 
-function editBody(state: Sheet['state'], input: Record<string, unknown>, resultText: string): Body {
+function editBody(
+  state: Sheet['state'],
+  input: Record<string, unknown>,
+  result: ToolGroup['result'],
+  resultText: string
+): Body {
   const oldStr = typeof input.old_string === 'string' ? input.old_string : '';
   const newStr = typeof input.new_string === 'string' ? input.new_string : '';
-  const rows = lineDiff(oldStr, newStr);
+  // The result row's hunks carry the line numbers the input never states;
+  // the diff of the two strings is what is left on a live turn, where the
+  // stream does not return them.
+  const rows = result?.patch?.length ? hunkRows(result.patch) : lineDiff(oldStr, newStr);
   const { added, removed } = diffStat(rows);
   return {
     rows,
@@ -131,7 +140,7 @@ function buildSheet(
       ? readBody(state, resultText)
       : kind === 'Write'
         ? writeBody(state, input, resultText)
-        : editBody(state, input, resultText);
+        : editBody(state, input, result, resultText);
   const status = state === 'pending' ? 'running' : state === 'error' ? 'error' : body.status;
   return { kind, path, dir: path ? shortDir(path) : '', state, ...body, status };
 }

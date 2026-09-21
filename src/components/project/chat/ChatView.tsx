@@ -17,8 +17,6 @@ import { sessionTitle } from '../utils';
 import { useThoughtStream } from './useThoughtStream';
 import { trackEvent } from '../../../lib/telemetry';
 import {
-  AGENT_TOOLS,
-  isMemoryFile,
   buildProcessedMessages,
   buildSkillIndex,
   collectModelRuns,
@@ -34,10 +32,10 @@ import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { VaultLinksProvider } from '../../VaultLinks';
+import { DiffsOpenContext } from './diffs-open';
 import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
 import { deriveContext } from '../terminal/context-window';
-import { buildFileChanges } from '../terminal/mission-feed';
 import { findMatchingTurns, stepToHit } from './find';
 import { useFindLayer } from './useFindLayer';
 import { FocusMinimap } from './FocusMinimap';
@@ -159,6 +157,8 @@ export function ChatView({
   }, [allSkills, plugins]);
   const [viewMode, setViewMode] = useState<ViewMode>('chat');
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
+  // The diffs at the foot of the turns: open until the pill folds them.
+  const [diffsOpen, setDiffsOpen] = useState(true);
   const [selectedTool, setSelectedTool] = useState<ToolGroup | null>(null);
   // One entry point for every "open this tool" in the view — inline card, session
   // graph, skill output. The host frame takes it when it owns the chrome.
@@ -296,26 +296,6 @@ export function ChatView({
   // Synced in a *layout* effect, declared above them: a density change rebuilds
   // the rows, and an anchoring effect reading last render's map would scroll to
   // the row a turn used to occupy.
-  // What this session did to the working tree, for the pill's diff cell. Same
-  // derivation Mission Control's band used — the memory files are excluded
-  // because they are a topic each, not a diff, and counting them would
-  // double-count the session's line totals.
-  const changes = useMemo(() => {
-    const ownTools = processed
-      .flatMap(p => p.toolGroups)
-      .filter(g => !AGENT_TOOLS.has(g.use.name))
-      .filter(g => !isMemoryFile(g.use.input as Record<string, unknown>));
-    const files = buildFileChanges(ownTools);
-    return files.reduce(
-      (acc, c) => ({
-        added: acc.added + c.added,
-        removed: acc.removed + c.removed,
-        files: acc.files + 1,
-      }),
-      { added: 0, removed: 0, files: 0 }
-    );
-  }, [processed]);
-
   // ── Find in transcript ────────────────────────────────────────────────
   // The list is windowed, so the browser's own Ctrl+F only ever sees the rows
   // around the viewport. `findMatchingTurns` scans the DATA (all of it) for the
@@ -619,7 +599,6 @@ export function ChatView({
   const controlPill = (showTranscriptControls: boolean) => (
     <ChatControlPill
       vitals={{ ctx, session }}
-      changes={changes}
       find={{
         query: findQuery,
         setQuery: q => {
@@ -640,6 +619,8 @@ export function ChatView({
       showTranscriptControls={showTranscriptControls && processed.length > 0}
       density={detailsFilter}
       setDensity={setDetailsFilter}
+      diffsOpen={diffsOpen}
+      onToggleDiffs={() => setDiffsOpen(o => !o)}
       canExport={canExport}
       exporting={exporting}
       exportPreset={exportPreset}
@@ -674,244 +655,250 @@ export function ChatView({
     // carry wikilinks of their own that point at topics under `~/.claude`, and
     // resolving those against the project tree would mark every one missing.
     <VaultLinksProvider root={project.realPath}>
-      <div className="cl-chat">
-        {focusMissed && (
-          <div
-            role="status"
-            style={{
-              padding: '8px 28px',
-              fontSize: 12.5,
-              color: 'var(--cl-ink-2)',
-              background: 'var(--cl-paper-2)',
-              borderBottom: '1px solid var(--cl-line)',
-            }}
-          >
-            That match is in this session's history but not in the transcript this view can load —
-            it sits before a <code>/compact</code>, which the reader stops at.{' '}
-            <button
-              onClick={() => setFocusMissed(false)}
-              style={{ color: 'var(--cl-accent)', textDecoration: 'underline' }}
+      <DiffsOpenContext.Provider value={diffsOpen}>
+        <div className="cl-chat">
+          {focusMissed && (
+            <div
+              role="status"
+              style={{
+                padding: '8px 28px',
+                fontSize: 12.5,
+                color: 'var(--cl-ink-2)',
+                background: 'var(--cl-paper-2)',
+                borderBottom: '1px solid var(--cl-line)',
+              }}
             >
-              Dismiss
-            </button>
-          </div>
-        )}
-        {!embedded && (
-          <TopBar
-            // Same stack rule as the unified frame: with a detail open the arrow
-            // returns to the transcript, and only from the transcript does it go
-            // back to Sessions — a lone back arrow has to go back one step.
-            onBack={detailBack ?? onBack}
-            backLabel={detailBack ? 'Back to chat' : 'Sessions'}
-            crumbs={[
-              // The session title is the same step back for the hand already up
-              // here; the detail takes the "you are here" accent.
-              {
-                // The session's `/color` dot rides the crumb, so the colour the
-                // user set to tell two runs apart is on screen while reading one
-                // of them — not only in the list they picked it from.
-                // `flex`, not `inline-flex`: the crumb button truncates, and an
-                // inline box sized to its own content would be clipped mid-word
-                // instead of ellipsised. A block-level flex row takes the
-                // button's width and hands the truncation to the title span.
-                label: session.agentColor ? (
-                  <span className="flex items-center min-w-0" style={{ gap: 7 }}>
-                    <SessionColorDot color={session.agentColor} />
-                    <span className="truncate min-w-0">{title}</span>
-                  </span>
-                ) : (
-                  title
-                ),
-                accent: !detailBack,
-                onClick: detailBack ?? undefined,
-                title: detailBack ? 'Back to chat (Esc)' : undefined,
-              },
-              ...(selectedTool
-                ? [
-                    {
-                      accent: true,
-                      label: (
-                        <span className="inline-flex items-center" style={{ gap: 6 }}>
-                          <span aria-hidden>
-                            {resolveToolIcon(
-                              selectedTool.use.name,
-                              selectedTool.use.input as Record<string, unknown>
-                            )}
-                          </span>
-                          <span style={{ letterSpacing: '0.1em' }}>
-                            {selectedTool.use.name.toUpperCase()}
-                          </span>
-                        </span>
-                      ),
-                    },
-                  ]
-                : []),
-            ]}
-            right={
-              detailBack ? (
-                // The detail owns the bar while it is open: the session's own
-                // controls (tags, Chat/Timeline) act on what is behind it.
-                <>
-                  {selectedTool && (
-                    <span className={`cl-tool-status ${toolRunStatus(selectedTool.result).tone}`}>
-                      {toolRunStatus(selectedTool.result).label}
+              That match is in this session's history but not in the transcript this view can load —
+              it sits before a <code>/compact</code>, which the reader stops at.{' '}
+              <button
+                onClick={() => setFocusMissed(false)}
+                style={{ color: 'var(--cl-accent)', textDecoration: 'underline' }}
+              >
+                Dismiss
+              </button>
+            </div>
+          )}
+          {!embedded && (
+            <TopBar
+              // Same stack rule as the unified frame: with a detail open the arrow
+              // returns to the transcript, and only from the transcript does it go
+              // back to Sessions — a lone back arrow has to go back one step.
+              onBack={detailBack ?? onBack}
+              backLabel={detailBack ? 'Back to chat' : 'Sessions'}
+              crumbs={[
+                // The session title is the same step back for the hand already up
+                // here; the detail takes the "you are here" accent.
+                {
+                  // The session's `/color` dot rides the crumb, so the colour the
+                  // user set to tell two runs apart is on screen while reading one
+                  // of them — not only in the list they picked it from.
+                  // `flex`, not `inline-flex`: the crumb button truncates, and an
+                  // inline box sized to its own content would be clipped mid-word
+                  // instead of ellipsised. A block-level flex row takes the
+                  // button's width and hands the truncation to the title span.
+                  label: session.agentColor ? (
+                    <span className="flex items-center min-w-0" style={{ gap: 7 }}>
+                      <SessionColorDot color={session.agentColor} />
+                      <span className="truncate min-w-0">{title}</span>
                     </span>
-                  )}
-                  <CloseOverlayButton label="Back to chat" onClose={detailBack} />
-                </>
-              ) : (
-                <>
-                  {liveInTerminal && <LiveInTerminalBadge />}
-                  <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
-                    {sessionTags.map(name => (
-                      <ManagedTagChip
-                        key={name}
-                        name={name}
-                        onRemoveFromItem={() => removeTagFromSession(session.filename, name)}
-                        removeLabel="Remove from this session"
-                        onRename={renameTag}
-                        onDelete={() => deleteTag(name)}
-                      />
-                    ))}
-                    <button
-                      type="button"
-                      className="cl-chat-tag-add"
-                      aria-label="Add tag"
-                      title="Add tag"
-                      data-haspicker={!!tagPickerAnchor}
-                      onClick={e => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setTagPickerAnchor(prev => (prev ? null : rect));
-                      }}
-                    >
-                      + tag
-                    </button>
-                    {tagPickerAnchor && (
-                      <TagPicker
-                        anchorRect={tagPickerAnchor}
-                        allTags={allTags}
-                        selected={sessionTags}
-                        onToggle={name => toggleTagOnSession(session.filename, name)}
-                        onClose={() => setTagPickerAnchor(null)}
-                      />
+                  ) : (
+                    title
+                  ),
+                  accent: !detailBack,
+                  onClick: detailBack ?? undefined,
+                  title: detailBack ? 'Back to chat (Esc)' : undefined,
+                },
+                ...(selectedTool
+                  ? [
+                      {
+                        accent: true,
+                        label: (
+                          <span className="inline-flex items-center" style={{ gap: 6 }}>
+                            <span aria-hidden>
+                              {resolveToolIcon(
+                                selectedTool.use.name,
+                                selectedTool.use.input as Record<string, unknown>
+                              )}
+                            </span>
+                            <span style={{ letterSpacing: '0.1em' }}>
+                              {selectedTool.use.name.toUpperCase()}
+                            </span>
+                          </span>
+                        ),
+                      },
+                    ]
+                  : []),
+              ]}
+              right={
+                detailBack ? (
+                  // The detail owns the bar while it is open: the session's own
+                  // controls (tags, Chat/Timeline) act on what is behind it.
+                  <>
+                    {selectedTool && (
+                      <span className={`cl-tool-status ${toolRunStatus(selectedTool.result).tone}`}>
+                        {toolRunStatus(selectedTool.result).label}
+                      </span>
                     )}
-                  </div>
-                  <div className="cl-view-mode" aria-label="View mode">
-                    {(['chat', 'timeline'] as ViewMode[]).map(v => (
+                    <CloseOverlayButton label="Back to chat" onClose={detailBack} />
+                  </>
+                ) : (
+                  <>
+                    {liveInTerminal && <LiveInTerminalBadge />}
+                    <div className="cl-chat-tags" onClick={e => e.stopPropagation()}>
+                      {sessionTags.map(name => (
+                        <ManagedTagChip
+                          key={name}
+                          name={name}
+                          onRemoveFromItem={() => removeTagFromSession(session.filename, name)}
+                          removeLabel="Remove from this session"
+                          onRename={renameTag}
+                          onDelete={() => deleteTag(name)}
+                        />
+                      ))}
                       <button
-                        key={v}
                         type="button"
-                        className={viewMode === v ? 'on' : ''}
-                        onClick={() => setViewMode(v)}
-                        title={
-                          v === 'timeline'
-                            ? 'Session timeline (swimlanes by file/tool)'
-                            : 'Linear transcript'
-                        }
+                        className="cl-chat-tag-add"
+                        aria-label="Add tag"
+                        title="Add tag"
+                        data-haspicker={!!tagPickerAnchor}
+                        onClick={e => {
+                          const rect = e.currentTarget.getBoundingClientRect();
+                          setTagPickerAnchor(prev => (prev ? null : rect));
+                        }}
                       >
-                        {v === 'chat' ? 'Chat' : 'Timeline'}
+                        + tag
                       </button>
-                    ))}
-                  </div>
-                </>
-              )
-            }
-          />
-        )}
+                      {tagPickerAnchor && (
+                        <TagPicker
+                          anchorRect={tagPickerAnchor}
+                          allTags={allTags}
+                          selected={sessionTags}
+                          onToggle={name => toggleTagOnSession(session.filename, name)}
+                          onClose={() => setTagPickerAnchor(null)}
+                        />
+                      )}
+                    </div>
+                    <div className="cl-view-mode" aria-label="View mode">
+                      {(['chat', 'timeline'] as ViewMode[]).map(v => (
+                        <button
+                          key={v}
+                          type="button"
+                          className={viewMode === v ? 'on' : ''}
+                          onClick={() => setViewMode(v)}
+                          title={
+                            v === 'timeline'
+                              ? 'Session timeline (swimlanes by file/tool)'
+                              : 'Linear transcript'
+                          }
+                        >
+                          {v === 'chat' ? 'Chat' : 'Timeline'}
+                        </button>
+                      ))}
+                    </div>
+                  </>
+                )
+              }
+            />
+          )}
 
-        {showDelete && (
-          <DeleteSessionDialog
-            hash={project.hash}
-            sessionFilename={session.filename}
-            title={title}
-            onCancel={() => setShowDelete(false)}
-            onDeleted={() => {
-              setShowDelete(false);
-              onBack();
-            }}
-          />
-        )}
+          {showDelete && (
+            <DeleteSessionDialog
+              hash={project.hash}
+              sessionFilename={session.filename}
+              title={title}
+              onCancel={() => setShowDelete(false)}
+              onDeleted={() => {
+                setShowDelete(false);
+                onBack();
+              }}
+            />
+          )}
 
-        {/* Overlays and alternate modes visually replace the chat workspace, but
+          {/* Overlays and alternate modes visually replace the chat workspace, but
           the workspace below stays MOUNTED (hidden via display:none) so its
           scroll position, highlight layer and scroll-spy state survive being
           covered and don't reset when the overlay closes. */}
-        {selectedTool ? (
-          // Chromeless when this view draws its own bar (the crumb + ✕ up there are
-          // the way back); embedded, the frame above owns the chrome instead — and
-          // there `openTool` has already handed the tool to it, so this branch is
-          // only reached standalone.
-          <ToolDetailPanel
-            group={selectedTool}
-            onBack={() => setSelectedTool(null)}
-            chromeless={!embedded}
-          />
-        ) : isError ? (
-          <div className="cl-chat-workspace">
-            <QueryError title="Failed to load transcript" error={error} onRetry={() => refetch()} />
-          </div>
-        ) : viewMode === 'timeline' ? (
-          <div className="cl-chat-workspace cl-chat-workspace--tl">
-            {isLoading ? (
-              <p className="cl-transcript-state">Loading transcript…</p>
-            ) : (
-              <SessionGraphView processed={processed} onSelectTool={openTool} />
-            )}
-            {controlPill(false)}
-          </div>
-        ) : null}
+          {selectedTool ? (
+            // Chromeless when this view draws its own bar (the crumb + ✕ up there are
+            // the way back); embedded, the frame above owns the chrome instead — and
+            // there `openTool` has already handed the tool to it, so this branch is
+            // only reached standalone.
+            <ToolDetailPanel
+              group={selectedTool}
+              onBack={() => setSelectedTool(null)}
+              chromeless={!embedded}
+            />
+          ) : isError ? (
+            <div className="cl-chat-workspace">
+              <QueryError
+                title="Failed to load transcript"
+                error={error}
+                onRetry={() => refetch()}
+              />
+            </div>
+          ) : viewMode === 'timeline' ? (
+            <div className="cl-chat-workspace cl-chat-workspace--tl">
+              {isLoading ? (
+                <p className="cl-transcript-state">Loading transcript…</p>
+              ) : (
+                <SessionGraphView processed={processed} onSelectTool={openTool} />
+              )}
+              {controlPill(false)}
+            </div>
+          ) : null}
 
-        <div
-          className="cl-chat-workspace cl-chat-workspace--focus"
-          style={chatHidden ? { display: 'none' } : undefined}
-        >
-          <main
-            className="cl-chat-feed"
-            ref={feedRef}
-            onScroll={handleFeedScroll}
-            onWheel={onFeedWheel}
+          <div
+            className="cl-chat-workspace cl-chat-workspace--focus"
+            style={chatHidden ? { display: 'none' } : undefined}
           >
-            {isLoading && <p className="cl-transcript-state">Loading transcript…</p>}
-            {messages?.length === 0 && !isLoading && (
-              <p className="cl-transcript-state">No messages found in this session.</p>
-            )}
+            <main
+              className="cl-chat-feed"
+              ref={feedRef}
+              onScroll={handleFeedScroll}
+              onWheel={onFeedWheel}
+            >
+              {isLoading && <p className="cl-transcript-state">Loading transcript…</p>}
+              {messages?.length === 0 && !isLoading && (
+                <p className="cl-transcript-state">No messages found in this session.</p>
+              )}
 
-            {processed.length > 0 && (
-              <div className="cl-chat-reading">
-                <div className="cl-transcript-inner" ref={mergedInnerRef}>
-                  {/* The sizer carries the full measured height of the list, so the
+              {processed.length > 0 && (
+                <div className="cl-chat-reading">
+                  <div className="cl-transcript-inner" ref={mergedInnerRef}>
+                    {/* The sizer carries the full measured height of the list, so the
                     scrollbar, the bottom-pinning ResizeObserver and the minimap
                     all see the whole session even though only the rows around the
                     viewport are mounted. */}
-                  <div className="cl-vlist" style={{ height: rowVirtualizer.getTotalSize() }}>
-                    {rowVirtualizer.getVirtualItems().map(v => (
-                      <div
-                        key={v.key}
-                        data-index={v.index}
-                        ref={rowVirtualizer.measureElement}
-                        className="cl-vrow"
-                        style={{ top: v.start }}
-                      >
-                        {renderRow(rows[v.index])}
-                      </div>
-                    ))}
+                    <div className="cl-vlist" style={{ height: rowVirtualizer.getTotalSize() }}>
+                      {rowVirtualizer.getVirtualItems().map(v => (
+                        <div
+                          key={v.key}
+                          data-index={v.index}
+                          ref={rowVirtualizer.measureElement}
+                          className="cl-vrow"
+                          style={{ top: v.start }}
+                        >
+                          {renderRow(rows[v.index])}
+                        </div>
+                      ))}
+                    </div>
                   </div>
                 </div>
-              </div>
-            )}
-          </main>
+              )}
+            </main>
 
-          <HighlightToolbar
-            toolbar={highlightLayer.toolbar}
-            onPick={highlightLayer.pickColor}
-            onRemove={highlightLayer.removeCurrent}
-          />
+            <HighlightToolbar
+              toolbar={highlightLayer.toolbar}
+              onPick={highlightLayer.pickColor}
+              onRemove={highlightLayer.removeCurrent}
+            />
 
-          <FocusMinimap items={minimapItems} active={activeTurn} onJump={jumpToTurn} />
+            <FocusMinimap items={minimapItems} active={activeTurn} onJump={jumpToTurn} />
 
-          {controlPill(true)}
+            {controlPill(true)}
+          </div>
         </div>
-      </div>
+      </DiffsOpenContext.Provider>
     </VaultLinksProvider>
   );
 }

@@ -2697,6 +2697,39 @@ body {
 .cl-seg button:hover {
   color: var(--cl-ink);
 }
+/* a glyph cell in the segment: same pill, same on-state, square instead of a
+   word; separated from the words by a hairline so it reads as its own switch */
+.cl-seg button.cl-seg-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  padding: 0;
+  margin-left: 2px;
+  color: var(--cl-ink-4);
+}
+.cl-seg button.cl-seg-icon::before {
+  content: '';
+  position: absolute;
+  left: -2px;
+  top: 6px;
+  bottom: 6px;
+  width: 1px;
+  background: var(--cl-line);
+}
+.cl-seg button.cl-seg-icon {
+  position: relative;
+}
+.cl-seg button.cl-seg-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.cl-seg button.cl-seg-icon:hover {
+  color: var(--cl-ink);
+}
+.cl-seg button.cl-seg-icon.on {
+  color: var(--cl-accent-ink);
+}
 .cl-seg button.on {
   background: linear-gradient(
     180deg,
@@ -3307,16 +3340,18 @@ body {
   grid-template-columns: 1fr;
 }
 
-/* Centred reading column. The gutter is a fixed 80px a side rather than a
-   percentage: the only thing it has to clear is the 64px focus rail, which is
-   absolutely positioned over the feed's LEFT edge (the comment that used to
-   live here still reserved a gutter on the right for it, from before the rail
-   moved). A percentage gutter grows with the window and was giving back a
-   third of a wide screen for nothing. */
+/* The reading column. Its gutters are fixed, and unequal: the left one clears
+   the 64px focus rail, absolutely positioned over the feed's LEFT edge, plus a
+   little air; the right one has nothing to clear but the scrollbar and takes
+   only the air. They were 80px a side, symmetric around a rail that sits on
+   one side only — and with Mission Control open beside the feed, a diff was
+   getting two thirds of the width it could have had. A percentage gutter would
+   be worse still: it grows with the window and gives back a third of a wide
+   screen for nothing. */
 .cl-chat-reading {
-  width: calc(100% - 160px);
-  max-width: var(--cl-read-col);
-  margin: 0 auto;
+  width: auto;
+  max-width: none;
+  margin: 0 24px 0 96px;
 }
 .cl-chat-reading .cl-transcript-inner {
   max-width: none;
@@ -3355,8 +3390,8 @@ body {
    stretching a paragraph past what the eye can track. */
 .cl-chat-reading .cl-transcript-inner {
   max-width: none;
-  margin: 0 auto;
-  padding: 18px 34px 140px;
+  margin: 0;
+  padding: 18px 24px 140px 34px;
   /* Turns must abut: the rhythm comes from the body's own padding and its
      closing rule, and a flex gap here would cut the thread between the dots.
      (The windowed transcript places rows absolutely and never sees the gap —
@@ -3879,10 +3914,10 @@ body {
      sits after (34 + 30 = 64 on the left). The sheet then stops at the reading
      measure, so a wide window widens the transcript without stretching the
      input across the whole screen — what is typed lands where it is read. */
-  width: calc(100% - 160px);
-  max-width: var(--cl-read-col);
-  padding: 0 34px 0 64px;
-  margin: 0 auto;
+  width: auto;
+  max-width: none;
+  padding: 0 24px 0 64px;
+  margin: 0 24px 0 96px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -4742,7 +4777,6 @@ body {
 .cl-pill-more[data-on] {
   box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 18%, transparent);
 }
-
 /* export / delete sheet — raised above the pill, never covers the transcript */
 .cl-sheet {
   width: 300px;
@@ -5761,6 +5795,395 @@ button.cl-pill-model[data-on] {
   width: 10px;
   height: 10px;
   flex-shrink: 0;
+}
+/* The files a turn changed, at its foot in MIN density (FileChangesStrip).
+   Drawn the way Claude Code prints them in the terminal: one line — verb,
+   file, +added −removed — and the numbered hunks under it, open by default.
+   On the page, in the page's own palette (light or dark), not a window inside
+   the turn: the diff is part of what the turn said. Syntax colours come from
+   `.cl-code-pre`, the same map the markdown code blocks use. */
+.cl-file-changes {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  margin-top: 14px;
+  min-width: 0;
+}
+.cl-file-change {
+  min-width: 0;
+}
+.cl-file-change-head {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+.cl-file-change-toggle {
+  flex: 1;
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 4px 4px 0;
+  background: transparent;
+  border: none;
+  color: var(--cl-ink-2);
+  text-align: left;
+  cursor: pointer;
+  font: 400 12px/1.4 var(--font-mono);
+}
+.cl-file-change-toggle:disabled,
+.cl-file-change-toggle.is-static {
+  cursor: default;
+}
+.cl-file-change-toggle:not(:disabled):not(.is-static):hover .cl-file-change-path b {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cl-file-change-caret {
+  width: 10px;
+  color: var(--cl-ink-4);
+  font-size: 9px;
+  flex-shrink: 0;
+}
+.cl-file-change-toggle:disabled .cl-file-change-caret {
+  visibility: hidden;
+}
+/* the verb is a small label, coloured by what happened: the eye reads
+   "created" before it reads the path */
+.cl-file-change-verb {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: var(--cl-ink-3);
+  background: color-mix(in oklab, var(--cl-ink-4) 14%, transparent);
+}
+.cl-file-change.is-edited .cl-file-change-verb {
+  color: var(--cl-accent-ink);
+  background: var(--cl-accent-soft);
+}
+.cl-file-change.is-created .cl-file-change-verb {
+  color: var(--diff-add);
+  background: var(--diff-add-bg);
+}
+.cl-file-change.is-deleted .cl-file-change-verb {
+  color: var(--diff-del);
+  background: var(--diff-del-bg);
+}
+.cl-file-change-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 65%, var(--cl-ink-3));
+}
+.cl-file-change-icon svg {
+  width: 12px;
+  height: 12px;
+}
+.cl-file-change-path {
+  min-width: 0;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  white-space: nowrap;
+  overflow: hidden;
+}
+.cl-file-change-path b {
+  font-weight: 600;
+  color: var(--cl-ink);
+  flex-shrink: 0;
+}
+.cl-file-change-dir {
+  color: var(--cl-ink-4);
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-file-change-stat {
+  flex-shrink: 0;
+  margin-left: auto;
+  display: inline-flex;
+  gap: 8px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+.cl-file-change-stat .is-add {
+  color: var(--diff-add);
+}
+.cl-file-change-stat .is-del {
+  color: var(--diff-del);
+}
+.cl-file-change-times {
+  flex-shrink: 0;
+  color: var(--cl-ink-4);
+  font-size: 10.5px;
+}
+/* always there, dimmed, so it can be found; lit on hover */
+.cl-file-change-full {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--cl-ink-4);
+  opacity: 0.6;
+  cursor: pointer;
+  transition:
+    opacity 0.15s,
+    color 0.15s;
+}
+.cl-file-change:hover .cl-file-change-full,
+.cl-file-change-full:focus-visible,
+.cl-file-change--full .cl-file-change-full {
+  opacity: 1;
+}
+.cl-file-change-full:hover {
+  color: var(--cl-ink);
+  border-color: var(--cl-line);
+  background: var(--cl-hover-bg);
+}
+.cl-file-change-body {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 6px;
+  min-width: 0;
+}
+.cl-file-change-note {
+  font: italic 11px/1.5 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+/* the diff itself: a bordered block, a gutter of line numbers on a slightly
+   deeper ground, a sign column, the code. Context rows are dimmed and only the
+   added and removed rows carry full ink, washed in the two semantic tints —
+   the change is what the block is for. The font is pinned here: the block
+   sits inside the reading column, whose prose size every unset descendant
+   would otherwise inherit. */
+/* The diff's own two tints. The semantic `--cl-ok` is a warm sage made for a
+   dot and a word, and washed under a line of code at 12% it read as nothing;
+   these are the greens and reds a diff viewer uses — more chroma, a touch
+   cooler on the green — and only here. */
+.cl-file-change,
+.cl-file-change-body {
+  --diff-add: oklch(0.6 0.16 148);
+  --diff-del: oklch(0.58 0.2 24);
+  --diff-add-bg: oklch(0.96 0.045 148);
+  --diff-del-bg: oklch(0.96 0.035 24);
+  --diff-add-mark: oklch(0.86 0.12 148);
+  --diff-del-mark: oklch(0.86 0.09 24);
+}
+:root[data-theme='dark'] .cl-file-change,
+:root[data-theme='dark'] .cl-file-change-body {
+  --diff-add: oklch(0.78 0.15 148);
+  --diff-del: oklch(0.76 0.16 24);
+  --diff-add-bg: oklch(0.3 0.05 148);
+  --diff-del-bg: oklch(0.3 0.05 24);
+  --diff-add-mark: oklch(0.42 0.1 148);
+  --diff-del-mark: oklch(0.42 0.1 24);
+}
+.cl-diff {
+  overflow-x: auto;
+  border: 1px solid var(--cl-line-soft);
+  border-radius: 8px;
+  background: var(--cl-paper);
+  font: 400 11px/1.65 var(--font-mono);
+  /* lifted a hair off the page: a soft drop plus a tight contact shadow, in
+     the warm ink the glass surfaces already cast — the block is a sheet laid
+     on the paper, not a hole cut in it */
+  box-shadow:
+    0 1px 2px var(--cl-glass-shadow),
+    0 6px 18px -8px var(--cl-glass-shadow);
+}
+:root[data-theme='dark'] .cl-diff {
+  border-color: var(--cl-line);
+  box-shadow:
+    0 1px 2px var(--cl-glass-shadow),
+    0 8px 22px -8px var(--cl-glass-shadow),
+    inset 0 1px 0 oklch(1 0 0 / 0.05);
+}
+.cl-diff-row {
+  display: grid;
+  grid-template-columns: calc(var(--gutter, 3ch) + 16px) 1.6ch minmax(0, 1fr);
+  align-items: start;
+  width: max-content;
+  min-width: 100%;
+}
+.cl-diff-row:first-child {
+  padding-top: 4px;
+}
+.cl-diff-row:last-child {
+  padding-bottom: 4px;
+}
+.cl-diff-ln {
+  padding: 0 8px;
+  color: var(--cl-ink-4);
+  text-align: right;
+  user-select: none;
+  align-self: stretch;
+  opacity: 0.8;
+}
+.cl-diff-sign {
+  text-align: center;
+  font-weight: 600;
+  user-select: none;
+  color: transparent;
+}
+.cl-diff-cell {
+  position: relative;
+  display: block;
+  min-width: 0;
+  padding-right: 10px;
+}
+.cl-diff-code {
+  position: relative;
+  display: block;
+  white-space: pre;
+}
+/* github-dark-dimmed's `.hljs` slab and ink go; the font stays the container's */
+.cl-diff .cl-diff-code.hljs {
+  padding: 0;
+  background: transparent !important;
+  color: var(--cl-ink-2);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: inherit;
+}
+.cl-diff-row.is-ctx .cl-diff-code,
+.cl-diff-row.is-ctx .cl-diff-code.hljs,
+.cl-diff-row.is-ctx .cl-diff-code [class^='hljs-'] {
+  color: var(--cl-ink-3);
+}
+.cl-diff-row.is-add {
+  background: var(--diff-add-bg);
+  box-shadow: inset 3px 0 0 var(--diff-add);
+}
+.cl-diff-row.is-add .cl-diff-ln {
+  color: var(--diff-add);
+  opacity: 1;
+}
+.cl-diff-row.is-add .cl-diff-sign {
+  color: var(--diff-add);
+}
+.cl-diff-row.is-del {
+  background: var(--diff-del-bg);
+  box-shadow: inset 3px 0 0 var(--diff-del);
+}
+.cl-diff-row.is-del .cl-diff-ln {
+  color: var(--diff-del);
+  opacity: 1;
+}
+.cl-diff-row.is-del .cl-diff-sign {
+  color: var(--diff-del);
+}
+/* the changed span of a paired row: a layer under the code, its own text
+   invisible, only the mark's ground showing through — a deeper wash of the
+   row's own tint, the way a diff viewer points at the token that moved */
+.cl-diff-mark-layer {
+  position: absolute;
+  inset: 0 10px 0 0;
+  white-space: pre;
+  color: transparent;
+  pointer-events: none;
+  user-select: none;
+}
+.cl-diff-mark-layer mark {
+  color: transparent;
+  border-radius: 3px;
+}
+.cl-diff-row.is-add .cl-diff-mark-layer mark {
+  background: var(--diff-add-mark);
+}
+.cl-diff-row.is-del .cl-diff-mark-layer mark {
+  background: var(--diff-del-mark);
+}
+/* the break between two hunks: a band across the block, the way a diff
+   viewer folds the lines it does not show, saying how many when known */
+.cl-diff-gap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 3px 8px 3px 0;
+  color: var(--cl-ink-4);
+  background: transparent;
+  border-top: 1px dashed var(--cl-line);
+  border-bottom: 1px dashed var(--cl-line);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  user-select: none;
+}
+.cl-diff-gap-mark {
+  width: calc(var(--gutter, 3ch) + 16px);
+  padding-right: 8px;
+  box-sizing: border-box;
+  text-align: right;
+  letter-spacing: 0.1em;
+}
+.cl-diff-more {
+  display: block;
+  width: 100%;
+  margin: 0;
+  padding: 6px 0 6px calc(var(--gutter, 3ch) + 16px + 1.6ch);
+  background: transparent;
+  border: none;
+  border-top: 1px dashed var(--cl-line);
+  color: var(--cl-accent-ink);
+  font: 500 10.5px/1.4 var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+}
+.cl-diff-more:hover {
+  color: var(--cl-ink);
+}
+/* the change as a page (Mission Control's overlay): the frame draws the crumb
+   and the close, this only scrolls the diffs at a reading width */
+.cl-file-change-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 18px 28px 40px;
+}
+.cl-file-change--page {
+  max-width: var(--cl-read-col);
+}
+.cl-file-change--page .cl-file-change-toggle {
+  font-size: 13px;
+  padding-bottom: 8px;
+}
+.cl-file-change--page .cl-file-change-body {
+  margin-top: 8px;
+}
+/* full screen: the same object in the modal, on a sheet of its own */
+.cl-file-change--full {
+  flex: 1;
+  min-width: 0;
+  max-height: 92vh;
+  display: flex;
+  flex-direction: column;
+  padding: 12px 16px 14px;
+  border-radius: 10px;
+  background: var(--cl-paper);
+  border: 1px solid var(--cl-line);
+  box-shadow: 0 30px 70px -34px oklch(0.1 0.02 45 / 0.7);
+}
+/* in the modal the sheet already floats; the diff inside it lies flat */
+.cl-file-change--full .cl-diff {
+  box-shadow: none;
+}
+.cl-file-change--full .cl-file-change-toggle {
+  font-size: 13px;
+}
+.cl-file-change--full .cl-file-change-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  margin: 8px 0 0;
 }
 /* CSS-only tooltip (native title is unreliable in Electron) — shows the file
  *  name(s) above the chip on hover/focus. */
@@ -7374,9 +7797,11 @@ button.cl-pill-model[data-on] {
      to plain air and the composer loses the 30px rail offset with it. */
   .cl-chat-reading {
     width: calc(100% - 56px);
+    margin: 0 auto;
   }
   .cl-composer-inner {
     width: calc(100% - 56px);
+    margin: 0 auto;
     padding: 0 28px;
   }
   .cl-tool-detail-scroll {
@@ -7397,9 +7822,11 @@ button.cl-pill-model[data-on] {
   }
   .cl-chat-reading {
     width: calc(100% - 20px);
+    margin: 0 auto;
   }
   .cl-composer-inner {
     width: calc(100% - 20px);
+    margin: 0 auto;
     padding: 0 10px;
   }
   .cl-chat-reading .cl-transcript-inner {
@@ -13836,77 +14263,79 @@ button.cl-sw-member:focus-visible,
    background, so we re-map highlight.js token colors to the brand `--cl-*`
    tokens (same hues as the chat tool-tints) — these already lift in dark, so
    one set of rules works in both themes. Scoped under `.cl-code-pre` so they
-   out-specify the global `.hljs-*` rules without touching `.prose-lens`. */
+   out-specify the global `.hljs-*` rules without touching `.prose-lens`. The
+   chat's diffs (`.cl-diff`) share the map and nothing else: they are on
+   paper, not on the grey slab `.cl-code-pre` brings. */
 .cl-code-pre {
   background: var(--cl-paper-2);
 }
-.cl-code-pre code.hljs {
+:is(.cl-code-pre, .cl-diff) code.hljs {
   background: transparent;
   padding: 0;
   color: var(--cl-ink-2);
 }
 
-.cl-code-pre .hljs-comment,
-.cl-code-pre .hljs-quote {
+:is(.cl-code-pre, .cl-diff) .hljs-comment,
+:is(.cl-code-pre, .cl-diff) .hljs-quote {
   color: var(--cl-ink-4);
   font-style: italic;
 }
-.cl-code-pre .hljs-keyword,
-.cl-code-pre .hljs-selector-tag,
-.cl-code-pre .hljs-tag,
-.cl-code-pre .hljs-name,
-.cl-code-pre .hljs-template-tag {
+:is(.cl-code-pre, .cl-diff) .hljs-keyword,
+:is(.cl-code-pre, .cl-diff) .hljs-selector-tag,
+:is(.cl-code-pre, .cl-diff) .hljs-tag,
+:is(.cl-code-pre, .cl-diff) .hljs-name,
+:is(.cl-code-pre, .cl-diff) .hljs-template-tag {
   color: var(--cl-violet);
 }
-.cl-code-pre .hljs-string,
-.cl-code-pre .hljs-regexp,
-.cl-code-pre .hljs-char.escape_,
-.cl-code-pre .hljs-addition {
+:is(.cl-code-pre, .cl-diff) .hljs-string,
+:is(.cl-code-pre, .cl-diff) .hljs-regexp,
+:is(.cl-code-pre, .cl-diff) .hljs-char.escape_,
+:is(.cl-code-pre, .cl-diff) .hljs-addition {
   color: var(--cl-ok);
 }
-.cl-code-pre .hljs-number,
-.cl-code-pre .hljs-literal,
-.cl-code-pre .hljs-variable.constant_ {
+:is(.cl-code-pre, .cl-diff) .hljs-number,
+:is(.cl-code-pre, .cl-diff) .hljs-literal,
+:is(.cl-code-pre, .cl-diff) .hljs-variable.constant_ {
   color: var(--cl-cyan);
 }
-.cl-code-pre .hljs-title,
-.cl-code-pre .hljs-title.function_,
-.cl-code-pre .hljs-section,
-.cl-code-pre .hljs-selector-id,
-.cl-code-pre .hljs-selector-class {
+:is(.cl-code-pre, .cl-diff) .hljs-title,
+:is(.cl-code-pre, .cl-diff) .hljs-title.function_,
+:is(.cl-code-pre, .cl-diff) .hljs-section,
+:is(.cl-code-pre, .cl-diff) .hljs-selector-id,
+:is(.cl-code-pre, .cl-diff) .hljs-selector-class {
   color: var(--cl-accent-ink);
 }
-.cl-code-pre .hljs-built_in,
-.cl-code-pre .hljs-type,
-.cl-code-pre .hljs-title.class_ {
+:is(.cl-code-pre, .cl-diff) .hljs-built_in,
+:is(.cl-code-pre, .cl-diff) .hljs-type,
+:is(.cl-code-pre, .cl-diff) .hljs-title.class_ {
   color: var(--cl-haiku);
 }
-.cl-code-pre .hljs-attr,
-.cl-code-pre .hljs-attribute,
-.cl-code-pre .hljs-property,
-.cl-code-pre .hljs-variable,
-.cl-code-pre .hljs-template-variable,
-.cl-code-pre .hljs-selector-attr,
-.cl-code-pre .hljs-selector-pseudo {
+:is(.cl-code-pre, .cl-diff) .hljs-attr,
+:is(.cl-code-pre, .cl-diff) .hljs-attribute,
+:is(.cl-code-pre, .cl-diff) .hljs-property,
+:is(.cl-code-pre, .cl-diff) .hljs-variable,
+:is(.cl-code-pre, .cl-diff) .hljs-template-variable,
+:is(.cl-code-pre, .cl-diff) .hljs-selector-attr,
+:is(.cl-code-pre, .cl-diff) .hljs-selector-pseudo {
   color: var(--cl-cyan);
 }
-.cl-code-pre .hljs-symbol,
-.cl-code-pre .hljs-bullet,
-.cl-code-pre .hljs-link {
+:is(.cl-code-pre, .cl-diff) .hljs-symbol,
+:is(.cl-code-pre, .cl-diff) .hljs-bullet,
+:is(.cl-code-pre, .cl-diff) .hljs-link {
   color: var(--cl-warn);
 }
-.cl-code-pre .hljs-meta,
-.cl-code-pre .hljs-meta .hljs-keyword {
+:is(.cl-code-pre, .cl-diff) .hljs-meta,
+:is(.cl-code-pre, .cl-diff) .hljs-meta .hljs-keyword {
   color: var(--cl-ink-4);
 }
-.cl-code-pre .hljs-deletion {
+:is(.cl-code-pre, .cl-diff) .hljs-deletion {
   color: var(--cl-danger);
 }
 /* Inside a code/diff block the content is source, not rendered markdown:
    don't apply real bold/italic to markdown's `**`/`*` tokens — keep the
    literal syntax as flat monospace (tint only, to mark it as syntax). */
-.cl-code-pre .hljs-emphasis,
-.cl-code-pre .hljs-strong {
+:is(.cl-code-pre, .cl-diff) .hljs-emphasis,
+:is(.cl-code-pre, .cl-diff) .hljs-strong {
   font-style: normal;
   font-weight: inherit;
   color: var(--cl-ink-3);

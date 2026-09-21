@@ -19,6 +19,25 @@ export function TrashGlyph() {
   );
 }
 
+/** A diff: two rows, one added, one removed. */
+export function DiffGlyph() {
+  return (
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M12 4v6M9 7h6M4 13h16M9 18h6" />
+    </svg>
+  );
+}
+
 export function ChevronUpGlyph() {
   return (
     <svg

@@ -246,6 +246,7 @@ describe('mergeTranscriptExtras', () => {
     skillPathByParentUuid: new Map(skills),
     effortByUuid: new Map(efforts),
     bashEditDiffByToolUseId: new Map(diffs),
+    patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(),
   });
@@ -439,6 +440,62 @@ describe('readTranscriptExtras — bashEditDiff', () => {
   });
 });
 
+describe('readTranscriptExtras — structuredPatch', () => {
+  // An `Edit`'s input says what changed and never where: the line numbers
+  // live only on the result row, which the SDK read does not return.
+  const editResultRow = (toolUseId: string, structuredPatch: unknown) => ({
+    type: 'user',
+    uuid: `r-${toolUseId}`,
+    timestamp: '2026-09-08T10:00:02.000Z',
+    message: {
+      role: 'user',
+      content: [{ type: 'tool_result', tool_use_id: toolUseId, content: 'updated' }],
+    },
+    toolUseResult: {
+      filePath: '/p/a.ts',
+      oldString: 'b',
+      newString: 'c',
+      originalFile: 'a\nb\n',
+      structuredPatch,
+    },
+  });
+
+  it('recovers the hunks of an Edit result, keyed by its tool_use id', async () => {
+    const extras = await readTranscriptExtras(writeJsonl([editResultRow('toolu_edit1', oneHunk)]));
+    expect(extras.patchByToolUseId.get('toolu_edit1')).toEqual(oneHunk);
+  });
+
+  it('records nothing for the empty patch of a new file', async () => {
+    const extras = await readTranscriptExtras(writeJsonl([editResultRow('toolu_write1', [])]));
+    expect(extras.patchByToolUseId.size).toBe(0);
+  });
+
+  it('stamps the hunks on the tool_result in the merge', () => {
+    const messages = [
+      {
+        uuid: 'u1',
+        role: 'user' as const,
+        timestamp: '2026-09-08T10:00:02.000Z',
+        content: [
+          { type: 'tool_result' as const, toolUseId: 'toolu_edit1', content: 'ok', isError: false },
+        ],
+      },
+    ];
+    const merged = mergeTranscriptExtras(messages, {
+      queued: [],
+      injected: [],
+      noticeByUuid: new Map(),
+      skillPathByParentUuid: new Map(),
+      effortByUuid: new Map(),
+      bashEditDiffByToolUseId: new Map(),
+      patchByToolUseId: new Map([['toolu_edit1', oneHunk]]),
+      artifactByToolUseId: new Map(),
+      sentByToolUseId: new Map(),
+    });
+    expect((merged[0].content[0] as { patch?: unknown }).patch).toEqual(oneHunk);
+  });
+});
+
 describe('parseBashEditDiff', () => {
   // The row comes from a file another program writes and nobody versions, so
   // every piece is optional until it has been seen.
@@ -492,6 +549,7 @@ describe('mergeTranscriptExtras — bashEditDiff', () => {
     skillPathByParentUuid: new Map<string, string>(),
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(diffs),
+    patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(),
   });
@@ -783,6 +841,7 @@ describe('mergeTranscriptExtras with what the SDK cannot see', () => {
       skillPathByParentUuid: new Map(),
       effortByUuid: new Map(),
       bashEditDiffByToolUseId: new Map(),
+      patchByToolUseId: new Map(),
       artifactByToolUseId: new Map(),
       sentByToolUseId: new Map(),
     });
@@ -919,6 +978,7 @@ describe('mergeTranscriptExtras — artifact', () => {
     skillPathByParentUuid: new Map<string, string>(),
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(),
+    patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(entries),
     sentByToolUseId: new Map(),
   });
@@ -1109,6 +1169,7 @@ describe('mergeTranscriptExtras — sent message', () => {
     skillPathByParentUuid: new Map<string, string>(),
     effortByUuid: new Map<string, string>(),
     bashEditDiffByToolUseId: new Map(),
+    patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(entries),
   });
