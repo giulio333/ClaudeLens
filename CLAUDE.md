@@ -164,7 +164,16 @@ a fenced block keeps its brackets and asks nothing, a failed lookup does NOT
 read as missing, a name that was missing is asked about again once the answer
 could have changed while a name that was found never is, and outside a
 `VaultLinksProvider` the text renders exactly as before — which is what keeps the memory views' own wikilinks from resolving
-against the project tree).
+against the project tree) and
+`chat-images` (a picture in the transcript, drawn twice over where it used to
+be nothing: the `image` block of a pasted screenshot or of a `Read` of a
+`.png` — a turn that is only a picture survives in both densities, the Read is
+the picture in its editor window and never "empty file" — and an image linked
+by path, `![seg](/private/tmp/…/seg.png)`, which the sandboxed renderer
+resolved against its own origin and drew as a broken glyph: now read through
+`images:read`, relative to the project root inside a chat only, and answered
+with the picture, "file is gone" or the reason it was refused; the reader's
+fences are `local-image`).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`
@@ -227,7 +236,10 @@ The first run found 14 row types and 27 attachment subtypes the code never
 mentions, and three content blocks the reader drops silently: `image` (57 in the
 corpus, each a turn rendered as nothing), `server_tool_use` and
 `advisor_tool_result`. All triaged as `candidate` — the backlog is in the
-manifest, not in an issue tracker.
+manifest, not in an issue tracker. Two of the three have since been read
+(`advisor_tool_result` as the `advisor` marker, `image` as an `image` block and
+as `images` on a tool result), and the manifest entry is what moved: a candidate
+retired is a `read` verdict with the old finding kept in its comment.
 
 `scripts/transcript-exercise.mjs` is the third stage and **opt-in** (`--yes`, and
 refuses to start without it): it drives `claude -p` against prompts chosen to

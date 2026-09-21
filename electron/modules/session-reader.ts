@@ -23,6 +23,7 @@ import type {
   BashEditDiff,
   BashEditHunk,
   ChatContentBlock,
+  ChatImage,
   ChatMessage,
   SentMessage,
   MessageUsage,
@@ -118,7 +119,14 @@ function parseContentArray(
         name: String(b.name ?? 'tool'),
         input: (b.input as Record<string, unknown>) ?? {},
       });
+    } else if (b.type === 'image') {
+      // A pasted screenshot, or the image a Read of a `.png` returned when the
+      // harness lifted it onto the user row. Kept as it is: the renderer
+      // draws it from the base64, there is no file to point at.
+      const image = parseImage(b);
+      if (image) blocks.push({ type: 'image', ...image });
     } else if (b.type === 'tool_result') {
+      const images = Array.isArray(b.content) ? imagesIn(b.content as unknown[]) : [];
       const content =
         typeof b.content === 'string'
           ? b.content
@@ -145,6 +153,7 @@ function parseContentArray(
         toolUseId: String(b.tool_use_id ?? ''),
         content,
         isError: Boolean(b.is_error),
+        ...(images.length ? { images } : {}),
       });
     } else if (b.type === 'advisor_tool_result') {
       // The consult's completion. Its payload is `advisor_redacted_result` —
@@ -157,6 +166,32 @@ function parseContentArray(
   }
 
   return blocks;
+}
+
+/** The base64 of an `image` block, or null when it carries something else
+ *  (the API also accepts a `url` source, which Claude Code never writes). */
+function parseImage(b: Record<string, unknown>): ChatImage | null {
+  const source = b.source as { type?: unknown; media_type?: unknown; data?: unknown } | undefined;
+  if (!source || source.type !== 'base64' || typeof source.data !== 'string' || !source.data) {
+    return null;
+  }
+  return {
+    mediaType: typeof source.media_type === 'string' ? source.media_type : 'image/png',
+    data: source.data,
+  };
+}
+
+/** The images inside a tool_result's content array, in order. */
+function imagesIn(items: unknown[]): ChatImage[] {
+  const out: ChatImage[] = [];
+  for (const c of items) {
+    if (!c || typeof c !== 'object') continue;
+    const block = c as Record<string, unknown>;
+    if (block.type !== 'image') continue;
+    const image = parseImage(block);
+    if (image) out.push(image);
+  }
+  return out;
 }
 
 // Normalizza un content stringa (messaggi user testuali) in blocchi.

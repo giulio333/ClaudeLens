@@ -45,7 +45,14 @@ const OBSERVED_BLOCKS: Record<string, Record<string, unknown>> = {
 
 /** The block types `parseContentArray` is built to keep. Everything else in
  *  OBSERVED_BLOCKS is dropped, and the manifest has to say so. */
-const PARSED_BLOCKS = ['text', 'thinking', 'tool_use', 'tool_result', 'advisor_tool_result'];
+const PARSED_BLOCKS = [
+  'text',
+  'thinking',
+  'tool_use',
+  'tool_result',
+  'image',
+  'advisor_tool_result',
+];
 
 /** What a kept block comes out as — usually itself. The exception is the one
  *  that proves the watch works: `advisor_tool_result` was triaged a candidate
@@ -94,7 +101,13 @@ describe('content blocks the reader keeps', () => {
     const [msg] = readChatSession(path);
     // `advisor` in place of the `advisor_tool_result` that went in, and in that
     // row's position: the fold renames the block, it does not move it.
-    expect(msg.content.map(b => b.type)).toEqual(['text', 'thinking', 'tool_use', 'advisor']);
+    expect(msg.content.map(b => b.type)).toEqual([
+      'text',
+      'thinking',
+      'tool_use',
+      'image',
+      'advisor',
+    ]);
   });
 });
 
@@ -119,11 +132,19 @@ describe('content blocks the reader drops', () => {
     expect(entry!.verdict).not.toBe('read');
   });
 
-  it('loses the whole message when the dropped block is its only content', () => {
+  it('keeps a message whose only content is an image', () => {
     const path = writeTranscript('s.jsonl', [assistantRow([OBSERVED_BLOCKS.image])]);
-    // Pinned as the current behaviour, not endorsed: this is why `image` is a
-    // candidate in the manifest — 57 rows in the observed corpus, each one a
-    // turn the transcript shows nothing for.
+    // This used to come out empty — 57 rows in the observed corpus, each one
+    // a turn the transcript showed nothing for — which is what made `image` a
+    // candidate in the manifest until it was read.
+    const [msg] = readChatSession(path);
+    expect(msg.content).toEqual([{ type: 'image', mediaType: 'image/png', data: 'iVBOR' }]);
+  });
+
+  it('loses the whole message when the dropped block is its only content', () => {
+    const path = writeTranscript('s.jsonl', [assistantRow([OBSERVED_BLOCKS.server_tool_use])]);
+    // Pinned as the current behaviour, not endorsed: this is why
+    // `server_tool_use` is a candidate in the manifest.
     expect(readChatSession(path)).toEqual([]);
   });
 

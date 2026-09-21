@@ -68,6 +68,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     get: (request: { sessionId: string; msgId: string }) =>
       ipcRenderer.invoke('exchange:get', request),
   },
+  images: {
+    read: (filePath: string, root?: string) => ipcRenderer.invoke('images:read', filePath, root),
+  },
   vault: {
     // The `[[wikilinks]]` a message cites, resolved against the project's own
     // files. One call per message, carrying only the names that message names —

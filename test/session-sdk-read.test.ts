@@ -36,7 +36,17 @@ beforeAll(() => {
         type: 'user',
         uuid: 'u1',
         timestamp: '2026-06-17T10:00:00.000Z',
-        message: { role: 'user', content: [{ type: 'text', text: 'hello world' }] },
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: 'hello world' },
+            // A pasted screenshot rides the same row: the SDK read has to hand
+            // the block over, or the renderer tests — which are fed
+            // ChatMessage objects directly — would pass over a view that
+            // never gets one.
+            { type: 'image', source: { type: 'base64', media_type: 'image/png', data: 'iVBOR' } },
+          ],
+        },
       },
       {
         parentUuid: 'u1',
@@ -71,7 +81,10 @@ describe('readChatSessionViaSdk', () => {
 
     const [user, assistant] = messages;
     expect(user.role).toBe('user');
-    expect(user.content).toEqual([{ type: 'text', text: 'hello world' }]);
+    expect(user.content).toEqual([
+      { type: 'text', text: 'hello world' },
+      { type: 'image', mediaType: 'image/png', data: 'iVBOR' },
+    ]);
 
     expect(assistant.role).toBe('assistant');
     expect(assistant.model).toBe('claude-opus-4-8');

@@ -61,6 +61,7 @@ export interface ClaudeMdHierarchy {
 // Ri-esportati qui così il renderer continua a importarli da './types'.
 export type {
   ChatContentBlock,
+  ChatImage,
   AdvisorConsult,
   ArtifactPublish,
   BashEditDiff,
@@ -223,6 +224,17 @@ export interface VaultLinkMiss {
 }
 
 export type VaultLinkAnswer = VaultLinkHit | VaultLinkMiss;
+
+/**
+ * An image a message links by filesystem path, read by
+ * `electron/modules/local-image.ts`. `missing` is the file that is gone (a
+ * cleaned scratchpad), `refused` the one the reader would not ship — outside
+ * the readable directories, not a raster image, too large.
+ */
+export type LocalImageAnswer =
+  | { status: 'ok'; dataUri: string; bytes: number }
+  | { status: 'missing' }
+  | { status: 'refused'; reason: string };
 
 export interface SessionArtifact {
   kind: ArtifactKind;

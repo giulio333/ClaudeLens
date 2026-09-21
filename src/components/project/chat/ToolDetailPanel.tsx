@@ -1,4 +1,6 @@
 import Markdown from '../../Markdown';
+import { ImageFigure } from '../../ImageFigure';
+import { imageDataUri } from '../../image-src';
 import type { ReactNode } from 'react';
 import { ToolGroup, isMemoryFile, resolveToolIcon, SKILL_TOOL } from './utils';
 import { PathChip, SectionLabel, CodeBlock, UrlChip } from './atoms';
@@ -666,7 +668,25 @@ export function ToolOutput({ name, result }: { name: string; result: ToolGroup['
     return <p className="text-[12px] text-[var(--cl-ink-3)] italic">No result available</p>;
 
   const raw = result.content;
-  if (!raw) return <p className="text-[12px] text-[var(--cl-ink-3)] italic">(no output)</p>;
+  // A screenshot a tool took, alone or beside its text.
+  const images = result.images?.length ? (
+    <div className="cl-image-row">
+      {result.images.map((image, i) => (
+        <ImageFigure key={i} src={imageDataUri(image)} alt={`${name} image ${i + 1}`} />
+      ))}
+    </div>
+  ) : null;
+  if (!raw) {
+    return images ?? <p className="text-[12px] text-[var(--cl-ink-3)] italic">(no output)</p>;
+  }
+  if (images) {
+    return (
+      <>
+        {images}
+        <ToolOutput name={name} result={{ ...result, images: undefined }} />
+      </>
+    );
+  }
 
   if (result.isError) {
     return (

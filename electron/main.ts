@@ -50,6 +50,7 @@ import {
   dismissPrompt,
 } from './modules/playbook-store';
 import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
+import { readLocalImage, type LocalImageAnswer } from './modules/local-image';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans, getUnlinkedPlans } from './modules/plans-reader';
@@ -1184,6 +1185,22 @@ ipcMain.handle('vault:openFile', async (_event, root: unknown, rel: unknown) => 
     const failure = await shell.openPath(resolveVaultFile(root, rel));
     if (failure) throw new Error(failure);
     return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// An image a message links by path, as a `data:` URI the CSP lets the renderer
+// draw. Contained to the home, the temp dirs (Claude Code's scratchpad lives
+// in `/private/tmp/claude-<uid>/…`) and the project root the chat is open on;
+// the bytes are sniffed, so only a raster image ever comes back — see the
+// module for why each fence is there.
+ipcMain.handle('images:read', async (_event, filePath: unknown, root: unknown) => {
+  try {
+    if (typeof filePath !== 'string' || !filePath) throw new Error('Missing file path');
+    const bases = [os.homedir(), os.tmpdir(), '/tmp'];
+    if (typeof root === 'string' && root) bases.push(root);
+    return ok<LocalImageAnswer>(await readLocalImage(filePath, bases));
   } catch (e) {
     return err(e);
   }

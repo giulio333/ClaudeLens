@@ -1,6 +1,9 @@
 import { useMemo, useState } from 'react';
 import type { CSSProperties } from 'react';
 import Markdown from '../../Markdown';
+import { ImageFigure } from '../../ImageFigure';
+import { imageDataUri } from '../../image-src';
+import type { ChatImage } from '../../../types';
 import { ToolGroup, isMemoryFile, fileExt, TOOL_TINT } from './utils';
 import { resolveLang } from './code-lang';
 import { CopyButton, IconButton, ExpandIcon, CloseIcon, SheetModal } from './CommandBlock';
@@ -65,13 +68,27 @@ type Sheet = {
   status: string;
   copyText: string;
   copyLabel: string;
+  /** The picture a Read of an image file returned, in place of rows. */
+  images?: ChatImage[];
 };
 
-type Body = Pick<Sheet, 'rows' | 'note' | 'status' | 'copyText' | 'copyLabel' | 'flag'>;
+type Body = Pick<Sheet, 'rows' | 'note' | 'status' | 'copyText' | 'copyLabel' | 'flag' | 'images'>;
 
 const lines = (n: number) => `${n} ${n === 1 ? 'line' : 'lines'}`;
 
-function readBody(state: Sheet['state'], resultText: string): Body {
+function readBody(state: Sheet['state'], resultText: string, images?: ChatImage[]): Body {
+  // A Read of a `.png` answers with the picture and no text: without this
+  // branch the window said "empty file" under it.
+  if (state === 'ok' && images?.length) {
+    return {
+      rows: null,
+      note: resultText,
+      images,
+      status: images.length === 1 ? images[0].mediaType : `${images.length} images`,
+      copyText: '',
+      copyLabel: '',
+    };
+  }
   // Pending: an empty file, so the body says it is still running. Error: no
   // rows at all, so the message prints as it is.
   const rows = state === 'ok' ? numberedRows(resultText) : state === 'pending' ? [] : null;
@@ -137,7 +154,7 @@ function buildSheet(
   const resultText = result?.content ?? '';
   const body =
     kind === 'Read'
-      ? readBody(state, resultText)
+      ? readBody(state, resultText, result?.images)
       : kind === 'Write'
         ? writeBody(state, input, resultText)
         : editBody(state, input, result, resultText);
@@ -258,6 +275,13 @@ function EditorWindow({
           </div>
         ) : (
           shown.map((row, i) => <Line key={i} row={row} html={html[i]} />)
+        )}
+        {sheet.images && (
+          <div className="cl-file-image">
+            {sheet.images.map((image, i) => (
+              <ImageFigure key={i} src={imageDataUri(image)} alt={fileName(sheet.path)} />
+            ))}
+          </div>
         )}
         {sheet.rows && sheet.rows.length === 0 && sheet.state !== 'error' && (
           <div className="cl-term-note">

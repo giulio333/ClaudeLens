@@ -219,9 +219,11 @@ export const CONTENT_BLOCKS = {
   tool_use: read('session-reader/parseContentArray'),
   tool_result: read('session-reader/parseContentArray'),
 
-  image: candidate(
-    'a pasted or screenshotted image in a user message — dropped entirely, so the transcript shows a turn reacting to nothing'
-  ),
+  // Was a candidate — "a pasted or screenshotted image in a user message —
+  // dropped entirely, so the transcript shows a turn reacting to nothing" —
+  // and has since been picked up: kept as an `image` block on the message,
+  // and, inside a tool_result's content array, on the result's `images`.
+  image: read('session-reader/parseContentArray'),
   server_tool_use: candidate(
     'a server-side tool call (web_search, …); dropped, so the turn shows no tool at all'
   ),

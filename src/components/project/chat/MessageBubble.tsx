@@ -1,6 +1,8 @@
 import { memo, useState } from 'react';
 import type { CSSProperties, Ref } from 'react';
 import Markdown from '../../Markdown';
+import { ImageFigure } from '../../ImageFigure';
+import { imageDataUri } from '../../image-src';
 import { AdvisorConsult, ChatContentBlock, Skill, Agent } from '../../../hooks/useIPC';
 import type { InboundOrigin, SessionNotice } from '../../../types';
 import {
@@ -637,6 +639,12 @@ export const MessageBubble = memo(function MessageBubble({
     ChatContentBlock,
     { type: 'thinking' }
   >[];
+  // Screenshots pasted into the prompt, mostly: a user row with a `[Image #1]`
+  // placeholder in its text and the picture beside it.
+  const imageBlocks = msg.content.filter(b => b.type === 'image') as Extract<
+    ChatContentBlock,
+    { type: 'image' }
+  >[];
   const agentGroups = toolGroups.filter(g => AGENT_TOOLS.has(g.use.name));
   const planGroups = toolGroups.filter(g => PLAN_TOOLS.has(g.use.name));
   const skillGroups = toolGroups.filter(g => g.use.name === SKILL_TOOL);
@@ -675,6 +683,10 @@ export const MessageBubble = memo(function MessageBubble({
 
   const hasVisibleContent =
     textBlocks.length > 0 ||
+    // A prompt that is only a pasted image has no text and no tools, and
+    // used to be dropped here — the turn reacting to it read as reacting to
+    // nothing.
+    imageBlocks.length > 0 ||
     (showThinking && thinkingBlocks.some(b => b.thinking)) ||
     (showTools && standardToolGroups.length > 0) ||
     showAgentStrip ||
@@ -982,6 +994,13 @@ export const MessageBubble = memo(function MessageBubble({
                 <Markdown>{b.text}</Markdown>
               </div>
             )
+          )}
+          {imageBlocks.length > 0 && (
+            <div className="cl-image-row">
+              {imageBlocks.map((b, i) => (
+                <ImageFigure key={i} src={imageDataUri(b)} alt={`Image ${i + 1}`} />
+              ))}
+            </div>
           )}
         </div>
 

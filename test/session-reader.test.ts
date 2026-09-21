@@ -208,6 +208,70 @@ describe('readChatSession', () => {
     ]);
   });
 
+  it('keeps a pasted image beside the text of the prompt it came with', () => {
+    // The shape Claude Code writes for a screenshot pasted into the prompt:
+    // the `[Image #1]` placeholder in the text block and the picture as an
+    // `image` block next to it. Both used to be dropped (#245-class drift).
+    const p = writeJsonl('s.jsonl', [
+      line({
+        type: 'user',
+        uuid: 'r1',
+        timestamp: 't',
+        message: {
+          role: 'user',
+          content: [
+            { type: 'text', text: '[Image #1] the dot is off-centre' },
+            { type: 'image', source: { type: 'base64', media_type: 'image/jpeg', data: '/9j/4A' } },
+            // A source the API accepts but Claude Code never writes: not ours to draw.
+            { type: 'image', source: { type: 'url', url: 'https://example.test/x.png' } },
+          ],
+        },
+      }),
+    ]);
+    const [msg] = readChatSession(p);
+    expect(msg.content).toEqual([
+      { type: 'text', text: '[Image #1] the dot is off-centre' },
+      { type: 'image', mediaType: 'image/jpeg', data: '/9j/4A' },
+    ]);
+  });
+
+  it('keeps the image a Read of a png returned, on the result', () => {
+    // The result's content array holds the picture and no text; joined into
+    // `content` it was an empty string, and the window said "empty file".
+    const p = writeJsonl('s.jsonl', [
+      line({
+        type: 'user',
+        uuid: 'r1',
+        timestamp: 't',
+        message: {
+          role: 'user',
+          content: [
+            {
+              type: 'tool_result',
+              tool_use_id: 'tu_1',
+              content: [
+                {
+                  type: 'image',
+                  source: { type: 'base64', media_type: 'image/png', data: 'iVBOR' },
+                },
+              ],
+            },
+          ],
+        },
+      }),
+    ]);
+    const [msg] = readChatSession(p);
+    expect(msg.content).toEqual([
+      {
+        type: 'tool_result',
+        toolUseId: 'tu_1',
+        content: '',
+        isError: false,
+        images: [{ mediaType: 'image/png', data: 'iVBOR' }],
+      },
+    ]);
+  });
+
   it('skips meta and sidechain lines', () => {
     const p = writeJsonl('s.jsonl', [
       line({

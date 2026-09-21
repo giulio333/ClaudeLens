@@ -16,6 +16,13 @@ Renders markdown with syntax highlighting and styled headings.
 - Custom styled links, headings, and code blocks
 - External links open in system browser (safe from Electron context)
 - `[[wikilink]]` chips — **only inside a `VaultLinksProvider`** (see below)
+- Images by path (`![x](/abs/file.png)`, `file://`, and a relative path when
+  inside a `VaultLinksProvider`, resolved against its root) are read through
+  `images:read` and drawn from the `data:` URI it answers — `ImageFigure.tsx`,
+  pure half in `image-src.ts`. The renderer cannot load them itself: it runs
+  sandboxed on `file://` under `img-src 'self' data:`. A file that is gone or
+  refused is a chip saying so, never the broken-image glyph. `urlTransform`
+  keeps `file:` and `data:image/` sources, which react-markdown drops by default
 
 **Props:**
 

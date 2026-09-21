@@ -1,5 +1,5 @@
 import { isValidElement, memo, useMemo, useRef, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
+import ReactMarkdown, { defaultUrlTransform } from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkFrontmatter from 'remark-frontmatter';
 import remarkMath from 'remark-math';
@@ -11,6 +11,7 @@ import { rehypeWikiLinks } from './rehype-wikilinks';
 import { useReportWikiLinks, useVaultLinksApi } from './vault-link-engine';
 import { WikiLink } from './VaultLinks';
 import { wikiLinkTargets } from '../lib/wikilinks';
+import { MarkdownImage } from './ImageFigure';
 
 // Reads the `language-xxx` class off the <code> child of a fenced block.
 // Fences without a language (plain ```) have no such class — fall back to 'text'.
@@ -75,6 +76,13 @@ const components: Components = {
     );
   },
 
+  // An image by path — `![seg](/private/tmp/…/seg.png)` — is read through the
+  // main process: the sandboxed renderer resolves the src against its own
+  // origin, not the disk, and drew every one of these as a broken glyph.
+  img({ src, alt }) {
+    return <MarkdownImage src={typeof src === 'string' ? src : undefined} alt={alt} />;
+  },
+
   // Heading con ancore visive
   h1({ children }) {
     return (
@@ -124,6 +132,14 @@ const components: Components = {
   },
 };
 
+// react-markdown drops the src of every scheme it does not know: `file:`,
+// which a message pointing at a local image might use, and `data:`, which is
+// how an image is inlined — and which is safe here for a picture only, so the
+// media type is part of the test.
+function urlTransform(url: string): string {
+  return /^(file:\/\/|data:image\/)/i.test(url) ? url : defaultUrlTransform(url);
+}
+
 const BASE_REHYPE = [rehypeHighlight, rehypeKatex];
 // Wikilinks first: `rehypeHighlight` rewrites the inside of code elements into
 // nested spans, and after it an inline `` `[[x]]` `` no longer has the single
@@ -161,6 +177,7 @@ function Markdown({ children, className = '' }: Props) {
         remarkPlugins={[remarkGfm, remarkFrontmatter, remarkMath]}
         rehypePlugins={linksEnabled ? WIKILINK_REHYPE : BASE_REHYPE}
         components={components}
+        urlTransform={urlTransform}
       >
         {children}
       </ReactMarkdown>

@@ -24,6 +24,7 @@ import type {
   ExchangeOutcome,
   ExchangeRequest,
   VaultLinkAnswer,
+  LocalImageAnswer,
   SubagentMeta,
   SessionArtifacts,
   DeleteRequest,
@@ -293,6 +294,9 @@ declare global {
       };
       exchange: {
         get: (request: ExchangeRequest) => Promise<IpcResult<ExchangeOutcome | null>>;
+      };
+      images: {
+        read: (filePath: string, root?: string) => Promise<IpcResult<LocalImageAnswer>>;
       };
       vault: {
         resolveLinks: (root: string, targets: string[]) => Promise<IpcResult<VaultLinkAnswer[]>>;
@@ -1487,6 +1491,23 @@ export function useAttachBackgroundAgent() {
  * source tree, which no watcher covers, so there is no `data:changed` to react
  * to: it is re-read when a project view mounts and then left alone.
  */
+/**
+ * An image a message links by filesystem path, read through the main process
+ * as a `data:` URI (the renderer cannot load `file://` itself, see
+ * `electron/modules/local-image.ts`). Cached for the session: the file is a
+ * scratchpad artifact and does not change under us — and when it is gone, a
+ * miss is an answer, not a retry.
+ */
+export function useLocalImage(filePath: string | null, root?: string) {
+  return useQuery({
+    queryKey: ['images:read', filePath, root ?? null],
+    queryFn: () => unwrap(window.electronAPI.images.read(filePath!, root)),
+    enabled: !!filePath,
+    staleTime: Infinity,
+    retry: false,
+  });
+}
+
 export function useProjectDescription(realPath: string | null) {
   return useQuery({
     queryKey: ['projects:description', realPath],

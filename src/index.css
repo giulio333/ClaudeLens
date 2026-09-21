@@ -6369,6 +6369,89 @@ button.cl-pill-model[data-on] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* ── images in the transcript ─────────────────────────────────────────────
+   A pasted screenshot, a Read of a .png, a picture linked by path. Drawn at
+   reading size — the column's width, capped short of a screenful — and opened
+   whole in the terminal's modal on a click. Spans styled as blocks, because
+   markdown puts an image inside a <p>. */
+.cl-image-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  max-width: var(--cl-read-measure);
+  margin: 10px 0 4px;
+}
+.cl-image {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  margin: 6px 0;
+  vertical-align: top;
+}
+.cl-image-open {
+  display: block;
+  max-width: 100%;
+  padding: 0;
+  border: 1px solid var(--cl-line);
+  border-radius: 8px;
+  overflow: hidden;
+  background: var(--cl-paper-2);
+  cursor: zoom-in;
+  line-height: 0;
+  transition: border-color 120ms ease;
+}
+.cl-image-open:hover {
+  border-color: var(--cl-ink-4);
+}
+.cl-image-open img {
+  display: block;
+  max-width: 100%;
+  max-height: 420px;
+  object-fit: contain;
+}
+.cl-image-caption {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-3);
+}
+/* What stands in for a picture that could not be drawn: a chip naming the
+   file and why, never the browser's broken-image glyph. */
+.cl-image-note {
+  display: inline-block;
+  padding: 1px 8px;
+  border: 1px dashed var(--cl-line);
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-3);
+}
+.cl-image-note.is-pending {
+  opacity: 0.6;
+}
+.cl-file-image {
+  padding: 10px 12px;
+}
+.cl-file-image .cl-image {
+  margin: 0;
+}
+.cl-image-full {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-height: 92vh;
+  cursor: zoom-out;
+}
+.cl-image-full img {
+  max-width: 100%;
+  max-height: 92vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 30px 70px -34px oklch(0.1 0.02 45 / 0.7);
+}
+
 .cl-message-text--assistant {
   padding: 1px 0;
   overflow-wrap: anywhere;

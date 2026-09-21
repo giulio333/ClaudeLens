@@ -55,6 +55,7 @@ import type {
   PurgePlan,
   PurgeResult,
   VaultLinkAnswer,
+  LocalImageAnswer,
 } from '../../src/types';
 import type { DerivedDescription } from '../../src/hooks/useIPC';
 
@@ -288,7 +289,16 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     openFile: vi.fn(async (_root: string, _rel: string) => ok<null>(null)),
   };
 
+  // An image linked by path. "Gone" is the honest default: a test that wants
+  // the picture drawn scripts the `ok` answer with its data URI.
+  const images = {
+    read: vi.fn(async (_filePath: string, _root?: string) =>
+      ok<LocalImageAnswer>({ status: 'missing' })
+    ),
+  };
+
   return {
+    images,
     playbook: {
       getTemplates: vi.fn(async (_hash: string) => ok<PromptTemplate[]>([])),
       getCandidates: vi.fn(async (_hash: string) =>

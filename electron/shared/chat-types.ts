@@ -32,8 +32,22 @@ export type ChatContentBlock =
       artifact?: ArtifactPublish;
       /** The delivery a `SendMessage` call made, when Claude Code recorded one. */
       sent?: SentMessage;
+      /** The images the result carried — a `Read` of a `.png`, a screenshot a
+       *  browser tool took. They sit in the result's content array beside the
+       *  text, and joined into `content` they were an empty string. */
+      images?: ChatImage[];
     }
+  | ({ type: 'image' } & ChatImage)
   | AdvisorConsult;
+
+/** An image as the transcript carries it: base64 inline, never a path. A
+ *  screenshot pasted into a prompt is one of these on the user row, next to
+ *  the `[Image #1]` placeholder in the text. */
+export interface ChatImage {
+  mediaType: string;
+  /** Base64, without the `data:` prefix — the renderer builds the URI. */
+  data: string;
+}
 
 /** What a shell command changed on disk, as Claude Code records it on the
  *  result row (`toolUseResult.bashEditDiff`).
