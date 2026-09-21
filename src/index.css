@@ -2781,28 +2781,29 @@ body {
 .cl-seg button:hover {
   color: var(--cl-ink);
 }
-/* a glyph cell in the segment: same pill, same on-state, square instead of a
-   word; separated from the words by a hairline so it reads as its own switch */
+/* a glyph cell in the segment: a square, not a word, and a switch rather than
+   a third density — so its on-state is the glyph's colour alone, never the
+   filled pill the words get (a 26px pill around a 12px glyph reads as a ring).
+   The hairline sits mid-gap so the cell has the same air on both sides. */
 .cl-seg button.cl-seg-icon {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  align-self: stretch;
   width: 26px;
   padding: 0;
-  margin-left: 2px;
+  margin-left: 6px;
   color: var(--cl-ink-4);
 }
 .cl-seg button.cl-seg-icon::before {
   content: '';
   position: absolute;
-  left: -2px;
-  top: 6px;
-  bottom: 6px;
+  left: -4px;
+  top: 5px;
+  bottom: 5px;
   width: 1px;
   background: var(--cl-line);
-}
-.cl-seg button.cl-seg-icon {
-  position: relative;
 }
 .cl-seg button.cl-seg-icon svg {
   width: 12px;
@@ -2810,9 +2811,14 @@ body {
 }
 .cl-seg button.cl-seg-icon:hover {
   color: var(--cl-ink);
+  background: color-mix(in oklch, var(--cl-ink) 8%, transparent);
 }
-.cl-seg button.cl-seg-icon.on {
+.cl-pill .cl-seg button.cl-seg-icon.on,
+.cl-pill .cl-seg button.cl-seg-icon.on:hover,
+:root[data-theme='dark'] .cl-pill .cl-seg button.cl-seg-icon.on {
   color: var(--cl-accent-ink);
+  background: transparent;
+  box-shadow: none;
 }
 .cl-seg button.on {
   background: linear-gradient(
@@ -2834,6 +2840,23 @@ body {
   box-shadow:
     inset 0 1px 0 oklch(1 0 0 / 0.1),
     0 1px 4px -1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
+}
+/* In the pill the on-cell is a raised white chip, ink on it — the accent
+   gradient above is the overview's; over a transcript a terracotta pill in
+   the bar competes with every accent the text carries. */
+.cl-pill .cl-seg button.on {
+  background: oklch(1 0 0 / 0.92);
+  color: var(--cl-ink);
+  box-shadow:
+    0 1px 2px color-mix(in oklch, var(--cl-ink) 14%, transparent),
+    0 0 0 1px color-mix(in oklch, var(--cl-ink) 6%, transparent);
+}
+:root[data-theme='dark'] .cl-pill .cl-seg button.on {
+  background: oklch(1 0 0 / 0.14);
+  color: var(--cl-ink);
+  box-shadow:
+    0 1px 2px oklch(0 0 0 / 0.35),
+    0 0 0 1px oklch(1 0 0 / 0.08);
 }
 /* Paper variant. The glass original belongs to the chat pill, which floats
    over a transcript; on an editorial section it has to be the same paper as

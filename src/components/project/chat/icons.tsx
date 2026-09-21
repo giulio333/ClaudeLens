@@ -33,7 +33,7 @@ export function DiffGlyph() {
       strokeLinejoin="round"
       aria-hidden
     >
-      <path d="M12 4v6M9 7h6M4 13h16M9 18h6" />
+      <path d="M12 5v6M9 8h6M4 14h16M9 19h6" />
     </svg>
   );
 }
