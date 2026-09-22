@@ -12,7 +12,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
-`vault-index`, `wikilinks`, `artifact`, `session-exchange`, `plugins-reader` (the `.mcp.json` and
+`vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `plugins-reader` (the `.mcp.json` and
 `hooks/hooks.json` parsers), and the chat `utils` and `find`.
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
@@ -154,6 +154,16 @@ turn, a last message that did not leave saying so instead of being counted, and
 no dock at all for a session that talked to nobody — its threading half, which
 keys a conversation on the pid the receiver verified rather than on a name the
 party can change, is `mission-messages`) and
+`context-rail` (the files a session read, on Lens's left edge where the
+turn navigator was: dots at rest — one per file, lit for the turn being
+read — the names by folder on hover, the lines of the last read on a name's
+hover in the transcript's own editor window, kept above the pill by its
+measured height, a click opening the file's own window — every read, the
+selected one's rows, the lines covered, the jump to its turn — and no rail for
+a session that read nothing; its pure half, which reads
+`Read` calls and the shell commands that only read — refusing a command that
+wrote, a construct it cannot follow and a span through a pipe — is
+`context-files`) and
 `exchange-thread` (the pure half of that page: which side a message is on,
 where a run of one party's messages starts, the wall time the conversation
 covers — and nothing rather than "0s" for a single message) and

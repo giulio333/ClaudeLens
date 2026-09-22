@@ -76,6 +76,16 @@ describe('numberedRows', () => {
     expect(lineRange(rows!)).toBe('436–438');
   });
 
+  it('reads the tab form current transcripts write, not only the arrow', () => {
+    // Every Read on hand from Claude Code 2.1.241 on is `N\t…`; matching only
+    // the arrow drew those windows unnumbered.
+    const rows = numberedRows('  1268\texport function x() {\n  1269\t  return 1;\n');
+    expect(rows).toEqual([
+      { kind: 'ctx', text: 'export function x() {', line: 1268 },
+      { kind: 'ctx', text: '  return 1;', line: 1269 },
+    ]);
+  });
+
   it('keeps an unnumbered line among numbered ones as a row without a number', () => {
     const rows = numberedRows('     1→a\n(truncated)');
     expect(rows).toEqual([

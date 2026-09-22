@@ -106,7 +106,9 @@ export function lineDiff(oldText: string, newText: string): FileRow[] {
   return rows;
 }
 
-const NUMBERED_LINE = /^\s*(\d+)→(.*)$/;
+// `cat -n` numbering: an arrow after the number in older transcripts, a tab in
+// current ones (every Read on hand from 2.1.241 to 2.1.280 uses the tab).
+const NUMBERED_LINE = /^\s*(\d+)(?:→|\t)(.*)$/;
 
 /**
  * The rows of a `Read` result, each with the line number Claude Code printed

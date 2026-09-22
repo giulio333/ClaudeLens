@@ -393,9 +393,6 @@ export function skillInitial(command: string): string {
 // children (the control pill, the minimap). Pure types, no React.
 // ──────────────────────────────────────────────────────────────────────────
 
-/** A navigable turn enriched for the minimap rail (1-based index + clock time). */
-export type MinimapItem = TurnDescriptor & { n: number; time: string };
-
 /** One row in the transcript stream: either a real message turn (optionally
  *  carrying a run of tool-only turns folded back into it, since their tool_use
  *  lines are persisted separately), or — when no assistant turn precedes the run
