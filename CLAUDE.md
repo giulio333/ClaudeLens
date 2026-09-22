@@ -13,7 +13,8 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
 `vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `plugins-reader` (the `.mcp.json` and
-`hooks/hooks.json` parsers), and the chat `utils` and `find`.
+`hooks/hooks.json` parsers), and the chat `utils`, `find` and `model-options`
+(which version each model alias resolves to, from the SDK handshake's model list).
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
 read path, the `dir` narrowing hint and its empty-result fallback, the read
