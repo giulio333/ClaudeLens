@@ -3439,7 +3439,7 @@ body {
 /* ──────────────────────────────────────────────────────────
    CHAT — "Focus" layout
    Chrome stripped to a floating control pill · one centred reading
-   column · a hairline right-edge minimap timeline · export & delete
+   column · the files read on a left-edge rail (Lens) · export & delete
    on a sheet raised from the pill. Maximum content, minimum furniture.
    ────────────────────────────────────────────────────────── */
 .cl-chat-workspace--focus {
@@ -3448,7 +3448,7 @@ body {
 }
 
 /* The reading column. Its gutters are fixed, and unequal: the left one clears
-   the 64px focus rail, absolutely positioned over the feed's LEFT edge, plus a
+   the 64px rail of files read, absolutely positioned over the feed's LEFT edge, plus a
    little air; the right one has nothing to clear but the scrollbar and takes
    only the air. They were 80px a side, symmetric around a rail that sits on
    one side only — and with Mission Control open beside the feed, a diff was
@@ -3732,11 +3732,11 @@ body {
   padding: 10px 0 18px;
 }
 
-/* left-edge turn navigator — the "TURNS" glass capsule (design 2a): rotated
-   label on top, one tick bar per turn, the active turn as a numbered accent
-   circle, the total count at the foot. Ticks are positioned proportionally in
-   a track whose height adapts to the turn count (see FocusMinimap.tsx). */
-.cl-focus-rail {
+/* left-edge rail of the files the session read (ContextRail.tsx) — in the
+   footprint the turn navigator had: a 64px column over the feed's left gutter.
+   At rest a capsule of dots, one per file; hover opens the list, a row's hover
+   the lines that were read. */
+.cl-ctx-rail {
   position: absolute;
   top: 0;
   left: 0;
@@ -3749,15 +3749,19 @@ body {
   pointer-events: none;
   z-index: 12;
 }
-/* Nastro: the floating furniture goes opaque + hairline instead of glass, so
-   the only translucency left on the surface is none at all. */
-.cl-turns-capsule {
+.cl-ctx-anchor {
+  position: relative;
+  display: flex;
+  max-height: 100%;
   pointer-events: auto;
+}
+.cl-ctx-capsule {
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 10px;
   max-height: 100%;
+  min-width: 0;
   padding: 14px 9px;
   border-radius: 999px;
   background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
@@ -3765,105 +3769,524 @@ body {
   box-shadow: 0 10px 26px -18px oklch(0.2 0.02 60 / 0.3);
   -webkit-backdrop-filter: blur(20px);
   backdrop-filter: blur(20px);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: opacity 140ms ease;
 }
-.cl-turns-cap-label {
+/* the panel grows out of the capsule and is translucent: the capsule under
+   it would show through, so it steps aside while the panel is open */
+.cl-ctx-anchor.is-open .cl-ctx-capsule {
+  opacity: 0;
+}
+.cl-ctx-capsule:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 2px;
+}
+.cl-ctx-cap-label {
   writing-mode: vertical-rl;
   transform: rotate(180deg);
   font: 700 8px var(--font-mono);
   letter-spacing: 0.14em;
   color: var(--cl-ink-4);
 }
-.cl-turns-total {
+.cl-ctx-total,
+.cl-ctx-more {
   font: 600 8.5px var(--font-mono);
   font-variant-numeric: tabular-nums;
   color: var(--cl-ink-4);
 }
-.cl-focus-rail-track {
-  position: relative;
-  width: 24px;
-  flex: 0 1 auto;
+.cl-ctx-dots {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  min-height: 0;
+  overflow: hidden;
 }
-/* one tick bar per turn — width/colour set inline (--w/--c) by the component */
-.cl-focus-tick {
-  position: absolute;
-  left: 50%;
-  width: var(--w, 10px);
-  height: 3px;
-  padding: 0;
-  border: 0;
-  border-radius: 2px;
-  background: var(--c, var(--cl-ink-4));
-  opacity: 0.4;
-  transform: translate(-50%, -50%);
-  cursor: pointer;
+/* the dot takes the file's kind tint (the same as its chip in the turns),
+   muted; the files read in the turn being read are drawn full, ringed */
+.cl-ctx-dot {
+  flex: 0 0 auto;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 70%, var(--cl-ink-3));
+  opacity: 0.45;
   transition:
-    opacity 0.15s,
-    width 0.12s;
+    opacity var(--cl-hover-ms, 120ms),
+    box-shadow var(--cl-hover-ms, 120ms);
 }
-.cl-focus-tick[data-accent] {
-  opacity: 0.62;
+.cl-ctx-dot.is-active {
+  opacity: 1;
+  box-shadow:
+    0 0 0 2px var(--cl-paper),
+    0 0 0 3.5px var(--cl-accent);
 }
-.cl-focus-tick:hover {
-  opacity: 0.9;
+.cl-ctx-capsule:hover .cl-ctx-dot {
+  opacity: 0.75;
 }
-/* Invisible hit area keeps dense ticks easy to hover/click. */
-.cl-focus-tick::before {
-  content: '';
+.cl-ctx-capsule:hover .cl-ctx-dot.is-active {
+  opacity: 1;
+}
+
+/* the list — frosted paper, the pill's material: it floats over the page, and
+   the page stays there under it, blurred. The contour is the pill's two-stop
+   one (a dark hairline inside, a light one outside): on a translucent body a
+   single border reads as a smudge.
+   Shut, it is invisible and a few pixels in towards the capsule, so opening
+   reads as the capsule unfolding rather than a box appearing beside it; it
+   stays mounted (inert) so that closing can run the same way back. */
+.cl-ctx-panel {
   position: absolute;
-  left: 50%;
+  left: -2px;
   top: 50%;
-  width: 26px;
-  height: 14px;
-  transform: translate(-50%, -50%);
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  width: 236px;
+  max-height: calc(100vh - 220px);
+  box-sizing: border-box;
+  padding: 11px 6px 8px;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--cl-paper) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 16px 34px -20px oklch(0.2 0.02 60 / 0.4),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(-50%) translateX(-6px) scale(0.97);
+  transform-origin: left center;
+  transition:
+    opacity 140ms ease-in,
+    transform 160ms ease-in,
+    visibility 0s linear 160ms;
 }
-/* the active turn — numbered accent circle, the scroll-spy cursor */
-.cl-focus-current {
-  position: absolute;
-  left: 50%;
-  width: 22px;
-  height: 22px;
-  padding: 0;
+.cl-ctx-panel.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(-50%);
+  transition:
+    opacity 180ms ease-out,
+    transform 240ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+.cl-ctx-panel-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 0 10px 6px;
+  font: 600 12.5px var(--font-sans);
+  color: var(--cl-ink);
+}
+.cl-ctx-panel-head .n {
+  font: 400 10.5px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
+}
+.cl-ctx-panel-list {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+.cl-ctx-group {
+  display: flex;
+  flex-direction: column;
+}
+.cl-ctx-group-label {
+  padding: 10px 10px 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 10.5px var(--font-sans);
+  color: var(--cl-ink-4);
+}
+.cl-ctx-group:first-child .cl-ctx-group-label {
+  padding-top: 2px;
+}
+.cl-ctx-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 26px;
+  padding: 0 10px;
   border: 0;
-  border-radius: 999px;
+  border-radius: 7px;
+  background: transparent;
+  color: color-mix(in oklab, var(--ft, var(--cl-ink-4)) 65%, var(--cl-ink-3));
+  text-align: left;
+  cursor: pointer;
+}
+.cl-ctx-row .cl-file-chip-logo {
+  width: 12px;
+  height: 12px;
+}
+.cl-ctx-row .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 11.5px var(--font-mono);
+  color: var(--cl-ink-2);
+}
+.cl-ctx-row .ext {
+  color: var(--cl-ink-4);
+}
+.cl-ctx-row:hover,
+.cl-ctx-row.is-peeked {
+  background: var(--cl-hover-bg);
+}
+.cl-ctx-row:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: -2px;
+}
+.cl-ctx-row.is-active {
+  background: var(--cl-accent-soft);
+}
+.cl-ctx-row.is-active .name {
+  color: var(--cl-accent-ink);
+}
+
+/* the peek: the lines the last read put on screen, on the list's own frosted
+   paper and contour, so the two read as one surface in either theme. A head
+   of name · lines · turn, then the rows — nothing at its foot. It fades in with
+   a short slide off the list, and out the same way. */
+.cl-ctx-peek {
+  position: absolute;
+  left: 244px;
+  z-index: 3;
+  width: min(480px, calc(100vw - 340px));
+  overflow: hidden;
+  border-radius: 12px;
+  pointer-events: none;
+  background: color-mix(in oklch, var(--cl-paper) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 16px 34px -20px oklch(0.2 0.02 60 / 0.4),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
+  opacity: 0;
+  visibility: hidden;
+  transform: translateX(-4px);
+  transition:
+    opacity 120ms ease-in,
+    transform 140ms ease-in,
+    visibility 0s linear 140ms;
+}
+.cl-ctx-peek.is-open {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition:
+    opacity 160ms ease-out,
+    transform 200ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+}
+:root[data-theme='dark'] .cl-ctx-peek {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 18px 38px -20px oklch(0 0 0 / 0.66),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
+}
+.cl-ctx-peek-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  min-width: 0;
+  padding: 10px 14px 4px;
+}
+.cl-ctx-peek-head .cl-file-chip-logo {
+  align-self: center;
+  width: 12px;
+  height: 12px;
+  color: var(--cl-ink-3);
+}
+.cl-ctx-peek-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 600 12.5px var(--font-sans);
+  color: var(--cl-ink);
+}
+.cl-ctx-peek-span,
+.cl-ctx-peek-turn {
+  flex: 0 0 auto;
+  font: 400 10.5px var(--font-mono);
+  color: var(--cl-ink-3);
+}
+.cl-ctx-peek-turn {
+  margin-left: auto;
+  color: var(--cl-ink-4);
+}
+/* the peek is a glance: fourteen rows, faded out at the foot */
+.cl-ctx-peek .cl-ctx-code {
+  padding: 4px 0 12px;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 28px), transparent 100%);
+}
+.cl-ctx-peek .cl-ctx-code-note {
+  padding: 4px 14px 12px;
+}
+
+/* a read's rows, on paper — the page's diffs' ground and highlight palette
+   (the hljs remap under `.cl-diff` covers this block too), with every row in
+   full ink: here the whole content is what was read, not context */
+.cl-ctx-code {
+  overflow-x: auto;
+  padding: 6px 0 10px;
+  font: 400 11px/1.65 var(--font-mono);
+}
+.cl-ctx-code-row {
+  display: grid;
+  grid-template-columns: calc(var(--gutter, 3ch) + 18px) minmax(0, 1fr);
+  width: max-content;
+  min-width: 100%;
+}
+.cl-ctx-code-row .ln {
+  padding: 0 10px 0 8px;
+  text-align: right;
+  color: var(--cl-ink-4);
+  user-select: none;
+}
+.cl-ctx-code code.hljs {
+  padding: 0 14px 0 0;
+  background: transparent !important;
+  color: var(--cl-ink-2);
+  font: inherit;
+  white-space: pre;
+}
+.cl-ctx-code-note {
+  padding: 12px 16px;
+  font: italic 11px/1.5 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+
+/* a file's own window, opened from its name: the reads down the left, the
+   selected one on the right — its command once, then its rows — and the
+   coverage and the jump at the foot. Opaque paper: it is read with the page
+   dimmed behind it, so nothing needs to show through. */
+.cl-ctx-sheet {
+  display: flex;
+  flex-direction: column;
+  width: min(920px, 92vw);
+  max-height: 88vh;
+  margin: 0 auto;
+  overflow: hidden;
+  border-radius: 14px;
+  background: var(--cl-paper);
+  box-shadow:
+    0 0 0 1px var(--cl-line),
+    0 30px 70px -34px oklch(0.2 0.02 60 / 0.45);
+  color: var(--cl-ink-2);
+  outline: none;
+}
+:root[data-theme='dark'] .cl-ctx-sheet {
+  box-shadow:
+    0 0 0 1px var(--cl-line),
+    0 30px 70px -34px oklch(0 0 0 / 0.7);
+}
+.cl-ctx-sheet-bar {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 12px 12px 12px 18px;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-ctx-sheet-bar .cl-file-chip-logo {
+  flex: 0 0 auto;
+  width: 13px;
+  height: 13px;
+  color: var(--cl-ink-3);
+}
+.cl-ctx-sheet-name {
+  flex: 0 0 auto;
+  font: 600 14px var(--font-sans);
+  color: var(--cl-ink);
+}
+.cl-ctx-sheet-path {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 10.5px var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-ctx-sheet-btn {
   display: inline-flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  transform: translate(-50%, -50%);
-  background: var(--cl-accent);
-  color: var(--cl-on-accent);
-  font: 700 9.5px var(--font-mono);
-  font-variant-numeric: tabular-nums;
-  box-shadow:
-    0 0 0 3px color-mix(in oklch, var(--cl-accent) 25%, transparent),
-    0 4px 10px -3px color-mix(in oklch, var(--cl-accent) 60%, transparent);
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cl-ink-3);
   cursor: pointer;
-  z-index: 2;
+  transition: background var(--cl-hover-ms, 120ms);
 }
-/* hover label — to the right of the capsule */
-.cl-focus-tick .lbl,
-.cl-focus-current .lbl {
-  position: absolute;
-  left: calc(100% + 14px);
-  top: 50%;
-  transform: translateY(-50%);
-  white-space: nowrap;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 600;
+.cl-ctx-sheet-btn:hover {
+  background: var(--cl-hover-bg);
   color: var(--cl-ink);
-  background: var(--cl-paper);
-  padding: 4px 7px;
-  border: 1px solid var(--cl-line);
-  border-radius: 6px;
-  box-shadow: var(--cl-glass-lift);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.15s;
-  z-index: 3;
 }
-.cl-focus-tick:hover .lbl,
-.cl-focus-current:hover .lbl {
-  opacity: 1;
+.cl-ctx-sheet-btn.is-done {
+  color: var(--cl-accent-ink);
+}
+.cl-ctx-sheet-main {
+  display: grid;
+  grid-template-columns: 232px minmax(0, 1fr);
+  flex: 1 1 auto;
+  min-height: 0;
+}
+.cl-ctx-sheet-reads {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-height: 0;
+  padding: 12px 8px;
+  border-right: 1px solid var(--cl-line-soft);
+  overflow-y: auto;
+}
+.cl-ctx-sheet-head {
+  padding: 0 10px 8px;
+  font: 400 10.5px var(--font-sans);
+  color: var(--cl-ink-4);
+}
+/* a read in the list: one line of where, one of how; the selected one takes
+   the accent tint and nothing else — no ring, no growing */
+.cl-ctx-read {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 8px;
+  row-gap: 2px;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  font: 400 10.5px var(--font-mono);
+  text-align: left;
+  cursor: pointer;
+}
+.cl-ctx-read .t {
+  color: var(--cl-ink-2);
+  font-weight: 600;
+}
+.cl-ctx-read .s {
+  justify-self: end;
+  color: var(--cl-ink-4);
+}
+.cl-ctx-read .v {
+  grid-column: 1 / -1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+  font: inherit;
+}
+.cl-ctx-read:hover {
+  background: var(--cl-hover-bg);
+}
+.cl-ctx-read.is-on {
+  background: var(--cl-accent-soft);
+}
+.cl-ctx-read.is-on .t {
+  color: var(--cl-accent-ink);
+}
+.cl-ctx-read:focus {
+  outline: none;
+}
+.cl-ctx-read:focus-visible,
+.cl-ctx-jump:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: -2px;
+}
+.cl-ctx-sheet-pane {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+.cl-ctx-sheet-cmd {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 16px 10px;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-ctx-sheet-cmd .where {
+  font: 500 12px var(--font-sans);
+  color: var(--cl-ink-2);
+}
+.cl-ctx-sheet-cmd code {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 400 10.5px/1.5 var(--font-mono);
+  color: var(--cl-ink-3);
+}
+.cl-ctx-sheet-cmd .note {
+  font: italic 10.5px var(--font-sans);
+  color: var(--cl-ink-4);
+}
+.cl-ctx-sheet-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+}
+.cl-ctx-sheet-body .cl-ctx-code {
+  overflow-x: visible;
+}
+.cl-ctx-sheet-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--cl-line-soft);
+  font: 400 10.5px var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-ctx-jump {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cl-accent-ink);
+  font: inherit;
+  cursor: pointer;
+}
+.cl-ctx-jump:hover {
+  text-decoration: underline;
+}
+
+/* the slide is motion; the fade is not, and stays */
+@media (prefers-reduced-motion: reduce) {
+  .cl-ctx-panel,
+  .cl-ctx-panel.is-open {
+    transform: translateY(-50%);
+  }
+  .cl-ctx-peek,
+  .cl-ctx-peek.is-open {
+    transform: none;
+  }
+}
+/* less transparency asked for: both go back to solid paper */
+@media (prefers-reduced-transparency: reduce) {
+  .cl-ctx-panel,
+  .cl-ctx-peek {
+    background: var(--cl-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 
 /* ──────────────────────────────────────────────────────────
@@ -4122,7 +4545,7 @@ body {
   flex-shrink: 0;
 }
 /* The composer is one sheet of paper + hairline, not glass: the chat surface
-   left glass behind with the "Nastro" direction (cl-pill and cl-turns-capsule
+   left glass behind with the "Nastro" direction (cl-pill and the left-edge capsule
    went opaque too), and a blurred slab under an opaque transcript was the last
    thing here that read as another app. Opaque --cl-paper rather than the pill's
    92% mix — this one holds text being typed, which must stay crisp. */
@@ -5457,8 +5880,7 @@ button.cl-pill-model[data-on] {
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .cl-focus-tick,
-  .cl-focus-current,
+  .cl-ctx-dot,
   .cl-pill-more,
   .cl-pill-model,
   .cl-pill-dock,
@@ -7980,7 +8402,7 @@ button.cl-pill-model[data-on] {
 }
 
 @media (max-width: 980px) {
-  .cl-focus-rail {
+  .cl-ctx-rail {
     display: none;
   }
   /* The rail is gone, so nothing needs clearing on the left: the gutter drops
@@ -14454,78 +14876,79 @@ button.cl-sw-member:focus-visible,
    tokens (same hues as the chat tool-tints) — these already lift in dark, so
    one set of rules works in both themes. Scoped under `.cl-code-pre` so they
    out-specify the global `.hljs-*` rules without touching `.prose-lens`. The
-   chat's diffs (`.cl-diff`) share the map and nothing else: they are on
-   paper, not on the grey slab `.cl-code-pre` brings. */
+   chat's diffs (`.cl-diff`) and the rows of a file read (`.cl-ctx-code`, the
+   Lens context rail) share the map and nothing else: they are on paper, not on
+   the grey slab `.cl-code-pre` brings. */
 .cl-code-pre {
   background: var(--cl-paper-2);
 }
-:is(.cl-code-pre, .cl-diff) code.hljs {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) code.hljs {
   background: transparent;
   padding: 0;
   color: var(--cl-ink-2);
 }
 
-:is(.cl-code-pre, .cl-diff) .hljs-comment,
-:is(.cl-code-pre, .cl-diff) .hljs-quote {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-comment,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-quote {
   color: var(--cl-ink-4);
   font-style: italic;
 }
-:is(.cl-code-pre, .cl-diff) .hljs-keyword,
-:is(.cl-code-pre, .cl-diff) .hljs-selector-tag,
-:is(.cl-code-pre, .cl-diff) .hljs-tag,
-:is(.cl-code-pre, .cl-diff) .hljs-name,
-:is(.cl-code-pre, .cl-diff) .hljs-template-tag {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-keyword,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-selector-tag,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-tag,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-name,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-template-tag {
   color: var(--cl-violet);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-string,
-:is(.cl-code-pre, .cl-diff) .hljs-regexp,
-:is(.cl-code-pre, .cl-diff) .hljs-char.escape_,
-:is(.cl-code-pre, .cl-diff) .hljs-addition {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-string,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-regexp,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-char.escape_,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-addition {
   color: var(--cl-ok);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-number,
-:is(.cl-code-pre, .cl-diff) .hljs-literal,
-:is(.cl-code-pre, .cl-diff) .hljs-variable.constant_ {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-number,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-literal,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-variable.constant_ {
   color: var(--cl-cyan);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-title,
-:is(.cl-code-pre, .cl-diff) .hljs-title.function_,
-:is(.cl-code-pre, .cl-diff) .hljs-section,
-:is(.cl-code-pre, .cl-diff) .hljs-selector-id,
-:is(.cl-code-pre, .cl-diff) .hljs-selector-class {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-title,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-title.function_,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-section,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-selector-id,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-selector-class {
   color: var(--cl-accent-ink);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-built_in,
-:is(.cl-code-pre, .cl-diff) .hljs-type,
-:is(.cl-code-pre, .cl-diff) .hljs-title.class_ {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-built_in,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-type,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-title.class_ {
   color: var(--cl-haiku);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-attr,
-:is(.cl-code-pre, .cl-diff) .hljs-attribute,
-:is(.cl-code-pre, .cl-diff) .hljs-property,
-:is(.cl-code-pre, .cl-diff) .hljs-variable,
-:is(.cl-code-pre, .cl-diff) .hljs-template-variable,
-:is(.cl-code-pre, .cl-diff) .hljs-selector-attr,
-:is(.cl-code-pre, .cl-diff) .hljs-selector-pseudo {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-attr,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-attribute,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-property,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-variable,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-template-variable,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-selector-attr,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-selector-pseudo {
   color: var(--cl-cyan);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-symbol,
-:is(.cl-code-pre, .cl-diff) .hljs-bullet,
-:is(.cl-code-pre, .cl-diff) .hljs-link {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-symbol,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-bullet,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-link {
   color: var(--cl-warn);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-meta,
-:is(.cl-code-pre, .cl-diff) .hljs-meta .hljs-keyword {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-meta,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-meta .hljs-keyword {
   color: var(--cl-ink-4);
 }
-:is(.cl-code-pre, .cl-diff) .hljs-deletion {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-deletion {
   color: var(--cl-danger);
 }
 /* Inside a code/diff block the content is source, not rendered markdown:
    don't apply real bold/italic to markdown's `**`/`*` tokens — keep the
    literal syntax as flat monospace (tint only, to mark it as syntax). */
-:is(.cl-code-pre, .cl-diff) .hljs-emphasis,
-:is(.cl-code-pre, .cl-diff) .hljs-strong {
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-emphasis,
+:is(.cl-code-pre, .cl-diff, .cl-ctx-code) .hljs-strong {
   font-style: normal;
   font-weight: inherit;
   color: var(--cl-ink-3);
@@ -14590,9 +15013,12 @@ button.cl-sw-member:focus-visible,
     transparent 100%
   );
 }
-:root[data-theme='dark'] .cl-focus-tick .lbl,
-:root[data-theme='dark'] .cl-focus-current .lbl {
-  box-shadow: 0 8px 20px -8px oklch(0 0 0 / 0.6);
+:root[data-theme='dark'] .cl-ctx-panel {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 18px 38px -20px oklch(0 0 0 / 0.66),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
 }
 
 /* ════════════════════════════════════════════════════════════════════════

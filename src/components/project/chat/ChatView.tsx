@@ -38,7 +38,8 @@ import { ChatControlPill } from './ChatControlPill';
 import { deriveContext } from '../terminal/context-window';
 import { findMatchingTurns, stepToHit } from './find';
 import { useFindLayer } from './useFindLayer';
-import { FocusMinimap } from './FocusMinimap';
+import { ContextRail } from './ContextRail';
+import { contextFiles, nearestTurn } from './context-files';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
@@ -256,7 +257,7 @@ export function ChatView({
     (t: string) => agentTintColor(agentColorOf(t)),
     [agentColorOf]
   );
-  const { minimapItems, rows, rowIndexByTurn } = useTranscriptModel({
+  const { rows, rowIndexByTurn } = useTranscriptModel({
     processed,
     detailsFilter,
     agentColor: resolveAgentTint,
@@ -314,6 +315,23 @@ export function ChatView({
     const matched = findMatchingTurns(processed, findQuery, detailsFilter);
     return matched.filter(n => rowIndexByTurn.has(n));
   }, [processed, findQuery, detailsFilter, rowIndexByTurn]);
+
+  // The files the session read, for the Lens rail. Only the embedded view has
+  // the rail, so the standalone one does not pay for the scan.
+  const readFiles = useMemo(
+    () => (embedded ? contextFiles(processed, project.realPath) : []),
+    [embedded, processed, project.realPath]
+  );
+  const renderedTurns = useMemo(
+    () => [...rowIndexByTurn.keys()].sort((a, b) => a - b),
+    [rowIndexByTurn]
+  );
+  // A read's turn is the row that shows it: a tool-only turn MIN folds away
+  // belongs to the turn it is folded into.
+  const turnOfRead = useCallback(
+    (idx: number) => nearestTurn(renderedTurns, idx + 1),
+    [renderedTurns]
+  );
 
   const rowIndexByTurnRef = useRef(rowIndexByTurn);
   useLayoutEffect(() => {
@@ -438,7 +456,7 @@ export function ChatView({
     }
     setFocusMissed(false);
     // Turn numbers are 1-based indices into `processed` — the same numbering
-    // `useTranscriptModel` gives the minimap and the row map.
+    // `useTranscriptModel` gives the row map.
     jumpToTurn(idx + 1);
   }, [focusMessageUuid, processed, jumpToTurn]);
 
@@ -886,7 +904,15 @@ export function ChatView({
               onRemove={highlightLayer.removeCurrent}
             />
 
-            <FocusMinimap items={minimapItems} active={activeTurn} onJump={jumpToTurn} />
+            {embedded && (
+              <ContextRail
+                files={readFiles}
+                cwd={project.realPath}
+                turnOf={turnOfRead}
+                activeTurn={activeTurn}
+                onJump={jumpToTurn}
+              />
+            )}
 
             {controlPill(true)}
           </div>

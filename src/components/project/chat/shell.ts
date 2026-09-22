@@ -121,6 +121,17 @@ function pipeOp(src: string, i: number): OpMatch | null {
   return { op: '|', len: src[i + 1] === '&' ? 2 : 1 };
 }
 
+/** Top-level statements of a one-liner — cut at `;`, `&&`, `||`, `&` and newlines
+ *  that sit outside quotes, `$(…)` and `{…}`. */
+export function splitStatements(text: string): string[] {
+  return scanSplit(text, statementOp).map(s => s.text);
+}
+
+/** True when the command carries a heredoc, whose body is not shell syntax. */
+export function hasHeredoc(text: string): boolean {
+  return HEREDOC_RE.test(text);
+}
+
 /** Top-level pipeline stages of a single statement. */
 export function splitPipeline(text: string): string[] {
   const parts = scanSplit(text, pipeOp).map(p => p.text);
