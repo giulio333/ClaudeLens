@@ -32,6 +32,7 @@ import { join } from 'path';
 import { execFile } from 'child_process';
 import { readFile, existsSync, mkdirSync, readFileSync, unlinkSync, writeFileSync } from 'fs';
 import { readPrefs, setPref } from './prefs-store';
+import { claudelensDir } from './claudelens-dir';
 import { describeError, redactPaths, ERROR_LIMITS } from '../shared/error-redact';
 
 // Public Aptabase ingest key (EU data center — the `A-EU-` prefix selects the
@@ -51,7 +52,7 @@ const ERROR_PATH = '/api/v0/error';
 const MAX_ERRORS_PER_RUN = 20;
 // A fatal error kills the process before an async POST can leave, so it is
 // written here synchronously and sent on the next launch instead.
-const PENDING_ERROR_FILE = join(os.homedir(), '.claudelens', 'pending-error.json');
+const pendingErrorFile = () => join(claudelensDir(), 'pending-error.json');
 
 // Opt-out preference, stored in ~/.claudelens/preferences.json (ClaudeLens
 // state, not Claude data). Absent → telemetry on (opt-out default).
@@ -179,8 +180,8 @@ export function queueFatalError(value: unknown): void {
       severity: 'fatal' as const,
       timestamp: new Date().toISOString(),
     };
-    mkdirSync(join(os.homedir(), '.claudelens'), { recursive: true });
-    writeFileSync(PENDING_ERROR_FILE, JSON.stringify(body), 'utf-8');
+    mkdirSync(claudelensDir(), { recursive: true });
+    writeFileSync(pendingErrorFile(), JSON.stringify(body), 'utf-8');
   } catch {
     /* the app is already dying — never throw from the crash path */
   }
@@ -194,9 +195,9 @@ export function queueFatalError(value: unknown): void {
  */
 export async function flushPendingError(): Promise<void> {
   try {
-    if (!existsSync(PENDING_ERROR_FILE)) return;
-    const raw = readFileSync(PENDING_ERROR_FILE, 'utf-8');
-    unlinkSync(PENDING_ERROR_FILE);
+    if (!existsSync(pendingErrorFile())) return;
+    const raw = readFileSync(pendingErrorFile(), 'utf-8');
+    unlinkSync(pendingErrorFile());
     if (!enabled || process.env.SCREENSHOT_MODE) return;
     const parsed = JSON.parse(raw);
     if (!parsed || typeof parsed.errorMessage !== 'string') return;

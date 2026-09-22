@@ -91,6 +91,7 @@ import {
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
 import { readPrefs, setPref } from './modules/prefs-store';
+import { claudelensDir, useDevClaudelensDir } from './modules/claudelens-dir';
 import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
 import {
   initTelemetry,
@@ -146,6 +147,10 @@ import { registerScreenshotHandlers } from './screenshotFixtures';
 // store initializes (notably on unsigned builds, which is how ClaudeLens ships).
 // If a future feature needs safeStorage-backed secrets, revisit this.
 app.commandLine.appendSwitch('use-mock-keychain');
+
+// A dev build keeps its own state dir (~/.claudelens-dev) so running the repo
+// never consumes the packaged app's preferences — see modules/claudelens-dir.ts.
+if (!app.isPackaged) useDevClaudelensDir();
 
 const PROJECTS_DIR = join(CLAUDE_DIR, 'projects');
 const TASKS_DIR = join(CLAUDE_DIR, 'tasks');
@@ -976,7 +981,7 @@ ipcMain.handle('config:getEffective', async (_event, cwd?: string) => {
 });
 
 // The store belongs to ClaudeLens; historical transcripts stay read-only.
-const PLAYBOOK_DIR = join(os.homedir(), '.claudelens', 'playbook');
+const PLAYBOOK_DIR = join(claudelensDir(), 'playbook');
 const playbookHandlers: Record<string, (...args: unknown[]) => Promise<unknown>> = {
   getTemplates: async hash => (await readPlaybook(PLAYBOOK_DIR, hash)).templates,
   getCandidates: hash => scanPromptCandidates(PROJECTS_DIR, PLAYBOOK_DIR, hash),

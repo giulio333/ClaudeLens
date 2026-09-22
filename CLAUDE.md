@@ -342,7 +342,9 @@ One entry per module, with the rationale and the gotchas, lives in
 
 `chat/PromptPlaybook.tsx` is shared by the SDK `ChatComposer` and Terminal Mission
 Control. Saved templates and dismissed-prompt fingerprints live in
-`~/.claudelens/playbook/<projectHash>/playbook.json`, through `playbook:*` IPC.
+`~/.claudelens/playbook/<projectHash>/playbook.json`, through `playbook:*` IPC
+(a dev build — `npm run dev` — keeps every piece of ClaudeLens state under
+`~/.claudelens-dev` instead, see `electron/modules/claudelens-dir.ts`).
 Mission Control opens it inside the rail via a book icon in the header; the SDK
 composer uses a popover. Closing the rail panel preserves activity filters and
 scroll, and Escape only closes it while focus is within the panel.

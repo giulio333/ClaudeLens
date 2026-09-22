@@ -7,12 +7,12 @@
 // data appeared to reset on reinstall. Storing it on disk via this module makes
 // it survive app updates and reinstalls.
 
-import os from 'os';
 import { join } from 'path';
 import { existsSync, mkdirSync, readFileSync, writeFileSync, renameSync } from 'fs';
+import { claudelensDir } from './claudelens-dir';
 
-const PREFS_DIR = join(os.homedir(), '.claudelens');
-const PREFS_FILE = join(PREFS_DIR, 'preferences.json');
+// Resolved per call: a dev build points the directory elsewhere at startup.
+const prefsFile = () => join(claudelensDir(), 'preferences.json');
 
 // Only ClaudeLens-namespaced keys are accepted, so the renderer can't bloat the
 // file with arbitrary content.
@@ -22,8 +22,8 @@ export type Prefs = Record<string, unknown>;
 
 export function readPrefs(): Prefs {
   try {
-    if (!existsSync(PREFS_FILE)) return {};
-    const parsed = JSON.parse(readFileSync(PREFS_FILE, 'utf-8'));
+    if (!existsSync(prefsFile())) return {};
+    const parsed = JSON.parse(readFileSync(prefsFile(), 'utf-8'));
     return parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? (parsed as Prefs) : {};
   } catch {
     return {};
@@ -36,10 +36,10 @@ export function setPref(key: string, value: unknown): void {
   }
   const current = readPrefs();
   current[key] = value;
-  mkdirSync(PREFS_DIR, { recursive: true });
+  mkdirSync(claudelensDir(), { recursive: true });
   // Atomic write: serialize to a temp file in the same dir, then rename, so a
   // crash mid-write can't leave a truncated/corrupt preferences.json.
-  const tmp = `${PREFS_FILE}.${process.pid}.tmp`;
+  const tmp = `${prefsFile()}.${process.pid}.tmp`;
   writeFileSync(tmp, JSON.stringify(current, null, 2), 'utf-8');
-  renameSync(tmp, PREFS_FILE);
+  renameSync(tmp, prefsFile());
 }
