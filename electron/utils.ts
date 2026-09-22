@@ -165,7 +165,7 @@ export function isAbsolutePath(p: string): boolean {
 // Cache per evitare di rileggere lo stesso jsonl più volte nella stessa sessione.
 const cwdCache = new Map<string, string>();
 
-/** Invalida la cache del cwd dopo che il contenuto di una cartella è cambiato (es. merge). */
+/** Invalida la cache del cwd dopo che il contenuto di una cartella è cambiato (es. purge). */
 export function invalidateCwdCache(hash?: string): void {
   if (hash) cwdCache.delete(hash);
   else cwdCache.clear();

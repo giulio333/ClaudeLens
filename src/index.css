@@ -18352,9 +18352,9 @@ select.cl-opt-input {
   flex: 1 0 100%;
   margin-top: 4px;
 }
-/* The shared metrics band: hairline-divided cells. Drawn by SearchView and
-   DuplicateProjectsNotice as well as the project hero, which overrides it
-   below — design 3b applies to the hero only. */
+/* The shared metrics band: hairline-divided cells. Drawn by SearchView as well
+   as the project hero, which overrides it below — design 3b applies to the hero
+   only. */
 .cl-hband {
   display: flex;
   align-items: stretch;
@@ -18427,8 +18427,8 @@ select.cl-opt-input {
 /* ── PROJECT HERO ONLY (design 3b) ────────────────────────────────────────
    Four flat columns — a label and a figure each — separated by space instead
    of rules. The hero is the one place that carries the band as the page's
-   headline; the search and duplicate views keep the divided cells, where the
-   figures are a caption to a result set rather than the subject. */
+   headline; the search view keeps the divided cells, where the figures are a
+   caption to a result set rather than the subject. */
 .cl-hero--band .cl-hband {
   max-width: var(--cl-measure);
   align-items: flex-start;
@@ -18706,230 +18706,91 @@ select.cl-opt-input {
 }
 
 /* ════════════════════════════════════════════════════════════════════════
-   DUPLICATE FOLDERS · side-by-side comparison
-   The decision here is "which folder survives", so the two candidates are
-   laid out as a diff: primary left, duplicates right, merge direction in the
-   gutter between them. Panels are equal-width so the session/memory figures
-   line up and can be compared by eye.
+   DUPLICATE FOLDERS · DuplicateProjectsView
+   Kept minimal on purpose: a project name with the path head its folders
+   share, printed once, and under it only the part of each folder's path that
+   differs, a word where one is needed (`primary`, `estimated`) and the
+   sessions it holds. No panels, no table rule, no role chips — and no long
+   dimmed prefix repeated on every line, which with long nested paths was most
+   of the ink on the page.
    ════════════════════════════════════════════════════════════════════════ */
+/* the hero's one prose line — `.cl-h-desc`'s type without its click-to-edit */
+.cl-dup-lede {
+  position: relative;
+  z-index: 2;
+  margin-top: 14px;
+  max-width: 62ch;
+  font-family: var(--font-reading);
+  font-size: 15.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+  text-wrap: pretty;
+}
+/* short tails leave the figures a long way from their path at full measure */
+.cl-dup-group {
+  max-width: 760px;
+}
 .cl-dup-group + .cl-dup-group {
-  margin-top: 34px;
+  margin-top: 28px;
 }
 .cl-dup-head {
   display: flex;
+  flex-wrap: wrap;
   align-items: baseline;
-  gap: 10px;
-  padding-bottom: 9px;
-  border-bottom: 1.5px solid var(--cl-ink);
-  margin-bottom: 14px;
+  column-gap: 14px;
+  row-gap: 2px;
+  margin-bottom: 6px;
 }
-.cl-dup-head .nm {
-  font-family: var(--font-mono);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: 0.02em;
+.cl-dup-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
   color: var(--cl-ink);
 }
-.cl-dup-head .ct {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
-}
-.cl-dup-compare {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) 46px minmax(0, 1fr);
-  align-items: stretch;
-}
-/* the duplicates column: one panel per candidate, stacked */
-.cl-dup-stack {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
+.cl-dup-prefix {
   min-width: 0;
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--cl-ink-4);
+  overflow-wrap: anywhere;
 }
-/* merge direction, drawn once between the columns */
-.cl-dup-gutter {
+.cl-dup-folders {
+  list-style: none;
+  margin: 0;
+  padding: 0 0 0 14px;
+}
+.cl-dup-folder {
   display: flex;
-  align-items: center;
-  justify-content: center;
-  position: relative;
+  flex-wrap: wrap;
+  align-items: baseline;
+  column-gap: 12px;
+  row-gap: 2px;
+  padding: 4px 0;
 }
-.cl-dup-gutter::before {
-  content: '';
-  position: absolute;
-  top: 10px;
-  bottom: 10px;
-  left: 50%;
-  border-left: 1px dashed var(--cl-line);
-}
-.cl-dup-gutter .arrow {
-  position: relative;
+.cl-dup-folder .path {
+  min-width: 0;
   font-family: var(--font-mono);
   font-size: 13px;
-  line-height: 1;
-  color: var(--cl-ink-4);
-  background: var(--cl-paper);
-  padding: 5px 0;
-}
-.cl-dup-panel {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  min-width: 0;
-  padding: 14px 16px;
-  border: 1px solid var(--cl-line);
-  border-radius: 10px;
-  background: var(--cl-paper-2);
-}
-.cl-dup-panel.is-primary {
-  border-color: color-mix(in oklch, var(--cl-ok) 45%, var(--cl-line));
-  background: color-mix(in oklch, var(--cl-ok) 7%, var(--cl-paper-2));
-}
-.cl-dup-role {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 10px;
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-.cl-dup-role .tag {
-  color: var(--cl-warn);
-}
-.cl-dup-panel.is-primary .cl-dup-role .tag {
-  color: var(--cl-ok);
-}
-.cl-dup-role .fate {
-  font-weight: 400;
-  letter-spacing: 0.1em;
-  color: var(--cl-ink-4);
-}
-/* the full path is the thing being decided on: it wraps instead of truncating */
-.cl-dup-path {
-  font-family: var(--font-mono);
-  font-size: 12px;
   line-height: 1.45;
   color: var(--cl-ink);
   overflow-wrap: anywhere;
 }
-.cl-dup-path .dir {
+.cl-dup-folder .note {
+  font-family: var(--font-mono);
+  font-size: 11px;
   color: var(--cl-ink-4);
-}
-.cl-dup-est {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  color: var(--cl-warn);
-}
-/* three figures per panel, same slots on both sides so they compare */
-.cl-dup-tape {
-  display: flex;
-  align-items: stretch;
-  margin-top: auto;
-  padding-top: 4px;
-}
-.cl-dup-tape .cell {
-  flex: 1 1 0;
-  min-width: 0;
-  padding-right: 12px;
-  border-right: 1px solid var(--cl-line);
-}
-.cl-dup-tape .cell:last-child {
-  border-right: none;
-  padding-right: 0;
-}
-.cl-dup-tape .cell + .cell {
-  padding-left: 12px;
-}
-.cl-dup-tape .k {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  line-height: 1;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
-}
-.cl-dup-tape .v {
-  font-size: 17px;
-  line-height: 1;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-  color: var(--cl-ink);
-  margin-top: 7px;
-  font-variant-numeric: tabular-nums;
-}
-.cl-dup-tape .v.date {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--cl-ink-2);
-}
-.cl-dup-tape .v small {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  font-weight: 400;
-  letter-spacing: 0;
-  color: var(--cl-ink-4);
-  margin-left: 4px;
-}
-/* mirrors the session-row action idiom, one size up: this one is the panel's
-   purpose, not a hover affordance */
-.cl-dup-act {
-  display: flex;
-  justify-content: flex-end;
-  padding-top: 2px;
-}
-.cl-dup-act button {
-  font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
   white-space: nowrap;
-  color: var(--cl-ink-3);
-  background: var(--cl-paper);
-  border: 1px solid var(--cl-line);
-  border-radius: 7px;
-  padding: 6px 11px;
-  cursor: pointer;
-  transition:
-    color 120ms,
-    border-color 120ms,
-    background 120ms;
 }
-.cl-dup-act button:hover {
-  color: var(--cl-accent-ink);
-  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
-  background: var(--cl-accent-soft);
+.cl-dup-folder .note.is-primary {
+  color: var(--cl-ok);
 }
-
-/* narrow window: the diff stops being readable side by side, so it stacks and
-   the gutter arrow turns to point down the flow */
-@media (max-width: 900px) {
-  .cl-dup-compare {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .cl-dup-gutter {
-    height: 34px;
-  }
-  .cl-dup-gutter::before {
-    top: 50%;
-    bottom: auto;
-    left: 10px;
-    right: 10px;
-    border-left: none;
-    border-top: 1px dashed var(--cl-line);
-  }
-  .cl-dup-gutter .arrow {
-    padding: 0 7px;
-    transform: rotate(90deg);
-  }
+.cl-dup-folder .figs {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--cl-ink-4);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ════════════════════════════════════════════════════════════════════════

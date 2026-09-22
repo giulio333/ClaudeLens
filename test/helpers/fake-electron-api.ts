@@ -57,7 +57,7 @@ import type {
   VaultLinkAnswer,
   LocalImageAnswer,
 } from '../../src/types';
-import type { DerivedDescription } from '../../src/hooks/useIPC';
+import type { DerivedDescription, DuplicateGroup } from '../../src/hooks/useIPC';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
 type IpcResult<T> = { data: T | null; error: string | null };
@@ -209,9 +209,11 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   // `--dry-run` plan the confirmation dialog shows, `purge` the execution.
   // `getDescription` is the read-only derivation from the project's CLAUDE.md —
   // there is no writer counterpart on purpose: an edited description is stored
-  // in the prefs, never back into that file.
+  // in the prefs, never back into that file. `detectDuplicates` is read-only
+  // too, and has no merge beside it any more: the Duplicates view only reports.
   const projects = {
     getDescription: vi.fn(async (_realPath: string) => ok<DerivedDescription | null>(null)),
+    detectDuplicates: vi.fn(async () => ok<DuplicateGroup[]>([])),
     planPurge: vi.fn(async (_hash: string) => ok(emptyPurgePlan())),
     purge: vi.fn(async (_hash: string) => ok(purgeResult())),
   };

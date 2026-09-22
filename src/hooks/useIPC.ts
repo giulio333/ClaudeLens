@@ -176,56 +176,12 @@ export interface DuplicateGroup {
   folders: DuplicateFolder[];
 }
 
-export interface SessionMove {
-  filename: string;
-  collides: boolean;
-  targetName: string;
-}
-
-export type MemoryActionKind = 'copy' | 'identical' | 'conflict-rename';
-
-export interface MemoryAction {
-  filename: string;
-  kind: MemoryActionKind;
-  targetName?: string;
-}
-
-export interface MergeResult {
-  movedSessions: number;
-  renamedSessions: number;
-  movedSidecars: number;
-  cwdRewrittenFiles: number;
-  memoryCopied: number;
-  memoryRenamed: number;
-  memorySkipped: number;
-  sourceDeleted: boolean;
-  backupPath: string;
-  warnings: string[];
-}
-
 /** A project description read out of the project's CLAUDE.md (never written back). */
 export interface DerivedDescription {
   text: string;
   source: 'lead' | 'section' | 'prose' | 'title';
   heading?: string;
   filePath: string;
-}
-
-export interface MergePlan {
-  source: { hash: string; realPath: string; authoritative: boolean };
-  dest: { hash: string; realPath: string; authoritative: boolean };
-  /** Sottocartella in cui i due progetti tengono i transcript: '' = radice,
-   *  'sessions' = layout annidato. Il merge legge da `from` e scrive in `to`,
-   *  cioè nel layout che la dest usa già. */
-  layout: { from: string; to: string };
-  cwdRewrite: { from: string; to: string } | null;
-  sessions: SessionMove[];
-  sidecars: { name: string; collides: boolean }[];
-  memory: MemoryAction[];
-  regenerateIndex: boolean;
-  sourceEmptyAfter: boolean;
-  blockers: string[];
-  warnings: string[];
 }
 
 declare global {
@@ -260,8 +216,6 @@ declare global {
         planPurge: (hash: string) => Promise<IpcResult<PurgePlan>>;
         purge: (hash: string) => Promise<IpcResult<PurgeResult>>;
         detectDuplicates: () => Promise<IpcResult<DuplicateGroup[]>>;
-        planMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergePlan>>;
-        executeMerge: (sourceHash: string, destHash: string) => Promise<IpcResult<MergeResult>>;
       };
       cost: {
         getSummary: () => Promise<IpcResult<ProjectCost[]>>;
@@ -576,25 +530,6 @@ export function useDuplicateProjects() {
   return useQuery({
     queryKey: ['projects:duplicates'],
     queryFn: () => unwrap(window.electronAPI.projects.detectDuplicates()),
-  });
-}
-
-/** Calcola il piano di merge (read-only) per una coppia source → dest. */
-export function planMerge(sourceHash: string, destHash: string): Promise<MergePlan> {
-  return unwrap(window.electronAPI.projects.planMerge(sourceHash, destHash));
-}
-
-/** Mutation: esegue il merge e invalida le query sui duplicati/progetti. */
-export function useExecuteMerge() {
-  const qc = useQueryClient();
-  return useMutation({
-    mutationFn: ({ sourceHash, destHash }: { sourceHash: string; destHash: string }) =>
-      unwrap(window.electronAPI.projects.executeMerge(sourceHash, destHash)),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['projects:duplicates'] });
-      qc.invalidateQueries({ queryKey: ['memory:projects'] });
-      qc.invalidateQueries({ queryKey: ['cost:summary'] });
-    },
   });
 }
 

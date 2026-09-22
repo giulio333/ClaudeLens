@@ -152,7 +152,7 @@ ClaudeLens checks the [Releases](https://github.com/giulio333/ClaudeLens/release
 ### Monitor
 
 - **Live Monitor** _(experimental)_ — real-time view of active Claude processes: status (idle / thinking / busy), a sliding activity chart, tool-frequency breakdown, and elapsed timer.
-- **Duplicate projects** — detect project folders that point to the same directory and merge their history and memory.
+- **Duplicate projects** — list the project folders that look like the same project opened from different paths, so you can consolidate them yourself. Read-only: ClaudeLens never moves or merges them.
 
 Everything updates live: any change under `~/.claude/` while you work in the terminal is reflected immediately, and vice versa.
 

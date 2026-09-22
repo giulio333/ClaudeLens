@@ -913,7 +913,7 @@ Subtab "Teams": mostra i **team di agenti** di Claude Code 2.x (teammate in-proc
 - **`ProjectDescription.tsx`** — La riga di prosa sotto il nome nell'hero: che cos'è questo progetto. Default **derivato dal CLAUDE.md** del progetto (`useProjectDescription` → IPC `projects:getDescription`, ladder empirica in `electron/modules/project-description.ts`), sovrascrivibile in place. **L'edit non tocca il CLAUDE.md**: la formulazione dell'utente vive nelle prefs di ClaudeLens (`useProjectDescriptions` → `cl-project-descriptions`, chiave = hash progetto) e svuotare il campo **cancella l'override** invece di salvare una descrizione vuota, così il file torna a fare da sorgente. **La frase stessa è il controllo**: si clicca il testo per modificarlo — niente bottone Edit né tag `from CLAUDE.md` di fianco, che spendevano spazio dell'hero per dire quello che dicono già il click e il tooltip (che nomina il file sorgente, o dichiara l'override). L'hover è l'unica affordance, una tinta e non un box. Senza né override né derivato resta un invito `+ Add a description`. Non montata nell'hero compatto dei Teams. Coperta da `test/project-description-view.test.tsx`
 - **`ProjectOverviewContent.tsx`** — Vista di un progetto: hero + **fascia metriche** + sezioni (memoria, sessioni, CLAUDE.md, analytics, mcp). Vedi sotto
 - **`ProjectRail.tsx`** — **Rail verticale** di navigazione del progetto (design 5a) — ha sostituito `ProjectSubtabs`. Vedi sotto
-- **`DuplicateProjectsNotice.tsx`** → `DuplicateProjectsBadge`, `DuplicateProjectsView` — Badge compatto nella home globale + vista dedicata dei progetti duplicati (cwd rewrite + merge). Vedi sotto
+- **`DuplicateProjectsNotice.tsx`** → `DuplicateProjectsBadge`, `DuplicateProjectsView` — Badge compatto nella home globale + vista dedicata dei progetti duplicati, **in sola lettura** (il merge è stato rimosso). Vedi sotto
 
 **Home globale — un benvenuto, non una dashboard. Design handoff _ClaudeLens
 Home v6_, opzione 6b.** `GlobalHomeView` ha sostituito interamente il layout a
@@ -1240,9 +1240,8 @@ Overview Redesign_, turni 1a → 2a → 3b) per il trattamento dell'hero progett
   colore). Il bordo inferiore in ink resta: il wash finisce in carta e senza
   quel filetto la pagina non avrebbe più alcun confine lì.
 
-`.cl-hband`/`.cl-hcell` sono **condivise** con `SearchView` e
-`DuplicateProjectsNotice`, che continuano a disegnare le celle divise da
-hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
+`.cl-hband`/`.cl-hcell` sono **condivise** con `SearchView`, che continua a
+disegnare le celle divise da hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
 resta a `clamp(40px, 4.2vw, 64px)` perché una cifra da 30px sotto un titolo da
 132px non è una gerarchia.
 Le sessioni — nella **vista Sessions** e, dalla stessa riga, nella landing
@@ -1471,42 +1470,59 @@ sRGB** su carta calda, l'unica cosa di quelle righe che veniva da un'altra
 palette. Lo stesso rail serve la toolbar della memoria, che già annullava a
 mano la banda.
 
-**Vista Duplicates — hero + confronto affiancato** (`DuplicateProjectsView`,
-direzione scelta tra 3 paradigmi con preview). Prima era un `BackButton` nudo
-sopra una colonna da 860px: il bottone finiva **sotto i semafori macOS** (la
-`TopBar` condivisa esiste proprio per il suo gutter da 88px) e i dati stavano in
-un terzo di finestra con il box di spiegazione come elemento più pesante della
-pagina, pur essendo da leggere una volta sola. Ora la vista prende la chrome
-delle altre deep view (`TopBar` + `cl-hero` + `Lens` + `cl-section`, come
-`PluginsView`) e la spiegazione scende in un `<details className="set-disc">`
-chiuso — il testo resta, smette di dominare.
-La **fascia metriche** (`.cl-hband`, nella sua forma condivisa a celle divise
-da hairline — l'hero progetto la sovrascrive, vedi 3b) dichiara la
-scala del problema, che prima nessuno diceva: Projects, Folders
-(`N primary · N duplicate`), **Sessions to move** e **Memory to merge** —
-i due totali sommano solo le cartelle **non** primarie, cioè esattamente ciò che
-un riordino sposterebbe.
-Ogni gruppo è un **diff a due colonne** (`.cl-dup-compare`, grid
-`1fr 46px 1fr`): primary a sinistra, i duplicati impilati a destra
-(`.cl-dup-stack` — un gruppo può averne più di uno), e nel gutter la **direzione
-del merge**, che punta **a sinistra** (`←`) perché il duplicato confluisce nel
-primary; per la stessa ragione il bottone ha perso la sua freccia `→`, che
-raccontava il contrario. Sotto i 900px il confronto impila e la freccia ruota di
-90° (punta in su, verso il primary): affiancate, due colonne da mezza finestra
-stretta non si confrontano più.
-I due pannelli portano **le stesse tre cifre negli stessi slot**
-(`.cl-dup-tape`: Sessions / Memory / Last) perché il confronto _è_ la decisione;
-il path **va a capo invece di troncare** (è l'oggetto della scelta) e il suo
-**prefisso condiviso è smorzato** (`sharedPathPrefix` in
-`shared/projectName.ts`, unit-tested in `test/project-formatters.test.ts`): le
-cartelle di un gruppo condividono il basename — è ciò che le rende candidate —
-quindi ciò che le distingue sta nel mezzo del path, e smorzare la testa comune
-porta l'occhio lì. Un prefisso di sola `/` non viene smorzato (un carattere non
-è rumore). Il primary si segnala col wash sage (`color-mix` su `--cl-ok`, niente
-tinta nuova) e la parola `kept`: `--cl-ok-soft`, che la vecchia riga usava, **non
-esiste** — il fallback `transparent` era sempre quello preso.
+**Vista Duplicates — la chrome delle pagine catalogo, una lista minimale**
+(`DuplicateProjectsView`). La vista è passata per due forme che non
+somigliavano al resto dell'app: prima un `BackButton` nudo sopra una colonna da
+860px (finiva **sotto i semafori macOS** — la `TopBar` esiste per il suo gutter
+da 88px), poi un hero con la **fascia metriche** a quattro celle, la
+spiegazione chiusa in un `<details className="set-disc">` (un idioma di
+Settings) e ogni gruppo come **diff a due colonne di pannelli boxati** su
+`--cl-paper-2`, con un gutter `←` per la direzione del merge. Erano le sole card
+in una pagina che è una lista, e senza merge il gutter non diceva più niente.
+Ora segue le pagine catalogo (`GlobalMcpView`, `GlobalSkillsView`):
+**`TopBar`** con crumb `Global · Duplicates` e back di default; **hero** con
+eyebrow, `Duplicates.`, una riga di prosa (`.cl-dup-lede`: il tipo di
+`.cl-h-desc` senza il suo click-to-edit — che cosa sono, come si sceglie il
+primary, che l'app non tocca nulla) e la **`cl-h-meta`** al posto della fascia:
+quattro cifre display che leggono "1" pesavano più del contenuto. I totali di
+sessioni e memoria sommano solo le cartelle **non** primarie, cioè la storia che
+il primary non mostra. Poi la lista, **minimale per scelta** dell'utente, arrivata alla terza forma.
+Una versione a righe della lista Sessions (filetto in ink, ordinale, tag di
+ruolo a pallino, cifre in colonne fisse, una `cl-section` per progetto) e una a
+nome-più-percorsi completi sono state scartate: con path lunghi e annidati —
+il caso comune, perché i duplicati nascono proprio da cartelle profonde — la
+seconda era per lo più **lo stesso prefisso smorzato ripetuto su ogni riga**, e
+le cifre andavano a capo. Ora c'è **una sola `cl-section`**; ogni progetto è il suo nome
+(`.cl-dup-name`, 15px) con accanto, **una volta sola**, la testa di path che le
+sue cartelle condividono (`.cl-dup-prefix`, mono smorzato, `~` al posto della
+home via `homeRelativePath`), e sotto, rientrate, le cartelle ridotte **alla
+sola parte che cambia** (`.cl-dup-folder`): quella in mono, una parola solo dove
+serve — `primary` in `--cl-ok` sulla prima, `estimated` sul path ricostruito —
+e a destra le sessioni, più la memoria solo se ce n'è (`0 memory` era rumore).
+Path completo e ultima attività stanno nel tooltip. Il gruppo è largo al più
+760px, perché con code corte le cifre a tutta misura finivano lontane dalla
+loro riga. Niente bordi, niente fondi, niente chip. Le righe vanno a capo
+(`flex-wrap`), così in una finestra stretta le cifre scendono sotto il path.
+Stati: `Loading…` mentre la scansione gira (prima diceva "No duplicates
+detected." anche durante il caricamento), l'errore della scansione detto come
+tale, e il vuoto.
+La coda **va a capo invece di troncare** (è ciò che distingue le cartelle). La
+testa condivisa viene da `sharedPathPrefix` in `shared/projectName.ts`
+(unit-tested in `test/project-formatters.test.ts`): le cartelle di un gruppo
+condividono il basename — è ciò che le rende candidate — quindi ciò che le
+distingue sta nel mezzo del path. Un prefisso di sola `/` non conta (il helper
+restituisce `''`), e allora ogni riga porta il suo path intero, sempre con `~`.
+Un path ricostruito dal nome cartella (nessun transcript ne registra il `cwd`)
+porta il flag `estimated`.
+**La vista è in sola lettura, per scelta.** Aveva un bottone "Merge into
+primary" (dialog col piano, poi spostamento dei transcript, rewrite del `cwd`,
+fusione di `memory/`, cancellazione della source): rimosso, perché il match è
+un'ipotesi e un merge sbagliato fonde storia reale di progetti diversi — vedi
+`electron/modules/CLAUDE.md`. Non va reintrodotto: la vista segnala, il riordino
+lo fa l'utente a mano.
 La scelta del primary resta del reader (attività più recente, poi più sessioni —
-`sortPrimaryFirst` in `duplicate-detector.ts`): la vista non offre di scambiarlo.
+`sortPrimaryFirst` in `duplicate-detector.ts`): è solo la cartella più viva, non
+una destinazione.
 
 ---
 

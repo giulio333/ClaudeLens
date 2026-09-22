@@ -498,8 +498,9 @@ export async function sessionTranscriptStamp(
 }
 
 /** Cache key. Scoped by project dir as well as id so an entry can never be
- *  reused across projects — a duplicate-merge moves transcripts between project
- *  dirs and preserves their mtime, which would otherwise look unchanged. */
+ *  reused across projects — a transcript moved between project dirs (by hand,
+ *  or by the duplicate merge ClaudeLens used to offer) keeps its mtime, which
+ *  would otherwise look unchanged. */
 export function sessionCacheKey(sessionId: string, source: SessionSource): string {
   return `${source.projectDir ?? ''}\u0000${sessionId}`;
 }

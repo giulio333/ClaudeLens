@@ -1,84 +1,85 @@
-import { useState } from 'react';
 import {
   useDuplicateProjects,
-  useExecuteMerge,
-  planMerge,
   type DuplicateFolder,
-  type MergePlan,
-  type MergeResult,
+  type DuplicateGroup,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
 import { TopBar } from '../shared/TopBar';
 import { Lens } from './Lens';
-import { MergeConfirmDialog } from '../shared/MergeConfirmDialog';
-import { projectDisplayName, sharedPathPrefix } from '../shared/projectName';
+import { homeRelativePath, sharedPathPrefix } from '../shared/projectName';
 
-function shortWhen(iso: string | null): string {
-  if (!iso) return 'no sessions';
+function lastActive(iso: string | null): string {
+  if (!iso) return '—';
   const d = new Date(iso);
   if (isNaN(d.getTime())) return '—';
-  return d.toLocaleString('en-US', { day: '2-digit', month: 'short', year: '2-digit' });
+  // with the year: a duplicate folder's last activity is often months old
+  return d.toLocaleDateString('en-US', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
 /**
- * One candidate folder, as a panel of the group's comparison. Both sides carry
- * the same three figures in the same slots so sessions/memory/last activity can
- * be compared by eye — that comparison *is* the decision on this page.
+ * One folder of a group: only the part of its path the group does not share —
+ * the shared head is printed once, beside the project name — then the
+ * sessions it holds, and its memory when it has any. The full path and the
+ * last activity are the tooltip.
  */
-function FolderPanel({
+function FolderLine({
   folder,
   primary,
   sharedPrefix,
-  onMerge,
 }: {
   folder: DuplicateFolder;
   primary: boolean;
   sharedPrefix: string;
-  onMerge?: () => void;
 }) {
-  const tail = folder.realPath.startsWith(sharedPrefix)
-    ? folder.realPath.slice(sharedPrefix.length)
-    : folder.realPath;
+  const tail =
+    sharedPrefix && folder.realPath.startsWith(sharedPrefix)
+      ? folder.realPath.slice(sharedPrefix.length)
+      : homeRelativePath(folder.realPath);
+  const sessions = `${folder.sessionCount} ${folder.sessionCount === 1 ? 'session' : 'sessions'}`;
 
   return (
-    <div className={`cl-dup-panel${primary ? ' is-primary' : ''}`}>
-      <div className="cl-dup-role">
-        <span className="tag">{primary ? '● primary' : '○ duplicate'}</span>
-        <span className="fate">{primary ? 'kept' : 'can be merged'}</span>
-      </div>
-
-      <div className="cl-dup-path" title={folder.realPath}>
-        {sharedPrefix && <span className="dir">{sharedPrefix}</span>}
+    <li className="cl-dup-folder">
+      <span
+        className="path"
+        title={`${folder.realPath}\nlast activity: ${lastActive(folder.lastActivity)}`}
+      >
         {tail}
-      </div>
-
-      {!folder.realPathAuthoritative && <div className="cl-dup-est">· estimated path</div>}
-
-      <div className="cl-dup-tape">
-        <div className="cell">
-          <div className="k">Sessions</div>
-          <div className="v">{folder.sessionCount}</div>
-        </div>
-        <div className="cell">
-          <div className="k">Memory</div>
-          <div className="v">
-            {folder.memoryTopicCount}
-            {folder.hasMemoryIndex && <small>+index</small>}
-          </div>
-        </div>
-        <div className="cell">
-          <div className="k">Last</div>
-          <div className="v date">{shortWhen(folder.lastActivity)}</div>
-        </div>
-      </div>
-
-      {onMerge && (
-        <div className="cl-dup-act">
-          <button type="button" onClick={onMerge}>
-            Merge into primary
-          </button>
-        </div>
+      </span>
+      {primary && <span className="note is-primary">primary</span>}
+      {!folder.realPathAuthoritative && (
+        <span
+          className="note"
+          title="No transcript in this folder records its working directory: the path is rebuilt from the folder name"
+        >
+          estimated
+        </span>
       )}
+      <span className="figs">
+        {sessions}
+        {folder.memoryTopicCount > 0 && ` · ${folder.memoryTopicCount} memory`}
+      </span>
+    </li>
+  );
+}
+
+function DuplicateGroupList({ group }: { group: DuplicateGroup }) {
+  const sharedPrefix = sharedPathPrefix(group.folders.map(f => f.realPath));
+  return (
+    <div className="cl-dup-group">
+      <div className="cl-dup-head">
+        <h2 className="cl-dup-name">{group.name}</h2>
+        {sharedPrefix && <span className="cl-dup-prefix">{homeRelativePath(sharedPrefix)}</span>}
+      </div>
+      <ul className="cl-dup-folders">
+        {group.folders.map((folder, i) => (
+          <FolderLine
+            key={folder.hash}
+            folder={folder}
+            primary={i === 0}
+            sharedPrefix={sharedPrefix}
+          />
+        ))}
+      </ul>
     </div>
   );
 }
@@ -105,64 +106,27 @@ export function DuplicateProjectsBadge({ onNavigate }: { onNavigate: (v: View) =
   );
 }
 
-/** Dedicated view: short explanation + the intercepted duplicates. */
+/**
+ * Dedicated view: the intercepted duplicates, one section per project, in the
+ * catalogue pages' chrome (TopBar, hero with a meta line), then each project
+ * as its name and the path head its folders share, over the part of each
+ * folder's path that differs — no table, no tags. Read-only on purpose — it used to merge a duplicate into the
+ * primary, and that moved and rewrote transcripts inside `~/.claude/projects`
+ * on a match that is only a guess (same basename). Consolidating stays a
+ * manual job.
+ */
 export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
-  const { data: groups = [] } = useDuplicateProjects();
-  const executeMerge = useExecuteMerge();
-  const [dialog, setDialog] = useState<{
-    plan: MergePlan;
-    source: DuplicateFolder;
-    dest: DuplicateFolder;
-    sourceName: string;
-    destName: string;
-  } | null>(null);
-  const [planError, setPlanError] = useState<string | null>(null);
-  const [result, setResult] = useState<MergeResult | null>(null);
-
-  function name(realPath: string): string {
-    return projectDisplayName(realPath);
-  }
-
-  async function openMerge(source: DuplicateFolder, dest: DuplicateFolder) {
-    setPlanError(null);
-    try {
-      const plan = await planMerge(source.hash, dest.hash);
-      setDialog({
-        plan,
-        source,
-        dest,
-        sourceName: name(source.realPath),
-        destName: name(dest.realPath),
-      });
-    } catch (e) {
-      setPlanError(e instanceof Error ? e.message : String(e));
-    }
-  }
-
-  async function confirmMerge() {
-    if (!dialog) return;
-    try {
-      const res = await executeMerge.mutateAsync({
-        sourceHash: dialog.source.hash,
-        destHash: dialog.dest.hash,
-      });
-      setDialog(null);
-      setResult(res);
-    } catch (e) {
-      setPlanError(e instanceof Error ? e.message : String(e));
-      setDialog(null);
-    }
-  }
+  const { data: groups = [], isLoading, error } = useDuplicateProjects();
 
   const folderCount = groups.reduce((s, g) => s + g.folders.length, 0);
-  // what a full clean-up would move: everything held by the non-primary folders
+  // what the non-primary folders hold, i.e. the history the primary does not show
   const dupFolders = groups.flatMap(g => g.folders.slice(1));
-  const sessionsToMove = dupFolders.reduce((s, f) => s + f.sessionCount, 0);
-  const memoryToMove = dupFolders.reduce((s, f) => s + f.memoryTopicCount, 0);
+  const sessionsHeld = dupFolders.reduce((s, f) => s + f.sessionCount, 0);
+  const memoryHeld = dupFolders.reduce((s, f) => s + f.memoryTopicCount, 0);
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
-      <TopBar onBack={onBack} backLabel="Global" crumbs={[{ label: 'Duplicates', accent: true }]} />
+      <TopBar onBack={onBack} crumbs={[{ label: 'Global · Duplicates' }]} />
 
       <div className="flex-1 overflow-y-auto">
         <section className="cl-hero">
@@ -175,155 +139,51 @@ export function DuplicateProjectsView({ onBack }: { onBack: () => void }) {
             <span className="label-name">Duplicates</span>
             <span className="glyph">.</span>
           </h1>
-
-          <div className="cl-hband">
-            <div className="cl-hcell">
-              <div className="lbl">Projects</div>
-              <div className="num">{groups.length}</div>
-              <div className="sub">in multiple paths</div>
-            </div>
-            <div className="cl-hcell">
-              <div className="lbl">Folders</div>
-              <div className="num">{folderCount}</div>
-              <div className="sub">
-                {groups.length} primary · {dupFolders.length} duplicate
-              </div>
-            </div>
-            <div className="cl-hcell">
-              <div className="lbl">Sessions to move</div>
-              <div className="num">{sessionsToMove}</div>
-              <div className="sub">held by duplicate folders</div>
-            </div>
-            <div className="cl-hcell">
-              <div className="lbl">Memory to merge</div>
-              <div className="num">{memoryToMove}</div>
-              <div className="sub">topics in duplicate folders</div>
-            </div>
-          </div>
-
-          <details className="set-disc">
-            <summary>Why does this happen?</summary>
-            <div
-              style={{
-                fontSize: 13,
-                lineHeight: 1.55,
-                color: 'var(--cl-ink-2)',
-                marginTop: 10,
-                maxWidth: 760,
-              }}
-            >
-              Claude Code identifies projects by <b>absolute path</b>: the same project opened from
-              different folders (e.g. moved from Desktop to Projects) produces separate histories.
-              The old folder often keeps only its{' '}
-              <code style={{ fontFamily: 'var(--font-mono)' }}>memory/</code>, because sessions get
-              removed by Claude Code's retention. ClaudeLens <b>flags them</b> — nothing is moved
-              until you choose to merge a folder into the primary one.
-            </div>
-          </details>
-        </section>
-
-        <section className="cl-section">
-          {planError && (
-            <div
-              style={{
-                fontSize: 12,
-                color: 'var(--cl-danger)',
-                margin: '0 0 18px',
-                padding: '8px 12px',
-                borderRadius: 8,
-                border: '1px solid var(--cl-danger)',
-                background: 'var(--cl-danger-soft)',
-                maxWidth: 720,
-              }}
-            >
-              Failed to compute merge plan: {planError}
+          <p className="cl-dup-lede">
+            Claude Code files a project&rsquo;s history under its absolute path, so the same project
+            opened from two folders ends up with two histories. The primary is the folder with the
+            most recent activity. ClaudeLens only points them out: it never moves, merges or deletes
+            a folder.
+          </p>
+          {!isLoading && groups.length > 0 && (
+            <div className="cl-h-meta">
+              <span>
+                <b>{groups.length}</b> {groups.length === 1 ? 'project' : 'projects'} in{' '}
+                <b>{folderCount}</b> folders
+              </span>
+              <span className="sep">·</span>
+              <span>
+                <b>{sessionsHeld}</b> {sessionsHeld === 1 ? 'session' : 'sessions'} ·{' '}
+                <b>{memoryHeld}</b> memory {memoryHeld === 1 ? 'topic' : 'topics'} outside the
+                primary
+              </span>
             </div>
           )}
+        </section>
 
-          {groups.length === 0 ? (
+        {isLoading ? (
+          <section className="cl-section">
+            <p style={{ color: 'var(--cl-ink-3)', fontSize: 13 }}>Loading…</p>
+          </section>
+        ) : error ? (
+          <section className="cl-section">
+            <div className="cl-empty">
+              Could not scan ~/.claude/projects:{' '}
+              {error instanceof Error ? error.message : String(error)}
+            </div>
+          </section>
+        ) : groups.length === 0 ? (
+          <section className="cl-section">
             <div className="cl-empty">No duplicates detected.</div>
-          ) : (
-            groups.map(group => {
-              const [primary, ...dups] = group.folders;
-              const sharedPrefix = sharedPathPrefix(group.folders.map(f => f.realPath));
-              return (
-                <div key={group.key} className="cl-dup-group">
-                  <div className="cl-dup-head">
-                    <span className="nm">{group.name}</span>
-                    <span className="ct">{group.folders.length} folders</span>
-                  </div>
-                  <div className="cl-dup-compare">
-                    <FolderPanel folder={primary} primary sharedPrefix={sharedPrefix} />
-                    <div className="cl-dup-gutter" aria-hidden="true">
-                      <span className="arrow">←</span>
-                    </div>
-                    <div className="cl-dup-stack">
-                      {dups.map(folder => (
-                        <FolderPanel
-                          key={folder.hash}
-                          folder={folder}
-                          primary={false}
-                          sharedPrefix={sharedPrefix}
-                          onMerge={() => openMerge(folder, primary)}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </div>
-              );
-            })
-          )}
-        </section>
+          </section>
+        ) : (
+          <section className="cl-section">
+            {groups.map(group => (
+              <DuplicateGroupList key={group.key} group={group} />
+            ))}
+          </section>
+        )}
       </div>
-
-      {dialog && (
-        <MergeConfirmDialog
-          plan={dialog.plan}
-          sourceName={dialog.sourceName}
-          destName={dialog.destName}
-          isLoading={executeMerge.isPending}
-          canExecute={true}
-          onConfirm={confirmMerge}
-          onCancel={() => setDialog(null)}
-        />
-      )}
-
-      {result && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-[var(--cl-paper-2)] rounded-lg shadow-lg p-6 max-w-md w-full mx-4">
-            <h3 className="text-[15px] font-semibold text-[var(--cl-ink)] mb-3">Merge complete</h3>
-            <ul className="text-[13px] text-[var(--cl-ink-3)] space-y-1 mb-4">
-              <li>
-                {result.movedSessions} sessions moved
-                {result.renamedSessions > 0 ? ` (${result.renamedSessions} renamed)` : ''}
-              </li>
-              <li>{result.movedSidecars} session data folders moved</li>
-              <li>{result.cwdRewrittenFiles} sessions had their cwd rewritten</li>
-              <li>
-                {result.memoryCopied} memory copied · {result.memoryRenamed} renamed ·{' '}
-                {result.memorySkipped} identical
-              </li>
-              <li>{result.sourceDeleted ? 'Source folder deleted' : 'Source folder kept'}</li>
-            </ul>
-            <div className="bg-[var(--cl-paper-3)] border border-[var(--cl-line)] rounded-lg p-3 mb-4 font-mono text-[11px] text-[var(--cl-ink-3)] break-all">
-              backup: {result.backupPath}
-            </div>
-            {result.warnings.length > 0 && (
-              <ul className="text-[12px] text-[var(--cl-warn)] list-disc pl-4 space-y-1 mb-4">
-                {result.warnings.map((w, i) => (
-                  <li key={i}>{w}</li>
-                ))}
-              </ul>
-            )}
-            <button
-              onClick={() => setResult(null)}
-              className="w-full px-4 py-2 rounded-lg bg-[var(--cl-accent)] text-[var(--cl-on-accent)] text-[13px] font-medium"
-            >
-              Done
-            </button>
-          </div>
-        </div>
-      )}
     </div>
   );
 }

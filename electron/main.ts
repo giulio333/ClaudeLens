@@ -125,8 +125,6 @@ import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { syncSessionTails, onTranscriptChanged, getSessionActivity } from './modules/session-tails';
 import { detectDuplicateProjects } from './modules/duplicate-detector';
-import { computeMergePlan } from './modules/duplicate-merger';
-import { executeMerge } from './modules/duplicate-merge-executor';
 import { planProjectPurge, runProjectPurge } from './modules/project-purger';
 import {
   resolveRealPath,
@@ -1635,41 +1633,6 @@ ipcMain.handle('projects:detectDuplicates', async () => {
   }
 });
 
-ipcMain.handle('projects:planMerge', async (_event, sourceHash: string, destHash: string) => {
-  try {
-    assertValidHash(sourceHash);
-    assertValidHash(destHash);
-    return ok(computeMergePlan(PROJECTS_DIR, sourceHash, destHash));
-  } catch (e) {
-    return err(e);
-  }
-});
-
-ipcMain.handle('projects:executeMerge', async (_event, sourceHash: string, destHash: string) => {
-  try {
-    assertValidHash(sourceHash);
-    assertValidHash(destHash);
-  } catch (e) {
-    return err(e);
-  }
-  pauseWatcher();
-  try {
-    const result = executeMerge(PROJECTS_DIR, sourceHash, destHash);
-    return ok(result);
-  } catch (e) {
-    return err(e);
-  } finally {
-    // Il contenuto delle due cartelle è cambiato (o è stato ripristinato dal rollback):
-    // invalida la cache del cwd e notifica un solo refresh.
-    invalidateCwdCache(sourceHash);
-    invalidateCwdCache(destHash);
-    resumeWatcher();
-    // Un merge sposta sessioni e fonde memory tra due progetti: nessuno scope
-    // ristretto lo descrive: `null` = invalida tutto.
-    safeSend('data:changed', null);
-  }
-});
-
 ipcMain.handle('mcp:getGlobal', async () => {
   try {
     return ok(await getGlobalMcp());
@@ -2301,15 +2264,6 @@ function openInTerminal(cwd: string, command: string): void {
   tryNext(0);
 }
 
-// File watcher — pausa rientrante (gestisce eventuali merge concorrenti).
-let watcherPauseDepth = 0;
-function pauseWatcher() {
-  watcherPauseDepth += 1;
-}
-function resumeWatcher() {
-  if (watcherPauseDepth > 0) watcherPauseDepth -= 1;
-}
-
 async function startWatcher() {
   // Osserva le sessioni dei progetti, i task creati durante le sessioni
   // (~/.claude/tasks/{sessionUUID}/*.json) e i piani (~/.claude/plans/*.md):
@@ -2348,7 +2302,6 @@ async function startWatcher() {
   // toccato (data-change-scope.ts). `null`/assente = "non lo so" → il renderer
   // invalida tutto, che è il comportamento storico e resta il fallback sicuro.
   const notify = (scopes: DataScope[] | null = null) => {
-    if (watcherPauseDepth > 0) return;
     safeSend('data:changed', scopes);
   };
 

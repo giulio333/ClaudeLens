@@ -2308,43 +2308,6 @@ const MOCK_DUPLICATES = [
   },
 ];
 
-const MOCK_MERGE_PLAN = {
-  source: { hash: DUP_SOURCE_HASH, realPath: '/Users/alice/Projects/webapp', authoritative: false },
-  dest: { hash: DUP_DEST_HASH, realPath: '/Users/alice/projects/webapp', authoritative: true },
-  cwdRewrite: { from: '/Users/alice/Projects/webapp', to: '/Users/alice/projects/webapp' },
-  sessions: [
-    {
-      filename: '20260615T101500_000300.jsonl',
-      collides: false,
-      targetName: '20260615T101500_000300.jsonl',
-    },
-    {
-      filename: '20260612T084500_000301.jsonl',
-      collides: false,
-      targetName: '20260612T084500_000301.jsonl',
-    },
-  ],
-  sidecars: [{ name: 'subagents', collides: false }],
-  memory: [{ filename: 'feedback_naming.md', kind: 'copy' as const }],
-  regenerateIndex: true,
-  sourceEmptyAfter: true,
-  blockers: [],
-  warnings: [],
-};
-
-const MOCK_MERGE_RESULT = {
-  movedSessions: 5,
-  renamedSessions: 0,
-  movedSidecars: 1,
-  cwdRewrittenFiles: 5,
-  memoryCopied: 1,
-  memoryRenamed: 0,
-  memorySkipped: 0,
-  sourceDeleted: true,
-  backupPath: '/Users/alice/.claude/.claudelens-backups/webapp-merge.zip',
-  warnings: [],
-};
-
 // ─── Artifacts di una sessione (dialog di cancellazione) ───────────────────────
 
 function getSessionArtifacts(filename: string) {
@@ -2715,8 +2678,6 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
     'config:getEffective',
     'cost:getPricingMeta',
     'projects:detectDuplicates',
-    'projects:planMerge',
-    'projects:executeMerge',
     'telemetry:isEnabled',
     'telemetry:setEnabled',
     'telemetry:track',
@@ -2996,10 +2957,8 @@ export function registerScreenshotHandlers(ipcMain: IpcMain) {
   // Pricing metadata (Analytics)
   ipcMain.handle('cost:getPricingMeta', () => ok(MOCK_PRICING_META));
 
-  // Progetti duplicati + merge
+  // Progetti duplicati
   ipcMain.handle('projects:detectDuplicates', () => ok(MOCK_DUPLICATES));
-  ipcMain.handle('projects:planMerge', () => ok(MOCK_MERGE_PLAN));
-  ipcMain.handle('projects:executeMerge', () => ok(MOCK_MERGE_RESULT));
 
   // Telemetria: in screenshot mode sempre OFF, toggle no-op, track scartato
   ipcMain.handle('telemetry:isEnabled', () => ok(false));

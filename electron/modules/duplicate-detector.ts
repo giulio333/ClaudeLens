@@ -96,7 +96,7 @@ function sortPrimaryFirst(a: DuplicateFolder, b: DuplicateFolder): number {
  *
  * Operazione read-only: si limita a *segnalare* i candidati. L'identità non è certa
  * (basename uguali possono appartenere a progetti diversi, es. due repo "api"), quindi
- * la conferma e l'eventuale merge restano all'utente.
+ * la conferma e l'eventuale riordino restano all'utente, a mano: l'app non sposta nulla.
  */
 /** Chiave di confronto tollerante: minuscolo, senza separatori (`.`, `-`, spazi, `/`). */
 function normKey(s: string): string {
