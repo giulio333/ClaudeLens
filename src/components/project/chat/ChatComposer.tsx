@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { fmtModel } from '../utils';
+import { composerModelOptions } from './model-options';
 import { PermissionRequestDialog } from './PermissionRequestDialog';
 import { useEffectiveConfig } from '../../../hooks/useIPC';
 import type { PermissionRequest, PermissionDecision } from '../../../hooks/useIPC';
@@ -44,10 +44,6 @@ type PermissionMode = (typeof PERMISSION_OPTIONS)[number]['value'];
  *  further asking, so it's the only one gated. `acceptEdits` still routes shell
  *  through `canUseTool`, and `default`/`plan` ask for each action. */
 const CONFIRM_MODES: PermissionMode[] = ['bypassPermissions'];
-
-/** Model aliases the CLI resolves on `--model`. The empty value means "send no
- *  --model flag" → Claude Code falls back to its configured default. */
-const MODEL_ALIASES = ['sonnet', 'opus', 'haiku', 'fable'] as const;
 
 /** A small upward popover anchored to a chip in the composer meta-row. Renders a
  *  trigger showing the current selection; clicking opens a menu of options above
@@ -231,16 +227,9 @@ export function ChatComposer({
     slashMenuRef.current?.querySelector('.is-active')?.scrollIntoView({ block: 'nearest' });
   }, [activeSlash, showSlash]);
 
-  // Build the model options: the inherited concrete id (if any) on top, then the
-  // CLI aliases, then "Default" (no --model flag). De-duplicated by value.
-  const modelOptions: { value: string; label: string }[] = [
-    ...(model ? [{ value: model, label: fmtModel(model) }] : []),
-    ...MODEL_ALIASES.filter(a => a !== model).map(a => ({
-      value: a,
-      label: a[0].toUpperCase() + a.slice(1),
-    })),
-    { value: '', label: 'Default' },
-  ];
+  // The inherited concrete id (if any) on top, then the CLI aliases with the
+  // version each resolves to, then "Default" (no --model flag).
+  const modelOptions = composerModelOptions(model, config?.init, selectedModel);
 
   // Gate: a risky permission mode (auto-approves edits/bash) needs an explicit
   // confirmation before the first send, and again if the user switches to a

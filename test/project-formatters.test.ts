@@ -80,6 +80,10 @@ describe('fmtModel — model id to display name', () => {
     ['claude-haiku-4-5-20251001', 'Haiku 4.5'],
     ['claude-3-5-sonnet-20241022', 'Sonnet 3.5'],
     ['claude-3-5-haiku', 'Haiku 3.5'],
+    ['claude-opus-5-5', 'Opus 5.5'],
+    // a context marker is a setting, not part of the version
+    ['claude-opus-5-5[1m]', 'Opus 5.5'],
+    ['claude-opus-5[1m]', 'Opus 5'],
   ];
 
   it.each(cases)('renders %s as %s', (id, expected) => {

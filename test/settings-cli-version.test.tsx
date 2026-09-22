@@ -59,6 +59,7 @@ function config(): EffectiveConfig {
       skills: [],
       agents: [],
       plugins: [],
+      models: [],
     },
     initError: null,
     effective: {},

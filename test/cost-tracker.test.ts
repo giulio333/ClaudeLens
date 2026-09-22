@@ -23,9 +23,10 @@ const PRICE = {
   opusLegacy: { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
   haiku: { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
   fable: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
-  // Fable/Mythos 5.1: same tier, but the cache read is 0.025x the input price
-  // (the only models where it is not 0.1x).
+  // Fable/Mythos 5.1: same tier, but the cache read is 0.025x the input price.
   fable51: { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+  // Opus 5.5: cheaper than Opus 5 on every line, cache read at 0.05x.
+  opus55: { input: 4.0, output: 20.0, cacheWrite: 5.0, cacheRead: 0.2 },
   sonnet5: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
 };
 
@@ -1054,9 +1055,9 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(await millionInput('claude-mythos-5')).toBeCloseTo(10, 10);
   });
 
-  // Fable 5.1 and Mythos 5.1 are the only models whose cache read is 0.025x the
-  // input price instead of 0.1x. Priced as Fable 5 they were charged 4x for
-  // every cache read — most of the input bill of an agentic session.
+  // Fable 5.1 and Mythos 5.1 read cache at 0.025x the input price instead of
+  // 0.1x. Priced as Fable 5 they were charged 4x for every cache read — most of
+  // the input bill of an agentic session.
   it("prices the 5.1 cache read at 0.025x, not at Fable 5's 0.1x", () => {
     expect(calculateCacheSavings(1_000_000, 'claude-fable-5-1')).toBeCloseTo(
       PRICE.fable51.input - PRICE.fable51.cacheRead,
@@ -1067,8 +1068,22 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(calculateCacheSavings(1_000_000, 'claude-fable-5')).toBeCloseTo(9, 6);
   });
 
+  // Opus 5.5 took the `opus` fallback, i.e. Opus 5's rate: 1.25x on input and
+  // output, 2.5x on cache reads. All four lines are asserted, because a cache
+  // read priced wrong is invisible on an input-only fixture.
+  it('prices Opus 5.5 at its own rate on all four lines', async () => {
+    const tokens = { input: 1000, output: 2000, cacheWrite: 3000, cacheRead: 400_000 };
+    writeSession(tmp, 'opus55.jsonl', [assistantLine({ model: 'claude-opus-5-5', ...tokens })]);
+    const { cost } = await getProjectUsage(tmp);
+    expect(cost).toBeCloseTo(expectedCost(PRICE.opus55, tokens), 10);
+    expect(cost).not.toBeCloseTo(expectedCost(PRICE.opus, tokens), 4);
+    expect(calculateCacheSavings(1_000_000, 'claude-opus-5-5')).toBeCloseTo(3.8, 6);
+  });
+
   it('anchors the fuzzy family fallbacks on the current generation', async () => {
-    // An unlisted Opus must not inherit the retired model's rate.
+    // An unlisted Opus must not inherit the retired model's rate — and it stays
+    // on Opus 5, what Claude Code's `opus` alias resolves to and the dearer of
+    // the current pair, rather than on the cheaper Opus 5.5.
     expect(await millionInput('some-opus-vNext')).toBeCloseTo(PRICE.opus.input, 10);
     expect(await millionInput('claude-fable-vNext')).toBeCloseTo(PRICE.fable.input, 10);
   });
@@ -1103,6 +1118,7 @@ describe('pricing table — rates verified against the official pricing page', (
   it('reports scheduled models as exactly priced, not estimates', () => {
     expect(isModelPriced('claude-sonnet-5')).toBe(true);
     expect(isModelPriced('claude-opus-5')).toBe(true);
+    expect(isModelPriced('claude-opus-5-5')).toBe(true);
     expect(isModelPriced('claude-fable-5')).toBe(true);
     expect(isModelPriced('claude-fable-5-1')).toBe(true);
     expect(isModelPriced('claude-mythos-5-1')).toBe(true);

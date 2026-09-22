@@ -2231,6 +2231,11 @@ const MOCK_EFFECTIVE_CONFIG = {
       { name: 'git-flow', path: '/Users/alice/.claude/plugins/git-flow' },
       { name: 'test-runner', path: '/Users/alice/.claude/plugins/test-runner' },
     ],
+    models: [
+      { value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet' },
+      { value: 'opus', resolvedModel: 'claude-opus-5', displayName: 'Opus' },
+      { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' },
+    ],
   },
   initError: null,
   effective: {

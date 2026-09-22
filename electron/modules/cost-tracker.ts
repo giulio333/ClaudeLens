@@ -63,7 +63,7 @@ export const AGENT_COLORS = [
 export type AgentColor = (typeof AGENT_COLORS)[number];
 
 // ─── Pricing table (prezzi per milione di token) ──────────────────────────────
-// Source: the official pricing page, https://docs.claude.com/en/docs/about-claude/pricing
+// Source: the official pricing page, https://platform.claude.com/docs/en/about-claude/pricing
 // IMPORTANT: when updating the PRICING table below, bump PRICING_LAST_UPDATED so
 // the cost UI can show users how current these estimates are.
 //
@@ -71,7 +71,7 @@ export type AgentColor = (typeof AGENT_COLORS)[number];
 // rate (2x) is deliberately not modelled: a transcript records a single
 // `cache_creation_input_tokens` figure and does not say which TTL produced it,
 // so picking the shorter — and far more common — one is the honest default.
-export const PRICING_LAST_UPDATED = '2026-09-07';
+export const PRICING_LAST_UPDATED = '2026-09-22';
 
 interface ModelPricing {
   input: number;
@@ -108,12 +108,17 @@ const PRICING: Record<string, ModelPricing> = {
   'claude-opus-4-7': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
   'claude-opus-4-8': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
   'claude-opus-5': { input: 5.0, output: 25.0, cacheWrite: 6.25, cacheRead: 0.5 },
+  // Opus 5.5 — cheaper than Opus 5 on every line, and its cache read is 0.05x the
+  // input price ($0.20/MTok), not 0.1x. Priced by the `opus` fallback it was
+  // billed 1.25x on input/output and 2.5x on cache reads — the line that
+  // dominates an agentic session's input bill.
+  'claude-opus-5-5': { input: 4.0, output: 20.0, cacheWrite: 5.0, cacheRead: 0.2 },
   // Fable 5 / Mythos 5 — neither id contains a known family word, so both used to
   // land on the conservative Sonnet default at a third of their real price.
   'claude-fable-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
   'claude-mythos-5': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 1.0 },
-  // Fable 5.1 / Mythos 5.1 — same $10/$50 tier as 5, but the ONE model pair
-  // whose cache read is not 0.1x the input price: it is 0.025x ($0.25/MTok).
+  // Fable 5.1 / Mythos 5.1 — same $10/$50 tier as 5, but a cache read at 0.025x
+  // the input price ($0.25/MTok) instead of 0.1x.
   // Priced by the family fallback they would be charged 4x for every cache
   // read, which on an agentic session is most of the input bill.
   'claude-fable-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
@@ -172,6 +177,9 @@ function scheduledPricing(key: string, at: string | undefined): ModelPricing | u
  * Exact id → date-stripped id → fuzzy family match → conservative Sonnet default.
  * The fuzzy anchors point at the CURRENT generation of each family: anchoring
  * `opus` on a retired model is what made every unlisted Opus cost 3x too much.
+ * `opus` stays on Opus 5 although Opus 5.5 is newer: Opus 5 is what Claude
+ * Code's `opus` alias resolves to, and 5.5 is the cheaper of the two, so an
+ * unlisted Opus is priced upwards rather than below what it may cost.
  */
 function getPricing(model: string | undefined, at?: string): ModelPricing {
   if (!model) return PRICING['claude-sonnet-4-6'];

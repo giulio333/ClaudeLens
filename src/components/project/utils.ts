@@ -79,9 +79,11 @@ export function sessionTitle(s: SessionNamed, maxLen = 80): string {
 // `\d+[.-]\d+` match: that pattern needs two digit groups, so every
 // single-digit release lost its number — `claude-opus-5` printed as a bare
 // "Opus". An 8-digit release stamp is dropped so `claude-haiku-4-5-20251001`
-// stays "Haiku 4.5" rather than "Haiku 4.5.20251001".
+// stays "Haiku 4.5" rather than "Haiku 4.5.20251001". A context marker is
+// dropped too: `claude-opus-5-5[1m]` — how the SDK reports a 1M setting — ended
+// in the segment `5[1m]`, which is not a number, and printed as "Opus 5".
 export function fmtModel(m: string): string {
-  const s = m.replace(/^claude-/, '');
+  const s = m.replace(/^claude-/, '').replace(/\[[^\]]*\]$/, '');
   const ver = s
     .split('-')
     .filter(part => /^\d+$/.test(part) && part.length !== 8)

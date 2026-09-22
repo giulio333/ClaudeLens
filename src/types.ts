@@ -1009,6 +1009,14 @@ export interface InitInfo {
   skills: string[];
   agents: string[];
   plugins: { name: string; path: string }[];
+  /** The model choices the CLI offers, each with the id its alias resolves to. */
+  models: InitModel[];
+}
+
+export interface InitModel {
+  value: string;
+  resolvedModel?: string;
+  displayName: string;
 }
 
 /** One tier of the settings cascade, with its file path when filesystem-backed. */

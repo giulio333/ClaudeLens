@@ -32,6 +32,16 @@ export interface InitInfo {
   skills: string[];
   agents: string[];
   plugins: { name: string; path: string }[];
+  /** The model choices the CLI offers, each with the id its alias resolves to
+   *  (`opus` → `claude-opus-5`). From the handshake's `initialize` response —
+   *  the only place that says which version an alias means today. */
+  models: InitModel[];
+}
+
+export interface InitModel {
+  value: string;
+  resolvedModel?: string;
+  displayName: string;
 }
 
 /** One tier of the settings cascade, with its file path when filesystem-backed. */
@@ -60,6 +70,9 @@ const INIT_TIMEOUT_MS = 30_000;
 // the config views (and the chat composer) stuck loading. Cap it.
 const SETTINGS_TIMEOUT_MS = 10_000;
 const PROBE_TIMEOUT_MS = 5_000;
+// How long the model list may hold up the init answer after it arrived. It is
+// normally settled already; a list that is not is worth less than the rest.
+const MODELS_WAIT_MS = 500;
 
 // resolveSettings reads the project files with SYNC fs, so a stalled read (a
 // dataless iCloud file whose materialization hangs) blocks the whole main
@@ -105,7 +118,25 @@ function mapInit(m: Record<string, unknown>): InitInfo {
     skills: (m.skills as string[]) ?? [],
     agents: (m.agents as string[]) ?? [],
     plugins: (m.plugins as { name: string; path: string }[]) ?? [],
+    models: [],
   };
+}
+
+/** The `models` of the `initialize` response, field by field: the shape is the
+ *  SDK's, but a row missing its `value` could only render as a blank choice. */
+function mapModels(models: unknown): InitModel[] {
+  if (!Array.isArray(models)) return [];
+  return models.flatMap(row => {
+    const r = row as Record<string, unknown>;
+    if (typeof r?.value !== 'string' || !r.value) return [];
+    return [
+      {
+        value: r.value,
+        resolvedModel: typeof r.resolvedModel === 'string' ? r.resolvedModel : undefined,
+        displayName: typeof r.displayName === 'string' ? r.displayName : r.value,
+      },
+    ];
+  });
 }
 
 // Drive a one-turn query just far enough to read the init message, then abort.
@@ -128,11 +159,23 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
         ...(claudeExecutable && { pathToClaudeCodeExecutable: claudeExecutable }),
       },
     });
+    // Cached by the SDK from the first connect, so it is already settled when
+    // the init message arrives (observed on 0.3.235); asked for up front and
+    // read after the break, so the probe still stops at the same point. A
+    // rejection — the teardown below — only costs the model list.
+    const initialize = q.initializationResult().catch(() => null);
     for await (const msg of q) {
       if (msg.type === 'system' && msg.subtype === 'init') {
         result = mapInit(msg as unknown as Record<string, unknown>);
         break; // closing the iterator tears down the query before a turn runs
       }
+    }
+    if (result) {
+      const settled = await Promise.race([
+        initialize,
+        new Promise<null>(resolve => setTimeout(() => resolve(null), MODELS_WAIT_MS)),
+      ]);
+      result.models = mapModels(settled?.models);
     }
   } catch (e) {
     if (!result) throw e; // ignore teardown/abort errors once we have the init
