@@ -3639,6 +3639,13 @@ body {
   background: transparent;
 }
 
+/* Inline code in a thinking note sheds its chip the way the prose's does. */
+.cl-chat-reading .cl-thinking-note-body .prose-lens :where(code):not(pre code) {
+  padding: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
 /* ── thinking: no tinted slab, just a rule in the left margin ── */
 .cl-chat-reading .cl-thinking-body {
   padding: 10px 0 10px 14px;
@@ -7440,6 +7447,54 @@ button.cl-pill-model[data-on] {
   font-family: var(--font-mono);
   font-size: 12.5px;
   line-height: 1.65;
+}
+
+/* Thinking note — a short thinking block, drawn inline in both densities (the
+ * terminal prints it like a message). Same vocabulary as the disclosure above —
+ * the mono label with its rule, the left-margin hairline — so it reads as the
+ * same kind of thing, but in the reading face: it is prose, not a dump. */
+.cl-thinking-note {
+  width: 100%;
+  max-width: var(--cl-read-measure);
+  margin: 2px 0 6px;
+}
+.cl-thinking-note-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-thinking-note-tag::before {
+  content: '';
+  width: 12px;
+  height: 1px;
+  background: var(--cl-line);
+  display: inline-block;
+}
+.cl-thinking-note-body {
+  margin-top: 4px;
+  padding: 1px 0 1px 14px;
+  border-left: 1px solid var(--cl-line);
+  overflow-wrap: anywhere;
+  font-family: var(--font-reading);
+  font-size: 14px;
+}
+.cl-thinking-note-body > .prose-lens {
+  --tw-prose-body: var(--cl-ink-3);
+  color: var(--cl-ink-3);
+  font-family: inherit;
+  font-size: inherit;
+  line-height: 1.65;
+}
+.cl-thinking-note-body > .prose-lens > :first-child {
+  margin-top: 0;
+}
+.cl-thinking-note-body > .prose-lens > :last-child {
+  margin-bottom: 0;
 }
 
 /* ─── Spike A (transitions.dev): disclosure reveal ──────────────────────────

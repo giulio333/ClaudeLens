@@ -98,7 +98,10 @@ marker rather than a turn; and the sender's half — a `SendMessage` is drawn as
 a message, to whom and with its summary, in both densities, never as the tool
 card with the result JSON in it, offers the exchange only for a delivery to
 another session, and says `SENDING`/`NO DELIVERY`/`FAILED` where the transcript
-recorded no delivery) and
+recorded no delivery; and a short `thinking` block — the update the terminal
+prints as a message — is a labelled note inline in both densities, reached by
+find and not by highlights, its row a turn in MIN that the shell run after it
+folds into, while raw reasoning stays out of MIN and folded in FULL) and
 `file-changes-strip` (the files a turn changed, at its foot in MIN density: an
 `Edit` is drawn as its diff, open by default and numbered where the result
 row's `structuredPatch` says, a live turn without those numbers falls back to

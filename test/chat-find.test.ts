@@ -53,12 +53,20 @@ describe('findMatchingTurns', () => {
     expect(findMatchingTurns(processed, '   ', 'all')).toEqual([]);
   });
 
-  it('reads thinking in FULL density and ignores it in MIN', () => {
+  it('reads a short thinking note in both densities, since both draw it', () => {
     const processed = buildProcessedMessages([
-      msg('assistant', [thinking('the needle is in here'), text('an answer')]),
+      msg('assistant', [thinking('the needle is in here\n\n'), text('an answer')]),
     ]);
     expect(findMatchingTurns(processed, 'needle', 'all')).toEqual([1]);
-    // MIN hides thinking, so a hit there would land on a turn showing no match.
+    expect(findMatchingTurns(processed, 'needle', 'minimal')).toEqual([1]);
+  });
+
+  it('reads a long thinking block in FULL density and ignores it in MIN', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [thinking('the needle is in here. ' + 'x'.repeat(700)), text('an answer')]),
+    ]);
+    expect(findMatchingTurns(processed, 'needle', 'all')).toEqual([1]);
+    // MIN hides raw reasoning, so a hit there would land on a turn showing no match.
     expect(findMatchingTurns(processed, 'needle', 'minimal')).toEqual([]);
   });
 

@@ -434,6 +434,26 @@ const ROLE_META: Record<TurnVariant, { label: string; initial: string; color: st
   notification: { label: 'Task event', initial: 'T', color: 'var(--cl-ink-3)' },
 };
 
+/**
+ * Longest `thinking` block still read as a note Claude wrote for the reader.
+ *
+ * Claude Code persists most thinking empty, and the few blocks it keeps are
+ * one- to three-sentence updates addressed to the user, in their language —
+ * which the terminal prints inline like any other message, so a Lens that hid
+ * them in MIN lost lines the terminal showed. Measured on a real corpus: 53
+ * non-empty blocks, p50 ~230 chars, max 417. A longer block is raw reasoning
+ * (older transcripts) and keeps the FULL-only disclosure.
+ */
+export const THINKING_NOTE_MAX = 600;
+
+/** The trimmed text of a thinking block short enough to be a note, else ''.
+ *  The one predicate `describeTurn`, `MessageBubble` and `find` all ask, so the
+ *  descriptor can't call a turn empty that the bubble then draws. */
+export function thinkingNote(thinking: string): string {
+  const t = thinking.trim();
+  return t.length <= THINKING_NOTE_MAX ? t : '';
+}
+
 /** Resolves a dispatched sub-agent's identity tint (final color string) from its
  *  `subagent_type`; returns undefined to fall back to the variant default. */
 export type AgentColorResolver = (subagentType: string) => string | undefined;
@@ -493,12 +513,15 @@ export function describeTurn(
   const showQuestions = questionGroups.length > 0;
 
   const hasText = textBlocks.length > 0;
-  const hasThinking = thinkingBlocks.some(b => b.thinking);
+  // A note shows in both densities; a long block only in FULL, behind its toggle.
+  const hasNote = thinkingBlocks.some(b => thinkingNote(b.thinking));
+  const hasLongThinking = thinkingBlocks.some(b => b.thinking && !thinkingNote(b.thinking));
   const hasTools = standardToolGroups.length > 0;
 
   const hasVisibleContent =
     hasText ||
-    (showThinking && hasThinking) ||
+    hasNote ||
+    (showThinking && hasLongThinking) ||
     (showTools && hasTools) ||
     showAgentStrip ||
     showPlanStrip ||

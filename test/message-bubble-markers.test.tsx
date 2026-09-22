@@ -421,3 +421,71 @@ describe('a harness notice', () => {
     expect(container.querySelector('.cl-notice-badge')?.textContent).toContain('agent done');
   });
 });
+
+// ─── A thinking block the terminal prints as a message ───────────────────────
+
+describe('a thinking block', () => {
+  const NOTE = 'Ho scoperto che le righe dei `Read` sono numerate con una tabulazione.\n\n';
+  const REASONING = 'Let me weigh the options. ' + 'x'.repeat(700);
+
+  function thinkingRow(thinking: string, uuid = 'th1'): ChatMessage {
+    return {
+      uuid,
+      role: 'assistant',
+      timestamp: '2026-09-22T19:09:38.000Z',
+      model: 'claude-opus-5-5',
+      content: [{ type: 'thinking', thinking }],
+    };
+  }
+
+  it('is drawn inline as a labelled note in both densities, never folded', () => {
+    for (const detailsFilter of ['minimal', 'all'] as const) {
+      const { container } = mount(thinkingRow(NOTE), { detailsFilter });
+
+      const note = container.querySelector('.cl-thinking-note');
+      expect(note?.querySelector('.cl-thinking-note-tag')?.textContent).toBe('Thinking');
+      // Markdown, trimmed: the backticked name is code, the trailing blank lines are gone.
+      const body = note?.querySelector('.cl-thinking-note-body');
+      expect(body?.querySelector('code')?.textContent).toBe('Read');
+      expect(body?.textContent).toBe(
+        'Ho scoperto che le righe dei Read sono numerate con una tabulazione.'
+      );
+      // Painted by find, but not a highlight block (those index the text blocks).
+      expect(body?.getAttribute('data-find-block')).toBe('th1:think-0');
+      expect(body?.hasAttribute('data-hl-block')).toBe(false);
+      expect(container.querySelector('.cl-thinking-toggle')).toBeNull();
+      cleanup();
+    }
+  });
+
+  it('keeps raw reasoning out of MIN and folded behind its toggle in FULL', () => {
+    const min = mount(thinkingRow(REASONING), { detailsFilter: 'minimal' });
+    expect(min.container.querySelector('.cl-turn')).toBeNull();
+    cleanup();
+
+    const full = mount(thinkingRow(REASONING), { detailsFilter: 'all' });
+    expect(full.container.querySelector('.cl-thinking-note')).toBeNull();
+    const toggle = full.container.querySelector('.cl-thinking-toggle') as HTMLElement;
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(full.container.querySelector('.cl-thinking-body')?.textContent).toBe(REASONING);
+  });
+
+  it('makes its row a turn in MIN, so the shell run after it folds into it', () => {
+    // The shape that went missing: a note row, then a Bash-only row. Without the
+    // note the pair read as nothing plus a stray "1 tool hidden" badge.
+    const bash: ChatMessage = {
+      uuid: 'b1',
+      role: 'assistant',
+      timestamp: '2026-09-22T19:09:38.100Z',
+      content: [{ type: 'tool_use', id: 't1', name: 'Bash', input: { command: 'ls' } }],
+    };
+    const processed = buildProcessedMessages([thinkingRow(NOTE), bash]);
+    const descriptors = processed.map(p => describeTurn(p, 'minimal'));
+
+    expect(descriptors[0]).toMatchObject({ visible: true, toolsOnly: false, variant: 'claude' });
+    expect(buildRenderItems(processed, descriptors)).toEqual([
+      { kind: 'turn', idx: 0, hiddenCount: 1, hiddenFiles: [] },
+    ]);
+  });
+});

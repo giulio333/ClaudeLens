@@ -75,11 +75,14 @@ export function useFindLayer({
     }
     const plain: Range[] = [];
     const active: Range[] = [];
-    container.querySelectorAll('[data-hl-block]').forEach(wrapper => {
+    // `data-find-block` marks prose find reaches but highlights don't: a
+    // thinking note, which has no index among the turn's text blocks.
+    container.querySelectorAll('[data-hl-block], [data-find-block]').forEach(wrapper => {
       const textContent = wrapper.textContent ?? '';
       if (!textContent) return;
       // Which turn this block belongs to: the uuid half of its own key.
-      const key = wrapper.getAttribute('data-hl-block') ?? '';
+      const key =
+        wrapper.getAttribute('data-hl-block') ?? wrapper.getAttribute('data-find-block') ?? '';
       const isActive = activeUuid !== null && key.slice(0, key.lastIndexOf(':')) === activeUuid;
       for (const [start, end] of occurrences(textContent, needle)) {
         const range = rangeFromOffsets(wrapper, start, end);

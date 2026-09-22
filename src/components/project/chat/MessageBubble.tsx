@@ -15,6 +15,7 @@ import {
   parseAnswersFromResultText,
   isQuestionDismissed,
   describeTurn,
+  thinkingNote,
   touchedFiles,
   mergeTouchedFiles,
   TouchedFile,
@@ -251,6 +252,21 @@ export function ThinkingBlock({ thinking }: { thinking: string }) {
         <b>{open ? 'Hide' : 'Show'}</b>
       </button>
       {open && <pre className="cl-thinking-body">{thinking}</pre>}
+    </div>
+  );
+}
+
+/** A short `thinking` block, drawn where the terminal draws it — inline, never
+ *  folded — but labelled and quieter than the answer, since it is Claude's note
+ *  on its way there. `findKey` puts it under the find layer's paint; it is not a
+ *  `data-hl-block`, whose index belongs to the turn's text blocks. */
+function ThinkingNote({ text, findKey }: { text: string; findKey: string }) {
+  return (
+    <div className="cl-thinking-note">
+      <span className="cl-thinking-note-tag">Thinking</span>
+      <div className="cl-thinking-note-body" data-find-block={findKey}>
+        <Markdown>{text}</Markdown>
+      </div>
     </div>
   );
 }
@@ -687,7 +703,8 @@ export const MessageBubble = memo(function MessageBubble({
     // used to be dropped here — the turn reacting to it read as reacting to
     // nothing.
     imageBlocks.length > 0 ||
-    (showThinking && thinkingBlocks.some(b => b.thinking)) ||
+    thinkingBlocks.some(b => thinkingNote(b.thinking)) ||
+    (showThinking && thinkingBlocks.some(b => b.thinking && !thinkingNote(b.thinking))) ||
     (showTools && standardToolGroups.length > 0) ||
     showAgentStrip ||
     showPlanStrip ||
@@ -972,8 +989,11 @@ export const MessageBubble = memo(function MessageBubble({
           )}
         </header>
 
-        {showThinking &&
-          thinkingBlocks.map((b, i) => <ThinkingBlock key={i} thinking={b.thinking} />)}
+        {thinkingBlocks.map((b, i) => {
+          const note = thinkingNote(b.thinking);
+          if (note) return <ThinkingNote key={i} text={note} findKey={`${msg.uuid}:think-${i}`} />;
+          return showThinking ? <ThinkingBlock key={i} thinking={b.thinking} /> : null;
+        })}
 
         <div className="cl-turn-content">
           {textBlocks.map((b, i) =>

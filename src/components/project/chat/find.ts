@@ -1,3 +1,4 @@
+import { thinkingNote } from './utils';
 import type { ChatDetailsFilter, ProcessedMessage } from './utils';
 
 /**
@@ -19,8 +20,9 @@ import type { ChatDetailsFilter, ProcessedMessage } from './utils';
  * minimap and `activeTurn` both step turn to turn.
  *
  * **Scope is the prose**, which is what the paint layer can reach: `text`
- * blocks, plus `thinking` when the density filter is showing it. A tool result
- * would be a hit on a turn with nothing lit in it, and thinking in MIN density
+ * blocks, plus `thinking` where the density shows it — a short one (a note,
+ * see `thinkingNote`) in both, a long one only in FULL. A tool result would be
+ * a hit on a turn with nothing lit in it, and a long thinking block in MIN
  * would be the same: a turn the reader is sent to must have something lit in it.
  */
 
@@ -29,7 +31,8 @@ function turnProse(p: ProcessedMessage, density: ChatDetailsFilter): string[] {
   const out: string[] = [];
   for (const block of p.msg.content) {
     if (block.type === 'text') out.push(block.text);
-    else if (block.type === 'thinking' && density === 'all') out.push(block.thinking);
+    else if (block.type === 'thinking' && (thinkingNote(block.thinking) || density === 'all'))
+      out.push(block.thinking);
   }
   return out;
 }
