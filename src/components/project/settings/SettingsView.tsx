@@ -17,6 +17,7 @@ import { mcpStatusMeta } from '../mcp/McpServerCard';
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme';
 import { fmtModel } from '../utils';
 import { compareVersions } from '../../../../electron/shared/version-compare';
+import { latestWhatsNew, openWhatsNew } from '../../../data/whats-new';
 import { version as appVersion, claudeCodeVersion } from '../../../../package.json';
 
 const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md';
@@ -816,6 +817,9 @@ export function AppearanceTab() {
 
 const QUARANTINE_CMD = 'xattr -d com.apple.quarantine /Applications/ClaudeLens.app';
 const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
+/** The newest release notes this build has — the installed version's, or the
+ *  last release before it that had something to show. */
+const LATEST_NOTES = latestWhatsNew(appVersion);
 
 function UpdatesBlock() {
   const { data: update, error, isFetching, refetch } = useUpdateCheck();
@@ -837,6 +841,24 @@ function UpdatesBlock() {
         <Row k="Installed">
           <Val>v{appVersion}</Val>
         </Row>
+        {LATEST_NOTES && (
+          <Row k="Release notes" hint="The popup this version opened with, and the ones before it">
+            <button
+              type="button"
+              onClick={openWhatsNew}
+              className="set-val"
+              style={{
+                color: 'var(--cl-accent)',
+                background: 'none',
+                border: 0,
+                padding: 0,
+                cursor: 'pointer',
+              }}
+            >
+              What’s new in {LATEST_NOTES.version}
+            </button>
+          </Row>
+        )}
         <Row k="Latest release" hint="Checked against GitHub releases at launch">
           {isFetching ? (
             <Dim>checking…</Dim>

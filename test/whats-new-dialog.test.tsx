@@ -6,13 +6,14 @@
 // per-version dismissal shape as the update banner's "skip this version".
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, screen, waitFor, fireEvent } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement, StrictMode } from 'react';
 import { WhatsNewDialog } from '../src/components/WhatsNewDialog';
 import { installFakeElectronAPI, ok, type FakeBridge } from './helpers/fake-electron-api';
 import { version as appVersion } from '../package.json';
-import type { WhatsNewRelease } from '../src/data/whats-new';
+import { openWhatsNew, WHATS_NEW, type WhatsNewRelease } from '../src/data/whats-new';
+import { compareVersions } from '../electron/shared/version-compare';
 
 // The suite used to read whatever the running package.json version authored,
 // and skip the three rendering tests when it authored nothing — which is
@@ -42,6 +43,9 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A picture', description: 'Drawn.', visual: 'chat-image' },
     { title: 'A diff', description: 'Under the turn.', visual: 'file-changes' },
     { title: 'A colour', description: 'On the crumb.', visual: 'session-color' },
+    { title: 'The files read', description: 'On the edge.', visual: 'context-rail' },
+    { title: 'A note', description: 'Inline.', visual: 'thinking-note' },
+    { title: 'A model', description: 'Priced.', visual: 'model-picker' },
   ],
 };
 
@@ -99,6 +103,13 @@ describe('WhatsNewDialog', () => {
     expect(container.querySelectorAll('.cl-whatsnew-index button')).toHaveLength(
       release.highlights.length
     );
+    // Each section is a stop on the thread, and the card opens on the first.
+    expect(container.querySelectorAll('.cl-whatsnew-stop .cl-whatsnew-dot')).toHaveLength(
+      release.highlights.length
+    );
+    const lit = container.querySelectorAll('.cl-whatsnew-item.is-current');
+    expect(lit).toHaveLength(1);
+    expect(lit[0]).toBe(container.querySelector('.cl-whatsnew-item'));
   });
 
   it('draws the transcript visuals with the feature in them, not just a frame', async () => {
@@ -119,6 +130,34 @@ describe('WhatsNewDialog', () => {
       container.querySelector('.cl-session-aura.cyan .cl-session-identity.cyan')
     ).not.toBeNull();
     expect(container.querySelector('.cl-session-bottom-glow.is-active')).not.toBeNull();
+    // The rail lists the files the preview's own turns read — four, one dot
+    // each, the last turn's two lit — and opens on that list, not on dots.
+    const rail = container.querySelector('.cl-whatsnew-frame--rail .cl-ctx-rail')!;
+    expect(rail.querySelectorAll('.cl-ctx-dot')).toHaveLength(4);
+    expect(rail.querySelectorAll('.cl-ctx-dot.is-active')).toHaveLength(2);
+    expect(rail.querySelector('.cl-ctx-panel.is-open')).not.toBeNull();
+    expect([...rail.querySelectorAll('.cl-ctx-row .name')].map(n => n.textContent)).toEqual(
+      expect.arrayContaining(['retry.ts', 'config.ts', 'retry.test.ts', 'package.json'])
+    );
+    // The thinking note is drawn in MIN, labelled, before the answer.
+    const note = container.querySelector('.cl-thinking-note');
+    expect(note?.querySelector('.cl-thinking-note-tag')?.textContent).toBe('Thinking');
+    expect(note?.textContent).toContain('The loop is wrong, not the tests.');
+    // The Model picker is open on the session's Opus 5.5, and every alias says
+    // which version it runs on — `opus` still meaning Opus 5.
+    const menu = container.querySelector('.cl-whatsnew-frame--composer .cl-composer-menu')!;
+    const items = [...menu.querySelectorAll('.cl-composer-menu-item-label')].map(
+      n => n.textContent
+    );
+    expect(items).toEqual([
+      'Opus 5.5',
+      'Sonnet 5',
+      'Opus 5',
+      'Haiku 4.5',
+      'Fable 5.1',
+      'Default · Opus 5.5',
+    ]);
+    expect(menu.querySelector('.is-active')?.textContent).toBe('Opus 5.5');
   });
 
   it('marks the version seen and closes on "Got it"', async () => {
@@ -156,5 +195,91 @@ describe('WhatsNewDialog', () => {
       expect(getAll).toHaveBeenCalled();
     });
     expect(screen.queryByRole('dialog', { name: "What's new" })).toBeNull();
+  });
+
+  it('dismisses on Escape, like "Got it"', async () => {
+    renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    fireEvent.keyDown(window, { key: 'Escape' });
+    await waitFor(() => {
+      expect(bridge.api.prefs.set).toHaveBeenCalledWith('cl-whatsnew-seen-version', appVersion);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: "What's new" })).toBeNull();
+    });
+  });
+
+  it('leaves Escape to a modal a preview opened on top of it', async () => {
+    renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    const sheet = document.createElement('div');
+    sheet.setAttribute('aria-modal', 'true');
+    document.body.appendChild(sheet);
+    try {
+      fireEvent.keyDown(window, { key: 'Escape' });
+      expect(bridge.api.prefs.set).not.toHaveBeenCalled();
+      screen.getByRole('dialog', { name: "What's new" });
+    } finally {
+      sheet.remove();
+    }
+  });
+
+  it('lists the releases skipped since the last one seen, folded until asked', async () => {
+    const seen = '0.0.1';
+    bridge.api.prefs.getAll = vi.fn(async () =>
+      ok<Record<string, unknown>>({ 'cl-whatsnew-seen-version': seen })
+    );
+    const { container } = renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    const skipped = WHATS_NEW.filter(
+      r => compareVersions(r.version, seen) > 0 && compareVersions(r.version, appVersion) < 0
+    );
+    expect(container.querySelector('.cl-whatsnew-earlier-title')?.textContent).toBe(
+      `Also new since ${seen}`
+    );
+    const heads = container.querySelectorAll<HTMLElement>('.cl-whatsnew-past-head');
+    expect([...heads].map(h => h.querySelector('.version')?.textContent)).toEqual(
+      skipped.map(r => r.version)
+    );
+    // Folded: none of their screens is mounted.
+    expect(container.querySelector('.cl-whatsnew-past-body')).toBeNull();
+
+    fireEvent.click(heads[0]);
+    expect(heads[0].getAttribute('aria-expanded')).toBe('true');
+    for (const h of skipped[0].highlights) screen.getByRole('heading', { name: h.title });
+  });
+
+  it('reopens from Settings after it was dismissed, with every release before it', async () => {
+    bridge.api.prefs.getAll = vi.fn(async () =>
+      ok<Record<string, unknown>>({ 'cl-whatsnew-seen-version': appVersion })
+    );
+    const { container } = renderDialog();
+    await waitFor(() => {
+      expect(bridge.api.prefs.getAll).toHaveBeenCalled();
+    });
+    expect(screen.queryByRole('dialog', { name: "What's new" })).toBeNull();
+
+    act(() => openWhatsNew());
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    expect(container.querySelector('.cl-whatsnew-title')?.textContent).toContain(appVersion);
+    expect(container.querySelector('.cl-whatsnew-earlier-title')?.textContent).toBe(
+      'Earlier releases'
+    );
+    expect(container.querySelectorAll('.cl-whatsnew-past')).toHaveLength(
+      WHATS_NEW.filter(r => compareVersions(r.version, appVersion) < 0).length
+    );
+
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    await waitFor(() => {
+      expect(screen.queryByRole('dialog', { name: "What's new" })).toBeNull();
+    });
   });
 });

@@ -48,20 +48,23 @@ const CONFIRM_MODES: PermissionMode[] = ['bypassPermissions'];
 /** A small upward popover anchored to a chip in the composer meta-row. Renders a
  *  trigger showing the current selection; clicking opens a menu of options above
  *  it. Closes on outside click or after a pick. */
-function ComposerSelect<T extends string>({
+export function ComposerSelect<T extends string>({
   label,
   value,
   options,
   onChange,
   disabled,
+  defaultOpen = false,
 }: {
   label: string;
   value: T;
   options: { value: T; label: string; danger?: boolean; hint?: string }[];
   onChange: (value: T) => void;
   disabled?: boolean;
+  /** Mount with the menu showing — only the "What's new" preview asks. */
+  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const rootRef = useRef<HTMLSpanElement | null>(null);
 
   useEffect(() => {

@@ -39,6 +39,7 @@ export function ContextRail({
   turnOf,
   activeTurn,
   onJump,
+  defaultOpen = false,
 }: {
   files: ContextFile[];
   cwd: string | null;
@@ -46,13 +47,17 @@ export function ContextRail({
   turnOf: (idx: number) => number | null;
   activeTurn: number | null;
   onJump: (turn: number) => void;
+  /** Mount with the list showing. Only the "What's new" preview asks: dots at
+   *  rest explain nothing to someone who has never seen the rail. Every later
+   *  open and close is the reader's. */
+  defaultOpen?: boolean;
 }) {
   const railRef = useRef<HTMLElement | null>(null);
   const anchorRef = useRef<HTMLDivElement | null>(null);
   const capsuleRef = useRef<HTMLButtonElement | null>(null);
   const closeTimer = useRef<number | null>(null);
   const [railH, setRailH] = useState(0);
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(defaultOpen);
   const [peek, setPeek] = useState<Peek | null>(null);
   // Whether the peek is showing. Kept apart from `peek` so hiding it fades the
   // window out where it is, instead of unmounting it mid-transition.

@@ -1,10 +1,32 @@
-import { useRef, type ReactNode, type RefObject } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useRef,
+  useState,
+  type CSSProperties,
+  type ReactNode,
+  type RefObject,
+} from 'react';
 import { AnimatePresence, motion } from 'motion/react';
 import { useWhatsNewSeenVersion, useMarkWhatsNewSeen } from '../hooks/useIPC';
 import type { ChatMessage } from '../hooks/useIPC';
-import { whatsNewFor, shouldShowWhatsNew, type WhatsNewHighlight } from '../data/whats-new';
+import {
+  latestWhatsNew,
+  onOpenWhatsNew,
+  releasesBefore,
+  releasesBetween,
+  shouldShowWhatsNew,
+  whatsNewFor,
+  type WhatsNewHighlight,
+  type WhatsNewRelease,
+} from '../data/whats-new';
 import { MessageBubble } from './project/chat/MessageBubble';
 import { PromptPlaybookPanel } from './project/chat/PromptPlaybook';
+import { ContextRail } from './project/chat/ContextRail';
+import { contextFiles } from './project/chat/context-files';
+import { ComposerSelect } from './project/chat/ChatComposer';
+import { composerModelOptions } from './project/chat/model-options';
+import type { InitModel } from '../types';
 import type { PromptCandidate, PromptTemplate } from '../../electron/shared/playbook-types';
 import { buildProcessedMessages, type ProcessedMessage } from './project/chat/utils';
 import type { ArtifactPublish } from '../types';
@@ -323,6 +345,272 @@ function SessionColorVisual(): ReactNode {
   );
 }
 
+// A short investigation — two `Read`s and two shell reads over three folders —
+// run through the pipeline the Lens runs (`buildProcessedMessages` →
+// `contextFiles`), so the rail beside it lists what the transcript really read.
+// Read results are tab-numbered, the form current transcripts write.
+const RAIL_CWD = '/home/acme/app';
+const RAIL_FIRST_TURN = 7;
+
+const RAIL_TURNS: ProcessedMessage[] = buildProcessedMessages([
+  {
+    uuid: 'wn-r1',
+    role: 'user',
+    timestamp: '2026-09-22T10:14:00.000Z',
+    content: [{ type: 'text', text: 'Why does the retry loop never give up?' }],
+  },
+  {
+    uuid: 'wn-r2',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-09-22T10:14:03.000Z',
+    content: [
+      { type: 'text', text: 'Reading the retry path and where its limit is set.' },
+      {
+        type: 'tool_use',
+        id: 'wn-read-1',
+        name: 'Read',
+        input: { file_path: `${RAIL_CWD}/src/retry.ts` },
+      },
+      {
+        type: 'tool_use',
+        id: 'wn-read-2',
+        name: 'Bash',
+        input: { command: "sed -n '1,4p' src/config.ts" },
+      },
+    ],
+  },
+  {
+    uuid: 'wn-r3',
+    role: 'user',
+    timestamp: '2026-09-22T10:14:04.000Z',
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-read-1',
+        content: [
+          '    12\texport async function withRetry<T>(run: () => Promise<T>) {',
+          '    13\t  let attempt = 0;',
+          '    14\t  while (true) {',
+          '    15\t    attempt += 1;',
+          '    16\t    try {',
+          '    17\t      return await run();',
+          '    18\t    } catch {',
+          '    19\t      await sleep(backoff(attempt));',
+          '    20\t    }',
+          '    21\t  }',
+          '    22\t}',
+        ].join('\n'),
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-read-2',
+        content:
+          "import { env } from './env';\n\nexport const MAX_ATTEMPTS = 5;\nexport const BASE_DELAY_MS = 200;\n",
+        isError: false,
+      },
+    ],
+  },
+  {
+    uuid: 'wn-r4',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-09-22T10:14:09.000Z',
+    content: [
+      {
+        type: 'text',
+        text: '`MAX_ATTEMPTS` is set to 5, but `while (true)` never reads it. Checking what the tests expect.',
+      },
+      {
+        type: 'tool_use',
+        id: 'wn-read-3',
+        name: 'Read',
+        input: { file_path: `${RAIL_CWD}/test/retry.test.ts` },
+      },
+      {
+        type: 'tool_use',
+        id: 'wn-read-4',
+        name: 'Bash',
+        input: { command: 'cat package.json' },
+      },
+    ],
+  },
+  {
+    uuid: 'wn-r5',
+    role: 'user',
+    timestamp: '2026-09-22T10:14:10.000Z',
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-read-3',
+        content: [
+          '     1\timport { withRetry } from "../src/retry";',
+          '     2\t',
+          '     3\ttest("gives up after MAX_ATTEMPTS", async () => {',
+          '     4\t  const run = vi.fn().mockRejectedValue(new Error("down"));',
+          '     5\t  await expect(withRetry(run)).rejects.toThrow("down");',
+          '     6\t  expect(run).toHaveBeenCalledTimes(5);',
+          '     7\t});',
+        ].join('\n'),
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-read-4',
+        content: '{\n  "name": "acme-app",\n  "scripts": { "test": "vitest run" }\n}\n',
+        isError: false,
+      },
+    ],
+  },
+]);
+
+const RAIL_FILES = contextFiles(RAIL_TURNS, RAIL_CWD);
+
+// The rail on the left edge of a short transcript, open on its list so the
+// preview shows what it is before anyone hovers; a name's hover, a click on
+// it and closing are all live. The last turn is the one being read, so its
+// files are the lit ones.
+function ContextRailVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--rail">
+      <div className="cl-transcript-inner">
+        {RAIL_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={RAIL_FIRST_TURN + i}
+          />
+        ))}
+      </div>
+      <ContextRail
+        files={RAIL_FILES}
+        cwd={RAIL_CWD}
+        turnOf={idx => RAIL_FIRST_TURN + idx}
+        activeTurn={RAIL_FIRST_TURN + RAIL_TURNS.length - 1}
+        onJump={() => {}}
+        defaultOpen
+      />
+    </div>
+  );
+}
+
+// A short `thinking` block is the update Claude Code prints inline while it
+// works. MIN used to drop it with every other thinking block; here it sits
+// between the ask and the answer, as the terminal showed it.
+const THINKING_TURNS: ProcessedMessage[] = buildProcessedMessages([
+  {
+    uuid: 'wn-t1',
+    role: 'user',
+    timestamp: '2026-09-22T10:20:00.000Z',
+    content: [{ type: 'text', text: 'Run the suite and fix whatever is red.' }],
+  },
+  {
+    uuid: 'wn-t2',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-09-22T10:20:41.000Z',
+    content: [
+      {
+        type: 'thinking',
+        thinking:
+          'Two failures, both in `retry.test.ts`: they expect the loop to stop after `MAX_ATTEMPTS`. The loop is wrong, not the tests.',
+      },
+      {
+        type: 'text',
+        text: 'Capped the loop at `MAX_ATTEMPTS` — all 48 tests pass now.',
+      },
+    ],
+  },
+]);
+
+function ThinkingNoteVisual(): ReactNode {
+  return <TranscriptFrame turns={THINKING_TURNS} />;
+}
+
+// The model list the SDK handshake answers with — the shape `model-options`
+// is tested against: `opus` offered as `opus[1m]`, Fable under its full id —
+// so the choices below are what `composerModelOptions` really builds for a
+// session on Opus 5.5, where the bare `opus` alias still means Opus 5.
+const PICKER_SESSION_MODEL = 'claude-opus-5-5';
+const PICKER_MODELS: InitModel[] = [
+  { value: 'sonnet', resolvedModel: 'claude-sonnet-5', displayName: 'Sonnet' },
+  { value: 'opus[1m]', resolvedModel: 'claude-opus-5[1m]', displayName: 'Opus (1M context)' },
+  { value: 'haiku', resolvedModel: 'claude-haiku-4-5-20251001', displayName: 'Haiku' },
+  { value: 'claude-fable-5-1[1m]', resolvedModel: 'claude-fable-5-1', displayName: 'Fable' },
+];
+const PICKER_OPTIONS = composerModelOptions(
+  PICKER_SESSION_MODEL,
+  { model: PICKER_SESSION_MODEL, models: PICKER_MODELS },
+  PICKER_SESSION_MODEL
+);
+
+const PICKER_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-m1',
+    role: 'assistant',
+    model: PICKER_SESSION_MODEL,
+    timestamp: '2026-09-22T10:31:00.000Z',
+    content: [{ type: 'text', text: 'The loop is capped and the suite is green.' }],
+  }),
+];
+
+// The Model picker, open, and live: picking another model moves the selection
+// and nothing is sent. A component of its own because it holds state, and the
+// VISUALS below are called as functions from inside the dialog's render.
+function PreviewModelPicker(): ReactNode {
+  const [model, setModel] = useState(PICKER_SESSION_MODEL);
+  return (
+    <ComposerSelect
+      label="Model"
+      value={model}
+      options={PICKER_OPTIONS}
+      onChange={setModel}
+      defaultOpen
+    />
+  );
+}
+
+// The last turn of a session on Opus 5.5, and under it the composer with its
+// Model picker open: the real `ComposerSelect`, inside the sheet and control
+// rail it sits in.
+function ModelPickerVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--composer">
+      <div className="cl-transcript-inner">
+        {PICKER_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={24 + i}
+          />
+        ))}
+      </div>
+      <div className="cl-composer-sheet">
+        <div className="cl-composer-row">
+          <textarea
+            className="cl-composer-input"
+            placeholder="Continue this session…   ⏎ send · ⇧⏎ newline"
+            rows={1}
+            readOnly
+            tabIndex={-1}
+          />
+        </div>
+        <div className="cl-composer-meta">
+          <span className="cl-composer-meta-note">resumes this session</span>
+          <span className="cl-composer-meta-tags">
+            <PreviewModelPicker />
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -330,12 +618,22 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'chat-image': ChatImageVisual,
   'file-changes': FileChangesVisual,
   'session-color': SessionColorVisual,
+  'context-rail': ContextRailVisual,
+  'thinking-note': ThinkingNoteVisual,
+  'model-picker': ModelPickerVisual,
 };
 
-/** The names of everything in this release, under the title. A card that opens
+/** The sections of the release on screen — the card's own children, never the
+ *  sections of an earlier release opened further down, which have a thread of
+ *  their own and nothing to do with the index or the lit dot. */
+const OWN_SECTIONS = ':scope > .cl-whatsnew-item';
+
+/** The names of everything in this release, beside the title. A card that opens
  *  on its first feature gives no sign the others are there; a list of them does,
  *  and it is navigation rather than a hint — each name carries the reader to its
- *  section. One authored highlight needs no index and gets none. */
+ *  section. The names hang on the transcript's own thread, one dot each, and
+ *  say where in the app each one lives. One authored highlight needs no index
+ *  and gets none. `--i` staggers the thread drawing itself in on open. */
 function ReleaseIndex({
   highlights,
   scroller,
@@ -350,9 +648,10 @@ function ReleaseIndex({
         <button
           key={highlight.title}
           type="button"
+          style={{ '--i': i } as CSSProperties}
           onClick={() => {
             const box = scroller.current;
-            const el = box?.querySelectorAll<HTMLElement>('.cl-whatsnew-item')[i];
+            const el = box?.querySelectorAll<HTMLElement>(OWN_SECTIONS)[i];
             if (!box || !el) return;
             // Measured against the scroller's own box, never `offsetTop`: the
             // card is animated, so its offset parent is not the one the sections
@@ -362,28 +661,191 @@ function ReleaseIndex({
             box.scrollTo({ top: Math.max(0, top - 24), behavior: 'smooth' });
           }}
         >
-          {highlight.title}
+          <span className="dot" aria-hidden />
+          <span className="name">{highlight.title}</span>
+          {highlight.where && <span className="where">{highlight.where}</span>}
         </button>
       ))}
     </nav>
   );
 }
 
-export function WhatsNewDialog() {
-  const { data: seenVersion, isLoading } = useWhatsNewSeenVersion();
-  const markSeen = useMarkWhatsNewSeen();
-  const release = whatsNewFor(appVersion);
+/** The section being read: the one crossing a band a third of the way down the
+ *  card, the line the eye reads at — the way the Lens rail lights the turn in
+ *  view. The first section until the card has scrolled; with no
+ *  IntersectionObserver (jsdom) it simply stays there. */
+function useCurrentSection(
+  scroller: RefObject<HTMLDivElement | null>,
+  active: boolean,
+  count: number
+): number {
+  const [current, setCurrent] = useState(0);
+  useEffect(() => {
+    const box = scroller.current;
+    if (!active || !box || typeof IntersectionObserver === 'undefined') return;
+    const items = [...box.querySelectorAll<HTMLElement>(OWN_SECTIONS)];
+    const io = new IntersectionObserver(
+      entries => {
+        for (const entry of entries)
+          if (entry.isIntersecting) setCurrent(items.indexOf(entry.target as HTMLElement));
+      },
+      { root: box, rootMargin: '-30% 0px -60% 0px' }
+    );
+    items.forEach(el => io.observe(el));
+    return () => io.disconnect();
+  }, [scroller, active, count]);
+  return current;
+}
 
-  const visible = !isLoading && shouldShowWhatsNew(appVersion, seenVersion ?? null, !!release);
-  // Every highlight gets its own moment: the first one is the hero the card
-  // opens on, the rest follow as sections of the same scroll. A release that
-  // authored one entry renders exactly as it did before.
-  const highlights = release?.highlights ?? [];
+/** Focus and Escape for an open card. Focus moves into it on open, so the keys
+ *  reach it and a screen reader lands in it, and goes back where it was on
+ *  close. Escape dismisses it — unless another modal is on top: a preview can
+ *  open one of its own (the rail's file window), and Escape is that one's. */
+function useDialogKeys(
+  card: RefObject<HTMLDivElement | null>,
+  open: boolean,
+  onDismiss: () => void
+): void {
+  useEffect(() => {
+    if (!open) return;
+    const before = document.activeElement as HTMLElement | null;
+    card.current?.focus({ preventScroll: true });
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape' || e.defaultPrevented) return;
+      const modals = document.querySelectorAll('[aria-modal="true"]');
+      if ([...modals].some(m => m !== card.current)) return;
+      onDismiss();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      before?.focus?.({ preventScroll: true });
+    };
+  }, [card, open, onDismiss]);
+}
+
+/** One feature: its words, held while its screen scrolls past, and its screen
+ *  as a stop on the thread — the line that hangs the names in the masthead
+ *  runs on down the page, one dot per section. */
+function HighlightSection({
+  highlight,
+  current = false,
+}: {
+  highlight: WhatsNewHighlight;
+  current?: boolean;
+}) {
+  return (
+    <section className={`cl-whatsnew-item${current ? ' is-current' : ''}`}>
+      <div className="cl-whatsnew-copy">
+        <h3 className="cl-whatsnew-subtitle">{highlight.title}</h3>
+        <p className="cl-whatsnew-desc">{highlight.description}</p>
+        {highlight.where && <p className="cl-whatsnew-where">{highlight.where}</p>}
+      </div>
+      <div className="cl-whatsnew-stop">
+        <span className="cl-whatsnew-dot" aria-hidden />
+        {highlight.visual && VISUALS[highlight.visual]()}
+      </div>
+    </section>
+  );
+}
+
+/** An earlier release, folded to its version and the names of what it brought;
+ *  opened, its sections as the popup first showed them. Folded, its screens are
+ *  not mounted at all — they are real components, and a page of history should
+ *  not cost what reading it would. */
+function PastRelease({ release }: { release: WhatsNewRelease }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <div className={`cl-whatsnew-past${open ? ' is-open' : ''}`}>
+      <button
+        type="button"
+        className="cl-whatsnew-past-head"
+        aria-expanded={open}
+        onClick={() => setOpen(o => !o)}
+      >
+        <span className="version">{release.version}</span>
+        <span className="names">
+          {release.highlights.map(h => (
+            <span key={h.title}>{h.title}</span>
+          ))}
+        </span>
+        <span className="caret" aria-hidden />
+      </button>
+      {open && (
+        <div className="cl-whatsnew-past-body">
+          {release.highlights.map(h => (
+            <HighlightSection key={h.title} highlight={h} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** The releases before the one on screen: the ones skipped since the reader
+ *  last dismissed the popup, or — reopened from Settings — all of them. */
+function EarlierReleases({
+  releases,
+  since,
+}: {
+  releases: WhatsNewRelease[];
+  since: string | null;
+}) {
+  if (releases.length === 0) return null;
+  return (
+    // A div, not a section: the card's last `section` is where the thread ends
+    // (`:last-of-type`), and that has to stay the last feature on screen.
+    <div className="cl-whatsnew-earlier">
+      <h3 className="cl-whatsnew-earlier-title">
+        {since ? `Also new since ${since}` : 'Earlier releases'}
+      </h3>
+      <div className="cl-whatsnew-earlier-list">
+        {releases.map(r => (
+          <PastRelease key={r.version} release={r} />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+/** What the card shows. On launch: the installed version's entry, plus any
+ *  release skipped since the last one dismissed — a reader who went from
+ *  2.2.24 to 2.2.27 would otherwise never see 2.2.26's. Asked for from
+ *  Settings: the newest entry this build has, and every one before it. */
+function useWhatsNewView(asked: boolean) {
+  const { data: seenVersion, isLoading } = useWhatsNewSeenVersion();
+  const seen = seenVersion ?? null;
+  const installed = whatsNewFor(appVersion);
+  if (asked) {
+    const release = installed ?? latestWhatsNew(appVersion);
+    return release ? { release, earlier: releasesBefore(release.version), since: null } : null;
+  }
+  if (isLoading || !installed || !shouldShowWhatsNew(appVersion, seen, true)) return null;
+  const earlier = seen ? releasesBetween(seen, installed.version) : [];
+  return { release: installed, earlier, since: seen };
+}
+
+export function WhatsNewDialog() {
+  const markSeen = useMarkWhatsNewSeen();
+  // Opened from Settings, after the launch showing was dismissed.
+  const [asked, setAsked] = useState(false);
+  useEffect(() => onOpenWhatsNew(() => setAsked(true)), []);
+
+  const view = useWhatsNewView(asked);
+  const highlights = view?.release.highlights ?? [];
+  const visible = !!view && highlights.length > 0;
   const card = useRef<HTMLDivElement>(null);
+  const current = useCurrentSection(card, visible, highlights.length);
+  const { mutate } = markSeen;
+  const dismiss = useCallback(() => {
+    setAsked(false);
+    mutate(appVersion);
+  }, [mutate]);
+  useDialogKeys(card, visible, dismiss);
 
   return (
     <AnimatePresence>
-      {visible && release && highlights.length > 0 && (
+      {visible && view && (
         <motion.div
           className="fixed inset-0 bg-black/45 flex items-center justify-center z-50 p-6"
           initial={{ opacity: 0 }}
@@ -397,38 +859,42 @@ export function WhatsNewDialog() {
             aria-label="What's new"
             className="cl-whatsnew-card"
             ref={card}
+            tabIndex={-1}
             initial={{ opacity: 0, scale: 0.96, y: 10 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.97, y: 8 }}
             transition={{ duration: 0.22, ease: 'easeOut' }}
           >
             <header className="cl-whatsnew-masthead">
-              <div className="cl-whatsnew-mark" aria-hidden="true">
+              <div className="cl-whatsnew-brand">
                 <img src="./brand-mark.png" alt="" />
+                <span>
+                  Claude<span className="lens">Lens</span>
+                </span>
               </div>
-              <div className="cl-whatsnew-eyebrow">ClaudeLens {release.version}</div>
-              <h2 className="cl-whatsnew-title">What&rsquo;s new</h2>
+              <h2 className="cl-whatsnew-title">
+                <span>What&rsquo;s new</span> <span>in {view.release.version}</span>
+              </h2>
               <ReleaseIndex highlights={highlights} scroller={card} />
             </header>
 
-            {highlights.map(highlight => (
-              <section key={highlight.title} className="cl-whatsnew-item">
-                <div className="cl-whatsnew-copy">
-                  <h3 className="cl-whatsnew-subtitle">{highlight.title}</h3>
-                  <p className="cl-whatsnew-desc">{highlight.description}</p>
-                  {highlight.where && <p className="cl-whatsnew-where">{highlight.where}</p>}
-                </div>
-                {highlight.visual && VISUALS[highlight.visual]()}
-              </section>
+            {highlights.map((highlight, i) => (
+              <HighlightSection
+                key={highlight.title}
+                highlight={highlight}
+                current={i === current}
+              />
             ))}
 
-            <button
-              type="button"
-              className="cl-hero-cta cl-whatsnew-ok"
-              onClick={() => markSeen.mutate(appVersion)}
-            >
-              Got it
-            </button>
+            <EarlierReleases releases={view.earlier} since={view.since} />
+
+            {/* Pinned to the card's foot, so dismissing never waits on
+                scrolling past every screen above it. */}
+            <footer className="cl-whatsnew-foot">
+              <button type="button" className="cl-hero-cta cl-whatsnew-ok" onClick={dismiss}>
+                Got it
+              </button>
+            </footer>
           </motion.div>
         </motion.div>
       )}

@@ -20590,67 +20590,79 @@ select.cl-opt-input {
   box-shadow:
     0 40px 100px -20px oklch(0 0 0 / 0.35),
     0 1px 0 oklch(1 0 0 / 0.06) inset;
-  padding: 56px 56px 40px;
+  /* no bottom padding: the pinned foot bar is the card's bottom edge, and a
+     padded scroller would leave it floating above one */
+  padding: 56px 56px 0;
   display: flex;
   flex-direction: column;
   align-items: stretch;
   text-align: left;
+}
+/* focused on open so Escape reaches it; the card itself needs no ring */
+.cl-whatsnew-card:focus {
+  outline: none;
 }
 :root[data-theme='dark'] .cl-whatsnew-card {
   box-shadow:
     0 32px 80px -16px oklch(0 0 0 / 0.6),
     0 1px 0 oklch(1 0 0 / 0.05) inset;
 }
-.cl-whatsnew-mark {
-  position: relative;
-  width: 60px;
-  height: 60px;
-  display: flex;
+/* The masthead — the release, stated, on the same two columns the sections
+   use: the title where each section's words sit, the index of what is in the
+   release where each section's screen sits, so the page reads in one
+   alignment from its first line. The index hangs on the transcript's own
+   thread (the Nastro spine: a 1.5px line, 9px dots), and a 1.5px ink rule
+   closes the head the way it closes the project hero. */
+.cl-whatsnew-masthead {
+  display: grid;
+  grid-template-columns: minmax(200px, 270px) minmax(0, 1fr);
+  grid-template-areas:
+    'mark .'
+    'title index';
+  column-gap: 40px;
+  align-items: start;
+  padding-bottom: 40px;
+  margin-bottom: 44px;
+  border-bottom: 1.5px solid var(--cl-ink);
+}
+/* The app's own wordmark, worn the way the top bar's wears it under the
+   pointer (`.cl-brand:hover`): accent ink, and "Lens" at the same 55% it has
+   there — the two oranges are one colour at two strengths, never a second hue. */
+.cl-whatsnew-brand {
+  grid-area: mark;
+  display: inline-flex;
   align-items: center;
-  justify-content: center;
-  margin-bottom: 20px;
-}
-/* The one bold flourish in an otherwise quiet, typographic screen: a soft
-   accent halo behind the app's own icon, the same terracotta the CTA below
-   uses — never a second colour introduced just for this moment. */
-.cl-whatsnew-mark::before {
-  content: '';
-  position: absolute;
-  inset: -14px;
-  border-radius: 50%;
-  background: radial-gradient(
-    circle,
-    color-mix(in oklch, var(--cl-accent) 22%, transparent) 0%,
-    color-mix(in oklch, var(--cl-accent) 0%, transparent) 72%
-  );
-}
-.cl-whatsnew-mark img {
-  position: relative;
-  width: 36px;
-  height: 36px;
-  object-fit: contain;
-}
-.cl-whatsnew-masthead .cl-whatsnew-desc {
-  margin-bottom: 0;
-}
-.cl-whatsnew-eyebrow {
-  font: 600 11px/1 var(--font-mono);
-  text-transform: uppercase;
-  letter-spacing: 0.09em;
+  gap: 10px;
+  margin-bottom: 22px;
+  font: 600 17px/1 var(--font-sans);
+  letter-spacing: -0.015em;
   color: var(--cl-accent-ink);
-  margin-bottom: 18px;
+}
+.cl-whatsnew-brand img {
+  width: 26px;
+  height: 26px;
+  object-fit: contain;
+  flex-shrink: 0;
+}
+.cl-whatsnew-brand .lens {
+  opacity: 0.55;
 }
 .cl-whatsnew-title {
-  font-size: clamp(24px, 3vw, 30px);
-  font-weight: 600;
-  letter-spacing: -0.015em;
+  grid-area: title;
+  margin: 0;
+  font: 700 clamp(34px, 3.8vw, 46px) / 1.04 var(--font-sans);
+  letter-spacing: -0.035em;
   color: var(--cl-ink);
-  margin: 0 0 10px;
+}
+/* one line each, so the break falls after "new" and never inside it */
+.cl-whatsnew-title span {
+  display: block;
+  white-space: nowrap;
 }
 .cl-whatsnew-desc {
   font-size: 15px;
   line-height: 1.55;
-  color: var(--cl-ink-3);
+  color: var(--cl-ink-2);
   max-width: 42ch;
   margin: 0 0 12px;
 }
@@ -20668,14 +20680,20 @@ select.cl-opt-input {
   width: 100%;
   min-width: 0;
   overflow: hidden;
-  background: var(--cl-paper-2);
+  /* The surface the preview really lives on: a session is read on paper, and
+     a warm grey behind it made every screen look dimmer than it is. The
+     hairline and the lift are what part it from the card, which is paper too.
+     Dark keeps paper-2: there it is the lighter of the two, and dark paper
+     would sink the preview into the card. */
+  background: var(--cl-paper);
   border: 1px solid var(--cl-line);
   border-radius: 16px;
   text-align: left;
-  box-shadow: 0 1px 0 oklch(1 0 0 / 0.5) inset;
+  box-shadow: 0 22px 44px -32px oklch(0.2 0.02 60 / 0.4);
 }
 :root[data-theme='dark'] .cl-whatsnew-frame {
-  box-shadow: none;
+  background: var(--cl-paper-2);
+  box-shadow: 0 22px 44px -30px oklch(0 0 0 / 0.7);
 }
 .cl-whatsnew-frame .cl-transcript-inner {
   max-width: none;
@@ -20697,35 +20715,130 @@ select.cl-opt-input {
 .cl-whatsnew-frame--stage .cl-transcript-inner {
   padding-bottom: 72px;
 }
-/* The masthead is the one centred thing on the page; everything under it is a
-   left-aligned row of feature and surface, so the eye reads down one column of
-   names and across to the screen each one names. */
-.cl-whatsnew-masthead {
+/* The rail preview: the real `ContextRail`, absolute on the frame's left edge
+   the way it sits on the feed's. The turns step right of its 64px column; the
+   list, when open, floats over them as it does in Lens. The rail's own 64/104
+   padding clears the Lens pill, which is not here, and the viewport query that
+   hides the rail under 980px is about the Lens gutter, not this frame — a
+   preview without the rail in it would show nothing new. The floor keeps
+   enough height for the dots the rail sizes to it. */
+.cl-whatsnew-frame--rail {
+  position: relative;
+  min-height: 440px;
+  container-type: inline-size;
+}
+/* The peek's own width assumes the rail sits on the viewport's left edge; here
+   it sits a copy column in, inside a frame that clips, so it is sized to the
+   frame instead. */
+.cl-whatsnew-frame--rail .cl-ctx-peek {
+  width: min(480px, calc(100cqw - 280px));
+}
+/* The composer preview: the sheet sits at the foot of the frame, as it sits at
+   the foot of a chat, and the frame keeps room above it for the Model menu,
+   which opens upward over the turn and would otherwise be clipped. */
+.cl-whatsnew-frame--composer {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  text-align: center;
-  margin-bottom: 44px;
+  justify-content: space-between;
+  min-height: 340px;
+  padding-bottom: 20px;
 }
+.cl-whatsnew-frame--composer .cl-composer-sheet {
+  margin: 0 22px;
+}
+.cl-whatsnew-frame--rail .cl-transcript-inner {
+  margin-left: 64px;
+}
+.cl-whatsnew-frame--rail .cl-ctx-rail {
+  display: flex;
+  padding: 18px 0;
+}
+/* A section: its words on the left, held while a tall screen scrolls past, and
+   its screen on the right as a stop on the thread the masthead's index hangs
+   on. The thread runs at the same x as the index's dots — the left edge of the
+   second column — so the list of names and the sections they lead to read as
+   one line down the page, and each screen starts where the names start. No
+   rule between sections: the thread is the structure now.
+
+   `--wn-stick` is where the words hold while scrolling; the section's dot
+   holds there too, level with its title, so the stop travels with the words
+   it belongs to. `--wn-dot-y` puts the dot's centre on the title's first line
+   (2px padding + half a 21px/1.25 line). */
 .cl-whatsnew-item {
+  --wn-stick: 24px;
+  --wn-dot: 9px;
+  --wn-dot-y: 10.5px;
+  --wn-pad: 48px;
   display: grid;
   grid-template-columns: minmax(200px, 270px) minmax(0, 1fr);
   gap: 40px;
   align-items: start;
-  padding-bottom: 44px;
+  padding-bottom: var(--wn-pad);
 }
 .cl-whatsnew-item + .cl-whatsnew-item {
-  border-top: 1px solid var(--cl-line);
-  padding-top: 44px;
+  padding-top: var(--wn-pad);
 }
 .cl-whatsnew-copy {
-  /* The words stay with their screen while a tall preview scrolls past. */
   position: sticky;
-  top: 0;
+  top: var(--wn-stick);
   padding-top: 2px;
+}
+.cl-whatsnew-stop {
+  position: relative;
+  align-self: stretch;
+  min-width: 0;
+  padding-left: 30px;
+}
+/* the thread: down the whole stop and on through the air between sections to
+   the next one; it starts at the first dot and fades out under the last screen */
+.cl-whatsnew-stop::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--wn-dot) / 2 - 0.75px);
+  top: 0;
+  bottom: calc(-2 * var(--wn-pad));
+  width: 1.5px;
+  background: color-mix(in oklch, var(--cl-ink) 14%, transparent);
+}
+.cl-whatsnew-item:first-of-type .cl-whatsnew-stop::before {
+  top: var(--wn-dot-y);
+}
+.cl-whatsnew-item:last-of-type .cl-whatsnew-stop::before {
+  bottom: 0;
+  background: linear-gradient(
+    to bottom,
+    color-mix(in oklch, var(--cl-ink) 14%, transparent) 70%,
+    transparent
+  );
+}
+/* in flow and sticky, so it rides with the title; the negative margin gives
+   back its box, so the screen still starts at the top of the stop */
+.cl-whatsnew-dot {
+  position: sticky;
+  z-index: 1;
+  top: calc(var(--wn-stick) + var(--wn-dot-y));
+  display: block;
+  width: var(--wn-dot);
+  height: var(--wn-dot);
+  margin: var(--wn-dot-y) 0 calc(-1 * (var(--wn-dot-y) + var(--wn-dot))) -30px;
+  border-radius: 50%;
+  background: var(--cl-paper);
+  box-shadow: inset 0 0 0 1.5px var(--cl-ink-4);
+  transition:
+    background 200ms ease,
+    box-shadow 200ms ease;
+}
+/* the section being read is lit the way the header's names light under the
+   pointer — the Lens rail's "this turn" in the popup's own terms */
+.cl-whatsnew-item.is-current .cl-whatsnew-dot {
+  background: var(--cl-accent);
+  box-shadow:
+    inset 0 0 0 1.5px var(--cl-accent),
+    0 0 0 3px var(--cl-accent-soft);
 }
 .cl-whatsnew-subtitle {
   font-size: 21px;
+  line-height: 1.25;
   font-weight: 600;
   letter-spacing: -0.012em;
   color: var(--cl-ink);
@@ -20739,7 +20852,7 @@ select.cl-opt-input {
 }
 @media (max-width: 900px) {
   .cl-whatsnew-card {
-    padding: 40px 24px 32px;
+    padding: 40px 24px 0;
   }
   .cl-whatsnew-item {
     grid-template-columns: minmax(0, 1fr);
@@ -20748,42 +20861,249 @@ select.cl-opt-input {
   .cl-whatsnew-copy {
     position: static;
   }
+  /* one column: the words sit above their screen, and a thread down the
+     screen's edge would belong to neither */
+  .cl-whatsnew-stop {
+    padding-left: 0;
+  }
+  .cl-whatsnew-stop::before,
+  .cl-whatsnew-dot {
+    display: none;
+  }
+  .cl-whatsnew-masthead {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas:
+      'mark'
+      'title'
+      'index';
+    row-gap: 24px;
+  }
+  .cl-whatsnew-brand {
+    margin-bottom: 0;
+  }
 }
 
-/* The release index: the names of what is in this version, as a row of quiet
-   links. It sits in the masthead's flow — a floating cue would have to dodge
-   the card's own action, and this says how much there is rather than merely
-   that there is more. */
+/* The release index: the names of what is in this version, each with where it
+   lives in the app. Navigation, not a hint — a name carries the reader to its
+   section. The thread is drawn per row, from a dot down to the next one, so it
+   holds whatever height a row's two lines take. */
 .cl-whatsnew-index {
+  grid-area: index;
   display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 8px 28px;
-  margin-top: 18px;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 2px;
 }
 .cl-whatsnew-index button {
+  --wn-dot: 9px;
+  --wn-dot-top: 12px;
+  --wn-gap: 6px;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 2px;
+  padding: 6px 10px 6px 30px;
   border: 0;
-  padding: 0;
+  border-radius: 8px;
   background: none;
   font: inherit;
-  font-size: 13px;
-  color: var(--cl-ink-3);
+  text-align: left;
   cursor: pointer;
-  border-bottom: 1px solid transparent;
 }
-.cl-whatsnew-index button:hover {
+.cl-whatsnew-index button:not(:last-child)::before {
+  content: '';
+  position: absolute;
+  left: calc(var(--wn-dot) / 2 - 0.75px);
+  top: calc(var(--wn-dot-top) + var(--wn-dot));
+  bottom: calc(-1 * (var(--wn-gap) + var(--wn-dot-top)));
+  width: 1.5px;
+  background: color-mix(in oklch, var(--cl-ink) 14%, transparent);
+}
+.cl-whatsnew-index .dot {
+  position: absolute;
+  left: 0;
+  top: var(--wn-dot-top);
+  width: var(--wn-dot);
+  height: var(--wn-dot);
+  border-radius: 50%;
+  background: var(--cl-paper);
+  box-shadow: inset 0 0 0 1.5px var(--cl-ink-4);
+  transition:
+    background var(--cl-hover-ms) ease,
+    box-shadow var(--cl-hover-ms) ease;
+}
+.cl-whatsnew-index .name {
+  font: 600 16.5px/1.3 var(--font-sans);
+  letter-spacing: -0.01em;
   color: var(--cl-ink);
-  border-bottom-color: var(--cl-accent);
+  transition: color var(--cl-hover-ms) ease;
+}
+.cl-whatsnew-index .where {
+  font: 400 12.5px/1.45 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-whatsnew-index button:hover .dot,
+.cl-whatsnew-index button:focus-visible .dot {
+  background: var(--cl-accent);
+  box-shadow:
+    inset 0 0 0 1.5px var(--cl-accent),
+    0 0 0 3px var(--cl-accent-soft);
+}
+.cl-whatsnew-index button:hover .name,
+.cl-whatsnew-index button:focus-visible .name {
+  color: var(--cl-accent-ink);
 }
 .cl-whatsnew-index button:focus-visible {
   outline: 2px solid var(--cl-accent);
-  outline-offset: 3px;
+  outline-offset: 2px;
+}
+/* The one orchestrated moment on the page: as the card lands, the index's
+   thread draws itself in — each dot, then the line down to the next — so the
+   first thing that moves is the list of what is in the release. The names are
+   there from the start; only the thread arrives. */
+@keyframes clWnDotIn {
+  from {
+    transform: scale(0);
+    opacity: 0;
+  }
+  to {
+    transform: none;
+    opacity: 1;
+  }
+}
+@keyframes clWnThreadIn {
+  from {
+    transform: scaleY(0);
+  }
+  to {
+    transform: none;
+  }
+}
+.cl-whatsnew-index .dot {
+  animation: clWnDotIn 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(240ms + var(--i, 0) * 160ms);
+}
+.cl-whatsnew-index button:not(:last-child)::before {
+  transform-origin: top;
+  animation: clWnThreadIn 180ms ease-out both;
+  animation-delay: calc(380ms + var(--i, 0) * 160ms);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-whatsnew-index .dot,
+  .cl-whatsnew-index .name,
+  .cl-whatsnew-dot,
+  .cl-whatsnew-past-head .caret {
+    transition: none;
+  }
+  .cl-whatsnew-index .dot,
+  .cl-whatsnew-index button:not(:last-child)::before {
+    animation: none;
+  }
 }
 
+/* The foot bar: pinned to the bottom of the card, so dismissing never waits on
+   scrolling past every screen above it. Paper and a hairline, bleeding to the
+   card's edges, the same anatomy as the composer's control rail. */
+.cl-whatsnew-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 60;
+  display: flex;
+  justify-content: flex-end;
+  margin: 8px -56px 0;
+  padding: 16px 56px 20px;
+  background: var(--cl-paper);
+  border-top: 1px solid var(--cl-line);
+}
 .cl-whatsnew-ok {
-  min-width: 220px;
-  align-self: center;
+  min-width: 160px;
   justify-content: center;
+}
+
+/* Earlier releases: the ones skipped since the last dismissal (or, reopened
+   from Settings, all of them), each folded to its version and the names of
+   what it brought, on the columns of the sections above. Opened, a release's
+   sections are drawn as they were, on a thread of their own. */
+.cl-whatsnew-earlier {
+  padding: 36px 0 24px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-whatsnew-earlier-title {
+  margin: 0 0 6px;
+  font: 600 14px/1.3 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-whatsnew-past + .cl-whatsnew-past {
+  border-top: 1px solid var(--cl-line);
+}
+.cl-whatsnew-past-head {
+  display: grid;
+  grid-template-columns: minmax(200px, 270px) minmax(0, 1fr) auto;
+  column-gap: 40px;
+  align-items: baseline;
+  width: 100%;
+  padding: 16px 0;
+  border: 0;
+  background: none;
+  font: inherit;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-whatsnew-past-head .version {
+  font: 700 22px/1.2 var(--font-sans);
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+  transition: color var(--cl-hover-ms) ease;
+}
+/* the names start where the index's names and the screens start */
+.cl-whatsnew-past-head .names {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-left: 30px;
+  font: 400 14px/1.45 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-whatsnew-past-head .caret {
+  align-self: center;
+  width: 7px;
+  height: 7px;
+  margin-right: 4px;
+  border-right: 1.5px solid var(--cl-ink-4);
+  border-bottom: 1.5px solid var(--cl-ink-4);
+  transform: rotate(45deg);
+  transition: transform 160ms ease;
+}
+.cl-whatsnew-past.is-open .caret {
+  transform: rotate(-135deg);
+}
+.cl-whatsnew-past-head:hover .version {
+  color: var(--cl-accent-ink);
+}
+.cl-whatsnew-past-head:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 4px;
+  border-radius: 6px;
+}
+.cl-whatsnew-past-body {
+  padding: 12px 0 8px;
+}
+/* after the rules it overrides, so the narrow card's values win */
+@media (max-width: 900px) {
+  .cl-whatsnew-foot {
+    margin-inline: -24px;
+    padding-inline: 24px;
+  }
+  .cl-whatsnew-past-head {
+    grid-template-columns: minmax(0, 1fr) auto;
+    row-gap: 6px;
+  }
+  .cl-whatsnew-past-head .names {
+    grid-row: 2;
+    padding-left: 0;
+  }
 }
 
 /* ── Harness notice: one line, and nobody said it ───────────────────────────
