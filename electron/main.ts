@@ -111,6 +111,14 @@ import {
   disposeAllTerminals,
   resolveClaudeCommand,
 } from './modules/terminal-manager';
+import {
+  deleteRemoteHost,
+  findRemoteHost,
+  readRemoteHosts,
+  saveRemoteHost,
+} from './modules/remote-hosts-store';
+import { buildRemoteScript, buildSshArgs, sshCommand } from './modules/remote-ssh';
+import type { RemoteHostInput, RemoteLaunchMode } from './shared/remote-host';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { createRegistryDiffState, diffRegistry } from './modules/notifications/registry-diff';
 import {
@@ -2124,6 +2132,98 @@ ipcMain.handle('terminal:kill', async (_event, id: string) => {
   killTerminal(id);
   return ok(null);
 });
+
+// ─── Remote hosts (#242) ──────────────────────────────────────────────────────
+//
+// The terminal pane pointed at another machine: the same PTY and the same
+// `terminal:data`/`write`/`resize`/`kill`/`exit` channels as above, with the
+// system `ssh` as the process instead of a local `claude` (modules/remote-ssh.ts
+// says why, and how the command is quoted). Kept apart from `terminal:create` on
+// purpose — the local path is not rewired for a layer an upstream "attach to a
+// remote session" would retire (anthropics/claude-code#87190). The session runs
+// on the host: its registry and transcript are there, so nothing local (Lens,
+// Mission Control, the session lists) sees it, and the renderer says so.
+
+// Resolved per call: a dev build points the state directory elsewhere at startup.
+const remoteHostsFile = () => join(claudelensDir(), 'remote-hosts.json');
+
+ipcMain.handle('remote:listHosts', async () => {
+  try {
+    return ok(readRemoteHosts(remoteHostsFile()));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('remote:saveHost', async (_event, input: RemoteHostInput) => {
+  try {
+    return ok(saveRemoteHost(remoteHostsFile(), input));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('remote:deleteHost', async (_event, id: string) => {
+  try {
+    deleteRemoteHost(remoteHostsFile(), id);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle(
+  'terminal:createRemote',
+  async (
+    event,
+    opts: {
+      hostId: string;
+      mode: RemoteLaunchMode;
+      dir?: string;
+      /** The Claude Code version this build requires (`claudeCodeVersion`, which
+       *  the renderer imports from package.json for the local check too). */
+      minVersion?: string;
+      cols?: number;
+      rows?: number;
+    }
+  ) => {
+    try {
+      const host = findRemoteHost(remoteHostsFile(), opts?.hostId);
+      if (!host) return err('That remote host is no longer saved.');
+      if (opts.mode !== 'claude' && opts.mode !== 'update') return err('Unknown remote launch.');
+      // Throws on a folder or a version the script could not carry safely.
+      const script = buildRemoteScript({
+        mode: opts.mode,
+        dir: opts.dir,
+        minVersion: opts.minVersion,
+      });
+      const send = (channel: string, ...args: unknown[]) => {
+        if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
+      };
+      // The PTY's local cwd is irrelevant to the remote session; the home folder
+      // always exists. The environment is the app's own: ssh forwards none of it
+      // beyond TERM (and whatever `SendEnv` the user configured), so the host
+      // runs on its own credentials and limits.
+      const { id, pid } = createTerminal(
+        {
+          cwd: os.homedir(),
+          command: sshCommand(),
+          args: buildSshArgs(host, script),
+          env: process.env,
+          cols: opts.cols,
+          rows: opts.rows,
+        },
+        {
+          onData: data => send('terminal:data', id, data),
+          onExit: exitCode => send('terminal:exit', id, exitCode),
+        }
+      );
+      return ok({ id, pid });
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
 
 // The terminal pane's clipboard, read/written through the main process rather
 // than `navigator.clipboard`: the packaged renderer is loaded from `file://`,

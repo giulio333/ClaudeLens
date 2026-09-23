@@ -6,6 +6,11 @@ import type {
   PromptTemplateInput,
   PromptCandidates,
 } from '../../electron/shared/playbook-types';
+import type {
+  RemoteHost,
+  RemoteHostInput,
+  RemoteLaunchMode,
+} from '../../electron/shared/remote-host';
 
 import type {
   MemoryTopic,
@@ -302,11 +307,24 @@ declare global {
           cols?: number;
           rows?: number;
         }) => Promise<IpcResult<{ id: string; pid: number }>>;
+        createRemote: (opts: {
+          hostId: string;
+          mode: RemoteLaunchMode;
+          dir?: string;
+          minVersion?: string;
+          cols?: number;
+          rows?: number;
+        }) => Promise<IpcResult<{ id: string; pid: number }>>;
         write: (id: string, data: string) => Promise<IpcResult<null>>;
         resize: (id: string, cols: number, rows: number) => Promise<IpcResult<null>>;
         kill: (id: string) => Promise<IpcResult<null>>;
         onData: (cb: (id: string, data: string) => void) => () => void;
         onExit: (cb: (id: string, exitCode: number) => void) => () => void;
+      };
+      remote: {
+        listHosts: () => Promise<IpcResult<RemoteHost[]>>;
+        saveHost: (input: RemoteHostInput) => Promise<IpcResult<RemoteHost>>;
+        deleteHost: (id: string) => Promise<IpcResult<null>>;
       };
       clipboard: {
         readText: () => Promise<IpcResult<string>>;
@@ -1171,6 +1189,31 @@ export function useDeleteTopic(hash: string) {
   return useMutation({
     mutationFn: (filename: string) => unwrap(window.electronAPI.memory.deleteTopic(hash, filename)),
     onSuccess: () => qc.invalidateQueries({ queryKey: ['memory:project', hash] }),
+  });
+}
+
+// Saved ssh destinations for the remote terminal (#242). ClaudeLens state, not
+// `~/.claude`, so no watcher scope owns the key: only these mutations move it.
+export function useRemoteHosts() {
+  return useQuery({
+    queryKey: ['remote:hosts'],
+    queryFn: () => unwrap(window.electronAPI.remote.listHosts()),
+  });
+}
+
+export function useSaveRemoteHost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (input: RemoteHostInput) => unwrap(window.electronAPI.remote.saveHost(input)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['remote:hosts'] }),
+  });
+}
+
+export function useDeleteRemoteHost() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => unwrap(window.electronAPI.remote.deleteHost(id)),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['remote:hosts'] }),
   });
 }
 

@@ -118,4 +118,6 @@ export type View =
    *  plus the background agents that are actually alive. */
   | { type: 'monitor' }
   | { type: 'duplicates' }
-  | { type: 'settings' };
+  | { type: 'settings' }
+  /** Claude Code on another machine, over the system ssh (#242). */
+  | { type: 'remote' };

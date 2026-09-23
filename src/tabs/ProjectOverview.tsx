@@ -75,6 +75,7 @@ import { DuplicateProjectsView } from '../components/project/overview/DuplicateP
 import { ProjectRail } from '../components/project/overview/ProjectRail';
 import { provisionalProjectHash } from '../components/project/shared/projectHash';
 import { SettingsView, SettingsGearIcon } from '../components/project/settings/SettingsView';
+import { RemoteView } from '../components/project/remote/RemoteView';
 import { NotificationToaster } from '../components/NotificationToaster';
 
 type Project = { hash: string; realPath: string };
@@ -756,6 +757,8 @@ export default function ProjectOverview() {
         return <DuplicateProjectsView onBack={goGlobal} />;
       case 'settings':
         return <SettingsView onBack={goGlobal} />;
+      case 'remote':
+        return <RemoteView onBack={goGlobal} />;
       default:
         return null;
     }
@@ -816,6 +819,7 @@ export default function ProjectOverview() {
           <button className={isMonitor ? 'on' : ''} onClick={goMonitor}>
             Monitor
           </button>
+          <button onClick={() => setView({ type: 'remote' })}>Remote</button>
           {STUDIO_ENABLED && (
             <button className={isStudio ? 'on' : ''} onClick={goStudio}>
               Agent Studio

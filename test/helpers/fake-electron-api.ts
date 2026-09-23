@@ -28,6 +28,7 @@ import type {
   PromptTemplateInput,
   PromptCandidates,
 } from '../../electron/shared/playbook-types';
+import type { RemoteHost, RemoteHostInput } from '../../electron/shared/remote-host';
 import type {
   ChatChunkEvent,
   ChatDoneEvent,
@@ -317,6 +318,15 @@ export function createFakeElectronAPI(channels: FakeChannels) {
       ),
       delete: vi.fn(async (_hash: string, _id: string) => ok(null)),
       dismiss: vi.fn(async (_hash: string, _text: string) => ok(null)),
+    },
+    // Saved ssh destinations for the remote terminal (#242). None is the honest
+    // default; a test that connects scripts its host.
+    remote: {
+      listHosts: vi.fn(async () => ok<RemoteHost[]>([])),
+      saveHost: vi.fn(async (input: RemoteHostInput) =>
+        ok<RemoteHost>({ ...input, id: input.id ?? 'host-1' })
+      ),
+      deleteHost: vi.fn(async (_id: string) => ok(null)),
     },
     clipboard: {
       readText: vi.fn(async () => ok('')),

@@ -13,6 +13,7 @@ import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../../../hooks/useTheme';
 import { trackEvent } from '../../../lib/telemetry';
 import { createTerminalPromptController, type TerminalPromptHandle } from './terminal-prompt';
+import type { RemoteLaunchMode } from '../../../../electron/shared/remote-host';
 
 /**
  * The terminal "dumb pipe": an xterm.js emulator wired to the interactive
@@ -31,6 +32,15 @@ import { createTerminalPromptController, type TerminalPromptHandle } from './ter
  */
 
 export type TerminalStatus = 'starting' | 'running' | 'exited' | 'error';
+
+/** The same pane on another machine, over the system ssh (#242). */
+export interface RemoteTerminalLaunch {
+  hostId: string;
+  mode: RemoteLaunchMode;
+  dir?: string;
+  /** Oldest Claude Code the remote may run — the host is refused below it. */
+  minVersion?: string;
+}
 
 // Clipboard wiring is a Windows/Linux-only concern (see the mount effect): on
 // macOS xterm leaves a Cmd+V keydown alone and Chromium pastes into the helper
@@ -90,8 +100,12 @@ export function TerminalPane({
   attachJobId,
   onPid,
   onStatus,
+  remote,
+  onExit,
+  hideExitOverlay,
 }: {
   ref?: Ref<TerminalPromptHandle>;
+  /** Local working directory; with `remote` set it is a label only. */
   cwd: string;
   resumeSessionId?: string;
   /** Live background-agent job id: `claude attach` it instead of `--resume`. */
@@ -100,6 +114,14 @@ export function TerminalPane({
   onPid: (pid: number | null) => void;
   /** Surface lifecycle so the parent's chrome (RUNNING indicator) can react. */
   onStatus?: (status: TerminalStatus) => void;
+  /** Run Claude Code on a remote host instead of locally. Fixed for the pane's
+   *  lifetime: a parent that changes it remounts the pane (a new `key`). */
+  remote?: RemoteTerminalLaunch;
+  /** The process ended, with its exit code. */
+  onExit?: (exitCode: number) => void;
+  /** Leave the ended session's output uncovered: the parent says what happened
+   *  and offers what to do next. A failure to start keeps its own notice. */
+  hideExitOverlay?: boolean;
 }) {
   const { resolved } = useTheme();
   const palette = PALETTES[resolved];
@@ -131,6 +153,9 @@ export function TerminalPane({
   const earlyRef = useRef<Array<{ id: string; data: string }>>([]);
   const earlyExitRef = useRef(new Map<string, number>());
   const onPidRef = useRef(onPid);
+  // Read by `startSession` only; the launch never changes under a mounted pane.
+  const remoteRef = useRef(remote);
+  const onExitRef = useRef(onExit);
   const [status, setStatus] = useState<TerminalStatus>('starting');
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +164,8 @@ export function TerminalPane({
   // pid without re-subscribing (updating a ref during render is disallowed).
   useEffect(() => {
     onPidRef.current = onPid;
-  }, [onPid]);
+    onExitRef.current = onExit;
+  }, [onPid, onExit]);
 
   useEffect(() => {
     onStatus?.(status);
@@ -163,20 +189,27 @@ export function TerminalPane({
       setStatus('starting');
       setError(null);
       setExitCode(null);
-      const res = await window.electronAPI.terminal
-        .create({
-          cwd,
-          // A live bg agent attaches by job id; --resume would be rejected while it
-          // runs in the background. Never send both.
-          resumeSessionId: attachJobId ? undefined : resume,
-          attachJobId: attachJobId || undefined,
-          cols: term.cols,
-          rows: term.rows,
-        })
-        .catch((cause: unknown) => ({
-          data: null,
-          error: cause instanceof Error ? cause.message : 'Failed to start the claude CLI.',
-        }));
+      const launch = remoteRef.current;
+      const res = await (
+        launch
+          ? window.electronAPI.terminal.createRemote({
+              ...launch,
+              cols: term.cols,
+              rows: term.rows,
+            })
+          : window.electronAPI.terminal.create({
+              cwd,
+              // A live bg agent attaches by job id; --resume would be rejected while it
+              // runs in the background. Never send both.
+              resumeSessionId: attachJobId ? undefined : resume,
+              attachJobId: attachJobId || undefined,
+              cols: term.cols,
+              rows: term.rows,
+            })
+      ).catch((cause: unknown) => ({
+        data: null,
+        error: cause instanceof Error ? cause.message : 'Failed to start the claude CLI.',
+      }));
       // Stale generation: the pane unmounted (or StrictMode re-mounted) while the
       // PTY was being created, so the cleanup ran before there was an id to kill.
       // Kill the just-spawned process now instead of leaking an orphan `claude`.
@@ -191,7 +224,7 @@ export function TerminalPane({
         return;
       }
       idRef.current = res.data.id;
-      trackEvent('terminal_opened');
+      trackEvent(launch ? 'remote_terminal_opened' : 'terminal_opened');
       onPidRef.current(res.data.pid);
       for (const chunk of earlyRef.current) {
         if (chunk.id === res.data.id) term.write(chunk.data);
@@ -205,6 +238,7 @@ export function TerminalPane({
         promptRef.current?.setState('exited');
         setExitCode(earlyExit);
         setStatus('exited');
+        onExitRef.current?.(earlyExit);
         return;
       }
       setStatus('running');
@@ -299,6 +333,7 @@ export function TerminalPane({
       onPidRef.current(null);
       setExitCode(code);
       setStatus('exited');
+      onExitRef.current?.(code);
     });
 
     const ro = new ResizeObserver(() => {
@@ -343,6 +378,8 @@ export function TerminalPane({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const showOverlay = status === 'error' || (status === 'exited' && !hideExitOverlay);
+
   return (
     <div
       className="relative h-full w-full overflow-hidden"
@@ -352,7 +389,7 @@ export function TerminalPane({
       }}
     >
       <div ref={containerRef} className="h-full w-full" />
-      {(status === 'exited' || status === 'error') && (
+      {showOverlay && (
         <div
           className="absolute inset-0 flex items-center justify-center"
           style={{ background: palette.scrim }}

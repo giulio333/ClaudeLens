@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { PromptTemplateInput } from './shared/playbook-types';
+import type { RemoteHostInput } from './shared/remote-host';
 
 // Subscribe to a renderer IPC channel with a *named* handler and return an
 // unsubscribe disposer. Unlike `removeAllListeners(channel)` (the old pattern),
@@ -144,12 +145,29 @@ contextBridge.exposeInMainWorld('electronAPI', {
       cols?: number;
       rows?: number;
     }) => ipcRenderer.invoke('terminal:create', opts),
+    // The same pane on another machine, over the system ssh (#242); output, input
+    // and exit ride the channels below like a local terminal's.
+    createRemote: (opts: {
+      hostId: string;
+      mode: 'claude' | 'update';
+      dir?: string;
+      minVersion?: string;
+      cols?: number;
+      rows?: number;
+    }) => ipcRenderer.invoke('terminal:createRemote', opts),
     write: (id: string, data: string) => ipcRenderer.invoke('terminal:write', id, data),
     resize: (id: string, cols: number, rows: number) =>
       ipcRenderer.invoke('terminal:resize', id, cols, rows),
     kill: (id: string) => ipcRenderer.invoke('terminal:kill', id),
     onData: (cb: (id: string, data: string) => void) => subscribe('terminal:data', cb),
     onExit: (cb: (id: string, exitCode: number) => void) => subscribe('terminal:exit', cb),
+  },
+  // Saved ssh destinations for the remote terminal (#242) — ClaudeLens state in
+  // ~/.claudelens/remote-hosts.json, no credentials.
+  remote: {
+    listHosts: () => ipcRenderer.invoke('remote:listHosts'),
+    saveHost: (input: RemoteHostInput) => ipcRenderer.invoke('remote:saveHost', input),
+    deleteHost: (id: string) => ipcRenderer.invoke('remote:deleteHost', id),
   },
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),

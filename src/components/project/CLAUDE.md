@@ -837,6 +837,59 @@ bottone sulla bolla, da `test/message-bubble-markers.test.tsx`.
 
 ---
 
+### `remote/` — Claude Code su un'altra macchina (#242)
+
+Vista `remote` (deep view, voce **Remote** nella barra in alto). Il terminale
+integrato puntato a un host via il **`ssh` di sistema**: stessa `TerminalPane`,
+stessi canali `terminal:*`, con `ssh -t <host> sh -c '<script>'` al posto di un
+`claude` locale (`electron/modules/remote-ssh.ts` dice perché e come è quotato).
+
+| File             | Esporta                                 | Descrizione                                                                                                                                                                                                                                           |
+| ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RemoteView.tsx` | `RemoteView`                            | Elenco degli host salvati (nome, destinazione ssh, porta, cartella di partenza) + form di aggiunta/modifica + pannello Connect con la cartella sull'host; una volta connesso, la `TerminalPane` in modalità remota con il banner e la notice d'uscita |
+| `remote-exit.ts` | `remoteExitNotice`, `remoteActionLabel` | Modulo puro: cosa significa un codice d'uscita (i `REMOTE_EXIT` dello script, il 255 di ssh, un'uscita normale) e quale passo successivo offrire                                                                                                      |
+
+Decisioni:
+
+- **Additiva e rimovibile, per scelta.** Claude Code potrebbe offrire un modo
+  suo per agganciarsi a una sessione su un'altra macchina
+  (anthropics/claude-code#87190), e allora questo strato va tolto. Quindi niente
+  di locale è riscritto attorno a un host: `TerminalMissionControl`,
+  `terminal:create`, `chat-runner` e i reader restano come sono. La
+  `TerminalPane` prende solo due prop opzionali (`remote`, `onExit` +
+  `hideExitOverlay`); senza, si comporta esattamente come prima.
+- **Una sessione remota non passa mai per locale.** Registro e transcript stanno
+  sull'host, quindi Lens, Mission Control e gli elenchi delle sessioni di questa
+  macchina non la vedono: il banner (`role="note"`) lo dice finché la
+  connessione è aperta, e la barra in alto stampa `RUNNING ON <HOST>`.
+- **La versione di Claude Code sull'host si controlla prima di avviarlo**, nello
+  script remoto e non con un `ssh` a parte: una connessione sola, e password,
+  2FA o una chiave nuova vengono chiesti nella pane stessa. La soglia è il
+  `claudeCodeVersion` di `package.json`, la stessa che Settings → General usa
+  per la CLI locale: sotto, lo script non avvia la sessione, e la notice offre
+  **`Update Claude Code on <host>`**, che lancia `claude update` sull'host nella
+  stessa pane e poi riporta a una sessione. Una versione illeggibile o un
+  `claude` assente fermano allo stesso modo, ognuno col suo messaggio. Il costo
+  dichiarato: siccome `prepare-release` porta quella soglia alla CLI installata
+  il giorno del rilascio, quasi ogni release di ClaudeLens chiede un
+  `claude update` sull'host, che è a un click.
+- **L'output resta scoperto.** Lo script stampa il suo motivo nel terminale
+  prima di uscire, quindi l'overlay `SESSION ENDED` della pane è spento
+  (`hideExitOverlay`) e la notice sta **sopra** il terminale (`role="status"`),
+  con le azioni. Un fallimento all'avvio (host non più salvato, cartella
+  rifiutata dal main) tiene invece l'overlay della pane col suo Retry.
+- **Riprovare è rimontare**: ogni tentativo è una `key` nuova, quindi una pane
+  nuova e un `ssh` nuovo. La modalità (`claude` / `update`) è fissata per la
+  vita di una pane.
+- La cartella usata l'ultima volta su un host sta in `localStorage`
+  (`cl-remote-dir:<id>`): è una comodità, perderla costa riscriverla. Gli host
+  invece stanno nel main (`~/.claudelens/remote-hosts.json`), perché sono dati.
+
+Coperta da `test/remote-view.test.tsx` (StrictMode, fake bridge); lo script
+remoto è eseguito davvero in `test/remote-ssh.test.ts`.
+
+---
+
 ### `sessions/`
 
 - **`TagBar.tsx`** — Barra dei tag di una sessione (lista + add)
