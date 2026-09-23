@@ -18,6 +18,7 @@ import { STUDIO_ENABLED } from '../lib/features';
 import { SearchView } from '../components/project/search/SearchView';
 import { ExchangeView } from '../components/project/exchange/ExchangeView';
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog';
+import { BetaTag } from '../components/project/shared/BetaTag';
 import {
   SearchPopover,
   LensTriggerIcon,
@@ -819,7 +820,13 @@ export default function ProjectOverview() {
           <button className={isMonitor ? 'on' : ''} onClick={goMonitor}>
             Monitor
           </button>
-          <button onClick={() => setView({ type: 'remote' })}>Remote</button>
+          <button
+            className={view.type === 'remote' ? 'on' : ''}
+            onClick={() => setView({ type: 'remote' })}
+          >
+            Remote
+            <BetaTag />
+          </button>
           {STUDIO_ENABLED && (
             <button className={isStudio ? 'on' : ''} onClick={goStudio}>
               Agent Studio

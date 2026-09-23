@@ -36,6 +36,9 @@ import {
   SessionColorFrame,
   SessionColorIdentity,
 } from './project/shared/SessionColorIdentity';
+import { ViewTabs } from './project/terminal/TerminalMissionControl';
+import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
+import type { RemoteHost } from '../../electron/shared/remote-host';
 import { version as appVersion } from '../../package.json';
 
 function turn(msg: ChatMessage): ProcessedMessage {
@@ -611,6 +614,64 @@ function ModelPickerVisual(): ReactNode {
   );
 }
 
+// A connected remote pane, on its Lens tab: the real top bar with the host in
+// the crumbs and the status that says where the session runs, the TERMINAL /
+// LENS tabs, the banner — Beta tag included — and the host's transcript under
+// it. The host is synthetic, and so is the exchange.
+const REMOTE_HOST: RemoteHost = {
+  id: 'preview',
+  name: 'Build server',
+  target: 'dev@build.example.com',
+};
+
+const REMOTE_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-remote-1',
+    role: 'user',
+    timestamp: '2026-09-23T09:14:00.000Z',
+    content: [{ type: 'text', text: 'Run the full test suite here, on the build server.' }],
+  }),
+  turn({
+    uuid: 'wn-remote-2',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-09-23T09:16:40.000Z',
+    content: [{ type: 'text', text: 'Done: 412 tests passed on the build server, none failed.' }],
+  }),
+];
+
+function RemoteVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--remote">
+      <TopBar
+        onBack={() => {}}
+        backLabel="Disconnect"
+        crumbs={[
+          { label: 'REMOTE' },
+          { label: REMOTE_HOST.name, accent: true },
+          { label: '~/projects/acme' },
+        ]}
+        right={<RemoteStatus status="running" hostName={REMOTE_HOST.name} />}
+      />
+      <ViewTabs view="lens" setView={() => {}} />
+      <div className="cl-whatsnew-remote-banner">
+        <RemoteBanner host={REMOTE_HOST} channel="shared" />
+      </div>
+      <div className="cl-transcript-inner">
+        {REMOTE_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={2 + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -621,6 +682,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'context-rail': ContextRailVisual,
   'thinking-note': ThinkingNoteVisual,
   'model-picker': ModelPickerVisual,
+  remote: RemoteVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

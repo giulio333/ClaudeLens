@@ -623,6 +623,28 @@ body {
   border-bottom-color: var(--cl-accent);
 }
 
+/* "Beta" (shared/BetaTag): a surface that ships before it has met every setup
+   it claims — Remote. A hairline tag in the accent's ink, never filled: it is
+   a label on the thing, and a filled chip would read as a second button. */
+.cl-beta {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 5px;
+  border: 1px solid color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  border-radius: 999px;
+  font-family: var(--font-mono);
+  font-size: 8.5px;
+  font-weight: 500;
+  line-height: 1.35;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-accent-ink);
+  white-space: nowrap;
+}
+.cl-scope .cl-beta {
+  margin-left: 7px;
+}
+
 .cl-bar-right {
   display: inline-flex;
   align-items: center;
@@ -20575,6 +20597,16 @@ select.cl-opt-input {
 }
 .cl-whatsnew-frame--stage .cl-transcript-inner {
   padding-bottom: 72px;
+}
+/* The remote preview: the connected frame's own top bar, tabs and banner over
+   the Lens, as a remote pane draws them — the top bar without the gutter that
+   clears the traffic lights, the banner in the stage's padding. */
+.cl-whatsnew-frame--remote .cl-topbar {
+  padding-left: 22px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-whatsnew-frame--remote .cl-whatsnew-remote-banner {
+  padding: 12px 22px 0 24px;
 }
 /* The rail preview: the real `ContextRail`, absolute on the frame's left edge
    the way it sits on the feed's. The turns step right of its 64px column; the

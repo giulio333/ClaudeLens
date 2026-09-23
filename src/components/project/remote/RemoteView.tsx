@@ -19,6 +19,7 @@ import type { RemoteLensChannel } from '../../../../electron/shared/remote-sessi
 import { RemoteOriginContext } from '../../remote-origin';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
+import { BetaTag } from '../shared/BetaTag';
 import { ToolDetailPanel } from '../chat/ToolDetailPanel';
 import { FileChangePage } from '../chat/FileChangesStrip';
 import type { ToolGroup } from '../chat/utils';
@@ -26,25 +27,16 @@ import { MissionRail } from '../terminal/MissionRail';
 import type { FileChange } from '../terminal/mission-feed';
 import { RailToggle, ViewTabs, type View } from '../terminal/TerminalMissionControl';
 import { Lens } from '../overview/Lens';
-import {
-  STATUS_LABEL,
-  TERMINAL_SURFACE,
-  TerminalPane,
-  type TerminalStatus,
-} from '../terminal/TerminalPane';
+import { TERMINAL_SURFACE, TerminalPane, type TerminalStatus } from '../terminal/TerminalPane';
 import {
   remoteActionLabel,
   remoteExitNotice,
   type RemoteNotice,
   type RemoteNoticeAction,
 } from './remote-exit';
+import { RemoteBanner, RemoteStatus } from './RemoteChrome';
 import { RemoteLensPane } from './RemoteLensPane';
-import {
-  channelNote,
-  remoteProjectHash,
-  remoteSessionSummary,
-  remoteTranscript,
-} from './remote-lens';
+import { remoteProjectHash, remoteSessionSummary, remoteTranscript } from './remote-lens';
 
 /**
  * Claude Code on another machine, in the embedded terminal (#242).
@@ -121,6 +113,7 @@ export function RemoteView({ onBack }: { onBack: () => void }) {
           <div className="cl-eyebrow">
             <span className="pip" />
             <span>Remote · over ssh</span>
+            <BetaTag />
           </div>
           <h1 className="cl-h-name static">
             <span className="label-name">Remote</span>
@@ -132,7 +125,7 @@ export function RemoteView({ onBack }: { onBack: () => void }) {
             it stores no password or key. The session runs on the host and its history stays there:
             while you are connected, Lens and Mission Control read it from the host and keep it in
             memory only, and the session lists on this machine do not show it. The host can run
-            Linux, macOS or Windows.
+            Linux, macOS or Windows. Remote is in beta: expect rough edges.
           </p>
         </section>
         <HostsSection onConnect={connect} />
@@ -698,54 +691,6 @@ function noPrompt(): Promise<void> {
 }
 
 function noop() {}
-
-function RemoteStatus({ status, hostName }: { status: TerminalStatus; hostName: string }) {
-  const running = status === 'running';
-  return (
-    <span
-      className="flex items-center font-mono uppercase"
-      style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
-    >
-      <span
-        aria-hidden
-        className={running ? 'cl-live-dot' : ''}
-        style={{
-          width: 7,
-          height: 7,
-          borderRadius: '50%',
-          background: running ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
-        }}
-      />
-      {(running ? 'RUNNING' : STATUS_LABEL[status].toUpperCase()) + ` ON ${hostName.toUpperCase()}`}
-    </span>
-  );
-}
-
-// Always on screen while connected: a remote session must never read as a local
-// one, and the way Lens reaches the host — one login or two — is stated rather
-// than discovered when ssh asks for a password a second time.
-function RemoteBanner({ host, channel }: { host: RemoteHost; channel: RemoteLensChannel | null }) {
-  return (
-    <div
-      role="note"
-      className="flex items-baseline flex-wrap"
-      style={{ gap: 10, fontSize: 12, color: 'var(--cl-ink-3)' }}
-    >
-      <span
-        className="font-mono uppercase"
-        style={{ fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-accent)' }}
-      >
-        Remote · {host.target}
-      </span>
-      <span>
-        This session runs on {host.name}.{' '}
-        {channel
-          ? channelNote(channel, host.name)
-          : 'Its history stays there, so Lens and Mission Control on this machine do not show it.'}
-      </span>
-    </div>
-  );
-}
 
 function RemoteNoticeBar({
   notice,

@@ -23,7 +23,8 @@ export interface WhatsNewHighlight {
     | 'session-color'
     | 'context-rail'
     | 'thinking-note'
-    | 'model-picker';
+    | 'model-picker'
+    | 'remote';
 }
 
 export interface WhatsNewRelease {
@@ -32,6 +33,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.28',
+    highlights: [
+      {
+        title: 'Remote hosts, in beta',
+        description:
+          'Beta: run Claude Code on another machine over your own ssh, and follow the session in Lens and Mission Control.',
+        where: 'Remote, in the top bar',
+        visual: 'remote',
+      },
+    ],
+  },
   {
     version: '2.2.27',
     highlights: [

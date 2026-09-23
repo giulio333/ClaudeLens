@@ -46,6 +46,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'The files read', description: 'On the edge.', visual: 'context-rail' },
     { title: 'A note', description: 'Inline.', visual: 'thinking-note' },
     { title: 'A model', description: 'Priced.', visual: 'model-picker' },
+    { title: 'A host', description: 'Beta.', visual: 'remote' },
   ],
 };
 
@@ -158,6 +159,12 @@ describe('WhatsNewDialog', () => {
       'Default · Opus 5.5',
     ]);
     expect(menu.querySelector('.is-active')?.textContent).toBe('Opus 5.5');
+    // The remote pane says where the session runs, and that Remote is a beta.
+    const remote = container.querySelector('.cl-whatsnew-frame--remote')!;
+    expect(remote.textContent).toContain('RUNNING ON BUILD SERVER');
+    const banner = remote.querySelector('[role="note"]')!;
+    expect(banner.textContent).toContain('Remote · dev@build.example.com');
+    expect(banner.querySelector('.cl-beta')?.textContent).toBe('Beta');
   });
 
   it('marks the version seen and closes on "Got it"', async () => {

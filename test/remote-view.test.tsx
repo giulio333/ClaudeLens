@@ -210,6 +210,16 @@ describe('connecting', () => {
     // A macOS/Linux client rides the terminal's own connection (#294).
     expect(banner.textContent).toContain("over this terminal's own ssh connection");
     expect(banner.textContent).toContain('Nothing of it is saved on this machine');
+    // Remote ships as a beta, and the connected frame keeps saying so.
+    expect(banner.querySelector('.cl-beta')?.textContent).toBe('Beta');
+  });
+
+  it('says on the page that Remote is a beta', async () => {
+    bridge.api.remote.listHosts.mockResolvedValue(ok([HOST]));
+    mount();
+    await screen.findByRole('button', { name: 'Connect' });
+    expect(document.querySelector('.cl-eyebrow .cl-beta')?.textContent).toBe('Beta');
+    expect(screen.getByText(/Remote is in beta/)).toBeTruthy();
   });
 
   it('refuses a folder the script could not carry, before any connection', async () => {
