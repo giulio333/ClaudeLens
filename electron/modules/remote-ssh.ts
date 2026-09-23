@@ -18,14 +18,21 @@
 // `\\` and `\'` specially there. That is why the gate spells "only digits" with
 // `tr -d` rather than the usual `[!0-9]`. The only user text in the script is
 // the folder, which `remoteDirProblem` restricts to characters that are inert
-// between double quotes. The remote must be Linux/macOS: a Windows OpenSSH
-// server has no `sh`.
+// between double quotes.
+//
+// Windows has no `sh`, so a Windows host gets the same gate written in
+// PowerShell (5.1 ships with every supported Windows) and sent as
+// `powershell -EncodedCommand <base64>`: the base64 alphabet means nothing to
+// cmd.exe or to PowerShell as the OpenSSH DefaultShell, so no quoting argument
+// is needed there at all, and inside the script the folder is a single-quoted
+// literal.
 
 import {
   REMOTE_EXIT,
   remoteDirProblem,
   type RemoteHost,
   type RemoteLaunchMode,
+  type RemoteOs,
 } from '../shared/remote-host';
 
 /**
@@ -136,12 +143,150 @@ export function remoteCommandString(script: string): string {
 }
 
 /**
+ * Where Claude Code installs itself on Windows, as PowerShell expressions: the
+ * native installer's `%USERPROFILE%\.local\bin`, npm's global folder, and the
+ * old local install.
+ */
+export const WINDOWS_CLAUDE_DIRS = [
+  '"$env:USERPROFILE\\.local\\bin"',
+  '"$env:APPDATA\\npm"',
+  '"$env:USERPROFILE\\.claude\\local"',
+];
+
+/**
+ * How a Windows host says why the script stopped. Win32-OpenSSH does not
+ * propagate the remote exit status when a tty is allocated — measured on
+ * OpenSSH_for_Windows 10.0p2: `cmd /c exit 42` answers 42 with `-T` and 0 with
+ * `-t` — and the TUI needs the tty, so the refusal codes cannot ride the exit
+ * code there. The script writes them as a private OSC sequence instead, which
+ * ConPTY passes through untouched (also measured) and xterm, not knowing the
+ * number, draws as nothing. `createExitMarkerScanner` reads it back in the main
+ * process.
+ */
+const EXIT_MARKER_OSC = 7771;
+const EXIT_MARKER_KEY = 'claudelens-exit';
+const EXIT_MARKER_RE = new RegExp(`\x1b\\]${EXIT_MARKER_OSC};${EXIT_MARKER_KEY}=(\\d{1,3})\x07`);
+// Longer than any marker, so one split across two chunks is still whole in the tail.
+const EXIT_MARKER_TAIL = 48;
+
+/** Watches a pane's output for the exit marker; `code()` is the last one seen. */
+export function createExitMarkerScanner(): { feed(chunk: string): void; code(): number | null } {
+  let tail = '';
+  let found: number | null = null;
+  return {
+    feed(chunk) {
+      const text = tail + chunk;
+      const m = EXIT_MARKER_RE.exec(text);
+      if (m) found = Number(m[1]);
+      tail = text.slice(-EXIT_MARKER_TAIL);
+    },
+    code: () => found,
+  };
+}
+
+/**
+ * The exit code to report for a remote pane: ssh's own, unless the connect
+ * script marked a refusal and ssh could not carry it (it reads 0 then).
+ */
+export function remoteExitCode(sshExit: number, marker: number | null): number {
+  return sshExit === 0 && marker !== null ? marker : sshExit;
+}
+
+/** A PowerShell single-quoted literal: only a quote is special, escaped by doubling. */
+function psLiteral(text: string): string {
+  return `'${text.replace(/'/g, "''")}'`;
+}
+
+/** The folder as a PowerShell expression: `~` is the user profile, anything else a literal. */
+export function windowsDirExpr(dir: string): string {
+  const problem = remoteDirProblem(dir, 'windows');
+  if (problem) throw new Error(problem);
+  if (dir === '~') return '$env:USERPROFILE';
+  if (dir.startsWith('~\\') || dir.startsWith('~/')) {
+    return `(Join-Path $env:USERPROFILE ${psLiteral(dir.slice(2))})`;
+  }
+  return psLiteral(dir);
+}
+
+function windowsVersionGate(minVersion: string): string[] {
+  const [maj, min, pat] = parseMinVersion(minVersion);
+  return [
+    '$raw = [string](& $claude --version 2>$null | Select-Object -First 1)',
+    "$m = [regex]::Match($raw, '^\\s*(\\d+)\\.(\\d+)\\.(\\d+)')",
+    `if (-not $m.Success) { Fail ${REMOTE_EXIT.unknownVersion} "could not read the Claude Code version on this host (claude --version answered: $raw)." }`,
+    "$v = [version]('{0}.{1}.{2}' -f $m.Groups[1].Value, $m.Groups[2].Value, $m.Groups[3].Value)",
+    `if ($v -lt [version]'${maj}.${min}.${pat}') { Fail ${REMOTE_EXIT.outdated} "Claude Code $v on this host is older than ${minVersion}, the version this ClaudeLens requires. Update it (claude update) and connect again." }`,
+  ];
+}
+
+/** The PowerShell script run on a Windows host: the POSIX gate, rule for rule. */
+export function buildWindowsScript(opts: RemoteScriptOptions): string {
+  const dirs = opts.claudeDirs ?? WINDOWS_CLAUDE_DIRS;
+  const lines = [
+    "$ProgressPreference = 'SilentlyContinue'",
+    // The refusal is also written as the exit marker: see REMOTE_EXIT_MARKER.
+    'function Fail($code, $msg) { [Console]::Error.WriteLine("ClaudeLens: $msg"); ' +
+      `[Console]::Out.Write("$([char]27)]${EXIT_MARKER_OSC};${EXIT_MARKER_KEY}=$code$([char]7)"); exit $code }`,
+    `$dirs = @(${dirs.join(', ')})`,
+    '$env:PATH = (@($dirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) }) + @($env:PATH)) -join [IO.Path]::PathSeparator',
+    // An .exe or .cmd first; npm's .ps1 shim only when nothing else answers.
+    '$c = Get-Command claude -CommandType Application -ErrorAction SilentlyContinue | Select-Object -First 1',
+    'if (-not $c) { $c = Get-Command claude -CommandType ExternalScript -ErrorAction SilentlyContinue | Select-Object -First 1 }',
+    `if (-not $c) { Fail ${REMOTE_EXIT.notFound} 'claude was not found on this host. Install Claude Code there (irm https://claude.ai/install.ps1 | iex), or add its folder to the user PATH.' }`,
+    '$claude = $c.Source',
+  ];
+  if (opts.mode === 'update') {
+    lines.push('& $claude update', 'exit $LASTEXITCODE');
+  } else {
+    if (!opts.dir || !opts.minVersion)
+      throw new Error('A Claude Code launch needs a folder and a minimum version.');
+    const dir = windowsDirExpr(opts.dir);
+    lines.push(
+      ...windowsVersionGate(opts.minVersion),
+      `$d = ${dir}`,
+      `if (-not (Test-Path -LiteralPath $d -PathType Container)) { Fail ${REMOTE_EXIT.noDir} "the folder $d does not exist on this host." }`,
+      'Set-Location -LiteralPath $d',
+      '& $claude',
+      'exit $LASTEXITCODE'
+    );
+  }
+  return lines.join('\n');
+}
+
+/** The PowerShell flags that run an encoded script — also what the suite runs `pwsh` with. */
+export function windowsCommandArgs(script: string): string[] {
+  const encoded = Buffer.from(script, 'utf16le').toString('base64');
+  return ['-NoLogo', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-EncodedCommand', encoded];
+}
+
+// cmd.exe refuses a command line past 8191 characters; the script is far
+// shorter, so reaching this means something grew that should not have.
+const WINDOWS_COMMAND_MAX = 8000;
+
+/** The string ssh sends to a Windows host, whose default shell is cmd.exe or PowerShell. */
+export function windowsCommandString(script: string): string {
+  const command = ['powershell', ...windowsCommandArgs(script)].join(' ');
+  if (command.length > WINDOWS_COMMAND_MAX) throw new Error('The remote command is too long.');
+  return command;
+}
+
+/** What ssh runs on the host, for the system the host runs. */
+export function buildRemoteCommand(os: RemoteOs, opts: RemoteScriptOptions): string {
+  return os === 'windows'
+    ? windowsCommandString(buildWindowsScript(opts))
+    : remoteCommandString(buildRemoteScript(opts));
+}
+
+/**
  * The ssh argv. `-t` asks for a remote tty (the TUI needs one); the `--` ends
  * option parsing before the destination, a second guard behind `TARGET_RE`
  * against a destination read as an option. The keepalives make a dropped
  * network end the pane instead of leaving it frozen.
  */
-export function buildSshArgs(host: Pick<RemoteHost, 'target' | 'port'>, script: string): string[] {
+export function buildSshArgs(
+  host: Pick<RemoteHost, 'target' | 'port'>,
+  remoteCommand: string
+): string[] {
   return [
     '-t',
     '-o',
@@ -153,7 +298,7 @@ export function buildSshArgs(host: Pick<RemoteHost, 'target' | 'port'>, script: 
     ...(host.port ? ['-p', String(host.port)] : []),
     '--',
     host.target,
-    remoteCommandString(script),
+    remoteCommand,
   ];
 }
 

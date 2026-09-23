@@ -231,7 +231,10 @@ describe('what reaches a shell', () => {
   );
 
   it('ends ssh option parsing before the destination and sends one command string', () => {
-    const args = buildSshArgs({ target: 'user@build.example.com', port: 2222 }, 'true');
+    const args = buildSshArgs(
+      { target: 'user@build.example.com', port: 2222 },
+      remoteCommandString('true')
+    );
     expect(args[0]).toBe('-t');
     expect(args.slice(args.indexOf('-p'), args.indexOf('-p') + 2)).toEqual(['-p', '2222']);
     expect(args.slice(-3)).toEqual(['--', 'user@build.example.com', "sh -c 'true'"]);

@@ -117,7 +117,13 @@ import {
   readRemoteHosts,
   saveRemoteHost,
 } from './modules/remote-hosts-store';
-import { buildRemoteScript, buildSshArgs, sshCommand } from './modules/remote-ssh';
+import {
+  buildRemoteCommand,
+  buildSshArgs,
+  createExitMarkerScanner,
+  remoteExitCode,
+  sshCommand,
+} from './modules/remote-ssh';
 import type { RemoteHostInput, RemoteLaunchMode } from './shared/remote-host';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { createRegistryDiffState, diffRegistry } from './modules/notifications/registry-diff';
@@ -2191,8 +2197,9 @@ ipcMain.handle(
       const host = findRemoteHost(remoteHostsFile(), opts?.hostId);
       if (!host) return err('That remote host is no longer saved.');
       if (opts.mode !== 'claude' && opts.mode !== 'update') return err('Unknown remote launch.');
-      // Throws on a folder or a version the script could not carry safely.
-      const script = buildRemoteScript({
+      // Throws on a folder or a version the script could not carry safely. The
+      // host's system decides the script: POSIX sh, or PowerShell on Windows.
+      const remoteCommand = buildRemoteCommand(host.os ?? 'posix', {
         mode: opts.mode,
         dir: opts.dir,
         minVersion: opts.minVersion,
@@ -2200,6 +2207,9 @@ ipcMain.handle(
       const send = (channel: string, ...args: unknown[]) => {
         if (!event.sender.isDestroyed()) event.sender.send(channel, ...args);
       };
+      // A Windows host cannot hand its refusal codes back through ssh when a tty
+      // is allocated, so the script also prints them as a marker (remote-ssh.ts).
+      const marker = createExitMarkerScanner();
       // The PTY's local cwd is irrelevant to the remote session; the home folder
       // always exists. The environment is the app's own: ssh forwards none of it
       // beyond TERM (and whatever `SendEnv` the user configured), so the host
@@ -2208,14 +2218,17 @@ ipcMain.handle(
         {
           cwd: os.homedir(),
           command: sshCommand(),
-          args: buildSshArgs(host, script),
+          args: buildSshArgs(host, remoteCommand),
           env: process.env,
           cols: opts.cols,
           rows: opts.rows,
         },
         {
-          onData: data => send('terminal:data', id, data),
-          onExit: exitCode => send('terminal:exit', id, exitCode),
+          onData: data => {
+            marker.feed(data);
+            send('terminal:data', id, data);
+          },
+          onExit: exitCode => send('terminal:exit', id, remoteExitCode(exitCode, marker.code())),
         }
       );
       return ok({ id, pid });

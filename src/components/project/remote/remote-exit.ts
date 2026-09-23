@@ -1,4 +1,8 @@
-import { REMOTE_EXIT, type RemoteLaunchMode } from '../../../../electron/shared/remote-host';
+import {
+  REMOTE_EXIT,
+  type RemoteLaunchMode,
+  type RemoteOs,
+} from '../../../../electron/shared/remote-host';
 
 /** What the notice under a finished remote connection offers next. */
 export type RemoteNoticeAction = 'update' | 'reconnect' | 'retry' | 'hosts';
@@ -16,6 +20,7 @@ export interface RemoteExitContext {
   target: string;
   dir: string;
   minVersion: string;
+  os: RemoteOs;
 }
 
 // ssh's own failure code: the host is unreachable, the login was refused, or
@@ -42,7 +47,10 @@ export function remoteExitNotice(code: number, ctx: RemoteExitContext): RemoteNo
     return {
       tone: 'warn',
       title: `Claude Code was not found on ${host}`,
-      body: 'Neither the PATH of the host nor ~/.local/bin, ~/.claude/local, /opt/homebrew/bin or /usr/local/bin holds a claude. Install Claude Code there, or add its folder to PATH in ~/.profile on the host.',
+      body:
+        ctx.os === 'windows'
+          ? 'Neither the PATH of the host nor %USERPROFILE%\\.local\\bin or %APPDATA%\\npm holds a claude. Install Claude Code there (in PowerShell: irm https://claude.ai/install.ps1 | iex), or add its folder to the user PATH.'
+          : 'Neither the PATH of the host nor ~/.local/bin, ~/.claude/local, /opt/homebrew/bin or /usr/local/bin holds a claude. Install Claude Code there, or add its folder to PATH in ~/.profile on the host.',
       actions: ['retry', 'hosts'],
     };
   }

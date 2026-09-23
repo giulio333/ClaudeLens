@@ -842,7 +842,8 @@ bottone sulla bolla, da `test/message-bubble-markers.test.tsx`.
 Vista `remote` (deep view, voce **Remote** nella barra in alto). Il terminale
 integrato puntato a un host via il **`ssh` di sistema**: stessa `TerminalPane`,
 stessi canali `terminal:*`, con `ssh -t <host> sh -c '<script>'` al posto di un
-`claude` locale (`electron/modules/remote-ssh.ts` dice perché e come è quotato).
+`claude` locale — o, su un host Windows, `powershell -EncodedCommand <…>`
+(`electron/modules/remote-ssh.ts` dice perché e come è quotato).
 
 | File             | Esporta                                 | Descrizione                                                                                                                                                                                                                                           |
 | ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
@@ -881,6 +882,15 @@ Decisioni:
 - **Riprovare è rimontare**: ogni tentativo è una `key` nuova, quindi una pane
   nuova e un `ssh` nuovo. La modalità (`claude` / `update`) è fissata per la
   vita di una pane.
+- **Il sistema dell'host si sceglie nel form** (`OsPicker`: Linux / macOS o
+  Windows) e non si indovina: indovinarlo costerebbe un secondo login, e chi
+  entra con password o 2FA se la vedrebbe chiedere due volte. Il sistema decide
+  lo script, le regole della cartella (`C:\src\app` e `~\…` su Windows, un path
+  assoluto o `~/…` altrove), i placeholder e la notice di `claude` assente, che
+  su Windows nomina `%USERPROFILE%\.local\bin` e l'installer PowerShell. Su
+  Windows il codice d'uscita non attraversa ssh quando c'è un tty: il rifiuto
+  arriva come marcatore nell'output e il main lo rimette al suo posto, quindi
+  per questa vista i due sistemi rispondono uguale.
 - La cartella usata l'ultima volta su un host sta in `localStorage`
   (`cl-remote-dir:<id>`): è una comodità, perderla costa riscriverla. Gli host
   invece stanno nel main (`~/.claudelens/remote-hosts.json`), perché sono dati.

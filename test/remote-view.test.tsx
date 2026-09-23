@@ -128,6 +128,7 @@ describe('saving a host', () => {
         name: 'Build',
         target: 'user@build.example.com',
         port: 2222,
+        os: 'posix',
         defaultDir: '',
       })
     );
@@ -144,6 +145,43 @@ describe('saving a host', () => {
     expect(save.disabled).toBe(true);
     fireEvent.click(save);
     expect(bridge.api.remote.saveHost).not.toHaveBeenCalled();
+  });
+});
+
+describe('a Windows host', () => {
+  const WIN: RemoteHost = { id: 'w1', name: 'Win', target: 'win-box', os: 'windows' };
+
+  it('is saved as one, and its folder is judged by Windows rules', async () => {
+    mount();
+    fireEvent.change(await screen.findByLabelText('Name'), { target: { value: 'Win' } });
+    fireEvent.change(screen.getByLabelText('ssh destination'), { target: { value: 'win-box' } });
+    fireEvent.change(screen.getByLabelText('Default folder'), { target: { value: 'C:\\src' } });
+    // A POSIX host refuses a drive-letter path…
+    expect(screen.getByText(/absolute path/)).toBeTruthy();
+    // …which is exactly what a Windows one takes.
+    fireEvent.click(screen.getByRole('radio', { name: 'Windows' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Save host' }));
+    await waitFor(() =>
+      expect(bridge.api.remote.saveHost).toHaveBeenCalledWith(
+        expect.objectContaining({ os: 'windows', defaultDir: 'C:\\src' })
+      )
+    );
+  });
+
+  it('connects to a drive-letter folder and names the Windows install when claude is missing', async () => {
+    bridge.api.remote.listHosts.mockResolvedValue(ok([WIN]));
+    mount();
+    fireEvent.change(await screen.findByLabelText('Folder on the host'), {
+      target: { value: 'C:\\src\\app' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: 'Connect' }));
+    await waitFor(() =>
+      expect(createRemote).toHaveBeenLastCalledWith(
+        expect.objectContaining({ hostId: 'w1', dir: 'C:\\src\\app' })
+      )
+    );
+    exit(REMOTE_EXIT.notFound);
+    expect(screen.getByRole('status').textContent).toContain('%USERPROFILE%');
   });
 });
 

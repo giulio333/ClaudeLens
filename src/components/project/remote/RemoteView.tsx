@@ -8,6 +8,7 @@ import {
   type RemoteHost,
   type RemoteHostInput,
   type RemoteLaunchMode,
+  type RemoteOs,
 } from '../../../../electron/shared/remote-host';
 import { TopBar } from '../shared/TopBar';
 import { Lens } from '../overview/Lens';
@@ -105,8 +106,8 @@ export function RemoteView({ onBack }: { onBack: () => void }) {
             Run Claude Code on another machine in the embedded terminal. ClaudeLens starts your
             system ssh, so ~/.ssh/config, keys, the agent and ProxyJump work as in any terminal, and
             it stores no password or key. The session runs on the host and its history stays there:
-            Lens, Mission Control and the session lists on this machine do not show it. Hosts
-            running Linux or macOS only, for now.
+            Lens, Mission Control and the session lists on this machine do not show it. The host can
+            run Linux, macOS or Windows.
           </p>
         </section>
         <HostsSection onConnect={connect} />
@@ -204,6 +205,7 @@ function HostList({
               <div className="font-mono" style={{ fontSize: 11, color: 'var(--cl-ink-4)' }}>
                 {h.target}
                 {h.port ? `:${h.port}` : ''}
+                {h.os === 'windows' ? ' · Windows' : ''}
               </div>
             </button>
           </li>
@@ -231,7 +233,7 @@ function ConnectPanel({
   onEdit: () => void;
 }) {
   const [dir, setDir] = useState(() => readLastDir(host.id) ?? host.defaultDir ?? '~');
-  const problem = remoteDirProblem(dir.trim());
+  const problem = remoteDirProblem(dir.trim(), host.os);
   const del = useDeleteRemoteHost();
   return (
     <form
@@ -257,7 +259,7 @@ function ConnectPanel({
         className={inputCls + (problem ? ' !border-[var(--cl-danger)]' : '')}
         value={dir}
         onChange={e => setDir(e.target.value)}
-        placeholder="~/projects/acme"
+        placeholder={host.os === 'windows' ? '~\\projects\\acme' : '~/projects/acme'}
         spellCheck={false}
       />
       {problem && <p className="mt-1 font-mono text-[10px] text-[var(--cl-danger)]">{problem}</p>}
@@ -303,12 +305,14 @@ function HostForm({
   const [target, setTarget] = useState(initial?.target ?? '');
   const [port, setPort] = useState(initial?.port ? String(initial.port) : '');
   const [defaultDir, setDefaultDir] = useState(initial?.defaultDir ?? '');
+  const [os, setOs] = useState<RemoteOs>(initial?.os ?? 'posix');
   const save = useSaveRemoteHost();
   const input: RemoteHostInput = {
     ...(initial && { id: initial.id }),
     name,
     target,
     ...(port.trim() && { port: Number(port.trim()) }),
+    os,
     defaultDir: defaultDir.trim(),
   };
   const problem = remoteHostProblem(input);
@@ -346,11 +350,18 @@ function HostForm({
       {field('Name', 'remote-name', name, setName, 'Build server')}
       {field('ssh destination', 'remote-target', target, setTarget, 'user@build.example.com')}
       {field('Port', 'remote-port', port, setPort, '22')}
-      {field('Default folder', 'remote-default-dir', defaultDir, setDefaultDir, '~/projects')}
+      <OsPicker value={os} onChange={setOs} />
+      {field(
+        'Default folder',
+        'remote-default-dir',
+        defaultDir,
+        setDefaultDir,
+        os === 'windows' ? '~\\projects' : '~/projects'
+      )}
       <p style={{ fontSize: 12, color: 'var(--cl-ink-3)' }}>
         The destination is what you would type after <code>ssh</code>: an alias from ~/.ssh/config,
-        a host name or user@host. Authentication is left to ssh. The host must run Linux or macOS: a
-        Windows host is not supported yet.
+        a host name or user@host. Authentication is left to ssh. A Windows host needs OpenSSH Server
+        running; the check before Claude Code starts runs in the PowerShell Windows ships with.
       </p>
       {(problem || save.error) && (
         <p className="font-mono text-[10px] text-[var(--cl-danger)]">
@@ -372,6 +383,36 @@ function HostForm({
         )}
       </div>
     </form>
+  );
+}
+
+// Which connect script the host gets. Chosen, not detected: detecting would
+// cost a second login, and a password or 2FA user would be asked twice.
+function OsPicker({ value, onChange }: { value: RemoteOs; onChange: (os: RemoteOs) => void }) {
+  const options: Array<[RemoteOs, string]> = [
+    ['posix', 'Linux / macOS'],
+    ['windows', 'Windows'],
+  ];
+  return (
+    <div>
+      <div className={labelCls} id="remote-os-label">
+        System
+      </div>
+      <div role="radiogroup" aria-labelledby="remote-os-label" className="flex gap-1.5">
+        {options.map(([os, label]) => (
+          <button
+            key={os}
+            type="button"
+            role="radio"
+            aria-checked={value === os}
+            onClick={() => onChange(os)}
+            className={`px-2.5 py-1 font-mono text-[11px] border transition-colors ${value === os ? 'bg-[var(--cl-ink)] text-[var(--cl-paper)] border-[var(--cl-ink)]' : 'bg-[var(--cl-paper)] text-[var(--cl-ink-2)] border-[var(--cl-line)] hover:border-[var(--cl-ink-4)]'}`}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+    </div>
   );
 }
 
@@ -405,6 +446,7 @@ function RemoteSessionView({
           mode,
           hostName: host.name,
           target: host.target,
+          os: host.os ?? 'posix',
           dir,
           minVersion: claudeCodeVersion,
         });

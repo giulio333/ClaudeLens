@@ -9,6 +9,14 @@
 // `remote-hosts-store.ts`, the `remote:*` / `terminal:createRemote` handlers and
 // `project/remote/` are the whole of it.
 
+/**
+ * What the host runs, which decides the connect script: a POSIX `sh` one on
+ * Linux/macOS, a PowerShell one on Windows. Chosen by the user rather than
+ * detected — detecting would cost a second login, and a password or 2FA user
+ * would be asked twice.
+ */
+export type RemoteOs = 'posix' | 'windows';
+
 export interface RemoteHost {
   id: string;
   /** What the host is called in ClaudeLens. */
@@ -16,7 +24,9 @@ export interface RemoteHost {
   /** The ssh destination: an alias from `~/.ssh/config`, a host, or `user@host`. */
   target: string;
   port?: number;
-  /** Folder the connect form starts from: absolute, `~` or `~/…`. */
+  /** Absent means `posix`, which is what every host saved before Windows was. */
+  os?: RemoteOs;
+  /** Folder the connect form starts from: absolute, `~` or `~/…` (`~\…` on Windows). */
   defaultDir?: string;
 }
 
@@ -48,6 +58,14 @@ export const REMOTE_EXIT = {
 const UNSAFE_DIR_CHARS = /["'`$\\!\x00-\x1f\x7f]/;
 // eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
 const CONTROL_CHARS = /[\x00-\x1f\x7f]/;
+// On Windows the folder never meets a shell as text: the PowerShell script is
+// sent base64-encoded, and inside it the folder is a single-quoted literal, where
+// only a quote is special and an ASCII one is escaped by doubling. The
+// typographic quotes PowerShell also reads as quotes are refused instead, with
+// what a Windows path cannot hold anyway.
+// eslint-disable-next-line no-control-regex -- control characters are exactly what is refused
+const UNSAFE_WINDOWS_DIR_CHARS = /["<>|?*\u2018-\u201b\x00-\x1f\x7f]/;
+const WINDOWS_ABSOLUTE_RE = /^[A-Za-z]:[\\/]/;
 // A destination ssh reads as a host: no whitespace, and never a leading `-`,
 // which ssh would parse as an option (`-oProxyCommand=…`).
 const TARGET_RE = /^[A-Za-z0-9._@%:[\]][A-Za-z0-9._@%:[\]-]*$/;
@@ -69,24 +87,39 @@ export function remoteHostProblem(input: RemoteHostInput): string | null {
       return 'The port must be a whole number between 1 and 65535.';
     }
   }
+  if (input.os !== undefined && input.os !== 'posix' && input.os !== 'windows') {
+    return 'Choose the system the host runs.';
+  }
   // Judged as stored: `normalizeRemoteHost` trims it.
   const defaultDir = input.defaultDir?.trim();
   if (defaultDir) {
-    const dirProblem = remoteDirProblem(defaultDir);
+    const dirProblem = remoteDirProblem(defaultDir, input.os);
     if (dirProblem) return dirProblem;
   }
   return null;
 }
 
 /** Why a folder cannot be opened on the remote, or null when it can. */
-export function remoteDirProblem(dir: string): string | null {
+export function remoteDirProblem(dir: string, os: RemoteOs = 'posix'): string | null {
   if (!dir) return 'Enter a folder on the host.';
   if (dir.length > 1024) return 'The folder path is longer than 1024 characters.';
+  if (os === 'windows') return windowsDirProblem(dir);
   if (dir !== '~' && !dir.startsWith('~/') && !dir.startsWith('/')) {
     return 'Use an absolute path, or one starting with ~/ (the home folder on the host).';
   }
   if (UNSAFE_DIR_CHARS.test(dir)) {
     return 'The folder path cannot contain quotes, $, `, \\, ! or control characters.';
+  }
+  return null;
+}
+
+function windowsDirProblem(dir: string): string | null {
+  const home = dir === '~' || dir.startsWith('~\\') || dir.startsWith('~/');
+  if (!home && !WINDOWS_ABSOLUTE_RE.test(dir)) {
+    return 'Use a full path such as C:\\src\\app, or one starting with ~\\ (the home folder on the host).';
+  }
+  if (UNSAFE_WINDOWS_DIR_CHARS.test(dir)) {
+    return 'The folder path cannot contain " < > | ? *, typographic quotes or control characters.';
   }
   return null;
 }
@@ -99,6 +132,7 @@ export function normalizeRemoteHost(input: RemoteHostInput, id: string): RemoteH
     name: input.name.trim(),
     target: input.target.trim(),
     ...(input.port !== undefined && { port: input.port }),
+    ...(input.os && { os: input.os }),
     ...(defaultDir && { defaultDir }),
   };
 }

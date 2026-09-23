@@ -13,9 +13,10 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
 `vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `plugins-reader` (the `.mcp.json` and
-`hooks/hooks.json` parsers), `remote-ssh` and `remote-hosts-store` (#242 — the connect
-script is run for real, through every login shell the machine has, against a stub
-`claude` under a temp `HOME`), and the chat `utils`, `find` and `model-options`
+`hooks/hooks.json` parsers), `remote-ssh`, `remote-ssh-windows` and `remote-hosts-store`
+(#242 — the connect script is run for real, through every login shell the machine has
+and, for a Windows host, through `pwsh` where there is one, against a stub `claude`
+under a temp home), and the chat `utils`, `find` and `model-options`
 (which version each model alias resolves to, from the SDK handshake's model list).
 `session-sdk-read`/`session-sdk-cache` are auth-free **integration** tests against the
 real Agent SDK (files on disk, no model turn, no API key): they pin the transcript
