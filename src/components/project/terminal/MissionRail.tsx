@@ -47,6 +47,7 @@ import type { FeedEvent, FeedKind, FileChange } from './mission-feed';
 import { ContextPopover, SpendPopover } from './VitalsPopover';
 import { MessagesDock } from './MessagesDock';
 import { buildMessageThreads } from './mission-messages';
+import type { RemoteTranscript } from '../../remote-origin';
 
 /**
  * The Mission Control rail beside the unified Terminal/Lens view — design "1d ·
@@ -494,6 +495,7 @@ export function MissionRail({
   onOpenExchange,
   onUsePrompt,
   showVitals = true,
+  remote,
 }: {
   hash: string;
   /** Null until the CLI registers itself in `~/.claude/sessions/` (a few seconds). */
@@ -534,6 +536,12 @@ export function MissionRail({
    *  has no pill, so there the line stays and this rail remains the only place
    *  any of the three is stated. */
   showVitals?: boolean;
+  /** A session read from another machine (#294): the transcript, the status
+   *  and the spend come from here, and nothing about the project is read on
+   *  this machine — tasks, teams, memory, sub-agents, definitions, the
+   *  configuration strip — nor is the local playbook offered. Unset, nothing
+   *  changes. */
+  remote?: RemoteTranscript;
 }) {
   const [playbookOpen, setPlaybookOpen] = useState(false);
   const playbookTrigger = useRef<HTMLButtonElement>(null);
@@ -543,13 +551,20 @@ export function MissionRail({
     if (restoreFocus) playbookTrigger.current?.focus();
   }
   const filename = sessionId ? `${sessionId}.jsonl` : null;
-  const { data: messages, isError, error, refetch } = useChatSession(hash, filename);
-  const { data: subagentMetas } = useSessionSubagents(hash, filename);
-  const { data: taskGroups } = useProjectTasks(hash);
-  const { data: sessionList } = useSessionList(hash);
+  // What is read on this machine: nothing, for a remote session.
+  const localFilename = remote ? null : filename;
+  const localHash = remote ? null : hash;
+  const localPath = remote ? null : realPath;
+  const chat = useChatSession(hash, localFilename);
+  const messages = remote ? remote.messages : chat.data;
+  const isError = !remote && chat.isError;
+  const { error, refetch } = chat;
+  const { data: subagentMetas } = useSessionSubagents(hash, localFilename);
+  const { data: taskGroups } = useProjectTasks(localHash);
+  const { data: sessionList } = useSessionList(localHash);
   // The raw `model` setting (e.g. `opus[1m]`) carries the 1M-context marker the
   // transcript's resolved id drops — used only to size the CONTEXT fill.
-  const { data: effectiveConfig } = useEffectiveConfig(realPath);
+  const { data: effectiveConfig } = useEffectiveConfig(realPath, !remote);
   const rawModel =
     typeof effectiveConfig?.effective?.model === 'string'
       ? (effectiveConfig.effective.model as string)
@@ -559,13 +574,15 @@ export function MissionRail({
   // The skills registry — lets a typed `/foo` skill be recognised by a name match
   // even when its post-command expansion marker isn't visible (same source the
   // Lens footer dock uses, so the rail and the dock stay in agreement).
-  const { data: allSkills } = useAllSkills(realPath);
+  const { data: allSkills } = useAllSkills(localPath);
   // Plugins resolve namespaced agentic skills (`document-skills:pdf`) to their
   // definition; the agent registries resolve a sub-agent's `subagent_type` to its
   // definition so a row with no transcript can still reach the agent config.
-  const { data: plugins } = usePlugins();
-  const { data: globalAgents } = useGlobalAgents();
-  const { data: projectAgents } = useProjectAgents(realPath);
+  const pluginsQuery = usePlugins(!remote);
+  const plugins = remote ? undefined : pluginsQuery.data;
+  const globalAgentsQuery = useGlobalAgents(!remote);
+  const globalAgents = remote ? undefined : globalAgentsQuery.data;
+  const { data: projectAgents } = useProjectAgents(localPath);
   const agentDefOf = useMemo(() => {
     const byName = new Map<string, Agent>();
     for (const a of globalAgents ?? []) byName.set(a.name, a);
@@ -579,15 +596,18 @@ export function MissionRail({
   // it can't say "working now"; the parent session's status can.
   const { data: activeSessions } = useActiveSessions();
   const liveStatus = useMemo(
-    () => activeSessions?.find(s => s.sessionId === sessionId)?.status,
-    [activeSessions, sessionId]
+    () =>
+      remote
+        ? (remote.status ?? undefined)
+        : activeSessions?.find(s => s.sessionId === sessionId)?.status,
+    [remote, activeSessions, sessionId]
   );
 
   // Agent teams — scoped to the focused session (a team is launched inside one
   // session: the lead *is* the session). Matching spans every rotated lead
   // sessionId; the stale-prone config lead id is only a secondary signal, never
   // the sole anchor.
-  const { data: teams } = useProjectTeams(hash);
+  const { data: teams } = useProjectTeams(localHash);
   const projectTeamCount = teams?.length ?? 0;
   const teamRows = useMemo(() => {
     if (!sessionId) return [];
@@ -657,7 +677,7 @@ export function MissionRail({
   // MEMORY — an `Edit` of a topic carries no frontmatter, so the on-disk index
   // supplies the name and description; the query is already mounted by the
   // memory views and the watcher keeps it fresh.
-  const { data: memory } = useMemoryProject(hash);
+  const { data: memory } = useMemoryProject(localHash);
   const memoryLookup = useMemo(() => {
     const byFilename = new Map<string, MemoryTopic>();
     for (const t of memory?.index ?? []) byFilename.set(t.filename, t);
@@ -696,8 +716,9 @@ export function MissionRail({
     [taskGroups, sessionId]
   );
   const summary = useMemo(
-    () => sessionList?.find(s => s.filename === filename),
-    [sessionList, filename]
+    () =>
+      remote ? (remote.summary ?? undefined) : sessionList?.find(s => s.filename === filename),
+    [remote, sessionList, filename]
   );
 
   const ctx = useMemo(() => deriveContext(messages, rawModel), [messages, rawModel]);
@@ -881,31 +902,33 @@ export function MissionRail({
             MISSION CONTROL
           </span>
           <span style={{ flex: 1 }} />
-          <button
-            ref={playbookTrigger}
-            type="button"
-            className="cl-playbook-rail-trigger"
-            aria-label="Playbook"
-            title="Prompt Playbook"
-            aria-expanded={playbookOpen}
-            aria-controls={playbookOpen ? playbookId : undefined}
-            onClick={() => (playbookOpen ? closePlaybook() : setPlaybookOpen(true))}
-          >
-            <svg
-              width="17"
-              height="17"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.6"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              aria-hidden="true"
+          {!remote && (
+            <button
+              ref={playbookTrigger}
+              type="button"
+              className="cl-playbook-rail-trigger"
+              aria-label="Playbook"
+              title="Prompt Playbook"
+              aria-expanded={playbookOpen}
+              aria-controls={playbookOpen ? playbookId : undefined}
+              onClick={() => (playbookOpen ? closePlaybook() : setPlaybookOpen(true))}
             >
-              <path d="M12 5.5C9 3.5 5.5 3.5 2 5v15c3.5-1.5 7-1.5 10 .5 3-2 6.5-2 10-.5V5c-3.5-1.5-7-1.5-10 .5Z" />
-              <path d="M12 5.5v15" />
-            </svg>
-          </button>
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M12 5.5C9 3.5 5.5 3.5 2 5v15c3.5-1.5 7-1.5 10 .5 3-2 6.5-2 10-.5V5c-3.5-1.5-7-1.5-10 .5Z" />
+                <path d="M12 5.5v15" />
+              </svg>
+            </button>
+          )}
         </div>
 
         {/* vitals — what the CONTEXT number and the SPEND/TASKS gauges used to
@@ -1049,7 +1072,11 @@ export function MissionRail({
         {/* the stream */}
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 20px 24px' }}>
           {!sessionId && (
-            <p className="cl-transcript-state">Waiting for the CLI session to register…</p>
+            <p className="cl-transcript-state">
+              {remote
+                ? `Waiting for the session on ${remote.hostName}…`
+                : 'Waiting for the CLI session to register…'}
+            </p>
           )}
 
           {sessionId && isError && (
@@ -1120,12 +1147,13 @@ export function MissionRail({
         <MessagesDock
           threads={threads}
           now={now}
-          onOpenExchange={onOpenExchange}
+          onOpenExchange={remote ? undefined : onOpenExchange}
           onLocateTurn={onLocateTurn}
         />
 
-        {/* ENVIRONMENT — the session's standing setup, pinned under the stream */}
-        <EnvironmentStrip init={init} />
+        {/* ENVIRONMENT — the session's standing setup, pinned under the stream.
+            This machine's setup says nothing about a session on another one. */}
+        {!remote && <EnvironmentStrip init={init} />}
       </div>
     </aside>
   );

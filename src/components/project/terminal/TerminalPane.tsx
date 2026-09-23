@@ -103,6 +103,7 @@ export function TerminalPane({
   remote,
   onExit,
   hideExitOverlay,
+  onTerminalId,
 }: {
   ref?: Ref<TerminalPromptHandle>;
   /** Local working directory; with `remote` set it is a label only. */
@@ -122,6 +123,9 @@ export function TerminalPane({
   /** Leave the ended session's output uncovered: the parent says what happened
    *  and offers what to do next. A failure to start keeps its own notice. */
   hideExitOverlay?: boolean;
+  /** The pane's terminal id once the PTY exists, null when it is gone — what a
+   *  remote pane's Lens is keyed on in the main process (#294). */
+  onTerminalId?: (id: string | null) => void;
 }) {
   const { resolved } = useTheme();
   const palette = PALETTES[resolved];
@@ -156,6 +160,7 @@ export function TerminalPane({
   // Read by `startSession` only; the launch never changes under a mounted pane.
   const remoteRef = useRef(remote);
   const onExitRef = useRef(onExit);
+  const onTerminalIdRef = useRef(onTerminalId);
   const [status, setStatus] = useState<TerminalStatus>('starting');
   const [exitCode, setExitCode] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -165,7 +170,8 @@ export function TerminalPane({
   useEffect(() => {
     onPidRef.current = onPid;
     onExitRef.current = onExit;
-  }, [onPid, onExit]);
+    onTerminalIdRef.current = onTerminalId;
+  }, [onPid, onExit, onTerminalId]);
 
   useEffect(() => {
     onStatus?.(status);
@@ -226,6 +232,7 @@ export function TerminalPane({
       idRef.current = res.data.id;
       trackEvent(launch ? 'remote_terminal_opened' : 'terminal_opened');
       onPidRef.current(res.data.pid);
+      onTerminalIdRef.current?.(res.data.id);
       for (const chunk of earlyRef.current) {
         if (chunk.id === res.data.id) term.write(chunk.data);
       }

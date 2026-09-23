@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { PromptTemplateInput } from './shared/playbook-types';
 import type { RemoteHostInput } from './shared/remote-host';
+import type { RemoteLensState } from './shared/remote-session';
 
 // Subscribe to a renderer IPC channel with a *named* handler and return an
 // unsubscribe disposer. Unlike `removeAllListeners(channel)` (the old pattern),
@@ -168,6 +169,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listHosts: () => ipcRenderer.invoke('remote:listHosts'),
     saveHost: (input: RemoteHostInput) => ipcRenderer.invoke('remote:saveHost', input),
     deleteHost: (id: string) => ipcRenderer.invoke('remote:deleteHost', id),
+    // Lens and Mission Control for the session a remote pane runs (#294), read
+    // from the host over a second channel and kept in memory.
+    getLensState: (terminalId: string) => ipcRenderer.invoke('remote:getLensState', terminalId),
+    answerLens: (terminalId: string, text: string) =>
+      ipcRenderer.invoke('remote:answerLens', terminalId, text),
+    retryLens: (terminalId: string) => ipcRenderer.invoke('remote:retryLens', terminalId),
+    onLensState: (cb: (state: RemoteLensState) => void) => subscribe('remote:lensState', cb),
   },
   clipboard: {
     readText: () => ipcRenderer.invoke('clipboard:readText'),

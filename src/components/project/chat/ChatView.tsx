@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
-import type { UIEvent } from 'react';
+import type { ReactNode, UIEvent } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import {
   saveMarkdownExport,
@@ -32,6 +32,7 @@ import { useChatAutoScroll } from './useAutoScroll';
 import { useTranscriptModel } from './useTranscriptModel';
 import { ToolDetailPanel } from './ToolDetailPanel';
 import { VaultLinksProvider } from '../../VaultLinks';
+import type { RemoteTranscript } from '../../remote-origin';
 import { DiffsOpenContext } from './diffs-open';
 import { AdvisorBadge, MessageBubble, ToolsHiddenBadge } from './MessageBubble';
 import { ChatControlPill } from './ChatControlPill';
@@ -76,6 +77,7 @@ export function ChatView({
   embedded = false,
   jumpToTurnRef,
   focusMessageUuid,
+  remote,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -106,23 +108,29 @@ export function ChatView({
    *  compaction boundary, so the message may simply not be here — and then the
    *  view says so instead of landing on whatever turn an index happened to hit. */
   focusMessageUuid?: string;
+  /** A session read from another machine (#294): its messages come from here
+   *  instead of this machine's disk, and nothing about the project is read
+   *  locally — definitions, configuration, wikilinks — nor can the transcript
+   *  be exported, highlighted or deleted from here. Unset, nothing changes. */
+  remote?: RemoteTranscript;
 }) {
-  const {
-    data: messages,
-    isLoading,
-    isError,
-    error,
-    refetch,
-  } = useChatSession(project.hash, session.filename);
-  const { data: globalAgents } = useGlobalAgents();
-  const { data: projectAgents } = useProjectAgents(project.realPath);
-  const { data: allSkills } = useAllSkills(project.realPath);
-  const { data: plugins } = usePlugins();
+  const chat = useChatSession(project.hash, remote ? null : session.filename);
+  const messages = remote ? remote.messages : chat.data;
+  const isLoading = !remote && chat.isLoading;
+  const isError = !remote && chat.isError;
+  const { error, refetch } = chat;
+  const localPath = remote ? null : project.realPath;
+  const globalAgentsQuery = useGlobalAgents(!remote);
+  const globalAgents = remote ? undefined : globalAgentsQuery.data;
+  const { data: projectAgents } = useProjectAgents(localPath);
+  const { data: allSkills } = useAllSkills(localPath);
+  const pluginsQuery = usePlugins(!remote);
+  const plugins = remote ? undefined : pluginsQuery.data;
   // Context occupancy for the pill's vitals cell. The raw `model` setting (e.g.
   // `opus[1m]`) carries the 1M marker the transcript's resolved id drops, and it
   // is what sizes the window — the same read Mission Control makes, through the
   // same query, so the two can never disagree about how full the window is.
-  const { data: effectiveConfig } = useEffectiveConfig(project.realPath);
+  const { data: effectiveConfig } = useEffectiveConfig(project.realPath, !remote);
   const rawModel =
     typeof effectiveConfig?.effective?.model === 'string'
       ? (effectiveConfig.effective.model as string)
@@ -228,7 +236,7 @@ export function ChatView({
 
   // Heavy: rebuild the processed transcript only when the displayed messages change.
   const processed = useMemo(() => buildProcessedMessages(displayMessages), [displayMessages]);
-  const canExport = processed.length > 0 && !isLoading;
+  const canExport = !remote && processed.length > 0 && !isLoading;
 
   const sessionId = useMemo(() => session.filename.replace(/\.jsonl$/, ''), [session.filename]);
 
@@ -501,7 +509,7 @@ export function ChatView({
   const highlightLayer = useHighlightLayer({
     container: transcriptEl,
     api: highlightsApi,
-    enabled: !chatHidden,
+    enabled: !chatHidden && !remote,
   });
   // Paints the find's occurrences over the mounted rows. The active turn is
   // passed as a uuid because that is what the DOM carries (`data-hl-block`).
@@ -609,7 +617,7 @@ export function ChatView({
         selectionMode={selectionMode}
         selected={selectedTurns.has(p.msg.uuid)}
         onToggleSelect={handleToggleSelect}
-        onExportTurn={handleExportTurn}
+        onExportTurn={remote ? undefined : handleExportTurn}
       />
     );
   };
@@ -660,7 +668,8 @@ export function ChatView({
       onClearSelection={clearSelection}
       onExportPreset={setExportPreset}
       onExport={handleExport}
-      onDelete={() => setShowDelete(true)}
+      onDelete={remote ? undefined : () => setShowDelete(true)}
+      exportable={!remote}
       modelRuns={modelRuns}
       onLocateModel={jumpToTurn}
       thought={thought}
@@ -672,7 +681,7 @@ export function ChatView({
     // files. Mounted here rather than higher up on purpose: the memory views
     // carry wikilinks of their own that point at topics under `~/.claude`, and
     // resolving those against the project tree would mark every one missing.
-    <VaultLinksProvider root={project.realPath}>
+    <TranscriptLinks root={remote ? null : project.realPath}>
       <DiffsOpenContext.Provider value={diffsOpen}>
         <div className="cl-chat">
           {focusMissed && (
@@ -918,6 +927,14 @@ export function ChatView({
           </div>
         </div>
       </DiffsOpenContext.Provider>
-    </VaultLinksProvider>
+    </TranscriptLinks>
   );
+}
+
+/** The `[[wikilinks]]` resolve against the project's files, which only exist
+ *  here for a local session: a remote one renders them as text, as any
+ *  markdown outside a `VaultLinksProvider` does. */
+function TranscriptLinks({ root, children }: { root: string | null; children: ReactNode }) {
+  if (root === null) return <>{children}</>;
+  return <VaultLinksProvider root={root}>{children}</VaultLinksProvider>;
 }

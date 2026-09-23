@@ -845,10 +845,12 @@ stessi canali `terminal:*`, con `ssh -t <host> sh -c '<script>'` al posto di un
 `claude` locale — o, su un host Windows, `powershell -EncodedCommand <…>`
 (`electron/modules/remote-ssh.ts` dice perché e come è quotato).
 
-| File             | Esporta                                 | Descrizione                                                                                                                                                                                                                                           |
-| ---------------- | --------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `RemoteView.tsx` | `RemoteView`                            | Elenco degli host salvati (nome, destinazione ssh, porta, cartella di partenza) + form di aggiunta/modifica + pannello Connect con la cartella sull'host; una volta connesso, la `TerminalPane` in modalità remota con il banner e la notice d'uscita |
-| `remote-exit.ts` | `remoteExitNotice`, `remoteActionLabel` | Modulo puro: cosa significa un codice d'uscita (i `REMOTE_EXIT` dello script, il 255 di ssh, un'uscita normale) e quale passo successivo offrire                                                                                                      |
+| File                 | Esporta                                                                        | Descrizione                                                                                                                                                                                                                                           |
+| -------------------- | ------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `RemoteView.tsx`     | `RemoteView`                                                                   | Elenco degli host salvati (nome, destinazione ssh, porta, cartella di partenza) + form di aggiunta/modifica + pannello Connect con la cartella sull'host; una volta connesso, la `TerminalPane` in modalità remota con il banner e la notice d'uscita |
+| `remote-exit.ts`     | `remoteExitNotice`, `remoteActionLabel`                                        | Modulo puro: cosa significa un codice d'uscita (i `REMOTE_EXIT` dello script, il 255 di ssh, un'uscita normale) e quale passo successivo offrire                                                                                                      |
+| `RemoteLensPane.tsx` | `RemoteLensPane`                                                               | Il tab Lens di una pane remota (#294): la `ChatView` embedded con `remote` impostato quando c'è un transcript, altrimenti dove sta la lettura — e la domanda di ssh per un secondo login, con il campo per rispondere                                 |
+| `remote-lens.ts`     | `channelNote`, `remoteProjectHash`, `remoteTranscript`, `remoteSessionSummary` | Modulo puro: la frase sul canale (condiviso o secondo login), la chiave di progetto che non incontra mai un progetto locale (`remote:<hostId>`), e ciò che `ChatView`/`MissionRail` ricevono                                                          |
 
 Decisioni:
 
@@ -857,12 +859,34 @@ Decisioni:
   (anthropics/claude-code#87190), e allora questo strato va tolto. Quindi niente
   di locale è riscritto attorno a un host: `TerminalMissionControl`,
   `terminal:create`, `chat-runner` e i reader restano come sono. La
-  `TerminalPane` prende solo due prop opzionali (`remote`, `onExit` +
-  `hideExitOverlay`); senza, si comporta esattamente come prima.
+  `TerminalPane` prende solo prop opzionali (`remote`, `onExit` +
+  `hideExitOverlay`, `onTerminalId` per la Lens); senza, si comporta
+  esattamente come prima. Lo stesso vale per `ChatView`, `MissionRail`,
+  `ChatControlPill` (`onDelete` opzionale, `exportable`) e per l'`enabled` di
+  `useEffectiveConfig`/`usePlugins`/`useGlobalAgents`.
 - **Una sessione remota non passa mai per locale.** Registro e transcript stanno
-  sull'host, quindi Lens, Mission Control e gli elenchi delle sessioni di questa
-  macchina non la vedono: il banner (`role="note"`) lo dice finché la
-  connessione è aperta, e la barra in alto stampa `RUNNING ON <HOST>`.
+  sull'host: il banner (`role="note"`) lo dice finché la connessione è aperta, e
+  la barra in alto stampa `RUNNING ON <HOST>`. Gli elenchi delle sessioni di
+  questa macchina non la vedono.
+- **Lens e Mission Control la leggono dall'host (#294)**, per la sola sessione
+  connessa e in sola lettura: tab `TERMINAL` / `LENS` (i `ViewTabs` e il
+  `RailToggle` di `TerminalMissionControl`, esportati) e la `MissionRail`, con la
+  `TerminalPane` sempre montata perché è la connessione. I dati arrivano da
+  `useRemoteLens` (push `remote:lensState` + snapshot all'aggancio, `revision`
+  contro lo snapshot tardivo — niente React Query: nessuno scope del watcher può
+  invalidare righe tenute nella memoria del main). `ChatView` e `MissionRail`
+  prendono la prop opzionale `remote` e con essa **non leggono niente del
+  progetto su questa macchina** — definizioni di skill e agent, config
+  effettiva, task, team, memoria, sotto-agenti, wikilink, lista sessioni,
+  playbook — né offrono export, highlight o delete: la cartella dell'host ha
+  spesso lo stesso path di una locale, e ogni lettura mostrerebbe i dati di
+  questa macchina come fossero della sessione. `RemoteOriginContext`
+  (`components/remote-origin.ts`) fa lo stesso per le foglie che aprono un
+  file per path (`MarkdownImage`). Il banner dice **come** la Lens raggiunge
+  l'host: sulla connessione del terminale (`ControlMaster`, client macOS/Linux)
+  o con un **secondo login**, la cui domanda appare nel tab Lens. Cosa non c'è:
+  transcript dei sotto-agenti, task, team, indice della memoria, definizioni,
+  permission mode — stanno sull'host e non vengono letti.
 - **La versione di Claude Code sull'host si controlla prima di avviarlo**, nello
   script remoto e non con un `ssh` a parte: una connessione sola, e password,
   2FA o una chiave nuova vengono chiesti nella pane stessa. La soglia è il
@@ -895,8 +919,9 @@ Decisioni:
   (`cl-remote-dir:<id>`): è una comodità, perderla costa riscriverla. Gli host
   invece stanno nel main (`~/.claudelens/remote-hosts.json`), perché sono dati.
 
-Coperta da `test/remote-view.test.tsx` (StrictMode, fake bridge); lo script
-remoto è eseguito davvero in `test/remote-ssh.test.ts`.
+Coperta da `test/remote-view.test.tsx` e `test/remote-lens-view.test.tsx`
+(StrictMode, fake bridge); lo script remoto e il watcher sono eseguiti davvero in
+`test/remote-ssh.test.ts` e `test/remote-watch.test.ts`.
 
 ---
 

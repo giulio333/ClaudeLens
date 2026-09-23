@@ -64,7 +64,7 @@ const RAIL_DEFAULT = 432;
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
 
-type View = 'terminal' | 'lens';
+export type View = 'terminal' | 'lens';
 type Overlay =
   | { kind: 'tool'; group: ToolGroup }
   | { kind: 'change'; change: FileChange }
@@ -85,7 +85,7 @@ type Overlay =
  *  three controls that fit at the end of this one. A 3-column grid keeps the
  *  tabs centered on the column while the right cluster stays flush right: with a
  *  plain flex row a long tag list would push them off center. */
-function ViewTabs({
+export function ViewTabs({
   view,
   setView,
   right,
@@ -166,7 +166,7 @@ function ViewTabs({
 /** Collapse/expand toggle for the Mission Control rail — a panel-right glyph
  *  (right pane filled when the rail is shown). Stays visible in the frame so the
  *  rail can be reopened after collapsing. Collapsed state is persisted by the parent. */
-function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
+export function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onToggle: () => void }) {
   const label = collapsed ? 'Show Mission Control' : 'Hide Mission Control';
   return (
     <button

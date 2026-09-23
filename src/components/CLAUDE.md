@@ -22,7 +22,10 @@ Renders markdown with syntax highlighting and styled headings.
   pure half in `image-src.ts`. The renderer cannot load them itself: it runs
   sandboxed on `file://` under `img-src 'self' data:`. A file that is gone or
   refused is a chip saying so, never the broken-image glyph. `urlTransform`
-  keeps `file:` and `data:image/` sources, which react-markdown drops by default
+  keeps `file:` and `data:image/` sources, which react-markdown drops by default.
+  Under a `RemoteOriginContext` (`remote-origin.ts`, set by the Remote view, #294)
+  a path is **not** read: it names a file on the host, and this machine's file
+  at the same path would be drawn as if it were that one
 
 **Props:**
 

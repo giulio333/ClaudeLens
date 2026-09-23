@@ -128,6 +128,7 @@ export function buildRemoteScript(opts: RemoteScriptOptions): string {
     lines.push(
       ...versionGate(opts.minVersion),
       `cd ${word} 2>/dev/null || { echo "ClaudeLens: the folder ${opts.dir} does not exist on this host." >&2; exit ${REMOTE_EXIT.noDir}; }`,
+      ...posixLaunchMarker(),
       'exec claude'
     );
   }
@@ -194,6 +195,92 @@ export const WINDOWS_MARK_FN =
   `[Console]::Out.Write("$([char]27)]${EXIT_MARKER_OSC};${EXIT_MARKER_KEY}=$code$([char]7)") }`;
 
 /**
+ * Says, invisibly, which process on the host is this pane's Claude Code, and
+ * when it started by the host's clock — what the Lens needs to find the
+ * session in the host's registry (#294), since the pid this machine sees is
+ * ssh's. Written on the same private OSC as the exit marker, under its own key.
+ *
+ * The pid is the CLI itself or, when a shim stands in front of it, an ancestor
+ * that lives exactly as long as the session. Never a guess: matching on the
+ * folder and the start time alone was measured to pick another session — one
+ * started a few seconds later in the same folder, while this one was still on
+ * its "trust this folder?" prompt and had not registered yet.
+ *
+ * On Windows the CLI is started with `Start-Process -PassThru`, the one way
+ * Windows PowerShell 5.1 learns a child's pid (WMI is commonly denied to the
+ * user, and `Get-Process` has no parent pid there); `-NoNewWindow` keeps it on
+ * the pane's console, so the TUI runs as it does under `&`. Reading `.Handle`
+ * once is what makes `.ExitCode` readable after the wait. An npm `.ps1` shim
+ * cannot be started that way, so it runs under `&` and the marker names the
+ * script's own PowerShell, which waits for it.
+ */
+const LAUNCH_MARKER_KEY = 'claudelens-launch';
+const WINDOWS_LAUNCH_FN =
+  'function MarkLaunch($id) { ' +
+  `[Console]::Out.Write("$([char]27)]${EXIT_MARKER_OSC};${LAUNCH_MARKER_KEY}=$id;$([DateTimeOffset]::UtcNow.ToUnixTimeSeconds())$([char]7)") }`;
+const WINDOWS_LAUNCH = [
+  WINDOWS_LAUNCH_FN,
+  "if ($c.CommandType -eq 'Application') {",
+  '  $p = Start-Process -FilePath $claude -NoNewWindow -PassThru',
+  '  $null = $p.Handle',
+  '  MarkLaunch $p.Id',
+  '  $p.WaitForExit()',
+  '  $rc = $p.ExitCode',
+  '} else {',
+  '  MarkLaunch $PID',
+  '  & $claude',
+  '  $rc = $LASTEXITCODE',
+  '}',
+];
+
+/**
+ * The POSIX half. `$$` is this `sh`'s pid, which the `exec` that follows hands
+ * to the CLI unchanged, so the registry entry is `sessions/<pid>.json` exactly.
+ * The quoting rules forbid `\`, so ESC and BEL come out of awk as the
+ * characters with those codes rather than out of an escape sequence; `n+0`
+ * makes awk read the code as a number and not print the digit "2".
+ */
+function posixLaunchMarker(): string[] {
+  return [
+    'e=$(awk -v f=%c -v n=27 "BEGIN{printf f,n+0}")',
+    'b=$(awk -v f=%c -v n=7 "BEGIN{printf f,n+0}")',
+    `printf "%s]${EXIT_MARKER_OSC};${LAUNCH_MARKER_KEY}=%s;%s%s" "$e" "$$" "$(date +%s)" "$b"`,
+  ];
+}
+
+/** When and as which process Claude Code started on the host. */
+export interface RemoteLaunch {
+  /** The CLI's pid on the host, or an ancestor's that lives as long as it. */
+  pid: number;
+  /** Host clock, epoch seconds. */
+  at: number;
+}
+
+const LAUNCH_MARKER_RE = new RegExp(
+  `\x1b\\]${EXIT_MARKER_OSC};${LAUNCH_MARKER_KEY}=(\\d{1,10});(\\d{1,12})\x07`
+);
+const LAUNCH_MARKER_TAIL = 64;
+
+/** Watches a pane's output for the launch marker; `launch()` is the first one seen. */
+export function createLaunchMarkerScanner(): {
+  feed(chunk: string): void;
+  launch(): RemoteLaunch | null;
+} {
+  let tail = '';
+  let found: RemoteLaunch | null = null;
+  return {
+    feed(chunk) {
+      if (found) return;
+      const text = tail + chunk;
+      const m = LAUNCH_MARKER_RE.exec(text);
+      if (m) found = { pid: Number(m[1]), at: Number(m[2]) };
+      tail = text.slice(-LAUNCH_MARKER_TAIL);
+    },
+    launch: () => found,
+  };
+}
+
+/**
  * The exit code to report for a remote pane: ssh's own, unless the connect
  * script marked a refusal and ssh could not carry it (it reads 0 then).
  */
@@ -245,9 +332,9 @@ export function buildWindowsScript(opts: RemoteScriptOptions): string {
   ];
   // What the CLI itself answered has to take the marker too: ssh would report
   // a failed `claude update` as 0, and the pane would call it a success.
-  const passThrough = ['$rc = $LASTEXITCODE', 'if ($rc -ne 0) { Mark $rc }', 'exit $rc'];
+  const passThrough = ['if ($rc -ne 0) { Mark $rc }', 'exit $rc'];
   if (opts.mode === 'update') {
-    lines.push('& $claude update', ...passThrough);
+    lines.push('& $claude update', '$rc = $LASTEXITCODE', ...passThrough);
   } else {
     if (!opts.dir || !opts.minVersion)
       throw new Error('A Claude Code launch needs a folder and a minimum version.');
@@ -257,7 +344,7 @@ export function buildWindowsScript(opts: RemoteScriptOptions): string {
       `$d = ${dir}`,
       `if (-not (Test-Path -LiteralPath $d -PathType Container)) { Fail ${REMOTE_EXIT.noDir} "the folder $d does not exist on this host." }`,
       'Set-Location -LiteralPath $d',
-      '& $claude',
+      ...WINDOWS_LAUNCH,
       ...passThrough
     );
   }
@@ -296,7 +383,8 @@ export function buildRemoteCommand(os: RemoteOs, opts: RemoteScriptOptions): str
  */
 export function buildSshArgs(
   host: Pick<RemoteHost, 'target' | 'port'>,
-  remoteCommand: string
+  remoteCommand: string,
+  controlPath?: string
 ): string[] {
   return [
     '-t',
@@ -306,11 +394,51 @@ export function buildSshArgs(
     'ServerAliveInterval=30',
     '-o',
     'ServerAliveCountMax=4',
+    ...(controlPath ? masterArgs(controlPath) : []),
     ...(host.port ? ['-p', String(host.port)] : []),
     '--',
     host.target,
     remoteCommand,
   ];
+}
+
+/**
+ * Makes the pane's connection an OpenSSH master the Lens channel can ride
+ * (#294), so a password or 2FA login is answered once. `ControlPersist=no`
+ * overrides a persisting master the user's own config may ask for: this one
+ * lives exactly as long as the pane. The socket is ClaudeLens' own
+ * (`controlPathFor`), never the user's configured one.
+ */
+function masterArgs(controlPath: string): string[] {
+  return [
+    '-o',
+    'ControlMaster=auto',
+    '-o',
+    `ControlPath=${controlPath}`,
+    '-o',
+    'ControlPersist=no',
+  ];
+}
+
+// A Unix socket path is at most 104 bytes on macOS (108 on Linux), counting
+// the terminating NUL; ssh adds nothing to a path without tokens.
+const CONTROL_PATH_MAX = 100;
+
+/**
+ * The master socket inside `dir` (a private directory the caller created), or
+ * null when there should be no master at all: a Windows client, whose OpenSSH
+ * has no `ControlMaster`, or a path ssh could not take — too long for a socket,
+ * or holding what its option parser would split on (whitespace, quotes) or
+ * expand (`%`). Then the Lens logs in a second time, and says so.
+ */
+export function controlPathFor(
+  dir: string,
+  platform: NodeJS.Platform = process.platform
+): string | null {
+  if (platform === 'win32') return null;
+  const path = `${dir}/s`;
+  if (Buffer.byteLength(path) > CONTROL_PATH_MAX || /[\s"'%]/.test(path)) return null;
+  return path;
 }
 
 /** The local ssh client: OpenSSH on macOS/Linux, the Windows 10+ built-in on win32. */

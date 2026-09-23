@@ -3,6 +3,7 @@ import { SheetModal } from './project/chat/CommandBlock';
 import { useVaultLinksApi } from './vault-link-engine';
 import { useLocalImage } from '../hooks/useIPC';
 import { localImagePath } from './image-src';
+import { useRemoteOrigin } from './remote-origin';
 
 /**
  * An image in the transcript: a screenshot pasted into a prompt, a `Read` of a
@@ -57,13 +58,23 @@ export function ImageFigure({
  */
 export function MarkdownImage({ src, alt }: { src?: string; alt?: string }) {
   const root = useVaultLinksApi()?.root ?? null;
+  const remoteHost = useRemoteOrigin();
   const path = src ? localImagePath(src, root) : null;
-  const local = useLocalImage(path, root ?? undefined);
+  // A path in a remote transcript names a file on the host: reading it here
+  // would draw this machine's file at that path, or call the host's one gone.
+  const local = useLocalImage(remoteHost ? null : path, root ?? undefined);
 
   if (!src) return null;
   if (!path) return <ImageFigure src={src} alt={alt} />;
 
   const name = path.split('/').pop() ?? path;
+  if (remoteHost) {
+    return (
+      <span className="cl-image-note is-unknown" title={path}>
+        {name} — on {remoteHost}, not read from this machine
+      </span>
+    );
+  }
   if (local.isPending) {
     return <span className="cl-image-note is-pending">{alt || name}</span>;
   }

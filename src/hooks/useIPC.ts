@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { keysForScope, scopesFromPayload } from './dataChangeScopes';
 import type {
   PromptTemplate,
@@ -11,6 +11,7 @@ import type {
   RemoteHostInput,
   RemoteLaunchMode,
 } from '../../electron/shared/remote-host';
+import type { RemoteLensState } from '../../electron/shared/remote-session';
 
 import type {
   MemoryTopic,
@@ -325,6 +326,10 @@ declare global {
         listHosts: () => Promise<IpcResult<RemoteHost[]>>;
         saveHost: (input: RemoteHostInput) => Promise<IpcResult<RemoteHost>>;
         deleteHost: (id: string) => Promise<IpcResult<null>>;
+        getLensState: (terminalId: string) => Promise<IpcResult<RemoteLensState | null>>;
+        answerLens: (terminalId: string, text: string) => Promise<IpcResult<null>>;
+        retryLens: (terminalId: string) => Promise<IpcResult<null>>;
+        onLensState: (cb: (state: RemoteLensState) => void) => () => void;
       };
       clipboard: {
         readText: () => Promise<IpcResult<string>>;
@@ -1217,6 +1222,38 @@ export function useDeleteRemoteHost() {
   });
 }
 
+/**
+ * What the Lens knows about the session a remote pane runs (#294), pushed by the
+ * main process as it reads the host. Not React Query: the rows are another
+ * machine's, held in the main process' memory, and nothing on disk here changes
+ * with them — so no watcher scope could invalidate a query for them. The
+ * snapshot fetched on mount covers a push that landed before the subscription,
+ * and the revision keeps a late snapshot from replacing a newer push.
+ */
+export function useRemoteLens(terminalId: string | null): RemoteLensState | null {
+  const [state, setState] = useState<RemoteLensState | null>(null);
+  useEffect(() => {
+    if (!terminalId) return;
+    let active = true;
+    const keep = (next: RemoteLensState | null) => {
+      if (!active || !next || next.terminalId !== terminalId) return;
+      setState(prev =>
+        prev && prev.terminalId === terminalId && prev.revision >= next.revision ? prev : next
+      );
+    };
+    const unsubscribe = window.electronAPI.remote.onLensState(keep);
+    window.electronAPI.remote
+      .getLensState(terminalId)
+      .then(res => keep(res.data))
+      .catch(() => {});
+    return () => {
+      active = false;
+      unsubscribe();
+    };
+  }, [terminalId]);
+  return state && state.terminalId === terminalId ? state : null;
+}
+
 export function useGlobalSkills() {
   return useQuery({
     queryKey: ['skills:global'],
@@ -1232,10 +1269,13 @@ export function useAllSkills(realPath: string | null) {
   });
 }
 
-export function useGlobalAgents() {
+/** `enabled: false` for a session of another machine (#294), whose agents are
+ *  not this machine's. */
+export function useGlobalAgents(enabled = true) {
   return useQuery({
     queryKey: ['agents:global'],
     queryFn: () => unwrap(window.electronAPI.agents.getGlobal()),
+    enabled,
   });
 }
 
@@ -1246,10 +1286,13 @@ export function useGlobalMcp() {
   });
 }
 
-export function usePlugins() {
+/** `enabled: false` for a session of another machine (#294), whose plugins are
+ *  not this machine's. */
+export function usePlugins(enabled = true) {
   return useQuery({
     queryKey: ['plugins:all'],
     queryFn: () => unwrap(window.electronAPI.plugins.getAll()),
+    enabled,
   });
 }
 
@@ -1564,11 +1607,14 @@ export function useDataChangedRefetch() {
  * Expensive (spawns a one-turn SDK query to read the init message), so it is
  * cached aggressively and intentionally left out of the `data:changed` refetch.
  */
-export function useEffectiveConfig(cwd?: string) {
+/** `enabled: false` is for a surface drawing a session of another machine
+ *  (#294), which this machine's configuration does not describe. */
+export function useEffectiveConfig(cwd?: string, enabled = true) {
   return useQuery({
     queryKey: ['config:effective', cwd ?? null],
     queryFn: () => unwrap(window.electronAPI.config.getEffective(cwd)),
     staleTime: 5 * 60 * 1000,
     refetchOnWindowFocus: false,
+    enabled,
   });
 }

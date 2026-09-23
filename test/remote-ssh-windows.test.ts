@@ -8,6 +8,7 @@ import {
   buildRemoteCommand,
   buildWindowsScript,
   createExitMarkerScanner,
+  createLaunchMarkerScanner,
   remoteExitCode,
   windowsCommandArgs,
   windowsCommandString,
@@ -154,6 +155,7 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', { timeout: 40_00
         `if [ "$1" = "--version" ]; then ${versionLine}; exit 0; fi`,
         `if [ "$1" = "update" ]; then echo UPDATED; exit ${updateExit}; fi`,
         'echo "RAN pwd=$(pwd)"',
+        'echo "PID=$$"',
         'exit 7',
       ].join('\n')
     );
@@ -196,6 +198,26 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', { timeout: 40_00
     expect(r.code).toBe(7);
     // The same code as a marker, for the Windows ssh that would report 0.
     expect(r.stdout).toContain(MARKER(7));
+  });
+
+  it('names the pid of the Claude Code it started, and when (#294)', async () => {
+    await stubClaude('2.1.280 (Claude Code)');
+    const before = Math.floor(Date.now() / 1000);
+    const r = await run({});
+    const scan = createLaunchMarkerScanner();
+    scan.feed(r.stdout);
+    // Start-Process hands back the child's own pid: the one the CLI registers under.
+    const pid = Number(/PID=(\d+)/.exec(r.stdout)?.[1]);
+    expect(scan.launch()).toEqual({ pid, at: expect.any(Number) });
+    expect(scan.launch()!.at).toBeGreaterThanOrEqual(before);
+    // And the CLI's exit code still comes back, as code and as marker.
+    expect(r.code).toBe(7);
+    expect(r.stdout).toContain(MARKER(7));
+  });
+
+  it('prints no launch marker when the gate refuses', async () => {
+    await stubClaude('2.1.279 (Claude Code)');
+    expect((await run({})).stdout).not.toContain('claudelens-launch');
   });
 
   it('marks a failed claude update, so a tty-bound ssh cannot report it as done', async () => {

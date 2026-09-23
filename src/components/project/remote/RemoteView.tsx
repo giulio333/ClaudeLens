@@ -1,6 +1,11 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { claudeCodeVersion } from '../../../../package.json';
-import { useDeleteRemoteHost, useRemoteHosts, useSaveRemoteHost } from '../../../hooks/useIPC';
+import {
+  useDeleteRemoteHost,
+  useRemoteHosts,
+  useRemoteLens,
+  useSaveRemoteHost,
+} from '../../../hooks/useIPC';
 import { useTheme } from '../../../hooks/useTheme';
 import {
   remoteDirProblem,
@@ -10,7 +15,16 @@ import {
   type RemoteLaunchMode,
   type RemoteOs,
 } from '../../../../electron/shared/remote-host';
+import type { RemoteLensChannel } from '../../../../electron/shared/remote-session';
+import { RemoteOriginContext } from '../../remote-origin';
 import { TopBar } from '../shared/TopBar';
+import { CloseOverlayButton } from '../shared/CloseOverlayButton';
+import { ToolDetailPanel } from '../chat/ToolDetailPanel';
+import { FileChangePage } from '../chat/FileChangesStrip';
+import type { ToolGroup } from '../chat/utils';
+import { MissionRail } from '../terminal/MissionRail';
+import type { FileChange } from '../terminal/mission-feed';
+import { RailToggle, ViewTabs, type View } from '../terminal/TerminalMissionControl';
 import { Lens } from '../overview/Lens';
 import {
   STATUS_LABEL,
@@ -24,21 +38,31 @@ import {
   type RemoteNotice,
   type RemoteNoticeAction,
 } from './remote-exit';
+import { RemoteLensPane } from './RemoteLensPane';
+import {
+  channelNote,
+  remoteProjectHash,
+  remoteSessionSummary,
+  remoteTranscript,
+} from './remote-lens';
 
 /**
  * Claude Code on another machine, in the embedded terminal (#242).
  *
  * A list of saved ssh destinations and, once one is connected, the same
  * `TerminalPane` a local session uses, pointed at the host through the system
- * `ssh`. The session is the stock CLI running over there: its registry and its
- * transcript are on the host, so nothing on this machine — Lens, Mission
- * Control, the session lists — sees it, and the frame says so on screen rather
- * than leaving a remote session to pass for a local one.
+ * `ssh`. The session is the stock CLI running over there, so its registry and
+ * its transcript are on the host: a second channel reads them (#294) and the
+ * Lens tab and the Mission Control rail draw the session from memory — nothing
+ * of it is written on this machine, and the session lists here still do not
+ * see it. The frame says all of this on screen rather than leaving a remote
+ * session to pass for a local one.
  *
  * Deliberately separate from `TerminalMissionControl`: that view is built on the
  * local registry and the local transcript, and this layer is meant to be
  * removable when Claude Code ships its own way to attach to a session on another
- * machine (anthropics/claude-code#87190).
+ * machine (anthropics/claude-code#87190). It borrows that view's tab row and
+ * rail toggle, and hands `ChatView` and `MissionRail` their `remote` prop.
  */
 
 interface RemoteSession {
@@ -106,8 +130,9 @@ export function RemoteView({ onBack }: { onBack: () => void }) {
             Run Claude Code on another machine in the embedded terminal. ClaudeLens starts your
             system ssh, so ~/.ssh/config, keys, the agent and ProxyJump work as in any terminal, and
             it stores no password or key. The session runs on the host and its history stays there:
-            Lens, Mission Control and the session lists on this machine do not show it. The host can
-            run Linux, macOS or Windows.
+            while you are connected, Lens and Mission Control read it from the host and keep it in
+            memory only, and the session lists on this machine do not show it. The host can run
+            Linux, macOS or Windows.
           </p>
         </section>
         <HostsSection onConnect={connect} />
@@ -428,9 +453,35 @@ function RemoteSessionView({
   const { resolved } = useTheme();
   const [status, setStatus] = useState<TerminalStatus>('starting');
   const [exitCode, setExitCode] = useState<number | null>(null);
+  const [terminalId, setTerminalId] = useState<string | null>(null);
+  const [view, setViewRaw] = useState<View>('terminal');
+  const [railCollapsed, setRailCollapsed] = useState(() => readPref(RAIL_COLLAPSED_KEY) === '1');
+  const [railWidth, setRailWidth] = useState(() => {
+    const saved = Number(readPref(RAIL_WIDTH_KEY));
+    return Number.isFinite(saved) && saved >= RAIL_MIN && saved <= RAIL_MAX ? saved : RAIL_DEFAULT;
+  });
+  const [overlay, setOverlay] = useState<Overlay>(null);
+  const jumpToTurnRef = useRef<((n: number) => void) | null>(null);
   const { host, dir, mode } = session;
+  // Only a session has something to read: `claude update` is the terminal alone.
+  const withLens = mode === 'claude';
+  const lens = useRemoteLens(withLens ? terminalId : null);
+
+  const setView = useCallback((next: View) => setViewRaw(next), []);
+  const closeOverlay = useCallback(() => setOverlay(null), []);
+  useEffect(() => {
+    if (!overlay) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') closeOverlay();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [overlay, closeOverlay]);
+
   const relaunch = (next: RemoteLaunchMode) => {
     setExitCode(null);
+    setTerminalId(null);
+    setOverlay(null);
     setSession({ ...session, mode: next, attempt: session.attempt + 1 });
   };
   const act = (action: RemoteNoticeAction) => {
@@ -451,35 +502,199 @@ function RemoteSessionView({
           minVersion: claudeCodeVersion,
         });
   const running = status === 'running';
+
+  const project = useMemo(
+    () => ({ hash: remoteProjectHash(host.id), realPath: lens?.cwd ?? dir }),
+    [host.id, lens?.cwd, dir]
+  );
+  const transcript = useMemo(() => remoteTranscript(lens, host.name), [lens, host.name]);
+  const chatSession = useMemo(() => remoteSessionSummary(lens), [lens]);
+  const jumpToTurn = useCallback(
+    (turnN: number) => {
+      setView('lens');
+      requestAnimationFrame(() => jumpToTurnRef.current?.(turnN));
+    },
+    [setView]
+  );
+  const onWidthChange = useCallback((w: number) => {
+    setRailWidth(w);
+    writePref(RAIL_WIDTH_KEY, String(w));
+  }, []);
+  const toggleRail = useCallback(() => {
+    setRailCollapsed(c => {
+      writePref(RAIL_COLLAPSED_KEY, c ? '0' : '1');
+      return !c;
+    });
+  }, []);
+
   return (
-    <div className="h-full flex flex-col" style={{ background: TERMINAL_SURFACE[resolved] }}>
-      <TopBar
-        onBack={onLeave}
-        backLabel={running ? 'Disconnect' : 'Back'}
-        crumbs={[
-          { label: 'REMOTE' },
-          { label: host.name, accent: true },
-          { label: mode === 'update' ? 'claude update' : dir },
-        ]}
-        right={<RemoteStatus status={status} hostName={host.name} />}
-      />
-      <div className="flex-1 min-h-0 flex flex-col" style={{ padding: '4px 26px 22px', gap: 10 }}>
-        <RemoteBanner host={host} />
-        {notice && <RemoteNoticeBar notice={notice} hostName={host.name} onAction={act} />}
-        <div className="flex-1 min-h-0">
-          <TerminalPane
-            key={session.attempt}
-            cwd={dir}
-            remote={{ hostId: host.id, mode, dir, minVersion: claudeCodeVersion }}
-            onPid={noop}
-            onStatus={setStatus}
-            onExit={setExitCode}
-            hideExitOverlay
-          />
+    // Every path a remote transcript names is on the host: the leaves that
+    // would open one here read this and do not.
+    <RemoteOriginContext.Provider value={host.name}>
+      <div
+        className="h-full flex flex-col cl-chat"
+        style={{
+          background:
+            view === 'terminal' || !withLens ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)',
+        }}
+      >
+        <TopBar
+          onBack={overlay ? closeOverlay : onLeave}
+          backLabel={overlay ? 'Back to session' : running ? 'Disconnect' : 'Back'}
+          crumbs={[
+            { label: 'REMOTE' },
+            { label: host.name, accent: !overlay },
+            { label: mode === 'update' ? 'claude update' : (lens?.cwd ?? dir) },
+            ...(overlay ? [{ label: overlayLabel(overlay), accent: true }] : []),
+          ]}
+          right={<RemoteStatus status={status} hostName={host.name} />}
+        />
+        <div style={{ flex: 1, minHeight: 0, display: 'flex' }}>
+          <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            {withLens && (
+              <ViewTabs
+                view={view}
+                setView={setView}
+                right={
+                  <>
+                    <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
+                    {overlay && (
+                      <CloseOverlayButton label="Back to session" onClose={closeOverlay} />
+                    )}
+                  </>
+                }
+              />
+            )}
+            <div
+              className="flex-1 min-h-0 flex flex-col"
+              style={{ padding: '10px 26px 22px', gap: 10, position: 'relative' }}
+            >
+              <RemoteBanner
+                host={host}
+                channel={withLens ? (lens?.channel ?? expectedChannel()) : null}
+              />
+              {notice && <RemoteNoticeBar notice={notice} hostName={host.name} onAction={act} />}
+              <div
+                className="flex-1 min-h-0"
+                style={{ display: view === 'terminal' || !withLens ? 'block' : 'none' }}
+              >
+                <TerminalPane
+                  key={session.attempt}
+                  cwd={dir}
+                  remote={{ hostId: host.id, mode, dir, minVersion: claudeCodeVersion }}
+                  onPid={noop}
+                  onStatus={setStatus}
+                  onExit={setExitCode}
+                  onTerminalId={setTerminalId}
+                  hideExitOverlay
+                />
+              </div>
+              {withLens && (
+                <div
+                  className="flex-1 min-h-0"
+                  style={{ display: view === 'lens' ? 'block' : 'none' }}
+                >
+                  <RemoteLensPane
+                    lens={lens}
+                    host={host}
+                    project={project}
+                    transcript={transcript}
+                    session={chatSession}
+                    onOpenTool={group => setOverlay({ kind: 'tool', group })}
+                    jumpToTurnRef={jumpToTurnRef}
+                    onBack={onLeave}
+                  />
+                </div>
+              )}
+              {overlay && (
+                <div
+                  className="absolute z-20 flex flex-col overflow-hidden"
+                  style={{
+                    top: 10,
+                    right: 26,
+                    bottom: 22,
+                    left: 26,
+                    background: 'var(--cl-paper)',
+                  }}
+                >
+                  {overlay.kind === 'tool' ? (
+                    <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
+                  ) : (
+                    <div className="cl-file-change-scroll">
+                      <FileChangePage file={overlay.change.file} />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          </main>
+          {withLens && !railCollapsed && (
+            <MissionRail
+              hash={project.hash}
+              sessionId={lens?.sessionId ?? null}
+              realPath={project.realPath}
+              width={railWidth}
+              onWidthChange={onWidthChange}
+              onOpenTool={group => setOverlay({ kind: 'tool', group })}
+              onOpenChange={change => setOverlay({ kind: 'change', change })}
+              // A sub-agent's transcript, a definition and a team live on the
+              // host and are not read from here; the rows stay where they are.
+              onOpenAgent={noop}
+              onOpenSkillDef={noop}
+              onOpenAgentDef={noop}
+              onOpenTeam={noop}
+              onLocateTurn={jumpToTurn}
+              onUsePrompt={noPrompt}
+              showVitals={view === 'terminal'}
+              remote={
+                transcript ?? { hostName: host.name, messages: [], status: null, summary: null }
+              }
+            />
+          )}
         </div>
       </div>
-    </div>
+    </RemoteOriginContext.Provider>
   );
+}
+
+type Overlay = { kind: 'tool'; group: ToolGroup } | { kind: 'change'; change: FileChange } | null;
+
+function overlayLabel(overlay: NonNullable<Overlay>): string {
+  return overlay.kind === 'tool' ? overlay.group.use.name.toUpperCase() : overlay.change.name;
+}
+
+const RAIL_DEFAULT = 432;
+const RAIL_MIN = 380;
+const RAIL_MAX = 560;
+const RAIL_WIDTH_KEY = 'cl-remote-rail-width';
+const RAIL_COLLAPSED_KEY = 'cl-remote-rail-collapsed';
+
+// Per-viewer conveniences, like the last folder: guarded, and lost at no cost.
+function readPref(key: string): string | null {
+  try {
+    return localStorage.getItem(key);
+  } catch {
+    return null;
+  }
+}
+function writePref(key: string, value: string): void {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    // Storage unavailable — the default comes back next time.
+  }
+}
+
+// What the main process will choose before it has said so: OpenSSH's control
+// socket everywhere but on a Windows client.
+function expectedChannel(): RemoteLensChannel {
+  return typeof navigator !== 'undefined' && /win/i.test(navigator.platform)
+    ? 'separate'
+    : 'shared';
+}
+
+function noPrompt(): Promise<void> {
+  return Promise.resolve();
 }
 
 function noop() {}
@@ -506,8 +721,10 @@ function RemoteStatus({ status, hostName }: { status: TerminalStatus; hostName: 
   );
 }
 
-// Always on screen while connected: a remote session must never read as a local one.
-function RemoteBanner({ host }: { host: RemoteHost }) {
+// Always on screen while connected: a remote session must never read as a local
+// one, and the way Lens reaches the host — one login or two — is stated rather
+// than discovered when ssh asks for a password a second time.
+function RemoteBanner({ host, channel }: { host: RemoteHost; channel: RemoteLensChannel | null }) {
   return (
     <div
       role="note"
@@ -521,8 +738,10 @@ function RemoteBanner({ host }: { host: RemoteHost }) {
         Remote · {host.target}
       </span>
       <span>
-        This session runs on {host.name}. Its history stays there, so Lens and Mission Control on
-        this machine do not show it.
+        This session runs on {host.name}.{' '}
+        {channel
+          ? channelNote(channel, host.name)
+          : 'Its history stays there, so Lens and Mission Control on this machine do not show it.'}
       </span>
     </div>
   );

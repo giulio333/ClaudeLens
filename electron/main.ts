@@ -120,10 +120,13 @@ import {
 import {
   buildRemoteCommand,
   buildSshArgs,
+  controlPathFor,
   createExitMarkerScanner,
+  createLaunchMarkerScanner,
   remoteExitCode,
   sshCommand,
 } from './modules/remote-ssh';
+import { RemoteLens, type LensSpawner } from './modules/remote-lens';
 import type { RemoteHostInput, RemoteLaunchMode } from './shared/remote-host';
 import { readActiveSessions, defaultSessionsDir } from './modules/sessions-registry-reader';
 import { createRegistryDiffState, diffRegistry } from './modules/notifications/registry-diff';
@@ -2210,6 +2213,12 @@ ipcMain.handle(
       // A Windows host cannot hand its refusal codes back through ssh when a tty
       // is allocated, so the script also prints them as a marker (remote-ssh.ts).
       const marker = createExitMarkerScanner();
+      // A session gets a Lens (#294): a second channel, opened once the connect
+      // script says Claude Code is starting, riding this connection's control
+      // socket where the client has one.
+      const control = opts.mode === 'claude' ? openControlDir() : null;
+      const launch = createLaunchMarkerScanner();
+      let lens: RemoteLens | null = null;
       // The PTY's local cwd is irrelevant to the remote session; the home folder
       // always exists. The environment is the app's own: ssh forwards none of it
       // beyond TERM (and whatever `SendEnv` the user configured), so the host
@@ -2218,7 +2227,7 @@ ipcMain.handle(
         {
           cwd: os.homedir(),
           command: sshCommand(),
-          args: buildSshArgs(host, remoteCommand),
+          args: buildSshArgs(host, remoteCommand, control?.path),
           env: process.env,
           cols: opts.cols,
           rows: opts.rows,
@@ -2226,17 +2235,117 @@ ipcMain.handle(
         {
           onData: data => {
             marker.feed(data);
+            if (lens && !launch.launch()) {
+              launch.feed(data);
+              const launched = launch.launch();
+              if (launched) lens.launched(launched);
+            }
             send('terminal:data', id, data);
           },
-          onExit: exitCode => send('terminal:exit', id, remoteExitCode(exitCode, marker.code())),
+          onExit: exitCode => {
+            lens?.terminalExited();
+            remoteLenses.delete(id);
+            if (control) closeControlDir(control.dir);
+            send('terminal:exit', id, remoteExitCode(exitCode, marker.code()));
+          },
         }
       );
+      if (opts.mode === 'claude' && opts.dir) {
+        lens = new RemoteLens({
+          terminalId: id,
+          host,
+          dir: opts.dir,
+          controlPath: control?.path ?? null,
+          spawn: spawnLensChannel,
+          onChange: state => send('remote:lensState', state),
+        });
+        remoteLenses.set(id, lens);
+      }
       return ok({ id, pid });
     } catch (e) {
       return err(e);
     }
   }
 );
+
+// ─── Remote Lens (#294) ───────────────────────────────────────────────────────
+//
+// Lens and Mission Control for the session a remote pane runs: its registry
+// entry and its transcript are on the host, so a second channel reads them
+// (modules/remote-lens.ts, remote-watch.ts) and the rows reach the renderer
+// from memory — nothing of another machine's work is written here. One reading
+// per pane, keyed by the pane's terminal id, gone when the pane is.
+
+const remoteLenses = new Map<string, RemoteLens>();
+// The private directories holding each pane's ssh control socket, removed with
+// the pane and, failing that, at quit.
+const controlDirs = new Set<string>();
+
+function openControlDir(): { dir: string; path: string | undefined } | null {
+  if (process.platform === 'win32') return null;
+  try {
+    // mkdtemp creates the directory 0700: nobody else can reach the socket.
+    const dir = mkdtempSync(join(os.tmpdir(), 'cl-'));
+    const path = controlPathFor(dir) ?? undefined;
+    if (!path) {
+      rmSync(dir, { recursive: true, force: true });
+      return null;
+    }
+    controlDirs.add(dir);
+    return { dir, path };
+  } catch {
+    return null;
+  }
+}
+
+function closeControlDir(dir: string): void {
+  controlDirs.delete(dir);
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch {
+    // Left in the temp dir; the OS clears it.
+  }
+}
+
+// The channel runs in a PTY of its own so that ssh, when it cannot ride the
+// pane's socket, has somewhere to ask for a password; the Lens shows the
+// question and types the answer back.
+const spawnLensChannel: LensSpawner = (args, handlers) => {
+  const { id } = createTerminal(
+    { cwd: os.homedir(), command: sshCommand(), args, env: process.env, cols: 200, rows: 24 },
+    { onData: handlers.onData, onExit: handlers.onExit }
+  );
+  return { write: data => writeTerminal(id, data), kill: () => killTerminal(id) };
+};
+
+ipcMain.handle('remote:getLensState', async (_event, terminalId: string) => {
+  try {
+    return ok(remoteLenses.get(terminalId)?.snapshot() ?? null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('remote:answerLens', async (_event, terminalId: string, text: string) => {
+  try {
+    if (typeof text !== 'string' || text.length > 4096 || /[\r\n]/.test(text)) {
+      return err('That answer cannot be sent.');
+    }
+    remoteLenses.get(terminalId)?.answer(text);
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('remote:retryLens', async (_event, terminalId: string) => {
+  try {
+    remoteLenses.get(terminalId)?.retry();
+    return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
 
 // The terminal pane's clipboard, read/written through the main process rather
 // than `navigator.clipboard`: the packaged renderer is loaded from `file://`,
@@ -2624,4 +2733,5 @@ app.on('before-quit', event => {
 // none outlive the app.
 app.on('will-quit', () => {
   disposeAllTerminals();
+  for (const dir of [...controlDirs]) closeControlDir(dir);
 });

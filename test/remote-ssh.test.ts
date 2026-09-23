@@ -7,6 +7,8 @@ import {
   REMOTE_CLAUDE_DIRS,
   buildRemoteScript,
   buildSshArgs,
+  controlPathFor,
+  createLaunchMarkerScanner,
   remoteCommandString,
   sshCommand,
   type RemoteScriptOptions,
@@ -51,6 +53,7 @@ async function stubClaude(version: string | null, dir = join(home, '.local', 'bi
       `if [ "$1" = "--version" ]; then ${versionLine}; exit 0; fi`,
       'if [ "$1" = "update" ]; then echo UPDATED; exit 0; fi',
       'echo "RAN pwd=$(pwd) args=[$*]"',
+      'echo "PID=$$"',
       'exit 7',
     ].join('\n')
   );
@@ -187,9 +190,68 @@ describe.each(LOGIN_SHELLS)('through %s as the login shell', shell => {
     expect(r.stdout).toContain(`RAN pwd=${join(home, 'proj')} args=[]`);
   });
 
+  it('names the pid Claude Code runs as, which the exec leaves unchanged (#294)', async () => {
+    await stubClaude('2.1.280 (Claude Code)');
+    const before = Math.floor(Date.now() / 1000);
+    const r = await run({ dir: '~/proj' }, shell);
+    const scan = createLaunchMarkerScanner();
+    scan.feed(r.stdout);
+    const pid = Number(/PID=(\d+)/.exec(r.stdout)?.[1]);
+    expect(scan.launch()).toEqual({ pid, at: expect.any(Number) });
+    expect(scan.launch()!.at).toBeGreaterThanOrEqual(before);
+    // Invisible: the marker is one OSC sequence, printed before the CLI starts.
+    expect(r.stdout.indexOf('\x1b]7771;claudelens-launch=')).toBeLessThan(r.stdout.indexOf('RAN '));
+  });
+
   it('stops an outdated claude', async () => {
     await stubClaude('2.1.1 (Claude Code)');
     expect((await run({}, shell)).code).toBe(REMOTE_EXIT.outdated);
+  });
+});
+
+describe('the launch marker', () => {
+  it('is not printed when the gate refuses, nor for claude update', async () => {
+    await stubClaude('2.1.1 (Claude Code)');
+    expect((await run({})).stdout).not.toContain('claudelens-launch');
+    await stubClaude('garbage');
+    const update = await run({ mode: 'update', dir: undefined, minVersion: undefined });
+    expect(update.stdout).not.toContain('claudelens-launch');
+  });
+
+  it('is read back even when a chunk boundary splits it, and only the first one counts', () => {
+    const scan = createLaunchMarkerScanner();
+    const marker = '\x1b]7771;claudelens-launch=4242;1790000000\x07';
+    scan.feed('banner\r\n' + marker.slice(0, 17));
+    expect(scan.launch()).toBeNull();
+    scan.feed(marker.slice(17) + '\x1b[?25h');
+    expect(scan.launch()).toEqual({ pid: 4242, at: 1790000000 });
+    scan.feed('\x1b]7771;claudelens-launch=1;1\x07');
+    expect(scan.launch()).toEqual({ pid: 4242, at: 1790000000 });
+  });
+
+  it('is not invented from text that only looks like it', () => {
+    const scan = createLaunchMarkerScanner();
+    scan.feed('claudelens-launch=1;2 printed as text\r\n');
+    expect(scan.launch()).toBeNull();
+  });
+});
+
+describe('the control socket the Lens rides (#294)', () => {
+  it('makes the pane connection a master that lives only as long as the pane', () => {
+    const args = buildSshArgs({ target: 'dev@box' }, 'cmd', '/tmp/cl-abc/s');
+    expect(args).toContain('ControlMaster=auto');
+    expect(args).toContain('ControlPath=/tmp/cl-abc/s');
+    expect(args).toContain('ControlPersist=no');
+    expect(args.slice(-3)).toEqual(['--', 'dev@box', 'cmd']);
+    expect(buildSshArgs({ target: 'dev@box' }, 'cmd').join(' ')).not.toContain('Control');
+  });
+
+  it('has no socket on a Windows client, or where ssh could not use the path', () => {
+    expect(controlPathFor('/tmp/cl-abc', 'darwin')).toBe('/tmp/cl-abc/s');
+    expect(controlPathFor('/tmp/cl-abc', 'win32')).toBeNull();
+    expect(controlPathFor(`/tmp/${'x'.repeat(120)}`, 'linux')).toBeNull();
+    expect(controlPathFor('/tmp/with space', 'linux')).toBeNull();
+    expect(controlPathFor('/tmp/100%', 'linux')).toBeNull();
   });
 });
 

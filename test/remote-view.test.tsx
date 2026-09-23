@@ -7,7 +7,9 @@
 //   1. a host is saved only when ssh would read it as a host — a destination
 //      that starts with "-" never reaches the store;
 //   2. Connect asks for the host, the folder and the Claude Code version this
-//      build requires, and the connected frame says the session is remote;
+//      build requires, and the connected frame says the session is remote and
+//      how its Lens reaches the host (`remote-lens-view.test.tsx` covers the
+//      Lens itself);
 //   3. a refusal of the script (an outdated CLI) is named under the terminal,
 //      whose output stays uncovered, and the update it offers runs on the host
 //      and then leads back to a session.
@@ -200,11 +202,14 @@ describe('connecting', () => {
     expect(createLocal).not.toHaveBeenCalled();
   });
 
-  it('says on screen that the session runs on the host, not here', async () => {
+  it('says on screen that the session runs on the host, and how Lens reaches it', async () => {
     await connected();
     const banner = screen.getByRole('note');
     expect(banner.textContent).toContain('Remote · user@build.example.com');
-    expect(banner.textContent).toContain('Lens and Mission Control on this machine do not show it');
+    expect(banner.textContent).toContain('This session runs on Build');
+    // A macOS/Linux client rides the terminal's own connection (#294).
+    expect(banner.textContent).toContain("over this terminal's own ssh connection");
+    expect(banner.textContent).toContain('Nothing of it is saved on this machine');
   });
 
   it('refuses a folder the script could not carry, before any connection', async () => {

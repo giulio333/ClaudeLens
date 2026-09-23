@@ -133,6 +133,7 @@ export function ChatControlPill({
   onExportPreset,
   onExport,
   onDelete,
+  exportable = true,
   modelRuns,
   onLocateModel,
   vitals,
@@ -163,7 +164,11 @@ export function ChatControlPill({
   onClearSelection: () => void;
   onExportPreset: (preset: ChatExportPreset) => void;
   onExport: (format: ChatExportFormat) => void;
-  onDelete: () => void;
+  /** Absent, the sheet offers no delete: the session is not on this machine. */
+  onDelete?: () => void;
+  /** False drops the export/delete sheet and its button altogether — a session
+   *  read from another machine is neither saved nor deleted from here (#294). */
+  exportable?: boolean;
   /** Every model+effort stretch of the transcript, oldest first. The last one is
    *  what the chip prints; more than one is what makes it a dock. */
   modelRuns: ModelRun[];
@@ -286,7 +291,7 @@ export function ChatControlPill({
           }}
         />
       )}
-      {sheet === 'export' && (
+      {sheet === 'export' && exportable && (
         <div className="cl-sheet cl-sheet--export" role="menu">
           <div className="cl-sheet-head">
             <span className="cl-export-label">Export</span>
@@ -359,19 +364,23 @@ export function ChatControlPill({
           </div>
           {exportMessage && <p className="cl-export-status is-ok">{exportMessage}</p>}
           {exportError && <p className="cl-export-status is-error">{exportError}</p>}
-          <div className="cl-sheet-sep" />
-          <button
-            type="button"
-            role="menuitem"
-            className="cl-sheet-item is-danger"
-            onClick={() => {
-              setSheet(null);
-              onDelete();
-            }}
-          >
-            <TrashGlyph />
-            <span>Delete session</span>
-          </button>
+          {onDelete && (
+            <>
+              <div className="cl-sheet-sep" />
+              <button
+                type="button"
+                role="menuitem"
+                className="cl-sheet-item is-danger"
+                onClick={() => {
+                  setSheet(null);
+                  onDelete();
+                }}
+              >
+                <TrashGlyph />
+                <span>Delete session</span>
+              </button>
+            </>
+          )}
         </div>
       )}
 
@@ -578,20 +587,22 @@ export function ChatControlPill({
                 <DiffGlyph />
               </button>
             </div>
-            <span className="cl-pill-div" />
+            {exportable && <span className="cl-pill-div" />}
           </>
         )}
-        <button
-          type="button"
-          className="cl-pill-more"
-          aria-haspopup="menu"
-          aria-expanded={sheet === 'export'}
-          data-on={sheet === 'export' || undefined}
-          title="Export & more"
-          onClick={toggleExport}
-        >
-          <ChevronUpGlyph />
-        </button>
+        {exportable && (
+          <button
+            type="button"
+            className="cl-pill-more"
+            aria-haspopup="menu"
+            aria-expanded={sheet === 'export'}
+            data-on={sheet === 'export' || undefined}
+            title="Export & more"
+            onClick={toggleExport}
+          >
+            <ChevronUpGlyph />
+          </button>
+        )}
       </div>
     </div>
   );

@@ -29,6 +29,7 @@ import type {
   PromptCandidates,
 } from '../../electron/shared/playbook-types';
 import type { RemoteHost, RemoteHostInput } from '../../electron/shared/remote-host';
+import type { RemoteLensState } from '../../electron/shared/remote-session';
 import type {
   ChatChunkEvent,
   ChatDoneEvent,
@@ -141,6 +142,8 @@ export function createChannels() {
      * yet) and nothing else would ever tell the renderer it went live (#194).
      */
     liveWatchStatus: new Channel<LiveWatchStatus>(),
+    // What a remote pane's Lens knows about its session (#294), pushed by main.
+    lensState: new Channel<RemoteLensState>(),
   };
 }
 
@@ -327,6 +330,11 @@ export function createFakeElectronAPI(channels: FakeChannels) {
         ok<RemoteHost>({ ...input, id: input.id ?? 'host-1' })
       ),
       deleteHost: vi.fn(async (_id: string) => ok(null)),
+      // The remote Lens (#294): no reading until a test pushes one.
+      getLensState: vi.fn(async (_terminalId: string) => ok<RemoteLensState | null>(null)),
+      answerLens: vi.fn(async (_terminalId: string, _text: string) => ok(null)),
+      retryLens: vi.fn(async (_terminalId: string) => ok(null)),
+      onLensState: channels.lensState.subscribe,
     },
     clipboard: {
       readText: vi.fn(async () => ok('')),
