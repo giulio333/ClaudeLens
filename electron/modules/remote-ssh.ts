@@ -185,6 +185,15 @@ export function createExitMarkerScanner(): { feed(chunk: string): void; code(): 
 }
 
 /**
+ * Writes the marker. A code outside 1–254 becomes 1: Windows reports a crash
+ * or a Ctrl+C as a negative NTSTATUS, which the marker's three digits could not
+ * carry, and a failure read back as nothing would read as a success.
+ */
+export const WINDOWS_MARK_FN =
+  'function Mark($code) { if ($null -eq $code -or $code -lt 1 -or $code -gt 254) { $code = 1 }; ' +
+  `[Console]::Out.Write("$([char]27)]${EXIT_MARKER_OSC};${EXIT_MARKER_KEY}=$code$([char]7)") }`;
+
+/**
  * The exit code to report for a remote pane: ssh's own, unless the connect
  * script marked a refusal and ssh could not carry it (it reads 0 then).
  */
@@ -224,9 +233,8 @@ export function buildWindowsScript(opts: RemoteScriptOptions): string {
   const dirs = opts.claudeDirs ?? WINDOWS_CLAUDE_DIRS;
   const lines = [
     "$ProgressPreference = 'SilentlyContinue'",
-    // The refusal is also written as the exit marker: see REMOTE_EXIT_MARKER.
-    'function Fail($code, $msg) { [Console]::Error.WriteLine("ClaudeLens: $msg"); ' +
-      `[Console]::Out.Write("$([char]27)]${EXIT_MARKER_OSC};${EXIT_MARKER_KEY}=$code$([char]7)"); exit $code }`,
+    WINDOWS_MARK_FN,
+    'function Fail($code, $msg) { [Console]::Error.WriteLine("ClaudeLens: $msg"); Mark $code; exit $code }',
     `$dirs = @(${dirs.join(', ')})`,
     '$env:PATH = (@($dirs | Where-Object { $_ -and (Test-Path -LiteralPath $_) }) + @($env:PATH)) -join [IO.Path]::PathSeparator',
     // An .exe or .cmd first; npm's .ps1 shim only when nothing else answers.
@@ -235,8 +243,11 @@ export function buildWindowsScript(opts: RemoteScriptOptions): string {
     `if (-not $c) { Fail ${REMOTE_EXIT.notFound} 'claude was not found on this host. Install Claude Code there (irm https://claude.ai/install.ps1 | iex), or add its folder to the user PATH.' }`,
     '$claude = $c.Source',
   ];
+  // What the CLI itself answered has to take the marker too: ssh would report
+  // a failed `claude update` as 0, and the pane would call it a success.
+  const passThrough = ['$rc = $LASTEXITCODE', 'if ($rc -ne 0) { Mark $rc }', 'exit $rc'];
   if (opts.mode === 'update') {
-    lines.push('& $claude update', 'exit $LASTEXITCODE');
+    lines.push('& $claude update', ...passThrough);
   } else {
     if (!opts.dir || !opts.minVersion)
       throw new Error('A Claude Code launch needs a folder and a minimum version.');
@@ -247,7 +258,7 @@ export function buildWindowsScript(opts: RemoteScriptOptions): string {
       `if (-not (Test-Path -LiteralPath $d -PathType Container)) { Fail ${REMOTE_EXIT.noDir} "the folder $d does not exist on this host." }`,
       'Set-Location -LiteralPath $d',
       '& $claude',
-      'exit $LASTEXITCODE'
+      ...passThrough
     );
   }
   return lines.join('\n');

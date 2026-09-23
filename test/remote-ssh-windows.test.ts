@@ -4,6 +4,7 @@ import { tmpdir } from 'os';
 import { join } from 'path';
 import {
   WINDOWS_CLAUDE_DIRS,
+  WINDOWS_MARK_FN,
   buildRemoteCommand,
   buildWindowsScript,
   createExitMarkerScanner,
@@ -127,7 +128,8 @@ describe('the exit marker', () => {
   });
 });
 
-describe.skipIf(!PWSH)('the Windows script, run by PowerShell', () => {
+// A cold pwsh start on a CI runner can take seconds; the default 5s is not enough.
+describe.skipIf(!PWSH)('the Windows script, run by PowerShell', { timeout: 40_000 }, () => {
   let home: string;
 
   beforeEach(async () => {
@@ -142,7 +144,7 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', () => {
   // An executable `claude` PowerShell resolves as an Application, as it would
   // claude.exe: answers --version with `version`, `update` with UPDATED, and
   // anything else with where it runs, exiting 7.
-  async function stubClaude(version: string | null) {
+  async function stubClaude(version: string | null, updateExit = 0) {
     const file = join(home, '.local', 'bin', 'claude');
     const versionLine = version === null ? ':' : `echo "${version}"`;
     await writeFile(
@@ -150,7 +152,7 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', () => {
       [
         '#!/bin/sh',
         `if [ "$1" = "--version" ]; then ${versionLine}; exit 0; fi`,
-        'if [ "$1" = "update" ]; then echo UPDATED; exit 0; fi',
+        `if [ "$1" = "update" ]; then echo UPDATED; exit ${updateExit}; fi`,
         'echo "RAN pwd=$(pwd)"',
         'exit 7',
       ].join('\n')
@@ -159,14 +161,19 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', () => {
   }
 
   function run(opts: Partial<RemoteScriptOptions>) {
-    const script = buildWindowsScript({
-      mode: 'claude',
-      dir: '~',
-      minVersion: '2.1.280',
-      // `\` is not a separator off Windows; the default list is asserted above.
-      claudeDirs: ['"$env:USERPROFILE/.local/bin"'],
-      ...opts,
-    });
+    return runScript(
+      buildWindowsScript({
+        mode: 'claude',
+        dir: '~',
+        minVersion: '2.1.280',
+        // `\` is not a separator off Windows; the default list is asserted above.
+        claudeDirs: ['"$env:USERPROFILE/.local/bin"'],
+        ...opts,
+      })
+    );
+  }
+
+  function runScript(script: string) {
     return new Promise<{ code: number; stdout: string; stderr: string }>(resolve => {
       execFile(
         PWSH!,
@@ -187,7 +194,33 @@ describe.skipIf(!PWSH)('the Windows script, run by PowerShell', () => {
     // `pwd` resolves symlinks (macOS' /var is /private/var).
     expect(r.stdout).toContain(`RAN pwd=${join(await realpath(home), "O'Brien proj")}`);
     expect(r.code).toBe(7);
+    // The same code as a marker, for the Windows ssh that would report 0.
+    expect(r.stdout).toContain(MARKER(7));
   });
+
+  it('marks a failed claude update, so a tty-bound ssh cannot report it as done', async () => {
+    await stubClaude('2.1.280 (Claude Code)', 3);
+    const r = await run({ mode: 'update', dir: undefined, minVersion: undefined });
+    expect(r.code).toBe(3);
+    const scan = createExitMarkerScanner();
+    scan.feed(r.stdout);
+    expect(remoteExitCode(0, scan.code())).toBe(3);
+  });
+
+  it('writes no marker for a clean exit', async () => {
+    await stubClaude('2.1.280 (Claude Code)', 0);
+    const r = await run({ mode: 'update', dir: undefined, minVersion: undefined });
+    expect(r.code).toBe(0);
+    expect(r.stdout).not.toContain('claudelens-exit');
+  });
+
+  it.each([[-1073741510], [0], [300]])(
+    'writes a code the marker cannot carry (%s) as 1',
+    async code => {
+      const r = await runScript(`${WINDOWS_MARK_FN}\nMark ${code}`);
+      expect(r.stdout).toContain(MARKER(1));
+    }
+  );
 
   it('refuses an outdated claude, and says so in the marker too', async () => {
     await stubClaude('2.1.279 (Claude Code)');
