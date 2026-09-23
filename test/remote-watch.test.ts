@@ -313,6 +313,14 @@ describe('what reaches a shell', () => {
     expect(alone.join(' ')).not.toContain('Control');
   });
 
+  it('asks CIM for a parent at most until it is refused once', () => {
+    // A refusal costs seconds on a host that denies WMI; paying it every poll
+    // would hold up the teardown check and the heartbeat behind it.
+    const script = buildWindowsWatchScript({ pid: 4242, launchedAt, dir: '~' });
+    expect(script).toContain('if(-not $global:CIM){return $null}');
+    expect(script).toContain('catch{$global:CIM=$false;$null}');
+  });
+
   it('keeps a Windows watch command under the length cmd.exe accepts', () => {
     const command = buildRemoteWatchCommand('windows', {
       pid: 4242,

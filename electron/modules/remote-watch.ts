@@ -184,8 +184,12 @@ export function buildWindowsWatchScript(opts: WatchScriptOptions): string {
     'function Say($m){[Console]::Out.Write("@cl $m`n");[Console]::Out.Flush()}',
     'function A($i){[bool](Get-Process -Id $i -EA SilentlyContinue)}',
     'function E($f){try{Get-Content -LiteralPath $f -Raw -EA Stop|ConvertFrom-Json}catch{$null}}',
-    // Parent pid through CIM, which a user may be denied: then nothing descends.
-    'function Par($i){try{(Get-CimInstance Win32_Process -Filter "ProcessId=$i" -EA Stop).ParentProcessId}catch{$null}}',
+    // Parent pid through CIM, which a user may be denied: then nothing
+    // descends. A denied call was measured at ~5 s on the test host, inside the
+    // loop that enforces teardown and sends the heartbeat, so the first refusal
+    // is remembered and never paid again.
+    '$global:CIM=$true',
+    'function Par($i){if(-not $global:CIM){return $null};try{(Get-CimInstance Win32_Process -Filter "ProcessId=$i" -EA Stop).ParentProcessId}catch{$global:CIM=$false;$null}}',
     'function Desc($i){$q=$i;for($k=0;$k -lt 8;$k++){$q=Par $q;if(-not $q -or $q -le 4){return $false};if($q -eq $W){return $true}};$false}',
     '$ND=N $D;$cp=0;$sid=$null;$st=$null;$f=$null;$off=0;$n=0;$wt=$false',
     'Say "hello 1"',
