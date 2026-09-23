@@ -105,7 +105,8 @@ export function RemoteView({ onBack }: { onBack: () => void }) {
             Run Claude Code on another machine in the embedded terminal. ClaudeLens starts your
             system ssh, so ~/.ssh/config, keys, the agent and ProxyJump work as in any terminal, and
             it stores no password or key. The session runs on the host and its history stays there:
-            Lens, Mission Control and the session lists on this machine do not show it.
+            Lens, Mission Control and the session lists on this machine do not show it. Hosts
+            running Linux or macOS only, for now.
           </p>
         </section>
         <HostsSection onConnect={connect} />
@@ -348,7 +349,8 @@ function HostForm({
       {field('Default folder', 'remote-default-dir', defaultDir, setDefaultDir, '~/projects')}
       <p style={{ fontSize: 12, color: 'var(--cl-ink-3)' }}>
         The destination is what you would type after <code>ssh</code>: an alias from ~/.ssh/config,
-        a host name or user@host. Authentication is left to ssh.
+        a host name or user@host. Authentication is left to ssh. The host must run Linux or macOS: a
+        Windows host is not supported yet.
       </p>
       {(problem || save.error) && (
         <p className="font-mono text-[10px] text-[var(--cl-danger)]">
