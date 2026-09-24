@@ -380,7 +380,18 @@ export function CommandSheet({
 /** A window on top of everything, unclamped and scrolling on its own — the
  *  answer to "the output is too big to read inside a chat bubble". Shared by
  *  the terminal and the editor window: same backdrop, same Escape. */
-export function SheetModal({ onClose, children }: { onClose: () => void; children: ReactNode }) {
+/** `glass`: the window is satin glass itself, so the backdrop only tints and
+ *  does not blur — a `backdrop-filter` inside another one samples the outer
+ *  layer's flat tint, not the page, and the satin would read as solid. */
+export function SheetModal({
+  onClose,
+  children,
+  glass = false,
+}: {
+  onClose: () => void;
+  children: ReactNode;
+  glass?: boolean;
+}) {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') onClose();
@@ -390,7 +401,12 @@ export function SheetModal({ onClose, children }: { onClose: () => void; childre
   }, [onClose]);
 
   return createPortal(
-    <div className="cl-term-modal" role="dialog" aria-modal="true" onClick={onClose}>
+    <div
+      className={`cl-term-modal${glass ? ' is-glass' : ''}`}
+      role="dialog"
+      aria-modal="true"
+      onClick={onClose}
+    >
       <div className="cl-term-modal-hold" onClick={e => e.stopPropagation()}>
         {children}
       </div>

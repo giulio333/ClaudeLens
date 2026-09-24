@@ -46,7 +46,7 @@ export function BackgroundShellSheet({
   if (s.stoppedByClaude) facts.push(['Stopped by', 'Claude, with TaskStop']);
 
   return (
-    <SheetModal onClose={onClose}>
+    <SheetModal onClose={onClose} glass>
       <div
         ref={sheetRef}
         className="cl-ctx-sheet cl-bgshell-sheet"

@@ -42,7 +42,7 @@ export function ContextFileSheet({
   useEffect(() => sheetRef.current?.focus(), []);
 
   return (
-    <SheetModal onClose={onClose}>
+    <SheetModal onClose={onClose} glass>
       <div
         ref={sheetRef}
         className="cl-ctx-sheet"

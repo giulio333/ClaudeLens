@@ -4100,8 +4100,7 @@ body {
 
 /* a file's own window, opened from its name: the reads down the left, the
    selected one on the right — its command once, then its rows — and the
-   coverage and the jump at the foot. Opaque paper: it is read with the page
-   dimmed behind it, so nothing needs to show through. */
+   coverage and the jump at the foot. */
 .cl-ctx-sheet {
   display: flex;
   flex-direction: column;
@@ -4110,17 +4109,33 @@ body {
   margin: 0 auto;
   overflow: hidden;
   border-radius: 14px;
-  background: var(--cl-paper);
+  /* the satin glass of the rail's list and peek, which open it: 60% paper and
+     a light blur — more blur hides more and reads as less transparent */
+  background: color-mix(in oklch, var(--cl-paper) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
   box-shadow:
-    0 0 0 1px var(--cl-line),
-    0 30px 70px -34px oklch(0.2 0.02 60 / 0.45);
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 30px 70px -34px oklch(0.2 0.02 60 / 0.45),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
   color: var(--cl-ink-2);
   outline: none;
 }
 :root[data-theme='dark'] .cl-ctx-sheet {
   box-shadow:
-    0 0 0 1px var(--cl-line),
-    0 30px 70px -34px oklch(0 0 0 / 0.7);
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 30px 70px -34px oklch(0 0 0 / 0.7),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
+}
+/* the backdrop under a glass window tints and does not blur: the window's own
+   blur is what frosts the page, and it only sees the page if no filter sits
+   between them */
+.cl-term-modal.is-glass {
+  background: color-mix(in oklch, var(--cl-ink) 16%, transparent);
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
 }
 .cl-ctx-sheet-bar {
   display: flex;
@@ -4311,7 +4326,8 @@ body {
 /* less transparency asked for: both go back to solid paper */
 @media (prefers-reduced-transparency: reduce) {
   .cl-ctx-panel,
-  .cl-ctx-peek {
+  .cl-ctx-peek,
+  .cl-ctx-sheet {
     background: var(--cl-paper);
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
