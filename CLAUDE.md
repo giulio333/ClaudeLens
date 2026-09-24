@@ -12,7 +12,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
 `thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
-`vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `plugins-reader` (the `.mcp.json` and
+`vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `background-shells`, `plugins-reader` (the `.mcp.json` and
 `hooks/hooks.json` parsers), `remote-ssh`, `remote-ssh-windows` and `remote-hosts-store`
 (#242 — the connect script is run for real, through every login shell the machine has
 and, for a Windows host, through `pwsh` where there is one, against a stub `claude`
@@ -179,6 +179,11 @@ a session that read nothing; its pure half, which reads
 `Read` calls and the shell commands that only read — refusing a command that
 wrote, a construct it cannot follow and a span through a pipe — is
 `context-files`) and
+`background-shells-view` (the pill beside RUNNING for the commands Claude
+left running in the background: it says the count and the minutes in words and
+never the command, draws nothing when nothing runs or ended recently — a shell
+of a session that is gone is not running — and reports the latest ending, then
+lists each outcome and jumps to the turn that started it) and
 `exchange-thread` (the pure half of that page: which side a message is on,
 where a run of one party's messages starts, the wall time the conversation
 covers — and nothing rather than "0s" for a single message) and

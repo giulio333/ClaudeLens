@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useActiveSessions, useSessionList } from '../../../hooks/useIPC';
+import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
 import { TagPicker } from '../sessions/TagPicker';
@@ -18,11 +18,19 @@ import { SkillDetailView } from '../skills/SkillDetailView';
 import { AgentDetailView } from '../agents/AgentDetailView';
 import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
-import { resolveToolIcon, toolRunStatus, type SessionAgent, type ToolGroup } from '../chat/utils';
+import {
+  buildProcessedMessages,
+  resolveToolIcon,
+  toolRunStatus,
+  type SessionAgent,
+  type ToolGroup,
+} from '../chat/utils';
 import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
 import { STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
+import { BackgroundShells } from './BackgroundShells';
+import { buildBackgroundShells } from './background-shells';
 import type { FileChange } from './mission-feed';
 import { FileChangePage } from '../chat/FileChangesStrip';
 import { flushSync } from 'react-dom';
@@ -420,6 +428,18 @@ export function TerminalMissionControl({
     [sessionId, onOpenSession, terminalMounted, termStatus]
   );
 
+  // The shells this session left running in the background — the CLI footer's
+  // "1 shell". Same query the rail reads, so it costs no second read. Running
+  // only while the CLI that owns them is: the registry says whether it is.
+  const { data: chatMessages } = useChatSession(project.hash, filename);
+  const backgroundShells = useMemo(
+    () => (chatMessages ? buildBackgroundShells(buildProcessedMessages(chatMessages)) : []),
+    [chatMessages]
+  );
+  const sessionLive =
+    (terminalMounted && termStatus === 'running') ||
+    (!!sessionId && !!activeSessions?.some(s => s.sessionId === sessionId));
+
   const { data: sessionList } = useSessionList(project.hash);
   const summary = useMemo(
     () => sessionList?.find(s => s.filename === filename),
@@ -546,24 +566,31 @@ export function TerminalMissionControl({
           // No spend figure here: the vitals row of the Mission Control rail
           // already carries it, and two copies of the same number a few
           // hundred pixels apart read as two different readings.
-          terminalMounted ? (
-            <span
-              className="flex items-center font-mono uppercase"
-              style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
-            >
+          <span className="flex items-center" style={{ gap: 14 }}>
+            <BackgroundShells
+              shells={backgroundShells}
+              sessionLive={sessionLive}
+              onShowInChat={jumpToTurn}
+            />
+            {terminalMounted && (
               <span
-                aria-hidden
-                className={termStatus === 'running' ? 'cl-live-dot' : ''}
-                style={{
-                  width: 7,
-                  height: 7,
-                  borderRadius: '50%',
-                  background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
-                }}
-              />
-              {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
-            </span>
-          ) : undefined
+                className="flex items-center font-mono uppercase"
+                style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
+              >
+                <span
+                  aria-hidden
+                  className={termStatus === 'running' ? 'cl-live-dot' : ''}
+                  style={{
+                    width: 7,
+                    height: 7,
+                    borderRadius: '50%',
+                    background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
+                  }}
+                />
+                {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
+              </span>
+            )}
+          </span>
         }
       />
 

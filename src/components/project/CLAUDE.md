@@ -359,6 +359,40 @@ thread ha un id da unire (una sessione dall'altra parte), altrimenti
 `onLocateTurn` sull'ultimo messaggio: un agente interno non ha uno scambio.
 Vista coperta da `test/messages-dock.test.tsx` (StrictMode).
 
+**Shell in background — nella top bar, non in Mission Control**
+(`terminal/background-shells.ts` + `terminal/BackgroundShells.tsx`). Il "1 shell"
+che la CLI stampa nel suo footer: i comandi che Claude ha lasciato girare
+(`run_in_background`, o spostati dall'harness allo scadere del timeout). Sta
+**accanto a RUNNING** nella `TopBar` di `TerminalMissionControl`, visibile da
+Terminal e da Lens, perché è **stato** della sessione e non un evento: una prima
+versione dentro il rail (un riquadro a terminale sotto i vitals, poi una riga
+del feed a fine corsa) è stata scartata dall'utente — troppo tecnica, e si
+confondeva con i dati del feed. La pillola parla a parole (`1 in background ·
+12 min`, poi `Finished`/`Failed`/`Stopped · 3 min ago` per 10 minuti) e al click
+apre un elenco con la `description` di ogni comando, da quanto gira o come è
+finito, e `Show in chat` (`jumpToTurn`). Niente comando, output o task id.
+Regole, misurate sulle 122 shell in background del corpus:
+
+- la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in
+  due frasi (`running in background with ID: …`, `moved to the background (ID:
+…)`), non da `run_in_background`, che la seconda via non porta;
+- finisce con la `<task-notification>` che porta il suo **`tool-use-id`**
+  (`completed`/`failed`/`stopped`/`killed`, exit code nel summary: un
+  `completed (exit code -1)` è un fallimento) **oppure** con un `TaskStop`
+  riuscito sul suo task id, che **non scrive nessuna notifica** — senza questa
+  regola ogni shell fermata così resterebbe "in corso" per sempre;
+- senza nessuna delle due è in corso **solo se la sessione è viva** (la PTY di
+  questa pane, o il registro): la shell è figlia della CLI, e una sessione
+  finita se l'è portata via;
+- l'elenco sta in un **portal su `<body>`**: la top bar è un contesto di
+  sovrapposizione suo (`backdrop-filter`), e un pannello disegnato lì dentro
+  finirebbe sotto il terminale.
+
+Legge la stessa query `sessions:chat` del rail, quindi nessuna lettura in più.
+Coperto da `test/background-shells.test.ts` e
+`test/background-shells-view.test.tsx` (StrictMode). Solo per le sessioni
+locali: la pane remota (#294) non la monta.
+
 **Mission Control — la specie WEB** (`terminal/mission-feed.ts` → `buildWebActivity`,
 righe `W` in tinta `--cl-haiku`, la stessa che `TOOL_TINT` dà ai due tool web nel
 transcript; filtro omonimo tra MEMORY e CHANGES). Era l'unico lavoro che il feed

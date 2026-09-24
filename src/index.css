@@ -21042,3 +21042,143 @@ select.cl-opt-input {
   margin-left: auto;
   flex-shrink: 0;
 }
+
+/* ── Background shells: the pill in a session's top bar and its list ─────────
+   BackgroundShells.tsx. Plain words, not a terminal: sans type, minutes. */
+.cl-bgshell {
+  position: relative;
+  flex-shrink: 0;
+}
+.cl-bgshell-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 11px 0 9px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: border-color 140ms;
+}
+.cl-bgshell-pill:hover,
+.cl-bgshell-pill[aria-expanded='true'] {
+  border-color: var(--cl-ink-4);
+}
+.cl-bgshell-pill[data-tone='done'] {
+  border-color: color-mix(in oklch, var(--cl-ok) 45%, transparent);
+  background: color-mix(in oklch, var(--cl-ok) 12%, transparent);
+}
+.cl-bgshell-pill[data-tone='failed'] {
+  border-color: color-mix(in oklch, var(--cl-danger) 45%, transparent);
+  background: color-mix(in oklch, var(--cl-danger) 10%, transparent);
+}
+.cl-bgshell-pill-meta {
+  color: var(--cl-ink-3);
+  font-variant-numeric: tabular-nums;
+}
+@keyframes cl-bgshell-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.cl-bgshell-spin {
+  flex-shrink: 0;
+  animation: cl-bgshell-spin 1.4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-bgshell-spin {
+    animation: none;
+  }
+}
+.cl-bgshell-panel {
+  position: fixed;
+  z-index: 60;
+  width: 360px;
+  box-sizing: border-box;
+  padding: 16px 18px 12px;
+  border-radius: var(--cl-r-popover);
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper-2);
+  box-shadow: var(--cl-glass-lift);
+  color: var(--cl-ink);
+  text-align: left;
+}
+.cl-bgshell-panel-title {
+  font-family: var(--font-sans);
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cl-bgshell-panel-lede,
+.cl-bgshell-panel-foot {
+  margin: 0;
+  font-family: var(--font-reading);
+  font-size: 12px;
+  color: var(--cl-ink-3);
+}
+.cl-bgshell-panel-lede {
+  padding: 4px 0 6px;
+}
+.cl-bgshell-panel-foot {
+  padding-top: 10px;
+  border-top: 1px solid var(--cl-line-soft);
+  font-size: 11.5px;
+  color: var(--cl-ink-4);
+}
+.cl-bgshell-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.cl-bgshell-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+}
+.cl-bgshell-item + .cl-bgshell-item {
+  border-top: 1px solid var(--cl-line-soft);
+}
+.cl-bgshell-item > svg {
+  margin-top: 2px;
+}
+.cl-bgshell-item-body {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  flex: 1;
+  min-width: 0;
+  font-family: var(--font-reading);
+}
+.cl-bgshell-item-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: var(--cl-ink);
+  overflow-wrap: anywhere;
+}
+.cl-bgshell-item-sub {
+  font-size: 12px;
+  color: var(--cl-ink-3);
+}
+.cl-bgshell-item-sub[data-tone='failed'] {
+  color: var(--cl-danger);
+}
+.cl-bgshell-item-link {
+  flex-shrink: 0;
+  padding: 2px 0 0;
+  border: 0;
+  background: none;
+  font-family: var(--font-reading);
+  font-size: 12px;
+  color: var(--cl-accent-ink);
+  cursor: pointer;
+}
+.cl-bgshell-item-link:hover {
+  text-decoration: underline;
+}
