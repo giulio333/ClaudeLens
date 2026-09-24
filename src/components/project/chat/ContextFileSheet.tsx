@@ -170,6 +170,24 @@ export function ReadLines({ read, ext, max }: { read: ContextRead; ext: string; 
   );
 }
 
+/** Plain text on paper in the same rows and palette as a read — a command,
+ *  say, numbered from 1. Used by the background shell's sheet. */
+export function PaperCode({ text, lang }: { text: string; lang: string | null }) {
+  const rows = useMemo(
+    (): FileRow[] => text.split('\n').map((t, i) => ({ kind: 'ctx', text: t, line: i + 1 })),
+    [text]
+  );
+  const html = useMemo(() => highlightRows(rows, lang), [rows, lang]);
+  const digits = Math.max(2, String(rows.length).length);
+  return (
+    <div className="cl-ctx-code" style={{ '--gutter': `${digits}ch` } as CSSProperties}>
+      {rows.map((row, i) => (
+        <CodeRow key={i} row={row} html={html[i]} />
+      ))}
+    </div>
+  );
+}
+
 function CodeRow({ row, html }: { row: FileRow; html: string | null }) {
   return (
     <div className="cl-ctx-code-row">

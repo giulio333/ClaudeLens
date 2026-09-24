@@ -30,7 +30,6 @@ import { TerminalPane } from './TerminalPane';
 import { STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
 import { BackgroundShells } from './BackgroundShells';
-import { BackgroundShellPage } from './BackgroundShellPage';
 import { buildBackgroundShells } from './background-shells';
 import type { FileChange } from './mission-feed';
 import { FileChangePage } from '../chat/FileChangesStrip';
@@ -82,9 +81,6 @@ type Overlay =
   | { kind: 'skill-def'; skill: Skill }
   | { kind: 'agent-def'; agent: Agent }
   | { kind: 'team'; teamName: string }
-  // Keyed by the call, not the shell: the page reads the shell fresh on each
-  // transcript read, so a running one turns into its ending in place.
-  | { kind: 'shell'; toolUseId: string; title: string }
   | null;
 
 /** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
@@ -369,8 +365,6 @@ export function TerminalMissionControl({
         return { kind: 'agent', label: overlay.agent.name };
       case 'team':
         return { kind: 'team', label: overlay.teamName };
-      case 'shell':
-        return { kind: 'shell', label: overlay.title };
     }
   }, [overlay]);
 
@@ -586,13 +580,7 @@ export function TerminalMissionControl({
           // already carries it, and two copies of the same number a few
           // hundred pixels apart read as two different readings.
           <span className="flex items-center" style={{ gap: 14 }}>
-            <BackgroundShells
-              shells={backgroundShells}
-              liveSince={liveSince}
-              onOpen={shell =>
-                setOverlay({ kind: 'shell', toolUseId: shell.toolUseId, title: shell.title })
-              }
-            />
+            <BackgroundShells shells={backgroundShells} liveSince={liveSince} />
             {terminalMounted && (
               <span
                 className="flex items-center font-mono uppercase"
@@ -776,11 +764,6 @@ export function TerminalMissionControl({
                     onOpenChat={openSessionFromOverlay}
                     chromeless
                   />
-                ) : overlay.kind === 'shell' ? (
-                  (() => {
-                    const shell = backgroundShells.find(b => b.toolUseId === overlay.toolUseId);
-                    return shell ? <BackgroundShellPage shell={shell} /> : null;
-                  })()
                 ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
                   <SubagentTranscriptPanel
                     hash={project.hash}

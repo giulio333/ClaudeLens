@@ -21190,61 +21190,57 @@ select.cl-opt-input {
 .cl-bgshell-item-sub[data-tone='failed'] {
   color: var(--cl-danger);
 }
-/* The shell's page (BackgroundShellPage): the frame's tool-detail layout, with
-   the status under the title and the facts as a label/value list. */
-.cl-bgshell-page-status {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin: 10px 0 0;
-  font-family: var(--font-reading);
-  font-size: 13.5px;
+/* A background shell's window (BackgroundShellSheet): the anatomy of a read
+   file's window (.cl-ctx-sheet), with the facts where the reads are. */
+.cl-bgshell-sheet {
+  width: min(820px, 92vw);
+}
+.cl-bgshell-sheet-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-bgshell-sheet-status {
+  font-family: var(--font-sans);
+  font-size: 11.5px;
   color: var(--cl-ink-3);
 }
-.cl-bgshell-page-status[data-tone='failed'] {
+.cl-bgshell-sheet-status[data-tone='failed'] {
   color: var(--cl-danger);
 }
 .cl-bgshell-facts {
-  margin: 8px 0 0;
-  display: grid;
-  grid-template-columns: max-content minmax(0, 1fr);
-  column-gap: 28px;
-  row-gap: 10px;
-  font-family: var(--font-reading);
-  font-size: 13.5px;
-}
-.cl-bgshell-facts > div {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+  padding: 16px 18px;
 }
 .cl-bgshell-facts dt {
+  font: 400 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
   color: var(--cl-ink-4);
 }
 .cl-bgshell-facts dd {
-  margin: 0;
-  min-width: 0;
+  margin: 3px 0 0;
+  font: 400 12.5px/1.4 var(--font-reading);
   color: var(--cl-ink-2);
 }
-.cl-bgshell-path {
-  display: flex;
+.cl-bgshell-sheet-cmd {
+  flex-direction: row;
   align-items: baseline;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  font-family: var(--font-mono);
-  font-size: 12px;
-  overflow-wrap: anywhere;
+  justify-content: space-between;
 }
-.cl-bgshell-copy {
+.cl-bgshell-sheet-cmd .cl-ctx-jump,
+.cl-ctx-sheet-foot .cl-ctx-jump {
   flex-shrink: 0;
-  padding: 0;
-  border: 0;
-  background: none;
-  font-family: var(--font-reading);
-  font-size: 11.5px;
-  letter-spacing: 0;
-  text-transform: none;
-  color: var(--cl-accent-ink);
-  cursor: pointer;
+  font: 400 11px var(--font-sans);
 }
-.cl-bgshell-copy:hover {
-  text-decoration: underline;
+.cl-bgshell-sheet-file {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

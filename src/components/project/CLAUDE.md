@@ -372,19 +372,23 @@ confondeva con i dati del feed. La pillola parla a parole (`1 in background ·
 apre un elenco con la `description` di ogni comando e da quanto gira o quando è
 finito (`Finished 9 min ago · ran 20 min`: prima il quando, poi la durata —
 "Finished after 20 min" si leggeva come "20 minuti fa"). Il comando e il resto
-stanno **in una pagina sua** (`terminal/BackgroundShellPage.tsx`), che un click
-sulla riga apre nell'overlay del frame come un tool o un file (overlay kind
-`shell`, crumb `SHELL · <titolo>`, ✕ ed Esc del frame): il comando nella stessa
-finestra terminale del transcript (`CommandBlock`), poi ora di inizio e di fine,
-durata, exit code, come è finita in background (chiesto da Claude o spostata
-allo scadere del timeout, letto dalla frase del risultato), se l'ha fermata
-Claude con `TaskStop`, e il file di output che il risultato nomina, copiabile.
-L'overlay tiene il `toolUseId`, non la shell: la pagina legge la shell fresca a
-ogni lettura del transcript, quindi una aperta mentre gira diventa il suo esito
-sul posto. Dentro il popover i dettagli erano stati provati e scartati: 380px
-non bastano a un comando vero. Niente "Show in chat": la pillola esiste solo
-nella sessione che ha lanciato la shell, quindi la chat è già quella a schermo.
-L'output stesso non c'è: la notifica non lo porta, sta solo nel file.
+stanno **in una finestra che galleggia sopra la sessione**
+(`terminal/BackgroundShellSheet.tsx`), la stessa anatomia e la stessa carta
+della finestra di un file letto (`ContextFileSheet`, via `SheetModal`: backdrop,
+Esc, click fuori): barra con stato e titolo, a sinistra la colonna dei fatti
+(ora di inizio e di fine, durata, exit code, come è finita in background —
+chiesto da Claude o spostata allo scadere del timeout, letto dalla frase del
+risultato — e se l'ha fermata Claude con `TaskStop`), a destra il comando in
+righe numerate su carta (`PaperCode`, esportato da `ContextFileSheet`), in
+fondo il file di output che il risultato nomina, entrambi copiabili. Due forme
+sono state scartate: i dettagli dentro il popover (380px non bastano a un
+comando vero) e una pagina nell'overlay del frame, che si sostituiva alla chat.
+La finestra tiene l'id della chiamata, non la shell: la legge fresca a ogni
+lettura del transcript, quindi una aperta mentre gira diventa il suo esito sul
+posto, e resta aperta anche se la pillola sparisce. Niente "Show in chat": la
+pillola esiste solo nella sessione che ha lanciato la shell, quindi la chat è
+già quella a schermo. L'output stesso non c'è: la notifica non lo porta, sta
+solo nel file.
 Regole, misurate sulle 122 shell in background del corpus:
 
 - la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in

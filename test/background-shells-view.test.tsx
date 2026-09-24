@@ -9,7 +9,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { cleanup, render, fireEvent } from '@testing-library/react';
 import { BackgroundShells } from '../src/components/project/terminal/BackgroundShells';
-import { BackgroundShellPage } from '../src/components/project/terminal/BackgroundShellPage';
+import { BackgroundShellSheet } from '../src/components/project/terminal/BackgroundShellSheet';
 import type { BackgroundShell } from '../src/components/project/terminal/background-shells';
 
 const NOW = Date.parse('2026-08-11T11:00:00.000Z');
@@ -41,12 +41,11 @@ function shell(
 function mount(
   shells: BackgroundShell[],
   // When the CLI process running the session started; null = none runs it.
-  liveSince: number | null = ago(60),
-  onOpen: (shell: BackgroundShell) => void = () => {}
+  liveSince: number | null = ago(60)
 ) {
   return render(
     <StrictMode>
-      <BackgroundShells shells={shells} liveSince={liveSince} onOpen={onOpen} />
+      <BackgroundShells shells={shells} liveSince={liveSince} />
     </StrictMode>
   );
 }
@@ -110,13 +109,19 @@ describe('BackgroundShells', () => {
     expect(getByText('Failed 3 min ago · ran 2 min · exit code 1')).toBeTruthy();
   });
 
-  it('opens a row onto its page, and closes the list', () => {
-    const onOpen = vi.fn();
-    const target = shell({ toolUseId: 'a' });
-    const { getByRole, queryByRole } = mount([target], ago(60), onOpen);
+  it('opens a row onto a window over the session, and closes the list', () => {
+    const { getByRole, queryByRole, getByLabelText, container } = mount([
+      shell({ toolUseId: 'a' }),
+    ]);
     fireEvent.click(getByRole('button', { name: /1 in background/ }));
     fireEvent.click(getByRole('button', { name: /Wait for the PR checks/ }));
-    expect(onOpen).toHaveBeenCalledWith(target);
+    expect(queryByRole('dialog', { name: 'Background work' })).toBeNull();
+    const win = getByRole('dialog');
+    expect(win.getAttribute('aria-modal')).toBe('true');
+    expect(win.textContent).toContain('gh pr checks 12 --watch');
+    // It floats over the page: portalled, not drawn in the pill's place.
+    expect(container.contains(win)).toBe(false);
+    fireEvent.click(getByLabelText('Close'));
     expect(queryByRole('dialog')).toBeNull();
   });
 
@@ -132,17 +137,17 @@ describe('BackgroundShells', () => {
   });
 });
 
-describe('BackgroundShellPage', () => {
-  function page(s: BackgroundShell) {
+describe('BackgroundShellSheet', () => {
+  function sheet(s: BackgroundShell, onClose: () => void = () => {}) {
     return render(
       <StrictMode>
-        <BackgroundShellPage shell={s} />
+        <BackgroundShellSheet shell={s} onClose={onClose} />
       </StrictMode>
     );
   }
 
   it('states what the transcript holds about an ended shell', () => {
-    const { getByRole, getByText, container } = page(
+    const { getByText, getByRole } = sheet(
       shell({
         toolUseId: 'a',
         state: 'done',
@@ -152,17 +157,19 @@ describe('BackgroundShellPage', () => {
         outputFile: '/tmp/x/tasks/a.output',
       })
     );
-    expect(getByRole('heading', { name: 'Wait for the PR checks' })).toBeTruthy();
+    const win = getByRole('dialog');
+    expect(getByText('Wait for the PR checks')).toBeTruthy();
     expect(getByText('Finished 4 min ago · ran 16 min')).toBeTruthy();
-    expect(container.textContent).toContain('gh pr checks 12 --watch');
+    expect(win.textContent).toContain('gh pr checks 12 --watch');
     expect(getByText('16 min')).toBeTruthy();
-    expect(getByText('Started there by Claude')).toBeTruthy();
-    expect(getByText('/tmp/x/tasks/a.output')).toBeTruthy();
+    expect(getByText('Started in the background by Claude')).toBeTruthy();
+    expect(getByText('output · /tmp/x/tasks/a.output')).toBeTruthy();
     expect(getByRole('button', { name: 'Copy path' })).toBeTruthy();
+    expect(getByRole('button', { name: 'Copy command' })).toBeTruthy();
   });
 
   it('says how a shell reached the background and who stopped it', () => {
-    const { getByText, queryByText } = page(
+    const { getByText, queryByText } = sheet(
       shell({
         toolUseId: 'b',
         via: 'timeout',
@@ -172,15 +179,22 @@ describe('BackgroundShellPage', () => {
         endedAt: ago(1),
       })
     );
-    expect(getByText('Moved there after its 120 s timeout')).toBeTruthy();
-    expect(getByText('By Claude, with TaskStop')).toBeTruthy();
+    expect(getByText('Moved to the background after its 120 s timeout')).toBeTruthy();
+    expect(getByText('Claude, with TaskStop')).toBeTruthy();
     // No exit code is on record for a stopped shell, so none is shown.
     expect(queryByText('Exit code')).toBeNull();
   });
 
   it('shows a running shell as running, with no end', () => {
-    const { getByText, queryByText } = page(shell({ toolUseId: 'c' }));
-    expect(getByText('Running for 12 min')).toBeTruthy();
+    const { getAllByText, queryByText } = sheet(shell({ toolUseId: 'c' }));
+    expect(getAllByText(/12 min/).length).toBeGreaterThan(0);
     expect(queryByText('Ended')).toBeNull();
+  });
+
+  it('closes on Escape', () => {
+    const onClose = vi.fn();
+    sheet(shell({ toolUseId: 'd' }), onClose);
+    fireEvent.keyDown(window, { key: 'Escape' });
+    expect(onClose).toHaveBeenCalled();
   });
 });

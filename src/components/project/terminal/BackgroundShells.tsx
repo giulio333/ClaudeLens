@@ -4,6 +4,8 @@ import { createPortal } from 'react-dom';
 import { STATE_WORD, shellStatusLine, spanLabel, visibleShells } from './background-shells';
 import type { BackgroundShell } from './background-shells';
 import { useMinuteClock } from './use-minute-clock';
+import { StateIcon } from './ShellStateIcon';
+import { BackgroundShellSheet } from './BackgroundShellSheet';
 
 /**
  * The session's background shells, in its top bar beside RUNNING: a pill that
@@ -12,8 +14,8 @@ import { useMinuteClock } from './use-minute-clock';
  * Written for a reader who does not want the shell: the title is the
  * `description` Claude already gives every command and the time is in minutes.
  * The rest — the command itself, the clock times, the exit code, how it got to
- * the background and where its output goes — is a click on its row away, on a
- * page of its own (`BackgroundShellPage`, in the frame's overlay). No "show in
+ * the background and where its output goes — is a click on its row away, in a
+ * window that floats over the session (`BackgroundShellSheet`). No "show in
  * chat": the pill only exists in the session that started the shell, so the
  * chat is already the one on screen. Nothing here can stop a shell: it belongs
  * to the CLI, and the pane only reads it.
@@ -28,14 +30,11 @@ import { useMinuteClock } from './use-minute-clock';
 export function BackgroundShells({
   shells,
   liveSince,
-  onOpen,
 }: {
   shells: BackgroundShell[];
   /** When the CLI process running the session started; null when none is.
    *  Only the shells that process started are its children. */
   liveSince: number | null;
-  /** Open the shell's page. */
-  onOpen: (shell: BackgroundShell) => void;
 }) {
   // Where the pill was when the list opened; null while it is closed.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -45,6 +44,13 @@ export function BackgroundShells({
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  // The shell whose window is open, by call id: the shell itself is read fresh
+  // from `shells` on every transcript read, so a running one ends in place.
+  const [sheetId, setSheetId] = useState<string | null>(null);
+  const sheetShell = sheetId ? shells.find(s => s.toolUseId === sheetId) : undefined;
+  const sheet = sheetShell && (
+    <BackgroundShellSheet shell={sheetShell} onClose={() => setSheetId(null)} />
+  );
 
   useEffect(() => {
     if (!open) return;
@@ -66,7 +72,9 @@ export function BackgroundShells({
     };
   }, [open]);
 
-  if (running.length === 0 && ended.length === 0) return null;
+  // An open window outlives the pill: the shell can leave the recent window
+  // while its window is being read.
+  if (running.length === 0 && ended.length === 0) return sheet ?? null;
 
   const latest = ended[0];
   const tone = running.length > 0 ? 'running' : latest.state;
@@ -127,7 +135,7 @@ export function BackgroundShells({
                     className="cl-bgshell-item"
                     onClick={() => {
                       setAnchor(null);
-                      onOpen(s);
+                      setSheetId(s.toolUseId);
                     }}
                   >
                     <StateIcon state={s.state} size={16} />
@@ -152,61 +160,7 @@ export function BackgroundShells({
           </div>,
           document.body
         )}
+      {sheet}
     </div>
-  );
-}
-
-export function StateIcon({
-  state,
-  size = 14,
-}: {
-  state: BackgroundShell['state'];
-  size?: number;
-}) {
-  if (state === 'running') {
-    return (
-      <svg
-        className="cl-bgshell-spin"
-        width={size}
-        height={size}
-        viewBox="0 0 24 24"
-        fill="none"
-        aria-hidden="true"
-      >
-        <circle cx="12" cy="12" r="9" stroke="var(--cl-line)" strokeWidth="2.4" />
-        <path
-          d="M21 12a9 9 0 0 0-9-9"
-          stroke="var(--cl-accent)"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-        />
-      </svg>
-    );
-  }
-  const color =
-    state === 'done' ? 'var(--cl-ok)' : state === 'failed' ? 'var(--cl-danger)' : 'var(--cl-ink-3)';
-  return (
-    <svg
-      width={size}
-      height={size}
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke={color}
-      strokeWidth="2.2"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      style={{ flexShrink: 0 }}
-    >
-      <circle cx="12" cy="12" r="9" />
-      {state === 'done' && <path d="M8 12.5l2.6 2.6L16 9.5" />}
-      {state === 'failed' && (
-        <>
-          <path d="M12 7.5v5.5" />
-          <path d="M12 16.5v.01" />
-        </>
-      )}
-      {state === 'stopped' && <rect x="9" y="9" width="6" height="6" rx="1" />}
-    </svg>
   );
 }
