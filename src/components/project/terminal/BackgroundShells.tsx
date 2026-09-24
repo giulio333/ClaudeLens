@@ -23,20 +23,20 @@ import type { BackgroundShell } from './background-shells';
  */
 export function BackgroundShells({
   shells,
-  sessionLive,
+  liveSince,
   onShowInChat,
 }: {
   shells: BackgroundShell[];
-  /** Whether the CLI that owns them is still running: without it, a shell
-   *  with no ending recorded is gone, not running. */
-  sessionLive: boolean;
+  /** When the CLI process running the session started; null when none is.
+   *  Only the shells that process started are its children. */
+  liveSince: number | null;
   onShowInChat?: (turnN: number) => void;
 }) {
   // Where the pill was when the list opened; null while it is closed.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const open = anchor !== null;
   const now = useMinuteClock(shells.length > 0);
-  const { running, ended } = visibleShells(shells, sessionLive, now);
+  const { running, ended } = visibleShells(shells, liveSince, now);
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();

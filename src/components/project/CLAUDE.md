@@ -381,9 +381,16 @@ Regole, misurate sulle 122 shell in background del corpus:
   `completed (exit code -1)` è un fallimento) **oppure** con un `TaskStop`
   riuscito sul suo task id, che **non scrive nessuna notifica** — senza questa
   regola ogni shell fermata così resterebbe "in corso" per sempre;
-- senza nessuna delle due è in corso **solo se la sessione è viva** (la PTY di
-  questa pane, o il registro): la shell è figlia della CLI, e una sessione
-  finita se l'è portata via;
+- senza nessuna delle due è in corso **solo se l'ha lanciata il processo CLI
+  che gira adesso**: la shell è sua figlia, e una partita prima — una sessione
+  ripresa si porta dietro le shell del processo uscito — è morta con lui. Il
+  momento di avvio viene dallo `startedAt` del registro (la voce di questa pane,
+  altrimenti quella del processo che la gira altrove) e, finché la CLI non vi si
+  è iscritta, dall'istante in cui la pane ha avuto il pid. Nessun processo vivo
+  → nessuna pillola. L'avviso di recupero che Claude Code scrive al resume non
+  basta: arriva tardi ed elenca più task id, di cui `parseTaskNotification`
+  tiene il primo. Un `exit code 144` resta un fallimento: sui 6 casi su disco
+  nessuno segue un `TaskStop`, e la CLI stessa li marca `failed`;
 - l'elenco sta in un **portal su `<body>`**: la top bar è un contesto di
   sovrapposizione suo (`backdrop-filter`), e un pannello disegnato lì dentro
   finirebbe sotto il terminale.

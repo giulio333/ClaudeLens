@@ -39,12 +39,13 @@ function shell(
 
 function mount(
   shells: BackgroundShell[],
-  sessionLive = true,
+  // When the CLI process running the session started; null = none runs it.
+  liveSince: number | null = ago(60),
   onShowInChat: (n: number) => void = () => {}
 ) {
   return render(
     <StrictMode>
-      <BackgroundShells shells={shells} sessionLive={sessionLive} onShowInChat={onShowInChat} />
+      <BackgroundShells shells={shells} liveSince={liveSince} onShowInChat={onShowInChat} />
     </StrictMode>
   );
 }
@@ -71,8 +72,14 @@ describe('BackgroundShells', () => {
     expect(getByRole('button', { name: /3 in background/ }).textContent).not.toContain('min');
   });
 
-  it('draws nothing once the session is gone and nothing ended recently', () => {
-    const { container } = mount([shell({ toolUseId: 'a' })], false);
+  it('draws nothing once the session is gone', () => {
+    const { container } = mount([shell({ toolUseId: 'a' })], null);
+    expect(container.textContent).toBe('');
+  });
+
+  it('ignores a shell left by the process before a resume', () => {
+    // Resumed 5 minutes ago; the shell is from the process that exited.
+    const { container } = mount([shell({ toolUseId: 'a', startedAt: ago(12) })], ago(5));
     expect(container.textContent).toBe('');
   });
 
@@ -106,7 +113,7 @@ describe('BackgroundShells', () => {
     const onShowInChat = vi.fn();
     const { getByRole, getAllByRole, queryByRole } = mount(
       [shell({ toolUseId: 'a', turnN: 7 })],
-      true,
+      ago(60),
       onShowInChat
     );
     fireEvent.click(getByRole('button', { name: /1 in background/ }));

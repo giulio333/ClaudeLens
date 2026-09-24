@@ -180,11 +180,23 @@ describe('visibleShells', () => {
   const now = T0 + 60 * 60_000;
   const base = { toolUseId: 'x', taskId: 'x', title: 't', command: 'c', startedAt: T0, turnN: 1 };
 
-  it('shows running shells only while the session is live', () => {
-    const shells = [{ ...base, state: 'running' as const }];
-    expect(visibleShells(shells, true, now).running).toHaveLength(1);
-    // The CLI that owned it is gone, and took the shell with it.
-    expect(visibleShells(shells, false, now).running).toEqual([]);
+  it('shows nothing when no CLI process runs the session', () => {
+    const shells = [
+      { ...base, state: 'running' as const },
+      { ...base, toolUseId: 'y', state: 'done' as const, endedAt: now - 60_000 },
+    ];
+    expect(visibleShells(shells, null, now)).toEqual({ running: [], ended: [] });
+  });
+
+  it('counts only the shells the live process started, not a resumed session’s old ones', () => {
+    // The session was resumed at +30: the shell from +0 belonged to the process
+    // that exited, and has no ending on disk because nothing recorded one.
+    const shells = [
+      { ...base, toolUseId: 'old', state: 'running' as const, startedAt: T0 },
+      { ...base, toolUseId: 'new', state: 'running' as const, startedAt: T0 + 40 * 60_000 },
+    ];
+    const { running } = visibleShells(shells, T0 + 30 * 60_000, now);
+    expect(running.map(s => s.toolUseId)).toEqual(['new']);
   });
 
   it('keeps an ended shell for the recent window, newest first', () => {
@@ -193,8 +205,7 @@ describe('visibleShells', () => {
       { ...base, toolUseId: 'a', state: 'done' as const, endedAt: now - 5 * 60_000 },
       { ...base, toolUseId: 'b', state: 'failed' as const, endedAt: now - 60_000 },
     ];
-    // Live or not: an ending is a fact whatever became of the session.
-    expect(visibleShells(shells, false, now).ended.map(s => s.toolUseId)).toEqual(['b', 'a']);
+    expect(visibleShells(shells, T0, now).ended.map(s => s.toolUseId)).toEqual(['b', 'a']);
   });
 });
 

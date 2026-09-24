@@ -315,6 +315,13 @@ export function TerminalMissionControl({
   );
 
   const [ptyPid, setPtyPid] = useState<number | null>(null);
+  // When this pane's CLI came up — the stand-in for the registry's `startedAt`
+  // until the CLI joins it.
+  const [ptySince, setPtySince] = useState<number | null>(null);
+  const onPid = useCallback((pid: number | null) => {
+    setPtyPid(pid);
+    setPtySince(pid ? Date.now() : null);
+  }, []);
   const [termStatus, setTermStatus] = useState<TerminalStatus>('starting');
   const [overlay, setOverlay] = useState<Overlay>(null);
   useEffect(() => {
@@ -429,16 +436,22 @@ export function TerminalMissionControl({
   );
 
   // The shells this session left running in the background — the CLI footer's
-  // "1 shell". Same query the rail reads, so it costs no second read. Running
-  // only while the CLI that owns them is: the registry says whether it is.
+  // "1 shell". Same query the rail reads, so it costs no second read. Only the
+  // live CLI process's own shells count, so this needs when it started: the
+  // registry says (this pane's entry first, else whichever process runs the
+  // session elsewhere), and this pane's own spawn time covers the seconds
+  // before the CLI joins the registry.
   const { data: chatMessages } = useChatSession(project.hash, filename);
   const backgroundShells = useMemo(
     () => (chatMessages ? buildBackgroundShells(buildProcessedMessages(chatMessages)) : []),
     [chatMessages]
   );
-  const sessionLive =
-    (terminalMounted && termStatus === 'running') ||
-    (!!sessionId && !!activeSessions?.some(s => s.sessionId === sessionId));
+  const liveSince = useMemo(() => {
+    const entries = (activeSessions ?? []).filter(s => sessionId && s.sessionId === sessionId);
+    const own = entries.find(s => s.pid === ptyPid) ?? entries[0];
+    if (own?.startedAt) return own.startedAt;
+    return termStatus === 'running' ? ptySince : null;
+  }, [activeSessions, sessionId, ptyPid, termStatus, ptySince]);
 
   const { data: sessionList } = useSessionList(project.hash);
   const summary = useMemo(
@@ -569,7 +582,7 @@ export function TerminalMissionControl({
           <span className="flex items-center" style={{ gap: 14 }}>
             <BackgroundShells
               shells={backgroundShells}
-              sessionLive={sessionLive}
+              liveSince={liveSince}
               onShowInChat={jumpToTurn}
             />
             {terminalMounted && (
@@ -685,7 +698,7 @@ export function TerminalMissionControl({
                   cwd={project.realPath}
                   resumeSessionId={resumeSessionId}
                   attachJobId={attachJobId}
-                  onPid={setPtyPid}
+                  onPid={onPid}
                   onStatus={setTermStatus}
                 />
               </div>

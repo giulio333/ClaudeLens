@@ -17,9 +17,14 @@ import type { ProcessedMessage } from '../chat/utils';
  *   on disk every shell stopped that way has none, so without this rule a
  *   stopped shell would read as running for the rest of the session.
  *
- * A shell with neither is running only while the session is: the process that
- * owns it is the CLI, and a session that ended took its shells with it. That
- * half lives with the caller, which knows whether the session is live.
+ * A shell with neither is running only if the CLI process running the session
+ * now is the one that started it: a shell is that process's child, and one
+ * started before it — a resumed session carries the shells of the process
+ * that exited — died with its parent. On disk 5 of the 122 background shells
+ * have no ending at all, and the resume notice that marks them stopped is no
+ * help here: it arrives late and lists several task ids, of which
+ * `parseTaskNotification` keeps the first. So the caller passes the live
+ * process's start time and `visibleShells` keeps only what began after it.
  *
  * This is state, not an event, which is why it stays out of Mission Control's
  * feed: it rides the session's top bar beside RUNNING.
@@ -122,16 +127,19 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
 export const RECENT_WINDOW_MS = 10 * 60_000;
 
 /**
- * What the top bar shows: the shells still running — only while the session
- * is live — and those that ended within the recent window, newest first.
+ * What the top bar shows: the shells the live CLI process started — running,
+ * or ended within the recent window, newest first. `liveSince` is when that
+ * process started; null when the session is not running, which shows nothing.
  */
 export function visibleShells(
   shells: BackgroundShell[],
-  sessionLive: boolean,
+  liveSince: number | null,
   now: number
 ): { running: BackgroundShell[]; ended: BackgroundShell[] } {
-  const running = sessionLive ? shells.filter(s => s.state === 'running') : [];
-  const ended = shells
+  if (liveSince === null) return { running: [], ended: [] };
+  const own = shells.filter(s => s.startedAt >= liveSince);
+  const running = own.filter(s => s.state === 'running');
+  const ended = own
     .filter(s => s.state !== 'running' && s.endedAt && now - s.endedAt < RECENT_WINDOW_MS)
     .sort((a, b) => (b.endedAt ?? 0) - (a.endedAt ?? 0));
   return { running, ended };

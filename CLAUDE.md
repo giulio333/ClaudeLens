@@ -181,8 +181,9 @@ wrote, a construct it cannot follow and a span through a pipe — is
 `context-files`) and
 `background-shells-view` (the pill beside RUNNING for the commands Claude
 left running in the background: it says the count and the minutes in words and
-never the command, draws nothing when nothing runs or ended recently — a shell
-of a session that is gone is not running — and reports the latest ending, then
+never the command, draws nothing when no CLI process runs the session, counts
+only the shells the live process started — a resumed session's old ones died
+with the process that exited — and reports the latest ending, then
 lists each outcome and jumps to the turn that started it) and
 `exchange-thread` (the pure half of that page: which side a message is on,
 where a run of one party's messages starts, the wall time the conversation
