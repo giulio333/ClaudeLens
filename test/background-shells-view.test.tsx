@@ -9,6 +9,7 @@ import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { StrictMode } from 'react';
 import { cleanup, render, fireEvent } from '@testing-library/react';
 import { BackgroundShells } from '../src/components/project/terminal/BackgroundShells';
+import { BackgroundShellPage } from '../src/components/project/terminal/BackgroundShellPage';
 import type { BackgroundShell } from '../src/components/project/terminal/background-shells';
 
 const NOW = Date.parse('2026-08-11T11:00:00.000Z');
@@ -40,11 +41,12 @@ function shell(
 function mount(
   shells: BackgroundShell[],
   // When the CLI process running the session started; null = none runs it.
-  liveSince: number | null = ago(60)
+  liveSince: number | null = ago(60),
+  onOpen: (shell: BackgroundShell) => void = () => {}
 ) {
   return render(
     <StrictMode>
-      <BackgroundShells shells={shells} liveSince={liveSince} />
+      <BackgroundShells shells={shells} liveSince={liveSince} onOpen={onOpen} />
     </StrictMode>
   );
 }
@@ -108,41 +110,14 @@ describe('BackgroundShells', () => {
     expect(getByText('Failed 3 min ago · ran 2 min · exit code 1')).toBeTruthy();
   });
 
-  it('opens a row onto what the transcript holds about the shell', () => {
-    const { getByRole, getByText, queryByText } = mount([
-      shell({
-        toolUseId: 'a',
-        state: 'done',
-        exitCode: 0,
-        startedAt: ago(20),
-        endedAt: ago(4),
-        outputFile: '/tmp/x/tasks/a.output',
-      }),
-      shell({
-        toolUseId: 'b',
-        title: 'Build',
-        via: 'timeout',
-        timeoutS: 120,
-        stoppedByClaude: true,
-        state: 'stopped',
-        endedAt: ago(1),
-      }),
-    ]);
-    fireEvent.click(getByRole('button', { name: /Finished|Stopped/ }));
-    // Closed rows keep the command out of sight.
-    expect(queryByText('gh pr checks 12 --watch')).toBeNull();
-    const row = getByRole('button', { name: /Wait for the PR checks/ });
-    fireEvent.click(row);
-    expect(row.getAttribute('aria-expanded')).toBe('true');
-    expect(getByText('gh pr checks 12 --watch')).toBeTruthy();
-    expect(getByText('16 min')).toBeTruthy();
-    expect(getByText('Started there by Claude')).toBeTruthy();
-    expect(getByText('a.output')).toBeTruthy();
-    // One row open at a time.
-    fireEvent.click(getByRole('button', { name: /^Build/ }));
-    expect(row.getAttribute('aria-expanded')).toBe('false');
-    expect(getByText('Moved there after its 120 s timeout')).toBeTruthy();
-    expect(getByText('By Claude, with TaskStop')).toBeTruthy();
+  it('opens a row onto its page, and closes the list', () => {
+    const onOpen = vi.fn();
+    const target = shell({ toolUseId: 'a' });
+    const { getByRole, queryByRole } = mount([target], ago(60), onOpen);
+    fireEvent.click(getByRole('button', { name: /1 in background/ }));
+    fireEvent.click(getByRole('button', { name: /Wait for the PR checks/ }));
+    expect(onOpen).toHaveBeenCalledWith(target);
+    expect(queryByRole('dialog')).toBeNull();
   });
 
   it('closes on Escape and on a click outside', () => {
@@ -154,5 +129,58 @@ describe('BackgroundShells', () => {
     fireEvent.click(pill);
     fireEvent.mouseDown(document.body);
     expect(queryByRole('dialog')).toBeNull();
+  });
+});
+
+describe('BackgroundShellPage', () => {
+  function page(s: BackgroundShell) {
+    return render(
+      <StrictMode>
+        <BackgroundShellPage shell={s} />
+      </StrictMode>
+    );
+  }
+
+  it('states what the transcript holds about an ended shell', () => {
+    const { getByRole, getByText, container } = page(
+      shell({
+        toolUseId: 'a',
+        state: 'done',
+        exitCode: 0,
+        startedAt: ago(20),
+        endedAt: ago(4),
+        outputFile: '/tmp/x/tasks/a.output',
+      })
+    );
+    expect(getByRole('heading', { name: 'Wait for the PR checks' })).toBeTruthy();
+    expect(getByText('Finished 4 min ago · ran 16 min')).toBeTruthy();
+    expect(container.textContent).toContain('gh pr checks 12 --watch');
+    expect(getByText('16 min')).toBeTruthy();
+    expect(getByText('Started there by Claude')).toBeTruthy();
+    expect(getByText('/tmp/x/tasks/a.output')).toBeTruthy();
+    expect(getByRole('button', { name: 'Copy path' })).toBeTruthy();
+  });
+
+  it('says how a shell reached the background and who stopped it', () => {
+    const { getByText, queryByText } = page(
+      shell({
+        toolUseId: 'b',
+        via: 'timeout',
+        timeoutS: 120,
+        state: 'stopped',
+        stoppedByClaude: true,
+        endedAt: ago(1),
+      })
+    );
+    expect(getByText('Moved there after its 120 s timeout')).toBeTruthy();
+    expect(getByText('By Claude, with TaskStop')).toBeTruthy();
+    // No exit code is on record for a stopped shell, so none is shown.
+    expect(queryByText('Exit code')).toBeNull();
+  });
+
+  it('shows a running shell as running, with no end', () => {
+    const { getByText, queryByText } = page(shell({ toolUseId: 'c' }));
+    expect(getByText('Running for 12 min')).toBeTruthy();
+    expect(queryByText('Ended')).toBeNull();
   });
 });

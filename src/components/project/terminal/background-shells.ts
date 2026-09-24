@@ -166,3 +166,24 @@ export function spanLabel(ms: number): string {
   const h = Math.floor(min / 60);
   return min % 60 ? `${h} h ${min % 60} min` : `${h} h`;
 }
+
+/** What each ending is called, in the pill and on the page. */
+export const STATE_WORD: Record<BackgroundShellState, string> = {
+  running: 'Running',
+  done: 'Finished',
+  failed: 'Failed',
+  stopped: 'Stopped',
+};
+
+/**
+ * One line on where a shell stands. When it ended comes first, how long it
+ * ran second: "Finished after 20 min" read as twenty minutes ago on a command
+ * that had just ended.
+ */
+export function shellStatusLine(s: BackgroundShell, now: number): string {
+  if (s.state === 'running') return `Running for ${spanLabel(now - s.startedAt)}`;
+  const when = s.endedAt ? ` ${spanLabel(now - s.endedAt)} ago` : '';
+  const ran = s.endedAt && s.startedAt ? ` · ran ${spanLabel(s.endedAt - s.startedAt)}` : '';
+  const code = s.state === 'failed' && s.exitCode !== undefined ? ` · exit code ${s.exitCode}` : '';
+  return `${STATE_WORD[s.state]}${when}${ran}${code}`;
+}
