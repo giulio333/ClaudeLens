@@ -24,7 +24,8 @@ export interface WhatsNewHighlight {
     | 'context-rail'
     | 'thinking-note'
     | 'model-picker'
-    | 'remote';
+    | 'remote'
+    | 'background-shells';
 }
 
 export interface WhatsNewRelease {
@@ -33,6 +34,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.29',
+    highlights: [
+      {
+        title: 'Background shells, in view',
+        description:
+          'When Claude leaves a command running, a pill says how many and for how long — click it for how each one ended.',
+        where: 'The terminal pane’s top bar, beside RUNNING',
+        visual: 'background-shells',
+      },
+    ],
+  },
   {
     version: '2.2.28',
     highlights: [

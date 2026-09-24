@@ -38,6 +38,8 @@ import {
 } from './project/shared/SessionColorIdentity';
 import { ViewTabs } from './project/terminal/TerminalMissionControl';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
+import { BackgroundShells } from './project/terminal/BackgroundShells';
+import type { BackgroundShell } from './project/terminal/background-shells';
 import type { RemoteHost } from '../../electron/shared/remote-host';
 import { version as appVersion } from '../../package.json';
 
@@ -672,6 +674,96 @@ function RemoteVisual(): ReactNode {
   );
 }
 
+// A terminal pane's top bar with the real pill beside RUNNING: one dev server
+// still running, one build that ended a few minutes ago. The times are taken
+// when the popup opens — the pill measures against the clock, and a finished
+// shell leaves the list after 10 minutes, so dates written here would read as
+// days old, or as nothing, by the time anyone updates.
+function PreviewBackgroundShells(): ReactNode {
+  const [shells] = useState(() => {
+    const now = Date.now();
+    const min = 60_000;
+    const list: BackgroundShell[] = [
+      {
+        toolUseId: 'wn-bg-1',
+        taskId: 'wn-task-1',
+        title: 'Start the dev server',
+        command: 'npm run dev',
+        state: 'running',
+        startedAt: now - 12 * min,
+        via: 'requested',
+      },
+      {
+        toolUseId: 'wn-bg-2',
+        taskId: 'wn-task-2',
+        title: 'Build the app',
+        command: 'npm run build',
+        state: 'done',
+        startedAt: now - 9 * min,
+        endedAt: now - 3 * min,
+        exitCode: 0,
+        via: 'timeout',
+        timeoutS: 120,
+      },
+    ];
+    return { list, liveSince: now - 40 * min };
+  });
+  return <BackgroundShells shells={shells.list} liveSince={shells.liveSince} />;
+}
+
+const SHELLS_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-bg-t1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-09-24T10:12:00.000Z',
+    content: [
+      {
+        type: 'text',
+        text: 'The build is green and the dev server is still up in the background — I will hear when it exits.',
+      },
+    ],
+  }),
+];
+
+function BackgroundShellsVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--shells">
+      <TopBar
+        onBack={() => {}}
+        crumbs={[{ label: 'ACME' }, { label: 'Wire the retry loop', accent: true }]}
+        right={
+          <span className="flex items-center" style={{ gap: 14 }}>
+            <PreviewBackgroundShells />
+            <span
+              className="flex items-center font-mono uppercase"
+              style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
+            >
+              <span
+                aria-hidden
+                className="cl-live-dot"
+                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-ok)' }}
+              />
+              RUNNING
+            </span>
+          </span>
+        }
+      />
+      <div className="cl-transcript-inner">
+        {SHELLS_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={18 + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -683,6 +775,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'thinking-note': ThinkingNoteVisual,
   'model-picker': ModelPickerVisual,
   remote: RemoteVisual,
+  'background-shells': BackgroundShellsVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

@@ -47,6 +47,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A note', description: 'Inline.', visual: 'thinking-note' },
     { title: 'A model', description: 'Priced.', visual: 'model-picker' },
     { title: 'A host', description: 'Beta.', visual: 'remote' },
+    { title: 'A shell', description: 'In the top bar.', visual: 'background-shells' },
   ],
 };
 
@@ -165,6 +166,16 @@ describe('WhatsNewDialog', () => {
     const banner = remote.querySelector('[role="note"]')!;
     expect(banner.textContent).toContain('Remote · dev@build.example.com');
     expect(banner.querySelector('.cl-beta')?.textContent).toBe('Beta');
+    // The pill counts the running shell and its minutes, measured from when the
+    // popup opened — never from a date written into the preview — and opens on
+    // the running shell and the one that just ended.
+    const pill = container.querySelector<HTMLButtonElement>(
+      '.cl-whatsnew-frame--shells .cl-bgshell-pill'
+    )!;
+    expect(pill.textContent).toBe('1 in background· 12 min');
+    fireEvent.click(pill);
+    const list = [...document.querySelectorAll('.cl-bgshell-item-title')].map(n => n.textContent);
+    expect(list).toEqual(['Start the dev server', 'Build the app']);
   });
 
   it('marks the version seen and closes on "Got it"', async () => {
