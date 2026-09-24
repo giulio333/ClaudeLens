@@ -106,7 +106,7 @@ describe('BackgroundShells', () => {
     fireEvent.click(getByRole('button', { name: /1 in background/ }));
     expect(getByRole('dialog', { name: 'Background work' })).toBeTruthy();
     expect(getByText('Running for 12 min')).toBeTruthy();
-    expect(getByText('Failed after 2 min · exit code 1')).toBeTruthy();
+    expect(getByText('Failed 3 min ago · ran 2 min · exit code 1')).toBeTruthy();
   });
 
   it('shows the turn that started a shell, and closes', () => {

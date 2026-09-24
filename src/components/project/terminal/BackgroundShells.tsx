@@ -173,13 +173,14 @@ const ENDED_WORD: Record<BackgroundShell['state'], string> = {
   stopped: 'Stopped',
 };
 
+/** When it ended comes first, how long it ran second: "Finished after 20 min"
+ *  read as twenty minutes ago on a command that had just ended. */
 function itemLine(s: BackgroundShell, now: number): string {
   if (s.state === 'running') return `Running for ${spanLabel(now - s.startedAt)}`;
-  const took = s.endedAt && s.startedAt ? ` after ${spanLabel(s.endedAt - s.startedAt)}` : '';
-  if (s.state === 'failed') {
-    return `Failed${took}${s.exitCode !== undefined ? ` · exit code ${s.exitCode}` : ''}`;
-  }
-  return `${ENDED_WORD[s.state]}${took}`;
+  const when = s.endedAt ? ` ${spanLabel(now - s.endedAt)} ago` : '';
+  const ran = s.endedAt && s.startedAt ? ` · ran ${spanLabel(s.endedAt - s.startedAt)}` : '';
+  const code = s.state === 'failed' && s.exitCode !== undefined ? ` · exit code ${s.exitCode}` : '';
+  return `${ENDED_WORD[s.state]}${when}${ran}${code}`;
 }
 
 function StateIcon({ state, size = 14 }: { state: BackgroundShell['state']; size?: number }) {
