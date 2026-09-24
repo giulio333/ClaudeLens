@@ -369,8 +369,17 @@ versione dentro il rail (un riquadro a terminale sotto i vitals, poi una riga
 del feed a fine corsa) è stata scartata dall'utente — troppo tecnica, e si
 confondeva con i dati del feed. La pillola parla a parole (`1 in background ·
 12 min`, poi `Finished`/`Failed`/`Stopped · 3 min ago` per 10 minuti) e al click
-apre un elenco con la `description` di ogni comando, da quanto gira o come è
-finito, e `Show in chat` (`jumpToTurn`). Niente comando, output o task id.
+apre un elenco con la `description` di ogni comando e da quanto gira o quando è
+finito (`Finished 9 min ago · ran 20 min`: prima il quando, poi la durata —
+"Finished after 20 min" si leggeva come "20 minuti fa"). Il comando e il resto
+stanno **un click più in là, sulla riga**, che si apre su ciò che il transcript
+sa: il comando intero (copiabile), ora di inizio e di fine, durata, exit code,
+come è finita in background (chiesto da Claude o spostata allo scadere del
+timeout, letto dalla frase del risultato), se l'ha fermata Claude con
+`TaskStop`, e il file di output che il risultato nomina. Una riga aperta alla
+volta. Niente "Show in chat": la pillola esiste solo nella sessione che ha
+lanciato la shell, quindi la chat è già quella a schermo. L'output stesso non
+c'è: la notifica non lo porta, sta solo nel file.
 Regole, misurate sulle 122 shell in background del corpus:
 
 - la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in

@@ -45,13 +45,21 @@ export type BackgroundShell = {
   /** Epoch ms of the notification or the stop; absent while running. */
   endedAt?: number;
   exitCode?: number;
-  /** 1-based turn index in `processed` of the call — where "Show in chat" goes. */
-  turnN: number;
+  /** How it got there: Claude asked (`run_in_background`), or the harness
+   *  moved it when it outran `timeoutS`. Read off the result's sentence. */
+  via: 'requested' | 'timeout';
+  timeoutS?: number;
+  /** Where the harness writes its output, as the result names it. */
+  outputFile?: string;
+  /** Ended by a `TaskStop` call — the one ending whose author is on record. */
+  stoppedByClaude?: true;
 };
 
 const BACKGROUND_ID_RE =
   /(?:running in background with ID: |moved to the background \(ID: )([\w-]+)/;
 const EXIT_CODE_RE = /exit code (-?\d+)/i;
+const TIMEOUT_RE = /within its (\d+)s timeout/;
+const OUTPUT_FILE_RE = /Output is being written to: (\S+?)\.?(?:\s|$)/;
 
 function epoch(ts: string | undefined): number {
   const t = ts ? Date.parse(ts) : NaN;
@@ -73,7 +81,7 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
   const byToolUseId = new Map<string, BackgroundShell>();
   const byTaskId = new Map<string, BackgroundShell>();
 
-  processed.forEach((p, idx) => {
+  for (const p of processed) {
     for (const g of p.toolGroups) {
       if (g.use.name !== 'Bash' || !g.result || g.result.isError) continue;
       const taskId = g.result.content.match(BACKGROUND_ID_RE)?.[1] ?? null;
@@ -81,6 +89,8 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
       const input = g.use.input as Record<string, unknown>;
       const command = typeof input.command === 'string' ? input.command : '';
       const description = typeof input.description === 'string' ? input.description.trim() : '';
+      const timeout = g.result.content.match(TIMEOUT_RE)?.[1];
+      const outputFile = g.result.content.match(OUTPUT_FILE_RE)?.[1];
       const shell: BackgroundShell = {
         toolUseId: g.use.id,
         taskId,
@@ -88,13 +98,15 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
         command,
         state: 'running',
         startedAt: epoch(p.msg.timestamp),
-        turnN: idx + 1,
+        via: timeout ? 'timeout' : 'requested',
+        ...(timeout ? { timeoutS: Number(timeout) } : {}),
+        ...(outputFile ? { outputFile } : {}),
       };
       shells.push(shell);
       byToolUseId.set(shell.toolUseId, shell);
       byTaskId.set(taskId, shell);
     }
-  });
+  }
 
   // Endings are applied in transcript order, so a later record wins — the CLI
   // re-notifies a shell on resume ("No completion record was found…").
@@ -116,6 +128,7 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
       const shell = typeof taskId === 'string' ? byTaskId.get(taskId) : undefined;
       if (shell && shell.state === 'running') {
         shell.state = 'stopped';
+        shell.stoppedByClaude = true;
         shell.endedAt = epoch(p.msg.timestamp);
       }
     }

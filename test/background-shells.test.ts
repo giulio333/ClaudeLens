@@ -79,7 +79,8 @@ describe('buildBackgroundShells', () => {
       title: 'Wait for the PR checks',
       state: 'running',
       startedAt: T0,
-      turnN: 1,
+      via: 'requested',
+      outputFile: '/tmp/x/tasks/bgaaa111.output',
     });
   });
 
@@ -89,7 +90,7 @@ describe('buildBackgroundShells', () => {
       result(2, 'toolu_b', movedByTimeout('bbbb2222')),
     ]);
     expect(shells).toHaveLength(1);
-    expect(shells[0].taskId).toBe('bbbb2222');
+    expect(shells[0]).toMatchObject({ taskId: 'bbbb2222', via: 'timeout', timeoutS: 120 });
     // No description: the command's first line stands in.
     expect(shells[0].title).toBe('npm run build');
   });
@@ -162,7 +163,11 @@ describe('buildBackgroundShells', () => {
       result(0, 'toolu_j', launched('bjjj')),
       ...taskStop(9, 'toolu_stop', 'bjjj'),
     ]);
-    expect(shell).toMatchObject({ state: 'stopped', endedAt: T0 + 9 * 60_000 });
+    expect(shell).toMatchObject({
+      state: 'stopped',
+      stoppedByClaude: true,
+      endedAt: T0 + 9 * 60_000,
+    });
   });
 
   it('leaves a shell running when the TaskStop failed or named another task', () => {
@@ -178,7 +183,14 @@ describe('buildBackgroundShells', () => {
 
 describe('visibleShells', () => {
   const now = T0 + 60 * 60_000;
-  const base = { toolUseId: 'x', taskId: 'x', title: 't', command: 'c', startedAt: T0, turnN: 1 };
+  const base = {
+    toolUseId: 'x',
+    taskId: 'x',
+    title: 't',
+    command: 'c',
+    startedAt: T0,
+    via: 'requested' as const,
+  };
 
   it('shows nothing when no CLI process runs the session', () => {
     const shells = [

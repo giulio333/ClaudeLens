@@ -184,7 +184,8 @@ left running in the background: it says the count and the minutes in words and
 never the command, draws nothing when no CLI process runs the session, counts
 only the shells the live process started — a resumed session's old ones died
 with the process that exited — and reports the latest ending, then
-lists each outcome and jumps to the turn that started it) and
+lists each outcome, one row at a time opening onto the command, the clock
+times, the exit code, how it reached the background and its output file) and
 `exchange-thread` (the pure half of that page: which side a message is on,
 where a run of one party's messages starts, the wall time the conversation
 covers — and nothing rather than "0s" for a single message) and

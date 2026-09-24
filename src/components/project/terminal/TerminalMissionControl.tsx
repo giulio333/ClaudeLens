@@ -580,11 +580,7 @@ export function TerminalMissionControl({
           // already carries it, and two copies of the same number a few
           // hundred pixels apart read as two different readings.
           <span className="flex items-center" style={{ gap: 14 }}>
-            <BackgroundShells
-              shells={backgroundShells}
-              liveSince={liveSince}
-              onShowInChat={jumpToTurn}
-            />
+            <BackgroundShells shells={backgroundShells} liveSince={liveSince} />
             {terminalMounted && (
               <span
                 className="flex items-center font-mono uppercase"

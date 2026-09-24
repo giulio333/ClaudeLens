@@ -21099,7 +21099,9 @@ select.cl-opt-input {
 .cl-bgshell-panel {
   position: fixed;
   z-index: 60;
-  width: 360px;
+  width: 400px;
+  max-height: calc(100vh - 80px);
+  overflow-y: auto;
   box-sizing: border-box;
   padding: 16px 18px 12px;
   border-radius: var(--cl-r-popover);
@@ -21136,17 +21138,36 @@ select.cl-opt-input {
   margin: 0;
   padding: 0;
 }
+.cl-bgshell-entry + .cl-bgshell-entry {
+  border-top: 1px solid var(--cl-line-soft);
+}
 .cl-bgshell-item {
   display: flex;
   align-items: flex-start;
   gap: 12px;
+  width: 100%;
   padding: 12px 0;
-}
-.cl-bgshell-item + .cl-bgshell-item {
-  border-top: 1px solid var(--cl-line-soft);
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
 }
 .cl-bgshell-item > svg {
   margin-top: 2px;
+}
+.cl-bgshell-item:hover .cl-bgshell-item-title,
+.cl-bgshell-item[aria-expanded='true'] .cl-bgshell-item-title {
+  color: var(--cl-accent-ink);
+}
+.cl-bgshell-caret {
+  flex-shrink: 0;
+  width: 14px;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  line-height: 1.3;
+  color: var(--cl-ink-4);
+  text-align: center;
 }
 .cl-bgshell-item-body {
   display: flex;
@@ -21169,16 +21190,76 @@ select.cl-opt-input {
 .cl-bgshell-item-sub[data-tone='failed'] {
   color: var(--cl-danger);
 }
-.cl-bgshell-item-link {
+.cl-bgshell-detail {
+  margin: 0 0 12px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cl-bgshell-detail-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-bgshell-cmd {
+  margin: 0;
+  max-height: 140px;
+  overflow: auto;
+  padding: 8px 10px;
+  border-radius: 8px;
+  border: 1px solid var(--cl-line-soft);
+  background: var(--cl-paper);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--cl-ink-2);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cl-bgshell-facts {
+  margin: 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  column-gap: 14px;
+  row-gap: 4px;
+  font-family: var(--font-reading);
+  font-size: 12px;
+}
+.cl-bgshell-facts > div {
+  display: contents;
+}
+.cl-bgshell-facts dt {
+  color: var(--cl-ink-4);
+}
+.cl-bgshell-facts dd {
+  margin: 0;
+  min-width: 0;
+  color: var(--cl-ink-2);
+}
+.cl-bgshell-path {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+.cl-bgshell-copy {
   flex-shrink: 0;
-  padding: 2px 0 0;
+  padding: 0;
   border: 0;
   background: none;
   font-family: var(--font-reading);
-  font-size: 12px;
+  font-size: 11.5px;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--cl-accent-ink);
   cursor: pointer;
 }
-.cl-bgshell-item-link:hover {
+.cl-bgshell-copy:hover {
   text-decoration: underline;
 }

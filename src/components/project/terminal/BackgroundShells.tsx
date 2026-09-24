@@ -9,10 +9,12 @@ import type { BackgroundShell } from './background-shells';
  * says how many are running and for how long, and opens the list on click.
  *
  * Written for a reader who does not want the shell: the title is the
- * `description` Claude already gives every command, the time is in minutes, and
- * the command, its output and the task id stay out — "Show in chat" leads to
- * the call for whoever wants them. Nothing here can stop a shell: it belongs to
- * the CLI, and the pane only reads it.
+ * `description` Claude already gives every command and the time is in minutes.
+ * The rest — the command itself, the clock times, the exit code, how it got to
+ * the background and where its output goes — is one click away on its row,
+ * for whoever wants it. No "show in chat": the pill only exists in the session
+ * that started the shell, so the chat is already the one on screen. Nothing
+ * here can stop a shell: it belongs to the CLI, and the pane only reads it.
  *
  * With nothing running, the pill reports the latest ending for the recent
  * window and then goes; with nothing to report it is not drawn at all.
@@ -24,13 +26,11 @@ import type { BackgroundShell } from './background-shells';
 export function BackgroundShells({
   shells,
   liveSince,
-  onShowInChat,
 }: {
   shells: BackgroundShell[];
   /** When the CLI process running the session started; null when none is.
    *  Only the shells that process started are its children. */
   liveSince: number | null;
-  onShowInChat?: (turnN: number) => void;
 }) {
   // Where the pill was when the list opened; null while it is closed.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -40,6 +40,8 @@ export function BackgroundShells({
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
   const panelId = useId();
+  // The one row whose details are open.
+  const [openRow, setOpenRow] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -115,29 +117,31 @@ export function BackgroundShells({
               Commands Claude left running. It is told when each one finishes.
             </p>
             <ul className="cl-bgshell-list">
-              {items.map(s => (
-                <li key={s.toolUseId} className="cl-bgshell-item">
-                  <StateIcon state={s.state} size={16} />
-                  <div className="cl-bgshell-item-body">
-                    <span className="cl-bgshell-item-title">{s.title}</span>
-                    <span className="cl-bgshell-item-sub" data-tone={s.state}>
-                      {itemLine(s, now)}
-                    </span>
-                  </div>
-                  {onShowInChat && (
+              {items.map(s => {
+                const expanded = openRow === s.toolUseId;
+                return (
+                  <li key={s.toolUseId} className="cl-bgshell-entry">
                     <button
                       type="button"
-                      className="cl-bgshell-item-link"
-                      onClick={() => {
-                        setAnchor(null);
-                        onShowInChat(s.turnN);
-                      }}
+                      className="cl-bgshell-item"
+                      aria-expanded={expanded}
+                      onClick={() => setOpenRow(expanded ? null : s.toolUseId)}
                     >
-                      Show in chat
+                      <StateIcon state={s.state} size={16} />
+                      <span className="cl-bgshell-item-body">
+                        <span className="cl-bgshell-item-title">{s.title}</span>
+                        <span className="cl-bgshell-item-sub" data-tone={s.state}>
+                          {itemLine(s, now)}
+                        </span>
+                      </span>
+                      <span className="cl-bgshell-caret" aria-hidden="true">
+                        {expanded ? '−' : '+'}
+                      </span>
                     </button>
-                  )}
-                </li>
-              ))}
+                    {expanded && <ShellDetails shell={s} />}
+                  </li>
+                );
+              })}
             </ul>
             <p className="cl-bgshell-panel-foot">
               {running.length > 0
@@ -181,6 +185,70 @@ function itemLine(s: BackgroundShell, now: number): string {
   const ran = s.endedAt && s.startedAt ? ` · ran ${spanLabel(s.endedAt - s.startedAt)}` : '';
   const code = s.state === 'failed' && s.exitCode !== undefined ? ` · exit code ${s.exitCode}` : '';
   return `${ENDED_WORD[s.state]}${when}${ran}${code}`;
+}
+
+/** The facts the transcript holds about one shell, as label and value. */
+function ShellDetails({ shell: s }: { shell: BackgroundShell }) {
+  const rows: Array<[string, string]> = [];
+  if (s.startedAt) rows.push(['Started', clockTime(s.startedAt)]);
+  if (s.endedAt) rows.push(['Ended', clockTime(s.endedAt)]);
+  if (s.startedAt && s.endedAt) rows.push(['Ran', spanLabel(s.endedAt - s.startedAt)]);
+  if (s.exitCode !== undefined) rows.push(['Exit code', String(s.exitCode)]);
+  rows.push([
+    'Background',
+    s.via === 'timeout'
+      ? `Moved there after its ${s.timeoutS ?? '?'} s timeout`
+      : 'Started there by Claude',
+  ]);
+  if (s.stoppedByClaude) rows.push(['Stopped', 'By Claude, with TaskStop']);
+  return (
+    <div className="cl-bgshell-detail">
+      <div className="cl-bgshell-detail-head">
+        <span>Command</span>
+        <CopyText text={s.command} label="Copy command" />
+      </div>
+      <pre className="cl-bgshell-cmd">{s.command}</pre>
+      <dl className="cl-bgshell-facts">
+        {rows.map(([k, v]) => (
+          <div key={k}>
+            <dt>{k}</dt>
+            <dd>{v}</dd>
+          </div>
+        ))}
+        {s.outputFile && (
+          <div>
+            <dt>Output</dt>
+            <dd className="cl-bgshell-path" title={s.outputFile}>
+              {s.outputFile.split('/').pop()}
+              <CopyText text={s.outputFile} label="Copy path" />
+            </dd>
+          </div>
+        )}
+      </dl>
+    </div>
+  );
+}
+
+function CopyText({ text, label }: { text: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return (
+    <button
+      type="button"
+      className="cl-bgshell-copy"
+      onClick={() => {
+        void navigator.clipboard.writeText(text).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 1500);
+        });
+      }}
+    >
+      {copied ? 'Copied' : label}
+    </button>
+  );
+}
+
+function clockTime(ms: number): string {
+  return new Date(ms).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' });
 }
 
 function StateIcon({ state, size = 14 }: { state: BackgroundShell['state']; size?: number }) {

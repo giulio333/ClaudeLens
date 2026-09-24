@@ -32,7 +32,7 @@ function shell(
     command: 'gh pr checks 12 --watch',
     state: 'running',
     startedAt: ago(12),
-    turnN: 4,
+    via: 'requested',
     ...over,
   };
 }
@@ -40,12 +40,11 @@ function shell(
 function mount(
   shells: BackgroundShell[],
   // When the CLI process running the session started; null = none runs it.
-  liveSince: number | null = ago(60),
-  onShowInChat: (n: number) => void = () => {}
+  liveSince: number | null = ago(60)
 ) {
   return render(
     <StrictMode>
-      <BackgroundShells shells={shells} liveSince={liveSince} onShowInChat={onShowInChat} />
+      <BackgroundShells shells={shells} liveSince={liveSince} />
     </StrictMode>
   );
 }
@@ -109,17 +108,41 @@ describe('BackgroundShells', () => {
     expect(getByText('Failed 3 min ago · ran 2 min · exit code 1')).toBeTruthy();
   });
 
-  it('shows the turn that started a shell, and closes', () => {
-    const onShowInChat = vi.fn();
-    const { getByRole, getAllByRole, queryByRole } = mount(
-      [shell({ toolUseId: 'a', turnN: 7 })],
-      ago(60),
-      onShowInChat
-    );
-    fireEvent.click(getByRole('button', { name: /1 in background/ }));
-    fireEvent.click(getAllByRole('button', { name: 'Show in chat' })[0]);
-    expect(onShowInChat).toHaveBeenCalledWith(7);
-    expect(queryByRole('dialog')).toBeNull();
+  it('opens a row onto what the transcript holds about the shell', () => {
+    const { getByRole, getByText, queryByText } = mount([
+      shell({
+        toolUseId: 'a',
+        state: 'done',
+        exitCode: 0,
+        startedAt: ago(20),
+        endedAt: ago(4),
+        outputFile: '/tmp/x/tasks/a.output',
+      }),
+      shell({
+        toolUseId: 'b',
+        title: 'Build',
+        via: 'timeout',
+        timeoutS: 120,
+        stoppedByClaude: true,
+        state: 'stopped',
+        endedAt: ago(1),
+      }),
+    ]);
+    fireEvent.click(getByRole('button', { name: /Finished|Stopped/ }));
+    // Closed rows keep the command out of sight.
+    expect(queryByText('gh pr checks 12 --watch')).toBeNull();
+    const row = getByRole('button', { name: /Wait for the PR checks/ });
+    fireEvent.click(row);
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(getByText('gh pr checks 12 --watch')).toBeTruthy();
+    expect(getByText('16 min')).toBeTruthy();
+    expect(getByText('Started there by Claude')).toBeTruthy();
+    expect(getByText('a.output')).toBeTruthy();
+    // One row open at a time.
+    fireEvent.click(getByRole('button', { name: /^Build/ }));
+    expect(row.getAttribute('aria-expanded')).toBe('false');
+    expect(getByText('Moved there after its 120 s timeout')).toBeTruthy();
+    expect(getByText('By Claude, with TaskStop')).toBeTruthy();
   });
 
   it('closes on Escape and on a click outside', () => {
