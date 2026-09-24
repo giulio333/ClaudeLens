@@ -10,13 +10,12 @@ import { useMinuteClock } from './use-minute-clock';
  * One background shell's window, opened from its row in the top bar's list.
  * It floats over the session like the window of a file the session read
  * (`ContextFileSheet`), with the same anatomy and the same paper: bar, a column
- * of facts, the command, and a foot — so the chat stays where it was beneath.
+ * of facts and the command — so the chat stays where it was beneath.
  *
  * It holds what the transcript knows and nothing it doesn't: when the shell
  * started and ended, how long it ran, its exit code, how it reached the
- * background and whether Claude stopped it, the command, and the output file
- * the result names. The output itself is not here — the ending notification
- * does not carry it, it lives only in that file. The caller hands the shell in
+ * background and whether Claude stopped it, and the command. The output is not
+ * here: the ending notification does not carry it. The caller hands the shell in
  * fresh on every transcript read, so a window opened on a running shell turns
  * into its ending in place.
  */
@@ -83,19 +82,6 @@ export function BackgroundShellSheet({
               <PaperCode text={s.command} lang="bash" />
             </div>
           </div>
-        </div>
-
-        <div className="cl-ctx-sheet-foot">
-          {s.outputFile ? (
-            <>
-              <span className="cl-bgshell-sheet-file" title={s.outputFile}>
-                output · {s.outputFile}
-              </span>
-              <CopyButton text={s.outputFile} label="Copy path" />
-            </>
-          ) : (
-            <span>no output file named</span>
-          )}
         </div>
       </div>
     </SheetModal>

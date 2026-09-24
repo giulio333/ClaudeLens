@@ -379,16 +379,16 @@ Esc, click fuori): barra con stato e titolo, a sinistra la colonna dei fatti
 (ora di inizio e di fine, durata, exit code, come è finita in background —
 chiesto da Claude o spostata allo scadere del timeout, letto dalla frase del
 risultato — e se l'ha fermata Claude con `TaskStop`), a destra il comando in
-righe numerate su carta (`PaperCode`, esportato da `ContextFileSheet`), in
-fondo il file di output che il risultato nomina, entrambi copiabili. Due forme
+righe numerate su carta (`PaperCode`, esportato da `ContextFileSheet`),
+copiabile. Niente piede: il path del file di output c'era, ed è stato tolto
+perché non serviva a nessuno. Due forme
 sono state scartate: i dettagli dentro il popover (380px non bastano a un
 comando vero) e una pagina nell'overlay del frame, che si sostituiva alla chat.
 La finestra tiene l'id della chiamata, non la shell: la legge fresca a ogni
 lettura del transcript, quindi una aperta mentre gira diventa il suo esito sul
 posto, e resta aperta anche se la pillola sparisce. Niente "Show in chat": la
 pillola esiste solo nella sessione che ha lanciato la shell, quindi la chat è
-già quella a schermo. L'output stesso non c'è: la notifica non lo porta, sta
-solo nel file.
+già quella a schermo. L'output non c'è: la notifica non lo porta.
 Regole, misurate sulle 122 shell in background del corpus:
 
 - la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in

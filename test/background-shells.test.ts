@@ -80,7 +80,6 @@ describe('buildBackgroundShells', () => {
       state: 'running',
       startedAt: T0,
       via: 'requested',
-      outputFile: '/tmp/x/tasks/bgaaa111.output',
     });
   });
 

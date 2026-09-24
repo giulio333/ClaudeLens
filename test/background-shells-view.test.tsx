@@ -154,7 +154,6 @@ describe('BackgroundShellSheet', () => {
         exitCode: 0,
         startedAt: ago(20),
         endedAt: ago(4),
-        outputFile: '/tmp/x/tasks/a.output',
       })
     );
     const win = getByRole('dialog');
@@ -163,8 +162,6 @@ describe('BackgroundShellSheet', () => {
     expect(win.textContent).toContain('gh pr checks 12 --watch');
     expect(getByText('16 min')).toBeTruthy();
     expect(getByText('Started in the background by Claude')).toBeTruthy();
-    expect(getByText('output · /tmp/x/tasks/a.output')).toBeTruthy();
-    expect(getByRole('button', { name: 'Copy path' })).toBeTruthy();
     expect(getByRole('button', { name: 'Copy command' })).toBeTruthy();
   });
 

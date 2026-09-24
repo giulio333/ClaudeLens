@@ -21249,14 +21249,7 @@ select.cl-opt-input {
   align-items: baseline;
   justify-content: space-between;
 }
-.cl-bgshell-sheet-cmd .cl-ctx-jump,
-.cl-ctx-sheet-foot .cl-ctx-jump {
+.cl-bgshell-sheet-cmd .cl-ctx-jump {
   flex-shrink: 0;
   font: 400 11px var(--font-sans);
-}
-.cl-bgshell-sheet-file {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }

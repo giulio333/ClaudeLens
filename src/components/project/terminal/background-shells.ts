@@ -49,8 +49,6 @@ export type BackgroundShell = {
    *  moved it when it outran `timeoutS`. Read off the result's sentence. */
   via: 'requested' | 'timeout';
   timeoutS?: number;
-  /** Where the harness writes its output, as the result names it. */
-  outputFile?: string;
   /** Ended by a `TaskStop` call — the one ending whose author is on record. */
   stoppedByClaude?: true;
 };
@@ -59,7 +57,6 @@ const BACKGROUND_ID_RE =
   /(?:running in background with ID: |moved to the background \(ID: )([\w-]+)/;
 const EXIT_CODE_RE = /exit code (-?\d+)/i;
 const TIMEOUT_RE = /within its (\d+)s timeout/;
-const OUTPUT_FILE_RE = /Output is being written to: (\S+?)\.?(?:\s|$)/;
 
 function epoch(ts: string | undefined): number {
   const t = ts ? Date.parse(ts) : NaN;
@@ -90,7 +87,6 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
       const command = typeof input.command === 'string' ? input.command : '';
       const description = typeof input.description === 'string' ? input.description.trim() : '';
       const timeout = g.result.content.match(TIMEOUT_RE)?.[1];
-      const outputFile = g.result.content.match(OUTPUT_FILE_RE)?.[1];
       const shell: BackgroundShell = {
         toolUseId: g.use.id,
         taskId,
@@ -100,7 +96,6 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
         startedAt: epoch(p.msg.timestamp),
         via: timeout ? 'timeout' : 'requested',
         ...(timeout ? { timeoutS: Number(timeout) } : {}),
-        ...(outputFile ? { outputFile } : {}),
       };
       shells.push(shell);
       byToolUseId.set(shell.toolUseId, shell);
