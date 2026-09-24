@@ -27,7 +27,8 @@ import { MissionRail } from '../terminal/MissionRail';
 import type { FileChange } from '../terminal/mission-feed';
 import { RailToggle, ViewTabs, type View } from '../terminal/TerminalMissionControl';
 import { Lens } from '../overview/Lens';
-import { TERMINAL_SURFACE, TerminalPane, type TerminalStatus } from '../terminal/TerminalPane';
+import { TerminalPane } from '../terminal/TerminalPane';
+import { TERMINAL_SURFACE, type TerminalStatus } from '../terminal/terminal-theme';
 import {
   remoteActionLabel,
   remoteExitNotice,

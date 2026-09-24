@@ -1,7 +1,7 @@
 import type { RemoteHost } from '../../../../electron/shared/remote-host';
 import type { RemoteLensChannel } from '../../../../electron/shared/remote-session';
 import { BetaTag } from '../shared/BetaTag';
-import { STATUS_LABEL, type TerminalStatus } from '../terminal/TerminalPane';
+import { STATUS_LABEL, type TerminalStatus } from '../terminal/terminal-theme';
 import { channelNote } from './remote-lens';
 
 /**

@@ -12,6 +12,7 @@ import { FitAddon } from '@xterm/addon-fit';
 import '@xterm/xterm/css/xterm.css';
 import { useTheme } from '../../../hooks/useTheme';
 import { trackEvent } from '../../../lib/telemetry';
+import { PALETTES, type TerminalStatus } from './terminal-theme';
 import { createTerminalPromptController, type TerminalPromptHandle } from './terminal-prompt';
 import type { RemoteLaunchMode } from '../../../../electron/shared/remote-host';
 
@@ -31,7 +32,7 @@ import type { RemoteLaunchMode } from '../../../../electron/shared/remote-host';
  * this component just reports its PTY `pid` and `status` up.
  */
 
-export type TerminalStatus = 'starting' | 'running' | 'exited' | 'error';
+export type { TerminalStatus } from './terminal-theme';
 
 /** The same pane on another machine, over the system ssh (#242). */
 export interface RemoteTerminalLaunch {
@@ -46,52 +47,6 @@ export interface RemoteTerminalLaunch {
 // macOS xterm leaves a Cmd+V keydown alone and Chromium pastes into the helper
 // textarea by itself, so that path stays untouched.
 const IS_MAC = typeof navigator !== 'undefined' && /mac/i.test(navigator.platform);
-
-const STATUS_LABEL: Record<TerminalStatus, string> = {
-  starting: 'Starting…',
-  running: 'Running',
-  exited: 'Ended',
-  error: 'Error',
-};
-
-// Per-theme terminal palettes — the brand surfaces (`--cl-paper-2`/`--cl-ink`)
-// plus a terracotta cursor. xterm needs concrete colors; `scrim`/`muted`/`body`
-// drive the exit overlay so it sits on the matching ground. The `term` field is
-// the xterm theme; the CLI reads `term.background` (OSC 11) to pick its palette.
-const PALETTES = {
-  dark: {
-    term: {
-      background: '#262421',
-      foreground: '#cfccc3',
-      cursor: '#C15F3C',
-      cursorAccent: '#262421',
-      selectionBackground: 'rgba(193, 95, 60, 0.28)',
-    },
-    scrim: 'color-mix(in srgb, #262421 82%, transparent)',
-    muted: '#8d897f',
-    body: '#cfccc3',
-  },
-  light: {
-    term: {
-      background: '#FFFFFF',
-      foreground: '#2b2722',
-      cursor: '#C15F3C',
-      cursorAccent: '#FFFFFF',
-      selectionBackground: 'rgba(193, 95, 60, 0.20)',
-    },
-    scrim: 'color-mix(in srgb, #FFFFFF 82%, transparent)',
-    muted: '#7c7669',
-    body: '#2b2722',
-  },
-} as const;
-
-// The terminal's surface color per theme — exported so the unified Terminal/Lens
-// view can paint its frame the same color when TERMINAL is active (seamless edge,
-// matches in both light and dark since it's the very color xterm renders).
-const TERMINAL_SURFACE: Record<'light' | 'dark', string> = {
-  light: PALETTES.light.term.background,
-  dark: PALETTES.dark.term.background,
-};
 
 export function TerminalPane({
   ref,
@@ -436,5 +391,3 @@ export function TerminalPane({
     </div>
   );
 }
-
-export { STATUS_LABEL, TERMINAL_SURFACE };
