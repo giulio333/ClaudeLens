@@ -393,7 +393,10 @@ Regole, misurate sulle 122 shell in background del corpus:
 
 - la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in
   due frasi (`running in background with ID: …`, `moved to the background (ID:
-…)`), non da `run_in_background`, che la seconda via non porta;
+…)`), non da `run_in_background`, che la seconda via non porta — e la frase
+  deve **aprire** il risultato: più avanti è l'output di un comando che la cita
+  (un grep sui transcript, il `cat` di una fixture), e contarlo lasciava "in
+  corso" fino alla fine del processo una shell che nessuna notifica chiuderà;
 - finisce con la `<task-notification>` che porta il suo **`tool-use-id`**
   (`completed`/`failed`/`stopped`/`killed`, exit code nel summary: un
   `completed (exit code -1)` è un fallimento) **oppure** con un `TaskStop`

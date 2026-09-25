@@ -104,6 +104,18 @@ describe('buildBackgroundShells', () => {
     expect(shells).toEqual([]);
   });
 
+  it('ignores a command that only printed the sentence, as a grep over transcripts does', () => {
+    // No notification would ever end these: counted, they read "running" for
+    // the rest of the process.
+    const shells = shellsOf([
+      bashCall(0, 'toolu_g', { command: 'grep -h "in background" transcripts/*.jsonl' }),
+      result(0, 'toolu_g', `{"type":"user","content":"${launched('bggg')}"}`),
+      bashCall(1, 'toolu_h', { command: 'python3 count_results.py' }),
+      result(1, 'toolu_h', `2 '${movedByTimeout('bhhh')}'`),
+    ]);
+    expect(shells).toEqual([]);
+  });
+
   it('ends a shell on its notification, matched by tool-use-id, with the exit code', () => {
     const [ok, bad] = shellsOf([
       bashCall(0, 'toolu_e', { command: 'a', run_in_background: true }),

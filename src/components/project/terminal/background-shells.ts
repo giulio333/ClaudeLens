@@ -6,9 +6,10 @@ import type { ProcessedMessage } from '../chat/utils';
  *
  * A background shell is a `Bash` call whose result says it went on running
  * without the turn: either Claude asked for it (`run_in_background`) or the
- * harness moved it there when it outran its timeout. Both write a result naming
- * the task id — `Command running in background with ID: <id>.` or `… was moved
- * to the background (ID: <id>).` — and both end the same ways:
+ * harness moved it there when it outran its timeout. Both write a result that
+ * opens by naming the task id — `Command running in background with ID: <id>.`
+ * or `Command did not complete … and was moved to the background (ID: <id>).` —
+ * and both end the same ways:
  *
  * - a `<task-notification>` carrying the call's `tool-use-id`, whose status is
  *   `completed`, `failed`, `stopped` or `killed` (the summary holds the exit
@@ -53,8 +54,12 @@ export type BackgroundShell = {
   stoppedByClaude?: true;
 };
 
+// Anchored: the sentence has to open the result. Further in, it is a command's
+// output quoting a background shell — a grep over transcripts, the `cat` of a
+// fixture — and counting that one left a shell no notification will ever end
+// reading "running" for the rest of the process.
 const BACKGROUND_ID_RE =
-  /(?:running in background with ID: |moved to the background \(ID: )([\w-]+)/;
+  /^Command (?:running in background with ID: |did not complete .*?moved to the background \(ID: )([\w-]+)/;
 const EXIT_CODE_RE = /exit code (-?\d+)/i;
 const TIMEOUT_RE = /within its (\d+)s timeout/;
 
