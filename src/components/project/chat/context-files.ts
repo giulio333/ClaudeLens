@@ -1,5 +1,6 @@
 import { contentRows, numberedRows } from './file-view';
 import type { FileRow } from './file-view';
+import { homeDirOf } from '../shared/projectName';
 import { hasHeredoc, splitPipeline, splitStatements } from './shell';
 import { fileExt } from './utils';
 import type { ProcessedMessage, ToolGroup } from './utils';
@@ -14,6 +15,9 @@ import type { ProcessedMessage, ToolGroup } from './utils';
  * a command Claude Code recorded as having changed files (`bashEditDiff`) read
  * nothing for our purposes, and a construct we cannot follow (a heredoc, a
  * substitution, a variable in the path) names no file rather than a wrong one.
+ * A leading `~` is followed, as the shell does, to the home the project sits in:
+ * sessions that work outside their project mostly get there with `cd ~/…`, and
+ * refusing the `~` lost every read after that `cd`.
  */
 
 /** The lines of a file a read put on screen. `end` is null when the read ran to
@@ -184,24 +188,30 @@ type ShellRead = { path: string; span: ReadSpan | null; exact: boolean };
 
 /** The files a shell command read, with the lines it printed when the command
  *  says (`sed -n 10,40p`, `head -n 20`). Relative paths resolve against `cwd`,
- *  moved by any `cd` along the way. */
+ *  moved by any `cd` along the way; `~` against the home `cwd` sits in, the
+ *  only one a transcript lets us know — and so the right one for a session
+ *  that ran on another machine too. */
 export function shellReads(command: string, cwd: string | null): ShellRead[] {
   if (hasHeredoc(command)) return [];
+  // A home is a POSIX path here: every path below is resolved as one.
+  const found = cwd ? homeDirOf(cwd) : null;
+  const home = found?.startsWith('/') ? found : null;
+  const wordsOf = (src: string) => shellWords(src, home);
   const out = new Map<string, ReadSpan | null>();
   let dir = cwd;
   const statements = splitStatements(command);
   // `cd x && sed -n 1,9p f` is still one read; any other statement adds output.
-  const doing = statements.filter(st => shellWords(st)?.[0]?.text !== 'cd').length;
+  const doing = statements.filter(st => wordsOf(st)?.[0]?.text !== 'cd').length;
   let exact = false;
   for (const statement of statements) {
-    const words = shellWords(statement);
+    const words = wordsOf(statement);
     if (words?.[0]?.text === 'cd') {
-      dir = words.length === 2 && words[1].safe ? resolvePath(dir, words[1].text) : null;
+      dir = cdTarget(dir, words.slice(1), home);
       continue;
     }
     // Only the first stage of a pipeline reads files; the rest read its output.
     const stages = splitPipeline(statement);
-    const stage = shellWords(stages[0]);
+    const stage = wordsOf(stages[0]);
     const parsed = stage ? parseReader(stage) : null;
     if (!parsed) continue;
     // Piped on, what reached the model is what the rest of the pipe let
@@ -214,6 +224,14 @@ export function shellReads(command: string, cwd: string | null): ShellRead[] {
     }
   }
   return [...out].map(([path, span]) => ({ path, span, exact: exact && out.size === 1 }));
+}
+
+/** Where a `cd` lands: home with no argument; nowhere we know after `cd -`
+ *  (the previous directory), an option, or a path that expands. */
+function cdTarget(dir: string | null, args: Word[], home: string | null): string | null {
+  if (args.length === 0) return home;
+  if (args.length > 1 || !args[0].safe || args[0].text.startsWith('-')) return null;
+  return resolvePath(dir, args[0].text);
 }
 
 function parseReader(words: Word[]): Parsed | null {
@@ -302,10 +320,11 @@ function walk(args: Word[], valued: string[]): { opts: Map<string, string>; pos:
   return { opts, pos };
 }
 
-/** Words of one simple command, quotes removed. A word is `safe` as a path only
- *  when nothing in it expands (`$`, globs, `~`). Redirections are dropped with
- *  their target; a substitution or a subshell makes the command unreadable. */
-function shellWords(src: string): Word[] | null {
+/** Words of one simple command, quotes removed and a leading `~` expanded to
+ *  `home`. A word is `safe` as a path only when nothing else in it expands (`$`,
+ *  globs, a `~` with no home to go to). Redirections are dropped with their
+ *  target; a substitution or a subshell makes the command unreadable. */
+function shellWords(src: string, home: string | null): Word[] | null {
   const words: Word[] = [];
   let buf = '';
   let safe = true;
@@ -338,7 +357,16 @@ function shellWords(src: string): Word[] | null {
       buf += src[++i];
       started = true;
     } else if (c === '`' || c === '(' || c === ')') return null;
-    else if (c === '>' || c === '<') {
+    else if (c === '~' && !started && /^(?:\/|\s|$)/.test(src.slice(i + 1, i + 2))) {
+      // Only an unquoted `~` heading a word, alone or before a slash, is the
+      // home — `~user`, `~+`, `"~/x"` and `\~` are not, to the shell either.
+      if (home) buf += home;
+      else {
+        buf += c;
+        safe = false;
+      }
+      started = true;
+    } else if (c === '>' || c === '<') {
       if (src[i + 1] === '(') return null;
       // `2>`, `&>` — the fd number is part of the redirection, not a word.
       if (/^\d*&?$/.test(buf)) started = false;

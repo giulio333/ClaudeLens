@@ -132,12 +132,13 @@ describe('shellReads — what a command read', () => {
   it('names nothing it cannot follow rather than a wrong file', () => {
     expect(paths('cat $DIR/a.ts')).toEqual([]);
     expect(paths('cat src/*.ts')).toEqual([]);
-    expect(paths('cat ~/notes.md')).toEqual([]);
     expect(paths('cat $(git ls-files)')).toEqual([]);
     expect(paths("cat <<'EOF' > out.md\nhello\nEOF")).toEqual([]);
     // A relative path with no cwd to resolve against.
     expect(paths('cat a.ts', null)).toEqual([]);
     expect(paths('cd $X && cat a.ts')).toEqual([]);
+    // `cd -` is the previous directory, not a folder named `-`.
+    expect(paths('cd - && cat a.ts')).toEqual([]);
   });
 
   it('ignores sed that edits or rewrites, and every other command', () => {
@@ -150,6 +151,41 @@ describe('shellReads — what a command read', () => {
   it('reads a range on one file only — on two, sed prints one stream', () => {
     const reads = shellReads("sed -n '1,5p' a.ts b.ts", CWD);
     expect(reads.map(r => r.span)).toEqual([null, null]);
+  });
+});
+
+describe('shellReads — the home a ~ stands for', () => {
+  const IN_HOME = '/Users/me/acme';
+
+  it('expands a leading ~ to the home the project sits in', () => {
+    expect(paths('cat ~/notes.md', IN_HOME)).toEqual(['/Users/me/notes.md']);
+    expect(paths('cat ~/notes.md', '/home/me/acme')).toEqual(['/home/me/notes.md']);
+    expect(paths('grep -n x ~/a.h b.h', IN_HOME)).toEqual(['/Users/me/a.h', '/Users/me/acme/b.h']);
+  });
+
+  it('follows a cd into the home, and the read after it is still exact', () => {
+    expect(shellReads("cd ~/lib && sed -n '1,9p' a.h", IN_HOME)).toEqual([
+      { path: '/Users/me/lib/a.h', span: { start: 1, end: 9 }, exact: true },
+    ]);
+    expect(paths('cd ~; cat notes.md', IN_HOME)).toEqual(['/Users/me/notes.md']);
+    // A bare cd goes home too.
+    expect(paths('cd && cat notes.md', IN_HOME)).toEqual(['/Users/me/notes.md']);
+  });
+
+  it('expands no other ~ — quoted or escaped it is a name, as to the shell', () => {
+    expect(paths('cat "~/notes.md"', IN_HOME)).toEqual(['/Users/me/acme/~/notes.md']);
+    expect(paths('cat \\~/notes.md', IN_HOME)).toEqual(['/Users/me/acme/~/notes.md']);
+    // Another user's home and the directory stack: nothing we can know.
+    expect(paths('cat ~bob/notes.md', IN_HOME)).toEqual([]);
+    expect(paths('cat ~+/notes.md', IN_HOME)).toEqual([]);
+  });
+
+  it('names nothing when the path shows no home — never a ~ folder in the cwd', () => {
+    expect(paths('cat ~/notes.md')).toEqual([]);
+    expect(paths('cd ~/lib && cat a.h')).toEqual([]);
+    expect(paths('cd && cat a.h')).toEqual([]);
+    // A real folder of macOS, not anyone's home.
+    expect(paths('cat ~/notes.md', '/Users/Shared/acme')).toEqual([]);
   });
 });
 

@@ -32,21 +32,33 @@ export function sharedPathPrefix(paths: string[]): string {
 }
 
 /**
+ * La home in cui sta un path: `/Users/foo/Projects/Bar` → `/Users/foo`.
+ *
+ * Riconosciuta per forma (`/Users/<x>`, `/home/<x>`, `C:\Users\<x>`) e non
+ * chiesta al main: nel renderer non c'è `os.homedir()`, e i path dei progetti
+ * sono per costruzione quelli dell'utente che ha lanciato Claude Code — anche
+ * quando la sessione gira su un host remoto, dove la home del main sarebbe
+ * quella della macchina sbagliata. `/Users/Shared` e `C:\Users\Public` sono
+ * esclusi perché sono cartelle vere, non home; fuori da queste forme
+ * (`/private/var/…`, `/opt/…`) la home non si sa, e il risultato è null.
+ */
+export function homeDirOf(p: string): string | null {
+  const unix = /^\/(?:Users|home)\/([^/\\]+)(?=[/\\]|$)/.exec(p);
+  if (unix) return unix[1] === 'Shared' ? null : unix[0];
+  const win = /^[A-Za-z]:\\Users\\([^\\/]+)(?=[\\/]|$)/.exec(p);
+  if (win) return win[1] === 'Public' ? null : win[0];
+  return null;
+}
+
+/**
  * `/Users/foo/Projects/Bar` → `~/Projects/Bar`.
  *
  * In un elenco dei progetti *dell'utente* il prefisso della home è identico su
  * ogni riga: è larghezza pura, e siccome sta in testa è la coda — l'unica parte
- * che distingue una riga dall'altra — a finire sotto l'ellissi. La home viene
- * riconosciuta per forma (`/Users/<x>`, `/home/<x>`, `C:\Users\<x>`) e non
- * chiesta al main: nel renderer non c'è `os.homedir()`, e questi path sono per
- * costruzione quelli dell'utente corrente. `/Users/Shared` è escluso perché è
- * una cartella vera di macOS, non una home; tutto il resto (`/private/var/…`,
- * `/opt/…`) passa intatto.
+ * che distingue una riga dall'altra — a finire sotto l'ellissi. Un path fuori
+ * da una home riconoscibile (`homeDirOf`) passa intatto.
  */
 export function homeRelativePath(p: string): string {
-  const unix = /^\/(?:Users|home)\/([^/\\]+)(?=[/\\]|$)/.exec(p);
-  if (unix && unix[1] !== 'Shared') return '~' + p.slice(unix[0].length);
-  const win = /^[A-Za-z]:\\Users\\([^\\/]+)(?=[\\/]|$)/.exec(p);
-  if (win && win[1] !== 'Public') return '~' + p.slice(win[0].length);
-  return p;
+  const home = homeDirOf(p);
+  return home ? '~' + p.slice(home.length) : p;
 }

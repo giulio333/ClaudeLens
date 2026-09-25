@@ -8,7 +8,11 @@ import {
   sessionTitle,
 } from '../src/components/project/utils';
 import { formatDate } from '../src/components/project/memory/utils';
-import { homeRelativePath, sharedPathPrefix } from '../src/components/project/shared/projectName';
+import {
+  homeDirOf,
+  homeRelativePath,
+  sharedPathPrefix,
+} from '../src/components/project/shared/projectName';
 import { fmtClockTime, createTimeScale } from '../src/components/project/chat/graph/useForceLayout';
 
 // Robustness fixes from the #99 audit: pure date/scale formatters must not
@@ -250,6 +254,24 @@ describe('sharedPathPrefix — the part of a duplicate group that carries no sig
 // che distingue una riga dall'altra. Il riconoscimento è per forma, quindi le
 // due cose da tenere ferme sono che una home vera venga accorciata e che una
 // cartella che *sembra* una home non lo sia.
+// The home a path sits in, told by its shape: what homeRelativePath strips, and
+// what a `~` stands for in a command the Lens context rail reads.
+describe('homeDirOf', () => {
+  it('finds the home of a macOS, Linux or Windows path', () => {
+    expect(homeDirOf('/Users/me/Projects/app')).toBe('/Users/me');
+    expect(homeDirOf('/home/me/src/app')).toBe('/home/me');
+    expect(homeDirOf('C:\\Users\\me\\Projects\\app')).toBe('C:\\Users\\me');
+    expect(homeDirOf('/Users/me')).toBe('/Users/me');
+  });
+
+  it('knows no home for a shared folder or a path outside every home', () => {
+    expect(homeDirOf('/Users/Shared/app')).toBeNull();
+    expect(homeDirOf('C:\\Users\\Public\\app')).toBeNull();
+    expect(homeDirOf('/private/var/folders/6z/abc/T/x')).toBeNull();
+    expect(homeDirOf('/opt/tools')).toBeNull();
+  });
+});
+
 describe('homeRelativePath', () => {
   it('replaces a macOS home prefix with ~', () => {
     expect(homeRelativePath('/Users/giulio/Projects/ClaudeLens')).toBe('~/Projects/ClaudeLens');
