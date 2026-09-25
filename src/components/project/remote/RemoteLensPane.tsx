@@ -33,7 +33,11 @@ export function RemoteLensPane({
   jumpToTurnRef: MutableRefObject<((n: number) => void) | null>;
   onBack: () => void;
 }) {
-  const showTranscript = !!transcript && !!session && transcript.messages.length > 0;
+  // A question from ssh outranks the transcript. A retry, or the restart a lost
+  // frame sets off, logs in again with the old transcript still in memory, and
+  // with that drawn instead the question would have nowhere to be answered.
+  const showTranscript =
+    !!transcript && !!session && transcript.messages.length > 0 && lens?.phase !== 'prompt';
   return (
     <div className="h-full flex flex-col" style={{ minHeight: 0 }}>
       {lens && showTranscript && lens.phase !== 'live' && (

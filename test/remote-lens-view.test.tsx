@@ -6,7 +6,8 @@
 // main process pushes:
 //
 //   1. it says where the reading stands until there is a transcript, and asks
-//      ssh's question for a second login in the Lens, never in the terminal;
+//      ssh's question for a second login in the Lens, never in the terminal —
+//      over a transcript already on screen too, as after a retry;
 //   2. once the host's transcript arrives, the real `ChatView` and
 //      `MissionRail` draw it — and read NOTHING about the project on this
 //      machine: the host's folder is often the same path as a local one, and
@@ -285,6 +286,29 @@ describe('the session, read from the host', () => {
     expect(screen.queryByText('Delete session')).toBeNull();
     // The playbook is this machine's, keyed on a local project.
     expect(screen.queryByRole('button', { name: 'Playbook' })).toBeNull();
+  });
+
+  it("asks ssh's question over a transcript already on screen, as after a retry", async () => {
+    await connected();
+    openLens();
+    const messages = [message('u1', 'user', 'hello')];
+    live(messages);
+    await waitFor(() => expect(screen.getByText('hello')).toBeTruthy());
+    // The retried channel logs in again while the old transcript is still held.
+    push({
+      phase: 'prompt',
+      channel: 'separate',
+      prompt: "dev@build's password:",
+      sessionId: SID,
+      messages,
+    });
+    const field = screen.getByLabelText("dev@build's password:") as HTMLInputElement;
+    fireEvent.change(field, { target: { value: 'hunter2' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Send' }));
+    expect(bridge.api.remote.answerLens).toHaveBeenCalledWith(lastId, 'hunter2');
+    // Answered, the transcript is back while the channel reconnects.
+    push({ phase: 'connecting', channel: 'separate', sessionId: SID, messages });
+    await waitFor(() => expect(screen.getByText('hello')).toBeTruthy());
   });
 
   it('keeps the transcript on screen after the session ends, and says so', async () => {

@@ -216,7 +216,8 @@ left uncovered, with the update it offers run on the host and then back to a
 session) and
 `remote-lens-view` (the Lens and Mission Control of a remote pane, #294: where
 the reading stands until there is a transcript, ssh's question for a second
-login asked in the Lens and answered there, the host's transcript drawn by the
+login asked in the Lens and answered there — over a transcript already on
+screen too, as after a retry — the host's transcript drawn by the
 real `ChatView` and `MissionRail` — and not one read of this machine's project
 data meanwhile, since the host's folder is often the same path as a local one —
 a path a message names left unread, no export, delete or playbook, and nothing
