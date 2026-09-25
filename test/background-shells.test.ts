@@ -141,6 +141,31 @@ describe('buildBackgroundShells', () => {
     expect(bad).toMatchObject({ state: 'failed', exitCode: 1 });
   });
 
+  it('reads the exit code the harness appended, not one the description mentions', () => {
+    const [ok, bad] = shellsOf([
+      bashCall(0, 'toolu_i', { command: 'a', run_in_background: true }),
+      result(0, 'toolu_i', launched('biii')),
+      bashCall(1, 'toolu_j', { command: 'b', run_in_background: true }),
+      result(1, 'toolu_j', launched('bjjj')),
+      notification(
+        5,
+        'biii',
+        'toolu_i',
+        'completed',
+        'Background command "Retry until exit code 1 stops" completed (exit code 0)'
+      ),
+      notification(
+        6,
+        'bjjj',
+        'toolu_j',
+        'failed',
+        'Background command "Check the exit code 0 path" failed with exit code 2'
+      ),
+    ]);
+    expect(ok).toMatchObject({ state: 'done', exitCode: 0 });
+    expect(bad).toMatchObject({ state: 'failed', exitCode: 2 });
+  });
+
   it('reads a non-zero exit under a "completed" status as a failure', () => {
     const [shell] = shellsOf([
       bashCall(0, 'toolu_g', { command: 'a', run_in_background: true }),

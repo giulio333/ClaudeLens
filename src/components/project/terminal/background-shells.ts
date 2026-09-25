@@ -60,7 +60,7 @@ export type BackgroundShell = {
 // reading "running" for the rest of the process.
 const BACKGROUND_ID_RE =
   /^Command (?:running in background with ID: |did not complete .*?moved to the background \(ID: )([\w-]+)/;
-const EXIT_CODE_RE = /exit code (-?\d+)/i;
+const EXIT_CODE_RE = /exit code (-?\d+)/gi;
 const TIMEOUT_RE = /within its (\d+)s timeout/;
 
 function epoch(ts: string | undefined): number {
@@ -116,7 +116,10 @@ export function buildBackgroundShells(processed: ProcessedMessage[]): Background
       const shell =
         (n.toolUseId && byToolUseId.get(n.toolUseId)) || (n.taskId && byTaskId.get(n.taskId));
       if (shell) {
-        const code = n.summary.match(EXIT_CODE_RE)?.[1];
+        // The last one: the summary quotes the command's description first,
+        // and a description can say "exit code 1" of a run that succeeded.
+        const codes = [...n.summary.matchAll(EXIT_CODE_RE)];
+        const code = codes[codes.length - 1]?.[1];
         shell.exitCode = code !== undefined ? Number(code) : undefined;
         shell.state = endState(n.status, shell.exitCode);
         shell.endedAt = epoch(p.msg.timestamp);

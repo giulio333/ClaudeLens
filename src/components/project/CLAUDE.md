@@ -398,10 +398,11 @@ Regole, misurate sulle 122 shell in background del corpus:
   (un grep sui transcript, il `cat` di una fixture), e contarlo lasciava "in
   corso" fino alla fine del processo una shell che nessuna notifica chiuderà;
 - finisce con la `<task-notification>` che porta il suo **`tool-use-id`**
-  (`completed`/`failed`/`stopped`/`killed`, exit code nel summary: un
-  `completed (exit code -1)` è un fallimento) **oppure** con un `TaskStop`
-  riuscito sul suo task id, che **non scrive nessuna notifica** — senza questa
-  regola ogni shell fermata così resterebbe "in corso" per sempre;
+  (`completed`/`failed`/`stopped`/`killed`, exit code nel summary — l'**ultimo**
+  del summary, che prima cita la description del comando e può nominarne un
+  altro: un `completed (exit code -1)` è un fallimento) **oppure** con un
+  `TaskStop` riuscito sul suo task id, che **non scrive nessuna notifica** —
+  senza questa regola ogni shell fermata così resterebbe "in corso" per sempre;
 - senza nessuna delle due è in corso **solo se l'ha lanciata il processo CLI
   che gira adesso**: la shell è sua figlia, e una partita prima — una sessione
   ripresa si porta dietro le shell del processo uscito — è morta con lui. Il
