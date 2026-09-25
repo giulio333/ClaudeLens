@@ -386,9 +386,11 @@ sono state scartate: i dettagli dentro il popover (380px non bastano a un
 comando vero) e una pagina nell'overlay del frame, che si sostituiva alla chat.
 La finestra tiene l'id della chiamata, non la shell: la legge fresca a ogni
 lettura del transcript, quindi una aperta mentre gira diventa il suo esito sul
-posto, e resta aperta anche se la pillola sparisce. Niente "Show in chat": la
-pillola esiste solo nella sessione che ha lanciato la shell, quindi la chat è
-già quella a schermo. L'output non c'è: la notifica non lo porta.
+posto, e resta aperta anche se la pillola sparisce; il suo orologio non si ferma
+quando la shell finisce, così `Finished 3 min ago` continua a contare. Niente
+"Show in chat": la pillola esiste solo nella sessione che ha lanciato la shell,
+quindi la chat è già quella a schermo. L'output non c'è: la notifica non lo
+porta.
 Regole, misurate sulle 122 shell in background del corpus:
 
 - la shell si riconosce dal **risultato** del `Bash`, che nomina il task id in

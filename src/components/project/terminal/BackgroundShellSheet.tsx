@@ -27,7 +27,9 @@ export function BackgroundShellSheet({
   onClose: () => void;
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
-  const now = useMinuteClock(s.state === 'running');
+  // Always ticking: an ended shell's line says how long ago it ended, and one
+  // that ends while the window is open must not freeze at the last tick.
+  const now = useMinuteClock(true);
   useEffect(() => sheetRef.current?.focus(), []);
 
   const facts: Array<[string, string]> = [];

@@ -7,7 +7,7 @@
 
 import { describe, it, expect, afterEach, beforeEach, vi } from 'vitest';
 import { StrictMode } from 'react';
-import { cleanup, render, fireEvent } from '@testing-library/react';
+import { act, cleanup, render, fireEvent } from '@testing-library/react';
 import { BackgroundShells } from '../src/components/project/terminal/BackgroundShells';
 import { BackgroundShellSheet } from '../src/components/project/terminal/BackgroundShellSheet';
 import type { BackgroundShell } from '../src/components/project/terminal/background-shells';
@@ -180,6 +180,32 @@ describe('BackgroundShellSheet', () => {
     expect(getByText('Claude, with TaskStop')).toBeTruthy();
     // No exit code is on record for a stopped shell, so none is shown.
     expect(queryByText('Exit code')).toBeNull();
+  });
+
+  it('keeps counting while it is open, over a shell that has ended', () => {
+    const { getByText } = sheet(
+      shell({ toolUseId: 'e', state: 'done', exitCode: 0, startedAt: ago(10), endedAt: ago(3) })
+    );
+    expect(getByText('Finished 3 min ago · ran 7 min')).toBeTruthy();
+    act(() => vi.advanceTimersByTime(2 * 60_000));
+    expect(getByText('Finished 5 min ago · ran 7 min')).toBeTruthy();
+  });
+
+  it('keeps counting after the shell ends with the window open', () => {
+    const running = shell({ toolUseId: 'f' });
+    const { getByText, rerender } = sheet(running);
+    act(() => vi.advanceTimersByTime(40_000));
+    // The next transcript read hands the same shell in, ended now.
+    rerender(
+      <StrictMode>
+        <BackgroundShellSheet
+          shell={{ ...running, state: 'done', exitCode: 0, endedAt: NOW + 40_000 }}
+          onClose={() => {}}
+        />
+      </StrictMode>
+    );
+    act(() => vi.advanceTimersByTime(4 * 60_000));
+    expect(getByText('Finished 4 min ago · ran 12 min')).toBeTruthy();
   });
 
   it('shows a running shell as running, with no end', () => {
