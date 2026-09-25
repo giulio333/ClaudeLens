@@ -126,10 +126,14 @@ export function createWatchReader(): {
   };
 }
 
-/** The line ssh is waiting on, if any: prompts end without a newline. */
+/** The line ssh is waiting on, if any: prompts end without a newline. The
+ *  script's own first line, cut in two by the PTY, is not one — nothing ssh
+ *  asks starts with the protocol's marker, and taking `@cl hel` for a question
+ *  would put a password form in front of the Lens for no reason. */
 export function pendingPrompt(preamble: string): string | null {
   const last = preamble.slice(preamble.lastIndexOf('\n') + 1).trim();
-  return last || null;
+  if (!last || last.startsWith('@cl') || '@cl'.startsWith(last)) return null;
+  return last;
 }
 
 /** The last thing ssh said, for a failure's reason. */

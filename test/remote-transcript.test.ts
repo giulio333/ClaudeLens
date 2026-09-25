@@ -55,6 +55,17 @@ describe('the channel reader', () => {
     expect(pendingPrompt(reader.preamble())).toBe('user@host’s password:');
   });
 
+  it("never takes the script's first line, cut in two by the PTY, for a prompt", () => {
+    for (const cut of ['@', '@c', '@cl', '@cl hel']) {
+      const reader = createWatchReader();
+      expect(reader.feed(`Warning: Permanently added the host.\r\n${cut}`)).toEqual([]);
+      expect(pendingPrompt(reader.preamble()), cut).toBeNull();
+    }
+    const reader = createWatchReader();
+    reader.feed('@cl hel');
+    expect(reader.feed('lo 1\r\n')).toEqual([{ kind: 'hello' }]);
+  });
+
   it('starts at hello, drops the \\r a PTY adds, and ignores noise after it', () => {
     const reader = createWatchReader();
     const out = reader.feed('motd line\r\n@cl hello 1\r\nstray output\r\n@cl tick\r\n');
