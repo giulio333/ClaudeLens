@@ -421,8 +421,11 @@ function masterArgs(controlPath: string): string[] {
 }
 
 // A Unix socket path is at most 104 bytes on macOS (108 on Linux), counting
-// the terminating NUL; ssh adds nothing to a path without tokens.
-const CONTROL_PATH_MAX = 100;
+// the terminating NUL. The master does not bind the path itself: it binds
+// `<path>.<16 random characters>` and renames that into place (OpenSSH mux.c),
+// and a temporary name too long for a socket ends ssh with 255 instead of
+// falling back to no master — so the path gets 104 − 1 − 17 bytes.
+const CONTROL_PATH_MAX = 86;
 
 /**
  * The master socket inside `dir` (a private directory the caller created), or

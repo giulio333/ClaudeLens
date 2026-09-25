@@ -253,6 +253,14 @@ describe('the control socket the Lens rides (#294)', () => {
     expect(controlPathFor('/tmp/with space', 'linux')).toBeNull();
     expect(controlPathFor('/tmp/100%', 'linux')).toBeNull();
   });
+
+  it('leaves room for the temporary name the master binds before its own', () => {
+    // `<path>.<16 characters>` must fit a macOS socket too: one byte past 86
+    // and ssh exits 255 after the login instead of running without a master.
+    const dirFor = (pathBytes: number) => `/t/${'x'.repeat(pathBytes - '/t/'.length - 2)}`;
+    expect(controlPathFor(dirFor(86), 'darwin')).toBe(`${dirFor(86)}/s`);
+    expect(controlPathFor(dirFor(87), 'darwin')).toBeNull();
+  });
 });
 
 describe('what reaches a shell', () => {
