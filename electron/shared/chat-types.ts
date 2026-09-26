@@ -343,6 +343,16 @@ export interface PermissionRequest {
   /** Why the request was triggered. */
   decisionReason?: string;
   toolUseID: string;
+  /** The rule "Always allow" would write grants more than this ask's own
+   *  action, so no persistent choice may be offered (`suggestions` is then
+   *  withheld by the main process too). */
+  suppressAlwaysAllowRule?: true;
+  /** The ask must not be approvable by a stray keystroke: open on Deny. */
+  defaultToNo?: true;
+  /** For an `mcp__*` tool: the server serving it and where it is configured
+   *  (`sdk`, `plugin`, `user`, `project`, `managed`, …). The name is text
+   *  from configuration — shown, never trusted. */
+  mcpServer?: { name: string; source: string };
 }
 
 /** The renderer's verdict on a `PermissionRequest`, returned to the SDK. */

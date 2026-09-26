@@ -87,9 +87,9 @@ import {
   ChatSessionParams,
   CanUseTool,
   PermissionResult,
-  PermissionUpdate,
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
+import { toPermissionRequest, toPermissionResult } from './modules/chat-permissions';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { claudelensDir, useDevClaudelensDir } from './modules/claudelens-dir';
 import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
@@ -1759,8 +1759,10 @@ ipcMain.handle('ai:stop', async () => {
 let currentChatSession: ChatSession | null = null;
 
 // Pending tool-approval requests, keyed by the requestId sent to the renderer.
-// Each resolver settles the Promise that `canUseTool` returned to the SDK.
-const pendingPermissions = new Map<string, (r: PermissionResult) => void>();
+// Each entry answers the Promise that `canUseTool` returned to the SDK, and
+// converts the renderer's decision with the options of ITS ask — which is where
+// a suppressed "Always allow" is refused whatever the renderer sent.
+const pendingPermissions = new Map<string, (d: PermissionDecision) => void>();
 
 // Resume default: the session file records no permission mode, so we pick a
 // faithful default. `default` means "ask every time" — now that the SDK can
@@ -1768,24 +1770,11 @@ const pendingPermissions = new Map<string, (r: PermissionResult) => void>();
 // rather than silently bypassing or blocking. Callers may override.
 const RESUME_PERMISSION_MODE = 'default';
 
-function toPermissionResult(d: PermissionDecision): PermissionResult {
-  if (d.kind === 'deny') return { behavior: 'deny', message: d.message || 'Denied by the user.' };
-  if (d.kind === 'always')
-    return {
-      behavior: 'allow',
-      updatedInput: d.input,
-      // The renderer round-trips the SDK's suggestions verbatim (opaque to it),
-      // so the loose shared type narrows back to the SDK's here.
-      updatedPermissions: d.suggestions as PermissionUpdate[] | undefined,
-    };
-  return { behavior: 'allow', updatedInput: d.input };
-}
-
 // Resolve every still-pending approval as a denial and clear the map. Used when a
 // turn is stopped or superseded so the SDK never hangs on an unanswered request.
 function denyAllPending(message: string): void {
   for (const resolve of pendingPermissions.values()) {
-    resolve({ behavior: 'deny', message });
+    resolve({ kind: 'deny', message });
   }
   pendingPermissions.clear();
 }
@@ -1818,27 +1807,24 @@ function makeCanUseTool(event: Electron.IpcMainInvokeEvent, cwd: string): CanUse
         pendingPermissions.delete(requestId);
         resolve(r);
       };
-      pendingPermissions.set(requestId, settle);
+      pendingPermissions.set(requestId, d => settle(toPermissionResult(d, options)));
 
       options.signal.addEventListener('abort', () =>
         settle({ behavior: 'deny', message: 'Aborted.' })
       );
 
-      event.sender.send('sessions:permissionRequest', {
-        requestId,
+      event.sender.send(
+        'sessions:permissionRequest',
         // canUseTool can only fire while its session is the live one (a
         // supersede denies its pending requests), so the current pointer is it.
-        sessionId: currentChatSession?.sessionId ?? '',
-        toolName,
-        title: options.title,
-        displayName: options.displayName,
-        description: options.description,
-        input,
-        suggestions: options.suggestions,
-        blockedPath: options.blockedPath,
-        decisionReason: options.decisionReason,
-        toolUseID: options.toolUseID,
-      });
+        toPermissionRequest(
+          requestId,
+          currentChatSession?.sessionId ?? '',
+          toolName,
+          input,
+          options
+        )
+      );
     });
 }
 
@@ -2013,7 +1999,7 @@ ipcMain.handle(
   'sessions:permissionResponse',
   async (_event, requestId: string, decision: PermissionDecision) => {
     const resolve = pendingPermissions.get(requestId);
-    if (resolve) resolve(toPermissionResult(decision));
+    if (resolve) resolve(decision);
     return ok(null);
   }
 );

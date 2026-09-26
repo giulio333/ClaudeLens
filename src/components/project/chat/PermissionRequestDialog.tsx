@@ -202,7 +202,10 @@ export function PermissionRequestDialog({
   // one-paragraph `pre`.
   const isShell = !isQuestion && request.toolName === 'Bash';
   const detail = isQuestion || isShell ? null : describeInput(request);
-  const canAlways = (request.suggestions?.length ?? 0) > 0;
+  // The SDK withholds the persistent choice when the rule it would write grants
+  // more than this ask; the main process drops the suggestions too, so this is
+  // the second of two locks, not the only one.
+  const canAlways = !request.suppressAlwaysAllowRule && (request.suggestions?.length ?? 0) > 0;
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
@@ -211,6 +214,14 @@ export function PermissionRequestDialog({
           <span className="text-[11px] font-mono uppercase tracking-wide px-1.5 py-0.5 rounded bg-[var(--cl-paper-3)] text-[var(--cl-ink-3)]">
             {request.toolName}
           </span>
+          {request.mcpServer && (
+            // Configuration text, so it is printed as text and nothing is
+            // decided from it: the name is whatever the config called the server.
+            <span className="text-[11px] text-[var(--cl-ink-3)]" data-testid="perm-mcp-server">
+              via <span className="font-mono">{request.mcpServer.name}</span> ·{' '}
+              {request.mcpServer.source}
+            </span>
+          )}
           {pendingCount > 0 && (
             <span className="text-[11px] text-[var(--cl-ink-4)]">+{pendingCount} more pending</span>
           )}
@@ -296,11 +307,19 @@ export function PermissionRequestDialog({
             )}
             <button
               type="button"
+              // An ask the SDK marks as not approvable by a stray keystroke opens
+              // on its decline option: Enter here denies, it never allows.
+              autoFocus={request.defaultToNo === true}
               onClick={() => setDenying(true)}
               className="w-full px-4 py-2 rounded-lg border border-[var(--cl-line)] hover:bg-[var(--cl-paper-3)] transition-colors text-[13px] font-medium text-[var(--cl-ink-3)]"
             >
               Deny…
             </button>
+            {request.suppressAlwaysAllowRule && (
+              <p className="text-[12px] text-[var(--cl-ink-4)] mt-1">
+                No “Always allow” here: the rule it would save covers more than this request.
+              </p>
+            )}
           </div>
         )}
       </div>

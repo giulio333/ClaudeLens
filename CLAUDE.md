@@ -11,7 +11,8 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-`thoughts`, `transcript-extras`, `bg-sessions-reader`, `agents-live-status`,
+`thoughts`, `transcript-extras`, `chat-permissions` (a suppressed "Always allow" is
+neither offered nor accepted), `bg-sessions-reader`, `agents-live-status`,
 `vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `background-shells`, `plugins-reader` (the `.mcp.json` and
 `hooks/hooks.json` parsers), `remote-ssh`, `remote-ssh-windows` and `remote-hosts-store`
 (#242 — the connect script is run for real, through every login shell the machine has
@@ -93,6 +94,10 @@ sentence on screen) and
 previous session's events/status/running tool before the new watch starts, LIVE
 is shown only for a verified attachment — a `pending` watch reads WAITING — and
 a `startWatch` answer belonging to a superseded session changes nothing) and
+`permission-request-dialog` (the SDK chat's approval dialog, #292: no "Always
+allow" when the SDK suppresses the rule, the dialog opens on Deny for a
+`defaultToNo` ask, the next queued request starts clean, and an MCP server's
+name is printed as text) and
 `message-bubble-markers` (the first test to mount `MessageBubble`: a message
 absorbed mid-turn wears the "sent mid-turn" chip and an ordinary one does not,
 and a slash command carrying a `skillPath` renders the skill card instead of
