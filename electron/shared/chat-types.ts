@@ -178,11 +178,20 @@ export interface InboundOrigin {
   from: 'session' | 'agent';
   /** Display name the sender carried at send time. Sender-supplied, and a
    *  background session renames itself as soon as it has a topic, so this
-   *  labels the message and never identifies the sender. */
+   *  labels the message and never identifies the sender. A hand-back carries
+   *  no name at all: its label is the `description` of the `Agent` call that
+   *  launched the agent, read off the same transcript (#297). */
   name?: string;
   /** Pid the receiver verified off the socket — sessions only, and the only
    *  part of the sender's identity that was checked rather than claimed. */
   pid?: number;
+  /** The task id of the agent that sent it — agents only, and what Claude Code
+   *  wrote rather than what the agent declared: the agent's counterpart of
+   *  `pid`, and the `agentId` of the dispatch that launched it. */
+  taskId?: string;
+  /** The agent's final report, handed back when it finished (Claude Code
+   *  2.1.276+), rather than a message it chose to send. */
+  handback?: true;
   /** Equal to the `msg_id` the sender's `SendMessage` result carries in its own
    *  transcript: the one join between the two halves of a message. */
   msgId?: string;

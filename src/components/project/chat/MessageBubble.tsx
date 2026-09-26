@@ -544,7 +544,9 @@ export function InboundMessage({
   const what = origin.from === 'agent' ? 'agent in this session' : 'another session';
   const identity =
     origin.from === 'agent'
-      ? 'An agent running inside this session sent this message.'
+      ? origin.handback
+        ? 'The final report of an agent this session ran in the background.'
+        : 'An agent running inside this session sent this message.'
       : origin.pid != null
         ? `Another Claude Code session sent this message. Verified sender pid ${origin.pid}; the name is the sender's own and can change.`
         : "Another Claude Code session sent this message. The name is the sender's own and can change.";
@@ -553,7 +555,7 @@ export function InboundMessage({
     <div className="cl-inbound">
       <MessageLine
         direction="in"
-        who={origin.name ?? what}
+        who={origin.name ?? (origin.taskId ? `agent ${origin.taskId}` : what)}
         what={what}
         agent={origin.from === 'agent'}
         title={identity}

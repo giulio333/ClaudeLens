@@ -205,6 +205,23 @@ describe('a message from another session', () => {
     expect(container.querySelector('.cl-msg-what')?.textContent).toBe('agent in this session');
   });
 
+  it("names an agent's hand-back after its dispatch, or by its task id when that is all there is", () => {
+    const { container } = mount(
+      userMessage('## Findings', {
+        inbound: { from: 'agent', taskId: 'a1', handback: true, name: 'Survey the fixtures' },
+      })
+    );
+    expect(container.querySelector('.cl-msg-who')?.textContent).toBe('Survey the fixtures');
+    expect(container.querySelector('.cl-msg-toggle')?.getAttribute('title')).toBe(
+      'The final report of an agent this session ran in the background.'
+    );
+
+    const unnamed = mount(
+      userMessage('## Findings', { inbound: { from: 'agent', taskId: 'a9', handback: true } })
+    );
+    expect(unnamed.container.querySelector('.cl-msg-who')?.textContent).toBe('agent a9');
+  });
+
   it('marks one that arrived while a turn was running', () => {
     const { container } = mount(
       userMessage('ping', { inbound: { from: 'session', name: 'alice-7c', queued: true } })

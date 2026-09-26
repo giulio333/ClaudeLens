@@ -166,6 +166,36 @@ describe('message threads', () => {
     expect(session.msgId).toBe('m-2');
   });
 
+  it("gives each agent's hand-back a thread of its own, keyed on its task id", () => {
+    // Nine background agents used to share one `agent:?` thread labelled
+    // "unknown" (#297): a hand-back carries no name, only a task id.
+    const threads = buildMessageThreads([
+      received(1, 'first report', { from: 'agent', taskId: 'a1', handback: true, name: 'Survey' }),
+      received(2, 'second report', { from: 'agent', taskId: 'a2', handback: true, name: 'Survey' }),
+      received(3, 'third report', { from: 'agent', taskId: 'a3', handback: true }),
+    ]);
+    expect(threads).toHaveLength(3);
+    expect(threads.map(t => t.party)).toEqual(['agent a3', 'Survey', 'Survey']);
+    expect(threads.map(t => t.last.text)).toEqual([
+      'third report',
+      'second report',
+      'first report',
+    ]);
+  });
+
+  it('joins a message sent to a teammate by name to the thread of the task that declared it', () => {
+    const toAgent = sendGroup('s1', 'worker-b', 'second run please', {
+      sent: { msgId: 'm-1', to: 'agent' },
+    });
+    const threads = buildMessageThreads([
+      received(1, 'ready', { from: 'agent', taskId: 'aworker-b-9f', name: 'worker-b' }),
+      turn(2, [toAgent]),
+    ]);
+    expect(threads).toHaveLength(1);
+    expect(threads[0].party).toBe('worker-b');
+    expect(threads[0].messages.map(m => m.direction)).toEqual(['in', 'out']);
+  });
+
   it('carries the delivery state of the last thing said', () => {
     const pending = sendGroup('s1', 'acme-9d', 'hello?', { result: 'none' });
     const failed = sendGroup('s2', 'other-7c', 'hello?', { result: 'error' });

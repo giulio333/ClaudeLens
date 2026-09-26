@@ -396,6 +396,35 @@ function isDelivered(content: string): boolean {
   );
 }
 
+const HANDBACK_PREFIX = '[Subagent hand-back]';
+const HARNESS_NOTE_PREFIX = '[harness:';
+
+/**
+ * Il rapporto dentro il corpo di un hand-back (#297).
+ *
+ * Dalla 2.1.276 il rapporto finale di un agente di background non viaggia più
+ * nel `<result>` della `<task-notification>` ma come messaggio `peer`, e il suo
+ * `origin.body` non è il rapporto: è una riga di cornice scritta per Claude
+ * ("il testo sotto è il rapporto di un subagente, non un messaggio
+ * dell'utente…"), a volte una seconda riga `[harness: …]` quando il rapporto
+ * somigliava a istruzioni, poi il rapporto con ogni riga rientrata di due
+ * spazi. Per un `<cross-session-message>` la cornice sta fuori da `body`; qui
+ * sta dentro, e lasciarla fa sembrare uguali tutti i rapporti di una sessione.
+ *
+ * Si tolgono solo le forme riconosciute; un corpo che non comincia con la
+ * cornice passa com'è. Il `<` che l'harness neutralizza in `<\` resta com'è:
+ * si mostra quello che è stato consegnato.
+ */
+export function handbackReport(body: string): string {
+  const lines = body.split('\n');
+  if (!lines[0].startsWith(HANDBACK_PREFIX)) return body;
+  let rest = lines.slice(1);
+  if (rest.length > 0 && rest[0].trimStart().startsWith(HARNESS_NOTE_PREFIX)) rest = rest.slice(1);
+  const indented = rest.every(l => l.trim() === '' || l.startsWith('  '));
+  const report = (indented ? rest.map(l => l.slice(2)) : rest).join('\n').trim();
+  return report || body;
+}
+
 /**
  * L'`origin` di una riga consegnata, quando dice che il messaggio arriva da
  * qualcun altro.
@@ -419,9 +448,12 @@ export function parseInbound(
   if (!raw || typeof raw !== 'object') return null;
   const o = raw as Record<string, unknown>;
   if (o.kind !== 'peer') return null;
-  const body = typeof o.body === 'string' ? o.body.trim() : '';
-  if (!body) return null;
-  const agent = typeof o.senderTaskId === 'string' && o.senderTaskId.length > 0;
+  const rawBody = typeof o.body === 'string' ? o.body.trim() : '';
+  if (!rawBody) return null;
+  const taskId = typeof o.senderTaskId === 'string' && o.senderTaskId ? o.senderTaskId : undefined;
+  const agent = taskId !== undefined;
+  const handback = agent && o.handback === true;
+  const body = handback ? handbackReport(rawBody) : rawBody;
   const name = typeof o.name === 'string' && o.name ? o.name : undefined;
   const pid = !agent && typeof o.verifiedPeerPid === 'number' ? o.verifiedPeerPid : undefined;
   const msgId = typeof o.msg_id === 'string' && o.msg_id ? o.msg_id : undefined;
@@ -434,6 +466,8 @@ export function parseInbound(
       from: agent ? 'agent' : 'session',
       ...(name ? { name } : {}),
       ...(pid !== undefined ? { pid } : {}),
+      ...(taskId ? { taskId } : {}),
+      ...(handback ? { handback: true as const } : {}),
       ...(msgId ? { msgId } : {}),
       ...(hops && hops.length > 0 ? { hopChain: hops } : {}),
       ...(queued ? { queued: true as const } : {}),
@@ -500,7 +534,8 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   // l'ora dell'assorbimento, la `enqueue` quella della digitazione.
   const enqueuedAt = new Map<string, string>();
 
-  for (const line of raw.split('\n')) {
+  const lines = raw.split('\n');
+  for (const line of lines) {
     if (!line) continue;
     // L'effort è un campo su una riga che l'SDK restituisce comunque, non una
     // riga a sé: si legge qui e si esce, senza passare dal `JSON.parse` sotto.
@@ -705,6 +740,8 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
   }
 
+  nameHandbacks(lines, injected);
+
   return {
     queued,
     injected,
@@ -716,6 +753,53 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     artifactByToolUseId,
     sentByToolUseId,
   };
+}
+
+/**
+ * Il nome dei rapporti di fine lavoro che non ne portano uno (#297).
+ *
+ * L'`origin` di un hand-back ha solo l'id del task, che è l'`agentId` scritto
+ * sul risultato della chiamata `Agent` che ha lanciato l'agente, nello stesso
+ * file: da lì si prende la `description` del dispatch, la riga che la lista
+ * Agents mette sotto il tipo. Il tipo da solo non basterebbe: nove agenti
+ * `general-purpose` sarebbero nove volte lo stesso nome.
+ *
+ * Seconda passata apposta, e solo per i file che hanno hand-back senza nome: le
+ * righe con `"agentId"` sono circa il 2% del corpus, e deserializzarle tutte
+ * nel ciclo sopra lo farebbe pagare a ogni transcript che `session-search`
+ * legge.
+ */
+function nameHandbacks(lines: string[], injected: ChatMessage[]): void {
+  const unnamed = new Map<string, InboundOrigin[]>();
+  for (const m of injected) {
+    const o = m.inbound;
+    if (!o?.handback || !o.taskId || o.name) continue;
+    const list = unnamed.get(o.taskId);
+    if (list) list.push(o);
+    else unnamed.set(o.taskId, [o]);
+  }
+  if (unnamed.size === 0) return;
+
+  for (const line of lines) {
+    if (!line.includes('"toolUseResult"')) continue;
+    const id = [...unnamed.keys()].find(k => line.includes(`"agentId":"${k}"`));
+    if (!id) continue;
+    let json: Record<string, unknown>;
+    try {
+      json = JSON.parse(line) as Record<string, unknown>;
+    } catch {
+      continue;
+    }
+    const result = json.toolUseResult as Record<string, unknown> | undefined;
+    // Anche le righe dell'agente stesso nominano il suo id: conta solo il
+    // risultato del dispatch, che lo porta come `agentId` di primo livello.
+    if (!result || typeof result !== 'object' || result.agentId !== id) continue;
+    const description = typeof result.description === 'string' ? result.description.trim() : '';
+    if (!description) continue;
+    for (const o of unnamed.get(id)!) o.name = description;
+    unnamed.delete(id);
+    if (unnamed.size === 0) return;
+  }
 }
 
 function stampSentMessages(

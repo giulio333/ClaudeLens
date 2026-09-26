@@ -352,7 +352,7 @@ chiuso **sul pid** ogni volta che un lato ne dà uno (`origin.pid` in entrata,
 `uds:/tmp/cc-socks/<pid>.sock` in uscita), e un messaggio indirizzato solo per
 nome entra nel thread del processo che quel nome **ha dichiarato ricevendo** —
 altrimenti resta sotto il nome, che è onesto: niente lo legava a un processo.
-Gli agenti si chiudono sul nome, non c'è pid da verificare. L'etichetta è
+Gli agenti si chiudono sul **task id** (`origin.senderTaskId`), che Claude Code scrive e l'agente non dichiara: il rapporto finale di un agente di background (hand-back, Claude Code 2.1.276+) non porta nome, e chiusi sul nome tutti i rapporti di una sessione finivano in un unico thread `unknown` (#297). Un messaggio mandato a un teammate per nome entra nel thread del task che quel nome ha dichiarato ricevendo; il nome di un hand-back è la `description` del dispatch che l'ha lanciato, letta dal main. L'etichetta è
 l'ultimo nome **dichiarato dall'altra parte**; quello con cui l'abbiamo
 chiamata vale solo finché non parla. Click → `onOpenExchange(msgId)` quando il
 thread ha un id da unire (una sessione dall'altra parte), altrimenti

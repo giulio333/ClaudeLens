@@ -502,6 +502,15 @@ export const FIELDS = {
   // on both delivery forms, and session-exchange keeps an agent out of a thread.
   'attachment.attachment.origin.senderTaskId': read('transcript-extras + session-exchange'),
   'user.origin.senderTaskId': read('transcript-extras + session-exchange'),
+  // A background agent's final report, handed back as a peer message since
+  // Claude Code 2.1.276 — no name, no pid, no msg_id, and a harness frame
+  // inside `body`. `parseInbound` strips the frame, and the name comes from the
+  // dispatch that launched the agent: its result carries the same id as
+  // `agentId`, and `description` is the line the Agents list shows (#297).
+  'user.origin.handback': read('transcript-extras'),
+  'attachment.attachment.origin.handback': read('transcript-extras'),
+  'user.toolUseResult.agentId': read('transcript-extras (hand-back name)'),
+  'user.toolUseResult.description': read('transcript-extras (hand-back name)'),
   'attachment.attachment.isMeta': candidate(
     'marks an attachment as harness-injected rather than typed; matters once attachment rows are read at all'
   ),

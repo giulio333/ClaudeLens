@@ -30,7 +30,10 @@ import type { MessageDeliveryState } from '../chat/sent-message';
  * whenever either side gives one, and a message that only carries a name joins
  * the pid-keyed thread whose received messages declared that name — otherwise
  * it stands under the name, which is honest: nothing tied it to a process.
- * Agents key by name; there is no pid to verify.
+ * Agents key the same way on their task id, which Claude Code wrote rather than
+ * the agent declared — a hand-back (#297) carries no name at all, and keyed by
+ * name every report of a session fell into one thread — and a message that
+ * names a teammate joins the thread of the task that declared that name.
  */
 
 export type ThreadMessage = {
@@ -85,6 +88,7 @@ export function socketPid(to: string): number | undefined {
 type Raw = ThreadMessage & {
   kind: 'session' | 'agent';
   pid?: number;
+  taskId?: string;
   name?: string;
 };
 
@@ -106,6 +110,7 @@ function collect(processed: ProcessedMessage[]): Raw[] {
         turnN: i + 1,
         kind: fromSession ? 'session' : 'agent',
         ...(inbound.pid !== undefined ? { pid: inbound.pid } : {}),
+        ...(inbound.taskId ? { taskId: inbound.taskId } : {}),
         ...(inbound.name ? { name: inbound.name } : {}),
         ...(fromSession && inbound.msgId ? { msgId: inbound.msgId } : {}),
         ...(inbound.queued ? { queued: true } : {}),
@@ -145,12 +150,19 @@ export function buildMessageThreads(processed: ProcessedMessage[]): MessageThrea
   // A name a verified pid declared, from the received side: the one link that
   // lets a message addressed by name join the thread of the process behind it.
   const pidByName = new Map<string, number>();
-  for (const r of raws)
-    if (r.kind === 'session' && r.direction === 'in' && r.pid !== undefined && r.name)
-      if (!pidByName.has(r.name)) pidByName.set(r.name, r.pid);
+  const taskByName = new Map<string, string>();
+  for (const r of raws) {
+    if (r.direction !== 'in' || !r.name) continue;
+    if (r.kind === 'session' && r.pid !== undefined && !pidByName.has(r.name))
+      pidByName.set(r.name, r.pid);
+    if (r.kind === 'agent' && r.taskId && !taskByName.has(r.name)) taskByName.set(r.name, r.taskId);
+  }
 
   const keyOf = (r: Raw): string => {
-    if (r.kind === 'agent') return `agent:${r.name ?? '?'}`;
+    if (r.kind === 'agent') {
+      const task = r.taskId ?? (r.name ? taskByName.get(r.name) : undefined);
+      return task ? `task:${task}` : `agent:${r.name ?? '?'}`;
+    }
     const pid = r.pid ?? (r.name ? pidByName.get(r.name) : undefined);
     return pid !== undefined ? `pid:${pid}` : `name:${r.name ?? '?'}`;
   };
@@ -158,12 +170,14 @@ export function buildMessageThreads(processed: ProcessedMessage[]): MessageThrea
   const threads = new Map<string, MessageThread & { nameAt: number }>();
   for (const r of raws) {
     const key = keyOf(r);
-    const { kind, pid, name, ...message } = r;
+    const { kind, pid, taskId, name, ...message } = r;
     let t = threads.get(key);
     if (!t) {
       t = {
         key,
-        party: name ?? (pid !== undefined ? `pid ${pid}` : 'unknown'),
+        party:
+          name ??
+          (pid !== undefined ? `pid ${pid}` : taskId !== undefined ? `agent ${taskId}` : 'unknown'),
         kind,
         messages: [],
         last: message,

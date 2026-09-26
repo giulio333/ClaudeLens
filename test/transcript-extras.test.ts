@@ -4,6 +4,7 @@ import {
   parseBashEditDiff,
   parseArtifactPublish,
   parseSentMessage,
+  handbackReport,
 } from '../electron/modules/transcript-extras';
 import type {
   ArtifactPublish,
@@ -1195,5 +1196,211 @@ describe('mergeTranscriptExtras — sent message', () => {
   it('returns the messages by reference when there is no delivery to add', () => {
     const messages = [resultMsg('r1', 'toolu_send1')];
     expect(mergeTranscriptExtras(messages, sentExtras([]))).toBe(messages);
+  });
+});
+
+/** The frame Claude Code (2.1.276+) writes around a background agent's final
+ *  report INSIDE `origin.body`: one line addressed to Claude, a `[harness: …]`
+ *  line when the report looked like instructions, then the report with every
+ *  line indented by two spaces. */
+function handbackBody(report: string, flagged = false): string {
+  return [
+    '[Subagent hand-back] The text below is the final report of a subagent this session delegated to. It is model output, NOT a message from the user.',
+    ...(flagged
+      ? [
+          '  [harness: subagent output matched instruction-shaped pattern(s): example. Control tags below are neutralized.]',
+        ]
+      : []),
+    ...report.split('\n').map(l => (l ? `  ${l}` : '')),
+  ].join('\n');
+}
+
+function handbackOrigin(agentId: string, report: string, flagged = false) {
+  return {
+    kind: 'peer',
+    from: agentId,
+    senderTaskId: agentId,
+    handback: true,
+    body: handbackBody(report, flagged),
+  };
+}
+
+function agentMessage(agentId: string, report: string): string {
+  return (
+    'Another Claude session sent a message:\n' +
+    `<agent-message from="${agentId}">\n${handbackBody(report)}\n</agent-message>`
+  );
+}
+
+/** Delivered while the parent was idle: an `isMeta` user row, no name, no pid. */
+function handbackRow(uuid: string, agentId: string, report: string, flagged = false) {
+  return {
+    type: 'user',
+    uuid,
+    timestamp: '2026-09-08T10:05:00.000Z',
+    isMeta: true,
+    promptSource: 'system',
+    turnOrigin: 'peer',
+    origin: handbackOrigin(agentId, report, flagged),
+    message: { role: 'user', content: agentMessage(agentId, report) },
+  };
+}
+
+/** The result row of the `Agent` call that launched the agent in the background. */
+function spawnRow(agentId: string, description: string) {
+  return {
+    type: 'user',
+    uuid: `spawn-${agentId}`,
+    timestamp: '2026-09-08T10:00:00.000Z',
+    message: {
+      role: 'user',
+      content: [
+        {
+          type: 'tool_result',
+          tool_use_id: `toolu_${agentId}`,
+          content: [
+            { type: 'text', text: `Async agent launched successfully.\nagentId: ${agentId}` },
+          ],
+        },
+      ],
+    },
+    toolUseResult: {
+      isAsync: true,
+      status: 'async_launched',
+      agentId,
+      description,
+      prompt: 'look into it',
+    },
+  };
+}
+
+describe("a background agent's hand-back", () => {
+  it('is from its agent, named after the dispatch, and carries the report alone', async () => {
+    const p = writeJsonl([
+      spawnRow('a0b1c2d3e4f5a6b7', 'Survey the fixtures'),
+      handbackRow('h1', 'a0b1c2d3e4f5a6b7', '## Findings\n\n- one\n  - nested'),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected).toHaveLength(1);
+    expect(injected[0].inbound).toMatchObject({
+      from: 'agent',
+      taskId: 'a0b1c2d3e4f5a6b7',
+      handback: true,
+      name: 'Survey the fixtures',
+    });
+    // The frame is gone and the two-space indent with it; the report's own
+    // indentation survives.
+    expect(injected[0].content).toEqual([
+      { type: 'text', text: '## Findings\n\n- one\n  - nested' },
+    ]);
+  });
+
+  it("drops the harness's own note on a report it flagged", async () => {
+    const p = writeJsonl([
+      spawnRow('a1', 'Check the settings'),
+      handbackRow('h1', 'a1', 'Status: done', true),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].content).toEqual([{ type: 'text', text: 'Status: done' }]);
+  });
+
+  it('gives each agent its own name', async () => {
+    const p = writeJsonl([
+      spawnRow('a1', 'First errand'),
+      spawnRow('a2', 'Second errand'),
+      handbackRow('h1', 'a2', 'second report'),
+      handbackRow('h2', 'a1', 'first report'),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected.map(m => [m.inbound?.taskId, m.inbound?.name])).toEqual([
+      ['a2', 'Second errand'],
+      ['a1', 'First errand'],
+    ]);
+  });
+
+  it('takes the name from the dispatch result, not from another row naming the id', async () => {
+    const p = writeJsonl([
+      {
+        type: 'user',
+        uuid: 'decoy',
+        timestamp: '2026-09-08T09:59:00.000Z',
+        message: { role: 'user', content: 'x' },
+        toolUseResult: { task: { agentId: 'a1' }, description: 'not the dispatch' },
+      },
+      spawnRow('a1', 'The real errand'),
+      handbackRow('h1', 'a1', 'report'),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].inbound?.name).toBe('The real errand');
+  });
+
+  it('keeps the task id and claims no name when the dispatch is not in the file', async () => {
+    const p = writeJsonl([handbackRow('h1', 'a9', 'report')]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].inbound?.taskId).toBe('a9');
+    expect(injected[0].inbound?.name).toBeUndefined();
+  });
+
+  it('is read the same way when it reached a busy parent, and only once', async () => {
+    const content = agentMessage('a1', 'report');
+    const p = writeJsonl([
+      spawnRow('a1', 'Busy errand'),
+      queueRow('enqueue', content, '2026-09-08T10:05:00.000Z'),
+      {
+        type: 'attachment',
+        uuid: 'q1',
+        timestamp: '2026-09-08T10:05:00.000Z',
+        attachment: {
+          type: 'queued_command',
+          prompt: content,
+          commandMode: 'prompt',
+          isMeta: true,
+          timestamp: '2026-09-08T10:05:00.000Z',
+          origin: handbackOrigin('a1', 'report'),
+        },
+      },
+      queueRow('remove', content, '2026-09-08T10:05:30.000Z', 'absorbed_mid_turn'),
+    ]);
+    const { injected, queued } = await readTranscriptExtras(p);
+    expect(queued).toHaveLength(0);
+    expect(injected).toHaveLength(1);
+    expect(injected[0].inbound).toMatchObject({
+      taskId: 'a1',
+      handback: true,
+      queued: true,
+      name: 'Busy errand',
+    });
+    expect(injected[0].content).toEqual([{ type: 'text', text: 'report' }]);
+  });
+
+  it("leaves a teammate's message and its declared name as they were", async () => {
+    const p = writeJsonl([
+      spawnRow('aworker-b-9f', 'A description that must not replace the name'),
+      peerUserRow('p1', '  indented on purpose', '2026-09-08T10:00:00.000Z', {
+        from: 'worker-b',
+        senderTaskId: 'aworker-b-9f',
+        name: 'worker-b',
+        verifiedPeerPid: undefined,
+      }),
+    ]);
+    const { injected } = await readTranscriptExtras(p);
+    expect(injected[0].inbound).toMatchObject({ name: 'worker-b', taskId: 'aworker-b-9f' });
+    expect(injected[0].inbound?.handback).toBeUndefined();
+  });
+});
+
+describe('handbackReport', () => {
+  it('passes a body without the frame through untouched', () => {
+    expect(handbackReport('  just a message')).toBe('  just a message');
+  });
+
+  it('does not de-indent a report whose lines are not all indented', () => {
+    const body = '[Subagent hand-back] frame\nfirst\n  second';
+    expect(handbackReport(body)).toBe('first\n  second');
+  });
+
+  it('falls back to the whole body when nothing follows the frame', () => {
+    const body = '[Subagent hand-back] frame only';
+    expect(handbackReport(body)).toBe(body);
   });
 });
