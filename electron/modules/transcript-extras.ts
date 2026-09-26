@@ -196,8 +196,13 @@ const num = (v: unknown): number => (typeof v === 'number' && Number.isFinite(v)
 export function parseArtifactPublish(toolUseResult: unknown): ArtifactPublish | undefined {
   if (!toolUseResult || typeof toolUseResult !== 'object') return undefined;
   const r = toolUseResult as Record<string, unknown>;
-  const id = str(r.artifact_id);
   const url = str(r.url);
+  // A page created from a published Artifact type records no `artifact_id`: its
+  // result has the URL, the title and a version string, and the publishes that
+  // follow carry the id together with that same URL. The URL stands in for the
+  // id there — the two are one-to-one wherever both are written — so the
+  // creation draws as the page it made instead of a plain chip.
+  const id = str(r.artifact_id) ?? (r.created_from_type === true ? url : undefined);
   if (!id || !url) return undefined;
   return {
     id,
@@ -551,8 +556,9 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     const isPatch = line.includes('"structuredPatch"');
     // `artifact_id` sta solo sul risultato di una publish: una `read` o una
     // `list` dell'Artifact tool non lo scrivono, quindi il prefiltro è già il
-    // discriminante e non c'è da deserializzare il resto del corpus.
-    const isArtifact = line.includes('"artifact_id"');
+    // discriminante e non c'è da deserializzare il resto del corpus. L'unica
+    // pagina senza id è quella creata da un tipo, che dice di esserlo.
+    const isArtifact = line.includes('"artifact_id"') || line.includes('"created_from_type":true');
     // `"msg_id"` sta su ENTRAMBE le metà di un messaggio: sul `toolUseResult`
     // del mittente e sull'`origin` del ricevente. Qui interessa la prima; la
     // seconda passa dal ramo della provenienza sotto, quindi questo prefiltro

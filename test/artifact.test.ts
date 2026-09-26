@@ -112,6 +112,19 @@ describe('the pages a session published', () => {
     expect(buildArtifactActivity(groups).map(a => a.title)).toEqual(['One', 'Two']);
   });
 
+  it('joins a page created from a type to the publishes that followed it', () => {
+    // The creation records only the URL, so its id is the URL; the publishes
+    // after it carry the real id with that same URL.
+    const url = 'https://claude.ai/artifact/Xy12Zw';
+    const groups = [
+      call({}, page({ id: url, url, updated: false, seq: undefined }), { id: 't1' }),
+      call({}, page({ id: 'real-id', url, updated: true, seq: 2 }), { id: 't2' }),
+    ];
+    const activity = buildArtifactActivity(groups);
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({ publishes: 2, created: true, seq: 2 });
+  });
+
   it('says the page was only updated when this session never created it', () => {
     const [a] = buildArtifactActivity([call({}, page({ updated: true, seq: 7 }))]);
     expect(a.created).toBe(false);

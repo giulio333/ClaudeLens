@@ -554,9 +554,11 @@ export const FIELDS = {
   'attachment.attachment.toolChange': ignored(
     '"add" on an `advisor_tool` attachment when the reviewer became available; the consults are what the view draws'
   ),
-  'user.toolUseResult.created_from_type': candidate(
-    'an Artifact created from a published type: the result carries url, title and version but no artifact_id, and parseArtifactPublish requires both, so the page it created draws as a plain chip instead of the page card'
-  ),
+  // Was a candidate: the page drew as a plain chip, because its result has url,
+  // title and version but no artifact_id and the reader required both. The URL
+  // now stands in for the id (one-to-one wherever both are written), and the
+  // rail joins the creation to the publishes that follow on that URL.
+  'user.toolUseResult.created_from_type': read('transcript-extras + chat/artifact'),
   'user.toolUseResult.discardedCommits': candidate(
     'ExitWorktree with discard: how many commits were thrown away with the worktree (a number) — with discardedFiles, the one record that work was discarded, which nothing shows'
   ),

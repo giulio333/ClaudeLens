@@ -930,6 +930,25 @@ describe('parseArtifactPublish', () => {
     expect(old?.url).toBe('https://claude.ai/artifact/AbCdEf');
   });
 
+  it('reads a page created from an Artifact type, which records no id, by its URL', () => {
+    const created = {
+      url: 'https://claude.ai/artifact/Xy12Zw',
+      title: 'Quarterly plan',
+      version: '1789000000-1',
+      created_from_type: true,
+      type: { url: 'https://claude.ai/artifact/Ty9', latest: true },
+      own_files: [],
+    };
+    expect(parseArtifactPublish(created)).toEqual({
+      id: 'https://claude.ai/artifact/Xy12Zw',
+      url: 'https://claude.ai/artifact/Xy12Zw',
+      title: 'Quarterly plan',
+      updated: false,
+    });
+    // The flag is the claim: a bare URL is still not a page.
+    expect(parseArtifactPublish({ ...created, created_from_type: undefined })).toBeUndefined();
+  });
+
   it('is not fooled by another tool result', () => {
     expect(parseArtifactPublish(undefined)).toBeUndefined();
     expect(parseArtifactPublish({ stdout: 'ok' })).toBeUndefined();
@@ -948,6 +967,23 @@ describe('readTranscriptExtras — artifact', () => {
     const extras = await readTranscriptExtras(p);
     expect(extras.artifactByToolUseId.get('toolu_art1')?.title).toBe('Release checklist');
     expect(extras.artifactByToolUseId.get('toolu_art1')?.seq).toBe(2);
+  });
+
+  it('recovers a page created from a type, which has no artifact_id to find it by', async () => {
+    const p = writeJsonl([
+      userRow('u1', 'make the plan'),
+      artifactResultRow('r1', 'toolu_art2', {
+        url: 'https://claude.ai/artifact/Xy12Zw',
+        title: 'Quarterly plan',
+        created_from_type: true,
+      }),
+    ]);
+    const extras = await readTranscriptExtras(p);
+    expect(extras.artifactByToolUseId.get('toolu_art2')).toMatchObject({
+      url: 'https://claude.ai/artifact/Xy12Zw',
+      title: 'Quarterly plan',
+      updated: false,
+    });
   });
 
   it('skips a row whose page cannot be pinned to one tool call', async () => {

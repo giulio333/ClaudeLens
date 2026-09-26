@@ -84,7 +84,8 @@ export interface BashEditFile {
  *  subscriptions, and the URL is text rather than a link. Every field here is
  *  one Claude Code already writes — nothing is recovered from that prose. */
 export interface ArtifactPublish {
-  /** The artifact's own id: stable across every publish to the same page. */
+  /** The artifact's own id: stable across every publish to the same page. A
+   *  page created from an Artifact type records none, and its URL stands in. */
   id: string;
   url: string;
   title: string;

@@ -106,12 +106,15 @@ export type ArtifactActivity = {
  * produced, and a refused publish produced nothing.
  */
 export function buildArtifactActivity(groups: ToolGroup[]): ArtifactActivity[] {
-  const byId = new Map<string, ArtifactActivity>();
+  // Keyed on the URL, which is one-to-one with the id wherever both are
+  // written: a page created from an Artifact type records only the URL, and
+  // keying on the id would split it from the publishes that followed.
+  const byUrl = new Map<string, ArtifactActivity>();
   for (const g of groups) {
     if (!isArtifactTool(g.use.name)) continue;
     const page = artifactOf(g);
     if (!page) continue;
-    let a = byId.get(page.id);
+    let a = byUrl.get(page.url);
     if (!a) {
       a = {
         id: page.id,
@@ -121,16 +124,15 @@ export function buildArtifactActivity(groups: ToolGroup[]): ArtifactActivity[] {
         publishes: 0,
         items: [],
       };
-      byId.set(page.id, a);
+      byUrl.set(page.url, a);
     }
     a.items.push(g);
     a.publishes += 1;
     a.title = page.title || a.title;
-    a.url = page.url;
     if (page.seq && page.seq > (a.seq ?? 0)) a.seq = page.seq;
     if (page.audience) a.audience = page.audience;
     if (!page.updated) a.created = true;
     a.description = a.description ?? artifactDescription(g);
   }
-  return [...byId.values()];
+  return [...byUrl.values()];
 }
