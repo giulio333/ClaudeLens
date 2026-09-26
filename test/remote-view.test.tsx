@@ -18,7 +18,7 @@ import { StrictMode, type ReactNode } from 'react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { claudeCodeVersion } from '../package.json';
+import { remoteMinClaudeCodeVersion } from '../package.json';
 import { ThemeContext } from '../src/hooks/useTheme';
 import { RemoteView } from '../src/components/project/remote/RemoteView';
 import { REMOTE_EXIT, type RemoteHost } from '../electron/shared/remote-host';
@@ -195,7 +195,7 @@ describe('connecting', () => {
         hostId: 'h1',
         mode: 'claude',
         dir: '~/projects',
-        minVersion: claudeCodeVersion,
+        minVersion: remoteMinClaudeCodeVersion,
       })
     );
     // Never the local path: a remote session must not start a local claude.

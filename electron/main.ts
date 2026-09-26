@@ -2175,8 +2175,8 @@ ipcMain.handle(
       hostId: string;
       mode: RemoteLaunchMode;
       dir?: string;
-      /** The Claude Code version this build requires (`claudeCodeVersion`, which
-       *  the renderer imports from package.json for the local check too). */
+      /** The oldest Claude Code the host may run (`remoteMinClaudeCodeVersion`
+       *  in package.json — not `claudeCodeVersion`, which moves every release). */
       minVersion?: string;
       cols?: number;
       rows?: number;

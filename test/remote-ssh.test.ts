@@ -9,11 +9,14 @@ import {
   buildSshArgs,
   controlPathFor,
   createLaunchMarkerScanner,
+  parseMinVersion,
   remoteCommandString,
   sshCommand,
   type RemoteScriptOptions,
 } from '../electron/modules/remote-ssh';
 import { REMOTE_EXIT } from '../electron/shared/remote-host';
+import { compareVersions } from '../electron/shared/version-compare';
+import { claudeCodeVersion, remoteMinClaudeCodeVersion } from '../package.json';
 
 // The connect script is the part of #242 that can be wrong in ways no type
 // catches, so it is run for real: through `sh`, with a stub `claude` that says
@@ -132,6 +135,13 @@ describe('the version gate', () => {
       expect(r.stdout).not.toContain('RAN ');
     }
   );
+
+  // The host's minimum is its own field so a release does not raise it: it
+  // moves only when the remote path needs something an older CLI lacks.
+  it('takes its minimum from a package.json field no newer than claudeCodeVersion', () => {
+    expect(() => parseMinVersion(remoteMinClaudeCodeVersion)).not.toThrow();
+    expect(compareVersions(remoteMinClaudeCodeVersion, claudeCodeVersion)).toBeLessThanOrEqual(0);
+  });
 });
 
 describe('finding claude and the folder', () => {

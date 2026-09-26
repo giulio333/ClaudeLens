@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { claudeCodeVersion } from '../../../../package.json';
+import { remoteMinClaudeCodeVersion } from '../../../../package.json';
 import {
   useDeleteRemoteHost,
   useRemoteHosts,
@@ -283,8 +283,8 @@ function ConnectPanel({
       />
       {problem && <p className="mt-1 font-mono text-[10px] text-[var(--cl-danger)]">{problem}</p>}
       <p className="mt-2" style={{ fontSize: 12, color: 'var(--cl-ink-3)' }}>
-        Claude Code starts in this folder. On a host older than {claudeCodeVersion} it is not
-        started, and ClaudeLens offers to update it.
+        Claude Code starts in this folder. On a host older than {remoteMinClaudeCodeVersion} it is
+        not started, and ClaudeLens offers to update it.
       </p>
       <div className="flex gap-3" style={{ marginTop: 20 }}>
         <button className="cl-btn cl-btn--primary" type="submit" disabled={!!problem}>
@@ -493,7 +493,7 @@ function RemoteSessionView({
           target: host.target,
           os: host.os ?? 'posix',
           dir,
-          minVersion: claudeCodeVersion,
+          minVersion: remoteMinClaudeCodeVersion,
         });
   const running = status === 'running';
 
@@ -575,7 +575,7 @@ function RemoteSessionView({
                 <TerminalPane
                   key={session.attempt}
                   cwd={dir}
-                  remote={{ hostId: host.id, mode, dir, minVersion: claudeCodeVersion }}
+                  remote={{ hostId: host.id, mode, dir, minVersion: remoteMinClaudeCodeVersion }}
                   onPid={noop}
                   onStatus={setStatus}
                   onExit={setExitCode}

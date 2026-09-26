@@ -956,15 +956,21 @@ Decisioni:
   permission mode — stanno sull'host e non vengono letti.
 - **La versione di Claude Code sull'host si controlla prima di avviarlo**, nello
   script remoto e non con un `ssh` a parte: una connessione sola, e password,
-  2FA o una chiave nuova vengono chiesti nella pane stessa. La soglia è il
-  `claudeCodeVersion` di `package.json`, la stessa che Settings → General usa
-  per la CLI locale: sotto, lo script non avvia la sessione, e la notice offre
-  **`Update Claude Code on <host>`**, che lancia `claude update` sull'host nella
-  stessa pane e poi riporta a una sessione. Una versione illeggibile o un
-  `claude` assente fermano allo stesso modo, ognuno col suo messaggio. Il costo
-  dichiarato: siccome `prepare-release` porta quella soglia alla CLI installata
-  il giorno del rilascio, quasi ogni release di ClaudeLens chiede un
-  `claude update` sull'host, che è a un click.
+  2FA o una chiave nuova vengono chiesti nella pane stessa. La soglia è
+  `remoteMinClaudeCodeVersion` di `package.json`, **non** il `claudeCodeVersion`
+  che Settings → General usa per la CLI locale: sotto, lo script non avvia la
+  sessione, e la notice offre **`Update Claude Code on <host>`**, che lancia
+  `claude update` sull'host nella stessa pane e poi riporta a una sessione. Una
+  versione illeggibile o un `claude` assente fermano allo stesso modo, ognuno
+  col suo messaggio. Era `claudeCodeVersion` all'inizio, e siccome
+  `prepare-release` la porta alla CLI installata il giorno del rilascio quasi
+  ogni release chiedeva un `claude update` sull'host. Il campo separato vale
+  2.1.281, la versione su cui il percorso remoto è stato provato da capo a fondo
+  (host Windows vero: gate, pid del lancio, voce del registro, transcript,
+  chiusura); si alza solo quando `remote-ssh.ts`, `remote-watch.ts` o
+  `remote-lens.ts` cominciano a dipendere da qualcosa che una CLI più vecchia
+  non scrive, e si abbassa solo dopo una prova su un host più vecchio. Un test
+  in `remote-ssh.test.ts` lo tiene non più nuovo di `claudeCodeVersion`.
 - **L'output resta scoperto.** Lo script stampa il suo motivo nel terminale
   prima di uscire, quindi l'overlay `SESSION ENDED` della pane è spento
   (`hideExitOverlay`) e la notice sta **sopra** il terminale (`role="status"`),
