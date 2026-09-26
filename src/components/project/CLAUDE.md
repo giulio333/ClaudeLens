@@ -982,6 +982,7 @@ Decisioni:
   Windows il codice d'uscita non attraversa ssh quando c'è un tty: il rifiuto
   arriva come marcatore nell'output e il main lo rimette al suo posto, quindi
   per questa vista i due sistemi rispondono uguale.
+- **Copia e link dall'host passano per il pannello (#293).** Via ssh Claude Code copia con OSC 52 (`c to copy`, l'URL del login) e stampa gli URL come link OSC 8: il pannello scartava la prima e, per il secondo, xterm apriva un `confirm()` nativo e poi un `window.open()` vuoto che l'app rifiuta, quindi nessun link si apriva. Ora `terminal/terminal-osc.ts` (puro) decide: una copia base64 UTF-8 va negli appunti via `clipboard:writeText`, fino a 1 MB; una richiesta di **lettura** (`?`) non riceve mai risposta — risponderla darebbe all'host gli appunti di questa macchina — e una di svuotamento è ignorata; un link si apre solo se è http(s), con `window.open` → `shell.openExternal`, senza dialog. Vale anche per il terminale locale. Resta fuori una selezione a mano di un URL che ConPTY ha spezzato su più righe: porta con sé gli a capo, ed è la copia OSC 52 a scavalcarla. Coperto da `test/terminal-osc.test.ts` e `test/terminal-pane-osc.test.tsx`
 - La cartella usata l'ultima volta su un host sta in `localStorage`
   (`cl-remote-dir:<id>`): è una comodità, perderla costa riscriverla. Gli host
   invece stanno nel main (`~/.claudelens/remote-hosts.json`), perché sono dati.

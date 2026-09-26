@@ -14,6 +14,7 @@ import { useTheme } from '../../../hooks/useTheme';
 import { trackEvent } from '../../../lib/telemetry';
 import { PALETTES, type TerminalStatus } from './terminal-theme';
 import { createTerminalPromptController, type TerminalPromptHandle } from './terminal-prompt';
+import { makeLinkHandler, parseOsc52 } from './terminal-osc';
 import type { RemoteLaunchMode } from '../../../../electron/shared/remote-host';
 
 /**
@@ -223,6 +224,17 @@ export function TerminalPane({
       cursorBlink: true,
       scrollback: 10000,
       theme: paletteRef.current.term,
+      // OSC 8 hyperlinks (#293): xterm's default asks with a native confirm()
+      // and then opens a blank window the app refuses, so no link ever opened.
+      linkHandler: makeLinkHandler(uri => window.open(uri, '_blank', 'noopener')),
+    });
+    // OSC 52 (#293): how a program over ssh — Claude Code's `c to copy` above
+    // all — reaches this machine's clipboard. Handled here or dropped: a read
+    // request is never answered and a clear is ignored (see `parseOsc52`).
+    term.parser.registerOscHandler(52, data => {
+      const osc = parseOsc52(data);
+      if (osc.kind === 'copy') void window.electronAPI.clipboard.writeText(osc.text);
+      return true;
     });
     const fit = new FitAddon();
     term.loadAddon(fit);

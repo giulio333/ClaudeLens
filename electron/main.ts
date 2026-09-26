@@ -2336,8 +2336,10 @@ ipcMain.handle('remote:retryLens', async (_event, terminalId: string) => {
 // The terminal pane's clipboard, read/written through the main process rather
 // than `navigator.clipboard`: the packaged renderer is loaded from `file://`,
 // where the async Clipboard API's read path depends on a permission the app
-// never grants. Electron's own module has no such gate. Only the Windows/Linux
-// terminal uses these (macOS gets the native Cmd+V paste) — see TerminalPane.
+// never grants. Electron's own module has no such gate. The Windows/Linux
+// copy-paste bindings use both (macOS gets the native Cmd+V paste), and every
+// platform writes through here when a program in the pane copies with OSC 52 —
+// Claude Code's `c to copy` over ssh (#293) — see TerminalPane.
 ipcMain.handle('clipboard:readText', async () => {
   try {
     return ok(clipboard.readText());
