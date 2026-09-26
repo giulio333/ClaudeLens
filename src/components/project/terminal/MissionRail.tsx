@@ -21,13 +21,14 @@ import {
   buildProcessedMessages,
   correlateSessionAgents,
   correlateSessionSkills,
-  isMemoryFile,
+  memoryScopeOf,
   skillHasViewableOutput,
   AGENT_TOOLS,
   ToolGroup,
   SessionAgent,
 } from '../chat/utils';
 import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
+import { shellReadPaths } from '../chat/context-files';
 import { FileIcon } from '../chat/fileIcons';
 import { buildArtifactActivity } from '../chat/artifact';
 import { QueryError } from '../../QueryError';
@@ -685,8 +686,8 @@ export function MissionRail({
     return (path: string) => byFilename.get(path.replace(/\\/g, '/').split('/').pop() ?? path);
   }, [memory]);
   const memoryActivity = useMemo(
-    () => buildMemoryActivity(ownTools, memoryLookup),
-    [ownTools, memoryLookup]
+    () => buildMemoryActivity(ownTools, memoryLookup, g => shellReadPaths(g, realPath)),
+    [ownTools, memoryLookup, realPath]
   );
   // WEB — pages fetched and searches run, one row per source. Nothing else in
   // the rail could see them: a research session's sources used to leave no trace
@@ -697,10 +698,12 @@ export function MissionRail({
   // see them, and a published page outlives the session that made it.
   const artifacts = useMemo(() => buildArtifactActivity(ownTools), [ownTools]);
   // CHANGES excludes the memory files: they are a topic each, not a diff, and
-  // reporting them twice would double-count the session's line totals.
+  // reporting them twice would double-count the session's line totals. By path,
+  // not by call: one shell command can rewrite a memory and a project file, and
+  // only the first belongs to MEMORY. A deleted topic stays, since MEMORY has no
+  // word for it and CHANGES says DELETED.
   const changes = useMemo(
-    () =>
-      buildFileChanges(ownTools.filter(g => !isMemoryFile(g.use.input as Record<string, unknown>))),
+    () => buildFileChanges(ownTools).filter(c => c.deleted || !memoryScopeOf(c.path)),
     [ownTools]
   );
   const totals = useMemo(

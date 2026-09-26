@@ -79,6 +79,13 @@ function readsOf(group: ToolGroup, cwd: string | null): FoundRead[] {
   return [];
 }
 
+/** The files a `Bash` call read, by the same rules the rail applies — exported
+ *  so MEMORY and the rail cannot disagree about what a shell read is. */
+export function shellReadPaths(group: ToolGroup, cwd: string | null): string[] {
+  if (group.use.name !== 'Bash') return [];
+  return [...new Set(readsOf(group, cwd).map(r => r.path))];
+}
+
 /** First and last line number a `Read` printed; null for an image or a marker. */
 export function numberedSpan(content: string): ReadSpan | null {
   const lines = (numberedRows(content) ?? []).flatMap(r => (r.line === undefined ? [] : [r.line]));

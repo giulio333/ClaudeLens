@@ -27,6 +27,8 @@ import {
   currentModel,
   turnModel,
 } from '../src/components/project/chat/utils';
+import type { ToolGroup } from '../src/components/project/chat/utils';
+import { shellReadPaths } from '../src/components/project/chat/context-files';
 import { ChatMessage, ChatContentBlock, SubagentMeta, Skill, InstalledPlugin } from '../src/types';
 
 // ---- fixture helpers ----
@@ -1131,6 +1133,83 @@ describe('memory activity', () => {
     ] as never);
     expect(touches).toEqual([]);
     expect(indexOps).toEqual([]);
+  });
+
+  // A shell command, the way auto mode reads and edits memory: `cd` into the
+  // folder, then `cat`/`sed`/a script. The reader is the Lens rail's own.
+  const shell = (command: string, bashEditDiff?: Record<string, unknown>) => ({
+    use: { id: `b-${command}`, name: 'Bash', input: { command } },
+    result: {
+      type: 'tool_result',
+      toolUseId: `b-${command}`,
+      content: 'output',
+      isError: false,
+      ...(bashEditDiff ? { bashEditDiff } : {}),
+    },
+  });
+  const readsOf = (g: ToolGroup) => shellReadPaths(g, '/Users/t/app');
+
+  it('counts the topics a shell command read, one item under each, the index apart', () => {
+    const both = shell(`cd ${MEM} && cat user_a.md feedback_b.md MEMORY.md`);
+    const { touches, indexOps } = buildMemoryActivity(
+      [both, shell(`sed -n 1,20p ${MEM}/user_a.md`), shell('cat /Users/t/app/README.md')] as never,
+      undefined,
+      readsOf
+    );
+    expect(touches.map(t => [t.title, t.action, t.reads])).toEqual([
+      ['user-a', 'read', 2],
+      ['b', 'read', 1],
+    ]);
+    expect(touches[1].items).toEqual([both]);
+    expect(indexOps).toEqual([both]);
+  });
+
+  it('counts what a shell command changed where Claude Code recorded it', () => {
+    const { touches } = buildMemoryActivity(
+      [
+        shell(`sed -i '' s/a/b/ ${MEM}/user_a.md`, {
+          files: [{ filePath: `${MEM}/user_a.md`, hunks: [] }],
+          changedFiles: [`${MEM}/user_a.md`, `${MEM}/user_c.md`, '/Users/t/app/x.ts'],
+          moreFiles: 1,
+        }),
+        shell(`printf x > ${MEM}/user_n.md`, {
+          files: [{ filePath: `${MEM}/user_n.md`, hunks: [], created: true }],
+          changedFiles: [`${MEM}/user_n.md`],
+          moreFiles: 0,
+        }),
+      ] as never,
+      undefined,
+      readsOf
+    );
+    // Diffed → revised, created → new, listed without a diff → wrote.
+    expect(touches.map(t => [t.title, t.action, t.writes])).toEqual([
+      ['user-a', 'revised', 1],
+      ['user-c', 'wrote', 1],
+      ['user-n', 'new', 1],
+    ]);
+  });
+
+  it('claims nothing for a script that rewrote a topic with no diff recorded', () => {
+    const script = shell(
+      `cd ${MEM} && python3 - <<'EOF'\np='user_a.md'\nopen(p,'w').write('x')\nEOF`
+    );
+    const { touches } = buildMemoryActivity([script] as never, undefined, readsOf);
+    expect(touches).toEqual([]);
+  });
+
+  it('leaves a deleted topic out, for CHANGES to report', () => {
+    const { touches } = buildMemoryActivity(
+      [
+        shell(`rm ${MEM}/user_a.md`, {
+          files: [{ filePath: `${MEM}/user_a.md`, hunks: [], deleted: true }],
+          changedFiles: [`${MEM}/user_a.md`],
+          moreFiles: 0,
+        }),
+      ] as never,
+      undefined,
+      readsOf
+    );
+    expect(touches).toEqual([]);
   });
 });
 

@@ -1039,9 +1039,15 @@ export function isMemoryFile(input: Record<string, unknown>): boolean {
  * remembered. Reads count too — they are the only visible evidence of which
  * memories informed the session.
  *
+ * A shell command counts where the transcript says what it did: the files it
+ * read, by the Lens rail's own conservative reading of the command, and the
+ * files it changed, when Claude Code recorded a `bashEditDiff` for it.
+ *
  * What this cannot see, by construction: memories recalled automatically (they
- * arrive as a `<system-reminder>`, not a tool call) and topics deleted with
- * `rm` (a `Bash` call carries no `file_path`).
+ * arrive as a `<system-reminder>`, not a tool call), and a topic a script
+ * rewrote when no diff was recorded — `python3 - <<EOF … open(p, 'w')` in the
+ * memory folder writes nothing into the transcript that names the file, and
+ * reading the script to guess would claim a change the transcript does not.
  */
 
 export type MemoryScope = 'user' | 'project';
@@ -1125,22 +1131,40 @@ export function writeAction(result: string | null | undefined): MemoryAction {
   return 'wrote';
 }
 
-export function buildMemoryActivity(groups: ToolGroup[], lookup?: MemoryLookup): MemoryActivity {
+/** What a shell command wrote to a memory folder, as Claude Code recorded it on
+ *  the result (`bashEditDiff`): a created file is `new`, a diffed one `revised`,
+ *  one listed without a diff (Claude Code caps the diffs) `wrote`. A deleted
+ *  topic is left to CHANGES, which says DELETED; MEMORY has no word for it. */
+function shellMemoryWrites(g: ToolGroup): Map<string, MemoryAction> {
+  const out = new Map<string, MemoryAction>();
+  const diff = g.result?.bashEditDiff;
+  if (!diff) return out;
+  const deleted = new Set<string>();
+  for (const f of diff.files) {
+    if (f.deleted) deleted.add(f.filePath);
+    else if (memoryScopeOf(f.filePath)) out.set(f.filePath, f.created ? 'new' : 'revised');
+  }
+  for (const path of diff.changedFiles)
+    if (!out.has(path) && !deleted.has(path) && memoryScopeOf(path)) out.set(path, 'wrote');
+  return out;
+}
+
+/**
+ * `shellReadsOf` names the files a `Bash` call read — the Lens rail's own reader
+ * (`shellReadPaths` in `context-files`), injected rather than imported because
+ * that module builds on this one. Without it a session that reads and edits its
+ * memory from the shell, which auto mode does as a matter of course, left no
+ * MEMORY row at all.
+ */
+export function buildMemoryActivity(
+  groups: ToolGroup[],
+  lookup?: MemoryLookup,
+  shellReadsOf?: (g: ToolGroup) => string[]
+): MemoryActivity {
   const byPath = new Map<string, MemoryTouch>();
   const indexOps: ToolGroup[] = [];
 
-  for (const g of groups) {
-    if (!MEMORY_TOOLS.has(g.use.name)) continue;
-    const input = g.use.input as Record<string, unknown>;
-    const path = input.file_path as string | undefined;
-    if (!path) continue;
-    const scope = memoryScopeOf(path);
-    if (!scope) continue;
-    if (isMemoryIndex(path)) {
-      indexOps.push(g);
-      continue;
-    }
-
+  const touchOf = (path: string, scope: MemoryScope): MemoryTouch => {
     let t = byPath.get(path);
     if (!t) {
       const known = lookup?.(path);
@@ -1158,6 +1182,51 @@ export function buildMemoryActivity(groups: ToolGroup[], lookup?: MemoryLookup):
       };
       byPath.set(path, t);
     }
+    return t;
+  };
+
+  // One command can read or write several topics, and the index with them: it
+  // is one item under each, and one index operation.
+  const noteShell = (g: ToolGroup) => {
+    const writes = shellMemoryWrites(g);
+    const reads = shellReadsOf?.(g) ?? [];
+    for (const path of new Set([...writes.keys(), ...reads])) {
+      const scope = memoryScopeOf(path);
+      if (!scope) continue;
+      if (isMemoryIndex(path)) {
+        if (!indexOps.includes(g)) indexOps.push(g);
+        continue;
+      }
+      const t = touchOf(path, scope);
+      t.items.push(g);
+      t.hasError ||= !!g.result?.isError;
+      const action = writes.get(path);
+      if (!action) {
+        t.reads += 1;
+        continue;
+      }
+      t.writes += 1;
+      if (ACTION_RANK[action] > ACTION_RANK[t.action]) t.action = action;
+    }
+  };
+
+  for (const g of groups) {
+    if (g.use.name === 'Bash') {
+      noteShell(g);
+      continue;
+    }
+    if (!MEMORY_TOOLS.has(g.use.name)) continue;
+    const input = g.use.input as Record<string, unknown>;
+    const path = input.file_path as string | undefined;
+    if (!path) continue;
+    const scope = memoryScopeOf(path);
+    if (!scope) continue;
+    if (isMemoryIndex(path)) {
+      indexOps.push(g);
+      continue;
+    }
+
+    const t = touchOf(path, scope);
     t.items.push(g);
     t.hasError ||= !!g.result?.isError;
 
