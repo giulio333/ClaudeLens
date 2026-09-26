@@ -204,6 +204,17 @@ export const ATTACHMENT_TYPES = {
   thinking_stripped: candidate(
     'thinking blocks were dropped from the turn (scope: "all"); what is left renders as if nothing was cut'
   ),
+
+  // ── 2.1.278 → 2.1.283 ───────────────────────────────────────────────────
+  credential_org: ignored(
+    "the organization the session's credentials belong to, as an opaque UUID with no name — nothing a transcript view could show"
+  ),
+  thinking_drop: ignored(
+    "diagnostics of one API request: how many earlier thinking blocks the client left out of what it sent (reason prefix_mismatch), with the request id, model and block hashes. The transcript's own thinking blocks are untouched, so the notes still draw; not written after 2.1.280 in the rows observed"
+  ),
+  advisor_stripped: unknown(
+    'a bare `{type}`, always right after a `thinking_stripped` row in a session that consulted the advisor earlier. The consult rows stay in the file and still draw as markers, so nothing the view shows is lost. A row with a payload (a scope, which consults) would say whether it marks the consults leaving the model context — the question `thinking_stripped` already asks'
+  ),
 };
 
 /**
@@ -526,6 +537,53 @@ export const FIELDS = {
   ),
   'attachment.attachment.removed': ignored(
     'on an `instructions` attachment: a CLAUDE.md that left the cascade mid-session; claude-md-reader reads the files themselves'
+  ),
+
+  // ── 2.1.278 → 2.1.283 ───────────────────────────────────────────────────
+  // A queued human message now says it is one: the attachment carries the
+  // arrival time the queue-operation pairing has to reconstruct (#245, #275).
+  'attachment.attachment.humanTurn': candidate(
+    'true on a `queued_command` whose origin is the user typing mid-turn (origin.kind human, commandMode prompt): the discriminant that would let that attachment replace the queue-operation pairing transcript-extras does for #245'
+  ),
+  'attachment.attachment.from': candidate(
+    'on a `thinking_stripped` with scope "partial": the message id and thinking block the stripping starts from — the anchor a "reasoning cut here" marker would need'
+  ),
+  'attachment.attachment.usage': ignored(
+    "tokens, tool uses and duration of a background task, on the queued_command of its task-notification — the figures of the notification's own <usage>, which the card already reads"
+  ),
+  'attachment.attachment.toolChange': ignored(
+    '"add" on an `advisor_tool` attachment when the reviewer became available; the consults are what the view draws'
+  ),
+  'user.toolUseResult.created_from_type': candidate(
+    'an Artifact created from a published type: the result carries url, title and version but no artifact_id, and parseArtifactPublish requires both, so the page it created draws as a plain chip instead of the page card'
+  ),
+  'user.toolUseResult.discardedCommits': candidate(
+    'ExitWorktree with discard: how many commits were thrown away with the worktree (a number) — with discardedFiles, the one record that work was discarded, which nothing shows'
+  ),
+  'user.toolUseResult.discardedFiles': candidate('as discardedCommits: the files discarded'),
+  'user.toolUseResult.contentNotInModelContext': ignored(
+    'true on an Edit result whose content was not sent back to the model; the diff the view draws comes from the input and the patch'
+  ),
+  'user.queueOrigin': candidate(
+    'which Artifact watch raised a task-notification (source artifact-watch-lifecycle / artifact-auto-react, the page slug and display name, watchEnded): the card could name the page and say the watch ended instead of drawing a generic task notice'
+  ),
+  'user.queueTranscriptOnly': unknown(
+    'true on a single task-notification row, which the view draws as any other card. Presumably a notification recorded without being queued to the model; a second specimen, or one on a human row, would say whether the view should mark it'
+  ),
+  'user.serverClassifierContext': ignored(
+    'the auto-mode permission classifier: its request id and the context it was sent (git state, live cwd, platform). Harness plumbing, the verdict is not in it, and it carries local paths'
+  ),
+  'assistant.serverClassifierRequest': ignored(
+    'the id of that classifier request, as user.serverClassifierContext'
+  ),
+  'assistant.message.input_transformations': unknown(
+    'an empty array on every row observed; a non-empty one would say what it records about the input'
+  ),
+  'agent-meta.worktreeCleanlyRemoved': ignored(
+    "whether an isolated agent's worktree was torn down cleanly — sidecar bookkeeping"
+  ),
+  'user.turnOrigin': ignored(
+    "the row's origin kind again (peer, task_notification, …); transcript-extras reads origin.kind"
   ),
 };
 
