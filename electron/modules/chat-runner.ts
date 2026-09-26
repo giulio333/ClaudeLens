@@ -24,7 +24,7 @@
 
 import { randomUUID } from 'crypto';
 import { mapSdkMessageToChat, type ChatMessage } from './session-reader';
-import { resolveClaudeExecutablePath } from '../utils';
+import { sdkExecutableOption } from './claude-executable';
 import type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
 import {
   noteMessage,
@@ -37,10 +37,6 @@ import {
 async function loadSdk() {
   return import('@anthropic-ai/claude-agent-sdk');
 }
-
-// Packaged app only: the SDK's CLI binary lives outside app.asar (asarUnpack)
-// and the SDK can't find it on its own. Undefined in dev.
-const claudeExecutable = resolveClaudeExecutablePath();
 
 // The SDK is ESM-only; deriving its types from the dynamic `import()` (rather than
 // a top-level `import type`) avoids the CommonJS→ESM resolution-mode requirement.
@@ -214,7 +210,8 @@ export class ChatSession {
           canUseTool: params.canUseTool,
           abortController: this.abort,
           env: params.env,
-          ...(claudeExecutable && { pathToClaudeCodeExecutable: claudeExecutable }),
+          // The bundled CLI, or the user's own when it is missing (#289).
+          ...sdkExecutableOption(),
         },
       });
 

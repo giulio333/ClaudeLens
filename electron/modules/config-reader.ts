@@ -1,7 +1,7 @@
 import os from 'os';
 import { existsSync } from 'fs';
 import { join } from 'path';
-import { resolveClaudeExecutablePath } from '../utils';
+import { resolveClaudeExecutable, sdkExecutableOption } from './claude-executable';
 import { readTextFile, withTimeout } from './safe-fs';
 
 // Reads the *effective* Claude Code configuration through the official Agent SDK
@@ -15,9 +15,6 @@ import { readTextFile, withTimeout } from './safe-fs';
 // The SDK is ESM-only, so it is loaded with a dynamic `import()` from the
 // CommonJS main process (same approach as chokidar in live-monitor.ts).
 
-// Packaged app only: points at the asar-unpacked CLI binary; undefined in dev.
-const claudeExecutable = resolveClaudeExecutablePath();
-
 /** Runtime view captured from the SDK `system/init` message. */
 export interface InitInfo {
   permissionMode: string;
@@ -25,6 +22,10 @@ export interface InitInfo {
   cwd: string;
   apiKeySource: string;
   claudeCodeVersion: string;
+  /** Whose CLI answered the handshake, so `claudeCodeVersion` is labelled for
+   *  what it is: the one bundled with ClaudeLens, or the user's own `claude`,
+   *  run because the bundled one is missing (#289). */
+  cliSource: 'bundled' | 'path';
   tools: string[];
   mcpServers: { name: string; status: string }[];
   slashCommands: string[];
@@ -111,6 +112,7 @@ function mapInit(m: Record<string, unknown>): InitInfo {
     cwd: String(m.cwd ?? ''),
     apiKeySource: String(m.apiKeySource ?? ''),
     claudeCodeVersion: String(m.claude_code_version ?? ''),
+    cliSource: 'bundled',
     tools: (m.tools as string[]) ?? [],
     mcpServers: (m.mcp_servers as { name: string; status: string }[]) ?? [],
     slashCommands: (m.slash_commands as string[]) ?? [],
@@ -146,6 +148,7 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
   const timer = setTimeout(() => abort.abort(), INIT_TIMEOUT_MS);
   let result: InitInfo | null = null;
   try {
+    const executable = resolveClaudeExecutable();
     const q = sdk.query({
       prompt: 'noop',
       options: {
@@ -155,8 +158,8 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
         // Don't write a transcript: this probe would otherwise show up in the
         // session list as a ghost "noop" chat on every config read.
         persistSession: false,
-        // Packaged app: the CLI binary is unpacked outside app.asar (see utils).
-        ...(claudeExecutable && { pathToClaudeCodeExecutable: claudeExecutable }),
+        // The bundled CLI, or the user's own when it is missing (#289).
+        ...sdkExecutableOption(executable),
       },
     });
     // Cached by the SDK from the first connect, so it is already settled when
@@ -167,6 +170,7 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
     for await (const msg of q) {
       if (msg.type === 'system' && msg.subtype === 'init') {
         result = mapInit(msg as unknown as Record<string, unknown>);
+        if (executable.source === 'path') result.cliSource = 'path';
         break; // closing the iterator tears down the query before a turn runs
       }
     }

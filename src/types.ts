@@ -1002,6 +1002,8 @@ export interface InitInfo {
   cwd: string;
   apiKeySource: string;
   claudeCodeVersion: string;
+  /** `path` when the bundled CLI is missing and the user's own `claude` answered. */
+  cliSource: 'bundled' | 'path';
   tools: string[];
   mcpServers: { name: string; status: string }[];
   slashCommands: string[];

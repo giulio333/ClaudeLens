@@ -43,7 +43,7 @@ afterEach(() => {
   bridge.restore();
 });
 
-function config(): EffectiveConfig {
+function config(cliSource: 'bundled' | 'path' = 'bundled'): EffectiveConfig {
   return {
     cwd: '/Users/alice',
     init: {
@@ -52,6 +52,7 @@ function config(): EffectiveConfig {
       cwd: '/Users/alice',
       apiKeySource: 'subscription',
       claudeCodeVersion: SDK_BUNDLED_VERSION,
+      cliSource,
       tools: [],
       mcpServers: [],
       slashCommands: [],
@@ -69,12 +70,12 @@ function config(): EffectiveConfig {
   };
 }
 
-function renderGeneral() {
+function renderGeneral(cliSource?: 'bundled' | 'path') {
   return render(
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(GeneralTab, { cfg: config(), q: '' })
+      createElement(GeneralTab, { cfg: config(cliSource), q: '' })
     )
   );
 }
@@ -118,5 +119,18 @@ describe('Settings → General · installed Claude Code', () => {
 
     await waitFor(() => expect(screen.getByText('not found in PATH')).toBeTruthy());
     expect(row('Claude Code').textContent).not.toContain(SDK_BUNDLED_VERSION);
+  });
+
+  it('never calls the PATH CLI bundled when it answered the handshake in its place (#289)', async () => {
+    // The bundled binary is missing, so the chat runs the user's own claude and
+    // the handshake reports that one's version: the row must say whose it is.
+    bridge.api.updates.claudeCodeVersion.mockResolvedValue(ok({ version: INSTALLED_VERSION }));
+
+    renderGeneral('path');
+
+    await waitFor(() => expect(row('Claude Code').textContent).toContain(INSTALLED_VERSION));
+    expect(screen.queryByText('Bundled CLI')).toBeNull();
+    expect(row('Chat CLI').textContent).toContain(SDK_BUNDLED_VERSION);
+    expect(row('Chat CLI').textContent).toContain('bundled with ClaudeLens is missing');
   });
 });

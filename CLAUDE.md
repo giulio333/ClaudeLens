@@ -11,7 +11,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-`thoughts`, `transcript-extras`, `chat-permissions` (a suppressed "Always allow" is
+`thoughts`, `transcript-extras`, `claude-executable` (#289 — the SDK chat's binary: the bundled one while it is there, else the user's `claude` from the same dirs Settings reads its version from, else a message that says what to do), `chat-permissions` (a suppressed "Always allow" is
 neither offered nor accepted), `terminal-osc` (what a program in the terminal pane may hand
 to this machine: an OSC 52 copy, never a clipboard read or clear, and a click
 on an http(s) OSC 8 link), `bg-sessions-reader`, `agents-live-status`,
@@ -75,7 +75,9 @@ union, the widen-on-unknown-payload fallback), `telemetry-report-error` (what
 reaches `telemetry:trackError` and what the browser-noise filter drops first)
 `settings-cli-version` (Settings → General prints `claude --version`, never
 the SDK handshake's bundled `claude_code_version`, and says so when the read
-fails instead of falling back to it), `search-view` (the results page of conversation search: the scan is
+fails instead of falling back to it; and when the bundled CLI is missing and the
+chat runs the PATH one, that handshake number is labelled `Chat CLI`, never
+`Bundled CLI`), `search-view` (the results page of conversation search: the scan is
 submitted and never streamed from keystrokes, the highlight is drawn at the
 offsets the scan reported rather than re-found here, opening a hit resolves the
 real `SessionSummary` from the project's list and refuses when the session is

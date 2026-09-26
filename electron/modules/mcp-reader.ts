@@ -2,7 +2,7 @@ import { existsSync } from 'fs';
 import { join } from 'path';
 import os from 'os';
 import { execClaude } from './claude-cli';
-import { resolveClaudeExecutablePath } from '../utils';
+import { resolveClaudeExecutablePath } from './claude-executable';
 import { readTextFile } from './safe-fs';
 
 // Reads the MCP servers Claude Code knows about. Two complementary sources:

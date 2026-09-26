@@ -2217,6 +2217,7 @@ const MOCK_EFFECTIVE_CONFIG = {
     cwd: '/Users/alice/projects/webapp',
     apiKeySource: 'subscription',
     claudeCodeVersion: '2.1.191',
+    cliSource: 'bundled',
     tools: ['Read', 'Write', 'Edit', 'Bash', 'Grep', 'Glob', 'Task', 'WebFetch', 'WebSearch'],
     mcpServers: [
       { name: 'github', status: 'connected' },

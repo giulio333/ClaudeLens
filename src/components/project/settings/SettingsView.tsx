@@ -10,6 +10,7 @@ import {
   useClaudeCodeVersion,
   useGlobalMcp,
   type EffectiveConfig,
+  type InitInfo,
   type McpServer,
   type UpdateInfo,
 } from '../../../hooks/useIPC';
@@ -469,7 +470,25 @@ function InstalledCliRow() {
  * no chip, no dot: updating your CLI cannot move this number, only a new
  * ClaudeLens can.
  */
-function BundledCliRow({ version }: { version: string | undefined }) {
+function BundledCliRow({
+  version,
+  source,
+}: {
+  version: string | undefined;
+  source: InitInfo['cliSource'] | undefined;
+}) {
+  // The handshake names whichever CLI answered it: when the bundled one is
+  // missing that is the user's own, and calling it "bundled" would put one
+  // install's number in the other's row (#289).
+  if (source === 'path')
+    return (
+      <Row
+        k="Chat CLI"
+        hint="The CLI bundled with ClaudeLens is missing, so the in-app chat runs the claude on your PATH"
+      >
+        {version ? <Val>{version}</Val> : <Dim />}
+      </Row>
+    );
   return (
     <Row
       k="Bundled CLI"
@@ -551,7 +570,7 @@ export function GeneralTab({
             ClaudeLens run for you"), and the whole bug was the app answering
             one with the other. Only the first carries the verdict. */}
         <InstalledCliRow />
-        <BundledCliRow version={init?.claudeCodeVersion || undefined} />
+        <BundledCliRow version={init?.claudeCodeVersion || undefined} source={init?.cliSource} />
         <Row k="Working directory" stack full>
           {init ? <Val sm>{init.cwd}</Val> : <Dim />}
         </Row>

@@ -81,6 +81,7 @@ import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { buildDispatchBgArgs, buildAiRunArgs } from './modules/claude-cli-args';
 import { spawnClaude, execClaude, readInstalledClaudeVersion } from './modules/claude-cli';
+import { claudeExtraDirs } from './modules/claude-executable';
 import { readEffectiveConfig } from './modules/config-reader';
 import {
   ChatSession,
@@ -297,13 +298,10 @@ function err<T>(e: unknown): IpcResult<T> {
 // where the CLI's own `migrate-installer` puts it and is prepended everywhere;
 // the FHS-ish dirs are Unix-only (on Windows the CLI lands on the user PATH, as
 // `claude.cmd` from npm or `claude.exe` in `%USERPROFILE%\.local\bin`).
+// The same list, in the same order, is where the SDK chat looks for a `claude`
+// when its bundled CLI is missing (#289), so the two cannot disagree.
 function claudeEnv(): NodeJS.ProcessEnv {
-  const extra = [
-    join(os.homedir(), '.claude', 'local'),
-    join(os.homedir(), '.local', 'bin'),
-    ...(process.platform === 'win32' ? [] : ['/usr/local/bin', '/opt/homebrew/bin']),
-  ];
-  const PATH = [...extra, process.env.PATH || ''].filter(Boolean).join(delimiter);
+  const PATH = [...claudeExtraDirs(), process.env.PATH || ''].filter(Boolean).join(delimiter);
   return { ...process.env, PATH };
 }
 
