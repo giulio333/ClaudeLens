@@ -218,6 +218,39 @@ Consequences of the row form:
   render would restart it on every re-render. Both animations respect
   `prefers-reduced-motion`.
 
+### LiveOrb.tsx + live-orb.ts
+
+"Claude is working right now", drawn as a thinking orb — the `thinking-orbs`
+dependency, a 20px canvas — whose animation follows the tool in flight
+(`liveOrbState`: breathing with no tool, searching for Read/Grep/Web, composing
+for Edit/Write, listening for Agent/Task/SendMessage/AskUserQuestion — waiting
+on another party's answer — and `working` for everything else). Only states
+that read at the 20px preset: `connecting`, the obvious verb for an agent, draws
+eight or nine loose dots and no line there, and `weaving` hardly more — in
+Mission Control it looked like noise. Five places, all of them the claim
+"working now" and none of them "alive": the SDK chat's live turn (`LiveTurn`,
+chip and the caret's place while it thinks), the narration line
+(`ThoughtLine`), the terminal pane's top bar while the registry says the
+session is busy — `orb WORKING` in place of RUNNING, violet like Mission
+Control's "busy", and shown for a session run in a terminal elsewhere too
+(beside the rail's MISSION CONTROL title it read as the panel's icon, and the
+rail can be closed) — a running sub-agent's row in the rail's feed, beside
+WORKING (`state="working"`: its calls are not this session's to see), and a
+working cell of the Monitor (sage, its WORKING tag). A LIVE/RUNNING dot, the
+background-shell spinner and long lists keep what they had: a process being up
+is not Claude working, and every orb is a canvas of its own.
+
+- **`color` takes only hex or `rgb()`.** An `oklch()` token or a `var()` is
+  dropped without a word and the dots go grey, so `ORB_INK` repeats each token
+  in hex per theme; `test/live-orb.test.ts` converts the tokens in `index.css`
+  and fails when a copy goes stale.
+- **The theme is pinned from `ThemeContext`**, never the orb's `auto`, which
+  puts a `MutationObserver` on the whole document for as long as it is mounted.
+- **`inFlightTool`** reads a session's tail digest (`useSessionActivity`, the
+  Monitor's): its own call, else `Agent` for a sub-agent it waits on, else
+  nothing — the model thinking between calls.
+- Always `aria-hidden`: every surface already says in words what runs.
+
 ## CSS Classes
 
 Components use Tailwind CSS + a custom `prose-lens` variant defined in `tailwind.config.ts` for semantic markdown rendering.

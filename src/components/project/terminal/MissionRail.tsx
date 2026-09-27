@@ -31,6 +31,7 @@ import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
 import { shellReadPaths } from '../chat/context-files';
 import { FileIcon } from '../chat/fileIcons';
 import { buildArtifactActivity } from '../chat/artifact';
+import { LiveOrb } from '../../LiveOrb';
 import { QueryError } from '../../QueryError';
 import { fmtCost, fmt } from '../utils';
 import { deriveContext } from './context-window';
@@ -369,8 +370,9 @@ function FeedRow({
         <DiffNum added={e.rightDiff.added} removed={e.rightDiff.removed} />
       ) : (
         <span
-          className="font-mono shrink-0"
+          className="font-mono shrink-0 flex items-center"
           style={{
+            gap: 6,
             fontSize: 9,
             fontWeight: 700,
             letterSpacing: '0.08em',
@@ -379,6 +381,10 @@ function FeedRow({
             color: e.rightTint,
           }}
         >
+          {/* A sub-agent at work: the orb says it is running now, beside the
+              WORKING it already printed. Its own calls are not this session's
+              to see, so the orb claims only that. */}
+          {e.kind === 'AGENTS' && e.live && <LiveOrb tone="violet" state="working" />}
           {e.right}
         </span>
       )}

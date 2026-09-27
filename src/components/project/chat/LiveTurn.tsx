@@ -1,4 +1,5 @@
 import { ToolActivity } from '../../../hooks/useIPC';
+import { LiveOrb } from '../../LiveOrb';
 import Markdown from '../../Markdown';
 
 /** Provisional assistant turn shown while the SDK streams the reply. Mirrors the
@@ -20,7 +21,12 @@ import Markdown from '../../Markdown';
  *  Read/Edit/Write, and most tools other than Bash).
  *
  *  Not the paced commentary line (`ThoughtLine`, a surface this app added):
- *  this is a chip that already existed saying the best true thing it can. */
+ *  this is a chip that already existed saying the best true thing it can.
+ *
+ *  The motion is the thinking orb (`LiveOrb`): breathing in place of the caret
+ *  while the model thinks with no text yet, and the tool's own animation at
+ *  the head of the chip. The caret stays while text streams — that is the
+ *  typing feel. */
 export function LiveTurn({
   text,
   tool,
@@ -33,6 +39,7 @@ export function LiveTurn({
   thought?: string;
   turnNumber: number;
 }) {
+  const orb = <LiveOrb tool={tool?.toolName} />;
   return (
     <article className="cl-turn cl-turn--claude cl-turn--live" aria-live="polite">
       <aside className="cl-turn-rail">
@@ -51,7 +58,7 @@ export function LiveTurn({
             {text && <Markdown>{text}</Markdown>}
             {tool ? (
               <span className={`cl-live-tool${thought ? ' is-note' : ''}`}>
-                <span className="dot" aria-hidden />
+                {orb}
                 {thought ? (
                   <>
                     <b>{thought}</b>
@@ -69,8 +76,10 @@ export function LiveTurn({
                   </>
                 )}
               </span>
-            ) : (
+            ) : text ? (
               <span className="cl-live-caret" aria-hidden />
+            ) : (
+              orb
             )}
           </div>
         </div>

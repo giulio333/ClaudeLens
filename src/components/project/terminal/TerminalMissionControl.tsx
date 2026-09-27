@@ -1,11 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
+import {
+  useActiveSessions,
+  useChatSession,
+  useSessionActivity,
+  useSessionList,
+} from '../../../hooks/useIPC';
 import { useSessionTags } from '../../../hooks/useSessionTags';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
 import { TagPicker } from '../sessions/TagPicker';
 import { useTheme } from '../../../hooks/useTheme';
 import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
 import { TopBar } from '../shared/TopBar';
+import { LiveOrb } from '../../LiveOrb';
+import { inFlightTool } from '../../live-orb';
 import {
   SessionBottomGlow,
   SessionColorFrame,
@@ -453,6 +460,14 @@ export function TerminalMissionControl({
     return termStatus === 'running' ? ptySince : null;
   }, [activeSessions, sessionId, ptyPid, termStatus, ptySince]);
 
+  // Whether Claude is working in this session right now — the registry's
+  // `busy`, whichever process runs it (this pane's or a terminal elsewhere) —
+  // and the tool in flight, from the Monitor's tail digest, for the orb that
+  // says so in the top bar.
+  const busy = activeSessions?.some(s => s.sessionId === sessionId && s.status === 'busy');
+  const { data: sessionActivity } = useSessionActivity();
+  const orbTool = inFlightTool(sessionActivity?.find(a => a.sessionId === sessionId));
+
   const { data: sessionList } = useSessionList(project.hash);
   const summary = useMemo(
     () => sessionList?.find(s => s.filename === filename),
@@ -581,23 +596,48 @@ export function TerminalMissionControl({
           // hundred pixels apart read as two different readings.
           <span className="flex items-center" style={{ gap: 14 }}>
             <BackgroundShells shells={backgroundShells} liveSince={liveSince} />
-            {terminalMounted && (
+            {/* While Claude works, the thinking orb takes the status slot: it
+                says more than RUNNING (a turn in flight implies the process is
+                up), and it shows for a session run in a terminal elsewhere,
+                which has no pane status of its own to print here. */}
+            {busy ? (
               <span
                 className="flex items-center font-mono uppercase"
-                style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
+                title="Claude is working"
+                style={{
+                  gap: 7,
+                  fontSize: 9.5,
+                  letterSpacing: '0.16em',
+                  color: 'var(--cl-violet-ink)',
+                }}
               >
-                <span
-                  aria-hidden
-                  className={termStatus === 'running' ? 'cl-live-dot' : ''}
-                  style={{
-                    width: 7,
-                    height: 7,
-                    borderRadius: '50%',
-                    background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
-                  }}
-                />
-                {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
+                <LiveOrb tone="violet" tool={orbTool} />
+                WORKING
               </span>
+            ) : (
+              terminalMounted && (
+                <span
+                  className="flex items-center font-mono uppercase"
+                  style={{
+                    gap: 7,
+                    fontSize: 9.5,
+                    letterSpacing: '0.16em',
+                    color: 'var(--cl-ink-3)',
+                  }}
+                >
+                  <span
+                    aria-hidden
+                    className={termStatus === 'running' ? 'cl-live-dot' : ''}
+                    style={{
+                      width: 7,
+                      height: 7,
+                      borderRadius: '50%',
+                      background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
+                    }}
+                  />
+                  {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
+                </span>
+              )
             )}
           </span>
         }

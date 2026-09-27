@@ -4354,7 +4354,9 @@ body {
   align-items: baseline;
   gap: 9px;
   max-width: min(560px, 74vw);
-  padding: 6px 13px;
+  /* trimmed for the 20px orb, which is taller than the sentence's line, and
+     tight on the left so it sits in the pill's round end */
+  padding: 5px 13px 5px 7px;
   border: 1px solid var(--cl-line);
   border-radius: 999px;
   background: color-mix(in oklch, var(--cl-paper) 92%, transparent);
@@ -4374,14 +4376,10 @@ body {
   cursor: default;
   animation: cl-thought-in 0.22s ease-out;
 }
-.cl-thought-dot {
-  flex: none;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--cl-accent);
-  /* Static. The line changing IS the motion here — a pulsing dot would be a
-     second animation competing with the one that carries meaning. */
+/* Centred, not on the baseline the text shares: a canvas's baseline is its
+   bottom edge, which would lift the orb above the sentence. */
+.cl-thought .cl-live-orb {
+  align-self: center;
 }
 .cl-thought-text {
   min-width: 0;
@@ -4539,7 +4537,9 @@ body {
   align-items: center;
   gap: 7px;
   margin-top: 2px;
-  padding: 4px 11px;
+  /* the 20px orb is taller than the text line: trimmed so the pill keeps its
+     height, and tight on the left so the orb sits in the pill's round end */
+  padding: 2px 11px 2px 5px;
   border: 1px solid var(--cl-line);
   border-radius: 999px;
   background: var(--cl-paper-2);
@@ -4553,13 +4553,13 @@ body {
 .cl-live-tool .s {
   color: var(--cl-ink-4);
 }
-.cl-live-tool .dot {
+/* The thinking orb (`LiveOrb`, a canvas) — here at the head of the chip and on
+   its own where the caret would blink while the model thinks with no text; the
+   same element in the narration line, Mission Control and the Monitor. */
+.cl-live-orb {
   flex: none;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--cl-accent);
-  animation: cl-composer-blink 1s steps(2) infinite;
+  display: inline-block;
+  vertical-align: middle;
 }
 .cl-composer-error {
   padding: 8px 12px;
@@ -19517,7 +19517,8 @@ select.cl-opt-input {
 }
 /* Nothing in the grid pulses. The halo belongs to the band, which is the only
    thing on this page still asking for something; a working session is expected
-   to be working. */
+   to be working. (Its NOW row does move — the thinking orb — but that is what
+   it is doing, not a call for you.) */
 @keyframes cl-mx-beat {
   0% {
     box-shadow: 0 0 0 0 color-mix(in oklch, var(--cl-accent) 55%, transparent);
@@ -19628,6 +19629,13 @@ select.cl-opt-input {
   width: 5px;
   height: 5px;
   border-radius: 1.5px;
+}
+/* The thinking orb of a working cell: centred rather than on the text's
+   baseline, and pulled into the row's padding so it never makes this row taller
+   than a neighbour's — FIXED ANATOMY lines the ribbons of a grid row up. */
+.cl-mx-now .cl-live-orb {
+  align-self: center;
+  margin: -3px 0 -3px -5px;
 }
 .cl-mx-now b {
   font-weight: 600;

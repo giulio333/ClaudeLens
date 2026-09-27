@@ -10,6 +10,7 @@ import { TopBar } from '../shared/TopBar';
 import { fmt, fmtCost, fmtModel, formatTokens } from '../utils';
 import { projectDisplayName } from '../shared/projectName';
 import { TOOL_TINT } from '../chat/utils';
+import { LiveOrb } from '../../LiveOrb';
 import { buildRibbon, RIBBON_WINDOW } from './trace';
 
 // The Monitor: every Claude process running on this machine — what is blocked on
@@ -857,7 +858,15 @@ function ProcessCell({ card, now }: { card: Card; now: number }) {
           that is not history. Its own inset block, because what a process is
           doing right now is a different kind of claim from what it did. */}
       <div className="cl-mx-now">
-        <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
+        {/* A working cell opens on the thinking orb, in the sage of its WORKING
+            tag, animating the tool in flight — or the sub-agent it waits on,
+            whose name then holds `tool`. Every other state keeps the static
+            tool-tint swatch. */}
+        {card.state === 'working' ? (
+          <LiveOrb tone="ok" tool={card.delegateSince !== null ? 'Agent' : card.tool} />
+        ) : (
+          <i className="dot" style={{ background: toolTint(card.tool) }} aria-hidden />
+        )}
         {card.tool && <b>{card.tool}</b>}
         <span className="arg">{card.doing}</span>
       </div>

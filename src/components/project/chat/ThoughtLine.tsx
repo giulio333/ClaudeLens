@@ -1,3 +1,4 @@
+import { LiveOrb } from '../../LiveOrb';
 import { Thought } from './thoughts';
 
 /**
@@ -19,6 +20,10 @@ import { Thought } from './thoughts';
  * ellipsis, never a wrap — a sentence that reflowed to two lines would move the
  * pill under it, and this surface's whole contract is that nothing on the page
  * moves when it speaks. The untruncated sentence stays in the `title`.
+ *
+ * It opens on the thinking orb (`LiveOrb`) animating the sentence's tool — it
+ * was a static dot, on the view that the line changing was motion enough; the
+ * orb says what KIND of action the sentence is about before it is read.
  */
 export function ThoughtLine({ thought }: { thought: Thought }) {
   return (
@@ -26,7 +31,7 @@ export function ThoughtLine({ thought }: { thought: Thought }) {
       className="cl-thought"
       title={`${thought.text}\n\n${thought.tool} — Claude's own note for this action`}
     >
-      <span className="cl-thought-dot" aria-hidden />
+      <LiveOrb tool={thought.tool} />
       <span className="cl-thought-text">{thought.text}</span>
       <span className="cl-thought-tool">{thought.tool}</span>
     </div>
