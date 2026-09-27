@@ -45,18 +45,41 @@ function mount(threads: MessageThread[], extra: Partial<Parameters<typeof Messag
 }
 
 describe('the messages dock', () => {
-  it('draws one card per counterpart, with what it is and the last thing said', () => {
+  it('draws one row per counterpart, with who it is, when, and the last thing said', () => {
     const { container } = mount([
       thread({ key: 'pid:900', party: 'acme-37', received: 2, sent: 1, msgId: 'm-2' }),
     ]);
 
-    const card = container.querySelector('[data-testid="thread"]')!;
-    expect(card.querySelector('.cl-msgdock-party')?.textContent).toBe('acme-37');
-    expect(card.querySelector('.cl-msgdock-what')?.textContent).toBe('session');
-    expect(card.querySelector('.cl-msgdock-preview')?.textContent).toBe('idle here too');
-    expect(card.querySelector('.cl-msgdock-time')?.textContent).toBe('7m');
-    // The counts are a hover fact, not a fourth column.
-    expect(card.getAttribute('title')).toContain('2 received · 1 sent');
+    const row = container.querySelector('[data-testid="thread"]')!;
+    expect(row.querySelector('.cl-msgdock-party')?.textContent).toBe('acme-37');
+    expect(row.querySelector('.cl-msgdock-preview')?.textContent).toBe('idle here too');
+    expect(row.querySelector('.cl-msgdock-time')?.textContent).toBe('7m');
+    // What the other party is lives in the tile, on the feed's grid — not in a
+    // label squeezed beside the name.
+    expect(row.classList.contains('is-session')).toBe(true);
+    expect(row.querySelector('.cl-msgdock-tile')?.textContent).toBe('⇄');
+    // The kind and the counts are a hover fact, not more columns.
+    expect(row.getAttribute('title')).toContain('acme-37 — session');
+    expect(row.getAttribute('title')).toContain('2 received · 1 sent');
+  });
+
+  it('prints the preview as text, not as markdown punctuation', () => {
+    const { container } = mount([
+      thread({
+        key: 'agent:t-1',
+        party: 'list test files',
+        kind: 'agent',
+        last: {
+          direction: 'in',
+          at: at(3),
+          text: '\n**40 files** under `test/` have the `// @vitest-environment` docblock.\nMore.',
+          turnN: 5,
+        },
+      }),
+    ]);
+    expect(container.querySelector('.cl-msgdock-preview')?.textContent).toBe(
+      '40 files under test/ have the // @vitest-environment docblock.'
+    );
   });
 
   it('prefers the summary a sent message carried over its text', () => {
@@ -74,8 +97,10 @@ describe('the messages dock', () => {
         },
       }),
     ]);
+    // What this session said reads as its own, the way a messenger's list does.
+    expect(container.querySelector('.cl-msgdock-you')?.textContent).toBe('You: ');
     expect(container.querySelector('.cl-msgdock-preview')?.textContent).toBe(
-      'Asking what it is doing'
+      'You: Asking what it is doing'
     );
   });
 
@@ -102,19 +127,27 @@ describe('the messages dock', () => {
     fireEvent.click(agent);
     expect(onLocateTurn).toHaveBeenCalledWith(9);
     expect(onOpenExchange).toHaveBeenCalledTimes(1);
-    expect(agent.querySelector('.cl-msgdock-what')?.textContent).toBe('agent in this session');
+    expect(agent.classList.contains('is-agent')).toBe(true);
+    expect(agent.querySelector('.cl-msgdock-tile')?.textContent).toBe('A');
+    expect(agent.getAttribute('title')).toContain('agent in this session');
   });
 
-  it('says so when the last message did not leave, instead of counting it', () => {
+  it('says so when the last message did not leave, and nothing when it did', () => {
     const { container } = mount([
       thread({
         key: 'name:acme-9d',
         party: 'acme-9d',
         last: { direction: 'out', at: at(1), text: 'hello?', state: 'failed', turnN: 2 },
       }),
+      thread({
+        key: 'pid:900',
+        party: 'acme-37',
+        last: { direction: 'out', at: at(4), text: 'ok', state: 'sent', turnN: 3 },
+      }),
     ]);
-    expect(container.querySelector('.cl-msgdock-state')?.textContent).toBe('FAILED');
-    expect(container.querySelector('.cl-msgdock-count')).toBeNull();
+    const [failed, sent] = [...container.querySelectorAll('[data-testid="thread"]')];
+    expect(failed.querySelector('.cl-msgdock-state')?.textContent).toBe('FAILED');
+    expect(sent.querySelector('.cl-msgdock-state')).toBeNull();
   });
 
   it('folds away on ask and stays folded across the StrictMode remount', () => {

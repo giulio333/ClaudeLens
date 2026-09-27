@@ -338,10 +338,19 @@ un'operazione con un esito (un glifo, una riga, uno stato), un messaggio è una
 battuta di una conversazione — la domanda del lettore è "con chi sta parlando
 questa sessione e qual è stata l'ultima cosa detta", che è la forma della
 sidebar di un messenger, non quella di un log. Quindi si raggruppa per
-interlocutore: monogramma tondo nel colore che un messaggio porta nel
-transcript (accent per una sessione, ink per un agente interno), nome, cosa
-l'altra parte È, l'ultima battuta con la sua direzione (`⇣`/`⇡`) e il conteggio;
-`N received · N sent` sta nel `title`, non in una quarta colonna. **Nessuna IPC
+interlocutore — ma sulla **griglia del feed** (tempo, tile da 20px, testo), non
+più su card: la prima versione aveva card bordate, un monogramma tondo (la
+iniziale della `description` di un agente, che non diceva niente), l'etichetta
+`agent in this session` schiacciata accanto al nome, la freccia `⇣`/`⇡`, un
+badge col conteggio e un'anteprima di una riga col markdown stampato — cinque
+cose per una conversazione, e il testo tagliato proprio dove serviva. Ora una
+riga dice tre cose: **chi** (il tile — la `A` viola che il feed dà a quello
+stesso agente, l'`⇄` accent della pagina dello scambio per un'altra sessione —
+poi il nome), **quando**, e **l'ultima battuta** su due righe (`line-clamp: 2`)
+passata da `previewLine` di `chat/message-line.ts`, con `You:` davanti quando
+l'ha detta questa sessione. Cosa sia l'altra parte e `N received · N sent`
+stanno nel `title`; un chip compare solo per un messaggio mandato che non è
+partito (`SENDING`/`NO DELIVERY`/`FAILED`). **Nessuna IPC
 nuova**: entrambe le metà sono già in `processed` — la ricevuta è un turno con
 `inbound` (#274), la mandata un tool group `SendMessage` (`chat/sent-message.ts`).
 

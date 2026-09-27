@@ -173,10 +173,11 @@ transcript is silent, so an older publish with no `seq` shows no version and one
 with no `audience` says nothing about who can open it; and MIN keeps a published
 page as one line beside the agent, skill and plan strips) and
 `messages-dock` (Mission Control's own surface for the conversations a session
-is having, kept out of the event feed on purpose: one card per counterpart with
-what it is and the last thing said, the summary preferred over the text for the
-preview, a thread with an id opening the exchange while an agent's locates its
-turn, a last message that did not leave saying so instead of being counted, and
+is having, kept out of the event feed on purpose but drawn on its grid: one row
+per counterpart whose tile says what it is, and the last thing said — the
+summary preferred over the text, markdown stripped, `You:` in front of what this
+session said — a thread with an id opening the exchange while an agent's locates
+its turn, a chip only for a last message that did not leave, and
 no dock at all for a session that talked to nobody — its threading half, which
 keys a conversation on the pid the receiver verified rather than on a name the
 party can change, is `mission-messages`) and
