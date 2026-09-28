@@ -215,6 +215,9 @@ export const ATTACHMENT_TYPES = {
   advisor_stripped: unknown(
     'a bare `{type}`, always right after a `thinking_stripped` row in a session that consulted the advisor earlier. The consult rows stay in the file and still draw as markers, so nothing the view shows is lost. A row with a payload (a scope, which consults) would say whether it marks the consults leaving the model context — the question `thinking_stripped` already asks'
   ),
+  inlined_image_paths: ignored(
+    'follows a human turn with a pasted image: tells the model where the harness saved a copy (under ~/.claude/uploads/<session>/) and not to Read it just to look. The picture itself is the `image` block on that user row, already drawn'
+  ),
 };
 
 /**
@@ -553,6 +556,9 @@ export const FIELDS = {
   ),
   'attachment.attachment.toolChange': ignored(
     '"add" on an `advisor_tool` attachment when the reviewer became available; the consults are what the view draws'
+  ),
+  'attachment.attachment.paths': ignored(
+    'on an `inlined_image_paths` attachment: the saved copies of the pasted images, which the user row already carries as `image` blocks'
   ),
   // Was a candidate: the page drew as a plain chip, because its result has url,
   // title and version but no artifact_id and the reader required both. The URL
