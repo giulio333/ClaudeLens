@@ -4,7 +4,15 @@ import Markdown from '../../Markdown';
 import { ImageFigure } from '../../ImageFigure';
 import { imageDataUri } from '../../image-src';
 import type { ChatImage } from '../../../types';
-import { ToolGroup, isMemoryFile, fileExt, TOOL_TINT } from './utils';
+import {
+  ToolGroup,
+  isMemoryFile,
+  fileExt,
+  TOOL_TINT,
+  EXIT_PLAN_TOOL,
+  PLAN_OUTCOME_LABEL,
+  planOutcome,
+} from './utils';
 import { resolveLang } from './code-lang';
 import { CopyButton, IconButton, ExpandIcon, CloseIcon, SheetModal } from './CommandBlock';
 import {
@@ -22,7 +30,7 @@ import {
 } from './file-view';
 import type { FileRow } from './file-view';
 
-type FileKind = 'Read' | 'Write' | 'Edit';
+type FileKind = 'Read' | 'Write' | 'Edit' | 'Plan';
 
 /** Rows drawn before the window asks to be unfolded — a clamp and not a nested
  *  scroller, for the terminal's reason: a scrollbar inside a transcript that
@@ -30,7 +38,7 @@ type FileKind = 'Read' | 'Write' | 'Edit';
  *  same news: an edit or a new file is what the turn did, a read is what it
  *  looked at on the way — the most frequent call and the least informative, so
  *  a turn of six reads must not be six tall dark slabs. */
-const ROW_CLAMP: Record<FileKind, number> = { Read: 12, Write: 24, Edit: 24 };
+const ROW_CLAMP: Record<FileKind, number> = { Read: 12, Write: 24, Edit: 24, Plan: 24 };
 
 const NO_ROWS: FileRow[] = [];
 
@@ -143,12 +151,40 @@ function editBody(
   };
 }
 
+/** The plan an `ExitPlanMode` presented, as the call carries it — the text the
+ *  user was asked about, not the file under `~/.claude/plans`, which a later
+ *  round of planning rewrites in place. A refusal prints under it: with
+ *  feedback, it is what the user said instead. */
+function planBody(input: Record<string, unknown>, result: ToolGroup['result']): Body {
+  const plan = typeof input.plan === 'string' ? input.plan : '';
+  const rows = contentRows(plan);
+  const outcome = planOutcome(result);
+  return {
+    rows,
+    note: result && outcome !== 'approved' ? result.content : '',
+    status: `${PLAN_OUTCOME_LABEL[outcome].toLowerCase()} · ${lines(rows.length)}`,
+    copyText: plan,
+    copyLabel: 'Copy plan',
+  };
+}
+
+/** A plan's state is its outcome: awaiting an answer, approved, or not. */
+function planState(result: ToolGroup['result']): Sheet['state'] {
+  const outcome = planOutcome(result);
+  return outcome === 'awaiting' ? 'pending' : outcome === 'approved' ? 'ok' : 'error';
+}
+
 /** What the window says, derived once from the tool call and its result. */
 function buildSheet(
   kind: FileKind,
   input: Record<string, unknown>,
   result: ToolGroup['result']
 ): Sheet {
+  if (kind === 'Plan') {
+    const path = typeof input.planFilePath === 'string' ? input.planFilePath : '';
+    const state = planState(result);
+    return { kind, path, dir: path ? shortDir(path) : '', state, ...planBody(input, result) };
+  }
   const path = typeof input.file_path === 'string' ? input.file_path : '';
   const state: Sheet['state'] = !result ? 'pending' : result.isError ? 'error' : 'ok';
   const resultText = result?.content ?? '';
@@ -197,7 +233,11 @@ function EditorWindow({
   // the same fragments the whole file would, and a 2000-line write folded to
   // 24 rows does not pay for 2000.
   const html = useMemo(() => highlightRows(shown, language), [shown, language]);
-  const tint = memory ? 'var(--cl-violet)' : (TOOL_TINT[sheet.kind] ?? 'var(--cl-ink-3)');
+  const tint = memory
+    ? 'var(--cl-violet)'
+    : sheet.kind === 'Plan'
+      ? 'var(--cl-accent)'
+      : (TOOL_TINT[sheet.kind] ?? 'var(--cl-ink-3)');
   const [copied, setCopied] = useState(false);
   // The bar says where the file sits, shortened; fullscreen has the width to
   // say it whole. Either way a click copies the real path, because a path you
@@ -330,7 +370,8 @@ export function FileSheet({
   const [expanded, setExpanded] = useState(false);
   const [full, setFull] = useState(false);
 
-  const kind: FileKind = name === 'Read' || name === 'Write' ? name : 'Edit';
+  const kind: FileKind =
+    name === 'Read' || name === 'Write' ? name : name === EXIT_PLAN_TOOL ? 'Plan' : 'Edit';
   const sheet = useMemo(() => buildSheet(kind, input, result), [kind, input, result]);
   const language = resolveLang(fileExt(sheet.path));
   const memory = isMemoryFile(input);
@@ -342,8 +383,11 @@ export function FileSheet({
   // the document the turn produced, so that is the one that opens; a read is a
   // slice of a file, numbered where it started, so its rows stay and the
   // document is one click away. An edit is a diff and has no second reading.
-  const markdown = kind !== 'Edit' && sheet.state === 'ok' && isMarkdownPath(sheet.path);
-  const [asDocument, setAsDocument] = useState(kind === 'Write');
+  // A plan is a document whatever became of it: a rejected one is still the
+  // plan the user was shown.
+  const markdown =
+    kind === 'Plan' || (kind !== 'Edit' && sheet.state === 'ok' && isMarkdownPath(sheet.path));
+  const [asDocument, setAsDocument] = useState(kind === 'Write' || kind === 'Plan');
   const preview =
     markdown && sheet.copyText
       ? { on: asDocument, onToggle: () => setAsDocument(d => !d) }

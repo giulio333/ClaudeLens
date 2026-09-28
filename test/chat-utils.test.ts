@@ -1232,6 +1232,19 @@ describe('toolRunStatus', () => {
       tone: 'is-ok',
     });
   });
+
+  it("reads a plan's run as its outcome, in the words its card uses", () => {
+    const approved = { content: 'User has approved your plan.', isError: false } as never;
+    const denied = { content: 'Denied by the user.', isError: true } as never;
+    expect(toolRunStatus(approved, 'ExitPlanMode')).toEqual({ label: 'Approved', tone: 'is-ok' });
+    expect(toolRunStatus(denied, 'ExitPlanMode')).toEqual({ label: 'Rejected', tone: 'is-error' });
+    expect(toolRunStatus(null, 'ExitPlanMode')).toEqual({
+      label: 'Awaiting approval',
+      tone: 'is-pending',
+    });
+    // Any other tool keeps the generic verdict.
+    expect(toolRunStatus(denied, 'Bash')).toEqual({ label: 'Error', tone: 'is-error' });
+  });
 });
 
 // The model the conversation is on is not a session property: `/model` changes

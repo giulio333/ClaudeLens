@@ -4,7 +4,7 @@ import { ToolGroup, isMemoryFile, toolMonogram, TOOL_TINT, AGENT_TOOLS } from '.
 import { ToolInput, ToolOutput } from './ToolDetailPanel';
 import { CommandSheet } from './CommandBlock';
 import { FileSheet } from './FileWindow';
-import { isFileTool } from './file-view';
+import { hasFileWindow } from './file-view';
 import { ownsToolBody, ownsOutputHead } from './shell';
 import { ArtifactCard } from './ArtifactCard';
 import { artifactAction, artifactOf, isArtifactTool } from './artifact';
@@ -79,7 +79,7 @@ export function ToolGroupCard({
   if (isMessageTool(use.name)) {
     return <OutboundMessage group={group} compact={collapsible} />;
   }
-  if (!collapsible && isFileTool(use.name)) {
+  if (!collapsible && hasFileWindow(use.name)) {
     return (
       <div className="cl-tool-window">
         <FileSheet name={use.name} input={use.input as Record<string, unknown>} result={result} />
@@ -183,7 +183,7 @@ export function ToolGroupCard({
                 showDescription={false}
               />
             </div>
-          ) : isFileTool(use.name) ? (
+          ) : hasFileWindow(use.name) ? (
             <div className="cl-tool-card-section">
               <FileSheet
                 name={use.name}

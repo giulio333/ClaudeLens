@@ -2,11 +2,18 @@ import Markdown from '../../Markdown';
 import { ImageFigure } from '../../ImageFigure';
 import { imageDataUri } from '../../image-src';
 import type { ReactNode } from 'react';
-import { ToolGroup, isMemoryFile, resolveToolIcon, SKILL_TOOL } from './utils';
+import {
+  ToolGroup,
+  isMemoryFile,
+  resolveToolIcon,
+  SKILL_TOOL,
+  EXIT_PLAN_TOOL,
+  toolRunStatus,
+} from './utils';
 import { PathChip, SectionLabel, CodeBlock, UrlChip } from './atoms';
 import { CommandBlock, CommandOutput, CommandSheet } from './CommandBlock';
 import { FileSheet } from './FileWindow';
-import { isFileTool } from './file-view';
+import { hasFileWindow } from './file-view';
 import { ownsToolBody, ownsOutputHead, isShellOutput } from './shell';
 import {
   parseHttpFailure,
@@ -166,8 +173,7 @@ function ToolDetailShell({
   noHero?: boolean;
   noBar?: boolean;
 }) {
-  const status = result ? (result.isError ? 'Error' : 'Complete') : 'Pending';
-  const statusClass = result ? (result.isError ? 'is-error' : 'is-ok') : 'is-pending';
+  const { label: status, tone: statusClass } = toolRunStatus(result, name);
   // The hero exists to carry a title the breadcrumb can't: a search query, a
   // fetched page, an agent's description. For `Edit` / `Read` / `Bash` the title
   // *is* the tool name, so the page said the same word four times — bar, kicker,
@@ -911,7 +917,9 @@ export function ToolDetailPanel({
         ? 'Web page'
         : name === WEB_SEARCH
           ? 'Web search'
-          : 'Tool execution';
+          : name === EXIT_PLAN_TOOL
+            ? 'Plan'
+            : 'Tool execution';
 
   return (
     <ToolDetailShell
@@ -941,7 +949,7 @@ export function ToolDetailPanel({
             <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
               <CommandSheet input={input} result={result} showCommand showDescription />
             </section>
-          ) : isFileTool(name) ? (
+          ) : hasFileWindow(name) ? (
             // Same for a file: the editor window carries input and result.
             <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
               <FileSheet name={name} input={input} result={result} />

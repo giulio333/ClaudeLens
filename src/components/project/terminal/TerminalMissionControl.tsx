@@ -699,8 +699,10 @@ export function TerminalMissionControl({
                 )}
                 <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
                 {overlay?.kind === 'tool' && (
-                  <span className={`cl-tool-status ${toolRunStatus(overlay.group.result).tone}`}>
-                    {toolRunStatus(overlay.group.result).label}
+                  <span
+                    className={`cl-tool-status ${toolRunStatus(overlay.group.result, overlay.group.use.name).tone}`}
+                  >
+                    {toolRunStatus(overlay.group.result, overlay.group.use.name).label}
                   </span>
                 )}
                 {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}

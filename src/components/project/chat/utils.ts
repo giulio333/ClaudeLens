@@ -366,6 +366,40 @@ export function isQuestionDismissed(text: string): boolean {
   return /tool use was rejected/i.test(text) || /no answer provided/i.test(text);
 }
 
+export const EXIT_PLAN_TOOL = 'ExitPlanMode';
+
+/** What became of a plan `ExitPlanMode` presented, read off the call's own
+ *  result: an approval is a plain result ("User has approved your plan…"), a
+ *  refusal is an error opening with the rejection Claude Code writes — or the
+ *  SDK chat's own deny, `chat-permissions`' "Denied by the user." — and any
+ *  other error is a plan that was not approved without saying who stopped it.
+ *  The phrase has to OPEN the result: an approval repeats the whole plan after
+ *  `## Approved Plan:`, and a plan about permissions quotes those very words.
+ *  No result: nobody has answered yet, the reading `AskQuestionCard` gives a
+ *  question. */
+export type PlanOutcome = 'approved' | 'rejected' | 'not-approved' | 'awaiting';
+
+const PLAN_REFUSAL =
+  /^\s*(?:the user doesn't want to proceed with this tool use|the tool use was rejected|denied by the user)/i;
+
+export function planOutcome(result: ToolGroup['result']): PlanOutcome {
+  if (!result) return 'awaiting';
+  if (!result.isError) return 'approved';
+  return PLAN_REFUSAL.test(result.content) ? 'rejected' : 'not-approved';
+}
+
+export const PLAN_OUTCOME_LABEL: Record<PlanOutcome, string> = {
+  approved: 'Approved',
+  rejected: 'Rejected',
+  'not-approved': 'Not approved',
+  awaiting: 'Awaiting approval',
+};
+
+/** The plan's first heading — every plan in the corpus opens with one. */
+export function planTitle(plan: string): string | null {
+  return plan.match(/^#+\s*(.+)$/m)?.[1].trim() || null;
+}
+
 // ──────────────────────────────────────────────────────────────────────────
 // Turn role resolution — single source of truth shared by MessageBubble
 // (rendering) and ChatView (navigation minimap + type filters). Mirrors the
@@ -1258,11 +1292,22 @@ export function buildMemoryActivity(
 /** How a tool call ended, and the chip class that says so. Pure and shared
  *  because two surfaces need the same verdict from the same `result`: the detail
  *  panel, and the frame hosting it when the panel is chromeless (the status chip
- *  then rides the frame's control row — see `TerminalMissionControl`). */
-export function toolRunStatus(result: ToolGroup['result']): {
-  label: 'Complete' | 'Error' | 'Pending';
+ *  then rides the frame's control row — see `TerminalMissionControl`). A plan's
+ *  run is its outcome — `Complete` on an approved plan and `Error` on a refused
+ *  one are not the words its card uses. */
+export function toolRunStatus(
+  result: ToolGroup['result'],
+  name?: string
+): {
+  label: string;
   tone: 'is-ok' | 'is-error' | 'is-pending';
 } {
+  if (name === EXIT_PLAN_TOOL) {
+    const outcome = planOutcome(result);
+    const tone =
+      outcome === 'approved' ? 'is-ok' : outcome === 'awaiting' ? 'is-pending' : 'is-error';
+    return { label: PLAN_OUTCOME_LABEL[outcome], tone };
+  }
   if (!result) return { label: 'Pending', tone: 'is-pending' };
   return result.isError
     ? { label: 'Error', tone: 'is-error' }

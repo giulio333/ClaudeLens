@@ -6,7 +6,7 @@
  *  (`test/file-view.test.ts`), not code buried in JSX.
  */
 
-import { writeAction } from './utils';
+import { EXIT_PLAN_TOOL, writeAction } from './utils';
 import type { FileChangeSource } from './utils';
 import type { BashEditHunk } from '../../../types';
 import { highlightLines } from './code-lang';
@@ -37,6 +37,13 @@ export const FILE_TOOLS = new Set(['Read', 'Write', 'Edit']);
 
 export function isFileTool(name: string): boolean {
   return FILE_TOOLS.has(name);
+}
+
+/** The calls drawn as an editor window: the file tools, and the plan an
+ *  `ExitPlanMode` presented — a markdown document, though not a file the call
+ *  touched, which is why it is not in `FILE_TOOLS`. */
+export function hasFileWindow(name: string): boolean {
+  return FILE_TOOLS.has(name) || name === EXIT_PLAN_TOOL;
 }
 
 /** `'a\nb\n'` is two lines, not three: the trailing newline closes the last

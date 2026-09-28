@@ -154,6 +154,14 @@ and the row highlighting, which colours each side of a diff whole so a `"""`
 docstring stays a string on every row it spans, over `code-lang`'s
 `highlightLines`, the cut of hljs' HTML into one balanced fragment per line —
 is `file-view`) and
+`plan-card` (the plan an `ExitPlanMode` presented, #278: the MIN card is the
+plan's title and its outcome read off the call's own result — `Approved`,
+`Rejected` for Claude Code's refusal or the SDK chat's deny, `Not approved` for
+any other error, `Awaiting approval` with no result — never a slice of the
+body, and an approval, which repeats the whole plan, stays `Approved` when the
+plan quotes a refusal; the click opens that call, and FULL's window and the detail panel draw
+the plan as its rendered document, a rejected one included, with what the
+user said printed under it) and
 `exchange-view` (the page an inbound message opens, #280: it asks for the
 exchange of the message it was opened on, draws the messages in the reader's
 order attributed to their senders with the entry marked, states the pair once

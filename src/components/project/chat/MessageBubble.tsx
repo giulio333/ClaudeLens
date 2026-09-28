@@ -24,6 +24,10 @@ import {
   PLAN_TOOLS,
   QUESTION_TOOL,
   SKILL_TOOL,
+  EXIT_PLAN_TOOL,
+  PLAN_OUTCOME_LABEL,
+  planOutcome,
+  planTitle,
 } from './utils';
 import { fmtModel, modelColor } from '../utils';
 import { agentTintColor } from '../shared/entityOptions';
@@ -272,31 +276,32 @@ function ThinkingNote({ text, findKey }: { text: string; findKey: string }) {
 }
 
 /** Plan-mode milestone rendered as an editorial card. EnterPlanMode is a bare
- *  marker; ExitPlanMode carries the proposed plan (title + snippet), click → detail. */
+ *  marker; ExitPlanMode is the plan's title and what became of it — the plan
+ *  itself is one click away, drawn as the document it is (`FileSheet`). */
 function PlanCard({ group, onOpen }: { group: ToolGroup; onOpen: () => void }) {
   const input = group.use.input as Record<string, unknown>;
-  const isExit = group.use.name === 'ExitPlanMode';
-  const planText = typeof input.plan === 'string' ? input.plan : '';
-  const titleMatch = planText.match(/^#+\s*(.+)$/m);
-  const title = titleMatch ? titleMatch[1].trim() : 'Plan presented';
-  const snippet = planText
-    .replace(/^#+\s*.+$/m, '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 280);
+  const isExit = group.use.name === EXIT_PLAN_TOOL;
+  const title = planTitle(typeof input.plan === 'string' ? input.plan : '') ?? 'Untitled plan';
+  const outcome = planOutcome(group.result);
 
   return (
-    <button type="button" className="cl-plan-card" onClick={onOpen} title="View plan detail">
+    <button
+      type="button"
+      className="cl-plan-card"
+      onClick={onOpen}
+      title={isExit ? 'Open the plan' : 'View plan detail'}
+    >
       <span className="top">
         <span className="ic">P</span>
         <span className="lbl">{isExit ? 'Plan' : 'Plan mode'}</span>
-        {isExit && <span className="chip">presented</span>}
+        {isExit && (
+          <span className="chip" data-outcome={outcome}>
+            {PLAN_OUTCOME_LABEL[outcome]}
+          </span>
+        )}
       </span>
       {isExit ? (
-        <>
-          <span className="title">{title}</span>
-          {snippet && <span className="snippet">{snippet}</span>}
-        </>
+        <span className="title">{title}</span>
       ) : (
         <span className="desc">Claude entered plan mode to design an approach before editing.</span>
       )}

@@ -755,8 +755,10 @@ export function ChatView({
                   // controls (tags, Chat/Timeline) act on what is behind it.
                   <>
                     {selectedTool && (
-                      <span className={`cl-tool-status ${toolRunStatus(selectedTool.result).tone}`}>
-                        {toolRunStatus(selectedTool.result).label}
+                      <span
+                        className={`cl-tool-status ${toolRunStatus(selectedTool.result, selectedTool.use.name).tone}`}
+                      >
+                        {toolRunStatus(selectedTool.result, selectedTool.use.name).label}
                       </span>
                     )}
                     <CloseOverlayButton label="Back to chat" onClose={detailBack} />
