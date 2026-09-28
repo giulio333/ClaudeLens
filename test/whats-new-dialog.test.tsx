@@ -48,6 +48,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A model', description: 'Priced.', visual: 'model-picker' },
     { title: 'A host', description: 'Beta.', visual: 'remote' },
     { title: 'A shell', description: 'In the top bar.', visual: 'background-shells' },
+    { title: 'An orb', description: 'While it works.', visual: 'live-orb' },
   ],
 };
 
@@ -145,6 +146,10 @@ describe('WhatsNewDialog', () => {
     const note = container.querySelector('.cl-thinking-note');
     expect(note?.querySelector('.cl-thinking-note-tag')?.textContent).toBe('Thinking');
     expect(note?.textContent).toContain('The loop is wrong, not the tests.');
+    // The live turn's chip opens on the orb and carries the call's own note.
+    const chip = container.querySelector('.cl-turn--live .cl-live-tool')!;
+    expect(chip.querySelector('.cl-live-orb')).not.toBeNull();
+    expect(chip.textContent).toContain('Run the full test suite');
     // The Model picker is open on the session's Opus 5.5, and every alias says
     // which version it runs on — `opus` still meaning Opus 5.
     const menu = container.querySelector('.cl-whatsnew-frame--composer .cl-composer-menu')!;

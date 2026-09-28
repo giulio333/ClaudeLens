@@ -21,6 +21,7 @@ import {
   type WhatsNewRelease,
 } from '../data/whats-new';
 import { MessageBubble } from './project/chat/MessageBubble';
+import { LiveTurn } from './project/chat/LiveTurn';
 import { PromptPlaybookPanel } from './project/chat/PromptPlaybook';
 import { ContextRail } from './project/chat/ContextRail';
 import { contextFiles } from './project/chat/context-files';
@@ -764,6 +765,43 @@ function BackgroundShellsVisual(): ReactNode {
   );
 }
 
+// The SDK chat's live turn while a call runs: the real `LiveTurn`, its chip
+// opening on the orb in the tool's own animation and carrying the call's note,
+// as the chat draws it. The elapsed seconds are fixed — the SDK's heartbeat is
+// what moves them, and nothing here streams.
+const ORB_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-orb-1',
+    role: 'user',
+    timestamp: '2026-09-27T11:02:00.000Z',
+    content: [{ type: 'text', text: 'Run the suite before you push.' }],
+  }),
+];
+
+function LiveOrbVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame">
+      <div className="cl-transcript-inner">
+        {ORB_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={30 + i}
+          />
+        ))}
+        <LiveTurn
+          text=""
+          tool={{ toolName: 'Bash', elapsedSeconds: 14 }}
+          thought="Run the full test suite"
+          turnNumber={31}
+        />
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -776,6 +814,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'model-picker': ModelPickerVisual,
   remote: RemoteVisual,
   'background-shells': BackgroundShellsVisual,
+  'live-orb': LiveOrbVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

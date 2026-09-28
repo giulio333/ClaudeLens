@@ -25,7 +25,8 @@ export interface WhatsNewHighlight {
     | 'thinking-note'
     | 'model-picker'
     | 'remote'
-    | 'background-shells';
+    | 'background-shells'
+    | 'live-orb';
 }
 
 export interface WhatsNewRelease {
@@ -34,6 +35,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.30',
+    highlights: [
+      {
+        title: 'See Claude at work',
+        description:
+          'While Claude works, a small orb moves the way the tool it is running does — searching, writing or waiting on an agent.',
+        where: 'The live chat, the terminal pane’s top bar, Mission Control and the Monitor',
+        visual: 'live-orb',
+      },
+    ],
+  },
   {
     version: '2.2.29',
     highlights: [
