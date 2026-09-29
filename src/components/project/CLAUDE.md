@@ -368,6 +368,23 @@ thread ha un id da unire (una sessione dall'altra parte), altrimenti
 `onLocateTurn` sull'ultimo messaggio: un agente interno non ha uno scambio.
 Vista coperta da `test/messages-dock.test.tsx` (StrictMode).
 
+**Mission Control — l'`EnvironmentStrip`** (`terminal/EnvironmentStrip.tsx` +
+`terminal/mcp-health.ts`): **una riga sola**, anche quando degli MCP sono
+caduti. Prima i server falliti erano stampati sotto la riga per nome intero —
+`plugin:acme:calendar` ripete il plugin su ogni server che
+spedisce, e quattro server erano tre righe a capo in un rail che non ha spazio
+per un elenco. Ora sono un **conteggio** (`● 4 MCP`, danger) accanto alla
+pillola del permission mode, e l'elenco sta nella readout card che il
+conteggio alza su hover o focus (stesso idioma e stessa `cl-vitals-pop--up`
+delle `VitalsPopover`, perché la striscia è in fondo e la card deve salire):
+**un gruppo per plugin o per scope** di configurazione, col prefisso detto una
+volta come intestazione. La card dice che la connessione è fallita **quando la
+config del progetto è stata letta** — l'handshake viene dal probe di
+`config-reader`, non dalla sessione in corso — e non dà il motivo, che
+l'handshake non porta (`error` sta solo in `mcpServerStatus()`, un secondo
+giro dell'SDK): rimanda a `/mcp`, che li elenca e può ritentare la connessione. Coperta da
+`test/environment-strip.test.tsx` (StrictMode) e `test/mcp-health.test.ts`.
+
 **Shell in background — nella top bar, non in Mission Control**
 (`terminal/background-shells.ts` + `terminal/BackgroundShells.tsx`). Il "1 shell"
 che la CLI stampa nel suo footer: i comandi che Claude ha lasciato girare

@@ -27,7 +27,9 @@ export interface InitInfo {
    *  run because the bundled one is missing (#289). */
   cliSource: 'bundled' | 'path';
   tools: string[];
-  mcpServers: { name: string; status: string }[];
+  /** `source` is where the server was defined (`plugin`, `user`, `project`, …),
+   *  absent on CLIs that predate the field. */
+  mcpServers: { name: string; status: string; source?: string }[];
   slashCommands: string[];
   outputStyle: string;
   skills: string[];
@@ -114,7 +116,7 @@ function mapInit(m: Record<string, unknown>): InitInfo {
     claudeCodeVersion: String(m.claude_code_version ?? ''),
     cliSource: 'bundled',
     tools: (m.tools as string[]) ?? [],
-    mcpServers: (m.mcp_servers as { name: string; status: string }[]) ?? [],
+    mcpServers: (m.mcp_servers as InitInfo['mcpServers']) ?? [],
     slashCommands: (m.slash_commands as string[]) ?? [],
     outputStyle: String(m.output_style ?? ''),
     skills: (m.skills as string[]) ?? [],

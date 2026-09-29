@@ -14,7 +14,7 @@ import {
   useSessionSubagents,
 } from '../../../hooks/useIPC';
 import type { Agent, MemoryTopic, Skill } from '../../../hooks/useIPC';
-import type { InitInfo, TeamSummary } from '../../../types';
+import type { TeamSummary } from '../../../types';
 import { liveLeadSession, teamLabel } from '../teams/utils';
 import {
   buildMemoryActivity,
@@ -48,6 +48,7 @@ import {
 import type { FeedEvent, FeedKind, FileChange } from './mission-feed';
 import { ContextPopover, SpendPopover } from './VitalsPopover';
 import { MessagesDock } from './MessagesDock';
+import { EnvironmentStrip } from './EnvironmentStrip';
 import { buildMessageThreads } from './mission-messages';
 import type { RemoteTranscript } from '../../remote-origin';
 
@@ -78,7 +79,8 @@ import type { RemoteTranscript } from '../../remote-origin';
  * native `title` tooltips for one release, which is where the numbers
  * effectively went missing: an unstyled OS rectangle a second late. The read-only session
  * ENVIRONMENT (permission mode, capability counts, failed MCP) is state, not an
- * event, so it holds a slim strip pinned at the bottom.
+ * event, so it holds a slim strip pinned at the bottom (`EnvironmentStrip`) —
+ * one row, the failed MCP servers a count on it and the list in its hover card.
  *
  * Rows are single click targets, as a feed should be: an agent opens its
  * transcript (falling back to its definition when no transcript exists yet), a
@@ -136,98 +138,6 @@ function DiffNum({ added, removed, size = 9 }: { added: number; removed: number;
       <span style={{ color: 'var(--cl-ok)' }}>+{fmt(added)}</span>
       <span style={{ color: 'var(--cl-danger)' }}>−{fmt(removed)}</span>
     </span>
-  );
-}
-
-const PERM_LABEL: Record<string, string> = {
-  default: 'DEFAULT',
-  acceptEdits: 'ACCEPT EDITS',
-  plan: 'PLAN MODE',
-  bypassPermissions: 'BYPASS',
-};
-
-/**
- * Read-only session environment from the Agent SDK init handshake — captured by
- * aborting a one-turn query *before* any model turn, so it costs zero tokens
- * (see config-reader.ts). Surfaces what the TUI never shows: the resolved
- * permission mode and how much capability is wired up (tools/skills/agents
- * available, not just what happened to run).
- *
- * It is pinned under the feed rather than dropped into it: none of this is an
- * event — it is the session's standing setup, true for every row above it.
- *
- * MCP is deliberately *not* counted: the globally-configured gateway servers
- * (claude.ai/*) sit pending/needs-auth in every project and never get used, so
- * a total is the same noise everywhere. Only `failed` servers earn a line, since
- * a connection that broke is the one MCP signal actually worth acting on.
- */
-function EnvironmentStrip({ init }: { init: InitInfo | null }) {
-  if (!init) return null;
-  const perm = PERM_LABEL[init.permissionMode] ?? init.permissionMode.toUpperCase();
-  const danger = init.permissionMode === 'bypassPermissions';
-  const failedMcp = init.mcpServers.filter(s => {
-    const s2 = s.status.toLowerCase();
-    return s2 === 'failed' || s2.includes('error');
-  });
-  const caps = [
-    { label: 'TOOLS', n: init.tools.length },
-    { label: 'SKILLS', n: init.skills.length },
-    { label: 'AGENTS', n: init.agents.length },
-  ].filter(c => c.n > 0);
-  return (
-    <div
-      className="shrink-0"
-      style={{ borderTop: '1px solid var(--cl-line)', padding: '10px 20px' }}
-    >
-      <div className="flex items-center" style={{ gap: 10 }}>
-        <span
-          className="font-mono"
-          style={{
-            fontSize: 9,
-            fontWeight: 700,
-            letterSpacing: '0.12em',
-            padding: '3px 8px',
-            borderRadius: 999,
-            color: danger ? 'var(--cl-on-accent)' : 'var(--cl-ink-2)',
-            background: danger ? 'var(--cl-danger)' : 'transparent',
-            border: `1px solid ${danger ? 'var(--cl-danger)' : 'var(--cl-line)'}`,
-          }}
-          title="Resolved permission mode for this session"
-        >
-          {perm}
-        </span>
-        <span style={{ flex: 1 }} />
-        {caps.map(c => (
-          <span
-            key={c.label}
-            className="font-mono"
-            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)' }}
-          >
-            <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{c.n}</b> {c.label}
-          </span>
-        ))}
-      </div>
-      {failedMcp.length > 0 && (
-        <div className="flex flex-wrap items-center" style={{ gap: 8, marginTop: 8 }}>
-          <span
-            className="font-mono shrink-0"
-            style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-danger)' }}
-          >
-            MCP FAILED
-          </span>
-          {failedMcp.map(s => (
-            <span
-              key={s.name}
-              className="font-mono truncate"
-              style={{ fontSize: 10, color: 'var(--cl-ink-3)' }}
-              title={`MCP server "${s.name}" failed to connect`}
-            >
-              {s.name}
-            </span>
-          ))}
-        </div>
-      )}
-    </div>
   );
 }
 

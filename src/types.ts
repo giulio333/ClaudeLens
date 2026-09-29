@@ -1005,7 +1005,9 @@ export interface InitInfo {
   /** `path` when the bundled CLI is missing and the user's own `claude` answered. */
   cliSource: 'bundled' | 'path';
   tools: string[];
-  mcpServers: { name: string; status: string }[];
+  /** `source` is where the server was defined (`plugin`, `user`, `project`, …),
+   *  absent on CLIs that predate the field. */
+  mcpServers: { name: string; status: string; source?: string }[];
   slashCommands: string[];
   outputStyle: string;
   skills: string[];

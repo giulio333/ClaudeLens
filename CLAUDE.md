@@ -207,6 +207,11 @@ with the process that exited — and reports the latest ending, then
 lists each outcome, a row opening the shell's window over the session; it states the
 command, the clock times, the exit code, how it reached the background, who
 stopped it, and nothing the transcript does not hold) and
+`environment-strip` (the strip at the foot of Mission Control: a failed MCP
+server is one count on the strip's own row, never a list under it, and the
+servers are a hover or focus away, one line per plugin or config scope with the
+`plugin:<name>:` prefix said once as the header — a server waiting for auth is
+not a failure; the grouping is `mcp-health`) and
 `exchange-thread` (the pure half of that page: which side a message is on,
 where a run of one party's messages starts, the wall time the conversation
 covers — and nothing rather than "0s" for a single message) and
