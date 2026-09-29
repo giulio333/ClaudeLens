@@ -14560,6 +14560,15 @@ button.cl-sw-member:focus-visible,
   font-size: 11px;
   color: var(--cl-ink-4);
 }
+/* A plugin Claude Code does not load: its name recedes and says so. */
+.cl-plugin-node.is-off .name {
+  color: var(--cl-ink-4);
+}
+.cl-plugin-node .off {
+  font-size: 10.5px;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink-4);
+}
 
 /* The pane: the selected plugin's index, one reading column. */
 .cl-plugin-pane {
@@ -14586,6 +14595,17 @@ button.cl-sw-member:focus-visible,
   font-size: 15.5px;
   line-height: 1.5;
   color: var(--cl-ink-2);
+}
+.cl-plugin-off {
+  margin-top: 10px;
+  font-family: var(--font-reading);
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--cl-ink-3);
+}
+.cl-plugin-off code {
+  font-family: var(--font-mono);
+  font-size: 12px;
 }
 /* The icon disc: the accent's one job on this page. It sits behind every
    mark that names a fact or a kind, so colour always means "a label". */

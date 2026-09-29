@@ -73,19 +73,29 @@ export function repoUrl(repo: string): string | null {
 }
 
 /** The install path with the part every plugin shares cut off — the reader
- * already knows it all lives under `~/.claude/plugins`. */
+ * already knows it all lives under `~/.claude/plugins`. A synced plugin's
+ * folder sits under one named by two account UUIDs, which say nothing to a
+ * reader and are shortened to `…` (the full path is the fact's tooltip). */
 export function shortInstallPath(installPath: string): string {
   const i = installPath.indexOf('/.claude/plugins/');
-  return i >= 0 ? installPath.slice(i + '/.claude/plugins/'.length) : installPath;
+  const rel = i >= 0 ? installPath.slice(i + '/.claude/plugins/'.length) : installPath;
+  return rel.replace(/^synced\/[0-9a-f-]+_[0-9a-f-]+\//i, 'synced/…/');
 }
 
 export interface PluginKey {
+  source: InstalledPlugin['source'];
   marketplace: string;
   name: string;
 }
 
 export function samePlugin(a: PluginKey, b: PluginKey): boolean {
-  return a.marketplace === b.marketplace && a.name === b.name;
+  return a.source === b.source && a.marketplace === b.marketplace && a.name === b.name;
+}
+
+/** The tree's key for a marketplace folder: a synced catalogue may share its
+ * name with an installed one, and each folder collapses on its own. */
+export function marketplaceKey(plugin: Pick<InstalledPlugin, 'source' | 'marketplace'>): string {
+  return `${plugin.source}:${plugin.marketplace}`;
 }
 
 /** Plugins grouped by marketplace, in the order the backend sorted them. */

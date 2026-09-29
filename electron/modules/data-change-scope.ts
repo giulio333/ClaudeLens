@@ -65,7 +65,13 @@ export function scopesForPath(path: string, claudeDir: string): DataScope[] | nu
     case 'workflows':
       return ['studio'];
     case 'plugins':
-      return rest[1] === 'installed_plugins.json' ? ['plugins'] : null;
+      // `installed_plugins.json`, or the list claude.ai syncs to an account
+      // (`synced/<org>_<account>/manifest.json`).
+      if (rest[1] === 'installed_plugins.json') return ['plugins'];
+      if (rest[1] === 'synced' && rest.length === 4 && rest[3] === 'manifest.json') {
+        return ['plugins'];
+      }
+      return null;
     default:
       return null;
   }

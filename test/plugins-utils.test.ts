@@ -2,9 +2,11 @@ import {
   describeVersion,
   firstSentence,
   groupByMarketplace,
+  marketplaceKey,
   pluginComponentCount,
   pluginComponentSummary,
   repoUrl,
+  samePlugin,
   shortInstallPath,
   stepPlugin,
 } from '../src/components/project/plugins/utils';
@@ -15,6 +17,8 @@ function plugin(overrides: Partial<InstalledPlugin> = {}): InstalledPlugin {
     name: 'test-plugin',
     marketplace: 'test-marketplace',
     scope: 'user',
+    source: 'marketplace',
+    enabled: true,
     version: '1.0.0',
     installPath: '/nowhere',
     skills: [],
@@ -189,5 +193,22 @@ describe('shortInstallPath', () => {
 
   it('leaves a path outside that root whole', () => {
     expect(shortInstallPath('/opt/plugins/tool')).toBe('/opt/plugins/tool');
+  });
+
+  it('shortens the account folder of a synced plugin, which is two UUIDs', () => {
+    const bucket = '11111111-2222-4333-8444-555555555555_66666666-7777-4888-9999-aaaaaaaaaaaa';
+    expect(shortInstallPath(`/Users/alice/.claude/plugins/synced/${bucket}/data`)).toBe(
+      'synced/…/data'
+    );
+  });
+});
+
+describe('samePlugin and marketplaceKey', () => {
+  it('tell a synced plugin from an installed one with the same name and marketplace', () => {
+    const installed = plugin({ name: 'data', marketplace: 'kw' });
+    const synced = plugin({ name: 'data', marketplace: 'kw', source: 'synced' });
+    expect(samePlugin(installed, synced)).toBe(false);
+    expect(samePlugin(synced, { source: 'synced', marketplace: 'kw', name: 'data' })).toBe(true);
+    expect(marketplaceKey(installed)).not.toBe(marketplaceKey(synced));
   });
 });

@@ -608,6 +608,8 @@ export interface InstalledPlugin {
   name: string;
   marketplace: string;
   scope: 'user';
+  source: 'marketplace' | 'synced';
+  enabled: boolean;
   version: string;
   installPath: string;
   description?: string;

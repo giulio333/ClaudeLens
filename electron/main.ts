@@ -177,6 +177,7 @@ const TEAMS_DIR = join(CLAUDE_DIR, 'teams');
 // installed_plugins.json: rinfresca la sezione Plugins su install/update/remove
 // (la cache dei plugin cambia spesso e non va osservata interamente).
 const INSTALLED_PLUGINS_FILE = join(CLAUDE_DIR, 'plugins', 'installed_plugins.json');
+const SYNCED_PLUGINS_DIR = join(CLAUDE_DIR, 'plugins', 'synced');
 
 type IpcResult<T> = { data: T | null; error: string | null };
 type ExportSaveResult = { canceled: boolean; filePath: string | null };
@@ -2573,6 +2574,20 @@ async function startWatcher() {
   watcher.on('change', notifyAndRefreshStudioWatches);
   watcher.on('unlink', notifyAndRefreshStudioWatches);
   watcher.on('unlinkDir', notifyAndRefreshStudioWatches);
+
+  // Plugins claude.ai syncs to an account (`plugins/synced/<org>_<account>/`).
+  // Only each folder's manifest.json says which are there; the plugin trees
+  // below it are rewritten wholesale by a sync round, so the watch stops at the
+  // manifest's level and a path the classifier cannot place is dropped here
+  // instead of read as "unknown", which would invalidate every query.
+  const syncedPluginsWatcher = watch(SYNCED_PLUGINS_DIR, { ignoreInitial: true, depth: 1 });
+  const onSyncedPluginsEvent = (path: string) => {
+    const scopes = scopesForPath(path, CLAUDE_DIR);
+    if (scopes) notify(scopes);
+  };
+  syncedPluginsWatcher.on('add', onSyncedPluginsEvent);
+  syncedPluginsWatcher.on('change', onSyncedPluginsEvent);
+  syncedPluginsWatcher.on('unlink', onSyncedPluginsEvent);
 
   // Registro sessioni vive (~/.claude/sessions/<pid>.json): push dedicato al
   // renderer invece del polling. Il file NON heartbeat-a — la CLI lo riscrive

@@ -159,7 +159,8 @@ function Fact({
 }
 
 /* The facts that place the plugin, each behind the mark that names it: the
-   marketplace it came from, the repo behind that marketplace, the version or
+   marketplace it came from, the repo behind that marketplace — or, for a
+   plugin claude.ai syncs to the account, that it is synced — the version or
    commit pinned, who wrote it, and where it sits on disk. A fact the
    plugin does not carry is simply not there. */
 function Facts({ plugin }: { plugin: InstalledPlugin }) {
@@ -170,6 +171,11 @@ function Facts({ plugin }: { plugin: InstalledPlugin }) {
       <Fact icon="marketplace" label="Marketplace">
         {plugin.marketplace}
       </Fact>
+      {plugin.source === 'synced' && (
+        <Fact icon="source" label="Source">
+          Synced from claude.ai
+        </Fact>
+      )}
       {plugin.repo && (
         <Fact icon="source" label="Source">
           {url ? (
@@ -222,6 +228,11 @@ export function PluginDetailView({
     <article className="cl-plugin-page">
       <h1 className="cl-plugin-title">{plugin.name}</h1>
       {plugin.description && <p className="cl-plugin-summary">{plugin.description}</p>}
+      {!plugin.enabled && (
+        <p className="cl-plugin-off">
+          Off: Claude Code does not load this plugin. Turn it on with <code>/plugin</code>.
+        </p>
+      )}
       <Facts plugin={plugin} />
 
       <div className="cl-plugin-index">

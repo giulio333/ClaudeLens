@@ -5,6 +5,7 @@ import { PluginIcon } from './icons';
 import { PluginDetailView, PluginItem, PluginItemView } from './PluginDetailView';
 import {
   groupByMarketplace,
+  marketplaceKey,
   pluginComponentCount,
   pluginComponentSummary,
   PluginKey,
@@ -30,16 +31,18 @@ function PluginNode({
   onSelect: () => void;
 }) {
   const count = pluginComponentCount(plugin);
+  const summary = pluginComponentSummary(plugin);
   return (
     <button
       type="button"
-      className={`cl-plugin-node${selected ? ' is-selected' : ''}`}
+      className={`cl-plugin-node${selected ? ' is-selected' : ''}${plugin.enabled ? '' : ' is-off'}`}
       aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
-      title={pluginComponentSummary(plugin)}
+      title={plugin.enabled ? summary : `${summary} · off, Claude Code does not load it`}
     >
       <PluginIcon name="plugin" size={14} />
       <span className="name">{plugin.name}</span>
+      {!plugin.enabled && <span className="off">off</span>}
       {count > 0 && <span className="ct">{count}</span>}
     </button>
   );
@@ -107,7 +110,8 @@ export function PluginsView({ onBack }: { onBack: () => void }) {
   const [open, setOpen] = useState<PluginItem | null>(null);
 
   const list = plugins ?? [];
-  const groups = groupByMarketplace(list);
+  const installed = groupByMarketplace(list.filter(p => p.source === 'marketplace'));
+  const synced = groupByMarketplace(list.filter(p => p.source === 'synced'));
   // The selection is a key, not an object, so a watcher refresh (install,
   // update) re-resolves it against the fresh list; a plugin that went away
   // falls back to the first one rather than leaving the pane on stale data.
@@ -117,21 +121,31 @@ export function PluginsView({ onBack }: { onBack: () => void }) {
     return <PluginItemView item={open} plugin={selected} onBack={() => setOpen(null)} />;
   }
 
-  const toggle = (marketplace: string) =>
+  const toggle = (key: string) =>
     setCollapsed(prev => {
       const next = new Set(prev);
-      if (next.has(marketplace)) next.delete(marketplace);
-      else next.add(marketplace);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
       return next;
     });
+
+  const select = (p: InstalledPlugin) =>
+    setSelectedKey({ source: p.source, marketplace: p.marketplace, name: p.name });
 
   const onTreeKey = (e: KeyboardEvent<HTMLElement>) => {
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
     e.preventDefault();
-    const visible = list.filter(p => !collapsed.has(p.marketplace));
+    const visible = list.filter(p => !collapsed.has(marketplaceKey(p)));
     const next = stepPlugin(visible, selected, e.key === 'ArrowDown' ? 1 : -1);
-    if (next) setSelectedKey({ marketplace: next.marketplace, name: next.name });
+    if (next) select(next);
   };
+
+  // One heading per source, in the order the backend sorted them — installed
+  // first — so the arrow keys walk the tree top to bottom.
+  const sections = [
+    { title: 'Marketplaces', groups: installed },
+    { title: 'Synced from claude.ai', groups: synced },
+  ].filter(s => s.groups.size > 0);
 
   return (
     <div className="h-full flex flex-col" style={{ background: 'var(--cl-paper)' }}>
@@ -161,17 +175,24 @@ export function PluginsView({ onBack }: { onBack: () => void }) {
               </p>
               <p className="cl-plugin-tree-path">~/.claude/plugins</p>
             </div>
-            <h2 className="cl-plugin-tree-kicker">Marketplaces</h2>
-            {[...groups.entries()].map(([marketplace, mpPlugins]) => (
-              <MarketplaceNode
-                key={marketplace}
-                marketplace={marketplace}
-                plugins={mpPlugins}
-                expanded={!collapsed.has(marketplace)}
-                selected={selected}
-                onToggle={() => toggle(marketplace)}
-                onSelect={p => setSelectedKey({ marketplace: p.marketplace, name: p.name })}
-              />
+            {sections.map(section => (
+              <div key={section.title}>
+                <h2 className="cl-plugin-tree-kicker">{section.title}</h2>
+                {[...section.groups.entries()].map(([marketplace, mpPlugins]) => {
+                  const key = marketplaceKey(mpPlugins[0]);
+                  return (
+                    <MarketplaceNode
+                      key={key}
+                      marketplace={marketplace}
+                      plugins={mpPlugins}
+                      expanded={!collapsed.has(key)}
+                      selected={selected}
+                      onToggle={() => toggle(key)}
+                      onSelect={select}
+                    />
+                  );
+                })}
+              </div>
             ))}
           </aside>
           <div className="cl-plugin-pane">

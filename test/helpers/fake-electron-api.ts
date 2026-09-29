@@ -45,6 +45,7 @@ import type {
   DeleteRequest,
   DeleteSessionResult,
   EffectiveConfig,
+  InstalledPlugin,
   LiveEvent,
   LiveWatchStatus,
   SessionActivity,
@@ -229,6 +230,12 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     getEffective: vi.fn(async (_cwd?: string) => ok<EffectiveConfig | null>(null)),
   };
 
+  // The plugins Claude Code can load: installed from a marketplace, or synced
+  // by claude.ai to the logged-in account.
+  const plugins = {
+    getAll: vi.fn(async () => ok<InstalledPlugin[]>([])),
+  };
+
   const prefs = {
     getAll: vi.fn(async () => ok<Record<string, unknown>>({})),
     set: vi.fn(async (_key: string, _value: unknown) => ok(null)),
@@ -348,6 +355,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     updates,
     projects,
     config,
+    plugins,
     prefs,
     live,
     memory,

@@ -76,6 +76,13 @@ describe('scopesForPath', () => {
     expect(scopes(join(CLAUDE, 'plugins', 'installed_plugins.json'))).toEqual(['plugins']);
   });
 
+  it('maps the manifest of a synced plugin folder to plugins, and nothing else under it', () => {
+    const bucket = join(CLAUDE, 'plugins', 'synced', 'org-id_account-id');
+    expect(scopes(join(bucket, 'manifest.json'))).toEqual(['plugins']);
+    expect(scopes(join(bucket, 'data', 'skills', 'analyze', 'SKILL.md'))).toBeNull();
+    expect(scopes(join(bucket, 'data.meta.json'))).toBeNull();
+  });
+
   it('maps a project-local .claude/workflows script to studio', () => {
     // Native workflow location outside ~/.claude — watched all the same.
     expect(scopes(join('/Users', 'tester', 'code', 'app', '.claude', 'workflows', 'x.js'))).toEqual(

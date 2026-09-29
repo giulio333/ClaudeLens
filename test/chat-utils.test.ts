@@ -569,6 +569,8 @@ const pluginDef = (name: string, skills: Skill[]): InstalledPlugin => ({
   name,
   marketplace: 'mkt',
   scope: 'user',
+  source: 'marketplace',
+  enabled: true,
   version: '1.0.0',
   installPath: `/Users/x/.claude/plugins/${name}`,
   skills,

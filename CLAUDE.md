@@ -16,7 +16,8 @@ neither offered nor accepted), `terminal-osc` (what a program in the terminal pa
 to this machine: an OSC 52 copy, never a clipboard read or clear, and a click
 on an http(s) OSC 8 link), `bg-sessions-reader`, `agents-live-status`,
 `vault-index`, `wikilinks`, `artifact`, `session-exchange`, `context-files`, `background-shells`, `plugins-reader` (the `.mcp.json` and
-`hooks/hooks.json` parsers), `remote-ssh`, `remote-ssh-windows` and `remote-hosts-store`
+`hooks/hooks.json` parsers, and the whole read over a temp `~/.claude`: the plugins claude.ai syncs to the
+logged-in account and never another login's, and which plugins `enabledPlugins` turns off), `remote-ssh`, `remote-ssh-windows` and `remote-hosts-store`
 (#242 — the connect script is run for real, through every login shell the machine has
 and, for a Windows host, through `pwsh` where there is one, against a stub `claude`
 under a temp home), `remote-watch` and `remote-transcript` (#294 — the watcher
@@ -207,6 +208,10 @@ with the process that exited — and reports the latest ending, then
 lists each outcome, a row opening the shell's window over the session; it states the
 command, the clock times, the exit code, how it reached the background, who
 stopped it, and nothing the transcript does not hold) and
+`plugins-view` (the Plugins page: a plugin claude.ai syncs to the account sits under
+its own heading and says so, one Claude Code does not load is marked in the tree and on its
+page, and a synced plugin sharing name and marketplace with an installed one stays its own
+entry) and
 `environment-strip` (the strip at the foot of Mission Control: a failed MCP
 server is one count on the strip's own row, never a list under it, and the
 servers are a hover or focus away, one line per plugin or config scope with the
