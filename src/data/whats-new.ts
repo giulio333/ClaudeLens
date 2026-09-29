@@ -26,7 +26,8 @@ export interface WhatsNewHighlight {
     | 'model-picker'
     | 'remote'
     | 'background-shells'
-    | 'live-orb';
+    | 'live-orb'
+    | 'plan';
 }
 
 export interface WhatsNewRelease {
@@ -35,6 +36,24 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.31',
+    highlights: [
+      {
+        title: 'What became of a plan',
+        description:
+          'A plan card now says whether you approved or rejected it, and opens the plan as the document it is.',
+        where: 'Any session transcript',
+        visual: 'plan',
+      },
+      {
+        title: 'Plugins synced from claude.ai',
+        description:
+          'The plugins claude.ai syncs to your account are listed beside the installed ones, and a plugin turned off is marked off.',
+        where: 'Global · Plugins',
+      },
+    ],
+  },
   {
     version: '2.2.30',
     highlights: [

@@ -49,6 +49,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A host', description: 'Beta.', visual: 'remote' },
     { title: 'A shell', description: 'In the top bar.', visual: 'background-shells' },
     { title: 'An orb', description: 'While it works.', visual: 'live-orb' },
+    { title: 'A plan', description: 'And its outcome.', visual: 'plan' },
   ],
 };
 
@@ -146,6 +147,16 @@ describe('WhatsNewDialog', () => {
     const note = container.querySelector('.cl-thinking-note');
     expect(note?.querySelector('.cl-thinking-note-tag')?.textContent).toBe('Thinking');
     expect(note?.textContent).toContain('The loop is wrong, not the tests.');
+    // Each plan card is the plan's title and what the user did with it, read
+    // off the call's own result: the refused round, then the approved one.
+    const plans = [...container.querySelectorAll('.cl-plan-card')].map(card => [
+      card.querySelector('.title')?.textContent,
+      card.querySelector('.chip')?.textContent,
+    ]);
+    expect(plans).toEqual([
+      ['Split the reader into two passes', 'Rejected'],
+      ['Merge the extras in the same pass', 'Approved'],
+    ]);
     // The live turn's chip opens on the orb and carries the call's own note.
     const chip = container.querySelector('.cl-turn--live .cl-live-tool')!;
     expect(chip.querySelector('.cl-live-orb')).not.toBeNull();

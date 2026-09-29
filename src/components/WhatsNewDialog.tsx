@@ -802,6 +802,70 @@ function LiveOrbVisual(): ReactNode {
   );
 }
 
+// Two rounds of plan mode, as the transcript carries them: a first plan the
+// user turned down — Claude Code's own refusal, with what they said after it —
+// and the revised one they approved, which the result repeats in full. Each
+// card reads its outcome off that result, as it does in a real session.
+const REJECTED_PLAN =
+  '# Split the reader into two passes\n\n## Steps\n\n1. Read the rows\n2. Merge the extras\n';
+const APPROVED_PLAN =
+  '# Merge the extras in the same pass\n\n## Steps\n\n1. Read each row once\n2. Attach its extras as it goes\n';
+
+function planRound(id: string, plan: string, minute: number, result: string, isError: boolean) {
+  return [
+    {
+      uuid: `wn-plan-${id}-a`,
+      role: 'assistant' as const,
+      model: 'claude-opus-5-5',
+      timestamp: `2026-09-28T10:${minute}:00.000Z`,
+      content: [
+        {
+          type: 'tool_use' as const,
+          id: `wn-plan-${id}`,
+          name: 'ExitPlanMode',
+          input: { plan, planFilePath: '/home/acme/.claude/plans/quiet-river-fox.md' },
+        },
+      ],
+    },
+    {
+      uuid: `wn-plan-${id}-u`,
+      role: 'user' as const,
+      timestamp: `2026-09-28T10:${minute + 1}:00.000Z`,
+      content: [
+        { type: 'tool_result' as const, toolUseId: `wn-plan-${id}`, content: result, isError },
+      ],
+    },
+  ];
+}
+
+const PLAN_TURNS: ProcessedMessage[] = buildProcessedMessages([
+  {
+    uuid: 'wn-plan-ask',
+    role: 'user',
+    timestamp: '2026-09-28T10:10:00.000Z',
+    content: [{ type: 'text', text: 'Plan how the reader should merge the extras.' }],
+  },
+  ...planRound(
+    '1',
+    REJECTED_PLAN,
+    12,
+    "The user doesn't want to proceed with this tool use. The tool use was rejected. " +
+      'To tell you how to proceed, the user said:\nkeep the single pass',
+    true
+  ),
+  ...planRound(
+    '2',
+    APPROVED_PLAN,
+    14,
+    `User has approved your plan. You can now start coding.\n\n## Approved Plan:\n${APPROVED_PLAN}`,
+    false
+  ),
+]);
+
+function PlanVisual(): ReactNode {
+  return <TranscriptFrame turns={PLAN_TURNS} />;
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -815,6 +879,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   remote: RemoteVisual,
   'background-shells': BackgroundShellsVisual,
   'live-orb': LiveOrbVisual,
+  plan: PlanVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the
