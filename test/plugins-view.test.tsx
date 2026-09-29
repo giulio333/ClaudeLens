@@ -131,4 +131,22 @@ describe('PluginsView', () => {
     expect(nodes[1].getAttribute('aria-current')).toBe('true');
     expect(nodes[0].getAttribute('aria-current')).toBeNull();
   });
+
+  it('lists a plugin with neither field as installed and on, never as off', async () => {
+    // What a main process older than `source`/`enabled` sends: a dev run whose
+    // Electron started before the rebuild landed. The tree went empty and the
+    // first plugin read "Off" — a claim nothing on disk made.
+    const legacy = plugin({ name: 'legacy', description: 'From an older main process.' });
+    delete (legacy as Partial<InstalledPlugin>).source;
+    delete (legacy as Partial<InstalledPlugin>).enabled;
+    bridge.api.plugins.getAll.mockResolvedValue(ok([legacy]));
+
+    const { container } = mount();
+
+    expect(await screen.findByRole('heading', { name: 'legacy' })).toBeTruthy();
+    expect(screen.getByText('Marketplaces')).toBeTruthy();
+    expect(treeNode('legacy').classList.contains('is-off')).toBe(false);
+    expect(screen.queryByText(/Claude Code does not load this plugin/)).toBeNull();
+    expect(container.querySelector('.cl-plugin-node .off')).toBeNull();
+  });
 });

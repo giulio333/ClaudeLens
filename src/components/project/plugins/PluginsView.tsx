@@ -5,6 +5,7 @@ import { PluginIcon } from './icons';
 import { PluginDetailView, PluginItem, PluginItemView } from './PluginDetailView';
 import {
   groupByMarketplace,
+  isPluginOff,
   marketplaceKey,
   pluginComponentCount,
   pluginComponentSummary,
@@ -32,17 +33,18 @@ function PluginNode({
 }) {
   const count = pluginComponentCount(plugin);
   const summary = pluginComponentSummary(plugin);
+  const off = isPluginOff(plugin);
   return (
     <button
       type="button"
-      className={`cl-plugin-node${selected ? ' is-selected' : ''}${plugin.enabled ? '' : ' is-off'}`}
+      className={`cl-plugin-node${selected ? ' is-selected' : ''}${off ? ' is-off' : ''}`}
       aria-current={selected ? 'true' : undefined}
       onClick={onSelect}
-      title={plugin.enabled ? summary : `${summary} · off, Claude Code does not load it`}
+      title={off ? `${summary} · off, Claude Code does not load it` : summary}
     >
       <PluginIcon name="plugin" size={14} />
       <span className="name">{plugin.name}</span>
-      {!plugin.enabled && <span className="off">off</span>}
+      {off && <span className="off">off</span>}
       {count > 0 && <span className="ct">{count}</span>}
     </button>
   );
@@ -110,7 +112,9 @@ export function PluginsView({ onBack }: { onBack: () => void }) {
   const [open, setOpen] = useState<PluginItem | null>(null);
 
   const list = plugins ?? [];
-  const installed = groupByMarketplace(list.filter(p => p.source === 'marketplace'));
+  // Anything not said to be synced is installed — including a plugin from a
+  // main process that predates `source`, which would otherwise drop out of the tree.
+  const installed = groupByMarketplace(list.filter(p => p.source !== 'synced'));
   const synced = groupByMarketplace(list.filter(p => p.source === 'synced'));
   // The selection is a key, not an object, so a watcher refresh (install,
   // update) re-resolves it against the fresh list; a plugin that went away

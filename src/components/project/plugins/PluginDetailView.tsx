@@ -8,6 +8,7 @@ import {
   describeMcpServer,
   describeVersion,
   firstSentence,
+  isPluginOff,
   repoUrl,
   shortInstallPath,
 } from './utils';
@@ -228,7 +229,7 @@ export function PluginDetailView({
     <article className="cl-plugin-page">
       <h1 className="cl-plugin-title">{plugin.name}</h1>
       {plugin.description && <p className="cl-plugin-summary">{plugin.description}</p>}
-      {!plugin.enabled && (
+      {isPluginOff(plugin) && (
         <p className="cl-plugin-off">
           Off: Claude Code does not load this plugin. Turn it on with <code>/plugin</code>.
         </p>

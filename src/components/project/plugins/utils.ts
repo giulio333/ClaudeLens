@@ -92,6 +92,14 @@ export function samePlugin(a: PluginKey, b: PluginKey): boolean {
   return a.source === b.source && a.marketplace === b.marketplace && a.name === b.name;
 }
 
+/** Whether the page says Claude Code does not load a plugin. Only an explicit
+ * `false` does: a main process older than the flag — a dev run whose Electron
+ * started before the rebuild landed — sends none, and "off" is a claim about
+ * what Claude Code loads, never a default. */
+export function isPluginOff(plugin: Pick<InstalledPlugin, 'enabled'>): boolean {
+  return plugin.enabled === false;
+}
+
 /** The tree's key for a marketplace folder: a synced catalogue may share its
  * name with an installed one, and each folder collapses on its own. */
 export function marketplaceKey(plugin: Pick<InstalledPlugin, 'source' | 'marketplace'>): string {

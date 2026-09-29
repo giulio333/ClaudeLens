@@ -247,9 +247,7 @@ describe('getInstalledPlugins', () => {
     // Another login on the same machine: its plugins are not loaded now.
     const theirs = bucketDir(OTHER_ORG, OTHER_ACCOUNT);
     write(join(theirs, 'manifest.json'), {
-      plugins: [
-        { name: 'ledger', marketplaceName: 'kw', installationPreference: 'available' },
-      ],
+      plugins: [{ name: 'ledger', marketplaceName: 'kw', installationPreference: 'available' }],
     });
     pluginAt(join(theirs, 'ledger'), { name: 'ledger' });
 
