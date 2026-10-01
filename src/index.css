@@ -20633,7 +20633,8 @@ select.cl-opt-input {
    the Lens, as a remote pane draws them — the top bar without the gutter that
    clears the traffic lights, the banner in the stage's padding. */
 .cl-whatsnew-frame--remote .cl-topbar,
-.cl-whatsnew-frame--shells .cl-topbar {
+.cl-whatsnew-frame--shells .cl-topbar,
+.cl-whatsnew-frame--parked .cl-topbar {
   padding-left: 22px;
   border-bottom: 1px solid var(--cl-line);
 }

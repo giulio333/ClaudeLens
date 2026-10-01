@@ -1,6 +1,7 @@
 import { useEffect, useId, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useActiveSessions } from '../../../hooks/useIPC';
+import type { ActiveSession } from '../../../types';
 import { spanLabel } from './background-shells';
 import { useMinuteClock } from './use-minute-clock';
 import {
@@ -31,17 +32,24 @@ const TONE_LABEL: Record<ChipTone, string> = {
  * Same anatomy as the background-shells pill beside it in Mission Control, and
  * portalled to `<body>` for the same reason: the top bar is a stacking context
  * of its own, so a panel drawn inside it would sit under the page.
+ *
+ * `activeSessions` stands in for the registry where the instances are not real
+ * ones (the "What's new" preview): there, the user's own registry could only
+ * make them idle, or match a live session of theirs.
  */
 export function ParkedTerminals({
   instances,
   onRestore,
   onClose,
+  activeSessions: registryOverride,
 }: {
   instances: readonly TerminalInstance[];
   onRestore: (id: string) => void;
   onClose: (id: string) => void;
+  activeSessions?: readonly ActiveSession[];
 }) {
-  const { data: activeSessions } = useActiveSessions();
+  const { data: registry } = useActiveSessions();
+  const activeSessions = registryOverride ?? registry;
   const now = useMinuteClock(instances.length > 0);
   // Where the badge was when the list opened; null while it is closed.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);

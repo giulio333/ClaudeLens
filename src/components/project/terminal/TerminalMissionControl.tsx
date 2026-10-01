@@ -235,7 +235,7 @@ export function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onTogg
  *  of it. Back is the other exit, the one that ends the session. A round icon
  *  button, the same control as the rail toggle beside it: a window dropping
  *  into a tray. */
-function ParkButton({ onPark }: { onPark: () => void }) {
+export function ParkButton({ onPark }: { onPark: () => void }) {
   const label = 'Keep running in background';
   return (
     <button

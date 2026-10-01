@@ -27,7 +27,8 @@ export interface WhatsNewHighlight {
     | 'remote'
     | 'background-shells'
     | 'live-orb'
-    | 'plan';
+    | 'plan'
+    | 'parked-terminals';
 }
 
 export interface WhatsNewRelease {
@@ -36,6 +37,19 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.32',
+    highlights: [
+      {
+        title: 'Sessions in the background',
+        description:
+          'Send a terminal session to the background and it keeps running while you work elsewhere, behind a badge that says which one needs you.',
+        where:
+          'The round button at the end of a terminal’s top bar; the badge brings a session back',
+        visual: 'parked-terminals',
+      },
+    ],
+  },
   {
     version: '2.2.31',
     highlights: [

@@ -50,6 +50,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A shell', description: 'In the top bar.', visual: 'background-shells' },
     { title: 'An orb', description: 'While it works.', visual: 'live-orb' },
     { title: 'A plan', description: 'And its outcome.', visual: 'plan' },
+    { title: 'Parked', description: 'In the background.', visual: 'parked-terminals' },
   ],
 };
 

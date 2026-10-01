@@ -27,7 +27,7 @@ import { ContextRail } from './project/chat/ContextRail';
 import { contextFiles } from './project/chat/context-files';
 import { ComposerSelect } from './project/chat/ChatComposer';
 import { composerModelOptions } from './project/chat/model-options';
-import type { InitModel } from '../types';
+import type { ActiveSession, InitModel } from '../types';
 import type { PromptCandidate, PromptTemplate } from '../../electron/shared/playbook-types';
 import { buildProcessedMessages, type ProcessedMessage } from './project/chat/utils';
 import type { ArtifactPublish } from '../types';
@@ -37,7 +37,9 @@ import {
   SessionColorFrame,
   SessionColorIdentity,
 } from './project/shared/SessionColorIdentity';
-import { ViewTabs } from './project/terminal/TerminalMissionControl';
+import { ParkButton, ViewTabs } from './project/terminal/TerminalMissionControl';
+import { ParkedTerminals } from './project/terminal/ParkedTerminals';
+import type { TerminalInstance } from './project/terminal/terminal-instances';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
 import { BackgroundShells } from './project/terminal/BackgroundShells';
 import type { BackgroundShell } from './project/terminal/background-shells';
@@ -727,6 +729,23 @@ const SHELLS_TURNS: ProcessedMessage[] = [
   }),
 ];
 
+// The pane status the terminal's top bar prints while its process is up.
+function PreviewRunning(): ReactNode {
+  return (
+    <span
+      className="flex items-center font-mono uppercase"
+      style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
+    >
+      <span
+        aria-hidden
+        className="cl-live-dot"
+        style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-ok)' }}
+      />
+      RUNNING
+    </span>
+  );
+}
+
 function BackgroundShellsVisual(): ReactNode {
   return (
     <div className="cl-whatsnew-frame cl-whatsnew-frame--shells">
@@ -736,17 +755,7 @@ function BackgroundShellsVisual(): ReactNode {
         right={
           <span className="flex items-center" style={{ gap: 14 }}>
             <PreviewBackgroundShells />
-            <span
-              className="flex items-center font-mono uppercase"
-              style={{ gap: 7, fontSize: 9.5, letterSpacing: '0.16em', color: 'var(--cl-ink-3)' }}
-            >
-              <span
-                aria-hidden
-                className="cl-live-dot"
-                style={{ width: 7, height: 7, borderRadius: '50%', background: 'var(--cl-ok)' }}
-              />
-              RUNNING
-            </span>
+            <PreviewRunning />
           </span>
         }
       />
@@ -866,6 +875,109 @@ function PlanVisual(): ReactNode {
   return <TranscriptFrame turns={PLAN_TURNS} />;
 }
 
+// A terminal's top bar with two sessions sent to the background: the real
+// badge, wearing the state of the one that needs the user, and the round
+// button that sends the session on screen to join them. The registry the badge
+// reads is synthetic and passed in — the user's own would match none of these
+// sessions, or one of theirs — and the uptimes are taken when the popup opens,
+// as the shells preview does.
+function PreviewParkedTerminals(): ReactNode {
+  const [preview] = useState(() => {
+    const now = Date.now();
+    const min = 60_000;
+    const parked = (
+      n: number,
+      realPath: string,
+      title: string,
+      color: TerminalInstance['report']['color']
+    ): TerminalInstance => ({
+      id: `wn-park-${n}`,
+      view: {
+        type: 'terminal',
+        project: { hash: `wn-park-project-${n}`, realPath },
+        resumeSessionId: `wn-park-session-${n}`,
+      },
+      report: { pid: null, sessionId: `wn-park-session-${n}`, title, color, termStatus: 'running' },
+    });
+    const instances = [
+      parked(1, '/home/acme/billing', 'Migrate the invoice tables', 'blue'),
+      parked(2, '/home/acme/web', 'Fix the flaky login test', null),
+    ];
+    const registry: ActiveSession[] = [
+      {
+        pid: 0,
+        sessionId: 'wn-park-session-1',
+        cwd: '/home/acme/billing',
+        status: 'waiting',
+        waitingFor: 'permission prompt',
+        startedAt: now - 34 * min,
+        source: 'registry',
+      },
+      {
+        pid: 0,
+        sessionId: 'wn-park-session-2',
+        cwd: '/home/acme/web',
+        status: 'busy',
+        startedAt: now - 12 * min,
+        source: 'registry',
+      },
+    ];
+    return { instances, registry };
+  });
+  return (
+    <ParkedTerminals
+      instances={preview.instances}
+      activeSessions={preview.registry}
+      onRestore={() => {}}
+      onClose={() => {}}
+    />
+  );
+}
+
+const PARKED_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-park-t1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-01T16:40:00.000Z',
+    content: [
+      {
+        type: 'text',
+        text: 'The retry loop now backs off twice before it gives up, and the suite is green.',
+      },
+    ],
+  }),
+];
+
+function ParkedTerminalsVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--parked">
+      <TopBar
+        onBack={() => {}}
+        crumbs={[{ label: 'ACME' }, { label: 'Wire the retry loop', accent: true }]}
+        right={
+          <span className="flex items-center" style={{ gap: 14 }}>
+            <PreviewParkedTerminals />
+            <PreviewRunning />
+            <ParkButton onPark={() => {}} />
+          </span>
+        }
+      />
+      <div className="cl-transcript-inner">
+        {PARKED_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={24 + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -880,6 +992,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'background-shells': BackgroundShellsVisual,
   'live-orb': LiveOrbVisual,
   plan: PlanVisual,
+  'parked-terminals': ParkedTerminalsVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the
