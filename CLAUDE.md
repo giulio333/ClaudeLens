@@ -379,10 +379,15 @@ of a tag that already has a Release, without touching the tag:
 
 **macOS signing is wired but conditional** (`docs/macos-signing.md`). The mac job
 signs with a Developer ID certificate and notarizes when the repo has the five
-Apple secrets, and falls back to the historical unsigned DMG when it doesn't —
-so forks and this repo pre-certificate keep releasing. The build config
-(`hardenedRuntime` + `build/entitlements.mac.*.plist`) is inert until an identity
-exists; the entitlements are the short list a hardened Electron app needs, and
+Apple secrets, and falls back to an **ad-hoc** signature when it doesn't — so
+forks and this repo pre-certificate keep releasing. Ad-hoc and not unsigned on
+purpose: unsigned, the main binary kept Electron's own `Identifier=Electron`,
+and macOS files Local Network and the other privacy grants under the signing
+identifier, so the switch a user turned on for `com.claudelens.app` never
+applied and the LAN answered `No route to host`. The job's "Verify ad-hoc
+signature" step fails the release if that identifier ever comes back. The build
+config (`hardenedRuntime` + `build/entitlements.mac.*.plist`) applies to the
+ad-hoc signature too; the entitlements are the short list a hardened Electron app needs, and
 the app must stay **unsandboxed** (it reads `~/.claude`, drives arbitrary project
 dirs and spawns the `claude` CLI through a pty). When a signed build ships,
 three pieces of user-facing text about the quarantine workaround go stale —

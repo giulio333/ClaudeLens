@@ -1,6 +1,7 @@
 # macOS code signing and notarization
 
-ClaudeLens currently ships **unsigned**. macOS quarantines the download, the
+ClaudeLens currently ships **ad-hoc signed**: signed, but by no identity Apple
+vouches for. macOS quarantines the download, the
 first launch fails with _"ClaudeLens is damaged and can't be opened"_ or
 _"cannot be opened because the developer cannot be verified"_, and every new
 user has to be talked through a Terminal command before the app will start —
@@ -9,8 +10,18 @@ carry that workaround today.
 
 The release workflow can sign and notarize instead. It is **opt-in**: with the
 Apple secrets configured, the mac job signs with a Developer ID certificate and
-notarizes; without them it produces the same unsigned DMG as before, so forks
-and secret-less runs keep working. This document is the setup.
+notarizes; without them it signs ad-hoc, so forks and secret-less runs keep
+working. This document is the setup.
+
+The fallback is ad-hoc rather than no signature at all, because macOS keys its
+privacy grants on the signing identifier. Left unsigned, the main binary keeps the
+signature the Electron zip ships with, whose identifier is `Electron`. The Local
+Network switch a user turned on for ClaudeLens was then filed under
+`com.claudelens.app` and never applied to the running app, and every connection
+to the LAN failed with `No route to host`. An ad-hoc signature takes the
+identifier from the bundle id. The Agent SDK's `claude` binary is excluded
+(`signIgnore`), so it keeps Anthropic's Developer ID signature. The mac job
+fails if the app is not signed as `com.claudelens.app`.
 
 Everything on the repository side is already in place — entitlements
 (`build/entitlements.mac.*.plist`), the `build.mac` block in `package.json`, and
@@ -97,7 +108,7 @@ times:
 | `APPLE_TEAM_ID`               | the Team ID from step 4                     |
 
 The workflow takes the signed path only when `MACOS_CERTIFICATE`, `APPLE_ID` and
-`APPLE_TEAM_ID` are all set. A partial set silently falls back to unsigned, so
+`APPLE_TEAM_ID` are all set. A partial set silently falls back to ad-hoc, so
 add all five.
 
 ### 6. Release and check
@@ -192,8 +203,11 @@ export APPLE_TEAM_ID="A1B2C3D4E5"
 npx electron-builder --mac -c.mac.notarize=true
 ```
 
-To package unsigned the way CI does without secrets:
+To package ad-hoc the way CI does without secrets:
 
 ```bash
-CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac
+CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac \
+  -c.mac.identity=- '-c.mac.signIgnore=claude-agent-sdk-darwin-[^/]+/claude$'
+codesign -dv release/mac-arm64/ClaudeLens.app 2>&1 | grep ^Identifier
+# → Identifier=com.claudelens.app
 ```

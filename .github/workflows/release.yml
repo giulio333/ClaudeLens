@@ -64,9 +64,9 @@ jobs:
       # macOS is packaged on its own path because it is the only platform with a
       # signing story. It is deliberately conditional: with the Apple secrets
       # configured the DMG is signed with the Developer ID certificate and
-      # notarized, and without them the job produces exactly the unsigned build
-      # it produced before — so forks, and this repo before the certificate
-      # exists, keep releasing. Setup: docs/macos-signing.md.
+      # notarized, and without them the job signs ad-hoc under the bundle id —
+      # so forks, and this repo before the certificate exists, keep releasing.
+      # Setup: docs/macos-signing.md.
       - name: Package mac (x64 + arm64)
         id: package-mac
         if: matrix.platform == 'mac'
@@ -91,9 +91,19 @@ jobs:
             # "<workspace> not a file" before packaging anything. Unset them so
             # the unsigned path is the one it actually takes.
             unset CSC_LINK CSC_KEY_PASSWORD APPLE_ID APPLE_APP_SPECIFIC_PASSWORD APPLE_TEAM_ID
-            # Without this electron-builder would pick up any stray identity in
-            # the runner keychain and sign with something we did not choose.
-            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish never
+            # Ad-hoc, not unsigned. Left unsigned, the app's main binary keeps the
+            # linker signature it came with in the Electron zip, whose identifier
+            # is "Electron" — and macOS keys privacy grants such as Local Network
+            # on that identifier, so the switch the user turned on for ClaudeLens
+            # never applied to the running app and every LAN connection failed
+            # with "No route to host". `identity=-` signs ad-hoc, which takes the
+            # identifier from the bundle id. The SDK's `claude` binary is left out
+            # so it keeps the Developer ID signature Anthropic ships it with.
+            # CSC_IDENTITY_AUTO_DISCOVERY=false keeps electron-builder from picking
+            # up a stray identity in the runner keychain instead.
+            CSC_IDENTITY_AUTO_DISCOVERY=false npx electron-builder --mac --publish never \
+              -c.mac.identity=- \
+              '-c.mac.signIgnore=claude-agent-sdk-darwin-[^/]+/claude$'
           fi
 
       # A DMG that builds is not the same as a DMG Gatekeeper accepts, and the
@@ -118,6 +128,40 @@ jobs:
             codesign --verify --deep --strict --verbose=2 "$app"
             spctl --assess --type execute --verbose=4 "$app"
             xcrun stapler validate "$app"
+          done
+
+      # The ad-hoc path has one claim to hold: the app introduces itself to macOS
+      # as com.claudelens.app. An electron-builder bump that skipped the ad-hoc
+      # signature would bring back "Electron" without a word, and the first sign
+      # of it would be a user's LAN going dark again.
+      - name: Verify ad-hoc signature
+        if: steps.package-mac.outputs.signed == 'false'
+        run: |
+          set -euo pipefail
+          shopt -s nullglob
+          apps=(release/mac*/ClaudeLens.app)
+          if [ ${#apps[@]} -eq 0 ]; then
+            echo "No packaged .app found under release/ — did electron-builder's output layout change?" >&2
+            exit 1
+          fi
+          for app in "${apps[@]}"; do
+            echo "── $app"
+            codesign --verify --deep --strict --verbose=2 "$app"
+            # Read into a variable, not piped into `grep -q`: under pipefail a grep
+            # that exits on the first match can SIGPIPE codesign and fail the check.
+            info=$(codesign -dv "$app" 2>&1)
+            if ! grep -qx 'Identifier=com.claudelens.app' <<<"$info"; then
+              echo "$app is not signed as com.claudelens.app:" >&2
+              grep '^Identifier=' <<<"$info" >&2
+              exit 1
+            fi
+            # It still runs re-signed, so this warns rather than fails.
+            for cli in "$app"/Contents/Resources/app.asar.unpacked/node_modules/@anthropic-ai/claude-agent-sdk-darwin-*/claude; do
+              cli_info=$(codesign -dv "$cli" 2>&1)
+              if ! grep -q '^TeamIdentifier=[A-Z0-9]\{10\}$' <<<"$cli_info"; then
+                echo "::warning title=claude re-signed::$cli lost its Developer ID signature"
+              fi
+            done
           done
 
       - name: Package ${{ matrix.platform }} (x64 + arm64)
