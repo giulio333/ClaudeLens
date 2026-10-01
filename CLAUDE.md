@@ -11,7 +11,7 @@ Unit tests (Vitest) live under `test/` and cover the pure parsing modules —
 `cost-tracker`, `memory-reader`/`memory-writer`, `session-reader`,
 `sessions-registry-reader`, `chat-stream`, `update-checker`, `plans-reader`,
 `data-change-scope`, `session-read-cache`, `tasks-reader`, `project-description`,
-`thoughts`, `live-orb` (which thinking-orb animation a tool in flight gets, and the hex copies of the tokens the orb is drawn in, pinned against `index.css` — the orb greys out an `oklch()` colour without a word), `transcript-extras`, `claude-executable` (#289 — the SDK chat's binary: the bundled one while it is there, else the user's `claude` from the same dirs Settings reads its version from, else a message that says what to do), `chat-permissions` (a suppressed "Always allow" is
+`thoughts`, `terminal-instances` (which embedded terminals stay alive: a navigation to a session already running reuses it instead of resuming it twice, an ended one is replaced, leaving drops only the terminal that was not parked; the badge's most urgent state), `live-orb` (which thinking-orb animation a tool in flight gets, and the hex copies of the tokens the orb is drawn in, pinned against `index.css` — the orb greys out an `oklch()` colour without a word), `transcript-extras`, `claude-executable` (#289 — the SDK chat's binary: the bundled one while it is there, else the user's `claude` from the same dirs Settings reads its version from, else a message that says what to do), `chat-permissions` (a suppressed "Always allow" is
 neither offered nor accepted), `terminal-osc` (what a program in the terminal pane may hand
 to this machine: an OSC 52 copy, never a clipboard read or clear, and a click
 on an http(s) OSC 8 link), `bg-sessions-reader`, `agents-live-status`,
@@ -251,7 +251,24 @@ screen too, as after a retry — the host's transcript drawn by the
 real `ChatView` and `MissionRail` — and not one read of this machine's project
 data meanwhile, since the host's folder is often the same path as a local one —
 a path a message names left unread, no export, delete or playbook, and nothing
-drawn that was pushed for another pane).
+drawn that was pushed for another pane) and
+`terminal-pane-buffer` (the pane among others, once a session can be parked: an
+ended pane keeps none of another terminal's output, a chunk that beat the
+surviving create is still shown under StrictMode, and a hidden pane gives up the
+keyboard) and
+`terminal-mission-control-park` (Mission Control's side of parking: the round
+background button and Back are separate exits — background in every state, idle
+or Lens-only included, never calls Back — and Back asks before stopping a turn in flight in its own
+pane but not for one running elsewhere, a parked one leaves Esc alone, a new
+message to show turns it to the Lens without persisting anything, and what it
+reports to the background badge) and
+`terminal-host` (parked sessions end to end on the real pane: a parked `claude`
+survives every navigation that does not end it, comes back without a second
+spawn — also when its session is opened again from elsewhere — dies on its ✕ or,
+unparked, on Back, survives the provisional→real project hash swap; the badge
+gathers any number of them, wears the most urgent state and lists them on click,
+and a row's ✕ asks first while Claude works in that session's own terminal,
+never for a Lens-only one).
 Extend the fake as tests reach further; the one cast lives at its install point.
 
 **Do not launch the app yourself to verify UI changes** (neither `npm run dev`

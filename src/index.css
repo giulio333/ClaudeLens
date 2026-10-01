@@ -21188,7 +21188,9 @@ select.cl-opt-input {
 .cl-bgshell-item > svg {
   margin-top: 2px;
 }
-.cl-bgshell-item:hover .cl-bgshell-item-title,
+/* A session's colour outlasts the hover (the parked-sessions list): it is the
+   only thing that says which session a row is, as on the sessions list. */
+.cl-bgshell-item:hover .cl-bgshell-item-title:not(.cl-session-identity),
 .cl-bgshell-item:hover .cl-bgshell-caret {
   color: var(--cl-accent-ink);
 }
@@ -21268,4 +21270,165 @@ select.cl-opt-input {
 .cl-bgshell-sheet-cmd .cl-ctx-jump {
   flex-shrink: 0;
   font: 400 11px var(--font-sans);
+}
+
+/* ─── Parked terminal sessions ────────────────────────────────────────────
+   The sessions kept running in the background (TerminalHost) sit behind one
+   badge — in the main bar's free cell and in Mission Control's top bar — that
+   opens their list. The badge's dot wears the state of the session that most
+   needs the user: accent while one waits for an answer, violet while Claude
+   works, green when a turn is done. Same pill and panel anatomy as the
+   background-shells pill (.cl-bgshell-*), which the panel reuses. */
+.cl-bar-parked {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 0;
+}
+.cl-parked {
+  position: relative;
+  flex-shrink: 0;
+  -webkit-app-region: no-drag;
+}
+.cl-parked-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 26px;
+  padding: 0 9px 0 10px;
+  border-radius: 999px;
+  border: 1px solid var(--cl-line);
+  background: var(--cl-paper-2);
+  color: var(--cl-ink);
+  font: 500 12px/1 var(--font-sans);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: border-color 140ms;
+}
+.cl-parked-badge:hover,
+.cl-parked-badge[aria-expanded='true'] {
+  border-color: var(--cl-ink-4);
+}
+.cl-parked-badge[data-tone='waiting'] {
+  border-color: color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  background: color-mix(in oklch, var(--cl-accent) 8%, var(--cl-paper-2));
+}
+.cl-parked-caret {
+  color: var(--cl-ink-4);
+}
+.cl-parked-dot {
+  width: 7px;
+  height: 7px;
+  flex-shrink: 0;
+  border-radius: 50%;
+  background: var(--cl-ink-4);
+}
+.cl-parked-dot[data-tone='idle'] {
+  background: var(--cl-ok);
+}
+.cl-parked-dot[data-tone='waiting'] {
+  background: var(--cl-accent);
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+.cl-parked-dot[data-tone='busy'] {
+  background: var(--cl-violet);
+  animation: cl-parked-pulse 1.6s ease-in-out infinite;
+}
+.cl-parked-dot[data-tone='lens'] {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px var(--cl-ink-4);
+}
+@keyframes cl-parked-pulse {
+  50% {
+    opacity: 0.35;
+  }
+}
+/* The list floats over the page as frosted glass, the recipe of the files-read
+   panel (.cl-ctx-panel): the page stays faintly legible behind it, so the list
+   reads as a layer over where the user is rather than a page of its own. */
+.cl-bgshell-panel.cl-parked-panel {
+  border: 0;
+  border-radius: 14px;
+  background: color-mix(in oklch, var(--cl-paper) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 16px 34px -20px oklch(0.2 0.02 60 / 0.4),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
+}
+:root[data-theme='dark'] .cl-bgshell-panel.cl-parked-panel {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 18px 38px -20px oklch(0 0 0 / 0.66),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cl-bgshell-panel.cl-parked-panel {
+    background: var(--cl-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+.cl-parked-panel .cl-bgshell-item > .cl-parked-dot {
+  margin-top: 5px;
+}
+.cl-parked-row > .cl-bgshell-item {
+  flex: 1;
+  min-width: 0;
+  width: auto;
+}
+/* The hover is the row's ground, not its title: a coloured title keeps its
+   colour, so the row needs another way to say "this one". */
+.cl-parked-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 0 -8px;
+  padding: 0 4px 0 8px;
+  border-radius: 10px;
+  transition: background 140ms;
+}
+.cl-parked-row:hover {
+  background: color-mix(in oklch, var(--cl-ink) 5%, transparent);
+}
+.cl-parked-project {
+  font: 400 10px var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-parked-state[data-tone='waiting'] {
+  color: var(--cl-accent-ink);
+}
+.cl-parked-state[data-tone='busy'] {
+  color: var(--cl-violet-ink);
+}
+.cl-parked-close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-top: 9px;
+  flex-shrink: 0;
+  border-radius: 999px;
+  font-size: 15px;
+  line-height: 1;
+  color: var(--cl-ink-4);
+  transition:
+    color 140ms,
+    background 140ms;
+}
+.cl-parked-close:hover {
+  color: var(--cl-ink);
+  background: var(--cl-line);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-parked-dot[data-tone='busy'],
+  .cl-parked-dot[data-tone='waiting'] {
+    animation: none;
+  }
 }

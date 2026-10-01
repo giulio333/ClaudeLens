@@ -15,6 +15,14 @@ function subscribe<T extends unknown[]>(channel: string, cb: (...args: T) => voi
   return () => ipcRenderer.removeListener(channel, handler);
 }
 
+// Several Mission Controls can be mounted at once now that a terminal session
+// can be parked (kept alive, hidden): each holds ~3 `live:activeSessions`
+// subscriptions (Mission Control, its rail, the embedded Lens) plus its pane's
+// `terminal:data`/`terminal:exit`. Node's default of 10 listeners per channel
+// would print a MaxListenersExceededWarning from the third parked session on,
+// for listeners that are all legitimate and all removed on unmount.
+ipcRenderer.setMaxListeners(64);
+
 contextBridge.exposeInMainWorld('electronAPI', {
   memory: {
     listProjects: () => ipcRenderer.invoke('memory:listProjects'),

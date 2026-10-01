@@ -57,7 +57,14 @@ import { MonitorView } from '../components/project/monitor/MonitorView';
 // ─── Chat
 import { ChatView } from '../components/project/chat/ChatView';
 import { LiveChatView } from '../components/project/chat/LiveChatView';
-import { TerminalMissionControl } from '../components/project/terminal/TerminalMissionControl';
+import { TerminalHost } from '../components/project/terminal/TerminalHost';
+import { ParkedTerminals } from '../components/project/terminal/ParkedTerminals';
+import { useTerminalNav } from '../components/project/terminal/use-terminal-nav';
+import {
+  exitViewFor,
+  parkTargetFor,
+  type TerminalInstance,
+} from '../components/project/terminal/terminal-instances';
 // ─── Memory
 import { MemoryTopicView } from '../components/project/memory/MemoryTopicView';
 import { PlanDetailView } from '../components/project/plans/PlanDetailView';
@@ -169,7 +176,12 @@ function viewForSection(section: ProjectSection, project: Project): View {
 export default function ProjectOverview() {
   const [selectedRaw, setSelected] = useState<Project | null>(null);
   const [scope, setScope] = useState<'global' | 'project'>('global');
-  const [viewRaw, setView] = useState<View>({ type: 'global-home' });
+  // Navigation and the embedded terminals it keeps alive are one state: going to
+  // a terminal finds the instance already running that session or starts one,
+  // leaving drops the one on screen unless it was parked (terminal-instances.ts).
+  const nav = useTerminalNav({ type: 'global-home' });
+  const viewRaw = nav.state.view;
+  const setView = nav.navigate;
   const [projectToDelete, setProjectToDelete] = useState<Project | null>(null);
 
   const { data: projects } = useMemoryProjects();
@@ -406,6 +418,81 @@ export default function ProjectOverview() {
     setProjectToDelete(null);
   }
 
+  // The editorial chrome shows `selected`, not the view's own project. A terminal
+  // can belong to another project than the one selected (a parked session, one
+  // opened from Monitor), so leaving it for a project page selects that project
+  // first — otherwise Back would land on the wrong project's list, or none.
+  const syncScopeTo = useCallback((next: View) => {
+    if (!CORE_PROJECT_VIEWS.includes(next.type) || !('project' in next) || !next.project) return;
+    setSelected(next.project);
+    setScope('project');
+  }, []);
+  const { park: parkCurrent, close: closeInstance, restore: restoreInstance } = nav;
+  const leaveTerminal = useCallback(
+    (inst: TerminalInstance) => {
+      syncScopeTo(exitViewFor(inst.view));
+      closeInstance(inst.id);
+    },
+    [syncScopeTo, closeInstance]
+  );
+  const parkTerminal = useCallback(
+    (inst: TerminalInstance) => {
+      syncScopeTo(parkTargetFor(inst.view));
+      parkCurrent();
+    },
+    [syncScopeTo, parkCurrent]
+  );
+  const realProject = useCallback(
+    (p: Project) => projects?.find(x => x.realPath === p.realPath) ?? p,
+    [projects]
+  );
+  const openSessionFromTerminal = useCallback(
+    (inst: TerminalInstance, resumeSessionId: string) =>
+      setView({
+        type: 'terminal',
+        project: realProject(inst.view.project),
+        resumeSessionId,
+        // The way back belongs to how this view was entered, not to which
+        // session it currently shows: hopping to another session still
+        // returns to the results / the topic that led here.
+        from: inst.view.from,
+        searchQuery: inst.view.searchQuery,
+        memoryTopic: inst.view.memoryTopic,
+        exchange: inst.view.exchange,
+      }),
+    [setView, realProject]
+  );
+  const openExchangeFromTerminal = useCallback(
+    (inst: TerminalInstance, entry: { sessionId: string; msgId: string }) =>
+      setView({ type: 'exchange', project: realProject(inst.view.project), ...entry }),
+    [setView, realProject]
+  );
+  const { instances, currentId } = nav.state;
+  const parkedInstances = useMemo(
+    () => instances.filter(i => i.id !== currentId),
+    [instances, currentId]
+  );
+  const parkedChips = (
+    <ParkedTerminals
+      instances={parkedInstances}
+      onRestore={restoreInstance}
+      onClose={closeInstance}
+    />
+  );
+  const terminals = (
+    <TerminalHost
+      instances={instances}
+      currentId={currentId}
+      projects={projects}
+      chips={parkedChips}
+      onBack={leaveTerminal}
+      onPark={parkTerminal}
+      onReport={nav.report}
+      onOpenSession={openSessionFromTerminal}
+      onOpenExchange={openExchangeFromTerminal}
+    />
+  );
+
   const isGlobalHome = view.type === 'global-home';
   const isCoreProject = CORE_PROJECT_VIEWS.includes(view.type);
   const isGlobalLiveAgents = view.type === 'agents-live' && !view.project;
@@ -617,49 +704,8 @@ export default function ProjectOverview() {
             onBack={() => setView({ type: 'sessions', project: view.project })}
           />
         );
-      case 'terminal':
-        return (
-          <TerminalMissionControl
-            // Keyed so terminal→terminal navigation (team overlay → lead session)
-            // remounts the view instead of retargeting a mounted PTY.
-            key={view.resumeSessionId ?? 'new'}
-            project={view.project}
-            resumeSessionId={view.resumeSessionId}
-            attachJobId={view.attachJobId}
-            focusMessageUuid={view.focusMessageUuid}
-            onBack={() =>
-              view.from === 'agents-live'
-                ? setView({ type: 'agents-live', project: view.project })
-                : view.from === 'search'
-                  ? // Back to the results, with the query that produced them: a
-                    // search is a place you come back to, and re-running it from
-                    // an empty field is the one thing a result page must not ask.
-                    setView({ type: 'search', query: view.searchQuery ?? '' })
-                  : view.from === 'memory-topic' && view.memoryTopic
-                    ? setView({ type: 'memory-topic', ...view.memoryTopic })
-                    : view.from === 'exchange' && view.exchange
-                      ? // Back to the exchange, which may sit in another project
-                        // than the turn it opened: the entry carries its own.
-                        setView({ type: 'exchange', ...view.exchange })
-                      : setView({ type: 'sessions', project: view.project })
-            }
-            onOpenSession={id =>
-              setView({
-                type: 'terminal',
-                project: view.project,
-                resumeSessionId: id,
-                // The way back belongs to how this view was entered, not to which
-                // session it currently shows: hopping to another session still
-                // returns to the results / the topic that led here.
-                from: view.from,
-                searchQuery: view.searchQuery,
-                memoryTopic: view.memoryTopic,
-                exchange: view.exchange,
-              })
-            }
-            onOpenExchange={entry => setView({ type: 'exchange', project: view.project, ...entry })}
-          />
-        );
+      // 'terminal' renders in TerminalHost, outside this switch: a terminal has
+      // to outlive the view it is on to be parked.
       case 'exchange':
         return (
           <ExchangeView
@@ -770,22 +816,27 @@ export default function ProjectOverview() {
   // navigation, instead of bubbling to the app-level boundary and resetting all state.
   if (!isEditorialCore) {
     return (
-      <div className="cl-app">
-        <div style={{ flex: 1, overflow: 'hidden' }}>
-          <ErrorBoundary key={JSON.stringify(view)}>{renderDeepView()}</ErrorBoundary>
-        </div>
-        {projectToDelete && (
-          <DeleteProjectDialog
-            project={projectToDelete}
-            onConfirm={() => handleDeleted(projectToDelete)}
-            onCancel={() => setProjectToDelete(null)}
-          />
+      <>
+        {view.type !== 'terminal' && (
+          <div className="cl-app">
+            <div style={{ flex: 1, overflow: 'hidden' }}>
+              <ErrorBoundary key={JSON.stringify(view)}>{renderDeepView()}</ErrorBoundary>
+            </div>
+            {projectToDelete && (
+              <DeleteProjectDialog
+                project={projectToDelete}
+                onConfirm={() => handleDeleted(projectToDelete)}
+                onCancel={() => setProjectToDelete(null)}
+              />
+            )}
+          </div>
         )}
-      </div>
+        {terminals}
+      </>
     );
   }
 
-  return (
+  const editorial = (
     <div className="cl-app">
       {/* ─── Top bar ─────────────────────────────────────── */}
       <header className="cl-bar">
@@ -834,7 +885,8 @@ export default function ProjectOverview() {
           )}
         </nav>
 
-        <div />
+        {/* The free cell of the bar: the sessions kept running in the background. */}
+        <div className="cl-bar-parked">{parkedChips}</div>
 
         <div className="cl-bar-right">
           <button
@@ -1007,5 +1059,14 @@ export default function ProjectOverview() {
         onOpenSession={(cwd, sessionId) => openSessionFromNotification(cwd, sessionId)}
       />
     </div>
+  );
+  // TerminalHost sits at the same place in both branches, so crossing from a
+  // deep view to the editorial chrome never remounts it (which would kill every
+  // parked session).
+  return (
+    <>
+      {editorial}
+      {terminals}
+    </>
   );
 }
