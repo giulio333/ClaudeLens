@@ -22,7 +22,8 @@ import type { RemoteLaunchMode } from '../../../../electron/shared/remote-host';
  * `claude` CLI running in a real PTY (`terminal:*` IPC → node-pty in the main
  * process). Keystrokes go down `terminal:write`, raw PTY bytes come back on
  * `terminal:data`. The PTY's lifetime is bound to this component — unmounting
- * kills the process, like closing a terminal window.
+ * kills the process, like closing a terminal window. A parked session stays
+ * alive by staying mounted, hidden (see `TerminalHost`).
  *
  * The console follows the app theme (light/dark): xterm reports its background
  * color to the `claude` CLI via OSC 11, and the CLI picks its TUI palette from
@@ -60,6 +61,7 @@ export function TerminalPane({
   onExit,
   hideExitOverlay,
   onTerminalId,
+  active = true,
 }: {
   ref?: Ref<TerminalPromptHandle>;
   /** Local working directory; with `remote` set it is a label only. */
@@ -82,6 +84,10 @@ export function TerminalPane({
   /** The pane's terminal id once the PTY exists, null when it is gone — what a
    *  remote pane's Lens is keyed on in the main process (#294). */
   onTerminalId?: (id: string | null) => void;
+  /** Whether the pane is the one on screen. A hidden pane (a parked session, or
+   *  Mission Control on its Lens side) gives up the keyboard, so a keystroke can
+   *  never answer a prompt in a session the user is not looking at. */
+  active?: boolean;
 }) {
   const { resolved } = useTheme();
   const palette = PALETTES[resolved];
@@ -112,6 +118,13 @@ export function TerminalPane({
   // them once the id arrives.
   const earlyRef = useRef<Array<{ id: string; data: string }>>([]);
   const earlyExitRef = useRef(new Map<string, number>());
+  // Parking is only for the window in which a create is in flight. Without an id
+  // the pane cannot tell its chunks from another pane's, so outside that window
+  // (exited, failed) it must drop them: with several panes mounted at once a
+  // pane that has ended would otherwise store every other terminal's output.
+  // Only this pane's own outcome clears it — never a stale create's (StrictMode
+  // rehearsal), which may resolve after the surviving create has started.
+  const creatingRef = useRef(false);
   const onPidRef = useRef(onPid);
   // Read by `startSession` only; the launch never changes under a mounted pane.
   const remoteRef = useRef(remote);
@@ -147,6 +160,7 @@ export function TerminalPane({
       const term = termRef.current;
       if (!term || idRef.current) return;
       const gen = genRef.current;
+      creatingRef.current = true;
       promptRef.current?.setState('starting');
       setStatus('starting');
       setError(null);
@@ -180,6 +194,7 @@ export function TerminalPane({
         return;
       }
       if (res.error || !res.data) {
+        creatingRef.current = false;
         promptRef.current?.setState('error');
         setError(res.error || 'Failed to start the claude CLI.');
         setStatus('error');
@@ -195,6 +210,7 @@ export function TerminalPane({
       earlyRef.current = [];
       const earlyExit = earlyExitRef.current.get(res.data.id);
       earlyExitRef.current.clear();
+      creatingRef.current = false;
       if (earlyExit !== undefined) {
         idRef.current = null;
         onPidRef.current(null);
@@ -206,10 +222,18 @@ export function TerminalPane({
       }
       setStatus('running');
       promptRef.current?.setState('running');
-      term.focus();
     },
     [cwd, attachJobId]
   );
+
+  // The keyboard follows the pane on screen: focus once the session runs and
+  // whenever the pane comes back, blur the moment it is hidden.
+  useEffect(() => {
+    const term = termRef.current;
+    if (!term) return;
+    if (!active) term.blur();
+    else if (status === 'running') term.focus();
+  }, [active, status]);
 
   // Initialize xterm with its DOM during commit so the imperative prompt handle
   // is usable as soon as a parent flushSync mount returns, without waiting for a
@@ -291,14 +315,14 @@ export function TerminalPane({
 
     const disposeData = window.electronAPI.terminal.onData((id, data) => {
       if (idRef.current === null) {
-        earlyRef.current.push({ id, data });
+        if (creatingRef.current) earlyRef.current.push({ id, data });
         return;
       }
       if (id === idRef.current) termRef.current?.write(data);
     });
     const disposeExit = window.electronAPI.terminal.onExit((id, code) => {
       if (idRef.current === null) {
-        earlyExitRef.current.set(id, code);
+        if (creatingRef.current) earlyExitRef.current.set(id, code);
         return;
       }
       if (id !== idRef.current) return;

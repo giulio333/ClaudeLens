@@ -42,6 +42,7 @@ import type { FileChange } from './mission-feed';
 import { FileChangePage } from '../chat/FileChangesStrip';
 import { flushSync } from 'react-dom';
 import type { TerminalPromptHandle } from './terminal-prompt';
+import type { InstanceReport } from './terminal-instances';
 
 /**
  * The unified Terminal ↔ Lens view ("Terminal Mission Control").
@@ -230,6 +231,48 @@ export function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onTogg
   );
 }
 
+/** Send this session to the background: keep its `claude` running and step out
+ *  of it. Back is the other exit, the one that ends the session. A round icon
+ *  button, the same control as the rail toggle beside it: a window dropping
+ *  into a tray. */
+function ParkButton({ onPark }: { onPark: () => void }) {
+  const label = 'Keep running in background';
+  return (
+    <button
+      type="button"
+      onClick={onPark}
+      title={label}
+      aria-label={label}
+      className="inline-flex items-center justify-center transition-colors shrink-0 hover:text-[var(--cl-accent-ink)]"
+      style={{
+        width: 32,
+        height: 32,
+        borderRadius: 999,
+        border: '1px solid var(--cl-glass-border)',
+        background: 'transparent',
+        color: 'var(--cl-ink-3)',
+      }}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M3 6.5V4.25A1.75 1.75 0 0 1 4.75 2.5h6.5A1.75 1.75 0 0 1 13 4.25V6.5" />
+        <line x1="8" y1="5.5" x2="8" y2="10.5" />
+        <polyline points="5.75 8.5 8 10.75 10.25 8.5" />
+        <line x1="3" y1="13.5" x2="13" y2="13.5" />
+      </svg>
+    </button>
+  );
+}
+
 export function TerminalMissionControl({
   project,
   resumeSessionId,
@@ -238,6 +281,10 @@ export function TerminalMissionControl({
   onBack,
   onOpenSession,
   onOpenExchange,
+  active = true,
+  onPark,
+  onReport,
+  topBarExtra,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
@@ -251,13 +298,24 @@ export function TerminalMissionControl({
   focusMessageUuid?: string;
   onBack: () => void;
   /** Navigate to another session's Mission Control (used by the team detail
-   *  overlay's "open chat"). Remounts this view — the caller keys it by
-   *  resumeSessionId — so a live PTY dies: gate behind a confirm here. */
+   *  overlay's "open chat"). This view is not parked by it, so it unmounts and a
+   *  live PTY dies: gate behind a confirm here. */
   onOpenSession?: (resumeSessionId: string) => void;
   /** Open the exchange a message from or to another session belongs to
    *  (#280) — handed to the embedded ChatView, whose bubbles offer it on both
    *  halves, and to the rail, whose MESSAGES rows open the same page. */
   onOpenExchange?: (entry: { sessionId: string; msgId: string }) => void;
+  /** Whether this Mission Control is the one on screen. A parked one stays
+   *  mounted (that is what keeps its `claude` alive) but hidden, and must not
+   *  take keys meant for the one the user is looking at. */
+  active?: boolean;
+  /** Keep this session running in the background and leave it (TerminalHost).
+   *  Drawn as the round icon button at the end of the top bar. */
+  onPark?: () => void;
+  /** What the parked-session chips show for this one: its PTY, session, title. */
+  onReport?: (report: InstanceReport) => void;
+  /** Rendered first in the top bar's right slot: the other sessions' chips. */
+  topBarExtra?: ReactNode;
 }) {
   const { resolved } = useTheme();
   // Opening an existing session defaults to LENS (read-only, nothing spawned); a
@@ -321,6 +379,15 @@ export function TerminalMissionControl({
     [view, setView]
   );
 
+  // A parked session reached again from a search hit carries a new message to
+  // show, and only the Lens can show it. Render-phase, like the latch below, and
+  // through the raw setter: nothing is written to localStorage during render.
+  const [seenFocus, setSeenFocus] = useState(focusMessageUuid);
+  if (focusMessageUuid !== seenFocus) {
+    setSeenFocus(focusMessageUuid);
+    if (focusMessageUuid) setViewRaw('lens');
+  }
+
   const [ptyPid, setPtyPid] = useState<number | null>(null);
   // When this pane's CLI came up — the stand-in for the registry's `startedAt`
   // until the CLI joins it.
@@ -336,15 +403,23 @@ export function TerminalMissionControl({
   }, [overlay]);
   const closeOverlay = useCallback(() => setOverlay(null), []);
 
-  // Esc closes a rail detail overlay (the embedded chat handles its own Esc).
+  // A parked Mission Control drops what it was about to type: a Playbook paste
+  // still waiting for the CLI would otherwise land in a session nobody sees.
   useEffect(() => {
-    if (!overlay) return;
+    if (!active) promptInsertionRef.current?.abort();
+  }, [active]);
+
+  // Esc closes a rail detail overlay (the embedded chat handles its own Esc).
+  // Only the Mission Control on screen listens: the key is the user's answer to
+  // what they are looking at, never to an overlay left open in a parked one.
+  useEffect(() => {
+    if (!overlay || !active) return;
     const onKey = (e: KeyboardEvent) => {
       if (e.key === 'Escape') closeOverlay();
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [overlay, closeOverlay]);
+  }, [overlay, closeOverlay, active]);
 
   /** What the open overlay is called in the top bar, and what dismissing it is
    *  called. The detail views themselves no longer say it: they render
@@ -468,6 +543,24 @@ export function TerminalMissionControl({
   const { data: sessionActivity } = useSessionActivity();
   const orbTool = inFlightTool(sessionActivity?.find(a => a.sessionId === sessionId));
 
+  // Back closes the terminal, as it always did; with Claude mid-turn in *this*
+  // pane that throws work away, so it asks first. `busy` alone also holds for the
+  // session running in a terminal elsewhere, which Back does not touch. Only the
+  // top bar's Back asks: the Lens calls `onBack` after deleting the session, a
+  // step the user has already confirmed.
+  const paneBusy = terminalMounted && termStatus === 'running' && !!busy;
+  const requestBack = useCallback(() => {
+    if (
+      paneBusy &&
+      !window.confirm(
+        'Claude is still working in this session. Going back closes the terminal and stops it. Close it anyway?'
+      )
+    ) {
+      return;
+    }
+    onBack();
+  }, [paneBusy, onBack]);
+
   const { data: sessionList } = useSessionList(project.hash);
   const summary = useMemo(
     () => sessionList?.find(s => s.filename === filename),
@@ -499,6 +592,20 @@ export function TerminalMissionControl({
   // Session title (custom > AI > first user message) — restored as the accent
   // crumb so the bar reads project / title / mode instead of a bare "TERMINAL".
   const title = summary ? sessionTitle(summary) : null;
+
+  const onReportRef = useRef(onReport);
+  useEffect(() => {
+    onReportRef.current = onReport;
+  }, [onReport]);
+  useEffect(() => {
+    onReportRef.current?.({
+      pid: ptyPid,
+      sessionId,
+      title,
+      color: summary?.agentColor ?? null,
+      termStatus: terminalMounted ? termStatus : null,
+    });
+  }, [ptyPid, sessionId, title, summary?.agentColor, terminalMounted, termStatus]);
 
   // Session tags, editable from inside the session (the embedded ChatView drops
   // its own TopBar, so the tag affordance lives in this frame's chrome instead).
@@ -550,7 +657,7 @@ export function TerminalMissionControl({
         // its own "Back to chat" underneath, wrong the moment this became the only
         // arrow on screen, because the one thing a lone back arrow must do is go
         // back one step. The label says which step, so it never has to be guessed.
-        onBack={overlay ? closeOverlay : onBack}
+        onBack={overlay ? closeOverlay : requestBack}
         backLabel={overlay ? 'Back to session' : 'Back'}
         crumbs={[
           { label: projectName.toUpperCase() },
@@ -595,6 +702,7 @@ export function TerminalMissionControl({
           // already carries it, and two copies of the same number a few
           // hundred pixels apart read as two different readings.
           <span className="flex items-center" style={{ gap: 14 }}>
+            {topBarExtra}
             <BackgroundShells shells={backgroundShells} liveSince={liveSince} />
             {/* While Claude works, the thinking orb takes the status slot: it
                 says more than RUNNING (a turn in flight implies the process is
@@ -639,6 +747,10 @@ export function TerminalMissionControl({
                 </span>
               )
             )}
+            {/* Background and Back are two different exits: this one keeps the
+                session (its process, if one runs, or just the Lens) and Back ends
+                it. So it is offered in every state, idle or Lens-only included. */}
+            {onPark && <ParkButton onPark={onPark} />}
           </span>
         }
       />
@@ -738,6 +850,7 @@ export function TerminalMissionControl({
                   attachJobId={attachJobId}
                   onPid={onPid}
                   onStatus={setTermStatus}
+                  active={active && view === 'terminal'}
                 />
               </div>
             )}
