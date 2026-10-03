@@ -8,8 +8,9 @@ import { StateIcon } from './ShellStateIcon';
 import { BackgroundShellSheet } from './BackgroundShellSheet';
 
 /**
- * The session's background shells, in its top bar beside RUNNING: a pill that
- * says how many are running and for how long, and opens the list on click.
+ * The session's background shells, in its top bar: a pill that says how many
+ * are running and for how long — or, `compact`, an icon with the count, as
+ * Mission Control draws it — and opens the list on click.
  *
  * Written for a reader who does not want the shell: the title is the
  * `description` Claude already gives every command and the time is in minutes.
@@ -30,11 +31,15 @@ import { BackgroundShellSheet } from './BackgroundShellSheet';
 export function BackgroundShells({
   shells,
   liveSince,
+  compact = false,
 }: {
   shells: BackgroundShell[];
   /** When the CLI process running the session started; null when none is.
    *  Only the shells that process started are its children. */
   liveSince: number | null;
+  /** The icon form, for Mission Control's single top bar: the state glyph and
+   *  how many run, the words moved to its label and tooltip. */
+  compact?: boolean;
 }) {
   // Where the pill was when the list opened; null while it is closed.
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
@@ -74,7 +79,40 @@ export function BackgroundShells({
 
   // An open window outlives the pill: the shell can leave the recent window
   // while its window is being read.
-  if (running.length === 0 && ended.length === 0) return sheet ?? null;
+  if (running.length === 0 && ended.length === 0) {
+    // The icon form keeps its place in the bar with nothing to report, so the
+    // controls beside it never move; it is quiet and opens nothing.
+    if (!compact) return sheet ?? null;
+    return (
+      <>
+        <button
+          type="button"
+          className="cl-bgshell-pill cl-bgshell-pill--icon"
+          data-tone="idle"
+          disabled
+          aria-label="No commands in background"
+          title="No commands in background"
+          style={{ WebkitAppRegion: 'no-drag' } as CSSProperties}
+        >
+          <svg
+            width="16"
+            height="16"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.5"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <rect x="2" y="2.5" width="12" height="11" rx="1.5" />
+            <path d="m4.5 6 2 2-2 2M8.5 10.5h3" />
+          </svg>
+        </button>
+        {sheet}
+      </>
+    );
+  }
 
   const latest = ended[0];
   const tone = running.length > 0 ? 'running' : latest.state;
@@ -98,19 +136,32 @@ export function BackgroundShells({
     >
       <button
         type="button"
-        className="cl-bgshell-pill"
+        className={compact ? 'cl-bgshell-pill cl-bgshell-pill--icon' : 'cl-bgshell-pill'}
         data-tone={tone}
         aria-expanded={open}
         aria-controls={panelId}
-        title={running.length === 0 ? latest.title : undefined}
+        aria-label={compact ? [label, meta].filter(Boolean).join(' · ') : undefined}
+        title={
+          compact
+            ? [label, meta, running.length === 0 ? latest.title : ''].filter(Boolean).join(' · ')
+            : running.length === 0
+              ? latest.title
+              : undefined
+        }
         onClick={e => {
           const rect = e.currentTarget.getBoundingClientRect();
           setAnchor(prev => (prev ? null : rect));
         }}
       >
         <StateIcon state={tone} />
-        <span>{label}</span>
-        {meta && <span className="cl-bgshell-pill-meta">· {meta}</span>}
+        {compact ? (
+          running.length > 0 && <span className="cl-bgshell-pill-count">{running.length}</span>
+        ) : (
+          <>
+            <span>{label}</span>
+            {meta && <span className="cl-bgshell-pill-meta">· {meta}</span>}
+          </>
+        )}
       </button>
 
       {anchor &&

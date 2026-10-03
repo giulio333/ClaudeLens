@@ -160,7 +160,7 @@ it.each(['before the frame', 'while waiting for readiness'])(
         await new Promise(resolve => requestAnimationFrame(resolve));
       });
     }
-    fireEvent.click(screen.getByRole('button', { name: /LENS/ }));
+    fireEvent.click(screen.getByRole('button', { name: 'Lens' }));
     act(() => dataListeners.forEach(listener => listener('pty-2', '\x1b[?2004h')));
     await act(async () => {
       await new Promise(resolve => requestAnimationFrame(resolve));

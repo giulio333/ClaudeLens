@@ -256,12 +256,21 @@ drawn that was pushed for another pane) and
 ended pane keeps none of another terminal's output, a chunk that beat the
 surviving create is still shown under StrictMode, and a hidden pane gives up the
 keyboard) and
-`terminal-mission-control-park` (Mission Control's side of parking: the round
-background button and Back are separate exits — background in every state, idle
-or Lens-only included, never calls Back — and Back asks before stopping a turn in flight in its own
-pane but not for one running elsewhere, a parked one leaves Esc alone, a new
-message to show turns it to the Lens without persisting anything, and what it
-reports to the background badge) and
+`terminal-mission-control-park` (Mission Control's side of parking: given a
+way to park, the top bar's back arrow leaves for the app and keeps the session
+running in every state, idle or Lens-only included, without asking; without
+one, Back ends it and asks before stopping a turn in flight in its own pane but
+not for one running elsewhere; either way the arrow walks out of an open detail
+first; a parked one leaves Esc alone, a new message to show turns it to the
+Lens without persisting anything, and what it reports to its tab) and
+`session-tabs` (Mission Control's first row, every open session a tab: the one
+on screen marked, the title in the session's colour, a click on another tab
+brings it on screen while one on the current tab does nothing, `+` opens a new
+session, a tab's ✕ asks first only while Claude works in that session's own
+terminal, and the grid button lists every tab with the one on screen marked and
+not reopened; what the reducer does with a closed or new tab — the neighbour
+comes on screen, the last one leaves, `+` keeps the one it replaces — is in
+`terminal-instances`) and
 `terminal-host` (parked sessions end to end on the real pane: a parked `claude`
 survives every navigation that does not end it, comes back without a second
 spawn — also when its session is opened again from elsewhere — dies on its ✕ or,

@@ -14,9 +14,11 @@ export function useTerminalNav(initial: View) {
   const park = useCallback(() => dispatch({ type: 'park' }), []);
   const restore = useCallback((id: string) => dispatch({ type: 'restore', id }), []);
   const close = useCallback((id: string) => dispatch({ type: 'close', id }), []);
+  const closeTab = useCallback((id: string) => dispatch({ type: 'closeTab', id }), []);
+  const openNew = useCallback(() => dispatch({ type: 'openNew' }), []);
   const report = useCallback(
     (id: string, patch: Partial<InstanceReport>) => dispatch({ type: 'report', id, patch }),
     []
   );
-  return { state, navigate, park, restore, close, report };
+  return { state, navigate, park, restore, close, closeTab, openNew, report };
 }

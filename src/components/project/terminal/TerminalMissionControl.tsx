@@ -1,18 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
-import {
-  useActiveSessions,
-  useChatSession,
-  useSessionActivity,
-  useSessionList,
-} from '../../../hooks/useIPC';
-import { useSessionTags } from '../../../hooks/useSessionTags';
-import { ManagedTagChip } from '../sessions/ManagedTagChip';
-import { TagPicker } from '../sessions/TagPicker';
+import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
 import { useTheme } from '../../../hooks/useTheme';
 import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
-import { TopBar } from '../shared/TopBar';
-import { LiveOrb } from '../../LiveOrb';
-import { inFlightTool } from '../../live-orb';
 import {
   SessionBottomGlow,
   SessionColorFrame,
@@ -34,7 +23,7 @@ import {
 } from '../chat/utils';
 import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
-import { STATUS_LABEL, TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
+import { TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
 import { BackgroundShells } from './BackgroundShells';
 import { buildBackgroundShells } from './background-shells';
@@ -180,6 +169,47 @@ export function ViewTabs({
   );
 }
 
+/** Terminal / Lens as one segmented control, the active half filled — the
+ *  switch at the right end of Mission Control's single top bar (variant C).
+ *  `ViewTabs` is the centred underline row the Remote view still draws. */
+function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
+  return (
+    <div className="cl-stabs-view" role="group" aria-label="View">
+      <button type="button" aria-pressed={view === 'terminal'} onClick={() => setView('terminal')}>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.7"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <path d="m3 4.5 3.5 3.5L3 11.5M8.5 12H13" />
+        </svg>
+        Terminal
+      </button>
+      <button type="button" aria-pressed={view === 'lens'} onClick={() => setView('lens')}>
+        <svg
+          width="14"
+          height="14"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.5"
+          aria-hidden="true"
+        >
+          <circle cx="8" cy="8" r="5.5" />
+          <circle cx="8" cy="8" r="1.6" />
+        </svg>
+        Lens
+      </button>
+    </div>
+  );
+}
+
 /** Collapse/expand toggle for the Mission Control rail — a panel-right glyph
  *  (right pane filled when the rail is shown). Stays visible in the frame so the
  *  rail can be reopened after collapsing. Collapsed state is persisted by the parent. */
@@ -284,7 +314,7 @@ export function TerminalMissionControl({
   active = true,
   onPark,
   onReport,
-  topBarExtra,
+  sessionTabs,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
@@ -309,13 +339,15 @@ export function TerminalMissionControl({
    *  mounted (that is what keeps its `claude` alive) but hidden, and must not
    *  take keys meant for the one the user is looking at. */
   active?: boolean;
-  /** Keep this session running in the background and leave it (TerminalHost).
-   *  Drawn as the round icon button at the end of the top bar. */
+  /** Keep this session running in the background and leave it (TerminalHost):
+   *  what the top bar's back arrow does when it is given. Without it the arrow
+   *  ends the session, as Back always did. */
   onPark?: () => void;
-  /** What the parked-session chips show for this one: its PTY, session, title. */
+  /** What this session's tab shows: its PTY, session, title, state. */
   onReport?: (report: InstanceReport) => void;
-  /** Rendered first in the top bar's right slot: the other sessions' chips. */
-  topBarExtra?: ReactNode;
+  /** The first row: every open session as a tab (`SessionTabs`). Without it the
+   *  row names the project and the session. */
+  sessionTabs?: ReactNode;
 }) {
   const { resolved } = useTheme();
   // Opening an existing session defaults to LENS (read-only, nothing spawned); a
@@ -536,12 +568,9 @@ export function TerminalMissionControl({
   }, [activeSessions, sessionId, ptyPid, termStatus, ptySince]);
 
   // Whether Claude is working in this session right now — the registry's
-  // `busy`, whichever process runs it (this pane's or a terminal elsewhere) —
-  // and the tool in flight, from the Monitor's tail digest, for the orb that
-  // says so in the top bar.
+  // `busy`, whichever process runs it (this pane's or a terminal elsewhere).
+  // The orb that says so is on the session's tab (`SessionTabs`).
   const busy = activeSessions?.some(s => s.sessionId === sessionId && s.status === 'busy');
-  const { data: sessionActivity } = useSessionActivity();
-  const orbTool = inFlightTool(sessionActivity?.find(a => a.sessionId === sessionId));
 
   // Back closes the terminal, as it always did; with Claude mid-turn in *this*
   // pane that throws work away, so it asks first. `busy` alone also holds for the
@@ -607,20 +636,6 @@ export function TerminalMissionControl({
     });
   }, [ptyPid, sessionId, title, summary?.agentColor, terminalMounted, termStatus]);
 
-  // Session tags, editable from inside the session (the embedded ChatView drops
-  // its own TopBar, so the tag affordance lives in this frame's chrome instead).
-  const {
-    tags: allTags,
-    tagsForSession,
-    toggleTagOnSession,
-    removeTagFromSession,
-    renameTag,
-    deleteTag,
-  } = useSessionTags(project.hash);
-  const sessionFilename = sessionForChat?.filename ?? null;
-  const sessionTags = sessionFilename ? tagsForSession(sessionFilename) : [];
-  const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
-
   async function insertPrompt(text: string) {
     promptInsertionRef.current?.abort();
     const insertion = new AbortController();
@@ -650,178 +665,114 @@ export function TerminalMissionControl({
       className="cl-chat"
       style={{ background: view === 'terminal' ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)' }}
     >
-      <TopBar
-        // The back arrow walks the stack: with a detail open it returns to the
-        // session, and only from the session does it leave for the project. It
-        // used to leave the session either way — defensible while each panel drew
-        // its own "Back to chat" underneath, wrong the moment this became the only
-        // arrow on screen, because the one thing a lone back arrow must do is go
-        // back one step. The label says which step, so it never has to be guessed.
-        onBack={overlay ? closeOverlay : requestBack}
-        backLabel={overlay ? 'Back to session' : 'Back'}
-        crumbs={[
-          { label: projectName.toUpperCase() },
-          // With a detail open the session crumb is the same step back, for the
-          // hand that is already up here; the accent ("you are here") moves to
-          // the detail's own crumb.
-          ...(title
-            ? [
-                {
-                  label: <SessionColorIdentity color={summary?.agentColor} title={title} />,
-                  accent: !overlayCrumb,
-                  onClick: overlayCrumb ? closeOverlay : undefined,
-                  title: overlayCrumb ? 'Back to session (Esc)' : undefined,
-                },
-              ]
-            : []),
-          ...(overlayCrumb
-            ? [
-                {
-                  accent: true,
-                  label: (
-                    <span className="inline-flex items-center" style={{ gap: 6 }}>
-                      {overlayCrumb.icon && <span aria-hidden>{overlayCrumb.icon}</span>}
-                      <span style={{ letterSpacing: '0.1em' }}>
-                        {overlayCrumb.kind !== 'tool' && (
-                          <span style={{ color: 'var(--cl-ink-4)' }}>
-                            {overlayCrumb.kind.toUpperCase()} ·{' '}
-                          </span>
-                        )}
-                        {overlayCrumb.kind === 'tool'
-                          ? overlayCrumb.label.toUpperCase()
-                          : overlayCrumb.label}
-                      </span>
-                    </span>
-                  ),
-                },
-              ]
-            : []),
-        ]}
-        right={
-          // No spend figure here: the vitals row of the Mission Control rail
-          // already carries it, and two copies of the same number a few
-          // hundred pixels apart read as two different readings.
-          <span className="flex items-center" style={{ gap: 14 }}>
-            {topBarExtra}
-            <BackgroundShells shells={backgroundShells} liveSince={liveSince} />
-            {/* While Claude works, the thinking orb takes the status slot: it
-                says more than RUNNING (a turn in flight implies the process is
-                up), and it shows for a session run in a terminal elsewhere,
-                which has no pane status of its own to print here. */}
-            {busy ? (
-              <span
-                className="flex items-center font-mono uppercase"
-                title="Claude is working"
-                style={{
-                  gap: 7,
-                  fontSize: 9.5,
-                  letterSpacing: '0.16em',
-                  color: 'var(--cl-violet-ink)',
-                }}
-              >
-                <LiveOrb tone="violet" tool={orbTool} />
-                WORKING
-              </span>
-            ) : (
-              terminalMounted && (
-                <span
-                  className="flex items-center font-mono uppercase"
-                  style={{
-                    gap: 7,
-                    fontSize: 9.5,
-                    letterSpacing: '0.16em',
-                    color: 'var(--cl-ink-3)',
-                  }}
-                >
-                  <span
-                    aria-hidden
-                    className={termStatus === 'running' ? 'cl-live-dot' : ''}
-                    style={{
-                      width: 7,
-                      height: 7,
-                      borderRadius: '50%',
-                      background: termStatus === 'running' ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
-                    }}
-                  />
-                  {termStatus === 'running' ? 'RUNNING' : STATUS_LABEL[termStatus].toUpperCase()}
-                </span>
-              )
-            )}
-            {/* Background and Back are two different exits: this one keeps the
-                session (its process, if one runs, or just the Lens) and Back ends
-                it. So it is offered in every state, idle or Lens-only included. */}
-            {onPark && <ParkButton onPark={onPark} />}
-          </span>
+      {/* Level one: the way back to the app, then every open session as a tab.
+          The arrow walks the stack: with a detail open it returns to the
+          session, and only from the session does it leave — and leaving keeps
+          the session running (`onPark`); ending one is its tab's ✕. The active
+          tab is painted with the surface below so it reads as part of it. */}
+      <div
+        className="cl-stabs-bar"
+        style={
+          {
+            '--cl-stab-surface':
+              view === 'terminal' ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)',
+          } as React.CSSProperties
         }
-      />
+      >
+        <button
+          type="button"
+          className="cl-stabs-icon cl-stabs-back"
+          onClick={overlay ? closeOverlay : (onPark ?? requestBack)}
+          aria-label={overlay ? 'Back to session' : onPark ? 'Back to app' : 'Back'}
+          title={
+            overlay
+              ? 'Back to session (Esc)'
+              : onPark
+                ? 'Back to the app; this session keeps running'
+                : 'Back'
+          }
+        >
+          <svg
+            width="15"
+            height="15"
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth="1.6"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M10 3.5 5.5 8l4.5 4.5" />
+          </svg>
+        </button>
+        {sessionTabs ?? (
+          <span className="cl-stabs-fallback">
+            <span>{projectName.toUpperCase()}</span>
+            {title && <SessionColorIdentity color={summary?.agentColor} title={title} />}
+          </span>
+        )}
+        {/* The right end, variant C: the detail on screen when one is open (what
+            the crumb used to name, its status and its ✕), then the view switch,
+            the session's background shells and the Mission Control toggle. */}
+        <div className="cl-stabs-end">
+          {overlayCrumb && (
+            <span className="cl-stabs-crumb">
+              {overlayCrumb.icon && <span aria-hidden>{overlayCrumb.icon}</span>}
+              {overlayCrumb.kind !== 'tool' && (
+                <span className="cl-stabs-crumb-kind">{overlayCrumb.kind} ·</span>
+              )}
+              <span className="truncate">{overlayCrumb.label}</span>
+            </span>
+          )}
+          {overlay?.kind === 'tool' && (
+            <span
+              className={`cl-tool-status ${toolRunStatus(overlay.group.result, overlay.group.use.name).tone}`}
+            >
+              {toolRunStatus(overlay.group.result, overlay.group.use.name).label}
+            </span>
+          )}
+          {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
+          <ViewSwitch view={view} setView={setView} />
+          <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
+          <button
+            type="button"
+            className="cl-stabs-icon"
+            onClick={toggleRail}
+            aria-pressed={!railCollapsed}
+            aria-label={railCollapsed ? 'Show Mission Control' : 'Hide Mission Control'}
+            title={railCollapsed ? 'Show Mission Control' : 'Hide Mission Control'}
+          >
+            <svg
+              width="16"
+              height="16"
+              viewBox="0 0 16 16"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.5"
+              aria-hidden="true"
+            >
+              <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
+              <line x1="9.75" y1="3.25" x2="9.75" y2="12.75" />
+              {!railCollapsed && (
+                <rect
+                  x="9.75"
+                  y="3.25"
+                  width="4.25"
+                  height="9.5"
+                  fill="currentColor"
+                  stroke="none"
+                  opacity="0.3"
+                />
+              )}
+            </svg>
+          </button>
+        </div>
+      </div>
 
       <div style={{ flex: 1, minHeight: 0, display: 'flex', position: 'relative' }}>
         {/* main column */}
         <main style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
-          {/* v2: the Terminal/Lens switch heads the focus column as centered tabs,
-              carrying the session tags and the column toggles at its right end —
-              one control row instead of two stacked ones. */}
-          <ViewTabs
-            view={view}
-            setView={setView}
-            right={
-              <>
-                {/* Tags belong to the session, not to the unit on screen: with a
-                    detail open they are noise in the row that now carries that
-                    detail's status and its ✕. */}
-                {sessionFilename && !overlay && (
-                  <div
-                    className="cl-chat-tags"
-                    style={{ flexWrap: 'nowrap' }}
-                    onClick={e => e.stopPropagation()}
-                  >
-                    {sessionTags.map(name => (
-                      <ManagedTagChip
-                        key={name}
-                        name={name}
-                        onRemoveFromItem={() => removeTagFromSession(sessionFilename, name)}
-                        removeLabel="Remove from this session"
-                        onRename={renameTag}
-                        onDelete={() => deleteTag(name)}
-                      />
-                    ))}
-                    <button
-                      type="button"
-                      className="cl-chat-tag-add"
-                      aria-label="Add tag"
-                      title="Add tag"
-                      data-haspicker={!!tagPickerAnchor}
-                      onClick={e => {
-                        const rect = e.currentTarget.getBoundingClientRect();
-                        setTagPickerAnchor(prev => (prev ? null : rect));
-                      }}
-                    >
-                      + tag
-                    </button>
-                    {tagPickerAnchor && (
-                      <TagPicker
-                        anchorRect={tagPickerAnchor}
-                        allTags={allTags}
-                        selected={sessionTags}
-                        onToggle={name => toggleTagOnSession(sessionFilename, name)}
-                        onClose={() => setTagPickerAnchor(null)}
-                      />
-                    )}
-                  </div>
-                )}
-                <RailToggle collapsed={railCollapsed} onToggle={toggleRail} />
-                {overlay?.kind === 'tool' && (
-                  <span
-                    className={`cl-tool-status ${toolRunStatus(overlay.group.result, overlay.group.use.name).tone}`}
-                  >
-                    {toolRunStatus(overlay.group.result, overlay.group.use.name).label}
-                  </span>
-                )}
-                {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
-              </>
-            }
-          />
-
           {/* the view: dark TUI slab or the embedded Lens chat (both kept mounted).
               Relative so a rail-opened detail overlay anchors to the content area
               (not over the whole split), keeping the Terminal/Lens switch and the

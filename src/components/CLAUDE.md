@@ -230,11 +230,11 @@ eight or nine loose dots and no line there, and `weaving` hardly more — in
 Mission Control it looked like noise. Five places, all of them the claim
 "working now" and none of them "alive": the SDK chat's live turn (`LiveTurn`,
 chip and the caret's place while it thinks), the narration line
-(`ThoughtLine`), the terminal pane's top bar while the registry says the
-session is busy — `orb WORKING` in place of RUNNING, violet like Mission
-Control's "busy", and shown for a session run in a terminal elsewhere too
-(beside the rail's MISSION CONTROL title it read as the panel's icon, and the
-rail can be closed) — a running sub-agent's row in the rail's feed, beside
+(`ThoughtLine`), a session's tab in Mission Control's first row while the
+registry says it is busy (`SessionTabs`) — in place of the tab's state dot,
+violet like Mission Control's "busy", and shown for a session run in a terminal
+elsewhere too; it used to be `orb WORKING` in the old top bar, and beside the
+rail's MISSION CONTROL title it read as the panel's icon — a running sub-agent's row in the rail's feed, beside
 WORKING (`state="working"`: its calls are not this session's to see), and a
 working cell of the Monitor (sage, its WORKING tag). A LIVE/RUNNING dot, the
 background-shell spinner and long lists keep what they had: a process being up

@@ -21427,6 +21427,270 @@ select.cl-opt-input {
   color: var(--cl-ink);
   background: var(--cl-line);
 }
+.cl-parked-row[data-current='true'] {
+  background: color-mix(in oklch, var(--cl-accent) 7%, transparent);
+}
+
+/* ── Mission Control, level one: every open session as a tab ──────────────
+   42px with 34px tabs standing on its floor puts every control on one line,
+   25px down — the centre of the macOS traffic lights (trafficLightPosition y
+   18) — behind the same 88px gutter as TopBar. The icons stand on the floor
+   too, 3px up, so their centre is the tabs' centre rather than the bar's. The bar
+   is the surface below it darkened a step, and the tab on screen is painted
+   with that surface (`--cl-stab-surface`, set by Mission Control from the view
+   it shows) and overlaps the bar's hairline, so it reads as the top of the
+   page under it. */
+.cl-stabs-bar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: stretch;
+  gap: 6px;
+  height: 42px;
+  padding: 0 10px 0 88px;
+  background: color-mix(in oklch, var(--cl-stab-surface, var(--cl-paper)) 94%, black);
+  border-bottom: 1px solid var(--cl-line);
+  -webkit-app-region: drag;
+}
+.cl-stabs-bar > .cl-parked {
+  align-self: flex-end;
+  margin-bottom: 3px;
+}
+.cl-stabs {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+  /* clip, not hidden: hidden would also clip the tab on screen where it
+     overlaps the bar's hairline by 1px, and draw the line back under it. */
+  overflow-x: clip;
+}
+.cl-stab {
+  flex: 0 1 240px;
+  min-width: 104px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-bottom: -1px;
+  padding: 0 4px 0 11px;
+  border: 1px solid transparent;
+  border-bottom: 0;
+  border-radius: 8px 8px 0 0;
+  -webkit-app-region: no-drag;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-stab[data-on='true'] {
+  background: var(--cl-stab-surface, var(--cl-paper));
+  border-color: var(--cl-line);
+}
+.cl-stab:not([data-on='true']):hover {
+  background: var(--cl-hover-bg);
+}
+.cl-stab-main {
+  flex: 1;
+  min-width: 0;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-stab-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 12.5px/1.2 var(--font-sans);
+}
+.cl-stab-title:not(.cl-session-identity) {
+  color: var(--cl-ink-3);
+}
+.cl-stab[data-on='true'] .cl-stab-title {
+  font-weight: 600;
+}
+.cl-stab[data-on='true'] .cl-stab-title:not(.cl-session-identity) {
+  color: var(--cl-ink);
+}
+.cl-stab-project {
+  flex: none;
+  font: 400 9.5px/1 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+/* The orb is a 20px canvas standing in for a 7px dot: the negative margins
+   keep the title where the dot would have put it. */
+.cl-stab-orb {
+  flex: none;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  margin: 0 -6px 0 -7px;
+}
+.cl-stab-close {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity var(--cl-hover-ms, 120ms),
+    background var(--cl-hover-ms, 120ms);
+}
+.cl-stab[data-on='true'] .cl-stab-close,
+.cl-stab:hover .cl-stab-close,
+.cl-stab-close:focus-visible {
+  opacity: 1;
+}
+.cl-stab-close:hover {
+  color: var(--cl-ink);
+  background: var(--cl-hover-bg);
+}
+.cl-stabs-icon {
+  flex: none;
+  align-self: flex-end;
+  margin-bottom: 3px;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-stabs-icon:hover,
+.cl-stabs-icon[aria-expanded='true'] {
+  background: var(--cl-hover-bg);
+  color: var(--cl-ink);
+}
+.cl-stabs-new {
+  margin-left: 4px;
+}
+.cl-stabs-bar > .cl-parked > .cl-stabs-icon {
+  margin-bottom: 0;
+}
+.cl-stabs-back {
+  margin-right: 2px;
+}
+.cl-stabs-fallback {
+  align-self: flex-end;
+  height: 34px;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font: 400 12px/1 var(--font-mono);
+  color: var(--cl-ink-3);
+}
+/* The right end of the bar (variant C): it stands on the floor like a tab, so
+   everything in it is centred on the tabs' line. */
+.cl-stabs-end {
+  flex: none;
+  align-self: flex-end;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  /* Pushed to the far end: the grid of every session stays beside the tabs. */
+  margin-left: auto;
+  padding-left: 12px;
+  -webkit-app-region: no-drag;
+}
+.cl-stabs-end .cl-stabs-icon {
+  align-self: auto;
+  margin-bottom: 0;
+}
+.cl-stabs-view {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px;
+  border-radius: 10px;
+  border: 1px solid var(--cl-line);
+  background: color-mix(in oklch, var(--cl-stab-surface, var(--cl-paper)) 88%, black);
+}
+.cl-stabs-view button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 24px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--cl-ink-3);
+  font: 500 12px/1 var(--font-sans);
+  cursor: pointer;
+  transition:
+    background var(--cl-hover-ms, 120ms),
+    color var(--cl-hover-ms, 120ms);
+}
+.cl-stabs-view button:hover {
+  color: var(--cl-ink);
+}
+.cl-stabs-view button[aria-pressed='true'] {
+  background: var(--cl-stab-surface, var(--cl-paper));
+  color: var(--cl-ink);
+  box-shadow: 0 0 0 1px var(--cl-line);
+}
+.cl-stabs-view button[aria-pressed='true'] svg {
+  color: var(--cl-accent);
+}
+/* The background shells as an icon: their state glyph and how many run. */
+.cl-bgshell-pill.cl-bgshell-pill--icon {
+  height: 28px;
+  gap: 5px;
+  padding: 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-bgshell-pill.cl-bgshell-pill--icon:hover,
+.cl-bgshell-pill.cl-bgshell-pill--icon[aria-expanded='true'] {
+  background: var(--cl-hover-bg);
+}
+.cl-bgshell-pill.cl-bgshell-pill--icon:disabled {
+  color: var(--cl-ink-4);
+  cursor: default;
+  background: transparent;
+}
+.cl-bgshell-pill-count {
+  font: 500 11px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+/* The name of the detail on screen, where the crumb used to say it. */
+.cl-stabs-crumb {
+  min-width: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: 400 10px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+}
+.cl-stabs-crumb-kind {
+  color: var(--cl-ink-4);
+}
 @media (prefers-reduced-motion: reduce) {
   .cl-parked-dot[data-tone='busy'],
   .cl-parked-dot[data-tone='waiting'] {

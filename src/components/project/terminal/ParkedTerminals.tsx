@@ -1,25 +1,20 @@
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useActiveSessions } from '../../../hooks/useIPC';
 import type { ActiveSession } from '../../../types';
 import { spanLabel } from './background-shells';
 import { useMinuteClock } from './use-minute-clock';
 import {
+  TONE_LABEL,
   chipTone,
+  endNeedsConfirm,
+  instanceProjectName,
+  instanceTitle,
   mostUrgentTone,
   registryEntryFor,
   type ChipTone,
   type TerminalInstance,
 } from './terminal-instances';
-
-const TONE_LABEL: Record<ChipTone, string> = {
-  starting: 'Starting',
-  busy: 'Claude is working',
-  waiting: 'Waiting for you',
-  idle: 'Your turn',
-  lens: 'Lens only, no terminal',
-  ended: 'Session ended',
-};
 
 /**
  * The sessions kept running in the background, behind one badge: how many, and
@@ -48,18 +43,167 @@ export function ParkedTerminals({
   onClose: (id: string) => void;
   activeSessions?: readonly ActiveSession[];
 }) {
+  const rows = useSessionRows(instances, registryOverride);
+  const { anchor, open, id, rootRef, panelRef, close, toggle } = useAnchoredPanel(
+    instances.length > 0
+  );
+  if (instances.length === 0) return null;
+
+  const badgeTone = mostUrgentTone(rows.map(r => r.tone));
+  const waiting = rows.filter(r => r.tone === 'waiting').length;
+  const count = instances.length;
+  const summary =
+    `${count} ${count === 1 ? 'session' : 'sessions'} in background` +
+    (waiting ? ` · ${waiting} waiting for you` : '');
+
+  return (
+    <div ref={rootRef} className="cl-parked">
+      <button
+        type="button"
+        className="cl-parked-badge"
+        data-tone={badgeTone}
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label={summary}
+        title={summary}
+        onClick={toggle}
+      >
+        <span className="cl-parked-dot" data-tone={badgeTone} aria-hidden />
+        <span className="cl-parked-count">{count}</span>
+        <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="cl-parked-caret">
+          <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.3" />
+        </svg>
+      </button>
+      {anchor && (
+        <SessionListPanel
+          anchor={anchor}
+          panelRef={panelRef}
+          id={id}
+          onDone={close}
+          label="Sessions in background"
+          title={`In background · ${count}`}
+          lede="Sessions kept running while you are elsewhere. Open one to pick it up where it was."
+          rows={rows}
+          onRestore={onRestore}
+          onClose={onClose}
+        />
+      )}
+    </div>
+  );
+}
+
+/**
+ * The tab strip's way out when it runs out of room: every open session, the one
+ * on screen included and marked, in the same list the background badge opens.
+ */
+export function OpenSessionsButton({
+  instances,
+  currentId,
+  onRestore,
+  onClose,
+}: {
+  instances: readonly TerminalInstance[];
+  currentId: string | null;
+  onRestore: (id: string) => void;
+  onClose: (id: string) => void;
+}) {
+  const rows = useSessionRows(instances);
+  const { anchor, open, id, rootRef, panelRef, close, toggle } = useAnchoredPanel(
+    instances.length > 0
+  );
+  const count = instances.length;
+  return (
+    <div ref={rootRef} className="cl-parked">
+      <button
+        type="button"
+        className="cl-stabs-icon"
+        aria-expanded={open}
+        aria-controls={id}
+        aria-label="All open sessions"
+        title="All open sessions"
+        onClick={toggle}
+      >
+        <svg
+          width="15"
+          height="15"
+          viewBox="0 0 16 16"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.4"
+          strokeLinejoin="round"
+          aria-hidden="true"
+        >
+          <rect x="2.5" y="2.5" width="4.5" height="4.5" rx="1" />
+          <rect x="9" y="2.5" width="4.5" height="4.5" rx="1" />
+          <rect x="2.5" y="9" width="4.5" height="4.5" rx="1" />
+          <rect x="9" y="9" width="4.5" height="4.5" rx="1" />
+        </svg>
+      </button>
+      {anchor && (
+        <SessionListPanel
+          anchor={anchor}
+          panelRef={panelRef}
+          id={id}
+          onDone={close}
+          label="Open sessions"
+          title={`Open sessions · ${count}`}
+          lede="Every session open in a tab. The ones you are not looking at keep running."
+          rows={rows}
+          currentId={currentId}
+          onRestore={onRestore}
+          onClose={onClose}
+        />
+      )}
+    </div>
+  );
+}
+
+interface SessionRow {
+  inst: TerminalInstance;
+  tone: ChipTone;
+  project: string;
+  title: string;
+  state: string;
+  since: string | null;
+}
+
+function useSessionRows(
+  instances: readonly TerminalInstance[],
+  registryOverride?: readonly ActiveSession[]
+): SessionRow[] {
   const { data: registry } = useActiveSessions();
   const activeSessions = registryOverride ?? registry;
   const now = useMinuteClock(instances.length > 0);
-  // Where the badge was when the list opened; null while it is closed.
+  return instances.map(inst => {
+    const tone = chipTone(inst.report, activeSessions);
+    const entry = registryEntryFor(inst.report, activeSessions);
+    const state =
+      tone === 'waiting' && entry?.waitingFor
+        ? `${TONE_LABEL[tone]}: ${entry.waitingFor}`
+        : TONE_LABEL[tone];
+    const since = entry?.startedAt && tone !== 'ended' ? spanLabel(now - entry.startedAt) : null;
+    return {
+      inst,
+      tone,
+      project: instanceProjectName(inst),
+      title: instanceTitle(inst),
+      state,
+      since,
+    };
+  });
+}
+
+/** Where the trigger was when the list opened; closed on a click outside, Esc
+ *  and a resize, and when there is nothing left to list. */
+function useAnchoredPanel(hasItems: boolean) {
   const [anchor, setAnchor] = useState<DOMRect | null>(null);
   const open = anchor !== null;
   const rootRef = useRef<HTMLDivElement>(null);
   const panelRef = useRef<HTMLDivElement>(null);
-  const panelId = useId();
-  // The last session ended from the list takes the badge with it: close the
-  // list too, so the next parked session does not reopen it on its own.
-  if (instances.length === 0 && anchor) setAnchor(null);
+  const id = useId();
+  // The last session ended from the list takes the trigger with it: close the
+  // list too, so the next session does not reopen it on its own.
+  if (!hasItems && anchor) setAnchor(null);
 
   useEffect(() => {
     if (!open) return;
@@ -81,124 +225,117 @@ export function ParkedTerminals({
     };
   }, [open]);
 
-  if (instances.length === 0) return null;
+  return {
+    anchor,
+    open,
+    rootRef,
+    panelRef,
+    id,
+    close: () => setAnchor(null),
+    toggle: (e: React.MouseEvent<HTMLElement>) => {
+      const rect = e.currentTarget.getBoundingClientRect();
+      setAnchor(prev => (prev ? null : rect));
+    },
+  };
+}
 
-  const rows = instances.map(inst => {
-    const tone = chipTone(inst.report, activeSessions);
-    const entry = registryEntryFor(inst.report, activeSessions);
-    const project =
-      inst.view.project.realPath.split(/[\\/]/).filter(Boolean).pop() || inst.view.project.realPath;
-    const title = inst.report.title ?? 'New session';
-    const state =
-      tone === 'waiting' && entry?.waitingFor
-        ? `${TONE_LABEL[tone]}: ${entry.waitingFor}`
-        : TONE_LABEL[tone];
-    const since = entry?.startedAt && tone !== 'ended' ? spanLabel(now - entry.startedAt) : null;
-    return { inst, tone, project, title, state, since, color: inst.report.color };
-  });
-  const badgeTone = mostUrgentTone(rows.map(r => r.tone));
-  const waiting = rows.filter(r => r.tone === 'waiting').length;
-  const count = instances.length;
-  const summary =
-    `${count} ${count === 1 ? 'session' : 'sessions'} in background` +
-    (waiting ? ` · ${waiting} waiting for you` : '');
-
-  return (
-    <div ref={rootRef} className="cl-parked">
-      <button
-        type="button"
-        className="cl-parked-badge"
-        data-tone={badgeTone}
-        aria-expanded={open}
-        aria-controls={panelId}
-        aria-label={summary}
-        title={summary}
-        onClick={e => {
-          const rect = e.currentTarget.getBoundingClientRect();
-          setAnchor(prev => (prev ? null : rect));
-        }}
-      >
-        <span className="cl-parked-dot" data-tone={badgeTone} aria-hidden />
-        <span className="cl-parked-count">{count}</span>
-        <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="cl-parked-caret">
-          <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.3" />
-        </svg>
-      </button>
-
-      {anchor &&
-        createPortal(
-          <div
-            ref={panelRef}
-            id={panelId}
-            role="dialog"
-            aria-label="Sessions in background"
-            className="cl-bgshell-panel cl-parked-panel"
-            style={{ top: anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }}
-          >
-            <div className="cl-bgshell-panel-title">In background · {count}</div>
-            <p className="cl-bgshell-panel-lede">
-              Sessions kept running while you are elsewhere. Open one to pick it up where it was.
-            </p>
-            <ul className="cl-bgshell-list">
-              {rows.map(({ inst, tone, project, title, state, since, color }) => (
-                <li key={inst.id} className="cl-bgshell-entry cl-parked-row">
-                  <button
-                    type="button"
-                    className="cl-bgshell-item"
-                    aria-label={`Open ${project} · ${title} (${state})`}
-                    onClick={() => {
-                      setAnchor(null);
-                      onRestore(inst.id);
-                    }}
+function SessionListPanel({
+  anchor,
+  panelRef,
+  id,
+  onDone,
+  label,
+  title,
+  lede,
+  rows,
+  currentId,
+  onRestore,
+  onClose,
+}: {
+  anchor: DOMRect;
+  panelRef: React.RefObject<HTMLDivElement | null>;
+  id: string;
+  onDone: () => void;
+  label: string;
+  title: ReactNode;
+  lede: string;
+  rows: SessionRow[];
+  currentId?: string | null;
+  onRestore: (id: string) => void;
+  onClose: (id: string) => void;
+}) {
+  return createPortal(
+    <div
+      ref={panelRef}
+      id={id}
+      role="dialog"
+      aria-label={label}
+      className="cl-bgshell-panel cl-parked-panel"
+      style={{ top: anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }}
+    >
+      <div className="cl-bgshell-panel-title">{title}</div>
+      <p className="cl-bgshell-panel-lede">{lede}</p>
+      <ul className="cl-bgshell-list">
+        {rows.map(({ inst, tone, project, title: rowTitle, state, since }) => {
+          const current = inst.id === currentId;
+          const color = inst.report.color;
+          return (
+            <li key={inst.id} className="cl-bgshell-entry cl-parked-row" data-current={current}>
+              <button
+                type="button"
+                className="cl-bgshell-item"
+                aria-current={current ? 'true' : undefined}
+                aria-label={`Open ${project} · ${rowTitle} (${state})`}
+                onClick={() => {
+                  onDone();
+                  if (!current) onRestore(inst.id);
+                }}
+              >
+                <span className="cl-parked-dot" data-tone={tone} aria-hidden />
+                <span className="cl-bgshell-item-body">
+                  <span className="cl-parked-project">{project}</span>
+                  {/* The session's colour is worn by its title, as on the
+                      sessions list: it is what says which session this is. */}
+                  <span
+                    className={`cl-bgshell-item-title${
+                      color ? ` cl-session-identity ${color}` : ''
+                    }`}
                   >
-                    <span className="cl-parked-dot" data-tone={tone} aria-hidden />
-                    <span className="cl-bgshell-item-body">
-                      <span className="cl-parked-project">{project}</span>
-                      {/* The session's colour is worn by its title, as on the
-                          sessions list: it is what says which session this is. */}
-                      <span
-                        className={`cl-bgshell-item-title${
-                          color ? ` cl-session-identity ${color}` : ''
-                        }`}
-                      >
-                        {title}
-                      </span>
-                      <span className="cl-bgshell-item-sub cl-parked-state" data-tone={tone}>
-                        {since ? `${state} · ${since}` : state}
-                      </span>
-                    </span>
-                  </button>
-                  <button
-                    type="button"
-                    className="cl-parked-close"
-                    title="End this session"
-                    aria-label={`End ${project} · ${title}`}
-                    onClick={() => {
-                      // Only a turn in this session's own terminal is stopped by
-                      // the ✕: a Lens-only one busy elsewhere closes nothing.
-                      if (
-                        tone === 'busy' &&
-                        inst.report.termStatus === 'running' &&
-                        !window.confirm(
-                          'Claude is still working in this session. End the terminal anyway?'
-                        )
-                      ) {
-                        return;
-                      }
-                      onClose(inst.id);
-                    }}
-                  >
-                    ×
-                  </button>
-                </li>
-              ))}
-            </ul>
-            <p className="cl-bgshell-panel-foot">
-              Quitting ClaudeLens ends every session still running here.
-            </p>
-          </div>,
-          document.body
-        )}
-    </div>
+                    {rowTitle}
+                  </span>
+                  <span className="cl-bgshell-item-sub cl-parked-state" data-tone={tone}>
+                    {since ? `${state} · ${since}` : state}
+                    {current ? ' · on screen' : ''}
+                  </span>
+                </span>
+              </button>
+              <button
+                type="button"
+                className="cl-parked-close"
+                title="End this session"
+                aria-label={`End ${project} · ${rowTitle}`}
+                onClick={() => {
+                  if (
+                    endNeedsConfirm(tone, inst.report) &&
+                    !window.confirm(
+                      'Claude is still working in this session. End the terminal anyway?'
+                    )
+                  ) {
+                    return;
+                  }
+                  onClose(inst.id);
+                }}
+              >
+                ×
+              </button>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="cl-bgshell-panel-foot">
+        Quitting ClaudeLens ends every session still running here.
+      </p>
+    </div>,
+    document.body
   );
 }

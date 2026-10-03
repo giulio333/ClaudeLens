@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
 //
-// Mission Control's side of parking: background and Back are two exits. The
-// round background button keeps the session in any state, idle or Lens-only
-// included; Back ends it, and asks first when that throws away a turn in flight
-// in its own pane. While parked it keeps its hands off keys meant for the
-// session on screen, and it reports what the background badge shows.
+// Mission Control's side of parking. Given a way to park, the top bar's back
+// arrow leaves for the app and keeps the session running, in any state and
+// without asking — ending a session is its tab's ✕. Without one, Back ends it
+// and asks first when that throws away a turn in flight in its own pane. Either
+// way the arrow first walks out of a detail. While parked it keeps its hands
+// off keys meant for the session on screen, and it reports what its tab shows.
 import { StrictMode } from 'react';
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
@@ -132,45 +133,59 @@ async function runningFresh(props: Props) {
 
 const lensPane = () => screen.getByText('Read-only transcript').parentElement!;
 
-it('sends a session with no terminal running to the background, apart from Back', async () => {
+/** Resolves once the registry read has landed: a busy session is only known
+ *  as busy from it. */
+async function registryRead() {
+  await waitFor(() => expect(client.getQueryData(['live:activeSessions'])).toBeDefined());
+}
+
+it('leaves a session with no terminal running for the app, and keeps it', async () => {
   const onPark = vi.fn();
   const onBack = vi.fn();
   render(tree({ resumeSessionId: 'session-a', onPark, onBack }));
-  fireEvent.click(screen.getByRole('button', { name: 'Keep running in background' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back to app' }));
   expect(onPark).toHaveBeenCalledTimes(1);
   expect(onBack).not.toHaveBeenCalled();
   expect(kill).not.toHaveBeenCalled();
 });
 
-it('sends an idle terminal to the background, and Back still only leaves', async () => {
-  bridge.api.live.getActiveSessions.mockResolvedValue(ok([registry({ status: 'idle' })]));
+it('leaves a busy terminal for the app without asking: nothing is stopped', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(ok([registry({})]));
   const confirm = vi.spyOn(window, 'confirm');
   const onPark = vi.fn();
   const onBack = vi.fn();
   await runningFresh({ onPark, onBack });
-  fireEvent.click(await screen.findByRole('button', { name: 'Keep running in background' }));
+  await registryRead();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to app' }));
   expect(onPark).toHaveBeenCalledTimes(1);
   expect(onBack).not.toHaveBeenCalled();
-  fireEvent.click(screen.getByRole('button', { name: /Back/ }));
-  expect(onBack).toHaveBeenCalledTimes(1);
-  expect(onPark).toHaveBeenCalledTimes(1);
-  // Nothing in flight: leaving an idle terminal asks nothing.
   expect(confirm).not.toHaveBeenCalled();
 });
 
-it('asks before Back stops a turn in flight in its own pane', async () => {
+it('without a way to park, Back ends an idle terminal without asking', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(ok([registry({ status: 'idle' })]));
+  const confirm = vi.spyOn(window, 'confirm');
+  const onBack = vi.fn();
+  await runningFresh({ onBack });
+  await registryRead();
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
+  expect(onBack).toHaveBeenCalledTimes(1);
+  expect(confirm).not.toHaveBeenCalled();
+});
+
+it('without a way to park, asks before Back stops a turn in flight in its own pane', async () => {
   bridge.api.live.getActiveSessions.mockResolvedValue(ok([registry({})]));
   const confirm = vi.spyOn(window, 'confirm').mockReturnValue(false);
   const onBack = vi.fn();
   await runningFresh({ onBack });
-  await screen.findByText('WORKING');
+  await registryRead();
 
-  fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   expect(confirm).toHaveBeenCalledTimes(1);
   expect(onBack).not.toHaveBeenCalled();
 
   confirm.mockReturnValue(true);
-  fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   expect(onBack).toHaveBeenCalledTimes(1);
 });
 
@@ -179,10 +194,21 @@ it('does not ask when the busy session runs in a terminal elsewhere', async () =
   const confirm = vi.spyOn(window, 'confirm');
   const onBack = vi.fn();
   render(tree({ resumeSessionId: 'session-a', onBack }));
-  await screen.findByText('WORKING');
-  fireEvent.click(screen.getByRole('button', { name: /Back/ }));
+  await registryRead();
+  fireEvent.click(screen.getByRole('button', { name: 'Back' }));
   expect(confirm).not.toHaveBeenCalled();
   expect(onBack).toHaveBeenCalledTimes(1);
+});
+
+it('walks back out of a detail before it leaves the session', async () => {
+  const onPark = vi.fn();
+  render(tree({ resumeSessionId: 'session-a', onPark }));
+  fireEvent.click(screen.getByRole('button', { name: 'Open a tool' }));
+  fireEvent.click(screen.getAllByRole('button', { name: 'Back to session' })[0]);
+  expect(onPark).not.toHaveBeenCalled();
+  expect(screen.queryByRole('button', { name: 'Back to session' })).toBeNull();
+  fireEvent.click(screen.getByRole('button', { name: 'Back to app' }));
+  expect(onPark).toHaveBeenCalledTimes(1);
 });
 
 it('leaves Esc to the session on screen while parked', async () => {
@@ -209,7 +235,7 @@ it('turns to the Lens when reached again with a message to show', async () => {
   expect(localStorage.getItem('tmc-view')).toBe('terminal');
 });
 
-it('reports its process, its session and its state to the chips', async () => {
+it('reports its process, its session and its state to its tab', async () => {
   bridge.api.live.getActiveSessions.mockResolvedValue(ok([registry({ status: 'idle' })]));
   const onReport = vi.fn();
   await runningFresh({ onReport });

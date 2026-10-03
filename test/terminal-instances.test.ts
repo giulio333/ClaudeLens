@@ -231,6 +231,62 @@ describe('park, restore, close', () => {
   });
 });
 
+describe('tabs: closeTab, openNew', () => {
+  it('closing the tab on screen brings its neighbour on screen and keeps the rest', () => {
+    const s = run(
+      home(),
+      go(resume('s-1')),
+      { type: 'openNew' },
+      { type: 'openNew' },
+      { type: 'restore', id: 't2' }
+    );
+    expect(ids(s)).toEqual(['t1', 't2', 't3']);
+    const closed = run(s, { type: 'closeTab', id: 't2' });
+    expect(ids(closed)).toEqual(['t1', 't3']);
+    expect(closed.currentId).toBe('t3');
+    expect(closed.view.type).toBe('terminal');
+    invariant(closed);
+  });
+
+  it('falls back to the tab before it when the last one in the row closes', () => {
+    const s = run(home(), go(resume('s-1')), { type: 'openNew' });
+    const closed = run(s, { type: 'closeTab', id: 't2' });
+    expect(ids(closed)).toEqual(['t1']);
+    expect(closed.currentId).toBe('t1');
+    invariant(closed);
+  });
+
+  it('closing a tab that is not on screen leaves the screen alone', () => {
+    const s = run(home(), go(resume('s-1')), { type: 'openNew' });
+    const closed = run(s, { type: 'closeTab', id: 't1' });
+    expect(ids(closed)).toEqual(['t2']);
+    expect(closed.currentId).toBe('t2');
+  });
+
+  it('closing the only tab leaves for where it was opened from', () => {
+    const s = run(home(), go(resume('s-1', { from: 'agents-live' })));
+    const closed = run(s, { type: 'closeTab', id: 't1' });
+    expect(closed.instances).toHaveLength(0);
+    expect(closed.view).toEqual({ type: 'agents-live', project: ACME });
+    invariant(closed);
+  });
+
+  it('opens a fresh terminal in the project on screen and keeps the one it replaces', () => {
+    const s = run(home(), go(resume('s-1', { project: ZETA })), running('t1'));
+    const opened = run(s, { type: 'openNew' });
+    expect(ids(opened)).toEqual(['t1', 't2']);
+    expect(opened.currentId).toBe('t2');
+    expect(opened.instances[1].view).toEqual({ type: 'terminal', project: ZETA });
+    expect(opened.instances[0].report.termStatus).toBe('running');
+    invariant(opened);
+  });
+
+  it('opens nothing when no terminal is on screen', () => {
+    const s = run(home(), go(resume('s-1')), { type: 'park' });
+    expect(run(s, { type: 'openNew' })).toBe(s);
+  });
+});
+
 describe('exitViewFor / parkTargetFor', () => {
   const topic = { topic: { name: 'acme' }, content: 'x', hash: ACME.hash } as never;
   const exchange = { project: ZETA, sessionId: 's-z', msgId: 'm-1' };

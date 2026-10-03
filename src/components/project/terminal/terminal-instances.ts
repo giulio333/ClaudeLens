@@ -55,6 +55,8 @@ export type NavAction =
   | { type: 'park' }
   | { type: 'restore'; id: string }
   | { type: 'close'; id: string }
+  | { type: 'closeTab'; id: string }
+  | { type: 'openNew' }
   | { type: 'report'; id: string; patch: Partial<InstanceReport> };
 
 const NO_REPORT: InstanceReport = {
@@ -191,6 +193,24 @@ export function navReducer(s: NavState, a: NavAction): NavState {
       if (a.id !== s.currentId) return { ...s, instances };
       return { ...s, view: exitViewFor(target.view), instances, currentId: null };
     }
+    case 'closeTab': {
+      // A tab's ✕: closing the one on screen brings its neighbour on screen,
+      // as a browser does; only the last one leaves, as Back does.
+      if (a.id !== s.currentId) return navReducer(s, { type: 'close', id: a.id });
+      const at = s.instances.findIndex(i => i.id === a.id);
+      const neighbour = s.instances[at + 1] ?? s.instances[at - 1];
+      if (!neighbour) return navReducer(s, { type: 'close', id: a.id });
+      const shown = navReducer(s, { type: 'restore', id: neighbour.id });
+      return navReducer(shown, { type: 'close', id: a.id });
+    }
+    case 'openNew': {
+      // `+`: a fresh `claude` in the project on screen, the current one kept
+      // running — a plain navigation would drop it, and its process with it.
+      const current = s.instances.find(i => i.id === s.currentId);
+      if (!current) return s;
+      const parked = navReducer(s, { type: 'park' });
+      return navigate(parked, { type: 'terminal', project: current.view.project });
+    }
     case 'report': {
       const target = s.instances.find(i => i.id === a.id);
       if (!target) return s;
@@ -239,6 +259,31 @@ export function chipTone(
     default:
       return r.termStatus === null ? 'lens' : 'idle';
   }
+}
+
+export const TONE_LABEL: Record<ChipTone, string> = {
+  starting: 'Starting',
+  busy: 'Claude is working',
+  waiting: 'Waiting for you',
+  idle: 'Your turn',
+  lens: 'Lens only, no terminal',
+  ended: 'Session ended',
+};
+
+/** The last segment of the instance's project path, for its tab and its row. */
+export function instanceProjectName(inst: TerminalInstance): string {
+  const path = inst.view.project.realPath;
+  return path.split(/[\\/]/).filter(Boolean).pop() || path;
+}
+
+export function instanceTitle(inst: TerminalInstance): string {
+  return inst.report.title ?? 'New session';
+}
+
+/** Ending a session asks first only when Claude works in its own terminal: a
+ *  Lens-only one busy elsewhere loses nothing when its tab goes. */
+export function endNeedsConfirm(tone: ChipTone, r: InstanceReport): boolean {
+  return tone === 'busy' && r.termStatus === 'running';
 }
 
 // What needs the user first: an answer, then a turn still going, then a turn to

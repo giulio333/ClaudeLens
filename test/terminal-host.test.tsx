@@ -115,7 +115,7 @@ function Harness({ projects }: { projects?: Array<{ hash: string; realPath: stri
       instances={nav.state.instances}
       currentId={nav.state.currentId}
       projects={projects}
-      chips={null}
+      tabs={null}
       onBack={inst => nav.close(inst.id)}
       onPark={() => nav.park()}
       onReport={nav.report}

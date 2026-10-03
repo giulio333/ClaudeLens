@@ -23,7 +23,7 @@ export function TerminalHost({
   instances,
   currentId,
   projects,
-  chips,
+  tabs,
   onBack,
   onPark,
   onReport,
@@ -35,8 +35,8 @@ export function TerminalHost({
   /** The known projects, to read a parked instance's project under its real
    *  hash once Claude Code has created its folder. */
   projects: readonly Project[] | undefined;
-  /** The other sessions' chips, for the top bar of the one on screen. */
-  chips: ReactNode;
+  /** The session tabs, for the top bar of the one on screen. */
+  tabs: ReactNode;
   onBack: (inst: TerminalInstance) => void;
   onPark: (inst: TerminalInstance) => void;
   onReport: (id: string, report: Partial<InstanceReport>) => void;
@@ -60,7 +60,7 @@ export function TerminalHost({
                 inst={inst}
                 project={project}
                 active={on}
-                chips={on ? chips : null}
+                tabs={on ? tabs : null}
                 onBack={onBack}
                 onPark={onPark}
                 onReport={onReport}
@@ -81,7 +81,7 @@ const TerminalSlot = memo(function TerminalSlot({
   inst,
   project,
   active,
-  chips,
+  tabs,
   onBack,
   onPark,
   onReport,
@@ -91,7 +91,7 @@ const TerminalSlot = memo(function TerminalSlot({
   inst: TerminalInstance;
   project: Project;
   active: boolean;
-  chips: ReactNode;
+  tabs: ReactNode;
   onBack: (inst: TerminalInstance) => void;
   onPark: (inst: TerminalInstance) => void;
   onReport: (id: string, report: Partial<InstanceReport>) => void;
@@ -122,7 +122,7 @@ const TerminalSlot = memo(function TerminalSlot({
       active={active}
       onPark={park}
       onReport={report}
-      topBarExtra={chips}
+      sessionTabs={tabs}
     />
   );
 });

@@ -59,6 +59,7 @@ import { ChatView } from '../components/project/chat/ChatView';
 import { LiveChatView } from '../components/project/chat/LiveChatView';
 import { TerminalHost } from '../components/project/terminal/TerminalHost';
 import { ParkedTerminals } from '../components/project/terminal/ParkedTerminals';
+import { SessionTabs } from '../components/project/terminal/SessionTabs';
 import { useTerminalNav } from '../components/project/terminal/use-terminal-nav';
 import {
   exitViewFor,
@@ -479,12 +480,32 @@ export default function ProjectOverview() {
       onClose={closeInstance}
     />
   );
+  // A tab's ✕ ends its session (the reducer brings the neighbour on screen);
+  // the last one leaves for where it was opened from, as Back did.
+  const { closeTab: closeTabInNav, openNew: openNewTab } = nav;
+  const closeTab = useCallback(
+    (id: string) => {
+      const only = instances.length === 1 ? instances[0] : undefined;
+      if (only?.id === id && id === currentId) return leaveTerminal(only);
+      closeTabInNav(id);
+    },
+    [instances, currentId, leaveTerminal, closeTabInNav]
+  );
+  const sessionTabs = (
+    <SessionTabs
+      instances={instances}
+      currentId={currentId}
+      onSelect={restoreInstance}
+      onClose={closeTab}
+      onNew={openNewTab}
+    />
+  );
   const terminals = (
     <TerminalHost
       instances={instances}
       currentId={currentId}
       projects={projects}
-      chips={parkedChips}
+      tabs={sessionTabs}
       onBack={leaveTerminal}
       onPark={parkTerminal}
       onReport={nav.report}
