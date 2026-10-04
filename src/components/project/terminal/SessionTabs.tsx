@@ -1,4 +1,5 @@
 import { useActiveSessions, useSessionActivity } from '../../../hooks/useIPC';
+import type { ActiveSession } from '../../../types';
 import { LiveOrb } from '../../LiveOrb';
 import { inFlightTool } from '../../live-orb';
 import { OpenSessionsButton } from './ParkedTerminals';
@@ -24,6 +25,9 @@ import {
  * project) and what state it is in: the dot of the background badge, or the
  * thinking orb while Claude works — the orb that the old top bar's WORKING
  * carried, now on the session it belongs to.
+ *
+ * `activeSessions` stands in for the registry where the instances are not real
+ * ones (the "What's new" preview), as on `ParkedTerminals`.
  */
 export function SessionTabs({
   instances,
@@ -31,14 +35,17 @@ export function SessionTabs({
   onSelect,
   onClose,
   onNew,
+  activeSessions: registryOverride,
 }: {
   instances: readonly TerminalInstance[];
   currentId: string | null;
   onSelect: (id: string) => void;
   onClose: (id: string) => void;
   onNew: () => void;
+  activeSessions?: readonly ActiveSession[];
 }) {
-  const { data: activeSessions } = useActiveSessions();
+  const { data: registry } = useActiveSessions();
+  const activeSessions = registryOverride ?? registry;
   const { data: activity } = useSessionActivity();
   const { hover, enter, leave } = useTabHover();
   const hovered = hover && instances.find(i => i.id === hover.id);
@@ -64,6 +71,7 @@ export function SessionTabs({
           currentId={currentId}
           onRestore={onSelect}
           onClose={onClose}
+          activeSessions={registryOverride}
         />
       )}
       <nav className="cl-stabs" aria-label="Open sessions" onMouseLeave={leave}>

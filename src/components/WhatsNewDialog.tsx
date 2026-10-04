@@ -37,8 +37,14 @@ import {
   SessionColorFrame,
   SessionColorIdentity,
 } from './project/shared/SessionColorIdentity';
-import { ParkButton, ViewTabs } from './project/terminal/TerminalMissionControl';
+import {
+  TabBarBack,
+  TabBarRailToggle,
+  ViewSwitch,
+  ViewTabs,
+} from './project/terminal/TerminalMissionControl';
 import { ParkedTerminals } from './project/terminal/ParkedTerminals';
+import { SessionTabs } from './project/terminal/SessionTabs';
 import type { TerminalInstance } from './project/terminal/terminal-instances';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
 import { BackgroundShells } from './project/terminal/BackgroundShells';
@@ -875,9 +881,10 @@ function PlanVisual(): ReactNode {
   return <TranscriptFrame turns={PLAN_TURNS} />;
 }
 
-// A terminal's top bar with two sessions sent to the background: the real
-// badge, wearing the state of the one that needs the user, and the round
-// button that sends the session on screen to join them. The registry the badge
+// A top bar with two sessions sent to the background: the real badge, wearing
+// the state of the one that needs the user. The round button that sent a
+// session there is gone — Mission Control's back arrow does it since 2.2.33 —
+// so the preview no longer draws it. The registry the badge
 // reads is synthetic and passed in — the user's own would match none of these
 // sessions, or one of theirs — and the uptimes are taken when the popup opens,
 // as the shells preview does.
@@ -959,7 +966,6 @@ function ParkedTerminalsVisual(): ReactNode {
           <span className="flex items-center" style={{ gap: 14 }}>
             <PreviewParkedTerminals />
             <PreviewRunning />
-            <ParkButton onPark={() => {}} />
           </span>
         }
       />
@@ -971,6 +977,102 @@ function ParkedTerminalsVisual(): ReactNode {
             detailsFilter="minimal"
             onOpenToolDetail={() => {}}
             turnIndex={24 + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// Mission Control's first row with three sessions open: the one on screen, one
+// Claude is working in — the orb — and one waiting on a permission prompt. The
+// registry the tabs read is synthetic and passed in, as for the background
+// badge above, and the uptimes are taken when the popup opens.
+function PreviewSessionTabs(): ReactNode {
+  const [preview] = useState(() => {
+    const now = Date.now();
+    const min = 60_000;
+    const tab = (
+      n: number,
+      realPath: string,
+      title: string,
+      color: TerminalInstance['report']['color']
+    ): TerminalInstance => ({
+      id: `wn-tab-${n}`,
+      view: {
+        type: 'terminal',
+        project: { hash: `wn-tab-project-${n}`, realPath },
+        resumeSessionId: `wn-tab-session-${n}`,
+      },
+      report: { pid: null, sessionId: `wn-tab-session-${n}`, title, color, termStatus: 'running' },
+    });
+    const instances = [
+      tab(1, '/home/acme/web', 'Wire the retry loop', null),
+      tab(2, '/home/acme/billing', 'Migrate the invoice tables', 'blue'),
+      tab(3, '/home/acme/web', 'Fix the flaky login test', null),
+    ];
+    const entry = (n: number, cwd: string, status: string, since: number): ActiveSession => ({
+      pid: 0,
+      sessionId: `wn-tab-session-${n}`,
+      cwd,
+      status,
+      startedAt: now - since * min,
+      source: 'registry',
+    });
+    const registry: ActiveSession[] = [
+      entry(1, '/home/acme/web', 'idle', 48),
+      entry(2, '/home/acme/billing', 'busy', 34),
+      { ...entry(3, '/home/acme/web', 'waiting', 12), waitingFor: 'permission prompt' },
+    ];
+    return { instances, registry };
+  });
+  return (
+    <SessionTabs
+      instances={preview.instances}
+      currentId="wn-tab-1"
+      onSelect={() => {}}
+      onClose={() => {}}
+      onNew={() => {}}
+      activeSessions={preview.registry}
+    />
+  );
+}
+
+const TABS_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-tabs-t1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-04T16:40:00.000Z',
+    content: [
+      {
+        type: 'text',
+        text: 'The retry loop now backs off twice before it gives up, and the suite is green.',
+      },
+    ],
+  }),
+];
+
+function SessionTabsVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--tabs">
+      <div className="cl-stabs-bar">
+        <TabBarBack label="Back to app" title="Back to the app" onClick={() => {}} />
+        <PreviewSessionTabs />
+        <div className="cl-stabs-end">
+          <ViewSwitch view="lens" setView={() => {}} />
+          <BackgroundShells shells={[]} liveSince={null} compact />
+          <TabBarRailToggle collapsed onToggle={() => {}} />
+        </div>
+      </div>
+      <div className="cl-transcript-inner">
+        {TABS_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={12 + i}
           />
         ))}
       </div>
@@ -993,6 +1095,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'live-orb': LiveOrbVisual,
   plan: PlanVisual,
   'parked-terminals': ParkedTerminalsVisual,
+  'session-tabs': SessionTabsVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

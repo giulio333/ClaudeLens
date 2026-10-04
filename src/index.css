@@ -20665,6 +20665,19 @@ select.cl-opt-input {
 .cl-whatsnew-frame--remote .cl-whatsnew-remote-banner {
   padding: 12px 22px 0 24px;
 }
+/* The tabs preview: Mission Control's own tab bar over the Lens, without the
+   gutter that clears the traffic lights and without its drag region, which
+   inside a dialog would take hold of the window. The tab on screen is painted
+   with the surface under it, as Mission Control does from the view it shows:
+   here that surface is the frame. */
+.cl-whatsnew-frame--tabs .cl-stabs-bar {
+  --cl-stab-surface: var(--cl-paper);
+  padding-left: 10px;
+  -webkit-app-region: no-drag;
+}
+:root[data-theme='dark'] .cl-whatsnew-frame--tabs .cl-stabs-bar {
+  --cl-stab-surface: var(--cl-paper-2);
+}
 /* The rail preview: the real `ContextRail`, absolute on the frame's left edge
    the way it sits on the feed's. The turns step right of its 64px column; the
    list, when open, floats over them as it does in Lens. The rail's own 64/104

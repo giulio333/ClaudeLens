@@ -51,6 +51,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'An orb', description: 'While it works.', visual: 'live-orb' },
     { title: 'A plan', description: 'And its outcome.', visual: 'plan' },
     { title: 'Parked', description: 'In the background.', visual: 'parked-terminals' },
+    { title: 'Tabs', description: 'Across the top.', visual: 'session-tabs' },
   ],
 };
 
@@ -193,6 +194,19 @@ describe('WhatsNewDialog', () => {
     fireEvent.click(pill);
     const list = [...document.querySelectorAll('.cl-bgshell-item-title')].map(n => n.textContent);
     expect(list).toEqual(['Start the dev server', 'Build the app']);
+    // Three sessions as tabs, one on screen. Their states come from the
+    // preview's own registry — the fake bridge's is empty, so a tab that reads
+    // working or waiting can only have read it there.
+    const bar = container.querySelector('.cl-whatsnew-frame--tabs .cl-stabs-bar')!;
+    const tabs = [...bar.querySelectorAll('.cl-stab')];
+    expect(tabs.map(t => t.querySelector('.cl-stab-title')?.textContent)).toEqual([
+      'Wire the retry loop',
+      'Migrate the invoice tables',
+      'Fix the flaky login test',
+    ]);
+    expect(bar.querySelectorAll('.cl-stab[data-on="true"]')).toHaveLength(1);
+    expect(tabs[1].querySelector('.cl-stab-orb .cl-live-orb')).not.toBeNull();
+    expect(tabs[2].querySelector('.cl-parked-dot[data-tone="waiting"]')).not.toBeNull();
   });
 
   it('marks the version seen and closes on "Got it"', async () => {

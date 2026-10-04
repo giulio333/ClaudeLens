@@ -28,7 +28,8 @@ export interface WhatsNewHighlight {
     | 'background-shells'
     | 'live-orb'
     | 'plan'
-    | 'parked-terminals';
+    | 'parked-terminals'
+    | 'session-tabs';
 }
 
 export interface WhatsNewRelease {
@@ -38,6 +39,18 @@ export interface WhatsNewRelease {
 
 export const WHATS_NEW: WhatsNewRelease[] = [
   {
+    version: '2.2.33',
+    highlights: [
+      {
+        title: 'Sessions as tabs',
+        description:
+          'Every open session is a tab across the top of Mission Control: a click switches to it, + starts another, and each tab says whether Claude is working or waiting for you.',
+        where: 'The top bar of Mission Control; the back arrow leaves and keeps them running',
+        visual: 'session-tabs',
+      },
+    ],
+  },
+  {
     version: '2.2.32',
     highlights: [
       {
@@ -45,7 +58,7 @@ export const WHATS_NEW: WhatsNewRelease[] = [
         description:
           'Send a terminal session to the background and it keeps running while you work elsewhere, behind a badge that says which one needs you.',
         where:
-          'The round button at the end of a terminal’s top bar; the badge brings a session back',
+          'Mission Control’s back arrow keeps a session running; the badge in the app’s top bar brings it back',
         visual: 'parked-terminals',
       },
     ],

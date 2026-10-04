@@ -101,13 +101,15 @@ export function OpenSessionsButton({
   currentId,
   onRestore,
   onClose,
+  activeSessions: registryOverride,
 }: {
   instances: readonly TerminalInstance[];
   currentId: string | null;
   onRestore: (id: string) => void;
   onClose: (id: string) => void;
+  activeSessions?: readonly ActiveSession[];
 }) {
-  const rows = useSessionRows(instances);
+  const rows = useSessionRows(instances, registryOverride);
   const { anchor, open, id, rootRef, panelRef, close, toggle } = useAnchoredPanel(
     instances.length > 0
   );

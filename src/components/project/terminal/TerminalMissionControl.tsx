@@ -172,7 +172,7 @@ export function ViewTabs({
 /** Terminal / Lens as one segmented control, the active half filled — the
  *  switch at the right end of Mission Control's single top bar (variant C).
  *  `ViewTabs` is the centred underline row the Remote view still draws. */
-function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
+export function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
   return (
     <div className="cl-stabs-view" role="group" aria-label="View">
       <button type="button" aria-pressed={view === 'terminal'} onClick={() => setView('terminal')}>
@@ -207,6 +207,88 @@ function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void 
         Lens
       </button>
     </div>
+  );
+}
+
+/** The tab bar's way back, at its left end. What it goes back to is the
+ *  caller's to say: the session from a detail, the app from a session. */
+export function TabBarBack({
+  label,
+  title,
+  onClick,
+}: {
+  label: string;
+  title: string;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="cl-stabs-icon cl-stabs-back"
+      onClick={onClick}
+      aria-label={label}
+      title={title}
+    >
+      <svg
+        width="15"
+        height="15"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.6"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <path d="M10 3.5 5.5 8l4.5 4.5" />
+      </svg>
+    </button>
+  );
+}
+
+/** The Mission Control toggle at the tab bar's right end: the same panel-right
+ *  glyph as `RailToggle`, drawn as one of the bar's bare icons. */
+export function TabBarRailToggle({
+  collapsed,
+  onToggle,
+}: {
+  collapsed: boolean;
+  onToggle: () => void;
+}) {
+  const label = collapsed ? 'Show Mission Control' : 'Hide Mission Control';
+  return (
+    <button
+      type="button"
+      className="cl-stabs-icon"
+      onClick={onToggle}
+      aria-pressed={!collapsed}
+      aria-label={label}
+      title={label}
+    >
+      <svg
+        width="16"
+        height="16"
+        viewBox="0 0 16 16"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="1.5"
+        aria-hidden="true"
+      >
+        <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
+        <line x1="9.75" y1="3.25" x2="9.75" y2="12.75" />
+        {!collapsed && (
+          <rect
+            x="9.75"
+            y="3.25"
+            width="4.25"
+            height="9.5"
+            fill="currentColor"
+            stroke="none"
+            opacity="0.3"
+          />
+        )}
+      </svg>
+    </button>
   );
 }
 
@@ -256,48 +338,6 @@ export function RailToggle({ collapsed, onToggle }: { collapsed: boolean; onTogg
             opacity="0.22"
           />
         )}
-      </svg>
-    </button>
-  );
-}
-
-/** Send this session to the background: keep its `claude` running and step out
- *  of it. Back is the other exit, the one that ends the session. A round icon
- *  button, the same control as the rail toggle beside it: a window dropping
- *  into a tray. */
-export function ParkButton({ onPark }: { onPark: () => void }) {
-  const label = 'Keep running in background';
-  return (
-    <button
-      type="button"
-      onClick={onPark}
-      title={label}
-      aria-label={label}
-      className="inline-flex items-center justify-center transition-colors shrink-0 hover:text-[var(--cl-accent-ink)]"
-      style={{
-        width: 32,
-        height: 32,
-        borderRadius: 999,
-        border: '1px solid var(--cl-glass-border)',
-        background: 'transparent',
-        color: 'var(--cl-ink-3)',
-      }}
-    >
-      <svg
-        width="16"
-        height="16"
-        viewBox="0 0 16 16"
-        fill="none"
-        stroke="currentColor"
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        aria-hidden="true"
-      >
-        <path d="M3 6.5V4.25A1.75 1.75 0 0 1 4.75 2.5h6.5A1.75 1.75 0 0 1 13 4.25V6.5" />
-        <line x1="8" y1="5.5" x2="8" y2="10.5" />
-        <polyline points="5.75 8.5 8 10.75 10.25 8.5" />
-        <line x1="3" y1="13.5" x2="13" y2="13.5" />
       </svg>
     </button>
   );
@@ -679,11 +719,9 @@ export function TerminalMissionControl({
           } as React.CSSProperties
         }
       >
-        <button
-          type="button"
-          className="cl-stabs-icon cl-stabs-back"
+        <TabBarBack
           onClick={overlay ? closeOverlay : (onPark ?? requestBack)}
-          aria-label={overlay ? 'Back to session' : onPark ? 'Back to app' : 'Back'}
+          label={overlay ? 'Back to session' : onPark ? 'Back to app' : 'Back'}
           title={
             overlay
               ? 'Back to session (Esc)'
@@ -691,21 +729,7 @@ export function TerminalMissionControl({
                 ? 'Back to the app; this session keeps running'
                 : 'Back'
           }
-        >
-          <svg
-            width="15"
-            height="15"
-            viewBox="0 0 16 16"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth="1.6"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            aria-hidden="true"
-          >
-            <path d="M10 3.5 5.5 8l4.5 4.5" />
-          </svg>
-        </button>
+        />
         {sessionTabs ?? (
           <span className="cl-stabs-fallback">
             <span>{projectName.toUpperCase()}</span>
@@ -735,38 +759,7 @@ export function TerminalMissionControl({
           {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
           <ViewSwitch view={view} setView={setView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
-          <button
-            type="button"
-            className="cl-stabs-icon"
-            onClick={toggleRail}
-            aria-pressed={!railCollapsed}
-            aria-label={railCollapsed ? 'Show Mission Control' : 'Hide Mission Control'}
-            title={railCollapsed ? 'Show Mission Control' : 'Hide Mission Control'}
-          >
-            <svg
-              width="16"
-              height="16"
-              viewBox="0 0 16 16"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="1.5"
-              aria-hidden="true"
-            >
-              <rect x="2" y="3.25" width="12" height="9.5" rx="2" />
-              <line x1="9.75" y1="3.25" x2="9.75" y2="12.75" />
-              {!railCollapsed && (
-                <rect
-                  x="9.75"
-                  y="3.25"
-                  width="4.25"
-                  height="9.5"
-                  fill="currentColor"
-                  stroke="none"
-                  opacity="0.3"
-                />
-              )}
-            </svg>
-          </button>
+          <TabBarRailToggle collapsed={railCollapsed} onToggle={toggleRail} />
         </div>
       </div>
 
