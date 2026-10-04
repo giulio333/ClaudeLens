@@ -67,6 +67,11 @@
   --cl-warn-soft: oklch(0.94 0.05 75);
   /* scrollbar thumb */
   --cl-scroll: oklch(0.82 0.008 90 / 0.6);
+  /* what Mission Control's tab bar is drawn towards from the surface under it:
+     a terracotta that, mixed 12% into white, lands the bar on a faint accent
+     veil — oklch(0.965 0.013 50) — and the hairline under it in the same hue */
+  --cl-stab-shade: oklch(0.708 0.108 50);
+  --cl-stab-line: oklch(0.88 0.02 50);
   /* shared editorial gutter (hero / section horizontal padding) */
   --cl-gutter: clamp(32px, 5.5vw, 80px);
   /* One measure for the project landing. The hero's figures stopped around
@@ -132,6 +137,9 @@
   --cl-warn: oklch(0.78 0.14 75);
   --cl-warn-soft: oklch(0.34 0.07 75);
   --cl-scroll: oklch(0.45 0.01 75 / 0.6);
+  /* dark: still a step darker than the surface, with the same accent hue */
+  --cl-stab-shade: oklch(0.1 0.04 45);
+  --cl-stab-line: oklch(0.33 0.02 50);
 }
 
 /* ── Liquid Glass tokens (global accent) ──
@@ -21502,7 +21510,11 @@ select.cl-opt-input {
    is the surface below it darkened a step, and the tab on screen is painted
    with that surface (`--cl-stab-surface`, set by Mission Control from the view
    it shows) and overlaps the bar's hairline, so it reads as the top of the
-   page under it. */
+   page under it. The step is taken towards `--cl-stab-shade`, not black: white
+   darkened with black is a neutral grey, the one cold surface in a warm app;
+   the shade gives the bar a faint veil of the accent instead. Mixed in oklab,
+   not oklch: white has no hue, and oklch would interpolate from its nominal 0°
+   rather than land on the shade's. */
 .cl-stabs-bar {
   flex-shrink: 0;
   display: flex;
@@ -21510,8 +21522,12 @@ select.cl-opt-input {
   gap: 6px;
   height: 42px;
   padding: 0 10px 0 88px;
-  background: color-mix(in oklch, var(--cl-stab-surface, var(--cl-paper)) 94%, black);
-  border-bottom: 1px solid var(--cl-line);
+  background: color-mix(
+    in oklab,
+    var(--cl-stab-surface, var(--cl-paper)) 88%,
+    var(--cl-stab-shade)
+  );
+  border-bottom: 1px solid var(--cl-stab-line);
   -webkit-app-region: drag;
 }
 .cl-stabs-bar > .cl-parked {
@@ -21580,11 +21596,11 @@ select.cl-opt-input {
 .cl-stab[data-on='true'] .cl-stab-title:not(.cl-session-identity) {
   color: var(--cl-ink);
 }
+/* The project as it is named on disk, in the title's own face: tracked mono
+   capitals beside a sans title were two type systems in one 34px tab. */
 .cl-stab-project {
   flex: none;
-  font: 400 9.5px/1 var(--font-mono);
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font: 400 11.5px/1.2 var(--font-sans);
   color: var(--cl-ink-4);
 }
 /* The orb is a 20px canvas standing in for a 7px dot: the negative margins
@@ -21689,7 +21705,9 @@ select.cl-opt-input {
   padding: 2px;
   border-radius: 9px;
   border: 1px solid var(--cl-line);
-  background: color-mix(in oklch, var(--cl-stab-surface, var(--cl-paper)) 88%, black);
+  /* No fill of its own: a darker well inside the darkened bar was a fourth
+     surface in 42px, under the white segment and the white tab. */
+  background: transparent;
 }
 .cl-stabs-view button {
   display: inline-flex;
@@ -21714,9 +21732,6 @@ select.cl-opt-input {
   background: var(--cl-stab-surface, var(--cl-paper));
   color: var(--cl-ink);
   box-shadow: 0 0 0 1px var(--cl-line);
-}
-.cl-stabs-view button[aria-pressed='true'] svg {
-  color: var(--cl-accent);
 }
 /* What a tab has no room for, under it after a rest (SessionTabCard): the
    whole title, the project and where it lives, the state and the tool in
