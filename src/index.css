@@ -6874,20 +6874,19 @@ button.cl-pill-model[data-on] {
   margin: 6px 0;
   vertical-align: top;
 }
+/* No frame of our own: a macOS window capture already carries its shadow and
+   a transparent margin, and a border or a fill behind it read as a second
+   frame around the picture. */
 .cl-image-open {
   display: block;
   max-width: 100%;
   padding: 0;
-  border: 1px solid var(--cl-line);
+  border: 0;
   border-radius: 8px;
   overflow: hidden;
-  background: var(--cl-paper-2);
+  background: none;
   cursor: zoom-in;
   line-height: 0;
-  transition: border-color 120ms ease;
-}
-.cl-image-open:hover {
-  border-color: var(--cl-ink-4);
 }
 .cl-image-open img {
   display: block;
