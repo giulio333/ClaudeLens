@@ -688,6 +688,8 @@ export function MissionRail({
   const doneTasks = tasks.filter(t => t.status === 'completed').length;
   const pct = ctx?.pct ?? 0;
   const ctxDanger = !!ctx && pct >= 90;
+  // A figure that has not moved off zero keeps its place but drops to meta ink.
+  const spent = !!summary && summary.estimatedCost > 0;
 
   // The filter pills: only species the session actually produced, plus TEAMS
   // whenever the *project* has teams — so "no teams anywhere" (no pill) and "no
@@ -879,13 +881,13 @@ export function MissionRail({
             >
               <span
                 style={{
-                  font: '700 21px/1 var(--font-sans)',
+                  font: `${ctx ? 700 : 400} 21px/1 var(--font-sans)`,
                   letterSpacing: '-0.03em',
-                  color: ctxDanger ? 'var(--cl-danger)' : 'var(--cl-ink)',
+                  color: ctxDanger ? 'var(--cl-danger)' : ctx ? 'var(--cl-ink)' : 'var(--cl-ink-4)',
                 }}
               >
                 {ctx ? pct : '—'}
-                <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>
+                {ctx && <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>}
               </span>
               <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
             </span>
@@ -898,16 +900,41 @@ export function MissionRail({
               onMouseLeave={() => setVital(null)}
               onFocus={() => setVital('spend')}
               onBlur={() => setVital(null)}
-              style={{ font: '700 15px/1 var(--font-sans)', color: 'var(--cl-accent-ink)' }}
+              style={{
+                font: `${spent ? 700 : 400} 15px/1 var(--font-sans)`,
+                color: spent ? 'var(--cl-accent-ink)' : 'var(--cl-ink-4)',
+              }}
             >
               {summary ? fmtCost(summary.estimatedCost) : '—'}
             </span>
             <span style={{ flex: 1 }} />
-            <span style={{ fontSize: 9.5, color: 'var(--cl-ok)' }}>+{fmt(totals.added)}</span>
-            <span style={{ fontSize: 9.5, color: 'var(--cl-danger)' }}>−{fmt(totals.removed)}</span>
-            <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
-              {changes.length} {changes.length === 1 ? 'file' : 'files'}
-            </span>
+            {/* Zero is not a reading: `+0 −0 0 files` in green and red said
+                three times that nothing happened, in the band's loudest hues. */}
+            {changes.length === 0 ? (
+              <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>no changes</span>
+            ) : (
+              <>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    color: totals.added > 0 ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
+                  }}
+                >
+                  +{fmt(totals.added)}
+                </span>
+                <span
+                  style={{
+                    fontSize: 9.5,
+                    color: totals.removed > 0 ? 'var(--cl-danger)' : 'var(--cl-ink-4)',
+                  }}
+                >
+                  −{fmt(totals.removed)}
+                </span>
+                <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+                  {changes.length} {changes.length === 1 ? 'file' : 'files'}
+                </span>
+              </>
+            )}
           </div>
         )}
 
@@ -977,12 +1004,21 @@ export function MissionRail({
                   fontSize: 9,
                   fontWeight: 600,
                   letterSpacing: '0.12em',
-                  border: `1px solid ${active ? 'var(--cl-ink)' : 'var(--cl-line)'}`,
-                  background: active ? 'var(--cl-ink)' : 'transparent',
-                  color: active ? 'var(--cl-paper)' : 'var(--cl-ink-3)',
+                  // The active filter is an accent veil, as on the tag filters:
+                  // solid ink made the choice of an empty filter the heaviest
+                  // thing in the rail.
+                  border: `1px solid ${
+                    active
+                      ? 'color-mix(in oklch, var(--cl-accent) 35%, transparent)'
+                      : 'var(--cl-line)'
+                  }`,
+                  background: active
+                    ? 'color-mix(in oklch, var(--cl-accent) 14%, transparent)'
+                    : 'transparent',
+                  color: active ? 'var(--cl-accent-ink)' : 'var(--cl-ink-3)',
                 }}
               >
-                {f.label} {f.n}
+                {f.label} <span style={{ opacity: 0.65 }}>{f.n}</span>
               </button>
             );
           })}
@@ -991,7 +1027,7 @@ export function MissionRail({
         {/* the stream */}
         <div style={{ flex: 1, minHeight: 0, overflowY: 'auto', padding: '8px 20px 24px' }}>
           {!sessionId && (
-            <p className="cl-transcript-state">
+            <p className="cl-rail-empty">
               {remote
                 ? `Waiting for the session on ${remote.hostName}…`
                 : 'Waiting for the CLI session to register…'}
@@ -1007,7 +1043,7 @@ export function MissionRail({
           )}
 
           {sessionId && !isError && empty && filter === 'ALL' && (
-            <p className="cl-transcript-state">
+            <p className="cl-rail-empty">
               Agents, skills and file changes will appear here as Claude works.
             </p>
           )}

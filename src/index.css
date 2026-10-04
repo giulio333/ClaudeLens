@@ -479,6 +479,23 @@ body {
   border-bottom-color: var(--cl-ink-4);
   outline: none;
 }
+
+/* Mission Control's feed before it has anything to show. Its own class, not
+   `.cl-transcript-state`: that one's 88px side padding is the transcript's
+   gutter, and in a 380px rail it pushed the sentence off centre. Centred in
+   the feed's height, a little above the middle where the eye lands. */
+.cl-rail-empty {
+  min-height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0;
+  padding: 0 16px 48px;
+  text-align: center;
+  text-wrap: balance;
+  font: 400 10.5px/1.6 var(--font-mono);
+  color: var(--cl-ink-4);
+}
 .cl-vitals-pop {
   animation: cl-vitals-in 0.14s ease-out;
   transform-origin: top left;
