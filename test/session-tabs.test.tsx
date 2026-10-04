@@ -7,10 +7,10 @@
 // the one on screen marked. What the reducer does with those calls is
 // `terminal-instances.test.ts`; this is what the strip offers and when it asks.
 import { StrictMode } from 'react';
-import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import type { ActiveSession } from '../src/types';
+import type { ActiveSession, SessionActivity } from '../src/types';
 import { ThemeContext } from '../src/hooks/useTheme';
 import type {
   InstanceReport,
@@ -164,6 +164,19 @@ it('closes without asking a session that is idle, or that works in a terminal el
   expect(props.onClose).toHaveBeenCalledWith('t2');
 });
 
+it('offers the grid button only once there are two tabs, before the tabs', () => {
+  mount([tab('t1', { title: 'Fix the build' })], 't1');
+  expect(screen.queryByRole('button', { name: 'All open sessions' })).toBeNull();
+  cleanup();
+  mount(
+    [tab('t1', { title: 'Fix the build' }), tab('t2', { title: 'Write the docs' }, ZETA)],
+    't1'
+  );
+  const grid = screen.getByRole('button', { name: 'All open sessions' });
+  const strip = screen.getByRole('navigation', { name: 'Open sessions' });
+  expect(grid.compareDocumentPosition(strip) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+});
+
 it('lists every tab behind the grid button, the one on screen marked and not reopened', () => {
   const props = mount(
     [tab('t1', { title: 'Fix the build' }), tab('t2', { title: 'Write the docs' }, ZETA)],
@@ -180,4 +193,43 @@ it('lists every tab behind the grid button, the one on screen marked and not reo
   fireEvent.click(screen.getByRole('button', { name: 'All open sessions' }));
   fireEvent.click(screen.getByRole('button', { name: /^Open zeta · Write the docs/ }));
   expect(props.onSelect).toHaveBeenCalledWith('t2');
+});
+
+it('shows the whole title, project and state under a tab after a rest, and hides it on leaving', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(
+    ok([busy({ pid: 2, sessionId: 'session-a', startedAt: Date.now() - 12 * 60_000 })])
+  );
+  const long = 'Refactor the authentication module so tokens refresh before they expire';
+  bridge.api.live.getActivity.mockResolvedValue(
+    ok([
+      {
+        sessionId: 'session-a',
+        lastTool: { name: 'Bash', arg: 'cd web && CI=1 npm run test --silent' },
+        delegates: [],
+      } as unknown as SessionActivity,
+    ])
+  );
+  mount([tab('t1', { pid: 2, sessionId: 'session-a', title: long })], 't1');
+  await registryRead();
+  await waitFor(() => expect(client.getQueryData(['live:sessionActivity'])).toBeDefined());
+  const stab = screen.getByRole('button', { name: new RegExp(`^${long}`) });
+  expect(stab.getAttribute('title')).toBeNull();
+  vi.useFakeTimers();
+  try {
+    fireEvent.mouseEnter(stab.parentElement!);
+    expect(screen.queryByRole('tooltip')).toBeNull();
+    act(() => vi.advanceTimersByTime(500));
+    const card = screen.getByRole('tooltip');
+    expect(card.textContent).toContain(long);
+    expect(card.textContent).toContain('acme');
+    expect(card.textContent).not.toContain('/synthetic/acme');
+    expect(card.textContent).toContain('Claude is working · open 12 min');
+    expect(card.textContent).toContain('Bash');
+    expect(card.textContent).toContain('npm');
+    expect(card.textContent).not.toContain('run test --silent');
+    fireEvent.mouseLeave(screen.getByRole('navigation', { name: 'Open sessions' }));
+    expect(screen.queryByRole('tooltip')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
 });

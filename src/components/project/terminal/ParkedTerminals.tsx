@@ -147,11 +147,12 @@ export function OpenSessionsButton({
           onDone={close}
           label="Open sessions"
           title={`Open sessions · ${count}`}
-          lede="Every session open in a tab. The ones you are not looking at keep running."
           rows={rows}
           currentId={currentId}
           onRestore={onRestore}
           onClose={onClose}
+          align="left"
+          compact
         />
       )}
     </div>
@@ -251,6 +252,8 @@ function SessionListPanel({
   currentId,
   onRestore,
   onClose,
+  align = 'right',
+  compact = false,
 }: {
   anchor: DOMRect;
   panelRef: React.RefObject<HTMLDivElement | null>;
@@ -258,23 +261,33 @@ function SessionListPanel({
   onDone: () => void;
   label: string;
   title: ReactNode;
-  lede: string;
+  lede?: string;
   rows: SessionRow[];
   currentId?: string | null;
   onRestore: (id: string) => void;
   onClose: (id: string) => void;
+  /** Which edge of the trigger the panel lines up with: the badge sits at the
+   *  right of its bar, the grid button at the left of the tabs. */
+  align?: 'left' | 'right';
+  /** The tab strip's list: one line per session, the project beside its state
+   *  instead of above the title, and no lede — the tabs already said it. */
+  compact?: boolean;
 }) {
+  const edge =
+    align === 'left'
+      ? { left: Math.max(8, anchor.left) }
+      : { right: Math.max(8, window.innerWidth - anchor.right) };
   return createPortal(
     <div
       ref={panelRef}
       id={id}
       role="dialog"
       aria-label={label}
-      className="cl-bgshell-panel cl-parked-panel"
-      style={{ top: anchor.bottom + 8, right: Math.max(8, window.innerWidth - anchor.right) }}
+      className={`cl-bgshell-panel cl-parked-panel${compact ? ' cl-parked-panel--compact' : ''}`}
+      style={{ top: anchor.bottom + 8, ...edge }}
     >
       <div className="cl-bgshell-panel-title">{title}</div>
-      <p className="cl-bgshell-panel-lede">{lede}</p>
+      {lede && <p className="cl-bgshell-panel-lede">{lede}</p>}
       <ul className="cl-bgshell-list">
         {rows.map(({ inst, tone, project, title: rowTitle, state, since }) => {
           const current = inst.id === currentId;
@@ -293,7 +306,7 @@ function SessionListPanel({
               >
                 <span className="cl-parked-dot" data-tone={tone} aria-hidden />
                 <span className="cl-bgshell-item-body">
-                  <span className="cl-parked-project">{project}</span>
+                  {!compact && <span className="cl-parked-project">{project}</span>}
                   {/* The session's colour is worn by its title, as on the
                       sessions list: it is what says which session this is. */}
                   <span
@@ -304,6 +317,7 @@ function SessionListPanel({
                     {rowTitle}
                   </span>
                   <span className="cl-bgshell-item-sub cl-parked-state" data-tone={tone}>
+                    {compact && <span className="cl-parked-project">{project} · </span>}
                     {since ? `${state} · ${since}` : state}
                     {current ? ' · on screen' : ''}
                   </span>

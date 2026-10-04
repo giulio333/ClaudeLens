@@ -21430,6 +21430,53 @@ select.cl-opt-input {
 .cl-parked-row[data-current='true'] {
   background: color-mix(in oklch, var(--cl-accent) 7%, transparent);
 }
+/* The tab strip's list (the grid button): a header, then one tight row per
+   session — the title on one line, project and state under it. */
+.cl-bgshell-panel.cl-parked-panel--compact {
+  width: 320px;
+  padding: 10px 12px 8px;
+}
+.cl-parked-panel--compact .cl-bgshell-panel-title {
+  padding: 0 0 6px;
+  font-size: 12.5px;
+}
+.cl-parked-panel--compact .cl-parked-row {
+  margin: 0 -6px;
+  padding: 0 2px 0 6px;
+  border-radius: 8px;
+}
+.cl-parked-panel--compact .cl-bgshell-entry + .cl-bgshell-entry {
+  border-top: 0;
+}
+.cl-parked-panel--compact .cl-bgshell-item {
+  gap: 10px;
+  padding: 7px 0;
+}
+.cl-parked-panel--compact .cl-bgshell-item-body {
+  gap: 2px;
+}
+.cl-parked-panel--compact .cl-bgshell-item-title {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-parked-panel--compact .cl-bgshell-item-sub {
+  font-size: 11.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-parked-panel--compact .cl-parked-close {
+  align-self: center;
+  width: 22px;
+  height: 22px;
+  margin-top: 0;
+}
+.cl-parked-panel--compact .cl-bgshell-panel-foot {
+  margin-top: 4px;
+  padding-top: 8px;
+  font-size: 11px;
+}
 
 /* ── Mission Control, level one: every open session as a tab ──────────────
    42px with 34px tabs standing on its floor puts every control on one line,
@@ -21600,12 +21647,13 @@ select.cl-opt-input {
   font: 400 12px/1 var(--font-mono);
   color: var(--cl-ink-3);
 }
-/* The right end of the bar (variant C): it stands on the floor like a tab, so
-   everything in it is centred on the tabs' line. */
+/* The right end of the bar (variant C), centred in the bar rather than on the
+   tabs' line: the Terminal/Lens pill is framed, and on the tabs' line (25px,
+   4px below the bar's centre) its frame stood 1px off the hairline with 8px
+   above it. */
 .cl-stabs-end {
   flex: none;
-  align-self: flex-end;
-  height: 34px;
+  align-self: center;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -21621,9 +21669,9 @@ select.cl-opt-input {
 .cl-stabs-view {
   display: inline-flex;
   align-items: center;
-  gap: 3px;
-  padding: 3px;
-  border-radius: 10px;
+  gap: 2px;
+  padding: 2px;
+  border-radius: 9px;
   border: 1px solid var(--cl-line);
   background: color-mix(in oklch, var(--cl-stab-surface, var(--cl-paper)) 88%, black);
 }
@@ -21631,7 +21679,7 @@ select.cl-opt-input {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  height: 24px;
+  height: 22px;
   padding: 0 10px;
   border: 0;
   border-radius: 7px;
@@ -21653,6 +21701,84 @@ select.cl-opt-input {
 }
 .cl-stabs-view button[aria-pressed='true'] svg {
   color: var(--cl-accent);
+}
+/* What a tab has no room for, under it after a rest (SessionTabCard): the
+   whole title, the project and where it lives, the state and the tool in
+   flight. Glass like the open-sessions list; no controls, so it never takes
+   the pointer. */
+.cl-stab-card {
+  position: fixed;
+  z-index: 60;
+  width: max-content;
+  max-width: 340px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 12px;
+  border-radius: 10px;
+  background: color-mix(in oklch, var(--cl-paper) 88%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 14px 30px -18px oklch(0.3 0.03 50 / 0.45);
+  color: var(--cl-ink);
+  pointer-events: none;
+  animation: cl-stab-card-in 120ms ease-out;
+}
+:root[data-theme='dark'] .cl-stab-card {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.08),
+    0 14px 30px -18px oklch(0 0 0 / 0.7);
+}
+@keyframes cl-stab-card-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px);
+  }
+}
+.cl-stab-card-title {
+  font: 600 13px/1.35 var(--font-sans);
+  overflow-wrap: anywhere;
+}
+.cl-stab-card-project {
+  font: 400 10px/1.3 var(--font-mono);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-stab-card-state {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font: 400 11.5px/1.3 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-stab-card-tool {
+  display: flex;
+  gap: 6px;
+  min-width: 0;
+  font: 400 11px/1.3 var(--font-mono);
+  color: var(--cl-ink-2);
+}
+.cl-stab-card-arg {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-ink-4);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-stab-card {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cl-stab-card {
+    background: var(--cl-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
 }
 /* The background shells as an icon: their state glyph and how many run. */
 .cl-bgshell-pill.cl-bgshell-pill--icon {

@@ -2,6 +2,8 @@ import { useActiveSessions, useSessionActivity } from '../../../hooks/useIPC';
 import { LiveOrb } from '../../LiveOrb';
 import { inFlightTool } from '../../live-orb';
 import { OpenSessionsButton } from './ParkedTerminals';
+import { SessionTabCard } from './SessionTabCard';
+import { useTabHover } from './use-tab-hover';
 import {
   TONE_LABEL,
   chipTone,
@@ -15,7 +17,8 @@ import {
  * The first row of Mission Control: every open session as a tab. A click on a
  * tab brings that session on screen and keeps the one it replaces running; its
  * ✕ ends it. `+` opens a new session in the project on screen, and the grid
- * button lists every tab — the way out when they no longer fit.
+ * button before the tabs lists every one of them — the way out when they no
+ * longer fit — once there are two.
  *
  * A tab says which session it is (its title, in the session's colour, and the
  * project) and what state it is in: the dot of the background badge, or the
@@ -37,6 +40,8 @@ export function SessionTabs({
 }) {
   const { data: activeSessions } = useActiveSessions();
   const { data: activity } = useSessionActivity();
+  const { hover, enter, leave } = useTabHover();
+  const hovered = hover && instances.find(i => i.id === hover.id);
 
   const close = (inst: TerminalInstance) => {
     const tone = chipTone(inst.report, activeSessions);
@@ -51,7 +56,17 @@ export function SessionTabs({
 
   return (
     <>
-      <nav className="cl-stabs" aria-label="Open sessions">
+      {/* Before the tabs, not after `+`: it stays put however many tabs there
+          are, and with one session there is nothing to list. */}
+      {instances.length > 1 && (
+        <OpenSessionsButton
+          instances={instances}
+          currentId={currentId}
+          onRestore={onSelect}
+          onClose={onClose}
+        />
+      )}
+      <nav className="cl-stabs" aria-label="Open sessions" onMouseLeave={leave}>
         {instances.map(inst => {
           const on = inst.id === currentId;
           const tone = chipTone(inst.report, activeSessions);
@@ -60,14 +75,19 @@ export function SessionTabs({
           const color = inst.report.color;
           const sessionId = inst.report.sessionId;
           return (
-            <div key={inst.id} className="cl-stab" data-on={on}>
+            <div
+              key={inst.id}
+              className="cl-stab"
+              data-on={on}
+              onMouseEnter={e => enter(inst.id, e.currentTarget)}
+            >
               <button
                 type="button"
                 className="cl-stab-main"
                 aria-current={on ? 'page' : undefined}
                 aria-label={`${title} · ${project} — ${TONE_LABEL[tone]}`}
-                title={`${project} · ${title} — ${TONE_LABEL[tone]}`}
                 onClick={() => {
+                  leave();
                   if (!on) onSelect(inst.id);
                 }}
               >
@@ -130,12 +150,14 @@ export function SessionTabs({
           </svg>
         </button>
       </nav>
-      <OpenSessionsButton
-        instances={instances}
-        currentId={currentId}
-        onRestore={onSelect}
-        onClose={onClose}
-      />
+      {hovered && hover && (
+        <SessionTabCard
+          inst={hovered}
+          rect={hover.rect}
+          activeSessions={activeSessions}
+          activity={activity?.find(a => a.sessionId === hovered.report.sessionId)}
+        />
+      )}
     </>
   );
 }
