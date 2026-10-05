@@ -21,19 +21,8 @@ import type {
   ToolGroup,
   TouchedFile,
 } from '../chat/utils';
-import {
-  parseHttpFailure,
-  parseRedirectNotice,
-  parseWebSearchResult,
-  webCanonicalUrl,
-  webHost,
-  webOutcome,
-  webPageLabel,
-  WEB_FETCH,
-  WEB_SEARCH,
-  WEB_TOOLS,
-} from '../chat/web';
-import type { WebLink, WebRedirect } from '../chat/web';
+import { webHost, webVisitOutcome, WEB_FETCH, WEB_TOOLS } from '../chat/web';
+import type { WebLink, WebVisit } from '../chat/web';
 
 /**
  * The data model behind Mission Control's **event feed** (design "1d · Feed").
@@ -133,131 +122,14 @@ export function areaOf(path: string, realPath: string): string {
 
 /* ── web activity ─────────────────────────────────────────────────────── */
 
-/**
- * What the session read from outside the machine.
- *
- * The web tools were the one kind of work the feed never showed: a research
- * session could pull ten pages and run five searches and the rail stayed empty
- * except for the files it wrote afterwards — the sources of an answer were
- * invisible, and a fetch that never landed (a redirect, a dead host) was
- * invisible twice over.
- *
- * The unit is **the page, or the query** — one row per distinct URL and per
- * distinct query, aggregating repeated calls the way `buildFileChanges`
- * aggregates repeated edits of one file. Two fetches of the same URL are the
- * same source read twice (usually asking it for something different), not two
- * events; two different pages of one host are two sources, so they stay apart.
- *
- * What this cannot see, by construction: a **sub-agent's** fetches, which live
- * in its own sidechain transcript (the AGENTS row is their entry point), and any
- * page pulled through a shell command or an MCP browser tool — neither carries a
- * `url` input this can read.
- */
-
-export type WebVisitKind = 'fetch' | 'search';
-
-export type WebVisit = {
-  /** Stable row identity: the URL for a fetch, the query for a search. */
-  key: string;
-  kind: WebVisitKind;
-  /** Page label (fetch) or the query itself (search) — the row's title. */
-  title: string;
-  /** Empty for a search, which has no single source. */
-  url: string;
-  /** Host of the URL; empty for a search. */
-  host: string;
-  /** The extraction ask (fetch) or the domain restriction (search) — tooltip
-   *  material: it explains *why* the page was pulled. */
-  ask: string;
-  /** Every call on this source, in transcript order. */
-  items: ToolGroup[];
-  /** Sources a search returned, from the call that produced them. */
-  links: WebLink[];
-  /** Where a fetch was redirected — evidence kept even when a later call to the
-   *  same URL succeeded, so the row can decide which fact it reports. */
-  redirect: WebRedirect | null;
-  /** Calls that came back with actual content. */
-  reads: number;
-  hasError: boolean;
-  /** Why it failed, in the tool's own words (first line) — a network error for a
-   *  fetch, `unavailable` for a search that never ran. */
-  failure: string | null;
-};
+// `buildWebActivity` and `WebVisit` live in `chat/web.ts` — the chat draws the
+// same visits at a turn's foot in MIN — and are re-exported here for the rail.
+export { buildWebActivity } from '../chat/web';
+export type { WebVisit, WebVisitKind } from '../chat/web';
 
 function str(input: Record<string, unknown>, key: string): string {
   const v = input[key];
   return typeof v === 'string' ? v : '';
-}
-
-export function buildWebActivity(groups: ToolGroup[]): WebVisit[] {
-  const byKey = new Map<string, WebVisit>();
-  for (const g of groups) {
-    const name = g.use.name;
-    if (!WEB_TOOLS.has(name)) continue;
-    const input = g.use.input as Record<string, unknown>;
-    const fetch = name === WEB_FETCH;
-    // A call whose defining input is missing can't be aggregated under any
-    // source — skipping it beats inventing a row titled "".
-    const rawSubject = fetch ? str(input, 'url') : str(input, 'query');
-    if (!rawSubject) continue;
-    // A fetch is grouped by the *document* it asked for, not by the exact string:
-    // two spellings of one page (an anchor, a trailing slash) are one source.
-    const subject = fetch ? webCanonicalUrl(rawSubject) : rawSubject;
-
-    const key = `${fetch ? 'fetch' : 'search'}:${subject}`;
-    let v = byKey.get(key);
-    if (!v) {
-      const domains = input.allowed_domains;
-      v = {
-        key,
-        kind: fetch ? 'fetch' : 'search',
-        title: fetch ? webPageLabel(subject) : subject,
-        url: fetch ? subject : '',
-        host: fetch ? webHost(subject) : '',
-        ask: fetch
-          ? str(input, 'prompt')
-          : Array.isArray(domains)
-            ? domains.filter(d => typeof d === 'string').join(', ')
-            : '',
-        items: [],
-        links: [],
-        redirect: null,
-        reads: 0,
-        hasError: false,
-        failure: null,
-      };
-      byKey.set(key, v);
-    }
-    v.items.push(g);
-
-    const raw = g.result?.content ?? '';
-    switch (webOutcome(name, g.result)) {
-      case 'read':
-        v.reads += 1;
-        if (name === WEB_SEARCH) {
-          const links = parseWebSearchResult(raw).links;
-          if (links.length > 0) v.links = links;
-        }
-        break;
-      case 'redirect':
-        v.redirect = parseRedirectNotice(raw);
-        break;
-      case 'failed':
-        v.hasError = true;
-        v.failure =
-          (name === WEB_SEARCH
-            ? parseWebSearchResult(raw).error
-            : // `HTTP 404 Not Found` reads as a row's meta; the sentence it opens
-              // ("The server returned …", plus advice about authenticated tools)
-              // does not. A transport error has no such shape, so it keeps its
-              // first line.
-              (parseHttpFailure(raw) ?? raw.split('\n')[0]?.trim())) || null;
-        break;
-      case 'pending':
-        break;
-    }
-  }
-  return [...byKey.values()];
 }
 
 /* ── memory labels ────────────────────────────────────────────────────── */
@@ -640,13 +512,10 @@ function clip(s: string, max = 240): string {
 
 function webEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
   return input.web.map(v => {
-    // Precedence follows the question the reader is asking: did the session end
-    // up with the page? A URL called twice — once redirected, once read — was
-    // read, and reporting REDIRECT there would be false.
-    const read = v.reads > 0;
-    const failed = !read && v.hasError;
-    const redirected = !read && !failed && !!v.redirect;
-    const pending = !read && !failed && !redirected;
+    const outcome = webVisitOutcome(v);
+    const failed = outcome === 'failed';
+    const redirected = outcome === 'redirect';
+    const pending = outcome === 'pending';
     const search = v.kind === 'search';
     const source = search ? linkHosts(v.links) || 'web search' : v.host === v.title ? '' : v.host;
     return {

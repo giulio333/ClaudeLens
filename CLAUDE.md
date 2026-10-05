@@ -125,6 +125,7 @@ recorded no delivery; and a short `thinking` block — the update the terminal
 prints as a message — is a labelled note inline in both densities, reached by
 find and not by highlights, its row a turn in MIN that the shell run after it
 folds into, while raw reasoning stays out of MIN and folded in FULL) and
+`web-sources-strip` (the pages a turn fetched and the searches it ran, at its foot in MIN: on the turn's own calls, on a run folded into it, and on the standalone badge of a run after a user turn — the shape that showed `tools hidden ×N` and no source — each line saying fetched, failed (an HTTP error told in prose included), redirect or pending; nothing in FULL) and
 `file-changes-strip` (the files a turn changed, at its foot in MIN density: an
 `Edit` is drawn as its diff, open by default and numbered where the result
 row's `structuredPatch` says, a live turn without those numbers falls back to

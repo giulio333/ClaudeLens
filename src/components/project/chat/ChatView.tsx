@@ -601,7 +601,14 @@ export function ChatView({
       return <AdvisorBadge consult={item.consult} />;
     }
     if (item.kind !== 'turn') {
-      return <ToolsHiddenBadge count={item.count} files={item.files} />;
+      return (
+        <ToolsHiddenBadge
+          count={item.count}
+          files={item.files}
+          web={item.web}
+          onOpenTool={openTool}
+        />
+      );
     }
     const p = processed[item.idx];
     return (
@@ -618,6 +625,7 @@ export function ChatView({
         isContinuation={row.isContinuation}
         hiddenToolCount={item.hiddenCount}
         hiddenFiles={item.hiddenFiles}
+        hiddenWeb={item.hiddenWeb}
         selectionMode={selectionMode}
         selected={selectedTurns.has(p.msg.uuid)}
         onToggleSelect={handleToggleSelect}

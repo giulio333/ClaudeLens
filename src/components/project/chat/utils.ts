@@ -10,6 +10,7 @@ import {
 import type { BashEditFile } from '../../../types';
 import { isArtifactTool } from './artifact';
 import { isMessageTool } from './sent-message';
+import { WEB_TOOLS } from './web';
 
 export type ChatDetailsFilter = 'all' | 'minimal';
 
@@ -432,8 +433,15 @@ export function skillInitial(command: string): string {
  *  lines are persisted separately), or — when no assistant turn precedes the run
  *  — a standalone "tools hidden" badge. */
 export type RenderItem =
-  | { kind: 'turn'; idx: number; hiddenCount?: number; hiddenFiles?: TouchedFile[] }
-  | { kind: 'tools'; key: string; count: number; files: TouchedFile[] }
+  | {
+      kind: 'turn';
+      idx: number;
+      hiddenCount?: number;
+      hiddenFiles?: TouchedFile[];
+      /** The web calls of that folded run — drawn as sources at the turn foot. */
+      hiddenWeb?: ToolGroup[];
+    }
+  | { kind: 'tools'; key: string; count: number; files: TouchedFile[]; web: ToolGroup[] }
   /** An advisor consult, drawn as a slim marker at its position in the stream
    *  (both density modes): there is no advice to read, so it never earns a
    *  bubble. */
@@ -1536,19 +1544,22 @@ export function buildRenderItems(
   descriptors: TurnDescriptor[]
 ): RenderItem[] {
   const items: RenderItem[] = [];
-  let run: { count: number; firstIdx: number; files: TouchedFile[] } | null = null;
+  let run: { count: number; firstIdx: number; files: TouchedFile[]; web: ToolGroup[] } | null =
+    null;
   const flush = () => {
     if (!run) return;
     const last = items[items.length - 1];
     if (last?.kind === 'turn' && processed[last.idx]?.msg.role === 'assistant') {
       last.hiddenCount = (last.hiddenCount ?? 0) + run.count;
       last.hiddenFiles = mergeTouchedFiles(last.hiddenFiles ?? [], run.files);
+      last.hiddenWeb = [...(last.hiddenWeb ?? []), ...run.web];
     } else {
       items.push({
         kind: 'tools',
         key: `tools-${run.firstIdx}`,
         count: run.count,
         files: run.files,
+        web: run.web,
       });
     }
     run = null;
@@ -1568,10 +1579,14 @@ export function buildRenderItems(
       // toolsOnly guarantees the turn holds only standard tools (no question/agent).
       const groups = processed[idx].toolGroups;
       const files = touchedFiles(groups);
+      // The pages fetched and searches run: MIN hides the calls but keeps
+      // their sources, the way it keeps the files they touched.
+      const web = groups.filter(g => WEB_TOOLS.has(g.use.name));
       if (run) {
         run.count += groups.length;
         run.files = mergeTouchedFiles(run.files, files);
-      } else run = { count: groups.length, firstIdx: idx, files };
+        run.web = [...run.web, ...web];
+      } else run = { count: groups.length, firstIdx: idx, files, web };
     } else if (d.visible) {
       flush();
       items.push({ kind: 'turn', idx });

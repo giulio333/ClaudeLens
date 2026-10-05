@@ -70,6 +70,20 @@ describe('web — url labels', () => {
     expect(webPageLabel('https://x.it/docs/l%C3%A0-qui')).toBe('là-qui');
   });
 
+  it('skips a trailing id for the segment that names the page', () => {
+    expect(
+      webPageLabel(
+        'https://docs.example.org/portal/documents/1234/567/Buyer_guide.pdf/0f3c9a21-7b4e-4d2a-9c11-5e8f2b6d4a70'
+      )
+    ).toBe('Buyer_guide.pdf');
+    expect(webPageLabel('https://x.it/blob/0123456789abcdef0123')).toBe('blob');
+    // A number is a name here, and a path of ids only keeps its last segment.
+    expect(webPageLabel('https://x.it/issues/8812')).toBe('8812');
+    expect(webPageLabel('https://x.it/0f3c9a21-7b4e-4d2a-9c11-5e8f2b6d4a70')).toBe(
+      '0f3c9a21-7b4e-4d2a-9c11-5e8f2b6d4a70'
+    );
+  });
+
   it('falls back to the host when the URL has no path', () => {
     expect(webPageLabel('https://www.githubstatus.com')).toBe('githubstatus.com');
     expect(webPageLabel('https://claude.ai/')).toBe('claude.ai');

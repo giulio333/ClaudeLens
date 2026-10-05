@@ -3501,11 +3501,15 @@ body {
    one side only — and with Mission Control open beside the feed, a diff was
    getting two thirds of the width it could have had. A percentage gutter would
    be worse still: it grows with the window and gives back a third of a wide
-   screen for nothing. */
+   screen for nothing. Then 96 + 24, which still left 160px of paper before the
+   first letter (gutter, inner padding, the dot's column) and read as empty
+   margins beside Mission Control: the left gutter is now exactly the rail,
+   whose capsule is narrower than its 64px column, and the dot column after it
+   is the air. */
 .cl-chat-reading {
   width: auto;
   max-width: none;
-  margin: 0 24px 0 96px;
+  margin: 0 8px 0 64px;
 }
 .cl-chat-reading .cl-transcript-inner {
   max-width: none;
@@ -3545,7 +3549,7 @@ body {
 .cl-chat-reading .cl-transcript-inner {
   max-width: none;
   margin: 0;
-  padding: 18px 24px 140px 34px;
+  padding: 18px 16px 140px 12px;
   /* Turns must abut: the rhythm comes from the body's own padding and its
      closing rule, and a flex gap here would cut the thread between the dots.
      (The windowed transcript places rows absolutely and never sees the gap —
@@ -4514,13 +4518,13 @@ body {
 .cl-composer-inner {
   /* Aligned with the transcript's text edge, not centred on its own: the same
      column geometry as `.cl-chat-reading`, plus the 30px turn rail the prose
-     sits after (34 + 30 = 64 on the left). The sheet then stops at the reading
+     sits after (12 + 30 = 42 on the left). The sheet then stops at the reading
      measure, so a wide window widens the transcript without stretching the
      input across the whole screen — what is typed lands where it is read. */
   width: auto;
   max-width: none;
-  padding: 0 24px 0 64px;
-  margin: 0 24px 0 96px;
+  padding: 0 16px 0 42px;
+  margin: 0 8px 0 64px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -6399,6 +6403,111 @@ button.cl-pill-model[data-on] {
   width: 10px;
   height: 10px;
   flex-shrink: 0;
+}
+/* The pages a turn fetched and the searches it ran, at its foot in MIN density
+   (WebSourcesStrip). The anatomy of the changed-file row under it, so the two
+   read as one list: a verb label coloured by what came back, a glyph, the
+   source in bold, where it is from dimmed after it. The verb takes the web
+   tools' own hue (`--cl-haiku`, as in the transcript and Mission Control's WEB
+   rows); a failure or a redirect takes danger or warn instead. The 18px left
+   inset is the file row's caret column, so the labels line up. */
+.cl-web-sources {
+  display: flex;
+  flex-direction: column;
+  margin: 14px 0 0;
+  padding: 0;
+  list-style: none;
+  min-width: 0;
+}
+.cl-web-source {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 4px 4px 4px 18px;
+  border: none;
+  background: transparent;
+  text-align: left;
+  color: var(--cl-ink-2);
+  cursor: pointer;
+  font: 400 12px/1.4 var(--font-mono);
+}
+.cl-web-source:disabled {
+  cursor: default;
+}
+.cl-web-source:not(:disabled):hover .cl-web-source-title {
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+.cl-web-source-verb {
+  flex-shrink: 0;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 4px;
+  color: color-mix(in oklab, var(--cl-haiku) 80%, var(--cl-ink));
+  background: color-mix(in oklab, var(--cl-haiku) 13%, transparent);
+}
+.cl-web-source[data-outcome='failed'] .cl-web-source-verb {
+  color: var(--cl-danger);
+  background: color-mix(in oklab, var(--cl-danger) 13%, transparent);
+}
+.cl-web-source[data-outcome='redirect'] .cl-web-source-verb {
+  color: color-mix(in oklab, var(--cl-warn) 70%, var(--cl-ink));
+  background: color-mix(in oklab, var(--cl-warn) 16%, transparent);
+}
+.cl-web-source[data-outcome='pending'] .cl-web-source-verb {
+  color: var(--cl-ink-3);
+  background: color-mix(in oklab, var(--cl-ink-4) 14%, transparent);
+}
+.cl-web-source-icon {
+  display: inline-flex;
+  flex-shrink: 0;
+  color: color-mix(in oklab, var(--cl-haiku) 60%, var(--cl-ink-3));
+}
+.cl-web-source-icon svg {
+  width: 12px;
+  height: 12px;
+}
+/* A query can be a sentence: the title yields first, but never below the
+   point where the hosts after it vanish. */
+.cl-web-source-title {
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 62%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-weight: 600;
+  color: var(--cl-ink);
+}
+.cl-web-source-meta {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+  color: var(--cl-ink-4);
+}
+.cl-web-source[data-outcome='failed'] .cl-web-source-meta {
+  color: color-mix(in oklab, var(--cl-danger) 75%, var(--cl-ink-3));
+}
+.cl-web-source-times {
+  flex-shrink: 0;
+  color: var(--cl-ink-4);
+  font-size: 10.5px;
+}
+.cl-web-source-count {
+  flex-shrink: 0;
+  margin-left: auto;
+  padding-right: 30px;
+  font-size: 10.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-3);
 }
 /* The files a turn changed, at its foot in MIN density (FileChangesStrip).
    Drawn the way Claude Code prints them in the terminal: one line — verb,

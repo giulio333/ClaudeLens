@@ -37,6 +37,8 @@ import { isMessageTool } from './sent-message';
 import { MessageLine } from './MessageLine';
 import { previewLine } from './message-line';
 import { FileChangesStrip } from './FileChangesStrip';
+import { WebSourcesStrip } from './WebSourcesStrip';
+import { WEB_TOOLS } from './web';
 import { blockKey, isPersistableMessageUuid } from './highlights';
 
 /** Unobtrusive header button that copies a turn's plain markdown text (text
@@ -463,7 +465,18 @@ function SkillCommandCard({
 /** Collapsed marker for a run of consecutive tool-only turns in minimal mode.
  *  A single badge with a "× N" multiplier replaces the stack of identical
  *  "1 tool hidden" rows so a long sequence of tool calls reads as one marker. */
-export function ToolsHiddenBadge({ count, files = [] }: { count: number; files?: TouchedFile[] }) {
+export function ToolsHiddenBadge({
+  count,
+  files = [],
+  web = [],
+  onOpenTool,
+}: {
+  count: number;
+  files?: TouchedFile[];
+  /** The run's web calls: their sources stay on screen when the calls don't. */
+  web?: ToolGroup[];
+  onOpenTool?: (group: ToolGroup) => void;
+}) {
   if (count <= 0) return null;
   return (
     <div className="cl-turn-tools-hidden">
@@ -471,6 +484,7 @@ export function ToolsHiddenBadge({ count, files = [] }: { count: number; files?:
         {count === 1 ? '1 tool hidden' : 'tools hidden'}
         {count > 1 && <span className="cl-turn-tools-hidden-x">×{count}</span>}
       </span>
+      <WebSourcesStrip groups={web} onOpen={onOpenTool} />
       <FileChangesStrip files={files} />
     </div>
   );
@@ -610,6 +624,7 @@ export const MessageBubble = memo(function MessageBubble({
   innerRef,
   hiddenToolCount = 0,
   hiddenFiles = [],
+  hiddenWeb = [],
   selectionMode = false,
   selected = false,
   onToggleSelect,
@@ -638,6 +653,8 @@ export const MessageBubble = memo(function MessageBubble({
   hiddenToolCount?: number;
   /** Files touched by that collapsed run of hidden tools, shown at the turn foot. */
   hiddenFiles?: TouchedFile[];
+  /** Web calls of that collapsed run — their sources are shown at the turn foot. */
+  hiddenWeb?: ToolGroup[];
   /** Selective export: show a per-turn checkbox so the turn can be picked. */
   selectionMode?: boolean;
   /** Whether this turn is currently picked for selective export. */
@@ -677,6 +694,7 @@ export const MessageBubble = memo(function MessageBubble({
   const questionGroups = toolGroups.filter(g => g.use.name === QUESTION_TOOL);
   // Messages this session sent to another, or to an agent inside it.
   const messageGroups = toolGroups.filter(g => isMessageTool(g.use.name));
+  const webGroups = toolGroups.filter(g => WEB_TOOLS.has(g.use.name));
   // Tools rendered by the generic stack: never include AskUserQuestion (we have
   // a dedicated card) and, in minimal, never include agent dispatches either
   // (those use the AgentDispatchCard).
@@ -1030,6 +1048,12 @@ export const MessageBubble = memo(function MessageBubble({
             </div>
           )}
         </div>
+
+        {!showTools && (hiddenWeb.length > 0 || webGroups.length > 0) && (
+          // Pages fetched and searches run — the folded run's and this turn's
+          // own. MIN hides the calls; the sources are what the answer stands on.
+          <WebSourcesStrip groups={[...hiddenWeb, ...webGroups]} onOpen={onOpenToolDetail} />
+        )}
 
         {!showTools &&
           (() => {

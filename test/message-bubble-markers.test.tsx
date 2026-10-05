@@ -502,7 +502,7 @@ describe('a thinking block', () => {
 
     expect(descriptors[0]).toMatchObject({ visible: true, toolsOnly: false, variant: 'claude' });
     expect(buildRenderItems(processed, descriptors)).toEqual([
-      { kind: 'turn', idx: 0, hiddenCount: 1, hiddenFiles: [] },
+      { kind: 'turn', idx: 0, hiddenCount: 1, hiddenFiles: [], hiddenWeb: [] },
     ]);
   });
 });
