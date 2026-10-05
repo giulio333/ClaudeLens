@@ -51,6 +51,7 @@ import {
 } from './modules/playbook-store';
 import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
 import { readLocalImage, type LocalImageAnswer } from './modules/local-image';
+import { createProjectRootGuard, listProjectDir, readProjectFile } from './modules/project-files';
 import { getSessionArtifacts, deleteSessionArtifacts } from './modules/session-deleter';
 import { getProjectTasks } from './modules/tasks-reader';
 import { getProjectPlans, getUnlinkedPlans } from './modules/plans-reader';
@@ -1204,6 +1205,34 @@ ipcMain.handle('vault:openFile', async (_event, root: unknown, rel: unknown) => 
     const failure = await shell.openPath(resolveVaultFile(root, rel));
     if (failure) throw new Error(failure);
     return ok(null);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// The project file explorer: one directory level, and one file as text. The
+// root must be a project the registry knows and `rel` must stay under it (see
+// `project-files.ts`), and neither writes. An image is read through `images:read`, opening a file in its
+// own app through `vault:openFile` — the explorer adds no third read path.
+const assertProjectRoot = createProjectRootGuard(discoverKnownProjectPaths);
+
+ipcMain.handle('files:listDir', async (_event, root: unknown, rel: unknown) => {
+  try {
+    if (typeof root !== 'string' || !root) throw new Error('Missing project root');
+    if (typeof rel !== 'string') throw new Error('Missing directory path');
+    assertProjectRoot(root);
+    return ok(await listProjectDir(root, rel));
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('files:readText', async (_event, root: unknown, rel: unknown) => {
+  try {
+    if (typeof root !== 'string' || !root) throw new Error('Missing project root');
+    if (typeof rel !== 'string') throw new Error('Missing file path');
+    assertProjectRoot(root);
+    return ok(await readProjectFile(root, rel));
   } catch (e) {
     return err(e);
   }

@@ -18,9 +18,13 @@ import {
   buildProcessedMessages,
   resolveToolIcon,
   toolRunStatus,
+  touchedFiles,
   type SessionAgent,
   type ToolGroup,
 } from '../chat/utils';
+import { contextFiles } from '../chat/context-files';
+import { FileViewer } from '../files/FileViewer';
+import { relToRoot, sessionMarks } from '../files/session-marks';
 import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
 import { TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
@@ -78,6 +82,7 @@ type Overlay =
   | { kind: 'skill-def'; skill: Skill }
   | { kind: 'agent-def'; agent: Agent }
   | { kind: 'team'; teamName: string }
+  | { kind: 'file'; rel: string }
   | null;
 
 /** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
@@ -519,6 +524,10 @@ export function TerminalMissionControl({
         return { kind: 'agent', label: overlay.agent.name };
       case 'team':
         return { kind: 'team', label: overlay.teamName };
+      case 'file':
+        // The file's page names it in its own head, with its own ✕: a crumb
+        // here said the same name a few hundred pixels away.
+        return null;
     }
   }, [overlay]);
 
@@ -596,10 +605,36 @@ export function TerminalMissionControl({
   // session elsewhere), and this pane's own spawn time covers the seconds
   // before the CLI joins the registry.
   const { data: chatMessages } = useChatSession(project.hash, filename);
-  const backgroundShells = useMemo(
-    () => (chatMessages ? buildBackgroundShells(buildProcessedMessages(chatMessages)) : []),
+  const sessionProcessed = useMemo(
+    () => (chatMessages ? buildProcessedMessages(chatMessages) : []),
     [chatMessages]
   );
+  const backgroundShells = useMemo(
+    () => buildBackgroundShells(sessionProcessed),
+    [sessionProcessed]
+  );
+  // A file a read, a diff or the rail names, opened in the Files viewer — when
+  // it is a file of this project; elsewhere there is nothing to open it in.
+  const fileOpenerFor = useCallback(
+    (path: string) => {
+      const rel = relToRoot(path, project.realPath);
+      return rel ? () => setOverlay({ kind: 'file', rel }) : undefined;
+    },
+    [project.realPath]
+  );
+
+  // A file open in the overlay is read again each time this session writes it:
+  // the count of its writes is part of the read's key.
+  const openFileRel = overlay?.kind === 'file' ? overlay.rel : null;
+  const openFileMarks = useMemo(() => {
+    if (!openFileRel) return null;
+    const root = project.realPath;
+    const shellReads = contextFiles(sessionProcessed, root).flatMap(f =>
+      f.reads.some(r => r.via === 'shell') ? [f.path] : []
+    );
+    const touched = touchedFiles(sessionProcessed.flatMap(p => p.toolGroups));
+    return sessionMarks(touched, root, shellReads);
+  }, [openFileRel, sessionProcessed, project.realPath]);
   const liveSince = useMemo(() => {
     const entries = (activeSessions ?? []).filter(s => sessionId && s.sessionId === sessionId);
     const own = entries.find(s => s.pid === ptyPid) ?? entries[0];
@@ -756,7 +791,9 @@ export function TerminalMissionControl({
               {toolRunStatus(overlay.group.result, overlay.group.use.name).label}
             </span>
           )}
-          {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
+          {overlay && overlay.kind !== 'file' && (
+            <CloseOverlayButton label="Back to session" onClose={closeOverlay} />
+          )}
           <ViewSwitch view={view} setView={setView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
           <TabBarRailToggle collapsed={railCollapsed} onToggle={toggleRail} />
@@ -815,6 +852,7 @@ export function TerminalMissionControl({
                   // would mount inside a ChatView whose top bar isn't on screen,
                   // and this bar would have no idea a tool is open to crumb it.
                   onOpenTool={group => setOverlay({ kind: 'tool', group })}
+                  fileOpenerFor={fileOpenerFor}
                   jumpToTurnRef={jumpToTurnRef}
                   focusMessageUuid={focusMessageUuid}
                 />
@@ -823,10 +861,12 @@ export function TerminalMissionControl({
 
             {/* detail overlay opened from the rail — scoped to the content box (the
                 pane area), so the header row above and the rail to the right stay
-                visible. Matches the Lens's own tool-detail overlay one-to-one. */}
+                visible. Matches the Lens's own tool-detail overlay one-to-one.
+                Above the Lens's control pill (z 40): the pill drives the
+                transcript underneath, and over a detail it covered the page. */}
             {overlay && (
               <div
-                className="absolute z-20 flex flex-col overflow-hidden"
+                className="absolute z-50 flex flex-col overflow-hidden"
                 style={{ top: 12, right: 26, bottom: 22, left: 26, background: 'var(--cl-paper)' }}
               >
                 {/* Every panel here is `chromeless`: the crumb in the top bar,
@@ -836,7 +876,12 @@ export function TerminalMissionControl({
                   <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
                 ) : overlay.kind === 'change' ? (
                   <div className="cl-file-change-scroll">
-                    <FileChangePage file={overlay.change.file} />
+                    <FileChangePage
+                      file={overlay.change.file}
+                      onOpenFile={
+                        overlay.change.deleted ? undefined : fileOpenerFor(overlay.change.path)
+                      }
+                    />
                   </div>
                 ) : overlay.kind === 'skill-def' ? (
                   <SkillDetailView
@@ -862,6 +907,15 @@ export function TerminalMissionControl({
                     backLabel="Close"
                     onOpenChat={openSessionFromOverlay}
                     chromeless
+                  />
+                ) : overlay.kind === 'file' ? (
+                  <FileViewer
+                    key={overlay.rel}
+                    root={project.realPath}
+                    rel={overlay.rel}
+                    version={openFileMarks?.writes.get(overlay.rel) ?? 0}
+                    mark={openFileMarks?.files.get(overlay.rel)}
+                    onClose={closeOverlay}
                   />
                 ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
                   <SubagentTranscriptPanel
@@ -906,6 +960,8 @@ export function TerminalMissionControl({
                 : undefined
             }
             onUsePrompt={insertPrompt}
+            onOpenFile={rel => setOverlay({ kind: 'file', rel })}
+            openFile={openFileRel}
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the
             // rail's band stays and is the only place either figure is stated.

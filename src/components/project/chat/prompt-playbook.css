@@ -106,6 +106,24 @@
   padding: 0 24px;
   border-bottom: 1px solid var(--cl-line);
 }
+/* In Mission Control's rail the panel has no heading — the rail's title says
+   PLAYBOOK — so the tab row opens it, with "+ New template" at its end. */
+.cl-playbook-tabbar {
+  display: flex;
+  align-items: flex-end;
+  flex-shrink: 0;
+  gap: 16px;
+  padding: 16px 24px 0;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-playbook-tabbar .cl-playbook-tabs {
+  flex: 1;
+  padding: 0;
+  border-bottom: 0;
+}
+.cl-playbook-tabbar .cl-playbook-new {
+  padding: 0 3px 13px;
+}
 .cl-playbook-tabs > button {
   display: flex;
   align-items: center;

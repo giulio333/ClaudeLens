@@ -23,12 +23,15 @@ import {
   correlateSessionSkills,
   memoryScopeOf,
   skillHasViewableOutput,
+  touchedFiles,
   AGENT_TOOLS,
   ToolGroup,
   SessionAgent,
 } from '../chat/utils';
 import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
-import { shellReadPaths } from '../chat/context-files';
+import { FilesRailPanel } from '../files/FilesRailPanel';
+import { sessionMarks } from '../files/session-marks';
+import { contextFiles, shellReadPaths } from '../chat/context-files';
 import { FileIcon } from '../chat/fileIcons';
 import { buildArtifactActivity } from '../chat/artifact';
 import { LiveOrb } from '../../LiveOrb';
@@ -411,6 +414,8 @@ export function MissionRail({
   onLocateTurn,
   onOpenExchange,
   onUsePrompt,
+  onOpenFile,
+  openFile,
   showVitals = true,
   remote,
 }: {
@@ -443,6 +448,12 @@ export function MissionRail({
    *  instead. */
   onOpenExchange?: (msgId: string) => void;
   onUsePrompt: (text: string) => Promise<void>;
+  /** Open a project file (path relative to `realPath`) in the frame's wide
+   *  overlay. Unset — a remote pane — the files panel is not offered: the
+   *  host's folder is often the same path as a local one. */
+  onOpenFile?: (rel: string) => void;
+  /** The file the overlay shows, so the panel marks where it was opened. */
+  openFile?: string | null;
   /** Whether this rail carries the vitals line — context %, spend, and the
    *  session's diff.
    *
@@ -460,11 +471,22 @@ export function MissionRail({
    *  changes. */
   remote?: RemoteTranscript;
 }) {
-  const [playbookOpen, setPlaybookOpen] = useState(false);
+  // One panel at a time takes the rail's body: the Playbook or the project's
+  // files. The feed under it stays mounted, hidden, so its filters and scroll
+  // are where the reader left them.
+  const [panel, setPanel] = useState<'playbook' | 'files' | null>(null);
+  const playbookOpen = panel === 'playbook';
+  const filesOpen = panel === 'files';
   const playbookTrigger = useRef<HTMLButtonElement>(null);
   const playbookId = useId();
+  const filesTrigger = useRef<HTMLButtonElement>(null);
+  const filesId = useId();
+  function closeFiles(restoreFocus = true) {
+    setPanel(null);
+    if (restoreFocus) filesTrigger.current?.focus();
+  }
   function closePlaybook(restoreFocus = true) {
-    setPlaybookOpen(false);
+    setPanel(null);
     if (restoreFocus) playbookTrigger.current?.focus();
   }
   const filename = sessionId ? `${sessionId}.jsonl` : null;
@@ -590,6 +612,19 @@ export function MissionRail({
   const ownTools = useMemo(
     () => processed.flatMap(p => p.toolGroups).filter(g => !AGENT_TOOLS.has(g.use.name)),
     [processed]
+  );
+  // FILES — what this session read, edited or created, marked on the tree. The
+  // shell reads come from the Lens rail's reader: most reads are `sed`/`cat`.
+  const fileMarks = useMemo(
+    () =>
+      sessionMarks(
+        touchedFiles(ownTools),
+        realPath,
+        contextFiles(processed, realPath).flatMap(f =>
+          f.reads.some(r => r.via === 'shell') ? [f.path] : []
+        )
+      ),
+    [ownTools, processed, realPath]
   );
   // MEMORY — an `Edit` of a topic carries no frontmatter, so the on-disk index
   // supplies the name and description; the query is already mounted by the
@@ -820,9 +855,37 @@ export function MissionRail({
               color: 'var(--cl-ink)',
             }}
           >
-            MISSION CONTROL
+            {/* The open panel names the rail: with the files on screen this is
+                the files panel or the Playbook, not Mission Control with a second
+                title under it. */}
+            {filesOpen ? 'FILES' : playbookOpen ? 'PLAYBOOK' : 'MISSION CONTROL'}
           </span>
           <span style={{ flex: 1 }} />
+          {!remote && onOpenFile && (
+            <button
+              ref={filesTrigger}
+              type="button"
+              className="cl-playbook-rail-trigger"
+              aria-label="Files"
+              title="Project files"
+              aria-expanded={filesOpen}
+              aria-controls={filesOpen ? filesId : undefined}
+              onClick={() => (filesOpen ? closeFiles() : setPanel('files'))}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z" />
+              </svg>
+            </button>
+          )}
           {!remote && (
             <button
               ref={playbookTrigger}
@@ -832,7 +895,7 @@ export function MissionRail({
               title="Prompt Playbook"
               aria-expanded={playbookOpen}
               aria-controls={playbookOpen ? playbookId : undefined}
-              onClick={() => (playbookOpen ? closePlaybook() : setPlaybookOpen(true))}
+              onClick={() => (playbookOpen ? closePlaybook() : setPanel('playbook'))}
             >
               <svg
                 width="17"
@@ -864,7 +927,7 @@ export function MissionRail({
             transcript they describe; printing them here as well would put the
             same number on screen twice a few hundred pixels apart, which is
             exactly why the terminal's TopBar stopped printing the spend. */}
-        {showVitals && !playbookOpen && (
+        {showVitals && !panel && (
           <div
             className="font-mono flex items-baseline"
             style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
@@ -938,15 +1001,15 @@ export function MissionRail({
           </div>
         )}
 
-        {showVitals && !playbookOpen && vital === 'ctx' && <ContextPopover ctx={ctx} />}
-        {showVitals && !playbookOpen && vital === 'spend' && <SpendPopover summary={summary} />}
+        {showVitals && !panel && vital === 'ctx' && <ContextPopover ctx={ctx} />}
+        {showVitals && !panel && vital === 'spend' && <SpendPopover summary={summary} />}
       </div>
 
       {/* The context fill, edge to edge — a 2px rule that doubles as a gauge.
           It is the context figure's gauge, so it leaves with the figure: what
           stays behind is the plain hairline the band needs to end on, not a
           two-pixel bar that would still look like a reading of something. */}
-      {showVitals && !playbookOpen ? (
+      {showVitals && !panel ? (
         <div className="shrink-0" style={{ height: 2, background: 'var(--cl-line-soft)' }}>
           <div
             style={{
@@ -963,6 +1026,16 @@ export function MissionRail({
         <div className="shrink-0" style={{ height: 1, background: 'var(--cl-line-soft)' }} />
       )}
 
+      {filesOpen && onOpenFile && (
+        <FilesRailPanel
+          id={filesId}
+          root={realPath}
+          marks={fileMarks}
+          openFile={openFile ?? null}
+          onOpen={onOpenFile}
+          onClose={closeFiles}
+        />
+      )}
       {playbookOpen && (
         <PromptPlaybookPanel
           key={hash}
@@ -971,12 +1044,13 @@ export function MissionRail({
           trigger={playbookTrigger}
           onClose={closePlaybook}
           onUse={onUsePrompt}
+          railTitled
           useHint="Open Terminal and add to its input without sending"
         />
       )}
       <div
         style={{
-          display: playbookOpen ? 'none' : 'flex',
+          display: panel ? 'none' : 'flex',
           flexDirection: 'column',
           flex: 1,
           minHeight: 0,

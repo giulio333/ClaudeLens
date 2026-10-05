@@ -93,6 +93,14 @@ export type {
   ExchangeOutcome,
 } from '../electron/shared/exchange-types';
 
+// The project file explorer's answers — shared with the main process, see
+// electron/shared/project-files-types.ts.
+export type {
+  ProjectDirEntry,
+  ProjectDirListing,
+  ProjectFileAnswer,
+} from '../electron/shared/project-files-types';
+
 // A normalized session-lifecycle notification pushed from the main process over
 // `notifications:event`. Mirrors electron/modules/notifications/types.ts (the two
 // tsconfigs don't share imports). The renderer renders it as a transient toast.

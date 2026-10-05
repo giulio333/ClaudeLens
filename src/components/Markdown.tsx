@@ -7,6 +7,7 @@ import rehypeHighlight from 'rehype-highlight';
 import rehypeKatex from 'rehype-katex';
 import type { Components } from 'react-markdown';
 import 'katex/dist/katex.min.css';
+import { rehypeCallouts } from './rehype-callouts';
 import { rehypeWikiLinks } from './rehype-wikilinks';
 import { useReportWikiLinks, useVaultLinksApi } from './vault-link-engine';
 import { WikiLink } from './VaultLinks';
@@ -140,11 +141,11 @@ function urlTransform(url: string): string {
   return /^(file:\/\/|data:image\/)/i.test(url) ? url : defaultUrlTransform(url);
 }
 
-const BASE_REHYPE = [rehypeHighlight, rehypeKatex];
+const BASE_REHYPE = [rehypeCallouts, rehypeHighlight, rehypeKatex];
 // Wikilinks first: `rehypeHighlight` rewrites the inside of code elements into
 // nested spans, and after it an inline `` `[[x]]` `` no longer has the single
 // text child the chip pass looks for.
-const WIKILINK_REHYPE = [rehypeWikiLinks, rehypeHighlight, rehypeKatex];
+const WIKILINK_REHYPE = [rehypeCallouts, rehypeWikiLinks, rehypeHighlight, rehypeKatex];
 const NO_TARGETS: string[] = [];
 
 interface Props {

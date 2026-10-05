@@ -39,6 +39,7 @@ export function ContextRail({
   turnOf,
   activeTurn,
   onJump,
+  openerFor,
   defaultOpen = false,
 }: {
   files: ContextFile[];
@@ -47,6 +48,9 @@ export function ContextRail({
   turnOf: (idx: number) => number | null;
   activeTurn: number | null;
   onJump: (turn: number) => void;
+  /** How to open a read file in the Files viewer, or undefined where it cannot
+   *  be (outside the project, a remote session): its window then offers none. */
+  openerFor?: (path: string) => (() => void) | undefined;
   /** Mount with the list showing. Only the "What's new" preview asks: dots at
    *  rest explain nothing to someone who has never seen the rail. Every later
    *  open and close is the reader's. */
@@ -208,6 +212,7 @@ export function ContextRail({
           turnOf={turnOf}
           onJump={onJump}
           onClose={closeDetail}
+          onOpenFile={openerFor?.(detailed.path)}
         />
       )}
     </nav>

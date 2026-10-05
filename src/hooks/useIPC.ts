@@ -31,6 +31,8 @@ import type {
   ExchangeRequest,
   VaultLinkAnswer,
   LocalImageAnswer,
+  ProjectDirListing,
+  ProjectFileAnswer,
   SubagentMeta,
   SessionArtifacts,
   DeleteRequest,
@@ -261,6 +263,10 @@ declare global {
       vault: {
         resolveLinks: (root: string, targets: string[]) => Promise<IpcResult<VaultLinkAnswer[]>>;
         openFile: (root: string, rel: string) => Promise<IpcResult<null>>;
+      };
+      files: {
+        listDir: (root: string, rel: string) => Promise<IpcResult<ProjectDirListing>>;
+        readText: (root: string, rel: string) => Promise<IpcResult<ProjectFileAnswer>>;
       };
       sessions: {
         listByProject: (hash: string) => Promise<IpcResult<SessionSummary[]>>;
@@ -1525,6 +1531,38 @@ export function useLocalImage(filePath: string | null, root?: string) {
     queryFn: () => unwrap(window.electronAPI.images.read(filePath!, root)),
     enabled: !!filePath,
     staleTime: Infinity,
+    retry: false,
+  });
+}
+
+/**
+ * One directory level of the project tree, for the file explorer. Nothing
+ * watches a project's source tree, so freshness is React Query's own: a short
+ * stale time, a refetch on focus, and the explorer's refresh button, which
+ * invalidates the `files:` prefix.
+ */
+export function useProjectDir(root: string | null, rel: string, enabled = true) {
+  return useQuery({
+    queryKey: ['files:dir', root, rel],
+    queryFn: () => unwrap(window.electronAPI.files.listDir(root!, rel)),
+    enabled: !!root && enabled,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
+  });
+}
+
+/**
+ * One project file as text. `version` is part of the key so a caller that
+ * knows the file changed — Mission Control counts the calls of its session
+ * that touched the path — gets a fresh read without waiting for staleness.
+ */
+export function useProjectFile(root: string | null, rel: string | null, version = 0) {
+  return useQuery({
+    queryKey: ['files:text', root, rel, version],
+    queryFn: () => unwrap(window.electronAPI.files.readText(root!, rel!)),
+    enabled: !!root && !!rel,
+    staleTime: 5_000,
+    refetchOnWindowFocus: true,
     retry: false,
   });
 }

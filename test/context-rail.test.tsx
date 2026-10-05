@@ -174,6 +174,41 @@ describe('ContextRail', () => {
     expect(document.body.querySelector('.cl-ctx-sheet')).toBeNull();
   });
 
+  it('offers the file as it is now only where the host can open it, and closes on the way', () => {
+    const opened = vi.fn();
+    const openerFor = vi.fn((path: string) =>
+      path.endsWith('utils.ts') ? () => opened(path) : undefined
+    );
+    const { container } = render(
+      <StrictMode>
+        <ContextRail
+          files={FILES()}
+          cwd={CWD}
+          turnOf={idx => idx + 1}
+          activeTurn={null}
+          onJump={() => {}}
+          openerFor={openerFor}
+        />
+      </StrictMode>
+    );
+    fireEvent.mouseEnter(container.querySelector('.cl-ctx-anchor')!);
+    fireEvent.click(rowFor(container, 'utils.ts'));
+    const open = [...document.body.querySelectorAll('.cl-ctx-sheet .cl-ctx-jump')].find(
+      b => b.textContent === 'Open file'
+    )!;
+    fireEvent.click(open);
+    expect(opened).toHaveBeenCalledWith('/w/acme/src/chat/utils.ts');
+    expect(document.body.querySelector('.cl-ctx-sheet')).toBeNull();
+  });
+
+  it('offers no way to the file without an opener', () => {
+    const { anchor, container } = mount();
+    fireEvent.mouseEnter(anchor);
+    fireEvent.click(rowFor(container, 'utils.ts'));
+    const foot = document.body.querySelector('.cl-ctx-sheet-foot')!;
+    expect(foot.textContent).not.toContain('Open file');
+  });
+
   it('previews a compound command too, unnumbered: its output is not the file', () => {
     const files = session([
       [

@@ -159,6 +159,13 @@ export function ProjectRail({
           view: { type: 'sessions', project },
         },
         {
+          key: 'files',
+          label: 'Files',
+          mono: 'F',
+          count: null,
+          view: { type: 'project-files', project },
+        },
+        {
           key: 'memory',
           label: 'Memory',
           mono: 'M',

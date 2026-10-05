@@ -153,7 +153,15 @@ function FileChange({ file }: { file: TouchedFile }) {
 /** The file's change as a page of its own — what a CHANGES row of Mission
  *  Control opens: the strip's header with the whole path, every diff under it,
  *  unclamped. The frame around it supplies the crumb and the close. */
-export function FileChangePage({ file }: { file: TouchedFile }) {
+export function FileChangePage({
+  file,
+  onOpenFile,
+}: {
+  file: TouchedFile;
+  /** The file as it is on disk now, in the Files viewer. Unset for a file
+   *  that is gone or that the host cannot open. */
+  onOpenFile?: () => void;
+}) {
   const stat = changeStat(file.sources);
   return (
     <div className="cl-file-change cl-file-change--page is-open">
@@ -177,6 +185,11 @@ export function FileChangePage({ file }: { file: TouchedFile }) {
             </span>
           )}
         </span>
+        {onOpenFile && (
+          <button type="button" className="cl-file-change-open" onClick={onOpenFile}>
+            Open file
+          </button>
+        )}
       </div>
       <FileChangeDiffs file={file} clamp={false} />
     </div>

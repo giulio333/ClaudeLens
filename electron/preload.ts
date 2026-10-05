@@ -89,6 +89,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('vault:resolveLinks', root, targets),
     openFile: (root: string, rel: string) => ipcRenderer.invoke('vault:openFile', root, rel),
   },
+  files: {
+    // The project file explorer: one directory level per call, one file as text.
+    listDir: (root: string, rel: string) => ipcRenderer.invoke('files:listDir', root, rel),
+    readText: (root: string, rel: string) => ipcRenderer.invoke('files:readText', root, rel),
+  },
   playbook: {
     getTemplates: (hash: string) => ipcRenderer.invoke('playbook:getTemplates', hash),
     getCandidates: (hash: string) => ipcRenderer.invoke('playbook:getCandidates', hash),

@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 import { StrictMode } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { TeamSummary } from '../src/types';
@@ -236,7 +236,13 @@ it('opens inside the rail on demand and restores the activity filter and focus',
   fireEvent.pointerDown(transcript);
   expect(fireEvent.keyDown(transcript, { key: 'Escape' })).toBe(true);
   expect(screen.getByRole('region', { name: 'Prompt Playbook' })).toBe(panel);
-  fireEvent.click(screen.getByRole('button', { name: 'Back to activity' }));
+  // The rail names the open panel and its toggle closes it: no title or ×
+  // of the panel's own.
+  expect(screen.getByText('PLAYBOOK')).toBeTruthy();
+  expect(screen.queryByText('MISSION CONTROL')).toBeNull();
+  expect(screen.queryByRole('button', { name: 'Back to activity' })).toBeNull();
+  expect(within(panel).getByRole('button', { name: '+ New template' })).toBeTruthy();
+  fireEvent.click(trigger);
   expect(screen.getByRole('button', { name: /TEAMS/ }).getAttribute('aria-pressed')).toBe('true');
   expect(document.activeElement).toBe(trigger);
   fireEvent.click(trigger);

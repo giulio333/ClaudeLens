@@ -59,6 +59,8 @@ import type {
   PurgeResult,
   VaultLinkAnswer,
   LocalImageAnswer,
+  ProjectDirListing,
+  ProjectFileAnswer,
 } from '../../src/types';
 import type { DerivedDescription, DuplicateGroup } from '../../src/hooks/useIPC';
 
@@ -302,6 +304,17 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     openFile: vi.fn(async (_root: string, _rel: string) => ok<null>(null)),
   };
 
+  // The project file explorer. An empty tree and a missing file are the honest
+  // defaults: a test that wants a listing or a file scripts it.
+  const files = {
+    listDir: vi.fn(async (_root: string, _rel: string) =>
+      ok<ProjectDirListing>({ entries: [], truncated: false })
+    ),
+    readText: vi.fn(async (_root: string, _rel: string) =>
+      ok<ProjectFileAnswer>({ status: 'missing' })
+    ),
+  };
+
   // An image linked by path. "Gone" is the honest default: a test that wants
   // the picture drawn scripts the `ok` answer with its data URI.
   const images = {
@@ -312,6 +325,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
 
   return {
     images,
+    files,
     playbook: {
       getTemplates: vi.fn(async (_hash: string) => ok<PromptTemplate[]>([])),
       getCandidates: vi.fn(async (_hash: string) =>

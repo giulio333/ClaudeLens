@@ -74,6 +74,7 @@ export function ChatView({
   onOpenSkill,
   onOpenAgent,
   onOpenTool,
+  fileOpenerFor,
   embedded = false,
   jumpToTurnRef,
   focusMessageUuid,
@@ -93,6 +94,9 @@ export function ChatView({
    *  back: opened locally, the panel would sit under a bar that doesn't know it
    *  exists. Unset (standalone ChatView) the panel opens in place. */
   onOpenTool?: (group: ToolGroup) => void;
+  /** Opens a file the session read in the Files viewer of the frame around the
+   *  embedded view; undefined for a path it cannot open. */
+  fileOpenerFor?: (path: string) => (() => void) | undefined;
   /** Imperative handle exposed to an outside navigator (the v2 Outline column):
    *  set to this view's `jumpToTurn` so a session-outline row can scroll the
    *  embedded transcript to a turn. Null while unmounted / Terminal mode. */
@@ -922,6 +926,7 @@ export function ChatView({
                 turnOf={turnOfRead}
                 activeTurn={activeTurn}
                 onJump={jumpToTurn}
+                openerFor={fileOpenerFor}
               />
             )}
 

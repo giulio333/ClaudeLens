@@ -23,11 +23,15 @@ export function ContextFileSheet({
   turnOf,
   onJump,
   onClose,
+  onOpenFile,
 }: {
   file: ContextFile;
   turnOf: (idx: number) => number | null;
   onJump: (turn: number) => void;
   onClose: () => void;
+  /** The file as it is on disk now, in the Files viewer — set only when the
+   *  host can open it (a file of the project, a local session). */
+  onOpenFile?: () => void;
 }) {
   const sheetRef = useRef<HTMLDivElement | null>(null);
   // The last read is where the peek left the reader, so it opens on that one.
@@ -85,6 +89,18 @@ export function ContextFileSheet({
           <span>
             {coverage ? `${coverage} read in all` : 'no read said which lines it printed'}
           </span>
+          {onOpenFile && (
+            <button
+              type="button"
+              className="cl-ctx-jump"
+              onClick={() => {
+                onClose();
+                onOpenFile();
+              }}
+            >
+              Open file
+            </button>
+          )}
           {turn !== null && (
             <button
               type="button"

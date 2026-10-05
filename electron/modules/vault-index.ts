@@ -59,7 +59,7 @@ export type VaultLinkAnswer = VaultLinkHit | VaultLinkMiss;
  * `.git` alone is usually larger than the tree around it. The rest are the
  * build and dependency dirs that make a scan of a code project unbounded.
  */
-const SKIP_DIRS = new Set([
+export const SKIP_DIRS: ReadonlySet<string> = new Set([
   'node_modules',
   'dist',
   'dist-electron',
@@ -277,15 +277,27 @@ export function resolveVaultLinks(root: string, targets: string[]): VaultLinkAns
  * tests as the resolution.
  */
 export function resolveVaultFile(root: string, rel: string): string {
-  if (!root) throw new Error('Missing project root');
   if (!rel) throw new Error('Missing file path');
+  const target = containedPath(root, rel);
+  if (!existsSync(target) || !statSync(target).isFile()) throw new Error('File not found');
+  return target;
+}
+
+/**
+ * The containment half of `resolveVaultFile`, for a file or a directory and
+ * without the existence check: `rel` joined to `root`, canonicalized, and
+ * refused unless it is the root itself or sits under it. `''` is the root.
+ * Shared with the file explorer (`project-files.ts`), which lists directories
+ * through the same fence.
+ */
+export function containedPath(root: string, rel: string): string {
+  if (!root) throw new Error('Missing project root');
   if (isAbsolute(rel)) throw new Error('Path must be relative to the project');
   const base = canonicalize(root);
   const target = canonicalize(join(base, rel));
   if (target !== base && !target.startsWith(base + sep)) {
     throw new Error('Path must be under the project directory');
   }
-  if (!existsSync(target) || !statSync(target).isFile()) throw new Error('File not found');
   return target;
 }
 

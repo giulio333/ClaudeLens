@@ -1029,6 +1029,18 @@ Coperta da `test/remote-view.test.tsx` e `test/remote-lens-view.test.tsx`
 
 ---
 
+### `files/` — Esplora file del progetto
+
+I file del progetto **in sola lettura**: niente scrittura, rename o delete. Lettura nel main (`electron/modules/project-files.ts`, `files:listDir`/`files:readText`), una cartella per volta quando il lettore la apre, e solo sotto una root che il registro dei progetti conosce. Due superfici, un componente:
+
+- **`ProjectFilesSection.tsx`** → `ProjectFilesSection`, `RefreshFilesButton` — La sezione **Files** del progetto (`View` case `project-files`, voce `F` nel gruppo Context del rail dopo Sessions), sotto l'hero come ogni altra sezione: albero a sinistra su paper-2, file a destra su carta — lo split della pagina Plugins. Il refresh invalida i prefissi `files:dir`/`files:text` della root: niente osserva l'albero sorgente di un progetto
+- **`FilesRailPanel.tsx`** — Lo stesso albero **in Mission Control**, nel rail dove si apre il Playbook (icona cartella accanto al libro; `MissionRail` tiene un solo `panel: 'playbook' | 'files' | null`, così i due pannelli non convivono e il feed sotto resta montato nascosto con filtri e scroll). Le marche dicono cosa la sessione ha fatto al file — letto (ciano), modificato (viola), creato (salvia), le tinte dei tool nel transcript — e risalgono a ogni cartella sopra, perché in un albero chiuso altrimenti non si vedono. Una lettura è anche quella da **shell** (`sed -n`, `cat`, … — la maggioranza), presa da `contextFiles`, lo stesso lettore del rail del Lens: `touchedFiles` vede solo le chiamate `Read`. `This session N` mostra solo i file toccati, in lista piatta. **Al viewer si arriva anche dal lavoro della sessione**: la pagina di una modifica (riga CHANGES → `FileChangePage`) ha `Open file`, e la finestra di un file letto (pallini del Lens → `ContextFileSheet`) ha `Open file` accanto a `Jump to turn`; entrambi passano da `fileOpenerFor` di `TerminalMissionControl`, che apre l'overlay `file` solo per un path dentro la root del progetto — un file cancellato, uno fuori dal progetto o una sessione remota non offrono il link. Aperto il pannello, **il titolo del rail diventa `FILES`** al posto di `MISSION CONTROL`, e il pannello ha una sola riga (filtro + refresh) senza titolo né ✕ propri: lo chiudono l'icona cartella attiva ed Esc. Il click apre il file nell'**overlay largo** del frame, e la riga resta segnata come aperta (`Overlay` `{ kind: 'file'; rel }` in `TerminalMissionControl`), non nel rail, troppo stretto per leggere un file; la lettura è chiavata sul numero di scritture della sessione su quel path, così si rilegge quando Claude lo modifica. **Mai in un pane remoto** (#294): `RemoteView` non passa `onOpenFile` e `MissionRail` non offre il bottone con `remote` — la cartella dell'host ha spesso lo stesso path di una locale
+- **`FileTree.tsx`** — L'albero lazy (`useProjectDir` per cartella, ↑↓ sulle righe a schermo, →/← apre e chiude), sul DOM e non su un modello appiattito: ogni cartella è la sua query. **Minimale per scelta dell'utente**: la prima versione (icona cartella su ogni cartella, glifo documento generico su ogni file, pallino di sessione isolato al bordo destro, anello terracotta sulla riga) è stata bocciata. Ora solo nomi: un chevron per la cartella, l'icona nella **tinta della sua famiglia** (`FileKindIcon`: `fileCategoryTint`, la stessa dei pallini del rail del Lens — codice viola, dati ciano, web haiku, documenti terracotta), il logo del linguaggio dove c'è e il glifo pagina per una famiglia senza logo (una nota `.md`), niente per un nome che l'estensione non classifica (`LICENSE`, `.gitignore`); sempre in uno slot da 14px, così i nomi restano allineati, un filetto verticale lungo ogni cartella aperta come nell'albero dei Plugins, righe da 26px. La marca di sessione è una **parola** accanto al nome (`read`/`edited`/`new`), attenuata sulle cartelle, e la riga aperta è velata con un filetto accent a sinistra invece che contornata. Il main tiene fuori anche i file del sistema operativo (`.DS_Store`, `Thumbs.db`, `desktop.ini`)
+- **`FileViewer.tsx`** — Il file **su carta**, non nella finestra editor scura del transcript (prima versione, bocciata: su un markdown lasciava una lastra nera sotto il documento). È la distinzione che `ContextFileSheet` traccia già: la finestra scura è l'output di un tool dentro una conversazione, questa è una pagina dell'app su un file. Testa che dice il file **una volta sola**: nome sopra la sua cartella (in `~`, path intero nel `title`), e a destra tutti i controlli su una riga — per il markdown il segmentato `Preview | Source` con l'anatomia di Terminal / Lens, poi Copy e Open come icone nude nominate dal tooltip, e in overlay la ✕ dopo un filetto. Tre parole mono in fila e poi un gruppo di icone incorniciato erano stati bocciati; e la barra di Mission Control non mostra né il nome del file né una seconda ✕ (`overlayCrumb` è `null` per `file`), corpo che scorre, piede mono con righe, dimensione e — in Mission Control — cosa ha fatto la sessione al file. Markdown in una colonna di lettura centrata larga quanto la misura di prosa del transcript (`--cl-read-measure`, 95ch; era 74ch e lasciava mezzo overlay vuoto), aperto sul documento, **senza le chip arancioni del transcript** (codice inline in mono su inchiostro, `[[wikilink]]` come link sottolineato a puntini, blockquote a filetto senza fondo né virgolette — regole scoped a `.cl-fview-doc`); codice e testo come righe numerate su carta (`PaperCode` di `ContextFileSheet`, palette chiara), highlight spento oltre 40.000 righe (era 5.000, e il `index.css` di questo repo — 22k righe, ~110 ms di hljs — usciva grigio); un'immagine raster da `images:read`; **SVG e HTML come sorgente, mai renderizzati**. Binario, oltre 1 MB, PDF e formati office/media lo dicono in una frase, con `Open ↗` → `vault:openFile`. In Mission Control l'overlay del frame sta ora **sopra la pill del Lens** (z 50 contro 40): prima la pill copriva qualunque dettaglio aperto
+- **`file-viewer.ts`** / **`session-marks.ts`** — Le metà pure (`viewerKind`, `lineCount`, `joinRoot`, `fmtBytes`; `relToRoot`, `sessionMarks` da `touchedFiles` più le letture da shell), `test/session-marks.test.ts`. Un path fuori dalla root, o scritto via un alias symlink della root, perde la marca — mai la mette sul file sbagliato
+
+Coperte da `test/project-files-view.test.tsx` e `test/files-rail-panel.test.tsx` (StrictMode).
+
 ### `sessions/`
 
 - **`TagBar.tsx`** — Barra dei tag di una sessione (lista + add)
@@ -1446,25 +1458,44 @@ Overview Redesign_, turni 1a → 2a → 3b) per il trattamento dell'hero progett
   wash caldo che sfuma sulla carta (`--cl-hero-wash`, tinta accent a 40°, più
   spenta nel tema dark dove un accent-soft a tutta fascia legge come campo di
   colore). Il bordo inferiore in ink resta: il wash finisce in carta e senza
-  quel filetto la pagina non avrebbe più alcun confine lì.
+  quel filetto la pagina non avrebbe più alcun confine lì. **Tranne sulla
+  landing** (`.cl-hero--landing`): lì subito sotto c'è `Recent sessions` col
+  suo filetto d'inchiostro, e due filetti a 40px l'uno dall'altro facevano una
+  cornice attorno al nulla — l'utente ha chiesto di togliere quello dell'hero.
 
 `.cl-hband`/`.cl-hcell` sono **condivise** con `SearchView`, che continua a
 disegnare le celle divise da hairline: il trattamento 3b vive tutto sotto `.cl-hero--band`. Il nome display
 resta a `clamp(40px, 4.2vw, 64px)` perché una cifra da 30px sotto un titolo da
 132px non è una gerarchia.
 Le sessioni — nella **vista Sessions** e, dalla stessa riga, nella landing
-(vedi sotto) — sono **righe** (`.cl-srow`): pin, indice, **titolo (che porta
-il colore della sessione)**, tag, spazio elastico, il gruppo cifre
-`msg · modello · token · data` e in coda il **kebab delle azioni**. Due elementi
-di 5b sono caduti qui, per la stessa ragione:
+(vedi sotto) — sono **righe a due piani** (`.cl-srow`, disegnate sul canvas
+di design dell'ottobre 2026, variante F): sopra il **titolo (che porta il
+colore della sessione)** con LIVE, expiry e tag (`.cl-srow-head`), sotto il
+**modello** (`.cl-srow-sub`); a destra tre colonne mono a larghezza fissa —
+`193k tok` · `178 msg` · `5d ago` (età relativa, data intera nel `title`; un
+orologio al minuto in `SessionRows` la fa invecchiare senza refetch) — e in
+coda il **kebab delle azioni**. Il **pin sta appeso nel margine sinistro**,
+fuori dalla colonna del testo: in linea spostava il titolo di una riga pinnata
+e la riga del modello no. Tolti su richiesta dell'utente, insieme: l'**indice**
+di riga, la **barretta del costo** (relativa alla sessione più cara in vista,
+diceva lo stesso dei token rispetto a un riferimento invisibile) e il conto
+alla rovescia dell'expiry su ogni riga — il chip resta solo negli ultimi 7
+giorni. Una sessione **viva** non ha una superficie sua (un wash caldo è stato
+provato e bocciato come «alone arancione»): dopo il modello, sulla stessa
+riga, dice cosa sta facendo — `liveActivityLine` in `overview/session-rows.ts`
+(puro, `test/session-rows.test.ts`), che parla solo per gli stati del registro
+che affermano qualcosa: `busy` → tool e argomento dal digest del tail (o il
+sotto-agente), `waiting` → `Needs you · <waitingFor>` in accento; `idle` e
+`unknown` non dicono niente, come nel welcome della home globale. Registro e
+digest sono letti **una volta** in `SessionRows`, non per riga. Due elementi
+di 5b erano caduti prima, per la stessa ragione:
 
 - **il filetto puntinato** che portava l'occhio dal titolo alle cifre. Esisteva
   anche come spazio morto riservato (`min-width: 196px`) sotto le azioni, che
   gli galleggiavano sopra in assoluto; senza quel cluster non connette più
   nulla, e una colonna di puntini grigi ripetuta su ogni riga si leggeva come
-  decorazione. Resta uno `.cl-srow-gap` vuoto: ciò che allinea davvero la lista
-  sono le **larghezze fisse delle colonne di cifre** (`model` 92px, `toks` 72px,
-  `when` 104px), non i puntini;
+  decorazione. Ciò che allinea davvero la lista sono le **larghezze fisse
+  delle colonne di cifre**, non i puntini;
 - **i tre bottoni etichettati** (Chat / + tag / Delete), sostituiti da un solo
   `SessionRowMenu` (`.cl-srow-menu`, il tondo da 24px con i tre puntini — stesso
   peso e stessa comparsa in hover del pin all'altro capo della riga, così i due
@@ -1494,11 +1525,13 @@ chiesto il titolo. Il titolo è l'unica cosa della riga che si legge comunque,
 e i token `--cl-agent-*` sono tarati per il testo (sotto), quindi a 16px
 reggono. Era stata considerata anche la **sfumatura di fondo** suggerita
 dall'utente e scartata per la ragione già scritta sopra per le righe pinnate —
-in dark è una macchia e litiga con la tinta dell'hover. La tinta batte
-l'accento dell'hover (specificità `.is-coloured.<nome>` > `:hover .title`): il
-fondo della riga dice già "questa", il colore è l'unica cosa che dice **quale**
-sessione è questa; e tinge anche l'italico di _Untitled_, che tiene il suo peso
-smorzato. L'indice torna neutro, e in accent solo quando pinnato.
+in dark è una macchia e litiga con la tinta dell'hover. L'hover non ricolora
+più il titolo: è un velo **neutro e arrotondato** (`.cl-srow::before`,
+`--cl-hover-bg`, che sborda di 12px oltre la colonna del testo) — la tinta
+accento squadrata sulle hairline, con il titolo che diventava terracotta, è
+stata bocciata dall'utente. Il velo dice "questa", il colore dice **quale**
+sessione è; e tinge anche l'italico di _Untitled_, che tiene il suo peso
+smorzato.
 
 Il nome sceglie una **classe** (`.cl-srow .title.is-coloured.blue`), mai uno
 `style` inline: il valore arriva da un record non documentato, `cost-tracker` lo
@@ -1546,18 +1579,12 @@ caricamento resta progressivo, prende solo l'idioma del pager del mock.
 La data della riga è formattata **en-US** come il resto dell'app: era l'ultimo
 `it-IT` rimasto in una UI english-only (`10 ago` accanto a colonne inglesi).
 
-**L'indice è il rango, e le due liste lo prendono dalla stessa mappa**
-(`sessionRank`, posizione 1-based nella lista completa ordinata per attività,
-passata a entrambe come `rankOf`). Le pinnate stanno in una sezione propria e
-sono tolte da quella sotto: numerando la prima per rango e la seconda per
-posizione, `02` stava sia su una pinnata sia su una sessione tre righe più
-giù — lo stesso numero per due sessioni nella stessa schermata. Da qui la
-**conseguenza voluta**: la lista non pinnata salta i numeri che la sezione
-sopra si è presa (`01`, `04`, `06`, …), e il conteggio in testata (`15 total`)
-resta quello delle righe di quella lista, non dell'ultimo indice stampato.
-`rankOf` si omette solo dove il sottoinsieme è un **prefisso** dell'ordine —
-le prime cinque della landing — perché lì l'ordinale sequenziale è già il
-rango.
+**Niente più indice di riga.** C'era un ordinale (`01`, `04`, …) preso dal
+rango nella lista completa (`sessionRank`/`rankOf`), perché numerare per
+posizione la sezione pinnata e la lista sotto dava lo stesso numero a due
+sessioni. Con le pinnate in testa alla landing un numero d'ordine non
+descriveva più l'ordine della lista, ed è stato tolto insieme a tutta la
+macchina del rango.
 
 **Landing di progetto — design handoff _Project Overview Redesign_, 3b**
 (`section === 'overview'`). La landing è **l'hero e una lista sola**. Le
@@ -1633,11 +1660,9 @@ Seconda passata, sullo stesso hero visto in app con un progetto reale:
   è unit-tested, non si tocca); è la barra a farsi da parte.
 
 La lista è **`SessionRows`**, le stesse righe `.cl-srow` della vista
-Sessions — pin, indice, titolo colorato, LIVE, expiry, tag, cifre in colonna e kebab
-compresi — senza `pageSize` (la testata dice già `All {N} →`, un footer
-"1–5 of 5" sotto conterebbe le stesse cinque due volte) e senza `rankOf`
-(sono le prime cinque della lista, l'ordinale sequenziale è già il rango
-vero). Per un po' ha avuto un record tutto suo (`RecentSessionRows`,
+Sessions — pin, titolo colorato, LIVE, expiry, tag, modello, cifre in colonna
+e kebab compresi — senza `pageSize` (la testata dice già `All {N} →`, un footer
+"1–5 of 5" sotto conterebbe le stesse cinque due volte). Per un po' ha avuto un record tutto suo (`RecentSessionRows`,
 `.cl-rsrow`: titolo + `LiveTag` su una base, una riga mono
 `N msg · modello · N tokens · quando` sotto), tenuto separato di proposito
 perché "una variante sul componente condiviso è il modo in cui la vista
@@ -1651,12 +1676,15 @@ stesso peso con cui `.cl-srows` si apre in Sessions, e infatti
 due filetti si sommavano in una barra) perché la base è condivisa da una
 decina di viste, e a destra c'è `All {N} →`.
 
-L'ordine è la **recenza**, non più le pinnate per prime (1c): la testata dice
-"Recent sessions" e la fascia non stampa più `last … ago`, quindi la prima
-riga è diventata l'unico posto in cui la pagina dichiara quando il progetto è
-stato toccato — una pinnata di tre settimane fa in quella posizione farebbe
-mentire la pagina. Le pinnate hanno comunque la **loro sezione** nella vista
-Sessions, che è dove si agisce su di esse.
+L'ordine è **prima le pinnate, poi le altre**, ognuna delle due parti dalla
+più recente, fino a 5 righe; se le pinnate da sole arrivano a 5, la lista è
+solo pinnate (`landingSessions` in `overview/session-rows.ts`, unit-tested).
+Per un giro (3b) era stata la sola recenza, con l'argomento che una pinnata
+vecchia in cima avrebbe fatto mentire la pagina su quando il progetto era
+stato toccato: l'utente ha deciso il contrario, e da quando ogni riga stampa
+la propria età (`5d ago`) una pinnata vecchia in cima dice quanti anni ha
+invece di passare per l'ultima attività. La vista Sessions tiene la sua
+sezione pinnata separata.
 
 La sezione **Teams** conserva l'hero compatto (`cl-hero--compact`) e la
 vecchia meta-riga: è una vista operativa, non una landing di progetto.

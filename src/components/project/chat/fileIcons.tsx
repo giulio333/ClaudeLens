@@ -90,9 +90,12 @@ function FileGlyph(props: SVGProps<SVGSVGElement>) {
   );
 }
 
-/** Renders the real devicon logo for the extension, or the generic glyph. */
-export function FileIcon({ ext }: { ext: string }) {
+/** Renders the real devicon logo for the extension, or the generic glyph —
+ *  or, `bare`, nothing: a tree of names reads cleaner without a page glyph on
+ *  every row that has no language to show. */
+export function FileIcon({ ext, bare }: { ext: string; bare?: boolean }) {
   const Logo = LOGO_BY_EXT[ext];
   if (Logo) return <Logo className="cl-file-chip-logo" width={12} height={12} aria-hidden />;
+  if (bare) return null;
   return <FileGlyph className="cl-file-chip-logo" />;
 }

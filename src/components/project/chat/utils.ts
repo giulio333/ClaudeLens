@@ -1498,6 +1498,12 @@ const FILE_CAT_BY_EXT: Record<string, 'code' | 'data' | 'web' | 'doc'> = {
   rst: 'doc',
 };
 
+/** The family a file belongs to by extension — code, data, web or doc — or
+ *  null when the extension says nothing (`LICENSE`, `.gitignore`). */
+export function fileCategory(ext: string): 'code' | 'data' | 'web' | 'doc' | null {
+  return FILE_CAT_BY_EXT[ext] ?? null;
+}
+
 export function fileCategoryTint(ext: string): string {
   switch (FILE_CAT_BY_EXT[ext]) {
     case 'code':

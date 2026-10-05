@@ -16,6 +16,14 @@ Renders markdown with syntax highlighting and styled headings.
 - Custom styled links, headings, and code blocks
 - External links open in system browser (safe from Electron context)
 - `[[wikilink]]` chips — **only inside a `VaultLinksProvider`** (see below)
+- Obsidian callouts (`> [!tip] Title`, `[!type]-`/`[!type]+` folded) —
+  `rehype-callouts.ts`, everywhere markdown renders. The rest of the first line
+  is the title, the lines after it the body; the type picks one of the app's
+  existing tones (info cyan, tip sage, warning amber, danger red, example
+  violet, anything else ink), never a hue of its own, drawn as a soft rounded
+  card — a 7% wash, a hairline and the type's glyph before the title, the type
+  label shown only when there is no title; a folded one is a `<details>`. Without it the marker printed as text inside a quote, in exactly
+  the notes a vault is made of. `test/markdown-callouts.test.tsx`
 - Images by path (`![x](/abs/file.png)`, `file://`, and a relative path when
   inside a `VaultLinksProvider`, resolved against its root) are read through
   `images:read` and drawn from the `data:` URI it answers — `ImageFigure.tsx`,

@@ -66,6 +66,7 @@ export function PromptPlaybookPanel({
   trigger,
   onClose,
   preview,
+  railTitled,
 }: PlaybookProps & {
   id: string;
   anchor?: DOMRect;
@@ -75,6 +76,11 @@ export function PromptPlaybookPanel({
    *  panel then draws these and asks `playbook:*` nothing, so a demo of the
    *  feature can never put the reader's own prompts on screen. */
   preview?: { templates: PromptTemplate[]; candidates: PromptCandidate[] };
+  /** Mission Control's rail names the panel in its own head (PLAYBOOK) and
+   *  closes it from its toggle: the panel then drops its title and its ×, and
+   *  "+ New template" moves to the end of the tab row. The editor keeps its
+   *  heading — "New template" is not something the rail's title says. */
+  railTitled?: boolean;
 }) {
   const { templates, candidates, change } = usePromptPlaybook(projectHash, !preview);
   const savedList = preview ? preview.templates : templates.data;
@@ -157,6 +163,67 @@ export function PromptPlaybookPanel({
 
   const below = anchor && window.innerHeight - anchor.bottom > 300;
   const width = Math.min(480, window.innerWidth - 24);
+  const newTemplate = (
+    <button
+      className="cl-playbook-new"
+      type="button"
+      disabled={busy}
+      onClick={() => {
+        setError(null);
+        setNotice(null);
+        setEditor({ kind: 'create', name: '', text: '' });
+      }}
+    >
+      + New template
+    </button>
+  );
+  const tabs = (
+    <div
+      className="cl-playbook-tabs"
+      role="tablist"
+      aria-label="Prompt collections"
+      onKeyDown={event => {
+        if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+        event.preventDefault();
+        const next =
+          event.key === 'Home'
+            ? 'saved'
+            : event.key === 'End'
+              ? 'suggested'
+              : tab === 'saved'
+                ? 'suggested'
+                : 'saved';
+        setTab(next);
+        event.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();
+      }}
+    >
+      <button
+        type="button"
+        role="tab"
+        data-tab="saved"
+        id={`${id}-saved-tab`}
+        aria-selected={tab === 'saved'}
+        aria-controls={`${id}-saved`}
+        tabIndex={tab === 'saved' ? 0 : -1}
+        onClick={() => setTab('saved')}
+      >
+        Saved <span>{savedList?.length ?? '—'}</span>
+      </button>
+      <button
+        type="button"
+        role="tab"
+        data-tab="suggested"
+        id={`${id}-suggested-tab`}
+        aria-selected={tab === 'suggested'}
+        aria-controls={`${id}-suggested`}
+        tabIndex={tab === 'suggested' ? 0 : -1}
+        onClick={() => setTab('suggested')}
+      >
+        Suggested <span>{suggestedList?.length ?? '—'}</span>
+      </button>
+    </div>
+  );
+
   return (
     <div
       ref={panel}
@@ -181,80 +248,34 @@ export function PromptPlaybookPanel({
           : undefined
       }
     >
-      <header className="cl-playbook-heading">
-        <strong>
-          {editor ? (editor.kind === 'update' ? 'Edit template' : 'New template') : 'Playbook'}
-        </strong>
-        {!editor && (
-          <button
-            className="cl-playbook-new"
-            type="button"
-            disabled={busy}
-            onClick={() => {
-              setError(null);
-              setNotice(null);
-              setEditor({ kind: 'create', name: '', text: '' });
-            }}
-          >
-            + New template
-          </button>
-        )}
-        <button
-          className="cl-playbook-close"
-          type="button"
-          aria-label={anchor ? 'Close playbook' : 'Back to activity'}
-          title={anchor ? 'Close playbook' : 'Back to activity'}
-          onClick={() => onClose()}
-        >
-          ×
-        </button>
-      </header>
-      {!editor && (
-        <div
-          className="cl-playbook-tabs"
-          role="tablist"
-          aria-label="Prompt collections"
-          onKeyDown={event => {
-            if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
-            event.preventDefault();
-            const next =
-              event.key === 'Home'
-                ? 'saved'
-                : event.key === 'End'
-                  ? 'suggested'
-                  : tab === 'saved'
-                    ? 'suggested'
-                    : 'saved';
-            setTab(next);
-            event.currentTarget.querySelector<HTMLButtonElement>(`[data-tab="${next}"]`)?.focus();
-          }}
-        >
-          <button
-            type="button"
-            role="tab"
-            data-tab="saved"
-            id={`${id}-saved-tab`}
-            aria-selected={tab === 'saved'}
-            aria-controls={`${id}-saved`}
-            tabIndex={tab === 'saved' ? 0 : -1}
-            onClick={() => setTab('saved')}
-          >
-            Saved <span>{savedList?.length ?? '—'}</span>
-          </button>
-          <button
-            type="button"
-            role="tab"
-            data-tab="suggested"
-            id={`${id}-suggested-tab`}
-            aria-selected={tab === 'suggested'}
-            aria-controls={`${id}-suggested`}
-            tabIndex={tab === 'suggested' ? 0 : -1}
-            onClick={() => setTab('suggested')}
-          >
-            Suggested <span>{suggestedList?.length ?? '—'}</span>
-          </button>
-        </div>
+      {(!railTitled || editor) && (
+        <header className="cl-playbook-heading">
+          <strong>
+            {editor ? (editor.kind === 'update' ? 'Edit template' : 'New template') : 'Playbook'}
+          </strong>
+          {!editor && newTemplate}
+          {!railTitled && (
+            <button
+              className="cl-playbook-close"
+              type="button"
+              aria-label={anchor ? 'Close playbook' : 'Back to activity'}
+              title={anchor ? 'Close playbook' : 'Back to activity'}
+              onClick={() => onClose()}
+            >
+              ×
+            </button>
+          )}
+        </header>
       )}
+      {!editor &&
+        (railTitled ? (
+          <div className="cl-playbook-tabbar">
+            {tabs}
+            {newTemplate}
+          </div>
+        ) : (
+          tabs
+        ))}
       <div className="cl-playbook-body">
         {error && (
           <p role="alert" className="cl-playbook-error">

@@ -19,6 +19,7 @@ import {
   useProjectAgents,
   useCleanupPeriodDays,
   useActiveSessions,
+  useSessionActivity,
 } from '../../../hooks/useIPC';
 import { View } from '../types';
 import {
@@ -50,6 +51,7 @@ import { MemoryPeekCard, type PeekPlacement } from '../memory/MemoryPeekCard';
 import { useMemoryPeek } from '../memory/useMemoryPeek';
 import { MEMORY_TYPE_TINT } from '../chat/utils';
 import { ProjectConfigView } from '../settings/ProjectConfigView';
+import { ProjectFilesSection } from '../files/ProjectFilesSection';
 import { usePinnedProjects } from '../../../hooks/usePinnedProjects';
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
 import { useSessionTags } from '../../../hooks/useSessionTags';
@@ -61,6 +63,7 @@ import { TagBar } from '../sessions/TagBar';
 import { TagPicker } from '../sessions/TagPicker';
 import { SessionRowMenu } from '../sessions/SessionRowMenu';
 import { DeleteSessionDialog } from '../shared/DeleteSessionDialog';
+import { landingSessions as orderLanding, liveActivityLine, relativeWhen } from './session-rows';
 
 // The two entry points a project hero offers, and the only place the app says
 // which budget each one spends. Hoisted because the Teams header and the
@@ -96,7 +99,8 @@ export type ProjectSection =
   | 'plans'
   | 'workflows'
   | 'teams'
-  | 'config';
+  | 'config'
+  | 'files';
 
 type Project = { hash: string; realPath: string };
 
@@ -330,22 +334,6 @@ export function ProjectView({
     [sessions, project.hash, isSessionPinned]
   );
   const hasPinnedSession = pinnedSessions.length > 0;
-  // True 1-based position of each session in the full activity-sorted list, so
-  // the pinned section shows the real rank (e.g. 04, 27) instead of 01, 02.
-  const sessionRank = useMemo(() => {
-    const m = new Map<string, number>();
-    sessions.forEach((s, i) => m.set(s.filename, i + 1));
-    return m;
-  }, [sessions]);
-  // BOTH lists of the Sessions view number their rows from this map, never from
-  // their own position: the pinned section is a subset of the same order, so a
-  // sequential index there and another one below restarted at 01 and the same
-  // number named two different sessions one section apart. The index is the
-  // rank, which is why the unpinned list skips the numbers shown above it.
-  const rankOf = useCallback(
-    (s: SessionSummary) => sessionRank.get(s.filename) ?? 0,
-    [sessionRank]
-  );
   // Pinned sessions live exclusively in their own section; the regular list
   // shows only the unpinned ones so a pinned session never appears twice.
   const unpinnedSessions = useMemo(
@@ -575,16 +563,15 @@ export function ProjectView({
     );
   };
 
-  // ── Project landing (design 1c) ──
-  // One session list, pins first: they no longer have a section of their own,
-  // so putting them at the head of the three is what keeps a pinned — and
-  // therefore possibly old — conversation reachable from the landing.
-  // Recency, not pins-first (design 3b): the head says "Recent sessions" and
-  // the band no longer prints "last … ago", so the top row is now the page's
-  // only statement of when this project was last touched — a pinned session
-  // from three weeks ago in that slot would make the page lie. Pins keep their
-  // own section in the Sessions view, which is where they are acted on.
-  const landingSessions = useMemo(() => sessions.slice(0, LANDING_SESSIONS), [sessions]);
+  // ── Project landing ──
+  // Pins first, then the newest of the rest (the user's call, over design 3b's
+  // recency-only order): a pin is "keep this one in reach", and the landing is
+  // the one list the project opens on. Each row still says how old it is, so a
+  // three-week-old pin in the top slot no longer reads as the last activity.
+  const landingSessions = useMemo(
+    () => orderLanding(sessions, s => isSessionPinned(project.hash, s.filename), LANDING_SESSIONS),
+    [sessions, project.hash, isSessionPinned]
+  );
 
   const enabledMcp = useMemo(() => {
     const all = [...(mcpData?.cloudServers ?? []), ...(mcpData?.localServers ?? [])];
@@ -617,7 +604,7 @@ export function ProjectView({
       <section
         className={`cl-hero${liveProc && !isTeamsSection ? ' is-live' : ''}${
           isTeamsSection ? ' cl-hero--compact cl-hero--teams' : ' cl-hero--band'
-        }`}
+        }${section === 'overview' ? ' cl-hero--landing' : ''}`}
       >
         {/* Teams keeps the compact glass pair pinned top-right. The project
             hero drops it: design 3b puts the actions in flow under the metrics,
@@ -903,7 +890,6 @@ export function ProjectView({
             cleanupDays={cleanupDays}
             onOpen={openTerminal}
             onOpenChat={openChat}
-            rankOf={rankOf}
             style={{ paddingTop: 38 }}
           />
           <section className="cl-section" style={{ paddingTop: hasPinnedSession ? undefined : 38 }}>
@@ -941,7 +927,6 @@ export function ProjectView({
                 pageSize={60}
                 onOpen={openTerminal}
                 onOpenChat={openChat}
-                rankOf={rankOf}
               />
             )}
           </section>
@@ -1438,6 +1423,8 @@ export function ProjectView({
         />
       )}
 
+      {section === 'files' && <ProjectFilesSection project={project} />}
+
       {section === 'config' && (
         <ProjectConfigView
           project={project}
@@ -1480,8 +1467,14 @@ function LiveTag() {
   );
 }
 
+/** How long until `cleanupPeriodDays` deletes the session — drawn only in the
+ *  last week. A countdown on every row (`23d`, `26d`, …) was a column of faint
+ *  numbers nobody acts on; the chip is worth its place when it is close. */
+const EXPIRY_NOTICE_DAYS = 7;
+
 function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number }) {
   const remaining = cleanupDays - sessionAgeDays(date);
+  if (remaining > EXPIRY_NOTICE_DAYS) return null;
   let color: string;
   let opacity: number;
   let label: string;
@@ -1494,13 +1487,9 @@ function ExpiryTag({ date, cleanupDays }: { date: string; cleanupDays: number })
     color = 'oklch(0.60 0.18 25)';
     opacity = 1;
     label = `${remaining}d`;
-  } else if (remaining <= 7) {
+  } else {
     color = 'oklch(0.65 0.15 55)';
     opacity = 0.9;
-    label = `${remaining}d`;
-  } else {
-    color = 'var(--cl-ink-4)';
-    opacity = 0.4;
     label = `${remaining}d`;
   }
 
@@ -1543,7 +1532,6 @@ function PinnedSessionsSection({
   cleanupDays,
   onOpen,
   onOpenChat,
-  rankOf,
   style,
 }: {
   sessions: SessionSummary[];
@@ -1551,7 +1539,6 @@ function PinnedSessionsSection({
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
-  rankOf?: (s: SessionSummary) => number;
   style?: CSSProperties;
 }) {
   if (sessions.length === 0) return null;
@@ -1567,7 +1554,6 @@ function PinnedSessionsSection({
         cleanupDays={cleanupDays}
         onOpen={onOpen}
         onOpenChat={onOpenChat}
-        rankOf={rankOf}
       />
     </section>
   );
@@ -1575,16 +1561,18 @@ function PinnedSessionsSection({
 
 type SessionRowProps = {
   session: SessionSummary;
-  rank: number;
   pinned: boolean;
   live: boolean;
+  // What a live session is doing, from the registry and its tail digest
+  // (`liveActivityLine`); null when there is nothing to claim. Primitives, so
+  // the memo comparator can see a change without a fresh object every push.
+  liveLine: string | null;
+  liveWaiting: boolean;
+  // The list's minute clock, so "5m ago" ages without a refetch.
+  now: number;
   tags: string[];
   cleanupDays: number;
   pickerOpen: boolean;
-  // This session's cost relative to the priciest session in the same list
-  // (0–1) — a per-row intensity bar, not a plotted series (a summary only
-  // carries one cost figure per session, never a message-by-message trail).
-  costRatio: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
   onTogglePin: (filename: string) => void;
@@ -1603,12 +1591,13 @@ type SessionRowProps = {
 function sessionRowEqual(a: SessionRowProps, b: SessionRowProps): boolean {
   if (
     a.session !== b.session ||
-    a.rank !== b.rank ||
     a.pinned !== b.pinned ||
     a.live !== b.live ||
+    a.liveLine !== b.liveLine ||
+    a.liveWaiting !== b.liveWaiting ||
+    a.now !== b.now ||
     a.cleanupDays !== b.cleanupDays ||
     a.pickerOpen !== b.pickerOpen ||
-    a.costRatio !== b.costRatio ||
     a.tags.length !== b.tags.length
   ) {
     return false;
@@ -1621,13 +1610,14 @@ function sessionRowEqual(a: SessionRowProps, b: SessionRowProps): boolean {
 
 const SessionRow = memo(function SessionRow({
   session: s,
-  rank,
   pinned,
   live,
+  liveLine,
+  liveWaiting,
+  now,
   tags,
   cleanupDays,
   pickerOpen,
-  costRatio,
   onOpen,
   onOpenChat,
   onTogglePin,
@@ -1668,67 +1658,64 @@ const SessionRow = memo(function SessionRow({
       >
         <PinIcon filled={pinned} />
       </button>
-      <span className="idx">{String(rank).padStart(2, '0')}</span>
-      {/* The session's `/color`, worn by the title — see `.cl-scolor` in
-          index.css for why it is neither a dot (the row already has the green
-          LIVE one and the model's) nor the ordinal (tried: a tinted "01" was
-          too quiet to read as the session's colour at all). Nothing is added
-          when the session carries no colour. */}
-      <span
-        className={`title${untitled ? ' is-untitled' : ''}${
-          s.agentColor ? ` is-coloured ${s.agentColor}` : ''
-        }`}
-        title={s.agentColor ? `Session colour: ${s.agentColor}` : undefined}
-      >
-        {sessionTitle(s)}
-      </span>
-      {live && <LiveTag />}
-      <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
-      {/* rendered only when there are tags: an empty flex item would still take
-          the row's 12px gap and eat into the space before the figures */}
-      {tags.length > 0 && (
-        <span className="cl-srow-tags" onClick={e => e.stopPropagation()}>
-          {tags.map(t => (
-            <TagChip
-              key={t}
-              name={t}
-              variant="plain"
-              tone="soft"
-              removable
-              onRemove={() => onRemoveTag(s.filename, t)}
-            />
-          ))}
+      {/* Two lines: the title and what tells the session apart, then the model
+          — followed, while it runs, by what it is doing. No ordinal: with pins
+          first a rank number no longer read as the list's order. */}
+      <span className="cl-srow-main">
+        <span className="cl-srow-head">
+          {/* The session's `/color`, worn by the title — see `.cl-scolor` in
+              index.css for why it is not a dot (the row already has the green
+              LIVE one and the model's). Nothing is added when the session
+              carries no colour. */}
+          <span
+            className={`title${untitled ? ' is-untitled' : ''}${
+              s.agentColor ? ` is-coloured ${s.agentColor}` : ''
+            }`}
+            title={s.agentColor ? `Session colour: ${s.agentColor}` : undefined}
+          >
+            {sessionTitle(s)}
+          </span>
+          {live && <LiveTag />}
+          <ExpiryTag date={s.date} cleanupDays={cleanupDays} />
+          {/* rendered only when there are tags: an empty flex item would still
+              take the head's gap */}
+          {tags.length > 0 && (
+            <span className="cl-srow-tags" onClick={e => e.stopPropagation()}>
+              {tags.map(t => (
+                <TagChip
+                  key={t}
+                  name={t}
+                  variant="plain"
+                  tone="soft"
+                  removable
+                  onRemove={() => onRemoveTag(s.filename, t)}
+                />
+              ))}
+            </span>
+          )}
         </span>
-      )}
-
-      {/* Plain empty space between the title cluster and the figures. It carried a
-          dotted leader (design 5b/4b) with the row actions floating on it: with
-          the actions collapsed into one kebab there is nothing left for the
-          leader to connect, and a run of grey dots down every row was reading as
-          decoration. The figures keep their fixed column widths — that is what
-          actually aligns the list. */}
-      <span className="cl-srow-gap" aria-hidden />
+        {/* The model always stays; what a live session is doing follows it on
+            the same line rather than taking its place. */}
+        <span className={`cl-srow-sub model ${fam}`}>
+          <span className="dot" />
+          <span className="name">{s.model ? fmtModel(s.model) : '—'}</span>
+          {liveLine && (
+            <span className={`act${liveWaiting ? ' is-waiting' : ''}`} title={liveLine}>
+              <span className="act-dot" />
+              <span className="txt">{liveLine}</span>
+            </span>
+          )}
+        </span>
+      </span>
 
       <span className="meta">
+        <span className="toks" title={`${fmt(s.totalTokens)} tokens`}>
+          {kTok(s.totalTokens)} tok
+        </span>
         <span className="msg">{fmt(s.messageCount)} msg</span>
-        <span className={`model ${fam}`}>
-          <span className="dot" /> {s.model ? fmtModel(s.model) : '—'}
+        <span className="when" title={shortWhen(s.date)}>
+          {relativeWhen(s.date, now)}
         </span>
-        <span className="toks">{fmt(s.totalTokens)}</span>
-        {/* Cost relative to the priciest session in this list — a column-width
-            bar, not a stat: the figure itself is the tooltip, the bar is a
-            glance-able "how does this one compare". Empty on a free session
-            instead of a zero-width sliver nobody would notice. */}
-        <span
-          className="cl-srow-cost"
-          title={s.estimatedCost > 0 ? `${fmtCost(s.estimatedCost)} this session` : undefined}
-        >
-          <span
-            className="cl-srow-cost-fill"
-            style={{ width: `${Math.round(costRatio * 100)}%` }}
-          />
-        </span>
-        <span className="when">{shortWhen(s.date)}</span>
       </span>
 
       <SessionRowMenu
@@ -1744,13 +1731,12 @@ const SessionRow = memo(function SessionRow({
   );
 }, sessionRowEqual);
 
-function SessionRows({
+export function SessionRows({
   sessions,
   projectHash,
   cleanupDays,
   onOpen,
   onOpenChat,
-  rankOf,
   pageSize,
 }: {
   sessions: SessionSummary[];
@@ -1758,13 +1744,6 @@ function SessionRows({
   cleanupDays: number;
   onOpen: (s: SessionSummary) => void;
   onOpenChat: (s: SessionSummary) => void;
-  // When provided, overrides the sequential row number with the session's true
-  // position in the full list. Every list that shows a SUBSET of a larger order
-  // passes it — both lists of the Sessions view do, since numbering the pinned
-  // ones by rank and the rest by position made the same number appear twice on
-  // one screen. Omitted only where the subset is a prefix (the landing's first
-  // five), where the sequential index already is the rank.
-  rankOf?: (s: SessionSummary) => number;
   // When set, only the first `pageSize` rows mount, behind a "Show more" button
   // (the full Sessions view, with hundreds of rows). Omitted for the small
   // pinned/preview lists, which render in full.
@@ -1772,10 +1751,21 @@ function SessionRows({
 }) {
   const { isPinned, togglePin } = usePinnedSessions();
   const { data: activeSessions = [] } = useActiveSessions();
-  const liveIds = useMemo(
-    () => new Set(activeSessions.map(a => a.sessionId).filter(Boolean)),
+  // One subscription for the whole list, never one per row: the Sessions view
+  // mounts dozens of rows and only the live ones read it.
+  const { data: activity = [] } = useSessionActivity();
+  const liveById = useMemo(
+    () => new Map(activeSessions.filter(a => a.sessionId).map(a => [a.sessionId, a])),
     [activeSessions]
   );
+  const activityById = useMemo(() => new Map(activity.map(a => [a.sessionId, a])), [activity]);
+  // The "5m ago" column ages while the page sits open; without a clock a row
+  // nobody refetched would keep saying "now" for an hour.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = setInterval(() => setNow(Date.now()), 60_000);
+    return () => clearInterval(id);
+  }, []);
   const {
     tags: allTags,
     tagsForSession,
@@ -1811,31 +1801,34 @@ function SessionRows({
 
   const visible = shown >= sessions.length ? sessions : sessions.slice(0, shown);
   const remaining = sessions.length - visible.length;
-  // Scaled against the whole list, not just the mounted page: "Show more"
-  // must not rescale rows already on screen.
-  const maxCost = sessions.reduce((m, s) => Math.max(m, s.estimatedCost), 0);
 
   return (
     <div className="cl-srows">
-      {visible.map((s, i) => (
-        <SessionRow
-          key={s.filename}
-          session={s}
-          rank={rankOf ? rankOf(s) : i + 1}
-          pinned={isPinned(projectHash, s.filename)}
-          live={liveIds.has(s.filename.replace(/\.jsonl$/, ''))}
-          tags={tagsForSession(s.filename)}
-          cleanupDays={cleanupDays}
-          pickerOpen={pickerFor?.filename === s.filename}
-          costRatio={maxCost > 0 ? s.estimatedCost / maxCost : 0}
-          onOpen={onOpen}
-          onOpenChat={onOpenChat}
-          onTogglePin={handleTogglePin}
-          onAddTag={handleAddTag}
-          onRemoveTag={handleRemoveTag}
-          onDelete={handleDelete}
-        />
-      ))}
+      {visible.map(s => {
+        const id = s.filename.replace(/\.jsonl$/, '');
+        const entry = liveById.get(id);
+        const line = liveActivityLine(entry, activityById.get(id));
+        return (
+          <SessionRow
+            key={s.filename}
+            session={s}
+            pinned={isPinned(projectHash, s.filename)}
+            live={!!entry}
+            liveLine={line?.text ?? null}
+            liveWaiting={line?.waiting ?? false}
+            now={now}
+            tags={tagsForSession(s.filename)}
+            cleanupDays={cleanupDays}
+            pickerOpen={pickerFor?.filename === s.filename}
+            onOpen={onOpen}
+            onOpenChat={onOpenChat}
+            onTogglePin={handleTogglePin}
+            onAddTag={handleAddTag}
+            onRemoveTag={handleRemoveTag}
+            onDelete={handleDelete}
+          />
+        );
+      })}
       {/* Footer in the 5b idiom: the range on the left, the progressive-load
           control on the right where the mock puts its pager. Loading stays
           progressive (mounted rows only) rather than paged. */}

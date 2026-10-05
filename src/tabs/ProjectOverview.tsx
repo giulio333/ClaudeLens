@@ -103,6 +103,7 @@ const CORE_PROJECT_VIEWS = [
   'project-workflows',
   'project-teams',
   'project-config',
+  'project-files',
 ];
 
 function sectionFromView(v: View): ProjectSection {
@@ -129,6 +130,8 @@ function sectionFromView(v: View): ProjectSection {
       return 'teams';
     case 'project-config':
       return 'config';
+    case 'project-files':
+      return 'files';
     default:
       return 'overview';
   }
@@ -169,6 +172,8 @@ function viewForSection(section: ProjectSection, project: Project): View {
       return { type: 'project-teams', project };
     case 'config':
       return { type: 'project-config', project };
+    case 'files':
+      return { type: 'project-files', project };
     default:
       return { type: 'overview' };
   }
