@@ -52,6 +52,8 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A plan', description: 'And its outcome.', visual: 'plan' },
     { title: 'Parked', description: 'In the background.', visual: 'parked-terminals' },
     { title: 'Tabs', description: 'Across the top.', visual: 'session-tabs' },
+    { title: 'Files', description: 'Marked.', visual: 'project-files' },
+    { title: 'Sources', description: 'At the foot.', visual: 'web-sources' },
   ],
 };
 
@@ -207,6 +209,32 @@ describe('WhatsNewDialog', () => {
     expect(bar.querySelectorAll('.cl-stab[data-on="true"]')).toHaveLength(1);
     expect(tabs[1].querySelector('.cl-stab-orb .cl-live-orb')).not.toBeNull();
     expect(tabs[2].querySelector('.cl-parked-dot[data-tone="waiting"]')).not.toBeNull();
+    // Mission Control's rail with the project tree open in it: the files the
+    // session touched marked, and the folders above them too — drawn from the
+    // preview's own folders, never from a read main would refuse for a made-up
+    // project.
+    const tree = container.querySelector('.cl-whatsnew-frame--files .cl-ftree')!;
+    const marked = [...tree.querySelectorAll('.cl-ftree-row')]
+      .filter(r => r.querySelector('.cl-ftree-mark'))
+      .map(
+        r =>
+          `${r.querySelector('.name')?.textContent} ${r.querySelector('.cl-ftree-mark')?.textContent}`
+      );
+    expect(marked).toEqual([
+      'src new',
+      'net new',
+      'backoff.ts new',
+      'retry.ts edited',
+      'test edited',
+      'README.md read',
+    ]);
+    expect(window.electronAPI.files.listDir).not.toHaveBeenCalled();
+    expect(window.electronAPI.files.readText).not.toHaveBeenCalled();
+    // The turn's searches and fetches at its foot, a page that was gone included.
+    const sources = [...container.querySelectorAll('.cl-web-source-verb')].map(v =>
+      v.textContent?.trim()
+    );
+    expect(sources).toEqual(['Searched', 'Fetched', 'Failed']);
   });
 
   it('marks the version seen and closes on "Got it"', async () => {

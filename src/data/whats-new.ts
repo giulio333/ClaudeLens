@@ -29,7 +29,9 @@ export interface WhatsNewHighlight {
     | 'live-orb'
     | 'plan'
     | 'parked-terminals'
-    | 'session-tabs';
+    | 'session-tabs'
+    | 'project-files'
+    | 'web-sources';
 }
 
 export interface WhatsNewRelease {
@@ -38,6 +40,25 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.34',
+    highlights: [
+      {
+        title: 'Your project’s files',
+        description:
+          'Browse the project’s files and open one to read it, with the files a session read, edited or created marked in Mission Control.',
+        where: 'Files in the project rail; the folder button in Mission Control’s rail',
+        visual: 'project-files',
+      },
+      {
+        title: 'Where a turn looked',
+        description:
+          'The pages a turn fetched and the searches it ran are listed at its foot, each saying whether it came back.',
+        where: 'Any session transcript, in MIN',
+        visual: 'web-sources',
+      },
+    ],
+  },
   {
     version: '2.2.33',
     highlights: [

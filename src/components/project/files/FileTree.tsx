@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import type { KeyboardEvent } from 'react';
 import { useProjectDir } from '../../../hooks/useIPC';
-import type { ProjectDirEntry } from '../../../types';
+import type { ProjectDirEntry, ProjectDirListing } from '../../../types';
 import { FileKindIcon } from './FileKindIcon';
 import type { FileMark, SessionMarks } from './session-marks';
 
@@ -35,8 +35,18 @@ function Mark({ mark, folder }: { mark: FileMark | undefined; folder?: boolean }
   );
 }
 
+/** Fixed folders for a preview of the tree (the "What's new" popup), keyed by
+ *  path relative to the root, `''` for the root itself: nothing is asked of
+ *  main, which refuses a project it does not know. */
+export type FileTreePreview = {
+  listings: Record<string, ProjectDirListing>;
+  /** The folders open on first draw. */
+  expanded: string[];
+};
+
 type TreeProps = {
   root: string;
+  preview?: FileTreePreview;
   marks?: SessionMarks;
   selected: string | null;
   onSelect: (rel: string) => void;
@@ -89,7 +99,14 @@ function Row({ entry, ...tree }: TreeProps & { entry: ProjectDirEntry }) {
 
 /** One directory's entries, read when it is first opened. */
 function Level({ rel, ...tree }: TreeProps & { rel: string }) {
-  const { data, isPending, error } = useProjectDir(tree.root, rel);
+  const query = useProjectDir(tree.root, rel, !tree.preview);
+  const { data, isPending, error } = tree.preview
+    ? {
+        data: tree.preview.listings[rel] ?? { entries: [], truncated: false },
+        isPending: false,
+        error: null,
+      }
+    : query;
   if (isPending) return <div className="cl-ftree-note">Loading…</div>;
   if (error || !data) {
     return (
@@ -146,13 +163,15 @@ export function FileTree({
   marks,
   selected,
   onSelect,
+  preview,
 }: {
   root: string;
   marks?: SessionMarks;
   selected: string | null;
   onSelect: (rel: string) => void;
+  preview?: FileTreePreview;
 }) {
-  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set());
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(() => new Set(preview?.expanded));
   const onToggle = (rel: string) =>
     setExpanded(prev => {
       const next = new Set(prev);
@@ -164,6 +183,7 @@ export function FileTree({
     <div className="cl-ftree" aria-label="Project files" onKeyDown={e => onTreeKey(e, onToggle)}>
       <Level
         root={root}
+        preview={preview}
         marks={marks}
         selected={selected}
         onSelect={onSelect}

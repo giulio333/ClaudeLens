@@ -50,6 +50,10 @@ import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
 import { BackgroundShells } from './project/terminal/BackgroundShells';
 import type { BackgroundShell } from './project/terminal/background-shells';
 import type { RemoteHost } from '../../electron/shared/remote-host';
+import { FilesRailPanel } from './project/files/FilesRailPanel';
+import type { FileTreePreview } from './project/files/FileTree';
+import type { SessionMarks } from './project/files/session-marks';
+import type { ProjectDirEntry } from '../types';
 import { version as appVersion } from '../../package.json';
 
 function turn(msg: ChatMessage): ProcessedMessage {
@@ -1080,6 +1084,195 @@ function SessionTabsVisual(): ReactNode {
   );
 }
 
+// Mission Control with the files panel open in its rail: the tab bar, the turn
+// that did the work, and the project tree with what the session read, edited
+// or created marked on each file and on every folder above it. The tree's
+// folders are handed in (`preview`) — main refuses a project it does not know,
+// and this one is synthetic. The rail's head is drawn here: in MissionRail it
+// is part of a component that reads the live session.
+const FILES_ROOT = '/home/acme/web';
+
+function listing(...entries: [rel: string, kind: 'dir' | 'file'][]) {
+  return {
+    entries: entries.map(([rel, kind]): ProjectDirEntry => {
+      const name = rel.slice(rel.lastIndexOf('/') + 1);
+      const dot = name.lastIndexOf('.');
+      return { name, rel, kind, ext: kind === 'file' && dot > 0 ? name.slice(dot + 1) : '' };
+    }),
+    truncated: false,
+  };
+}
+
+const PREVIEW_TREE: FileTreePreview = {
+  listings: {
+    '': listing(['src', 'dir'], ['test', 'dir'], ['README.md', 'file'], ['package.json', 'file']),
+    src: listing(['src/net', 'dir'], ['src/index.ts', 'file']),
+    'src/net': listing(
+      ['src/net/backoff.ts', 'file'],
+      ['src/net/http.ts', 'file'],
+      ['src/net/retry.ts', 'file']
+    ),
+    test: listing(['test/retry.test.ts', 'file']),
+  },
+  expanded: ['src', 'src/net'],
+};
+
+const PREVIEW_MARKS: SessionMarks = {
+  files: new Map([
+    ['README.md', 'read'],
+    ['src/net/backoff.ts', 'created'],
+    ['src/net/retry.ts', 'edited'],
+    ['test/retry.test.ts', 'edited'],
+  ]),
+  dirs: new Map([
+    ['src', 'created'],
+    ['src/net', 'created'],
+    ['test', 'edited'],
+  ]),
+  writes: new Map(),
+};
+
+const FILES_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-files-t1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-05T18:12:00.000Z',
+    content: [
+      {
+        type: 'text',
+        text: 'Moved the delays into `backoff.ts` and capped the retry loop; the test covers both.',
+      },
+    ],
+  }),
+];
+
+function ProjectFilesVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--files">
+      <div className="cl-stabs-bar">
+        <TabBarBack label="Back to app" title="Back to the app" onClick={() => {}} />
+        <PreviewSessionTabs />
+        <div className="cl-stabs-end">
+          <ViewSwitch view="lens" setView={() => {}} />
+          <TabBarRailToggle collapsed={false} onToggle={() => {}} />
+        </div>
+      </div>
+      <div className="cl-whatsnew-files-stage">
+        <div className="cl-transcript-inner">
+          {FILES_TURNS.map((processed, i) => (
+            <MessageBubble
+              key={processed.msg.uuid}
+              processed={processed}
+              detailsFilter="minimal"
+              onOpenToolDetail={() => {}}
+              turnIndex={18 + i}
+            />
+          ))}
+        </div>
+        <aside className="cl-whatsnew-files-rail">
+          <div className="cl-whatsnew-files-rail-head">
+            <span aria-hidden className="cl-live-dot cl-whatsnew-files-led" />
+            <span className="cl-whatsnew-files-title">FILES</span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              className="cl-playbook-rail-trigger"
+              aria-label="Files"
+              aria-expanded
+              tabIndex={-1}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M3 6.5A1.5 1.5 0 0 1 4.5 5h4.6l2 2.2h8.4A1.5 1.5 0 0 1 21 8.7v9.8a1.5 1.5 0 0 1-1.5 1.5h-15A1.5 1.5 0 0 1 3 18.5Z" />
+              </svg>
+            </button>
+          </div>
+          <FilesRailPanel
+            id="whats-new-files"
+            root={FILES_ROOT}
+            marks={PREVIEW_MARKS}
+            openFile="src/net/retry.ts"
+            onOpen={() => {}}
+            onClose={() => {}}
+            preview={PREVIEW_TREE}
+          />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
+// A turn that searched and then read two of the pages it found, one of which
+// was gone: the strip at its foot says so line by line, in MIN.
+const WEB_SOURCES_TURN: ProcessedMessage[] = buildProcessedMessages([
+  {
+    uuid: 'wn-w1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-05T10:00:00.000Z',
+    content: [
+      { type: 'text', text: 'The client retries on 429 and 503, honouring `Retry-After`.' },
+      {
+        type: 'tool_use',
+        id: 'wn-ws-1',
+        name: 'WebSearch',
+        input: { query: 'retry-after header' },
+      },
+      {
+        type: 'tool_use',
+        id: 'wn-wf-1',
+        name: 'WebFetch',
+        input: { url: 'https://docs.example.com/http/retry-after.html', prompt: 'Summarise' },
+      },
+      {
+        type: 'tool_use',
+        id: 'wn-wf-2',
+        name: 'WebFetch',
+        input: { url: 'https://example.org/blog/backoff.html', prompt: 'Summarise' },
+      },
+    ],
+  },
+  {
+    uuid: 'wn-w2',
+    role: 'user',
+    timestamp: '2026-10-05T10:00:04.000Z',
+    content: [
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-ws-1',
+        content:
+          'Web search results for query: "retry-after header"\n\nLinks: [{"title":"Retry-After","url":"https://docs.example.com/http/retry-after.html"},{"title":"Backoff","url":"https://example.org/blog/backoff.html"}]',
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-wf-1',
+        content: '# Retry-After\nThe delay before a client should retry.',
+        isError: false,
+      },
+      {
+        type: 'tool_result',
+        toolUseId: 'wn-wf-2',
+        content: 'The server returned HTTP 404 Not Found.',
+        isError: false,
+      },
+    ],
+  },
+]);
+
+function WebSourcesVisual(): ReactNode {
+  return <TranscriptFrame turns={WEB_SOURCES_TURN} />;
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1096,6 +1289,8 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   plan: PlanVisual,
   'parked-terminals': ParkedTerminalsVisual,
   'session-tabs': SessionTabsVisual,
+  'project-files': ProjectFilesVisual,
+  'web-sources': WebSourcesVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

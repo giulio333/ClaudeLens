@@ -3,7 +3,7 @@ import type { KeyboardEvent } from 'react';
 import { FileKindIcon } from './FileKindIcon';
 import { fileName } from '../chat/file-view';
 import { fileExt } from '../chat/utils';
-import { FileTree } from './FileTree';
+import { FileTree, type FileTreePreview } from './FileTree';
 import { RefreshFilesButton } from './ProjectFilesSection';
 import type { FileMark, SessionMarks } from './session-marks';
 
@@ -68,6 +68,7 @@ export function FilesRailPanel({
   openFile,
   onOpen,
   onClose,
+  preview,
 }: {
   id: string;
   root: string;
@@ -76,14 +77,17 @@ export function FilesRailPanel({
   openFile: string | null;
   onOpen: (rel: string) => void;
   onClose: (restoreFocus?: boolean) => void;
+  /** Fixed folders for the "What's new" popup, which also keeps the panel from
+   *  taking the focus and Escape, both the popup's own there. */
+  preview?: FileTreePreview;
 }) {
   const [mode, setMode] = useState<'tree' | 'touched'>('tree');
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.focus();
-  }, []);
+    if (!preview) ref.current?.focus();
+  }, [preview]);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || preview) return;
     e.stopPropagation();
     onClose(true);
   };
@@ -113,11 +117,17 @@ export function FilesRailPanel({
           </button>
         </div>
         <span style={{ flex: 1 }} />
-        <RefreshFilesButton root={root} />
+        {!preview && <RefreshFilesButton root={root} />}
       </div>
       <div className="cl-files-rail-body">
         {mode === 'tree' ? (
-          <FileTree root={root} marks={marks} selected={openFile} onSelect={onOpen} />
+          <FileTree
+            root={root}
+            marks={marks}
+            selected={openFile}
+            onSelect={onOpen}
+            preview={preview}
+          />
         ) : (
           <TouchedList marks={marks} openFile={openFile} onOpen={onOpen} />
         )}

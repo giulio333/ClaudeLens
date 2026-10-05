@@ -21136,12 +21136,14 @@ select.cl-opt-input {
    inside a dialog would take hold of the window. The tab on screen is painted
    with the surface under it, as Mission Control does from the view it shows:
    here that surface is the frame. */
-.cl-whatsnew-frame--tabs .cl-stabs-bar {
+.cl-whatsnew-frame--tabs .cl-stabs-bar,
+.cl-whatsnew-frame--files .cl-stabs-bar {
   --cl-stab-surface: var(--cl-paper);
   padding-left: 10px;
   -webkit-app-region: no-drag;
 }
-:root[data-theme='dark'] .cl-whatsnew-frame--tabs .cl-stabs-bar {
+:root[data-theme='dark'] .cl-whatsnew-frame--tabs .cl-stabs-bar,
+:root[data-theme='dark'] .cl-whatsnew-frame--files .cl-stabs-bar {
   --cl-stab-surface: var(--cl-paper-2);
 }
 /* The rail preview: the real `ContextRail`, absolute on the frame's left edge
@@ -21155,6 +21157,45 @@ select.cl-opt-input {
   position: relative;
   min-height: 440px;
   container-type: inline-size;
+}
+/* Mission Control with the files panel open: the turn on the left, the rail at
+   its own paper and hairline on the right, its head as MissionRail draws it. */
+.cl-whatsnew-files-stage {
+  display: flex;
+  min-height: 330px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-whatsnew-files-stage .cl-transcript-inner {
+  flex: 1;
+  min-width: 0;
+}
+.cl-whatsnew-files-rail {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--cl-paper);
+  border-left: 1px solid var(--cl-line);
+}
+.cl-whatsnew-files-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 15px 20px 12px;
+}
+.cl-whatsnew-files-led {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cl-ok);
+  box-shadow: 0 0 8px var(--cl-ok);
+}
+.cl-whatsnew-files-title {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  color: var(--cl-ink);
 }
 /* The peek's own width assumes the rail sits on the viewport's left edge; here
    it sits a copy column in, inside a frame that clips, so it is sized to the
