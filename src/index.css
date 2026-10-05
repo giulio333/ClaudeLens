@@ -17417,6 +17417,190 @@ select.cl-opt-input {
   flex-shrink: 0;
 }
 
+/* slash commands — an explorer: the sources on a rail, the selected source's
+   commands beside it, name over the full description. Flat on whatever it
+   sits on: one hairline between rail and list, no sheet, no nested card. */
+.set-cx {
+  display: flex;
+  align-items: flex-start;
+  margin-top: 12px;
+}
+.set-cx-rail {
+  position: sticky;
+  top: 16px;
+  width: 220px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding-right: 20px;
+}
+.set-cx-kicker {
+  padding: 0 0 4px 12px;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.set-cx-node {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 5px 10px 5px 12px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  font: inherit;
+  font-family: var(--font-reading);
+  font-size: 13px;
+  color: var(--cl-ink-3);
+  text-align: left;
+  cursor: pointer;
+  outline: none;
+}
+.set-cx-node:hover,
+.set-cx-node:focus-visible {
+  background: var(--cl-hover-bg);
+  color: var(--cl-ink);
+}
+.set-cx-node.is-selected {
+  color: var(--cl-ink);
+  font-weight: 600;
+}
+/* the one stroke of colour on the rail: a short bar on the open source */
+.set-cx-node.is-selected::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 2px;
+  border-radius: 1px;
+  background: var(--cl-accent);
+}
+.set-cx-node .name {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.set-cx-node .ct {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  font-weight: 400;
+  color: var(--cl-ink-4);
+}
+.set-cx-pane {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 32px;
+  padding-left: 28px;
+  border-left: 1px solid var(--cl-line);
+}
+.set-cx-note {
+  font-size: 12.5px;
+  font-style: italic;
+  color: var(--cl-ink-4);
+}
+.set-cx-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 12px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.set-cx-head h3 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+}
+.set-cx-head .meta {
+  font-size: 12px;
+  color: var(--cl-ink-4);
+}
+.set-cx-head code {
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  color: var(--cl-ink-3);
+}
+.set-cx-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.set-cx-row {
+  padding: 12px 0 13px;
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.set-cx-row:last-child {
+  border-bottom: 0;
+}
+.set-cx-row .cmd {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 500;
+  color: var(--cl-ink);
+}
+.set-cx-row .slash {
+  color: var(--cl-ink-4);
+  font-weight: 400;
+}
+.set-cx-row .hint {
+  margin-left: 10px;
+  font-weight: 400;
+  color: var(--cl-ink-4);
+}
+.set-cx-row .desc {
+  margin-top: 4px;
+  font-family: var(--font-reading);
+  font-size: 13px;
+  line-height: 1.55;
+  color: var(--cl-ink-3);
+}
+@media (max-width: 860px) {
+  .set-cx {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .set-cx-rail {
+    position: static;
+    width: auto;
+    padding: 0 0 16px;
+  }
+  .set-cx-pane {
+    padding: 16px 0 0;
+    border-left: 0;
+    border-top: 1px solid var(--cl-line);
+  }
+}
+
+/* The project's Config page is a page of the project, not the Settings
+   panel: its blocks drop the paper-2 card and sit on the paper like every
+   other project section — a mono label over an ink rule, then the content. */
+.cl-pcfg .set-block {
+  margin-top: 36px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: none;
+}
+.cl-pcfg .set-block-head {
+  margin-bottom: 6px;
+  padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--cl-ink);
+}
+
 /* chip cloud (permission rules — colored, meaningful tones) */
 .set-cloud {
   display: flex;

@@ -1019,12 +1019,22 @@ export interface InitInfo {
    *  absent on CLIs that predate the field. */
   mcpServers: { name: string; status: string; source?: string }[];
   slashCommands: string[];
+  /** The same commands with description, argument hint and builtin flag;
+   *  empty (or absent on an older payload) when the CLI did not say. */
+  commands?: InitCommand[];
   outputStyle: string;
   skills: string[];
   agents: string[];
   plugins: { name: string; path: string }[];
   /** The model choices the CLI offers, each with the id its alias resolves to. */
   models: InitModel[];
+}
+
+export interface InitCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  builtin: boolean;
 }
 
 export interface InitModel {

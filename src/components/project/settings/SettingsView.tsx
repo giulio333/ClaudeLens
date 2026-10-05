@@ -15,6 +15,7 @@ import {
   type UpdateInfo,
 } from '../../../hooks/useIPC';
 import { mcpStatusMeta } from '../mcp/McpServerCard';
+import { SlashCommandList } from './SlashCommandList';
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme';
 import { fmtModel } from '../utils';
 import { compareVersions } from '../../../../electron/shared/version-compare';
@@ -763,8 +764,11 @@ export function ExtensionsTab({
       <Block label="Subagents" count={init?.agents.length}>
         <InvList items={filt(init?.agents)} empty={!init} />
       </Block>
-      <Block label="Slash commands" count={init?.slashCommands.length}>
-        <InvList items={filt(init?.slashCommands)} empty={!init} />
+      <Block
+        label="Slash commands"
+        count={init ? init.commands?.length || init.slashCommands.length : undefined}
+      >
+        <SlashCommandList init={init} q={q} />
       </Block>
       <Block label="Plugins" count={init?.plugins.length}>
         {!init ? (

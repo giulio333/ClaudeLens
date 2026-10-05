@@ -90,7 +90,7 @@ export function ProjectConfigView({
       ) : error ? (
         <div className="cl-empty">Failed to read configuration: {(error as Error).message}</div>
       ) : data ? (
-        <div style={{ maxWidth: 660, marginTop: 22 }}>
+        <div className="cl-pcfg" style={{ marginTop: 22 }}>
           <GeneralTab cfg={data} q="" heading />
           <PermissionsTab cfg={data} q="" heading />
           <ToolsTab cfg={data} q="" heading />
@@ -120,7 +120,7 @@ export function ProjectConfigView({
       ) : (
         /* Una colonna sola: la cascata è una sequenza ordinata, e la
            griglia a due colonne la faceva leggere a zig-zag. */
-        <div className="cl-md-cascade" style={{ maxWidth: 660 }}>
+        <div className="cl-md-cascade">
           {claudeMdLayerList.map(({ layer: l, lines, weight }) => {
             const { prefix, focus, suffix } = claudeMdPathParts(l, project.realPath);
             return (
@@ -166,7 +166,7 @@ export function ProjectConfigView({
           project in the plan and refuses one that holds more than this project.
           The flag carries the full account. */}
       {PROJECT_PURGE_ENABLED && (
-        <div style={{ maxWidth: 660, marginTop: 44 }}>
+        <div style={{ marginTop: 44 }}>
           <div className="set-block-head">
             <span className="lbl">Danger zone</span>
           </div>

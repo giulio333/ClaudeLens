@@ -31,6 +31,10 @@ export interface InitInfo {
    *  absent on CLIs that predate the field. */
   mcpServers: { name: string; status: string; source?: string }[];
   slashCommands: string[];
+  /** The same commands with what the CLI says about each — description,
+   *  argument hint, whether it is Claude Code's own. From the handshake's
+   *  `initialize` response; empty when that answer did not arrive in time. */
+  commands: InitCommand[];
   outputStyle: string;
   skills: string[];
   agents: string[];
@@ -39,6 +43,14 @@ export interface InitInfo {
    *  (`opus` → `claude-opus-5`). From the handshake's `initialize` response —
    *  the only place that says which version an alias means today. */
   models: InitModel[];
+}
+
+export interface InitCommand {
+  name: string;
+  description: string;
+  argumentHint: string;
+  /** Claude Code's own command; absent means user, project, plugin or MCP. */
+  builtin: boolean;
 }
 
 export interface InitModel {
@@ -118,6 +130,7 @@ function mapInit(m: Record<string, unknown>): InitInfo {
     tools: (m.tools as string[]) ?? [],
     mcpServers: (m.mcp_servers as InitInfo['mcpServers']) ?? [],
     slashCommands: (m.slash_commands as string[]) ?? [],
+    commands: [],
     outputStyle: String(m.output_style ?? ''),
     skills: (m.skills as string[]) ?? [],
     agents: (m.agents as string[]) ?? [],
@@ -138,6 +151,24 @@ function mapModels(models: unknown): InitModel[] {
         value: r.value,
         resolvedModel: typeof r.resolvedModel === 'string' ? r.resolvedModel : undefined,
         displayName: typeof r.displayName === 'string' ? r.displayName : r.value,
+      },
+    ];
+  });
+}
+
+/** The `commands` of the `initialize` response; a row without a name could
+ *  only render as a blank line. */
+function mapCommands(commands: unknown): InitCommand[] {
+  if (!Array.isArray(commands)) return [];
+  return commands.flatMap(row => {
+    const r = row as Record<string, unknown>;
+    if (typeof r?.name !== 'string' || !r.name) return [];
+    return [
+      {
+        name: r.name,
+        description: typeof r.description === 'string' ? r.description : '',
+        argumentHint: typeof r.argumentHint === 'string' ? r.argumentHint : '',
+        builtin: r.builtin === true,
       },
     ];
   });
@@ -182,6 +213,7 @@ async function captureInit(sdk: Sdk, cwd: string): Promise<InitInfo | null> {
         new Promise<null>(resolve => setTimeout(() => resolve(null), MODELS_WAIT_MS)),
       ]);
       result.models = mapModels(settled?.models);
+      result.commands = mapCommands(settled?.commands);
     }
   } catch (e) {
     if (!result) throw e; // ignore teardown/abort errors once we have the init

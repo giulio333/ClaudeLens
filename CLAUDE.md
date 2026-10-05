@@ -213,6 +213,12 @@ stopped it, and nothing the transcript does not hold) and
 its own heading and says so, one Claude Code does not load is marked in the tree and on its
 page, and a synced plugin sharing name and marketplace with an installed one stays its own
 entry) and
+`slash-command-list` (Settings → Extensions' slash commands as an explorer:
+the sources on a rail — project & user, one per plugin, Claude Code's own — and
+the selected source's commands with the description and argument hint the
+handshake's `initialize` answer carries; a search shows every match at once,
+grouped, so a command in two sources is never behind a click, and a CLI that
+listed names only is said to have; the grouping is `slash-command-groups`) and
 `environment-strip` (the strip at the foot of Mission Control: a failed MCP
 server is one count on the strip's own row, never a list under it, and the
 servers are a hover or focus away, one line per plugin or config scope with the

@@ -2241,6 +2241,7 @@ const MOCK_EFFECTIVE_CONFIG = {
       { name: 'filesystem', status: 'connected' },
     ],
     slashCommands: ['commit', 'review-pr', 'frontend-design', 'claude-api', 'deploy'],
+    commands: [],
     outputStyle: 'default',
     skills: ['changelog', 'deploy'],
     agents: ['code-reviewer', 'docs-writer', 'db-migrator'],
