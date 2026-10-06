@@ -262,6 +262,34 @@ describe('WhatsNewDialog', () => {
     expect(screen.queryByRole('dialog', { name: "What's new" })).toBeNull();
   });
 
+  it('on a fix-only release, leads with the newest release skipped to reach it', async () => {
+    stub.release = undefined;
+    const seen = '0.0.1';
+    bridge.api.prefs.getAll = vi.fn(async () =>
+      ok<Record<string, unknown>>({ 'cl-whatsnew-seen-version': seen })
+    );
+    const { container } = renderDialog();
+    await waitFor(() => {
+      screen.getByRole('dialog', { name: "What's new" });
+    });
+    const skipped = WHATS_NEW.filter(
+      r => compareVersions(r.version, seen) > 0 && compareVersions(r.version, appVersion) < 0
+    );
+    expect(container.querySelector('.cl-whatsnew-title')?.textContent).toContain(
+      skipped[0].version
+    );
+    screen.getByRole('heading', { name: skipped[0].highlights[0].title });
+    expect(
+      [...container.querySelectorAll('.cl-whatsnew-past-head .version')].map(v => v.textContent)
+    ).toEqual(skipped.slice(1).map(r => r.version));
+
+    // Dismissed as the installed version, so the next launch is silent.
+    fireEvent.click(screen.getByRole('button', { name: 'Got it' }));
+    await waitFor(() => {
+      expect(bridge.api.prefs.set).toHaveBeenCalledWith('cl-whatsnew-seen-version', appVersion);
+    });
+  });
+
   it('stays hidden when this exact version was already marked seen', async () => {
     const getAll = vi.fn(async () =>
       ok<Record<string, unknown>>({ 'cl-whatsnew-seen-version': appVersion })

@@ -1480,7 +1480,8 @@ function EarlierReleases({
 
 /** What the card shows. On launch: the installed version's entry, plus any
  *  release skipped since the last one dismissed — a reader who went from
- *  2.2.24 to 2.2.27 would otherwise never see 2.2.26's. Asked for from
+ *  2.2.24 to 2.2.27 would otherwise never see 2.2.26's — or, on a fix-only
+ *  release, the newest skipped entry leading the rest. Asked for from
  *  Settings: the newest entry this build has, and every one before it. */
 function useWhatsNewView(asked: boolean) {
   const { data: seenVersion, isLoading } = useWhatsNewSeenVersion();
@@ -1490,9 +1491,13 @@ function useWhatsNewView(asked: boolean) {
     const release = installed ?? latestWhatsNew(appVersion);
     return release ? { release, earlier: releasesBefore(release.version), since: null } : null;
   }
-  if (isLoading || !installed || !shouldShowWhatsNew(appVersion, seen, true)) return null;
-  const earlier = seen ? releasesBetween(seen, installed.version) : [];
-  return { release: installed, earlier, since: seen };
+  if (isLoading || !shouldShowWhatsNew(appVersion, seen, true)) return null;
+  const skipped = seen ? releasesBetween(seen, appVersion) : [];
+  if (installed) return { release: installed, earlier: skipped, since: seen };
+  // A fix-only release authored nothing, but the ones skipped to reach it did:
+  // the newest of them leads, or a jump past them would never show them.
+  if (!skipped.length) return null;
+  return { release: skipped[0], earlier: skipped.slice(1), since: seen };
 }
 
 export function WhatsNewDialog() {
