@@ -347,6 +347,7 @@ describe('foldEvents · usage', () => {
     inputTokens: 10,
     outputTokens: 200,
     cacheWriteTokens: 300,
+    cacheWrite1hTokens: 0,
     cacheReadTokens: 120_000,
     ...over,
   });

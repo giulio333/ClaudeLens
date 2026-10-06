@@ -68,9 +68,8 @@ export type AgentColor = (typeof AGENT_COLORS)[number];
 // the cost UI can show users how current these estimates are.
 //
 // `cacheWrite` is the **5-minute** cache write rate (1.25x base input). The 1-hour
-// rate (2x) is deliberately not modelled: a transcript records a single
-// `cache_creation_input_tokens` figure and does not say which TTL produced it,
-// so picking the shorter — and far more common — one is the honest default.
+// rate is 2x base input on every model, so it is derived rather than tabled —
+// see `cacheWrite1hTokens` for where a transcript says which TTL a write had.
 export const PRICING_LAST_UPDATED = '2026-09-22';
 
 interface ModelPricing {
@@ -232,21 +231,61 @@ export function isModelPriced(model: string | undefined): boolean {
   return !!model && (model in PRICING || model in SCHEDULED);
 }
 
+/** The 1-hour cache write multiplier on base input, the same for every model. */
+const CACHE_WRITE_1H_MULTIPLIER = 2;
+
+/**
+ * How many of a usage's `cache_creation_input_tokens` went to the 1-hour cache.
+ *
+ * Claude Code caches for an hour, and on disk ~9 in 10 cache write tokens are
+ * 1h ones — billed at 2x input, not the 5-minute 1.25x. The split is on the
+ * usage's `cache_creation`, but on a turn with several iterations (an
+ * `advisor` consult) that top-level breakdown covers only the first one while
+ * the total sums them all: there the `message` iterations' own breakdowns are
+ * what adds up to the total, and an `advisor_message` iteration is the
+ * reviewer's, never this model's. Clamped to the total, so a malformed row can
+ * only fall back to the 5-minute rate. A usage with no breakdown answers 0.
+ */
+export function cacheWrite1hTokens(usage: unknown): number {
+  if (!usage || typeof usage !== 'object') return 0;
+  const u = usage as Record<string, unknown>;
+  const num = (v: unknown): number =>
+    typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : 0;
+  const oneHour = (o: unknown): number =>
+    num((o as Record<string, unknown> | null | undefined)?.ephemeral_1h_input_tokens);
+  const total = num(u.cache_creation_input_tokens);
+  const iterations = Array.isArray(u.iterations)
+    ? u.iterations.filter(
+        (it): it is Record<string, unknown> =>
+          !!it && typeof it === 'object' && (it as Record<string, unknown>).type === 'message'
+      )
+    : [];
+  const found =
+    iterations.length > 0
+      ? iterations.reduce((sum, it) => sum + oneHour(it.cache_creation), 0)
+      : oneHour(u.cache_creation);
+  return Math.min(found, total);
+}
+
 /** `at`: ISO timestamp of the session, so a model whose published rate changed
- *  is billed at the rate in force when it ran. */
+ *  is billed at the rate in force when it ran. `cacheWrite1hTokens` is the part
+ *  of `cacheWriteTokens` written to the 1-hour cache. */
 function calculateCost(
   inputTokens: number,
   outputTokens: number,
   cacheWriteTokens: number,
   cacheReadTokens: number,
   model: string | undefined,
-  at?: string
+  at?: string,
+  cacheWrite1hTokens = 0
 ): number {
   const p = getPricing(model, at);
+  const oneHour = Math.min(cacheWrite1hTokens, cacheWriteTokens);
   return (
     (inputTokens / 1_000_000) * p.input +
     (outputTokens / 1_000_000) * p.output +
-    (cacheWriteTokens / 1_000_000) * p.cacheWrite +
+    ((cacheWriteTokens - oneHour) / 1_000_000) * p.cacheWrite +
+    (oneHour / 1_000_000) * p.input * CACHE_WRITE_1H_MULTIPLIER +
     (cacheReadTokens / 1_000_000) * p.cacheRead
   );
 }
@@ -266,6 +305,8 @@ export function costOfUsage(
     outputTokens: number;
     cacheWriteTokens: number;
     cacheReadTokens: number;
+    /** The part of `cacheWriteTokens` written to the 1-hour cache. */
+    cacheWrite1hTokens?: number;
   },
   model: string | undefined,
   at?: string
@@ -276,7 +317,8 @@ export function costOfUsage(
     usage.cacheWriteTokens,
     usage.cacheReadTokens,
     model,
-    at
+    at,
+    usage.cacheWrite1hTokens
   );
 }
 
@@ -340,6 +382,7 @@ interface ParsedSession {
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
+  cacheWrite1hTokens: number;
   cacheReadTokens: number;
   messageCount: number;
   date: string;
@@ -365,6 +408,7 @@ interface LineData {
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
+  cacheWrite1hTokens: number;
   cacheReadTokens: number;
   model: string | undefined;
   // Stable identity of the message-level usage, used to dedup repeated lines.
@@ -490,6 +534,7 @@ function extractLineData(json: any): LineData | null {
     inputTokens: num(usage?.input_tokens),
     outputTokens: num(usage?.output_tokens),
     cacheWriteTokens: num(usage?.cache_creation_input_tokens),
+    cacheWrite1hTokens: cacheWrite1hTokens(usage),
     cacheReadTokens: num(usage?.cache_read_input_tokens),
     model: model && model !== '<synthetic>' ? model : undefined,
     usageKey,
@@ -503,6 +548,7 @@ interface SessionAccumulator {
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
+  cacheWrite1hTokens: number;
   cacheReadTokens: number;
   messageCount: number;
   date: string;
@@ -648,6 +694,7 @@ function newAccumulator(): SessionAccumulator {
     inputTokens: 0,
     outputTokens: 0,
     cacheWriteTokens: 0,
+    cacheWrite1hTokens: 0,
     cacheReadTokens: 0,
     messageCount: 0,
     date: '',
@@ -697,6 +744,7 @@ function foldLine(line: string, acc: SessionAccumulator): void {
     acc.inputTokens += parsed.inputTokens;
     acc.outputTokens += parsed.outputTokens;
     acc.cacheWriteTokens += parsed.cacheWriteTokens;
+    acc.cacheWrite1hTokens += parsed.cacheWrite1hTokens;
     acc.cacheReadTokens += parsed.cacheReadTokens;
   }
 }
@@ -710,6 +758,7 @@ function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
     inputTokens: acc.inputTokens,
     outputTokens: acc.outputTokens,
     cacheWriteTokens: acc.cacheWriteTokens,
+    cacheWrite1hTokens: acc.cacheWrite1hTokens,
     cacheReadTokens: acc.cacheReadTokens,
     messageCount: acc.messageCount,
     date: acc.date || new Date(mtimeMs).toISOString(),
@@ -879,7 +928,8 @@ async function aggregateProject(projectPath: string): Promise<ProjectAggregate> 
       s.cacheWriteTokens,
       s.cacheReadTokens,
       s.model,
-      s.date
+      s.date,
+      s.cacheWrite1hTokens
     );
   }
 
@@ -954,7 +1004,8 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           s.cacheWriteTokens,
           s.cacheReadTokens,
           s.model,
-          s.date
+          s.date,
+          s.cacheWrite1hTokens
         );
 
         return {

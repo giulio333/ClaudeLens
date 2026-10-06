@@ -8,6 +8,8 @@ import {
   getPricingMeta,
   isModelPriced,
   calculateCacheSavings,
+  cacheWrite1hTokens,
+  costOfUsage,
   getParseStats,
   resetParseCache,
   PRICING_LAST_UPDATED,
@@ -67,6 +69,16 @@ function assistantLine(opts: {
         cache_read_input_tokens: opts.cacheRead ?? 0,
       },
     },
+  });
+}
+
+// A line whose usage carries its own `cache_creation` breakdown, as Claude Code
+// writes them: the 1-hour share of the cache writes is billed at 2x input.
+function lineWithUsage(usage: Record<string, unknown>, model = 'claude-opus-5'): string {
+  return JSON.stringify({
+    type: 'assistant',
+    timestamp: '2026-09-01T10:00:00.000Z',
+    message: { model, usage },
   });
 }
 
@@ -1192,5 +1204,92 @@ describe('parse cache — retained bytes', () => {
     await getSessionList(tmp);
 
     expect(getParseStats()).toMatchObject({ cachedFiles: 0, retainedPartialBytes: 0 });
+  });
+});
+
+describe('1-hour cache writes', () => {
+  it('reads the 1h share off the usage breakdown, and nothing without one', () => {
+    expect(
+      cacheWrite1hTokens({
+        cache_creation_input_tokens: 1000,
+        cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 900 },
+      })
+    ).toBe(900);
+    expect(cacheWrite1hTokens({ cache_creation_input_tokens: 1000 })).toBe(0);
+    expect(cacheWrite1hTokens(undefined)).toBe(0);
+    // Never more than the total: a malformed row falls back to the 5m rate.
+    expect(
+      cacheWrite1hTokens({
+        cache_creation_input_tokens: 10,
+        cache_creation: { ephemeral_1h_input_tokens: 50 },
+      })
+    ).toBe(10);
+  });
+
+  // An advisor consult: the top-level breakdown covers the first iteration only,
+  // the total sums every `message` iteration, and the reviewer's own iteration
+  // is not this model's.
+  it("sums the message iterations' breakdowns, skipping the reviewer's", () => {
+    expect(
+      cacheWrite1hTokens({
+        cache_creation_input_tokens: 1500,
+        cache_creation: { ephemeral_1h_input_tokens: 400, ephemeral_5m_input_tokens: 0 },
+        iterations: [
+          {
+            type: 'message',
+            cache_creation_input_tokens: 400,
+            cache_creation: { ephemeral_1h_input_tokens: 400, ephemeral_5m_input_tokens: 0 },
+          },
+          {
+            type: 'advisor_message',
+            cache_creation_input_tokens: 7000,
+            cache_creation: { ephemeral_1h_input_tokens: 7000, ephemeral_5m_input_tokens: 0 },
+          },
+          {
+            type: 'message',
+            cache_creation_input_tokens: 1100,
+            cache_creation: { ephemeral_1h_input_tokens: 1000, ephemeral_5m_input_tokens: 100 },
+          },
+        ],
+      })
+    ).toBe(1400);
+  });
+
+  it('prices the 1h share at 2x input and the rest at the 5m rate', () => {
+    const usage = {
+      inputTokens: 0,
+      outputTokens: 0,
+      cacheReadTokens: 0,
+      cacheWriteTokens: 1_000_000,
+    };
+    // Opus 5.5: $4 input, $5 for a 5m write, $8 for a 1h write.
+    expect(costOfUsage(usage, 'claude-opus-5-5')).toBeCloseTo(5, 10);
+    expect(costOfUsage({ ...usage, cacheWrite1hTokens: 1_000_000 }, 'claude-opus-5-5')).toBeCloseTo(
+      8,
+      10
+    );
+    expect(costOfUsage({ ...usage, cacheWrite1hTokens: 250_000 }, 'claude-opus-5-5')).toBeCloseTo(
+      0.75 * 5 + 0.25 * 8,
+      10
+    );
+  });
+
+  it('bills a session at the TTL each of its writes had', async () => {
+    writeSession(tmp, 'ttl.jsonl', [
+      lineWithUsage({
+        input_tokens: 0,
+        output_tokens: 0,
+        cache_creation_input_tokens: 1_000_000,
+        cache_creation: { ephemeral_5m_input_tokens: 0, ephemeral_1h_input_tokens: 1_000_000 },
+      }),
+      // An older row with no breakdown keeps the 5m rate.
+      lineWithUsage({ input_tokens: 0, output_tokens: 0, cache_creation_input_tokens: 1_000_000 }),
+    ]);
+    const [s] = await getSessionList(tmp);
+    expect(s.cacheWriteTokens).toBe(2_000_000);
+    // Opus 5: $10 for the 1h million, $6.25 for the 5m one.
+    expect(s.estimatedCost).toBeCloseTo(10 + 6.25, 10);
+    const { cost } = await getProjectUsage(tmp);
+    expect(cost).toBeCloseTo(10 + 6.25, 10);
   });
 });

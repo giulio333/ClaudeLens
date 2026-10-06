@@ -1,4 +1,5 @@
 import { openSync, fstatSync, readSync, closeSync } from 'fs';
+import { cacheWrite1hTokens } from './cost-tracker';
 
 // Reading the tail of a session transcript: the byte-level half of the Live
 // views. Extracted from `live-monitor.ts`, where it lived inside a chokidar
@@ -95,6 +96,8 @@ export interface TurnUsage {
   inputTokens: number;
   outputTokens: number;
   cacheWriteTokens: number;
+  /** The part of `cacheWriteTokens` written to the 1-hour cache, which bills higher. */
+  cacheWrite1hTokens: number;
   cacheReadTokens: number;
 }
 
@@ -248,6 +251,7 @@ export function parseTurnUsage(json: Record<string, unknown>): TurnUsage | null 
     inputTokens,
     outputTokens,
     cacheWriteTokens,
+    cacheWrite1hTokens: cacheWrite1hTokens(usage),
     cacheReadTokens,
   };
 }

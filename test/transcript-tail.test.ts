@@ -299,8 +299,22 @@ describe('parseTurnUsage', () => {
       inputTokens: 2,
       outputTokens: 139,
       cacheWriteTokens: 277,
+      cacheWrite1hTokens: 0,
       cacheReadTokens: 277_604,
     });
+  });
+
+  it('keeps the 1-hour share of the cache writes, which bills higher', () => {
+    const turn = parseTurnUsage(
+      withUsage({
+        input_tokens: 2,
+        output_tokens: 10,
+        cache_creation_input_tokens: 500,
+        cache_creation: { ephemeral_5m_input_tokens: 100, ephemeral_1h_input_tokens: 400 },
+      })
+    );
+    expect(turn?.cacheWriteTokens).toBe(500);
+    expect(turn?.cacheWrite1hTokens).toBe(400);
   });
 
   // The same rule that keeps a sub-agent's tool tally out of its parent's, and it
@@ -333,6 +347,7 @@ describe('parseTurnUsage', () => {
       inputTokens: 0,
       outputTokens: 7,
       cacheWriteTokens: 0,
+      cacheWrite1hTokens: 0,
       cacheReadTokens: 0,
     });
   });
