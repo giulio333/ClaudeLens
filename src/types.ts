@@ -876,6 +876,9 @@ export interface TraceMark {
   arg?: string;
   /** The call's `tool_use` id, carried only so its result can find it again. */
   id?: string;
+  /** Its result has come back; until then the call is pending (an `Edit`
+   *  awaiting approval has written nothing). */
+  done?: boolean;
   /** Its result came back an error. A verdict on the call, not a second event. */
   failed?: boolean;
 }

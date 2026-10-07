@@ -334,6 +334,35 @@ describe('foldEvents', () => {
     expect(done.recent.find(m => m.tool === 'Bash')?.failed).toBe(true);
     expect(done.recent.find(m => m.tool === 'Read')?.failed).toBeUndefined();
     expect(done.errorCount).toBe(1);
+    // Answered or not: the Read is still pending.
+    expect(done.recent.find(m => m.tool === 'Bash')?.done).toBe(true);
+    expect(done.recent.find(m => m.tool === 'Read')?.done).toBeUndefined();
+  });
+
+  // An Edit waiting on the user's approval has written nothing: the call is
+  // pending until its result, and a tab must not say the file was written.
+  it('marks a call done when its own result comes back, and only then', () => {
+    const asked = foldEvents(EMPTY, [
+      {
+        id: 'a',
+        timestamp: '2026-08-16T10:00:00.000Z',
+        type: 'tool_use',
+        toolName: 'Edit',
+        toolUseId: 'toolu_edit',
+      },
+    ]);
+    expect(asked.recent[0].done).toBeUndefined();
+    const written = foldEvents(asked, [
+      {
+        id: 'b',
+        timestamp: '2026-08-16T10:00:04.000Z',
+        type: 'tool_result',
+        toolUseId: 'toolu_edit',
+      },
+    ]);
+    expect(written.recent).toHaveLength(1);
+    expect(written.recent[0]).toMatchObject({ done: true });
+    expect(written.recent[0].failed).toBeUndefined();
   });
 });
 

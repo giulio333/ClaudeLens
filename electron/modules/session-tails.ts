@@ -57,8 +57,12 @@ export interface TraceMark {
   tool?: string;
   arg?: string;
   /** The call's `tool_use` id. Carried only so its result can find it again (see
-   *  `failed`); nothing renders it. */
+   *  `done` and `failed`); nothing renders it. */
   id?: string;
+  /** Set when this call's result has come back. Until then the call is pending:
+   *  an `Edit` waiting on the user's approval has written nothing yet, and may
+   *  never — a tab must not flash a file as written off its `tool_use` alone. */
+  done?: boolean;
   /** Set when this call's result came back an error.
    *
    *  A failure is an attribute of the call, not a second event: marking the
@@ -449,12 +453,14 @@ export function foldEvents(
             ? next.delegates
             : closeDelegate(next.delegates, event.toolUseId),
         };
-        // A failure is not an event of its own — it is a verdict on the call
-        // that is already on the track. Paired by id rather than by "the last
-        // tool", which parallel calls make wrong.
-        if (event.isError && event.toolUseId) {
+        // A result is not an event of its own — it is a verdict on the call
+        // that is already on the track: done, and maybe failed. Paired by id
+        // rather than by "the last tool", which parallel calls make wrong.
+        if (event.toolUseId) {
           const i = marks.findIndex(m => m.id === event.toolUseId);
-          if (i !== -1) marks[i] = { ...marks[i], failed: true };
+          if (i !== -1) {
+            marks[i] = { ...marks[i], done: true, ...(event.isError ? { failed: true } : {}) };
+          }
         }
         break;
       // Text and thinking do NOT set the activity. `parseJsonlLine` emits a

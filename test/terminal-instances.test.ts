@@ -8,12 +8,15 @@
 
 import { describe, expect, it } from 'vitest';
 import {
+  asksQuestion,
   chipTone,
   exitViewFor,
   mostUrgentTone,
   initNav,
   navReducer,
   parkTargetFor,
+  stateLabel,
+  tabGroups,
   type InstanceReport,
   type NavAction,
   type NavState,
@@ -281,9 +284,70 @@ describe('tabs: closeTab, openNew', () => {
     invariant(opened);
   });
 
+  it('puts a new session after the last one of its project, so the row stays grouped', () => {
+    const s = run(
+      home(),
+      go(resume('s-1')),
+      { type: 'park' },
+      go(resume('s-2', { project: ZETA })),
+      { type: 'park' },
+      go(fresh(ACME))
+    );
+    expect(ids(s)).toEqual(['t1', 't3', 't2']);
+    // `+` on a ZETA tab lands after the last ZETA one, wherever that is.
+    const more = run(s, { type: 'restore', id: 't2' }, { type: 'openNew' });
+    expect(ids(more)).toEqual(['t1', 't3', 't2', 't4']);
+    // The neighbour that comes on screen is the one drawn beside the closed tab.
+    const closed = run(s, { type: 'closeTab', id: 't3' });
+    expect(closed.currentId).toBe('t2');
+    invariant(closed);
+  });
+
   it('opens nothing when no terminal is on screen', () => {
     const s = run(home(), go(resume('s-1')), { type: 'park' });
     expect(run(s, { type: 'openNew' })).toBe(s);
+  });
+});
+
+describe('tabGroups', () => {
+  it('runs the tabs of one project together under its name', () => {
+    const s = run(
+      home(),
+      go(resume('s-1')),
+      { type: 'openNew' },
+      { type: 'park' },
+      go(resume('s-3', { project: ZETA }))
+    );
+    const groups = tabGroups(s.instances);
+    expect(groups.map(g => [g.project, g.instances.map(i => i.id)])).toEqual([
+      ['acme', ['t1', 't2']],
+      ['zeta', ['t3']],
+    ]);
+    expect(tabGroups([])).toEqual([]);
+  });
+
+  it('keeps two runs of one project apart rather than reorder what it was given', () => {
+    const at = (id: string, project = ACME) => ({
+      id,
+      view: fresh(project),
+      report: {
+        pid: null,
+        sessionId: null,
+        title: null,
+        color: null,
+        termStatus: null,
+        gitBranch: null,
+      },
+    });
+    const groups = tabGroups([at('a'), at('b', ZETA), at('c')]);
+    expect(groups.map(g => g.project)).toEqual(['acme', 'zeta', 'acme']);
+    // Keys that survive a group losing its first tab, and stay apart.
+    expect(groups.map(g => g.id)).toEqual([
+      '/synthetic/acme#0',
+      '/synthetic/zeta#0',
+      '/synthetic/acme#1',
+    ]);
+    expect(tabGroups([at('c')])[0].id).toBe(groups[0].id);
   });
 });
 
@@ -347,6 +411,21 @@ describe('chipTone', () => {
     const lensOnly = report({ pid: null, termStatus: null });
     expect(chipTone(lensOnly, [])).toBe('lens');
     expect(chipTone(lensOnly, [entry({ pid: 99, sessionId: 's-7', status: 'busy' })])).toBe('busy');
+  });
+
+  it('calls a wait a question only on the name Claude Code gives an AskUserQuestion', () => {
+    expect(asksQuestion('input needed')).toBe(true);
+    expect(asksQuestion('permission prompt')).toBe(false);
+    expect(asksQuestion('dialog open')).toBe(false);
+    expect(asksQuestion(undefined)).toBe(false);
+    expect(stateLabel('waiting', entry({ status: 'waiting', waitingFor: 'input needed' }))).toBe(
+      'Claude asks you a question'
+    );
+    expect(
+      stateLabel('waiting', entry({ status: 'waiting', waitingFor: 'permission prompt' }))
+    ).toBe('Waiting for you: permission prompt');
+    expect(stateLabel('waiting', undefined)).toBe('Waiting for you');
+    expect(stateLabel('idle', entry({}))).toBe('Your turn');
   });
 
   it('says ended, starting or idle when the registry cannot say more', () => {

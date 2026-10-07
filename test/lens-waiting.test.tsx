@@ -171,6 +171,25 @@ it('draws the line with its reason and the way to the terminal', () => {
   expect(onOpenTerminal).toHaveBeenCalledTimes(1);
 });
 
+it('draws the question mark only for a question Claude asks, and no reason that repeats it', () => {
+  render(
+    <StrictMode>
+      <WaitingLine waiting={{ reason: 'input needed', onOpenTerminal: vi.fn() }} />
+    </StrictMode>
+  );
+  const line = screen.getByRole('status');
+  expect(line.textContent).toContain('Claude asks you a question');
+  expect(line.textContent).not.toContain('input needed');
+  expect(line.querySelector('.cl-waiting-ic svg')).not.toBeNull();
+  cleanup();
+  render(
+    <StrictMode>
+      <WaitingLine waiting={{ reason: 'permission prompt', onOpenTerminal: vi.fn() }} />
+    </StrictMode>
+  );
+  expect(screen.getByRole('status').querySelector('.cl-waiting-ic svg')).toBeNull();
+});
+
 it('says where the session waits when there is no terminal to open, and no reason it was not given', () => {
   render(
     <StrictMode>

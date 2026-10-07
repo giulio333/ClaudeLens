@@ -1,4 +1,5 @@
 import { QuestionGlyph } from '../shared/QuestionGlyph';
+import { asksQuestion } from '../terminal/terminal-instances';
 
 /** What the registry says while the session waits on the user. */
 export interface SessionWaiting {
@@ -21,22 +22,27 @@ export interface SessionWaiting {
  * and leads to the terminal where the question is. Once answered, the line
  * goes and the question's own card arrives with the answer on it.
  *
+ * The `?` is drawn only for a question Claude asks (`waitingFor` is
+ * `input needed`, see `asksQuestion`); any other wait — a tool's approval, a
+ * dialog — wears the accent dot and names its reason.
+ *
  * It takes the narration's slot (`ThoughtLine`): a session waiting on the user
  * is narrating nothing.
  */
 export function WaitingLine({ waiting }: { waiting: SessionWaiting }) {
   const { reason, onOpenTerminal } = waiting;
+  const question = asksQuestion(reason);
+  const what = question ? 'Claude asks you a question' : 'Claude is waiting for you';
   return (
     <div className="cl-waiting" role="status">
-      <span className="cl-waiting-ic" aria-hidden>
-        <QuestionGlyph />
+      <span className="cl-waiting-ic" data-question={question || undefined} aria-hidden>
+        {question && <QuestionGlyph />}
       </span>
       <span className="cl-waiting-text">
-        {onOpenTerminal
-          ? 'Claude is waiting for you'
-          : 'Claude is waiting for you in another terminal'}
+        {onOpenTerminal ? what : `${what} in another terminal`}
       </span>
-      {reason && <span className="cl-waiting-reason">{reason}</span>}
+      {/* A question says it in words; `input needed` would only repeat it. */}
+      {reason && !question && <span className="cl-waiting-reason">{reason}</span>}
       {onOpenTerminal && (
         <button type="button" className="cl-waiting-open" onClick={onOpenTerminal}>
           Open terminal →

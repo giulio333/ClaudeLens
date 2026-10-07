@@ -4,15 +4,18 @@ import { useActiveSessions } from '../../../hooks/useIPC';
 import type { ActiveSession } from '../../../types';
 import { spanLabel } from './background-shells';
 import { ToneDot } from './ToneDot';
+import { showsUnseen } from './tab-attention';
 import { useMinuteClock } from './use-minute-clock';
+import { useTabAttention } from './use-tab-attention';
 import {
-  TONE_LABEL,
+  asksQuestion,
   chipTone,
   endNeedsConfirm,
   instanceProjectName,
   instanceTitle,
   mostUrgentTone,
   registryEntryFor,
+  stateLabel,
   type ChipTone,
   type TerminalInstance,
 } from './terminal-instances';
@@ -24,6 +27,10 @@ import {
  * there, where a row of chips in the top bar ran out of room at the second one.
  * A row brings its session back exactly as it was left (same process, same
  * scrollback); its ✕ ends it.
+ *
+ * A session whose turn ended while the user was elsewhere rings its dot, here
+ * as on its tab, and the badge's dot rings while any of them does: this badge
+ * is what is on screen when the strip of tabs is not.
  *
  * Same anatomy as the background-shells pill beside it in Mission Control, and
  * portalled to `<body>` for the same reason: the top bar is a stacking context
@@ -52,10 +59,12 @@ export function ParkedTerminals({
 
   const badgeTone = mostUrgentTone(rows.map(r => r.tone));
   const waiting = rows.filter(r => r.tone === 'waiting').length;
+  const unseen = rows.filter(r => r.unseen).length;
   const count = instances.length;
   const summary =
     `${count} ${count === 1 ? 'session' : 'sessions'} in background` +
-    (waiting ? ` · ${waiting} waiting for you` : '');
+    (waiting ? ` · ${waiting} waiting for you` : '') +
+    (unseen ? ` · ${unseen} not seen yet` : '');
 
   return (
     <div ref={rootRef} className="cl-parked">
@@ -69,7 +78,7 @@ export function ParkedTerminals({
         title={summary}
         onClick={toggle}
       >
-        <ToneDot tone={badgeTone} />
+        <ToneDot tone={badgeTone} question={rows.some(r => r.question)} unseen={unseen > 0} />
         <span className="cl-parked-count">{count}</span>
         <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="cl-parked-caret">
           <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.3" />
@@ -169,6 +178,10 @@ interface SessionRow {
   title: string;
   state: string;
   since: string | null;
+  /** Claude asks the user a question (`asksQuestion`), not just any wait. */
+  question: boolean;
+  /** Its turn ended while it was off screen, and it has not been on screen since. */
+  unseen: boolean;
 }
 
 function useSessionRows(
@@ -178,13 +191,11 @@ function useSessionRows(
   const { data: registry } = useActiveSessions();
   const activeSessions = registryOverride ?? registry;
   const now = useMinuteClock(instances.length > 0);
+  const attention = useTabAttention();
   return instances.map(inst => {
     const tone = chipTone(inst.report, activeSessions);
     const entry = registryEntryFor(inst.report, activeSessions);
-    const state =
-      tone === 'waiting' && entry?.waitingFor
-        ? `${TONE_LABEL[tone]}: ${entry.waitingFor}`
-        : TONE_LABEL[tone];
+    const state = stateLabel(tone, entry);
     const since = entry?.startedAt && tone !== 'ended' ? spanLabel(now - entry.startedAt) : null;
     return {
       inst,
@@ -193,6 +204,8 @@ function useSessionRows(
       title: instanceTitle(inst),
       state,
       since,
+      question: tone === 'waiting' && asksQuestion(entry?.waitingFor),
+      unseen: showsUnseen(attention.byId[inst.id], tone),
     };
   });
 }
@@ -292,8 +305,9 @@ function SessionListPanel({
       <div className="cl-bgshell-panel-title">{title}</div>
       {lede && <p className="cl-bgshell-panel-lede">{lede}</p>}
       <ul className="cl-bgshell-list">
-        {rows.map(({ inst, tone, project, title: rowTitle, state, since }) => {
+        {rows.map(({ inst, tone, project, title: rowTitle, state, since, question, unseen }) => {
           const current = inst.id === currentId;
+          const seen = current || !unseen;
           const color = inst.report.color;
           return (
             <li key={inst.id} className="cl-bgshell-entry cl-parked-row" data-current={current}>
@@ -301,13 +315,13 @@ function SessionListPanel({
                 type="button"
                 className="cl-bgshell-item"
                 aria-current={current ? 'true' : undefined}
-                aria-label={`Open ${project} · ${rowTitle} (${state})`}
+                aria-label={`Open ${project} · ${rowTitle} (${state}${seen ? '' : ', not seen yet'})`}
                 onClick={() => {
                   onDone();
                   if (!current) onRestore(inst.id);
                 }}
               >
-                <ToneDot tone={tone} />
+                <ToneDot tone={tone} question={question} unseen={!seen} />
                 <span className="cl-bgshell-item-body">
                   {!compact && <span className="cl-parked-project">{project}</span>}
                   {/* The session's colour is worn by its title, as on the
@@ -323,6 +337,7 @@ function SessionListPanel({
                     {compact && <span className="cl-parked-project">{project} · </span>}
                     {since ? `${state} · ${since}` : state}
                     {current ? ' · on screen' : ''}
+                    {seen ? '' : ' · not seen yet'}
                   </span>
                 </span>
               </button>

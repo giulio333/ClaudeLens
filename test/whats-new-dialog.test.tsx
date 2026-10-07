@@ -201,14 +201,19 @@ describe('WhatsNewDialog', () => {
     // working or waiting can only have read it there.
     const bar = container.querySelector('.cl-whatsnew-frame--tabs .cl-stabs-bar')!;
     const tabs = [...bar.querySelectorAll('.cl-stab')];
+    // A project's tabs together, under its name printed once.
     expect(tabs.map(t => t.querySelector('.cl-stab-title')?.textContent)).toEqual([
       'Wire the retry loop',
-      'Migrate the invoice tables',
       'Fix the flaky login test',
+      'Migrate the invoice tables',
+    ]);
+    expect([...bar.querySelectorAll('.cl-stabs-group-label')].map(n => n.textContent)).toEqual([
+      'web',
+      'billing',
     ]);
     expect(bar.querySelectorAll('.cl-stab[data-on="true"]')).toHaveLength(1);
-    expect(tabs[1].querySelector('.cl-stab-orb .cl-live-orb')).not.toBeNull();
-    expect(tabs[2].querySelector('.cl-parked-dot[data-tone="waiting"]')).not.toBeNull();
+    expect(tabs[2].querySelector('.cl-stab-orb .cl-live-orb')).not.toBeNull();
+    expect(tabs[1].querySelector('.cl-parked-dot[data-tone="waiting"]')).not.toBeNull();
     // Mission Control's rail with the project tree open in it: the files the
     // session touched marked, and the folders above them too — drawn from the
     // preview's own folders, never from a read main would refuse for a made-up

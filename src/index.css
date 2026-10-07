@@ -4449,8 +4449,9 @@ body {
    same floating line, so the pill under it never moves — on the satin glass of
    the READING rail's list: 60% paper and a light blur, the two-stop contour (a
    dark hairline inside, a light one outside) that keeps a translucent body from
-   reading as a smudge. The glass stays neutral: the accent is spent on the `?`
-   mark alone, the one thing on the line that asks for the eye. */
+   reading as a smudge. The glass stays neutral: the accent is spent on the
+   mark alone — the `?` of a question, the dot of any other wait — the one
+   thing on the line that asks for the eye. */
 .cl-waiting {
   position: absolute;
   bottom: calc(100% + 10px);
@@ -4538,14 +4539,15 @@ body {
   }
 }
 
-/* The `?` a waiting session wears, on its tab (`ToneDot`) and on this line: a
-   veiled accent disc with the glyph and a hairline ring in the accent, not a
-   solid slab with a white glyph — on the paper of the Lens and on the
-   terminal's dark bar alike the veil takes the surface's colour, and the
-   mark weighs what a 7px dot weighs. The pulse rides a pseudo-element: on the
-   disc's own box-shadow it would wipe the ring for the whole animation. */
-.cl-waiting-ic,
-.cl-parked-dot[data-tone='waiting'] {
+/* The `?` a session wears while Claude asks a question (`asksQuestion`), on its
+   tab (`ToneDot`) and on this line: a veiled accent disc with the glyph and a
+   hairline ring in the accent, not a solid slab with a white glyph — on the
+   paper of the Lens and on the terminal's dark bar alike the veil takes the
+   surface's colour, and the mark weighs what a 7px dot weighs. The pulse rides
+   a pseudo-element: on the disc's own box-shadow it would wipe the ring for
+   the whole animation. */
+.cl-waiting-ic[data-question='true'],
+.cl-parked-dot[data-tone='waiting'][data-question='true'] {
   position: relative;
   flex: none;
   display: inline-grid;
@@ -4555,8 +4557,8 @@ body {
   background: color-mix(in oklch, var(--cl-accent) 16%, transparent);
   box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 55%, transparent);
 }
-.cl-waiting-ic::after,
-.cl-parked-dot[data-tone='waiting']::after {
+.cl-waiting-ic[data-question='true']::after,
+.cl-parked-dot[data-tone='waiting'][data-question='true']::after {
   content: '';
   position: absolute;
   inset: 0;
@@ -4569,9 +4571,30 @@ body {
   width: 100%;
   height: 100%;
 }
+/* Any other wait — a tool's approval, a dialog — is no question: the accent
+   dot, pulsing, which the `?` replaced for everything at first. */
+.cl-parked-dot[data-tone='waiting']:not([data-question='true']) {
+  background: var(--cl-accent);
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+.cl-waiting-ic:not([data-question='true']) {
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+}
+.cl-waiting-ic:not([data-question='true'])::before {
+  content: '';
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
 @media (prefers-reduced-motion: reduce) {
-  .cl-waiting-ic::after,
-  .cl-parked-dot[data-tone='waiting']::after {
+  .cl-waiting-ic[data-question='true']::after,
+  .cl-parked-dot[data-tone='waiting'][data-question='true']::after,
+  .cl-parked-dot[data-tone='waiting']:not([data-question='true']),
+  .cl-waiting-ic:not([data-question='true'])::before {
     animation: none;
   }
 }
@@ -22002,11 +22025,11 @@ select.cl-opt-input {
 .cl-parked-dot[data-tone='idle'] {
   background: var(--cl-ok);
 }
-/* Waiting for an answer is the `?` mark (`ToneDot`, drawn with `.cl-waiting-ic`
-   above): a 7px dot cannot hold the glyph, so the disc grows to 13px and the
-   negative margins keep the 7px footprint — a session going waiting↔idle does
-   not move the title beside it. */
-.cl-parked-dot[data-tone='waiting'] {
+/* A question is the `?` mark (`ToneDot`, drawn with `.cl-waiting-ic` above): a
+   7px dot cannot hold the glyph, so the disc grows to 13px and the negative
+   margins keep the 7px footprint — a session going waiting↔idle does not move
+   the title beside it. */
+.cl-parked-dot[data-tone='waiting'][data-question='true'] {
   width: 13px;
   height: 13px;
   margin: -3px;
@@ -22056,7 +22079,7 @@ select.cl-opt-input {
 .cl-parked-panel .cl-bgshell-item > .cl-parked-dot {
   margin-top: 5px;
 }
-.cl-parked-panel .cl-bgshell-item > .cl-parked-dot[data-tone='waiting'] {
+.cl-parked-panel .cl-bgshell-item > .cl-parked-dot[data-tone='waiting'][data-question='true'] {
   margin-top: 2px;
 }
 .cl-parked-row > .cl-bgshell-item {
@@ -22199,9 +22222,94 @@ select.cl-opt-input {
   display: flex;
   align-items: flex-end;
   gap: 2px;
-  /* clip, not hidden: hidden would also clip the tab on screen where it
-     overlaps the bar's hairline by 1px, and draw the line back under it. */
-  overflow-x: clip;
+}
+/* When the tabs no longer fit, they scroll (`useStripOverflow`) — `+` stays
+   outside the row, so it never scrolls away. A scroller clips both axes, and
+   the tab on screen overlaps the bar's hairline by 1px: the row reaches 1px
+   into the hairline itself and its tabs stand on its floor, so the overlap
+   stays inside the clip and the line is not drawn back under the tab. */
+.cl-stabs-viewport {
+  position: relative;
+  flex: 0 1 auto;
+  min-width: 0;
+  align-self: stretch;
+  display: flex;
+}
+.cl-stabs-scroll {
+  flex: 0 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: -1px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  overscroll-behavior-x: contain;
+  scrollbar-width: none;
+}
+.cl-stabs-scroll::-webkit-scrollbar {
+  display: none;
+}
+.cl-stabs-scroll .cl-stab {
+  margin-bottom: 0;
+}
+/* An edge with more row past it fades out, so a tab cut there reads as
+   continuing rather than as broken. */
+.cl-stabs-scroll[data-more-left='true'] {
+  mask-image: linear-gradient(to right, transparent, #000 28px);
+}
+.cl-stabs-scroll[data-more-right='true'] {
+  mask-image: linear-gradient(to left, transparent, #000 28px);
+}
+.cl-stabs-scroll[data-more-left='true'][data-more-right='true'] {
+  mask-image: linear-gradient(
+    to right,
+    transparent,
+    #000 28px,
+    #000 calc(100% - 28px),
+    transparent
+  );
+}
+/* A session past an edge that needs the user — a wait, a turn finished
+   unseen — marks that edge; a click brings it into view. */
+.cl-stabs-edge {
+  position: absolute;
+  bottom: 6px;
+  z-index: 1;
+  width: 20px;
+  height: 20px;
+  display: inline-grid;
+  place-items: center;
+  border: 0;
+  border-radius: 50%;
+  background: color-mix(
+    in oklab,
+    var(--cl-stab-surface, var(--cl-paper)) 88%,
+    var(--cl-stab-shade)
+  );
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
+  cursor: pointer;
+  -webkit-app-region: no-drag;
+}
+.cl-stabs-edge[data-side='left'] {
+  left: 2px;
+}
+.cl-stabs-edge[data-side='right'] {
+  right: 2px;
+}
+.cl-stabs-edge:hover {
+  box-shadow: inset 0 0 0 1px var(--cl-accent);
+}
+.cl-stabs-edge-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-stabs-edge-dot {
+    animation: none;
+  }
 }
 .cl-stab {
   flex: 0 1 240px;
@@ -22217,13 +22325,27 @@ select.cl-opt-input {
   border-radius: 8px 8px 0 0;
   -webkit-app-region: no-drag;
   transition: background var(--cl-hover-ms, 120ms);
+  /* The context fill is drawn under the tab's content and inside its rounded
+     top (below). */
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
 }
 .cl-stab[data-on='true'] {
   background: var(--cl-stab-surface, var(--cl-paper));
   border-color: var(--cl-line);
 }
+/* At rest a tab already wears a breath of the accent: the sessions sit on a
+   surface and their project's name stands bare beside them, so the two read
+   apart before the pointer says anything. Pointing deepens it across the
+   group (below). */
+.cl-stab:not([data-on='true']) {
+  background: color-mix(in oklch, var(--cl-accent) 4%, transparent);
+}
+/* The tab under the pointer takes the accent hover of an actionable control,
+   so it stays the strongest of its tinted group. */
 .cl-stab:not([data-on='true']):hover {
-  background: var(--cl-hover-bg);
+  background: var(--cl-glass-hover-bg);
 }
 .cl-stab-main {
   flex: 1;
@@ -22255,12 +22377,296 @@ select.cl-opt-input {
 .cl-stab[data-on='true'] .cl-stab-title:not(.cl-session-identity) {
   color: var(--cl-ink);
 }
-/* The project as it is named on disk, in the title's own face: tracked mono
-   capitals beside a sans title were two type systems in one 34px tab. */
-.cl-stab-project {
+/* The context window, worn as a fill from the left (`tab-live.ts`): faint
+   while there is room, the accent from 80%, where compaction is near; the
+   pointer deepens it. A session with no reading yet wears no fill — unknown
+   is not empty. It grows with the session (a transition on its width), and
+   a tab that mounts already full has nothing to grow from. */
+.cl-stab[data-ctx]::before {
+  content: '';
+  position: absolute;
+  inset: 0 auto 0 0;
+  z-index: -1;
+  width: calc(var(--cl-ctx, 0) * 100%);
+  background: color-mix(in oklch, var(--cl-accent) 7%, transparent);
+  transition:
+    width 600ms ease,
+    background var(--cl-hover-ms, 120ms);
+}
+.cl-stab[data-ctx='high']::before {
+  background: color-mix(in oklch, var(--cl-accent) 17%, transparent);
+}
+.cl-stab[data-ctx]:hover::before {
+  background: color-mix(in oklch, var(--cl-accent) 13%, transparent);
+}
+.cl-stab[data-ctx='high']:hover::before {
+  background: color-mix(in oklch, var(--cl-accent) 24%, transparent);
+}
+/* The title, the live line and a file just written share one slot and take
+   turns in it, rolling vertically: under the pointer the live line — what
+   the session is doing, what it waits on, how long it has been idle, and the
+   share of its window in use — takes the tab's whole width. Side by side
+   with the title, a narrow tab cut both to a few letters. The whole title is
+   one rest away, in the card. */
+.cl-stab-slot {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: grid;
+  align-items: center;
+  overflow: hidden;
+}
+.cl-stab-slot > * {
+  grid-area: 1 / 1;
+  min-width: 0;
+  transition:
+    transform 220ms ease,
+    opacity 180ms ease;
+}
+.cl-stab-live {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  overflow: hidden;
+  white-space: nowrap;
+  font: 400 12px/1.2 var(--font-sans);
+  color: var(--cl-ink-2);
+  opacity: 0;
+  transform: translateY(100%);
+}
+.cl-stab:hover .cl-stab-slot > .cl-stab-title {
+  opacity: 0;
+  transform: translateY(-100%);
+}
+.cl-stab:hover .cl-stab-live {
+  opacity: 1;
+  transform: none;
+}
+.cl-stab-live-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-stab-ctx {
   flex: none;
-  font: 400 11.5px/1.2 var(--font-sans);
+  font: 500 10.5px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
   color: var(--cl-ink-4);
+}
+.cl-stab[data-ctx='high'] .cl-stab-ctx {
+  color: var(--cl-accent);
+}
+/* The rhythm of the work, each played once per change (`useBump`). A call
+   made: a beat runs along the tab's floor. A file written: a flash of the
+   accent, and the file's name rolls in over the title for a moment. A result
+   that came back an error: the tab shakes once and its floor stays red a few
+   seconds. */
+.cl-stab-beat,
+.cl-stab-fault {
+  position: absolute;
+  inset: auto 0 0 0;
+  height: 2px;
+  pointer-events: none;
+}
+.cl-stab-beat {
+  background: var(--cl-violet);
+  transform-origin: left;
+  animation: cl-stab-beat 700ms ease-out forwards;
+}
+@keyframes cl-stab-beat {
+  from {
+    transform: scaleX(0);
+    opacity: 0.9;
+  }
+  to {
+    transform: scaleX(1);
+    opacity: 0;
+  }
+}
+.cl-stab-flash {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  background: color-mix(in oklch, var(--cl-accent) 22%, transparent);
+  animation: cl-stab-flash 900ms ease-out forwards;
+}
+@keyframes cl-stab-flash {
+  to {
+    opacity: 0;
+  }
+}
+.cl-stab-wrote {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 12px/1.2 var(--font-mono);
+  color: var(--cl-accent);
+  opacity: 0;
+  animation: cl-slot-wrote 2.2s ease forwards;
+}
+.cl-stab-wrote::before {
+  content: '✎ ';
+}
+@keyframes cl-slot-wrote {
+  0% {
+    opacity: 0;
+    transform: translateY(100%);
+  }
+  12%,
+  82% {
+    opacity: 1;
+    transform: none;
+  }
+  100% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+/* The title makes way while the name shows; two names for one animation, so
+   the next write plays it again (`alternate`). */
+.cl-stab-slot[data-wrote='a'] > .cl-stab-title {
+  animation: cl-slot-yield-a 2.2s ease;
+}
+.cl-stab-slot[data-wrote='b'] > .cl-stab-title {
+  animation: cl-slot-yield-b 2.2s ease;
+}
+@keyframes cl-slot-yield-a {
+  12%,
+  82% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+@keyframes cl-slot-yield-b {
+  12%,
+  82% {
+    opacity: 0;
+    transform: translateY(-100%);
+  }
+}
+.cl-stab:hover .cl-stab-wrote {
+  visibility: hidden;
+}
+.cl-stab-fault {
+  background: var(--cl-danger);
+  animation: cl-stab-fault 3s ease forwards;
+}
+@keyframes cl-stab-fault {
+  0%,
+  80% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+.cl-stab[data-fault='a'] {
+  animation: cl-stab-shake-a 420ms ease;
+}
+.cl-stab[data-fault='b'] {
+  animation: cl-stab-shake-b 420ms ease;
+}
+@keyframes cl-stab-shake-a {
+  20%,
+  60% {
+    transform: translateX(-2px);
+  }
+  40%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+@keyframes cl-stab-shake-b {
+  20%,
+  60% {
+    transform: translateX(-2px);
+  }
+  40%,
+  80% {
+    transform: translateX(2px);
+  }
+}
+/* A satellite per sub-agent at work, circling the orb a third of a turn
+   apart. Still, under reduced motion, they keep their places. */
+.cl-stab-orb {
+  position: relative;
+}
+.cl-stab-sat {
+  position: absolute;
+  top: calc(50% - 1.5px);
+  left: calc(50% - 1.5px);
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--cl-violet);
+  transform: rotate(calc(var(--i, 0) * 120deg)) translateX(10px);
+  animation: cl-stab-orbit 3s linear infinite;
+  animation-delay: calc(var(--i, 0) * -1s);
+}
+@keyframes cl-stab-orbit {
+  from {
+    transform: rotate(0deg) translateX(10px);
+  }
+  to {
+    transform: rotate(360deg) translateX(10px);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-stab[data-ctx]::before,
+  .cl-stab-slot > * {
+    transition: none;
+  }
+  .cl-stab-sat,
+  .cl-stab[data-fault],
+  .cl-stab-slot[data-wrote] > .cl-stab-title {
+    animation: none;
+  }
+  /* A one-shot left without its animation would stay on screen for good. */
+  .cl-stab-beat,
+  .cl-stab-flash,
+  .cl-stab-wrote,
+  .cl-stab-fault {
+    display: none;
+  }
+}
+/* A project's tabs run together behind its name, printed once (`tabGroups`)
+   where every tab used to repeat it. The name is the project as it is named on
+   disk, in the title's own face — never capitals: a path is case-sensitive —
+   and it is no control: it stays part of the bar's drag region. */
+.cl-stabs-group {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: flex-end;
+  gap: 2px;
+}
+.cl-stabs-group + .cl-stabs-group {
+  margin-left: 8px;
+}
+.cl-stabs-group-label {
+  flex: none;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  max-width: 140px;
+  padding: 7px 4px 0 6px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 11.5px/1.2 var(--font-sans);
+  color: var(--cl-ink-4);
+  transition: color var(--cl-hover-ms, 120ms);
+}
+/* Pointing at a tab shows which others share its project: its group's tabs
+   take more of the accent and the name darkens. Only with more than one
+   project open — with one, it would light the whole strip and say nothing.
+   A tab tinted for a long wait keeps its own tint. */
+.cl-stabs[data-grouped='true'] .cl-stabs-group:hover .cl-stabs-group-label {
+  color: var(--cl-ink-2);
+}
+.cl-stabs[data-grouped='true']
+  .cl-stabs-group:hover
+  .cl-stab:not([data-on='true']):not(:hover):not([data-long-wait='true']) {
+  background: color-mix(in oklch, var(--cl-accent) 9%, transparent);
 }
 /* The orb is a 20px canvas standing in for a 7px dot: the negative margins
    keep the title where the dot would have put it. */
@@ -22270,6 +22676,117 @@ select.cl-opt-input {
   width: 20px;
   height: 20px;
   margin: 0 -6px 0 -7px;
+}
+/* What a tab remembers between two looks (`tab-attention.ts`). A turn that
+   ended out of sight rings the dot in its own colour — on the tab, the
+   background badge and its rows — and lifts the title out of the muted ink, as
+   an unread tab does. The `?` keeps its own pulse and never wears the ring. */
+.cl-parked-dot[data-unseen='true']:not([data-tone='waiting']) {
+  position: relative;
+}
+.cl-parked-dot[data-unseen='true']:not([data-tone='waiting'])::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: inherit;
+  opacity: 0.32;
+  animation: cl-dot-unseen 2.4s ease-in-out infinite;
+}
+.cl-parked-dot[data-tone='lens'][data-unseen='true']::before {
+  background: var(--cl-ink-4);
+}
+@keyframes cl-dot-unseen {
+  50% {
+    transform: scale(1.35);
+    opacity: 0.12;
+  }
+}
+.cl-stab[data-unseen='true'] .cl-stab-title {
+  font-weight: 600;
+}
+.cl-stab[data-unseen='true'] .cl-stab-title:not(.cl-session-identity) {
+  color: var(--cl-ink);
+}
+/* The orb, 20px of violet, collapsing into the 7px dot of the state the turn
+   ended in: the scale starts at the orb's own size. */
+.cl-parked-dot[data-motion='settle'] {
+  animation: cl-dot-settle 700ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+@keyframes cl-dot-settle {
+  from {
+    transform: scale(2.6);
+    background: var(--cl-violet);
+    opacity: 0.4;
+  }
+  60% {
+    transform: scale(0.85);
+    opacity: 1;
+  }
+  to {
+    transform: scale(1);
+  }
+}
+.cl-parked-dot[data-tone='waiting'][data-motion='ask'] {
+  animation: cl-dot-ask 900ms ease-out;
+}
+/* The plain dot's pulse is on the dot itself: the bounce hands over to it. */
+.cl-parked-dot[data-tone='waiting'][data-motion='ask']:not([data-question='true']) {
+  animation:
+    cl-dot-ask 900ms ease-out,
+    cl-ntf-pulse 2.2s ease-out 900ms infinite;
+}
+@keyframes cl-dot-ask {
+  0% {
+    transform: translateY(5px) scale(0.3);
+    opacity: 0;
+  }
+  45% {
+    transform: translateY(-3px) scale(1.2);
+    opacity: 1;
+  }
+  70% {
+    transform: translateY(1px) scale(0.95);
+  }
+  100% {
+    transform: none;
+  }
+}
+/* A question unanswered for minutes tints its tab and quickens the `?`. Not
+   the tab on screen: the user is looking at it. */
+.cl-stab:not([data-on='true'])[data-long-wait='true'] {
+  background: color-mix(in oklch, var(--cl-accent) 10%, transparent);
+}
+.cl-stab:not([data-on='true'])[data-long-wait='true']:hover {
+  background: color-mix(in oklch, var(--cl-accent) 16%, transparent);
+}
+.cl-stab[data-long-wait='true'] .cl-parked-dot[data-tone='waiting'][data-question='true']::after,
+.cl-stab[data-long-wait='true'] .cl-parked-dot[data-tone='waiting']:not([data-question='true']) {
+  animation-duration: 1.2s;
+}
+/* An ended session greys out instead of switching colour at once. A tab that
+   mounts already ended has nothing to transition from, and draws grey. */
+.cl-stab-main {
+  transition:
+    opacity 400ms ease,
+    filter 400ms ease;
+}
+.cl-stab[data-tone='ended'] .cl-stab-main {
+  opacity: 0.55;
+  filter: grayscale(1);
+}
+/* The rules' own selectors: a shorter one loses on specificity and the
+   animation plays on. The ring stays, still: it is the mark. */
+@media (prefers-reduced-motion: reduce) {
+  .cl-parked-dot[data-motion='settle'],
+  .cl-parked-dot[data-tone='waiting'][data-motion='ask'],
+  .cl-parked-dot[data-tone='waiting'][data-motion='ask']:not([data-question='true']),
+  .cl-parked-dot[data-unseen='true']:not([data-tone='waiting'])::before {
+    animation: none;
+  }
+  .cl-stab-main {
+    transition: none;
+  }
 }
 .cl-stab-close {
   flex: none;

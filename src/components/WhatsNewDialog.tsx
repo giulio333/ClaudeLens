@@ -1024,10 +1024,11 @@ function PreviewSessionTabs(): ReactNode {
         gitBranch: null,
       },
     });
+    // In the order the app keeps them: a project's tabs together.
     const instances = [
       tab(1, '/home/acme/web', 'Wire the retry loop', null),
-      tab(2, '/home/acme/billing', 'Migrate the invoice tables', 'blue'),
       tab(3, '/home/acme/web', 'Fix the flaky login test', null),
+      tab(2, '/home/acme/billing', 'Migrate the invoice tables', 'blue'),
     ];
     const entry = (n: number, cwd: string, status: string, since: number): ActiveSession => ({
       pid: 0,

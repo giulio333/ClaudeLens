@@ -60,6 +60,7 @@ import { LiveChatView } from '../components/project/chat/LiveChatView';
 import { TerminalHost } from '../components/project/terminal/TerminalHost';
 import { ParkedTerminals } from '../components/project/terminal/ParkedTerminals';
 import { SessionTabs } from '../components/project/terminal/SessionTabs';
+import { TabAttentionProvider } from '../components/project/terminal/TabAttentionProvider';
 import { useTerminalNav } from '../components/project/terminal/use-terminal-nav';
 import {
   exitViewFor,
@@ -842,7 +843,7 @@ export default function ProjectOverview() {
   // navigation, instead of bubbling to the app-level boundary and resetting all state.
   if (!isEditorialCore) {
     return (
-      <>
+      <TabAttentionProvider instances={instances} currentId={currentId}>
         {view.type !== 'terminal' && (
           <div className="cl-app">
             <div style={{ flex: 1, overflow: 'hidden' }}>
@@ -858,7 +859,7 @@ export default function ProjectOverview() {
           </div>
         )}
         {terminals}
-      </>
+      </TabAttentionProvider>
     );
   }
 
@@ -1090,9 +1091,9 @@ export default function ProjectOverview() {
   // deep view to the editorial chrome never remounts it (which would kill every
   // parked session).
   return (
-    <>
+    <TabAttentionProvider instances={instances} currentId={currentId}>
       {editorial}
       {terminals}
-    </>
+    </TabAttentionProvider>
   );
 }

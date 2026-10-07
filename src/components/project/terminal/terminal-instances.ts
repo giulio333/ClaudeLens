@@ -132,6 +132,24 @@ function withoutCurrent(s: NavState): readonly TerminalInstance[] {
   return s.currentId === null ? s.instances : s.instances.filter(i => i.id !== s.currentId);
 }
 
+/** The tabs are drawn grouped by project (`tabGroups`), so a new instance goes
+ *  after the last one of its project rather than at the end: the order on
+ *  screen is then the array's own, and the neighbour `closeTab` brings on
+ *  screen is the tab drawn beside the one closed. Keyed on the real path — the
+ *  hash of a new project is provisional and changes under a running pane. */
+function insertGrouped(
+  list: readonly TerminalInstance[],
+  inst: TerminalInstance
+): TerminalInstance[] {
+  const key = inst.view.project.realPath;
+  let last = -1;
+  list.forEach((i, n) => {
+    if (i.view.project.realPath === key) last = n;
+  });
+  if (last === -1) return [...list, inst];
+  return [...list.slice(0, last + 1), inst, ...list.slice(last + 1)];
+}
+
 function navigate(s: NavState, next: View): NavState {
   if (next.type !== 'terminal') {
     return { ...s, view: next, instances: withoutCurrent(s), currentId: null };
@@ -161,7 +179,7 @@ function navigate(s: NavState, next: View): NavState {
   const id = `t${s.seq + 1}`;
   return {
     view: next,
-    instances: [...withoutCurrent(s), { id, view: next, report: NO_REPORT }],
+    instances: insertGrouped(withoutCurrent(s), { id, view: next, report: NO_REPORT }),
     currentId: id,
     seq: s.seq + 1,
   };
@@ -273,10 +291,62 @@ export const TONE_LABEL: Record<ChipTone, string> = {
   ended: 'Session ended',
 };
 
+/** Claude asks the user a question — the one wait the `?` stands for. Claude
+ *  Code names the dialog it waits on in the registry's `waitingFor`, from a
+ *  table of its dialogs (read off 2.1.293): `input needed` for an
+ *  `AskUserQuestion`, `permission prompt` for a tool's approval, `dialog open`
+ *  and a few others for the rest. `input needed` is not only Claude's, though:
+ *  an MCP server's input prompt, a queued elicitation and the teammate-setup
+ *  choice (iTerm2 or tmux) wear it too, and nothing in the registry tells them
+ *  apart — rare dialogs that ask the user something all the same. */
+export function asksQuestion(waitingFor: string | null | undefined): boolean {
+  return waitingFor === 'input needed';
+}
+
+/** What a session's state is called on its row, its card and its tab's label:
+ *  a wait says on what, and a question says so in words. */
+export function stateLabel(tone: ChipTone, entry: ActiveSession | undefined): string {
+  if (tone !== 'waiting') return TONE_LABEL[tone];
+  if (asksQuestion(entry?.waitingFor)) return 'Claude asks you a question';
+  return entry?.waitingFor ? `${TONE_LABEL.waiting}: ${entry.waitingFor}` : TONE_LABEL.waiting;
+}
+
 /** The last segment of the instance's project path, for its tab and its row. */
 export function instanceProjectName(inst: TerminalInstance): string {
   const path = inst.view.project.realPath;
   return path.split(/[\\/]/).filter(Boolean).pop() || path;
+}
+
+export interface TabGroup {
+  /** The project's real path: what the run is keyed on. */
+  key: string;
+  /** The run's React key: the path and how many runs of it came before. Never
+   *  a tab's id — closing a group's first tab would remount the whole group and
+   *  replay every animation in it. */
+  id: string;
+  /** Its name, printed once before its tabs instead of on every tab. */
+  project: string;
+  instances: TerminalInstance[];
+}
+
+/** The tabs as runs of one project, in the order given. The reducer keeps a
+ *  project's instances together, so a project is one run; a list that does not
+ *  (a preview) gets two runs rather than an order of this function's own. */
+export function tabGroups(list: readonly TerminalInstance[]): TabGroup[] {
+  const groups: TabGroup[] = [];
+  const runs = new Map<string, number>();
+  for (const inst of list) {
+    const key = inst.view.project.realPath;
+    const last = groups[groups.length - 1];
+    if (last?.key === key) {
+      last.instances.push(inst);
+      continue;
+    }
+    const n = runs.get(key) ?? 0;
+    runs.set(key, n + 1);
+    groups.push({ key, id: `${key}#${n}`, project: instanceProjectName(inst), instances: [inst] });
+  }
+  return groups;
 }
 
 export function instanceTitle(inst: TerminalInstance): string {

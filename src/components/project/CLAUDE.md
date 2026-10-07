@@ -75,8 +75,15 @@ file e il suo test.
   vista rimontava — e uccideva il PTY — al passaggio dall'hash provvisorio a quello reale.
 - **Una sessione in attesa non ha ancora la domanda nel transcript**: Claude Code scrive la riga
   `tool_use` di una domanda insieme alla risposta. L'attesa si legge solo dal registro
-  (`status: 'waiting'` + `waitingFor`, testo libero che non dice se è una domanda o un permesso, né
-  porta il testo della domanda); `TerminalMissionControl` la passa al Lens (`WaitingLine`).
+  (`status: 'waiting'` + `waitingFor`, che non porta il testo della domanda);
+  `TerminalMissionControl` la passa al Lens (`WaitingLine`). Il `?` è solo per una domanda,
+  `waitingFor === 'input needed'` (`asksQuestion`): `AskUserQuestion`, ma anche l'input di un
+  server MCP, un'elicitation in coda e la scelta del setup dei teammate, che il registro non
+  distingue. Un permesso (`permission prompt`) o un dialogo (`dialog open`) restano il pallino
+  accento.
+- La striscia delle tab si rimonta a ogni cambio di tab e fuori da Mission Control non c'è: ciò
+  che una tab ricorda (non visto, l'ultimo cambio di stato) sta in `TabAttentionProvider`, e
+  un'animazione una tantum parte solo per un cambio più nuovo della striscia (`seq`), mai al mount.
 - Limiti noti: un reload del renderer lascia orfani i PTY parcheggiati; il preload alza
   `setMaxListeners` perché ogni Mission Control tiene circa 5 listener IPC.
 - Ciò che un programma nel terminale può chiedere alla macchina passa da `terminal-osc.ts`: una
