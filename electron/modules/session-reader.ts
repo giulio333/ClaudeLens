@@ -392,6 +392,7 @@ export type SdkSessionMessage = {
   uuid?: string;
   message?: unknown;
   timestamp?: string;
+  is_meta?: boolean;
 };
 
 // Mapping di un singolo SDK message → ChatMessage, riusando lo stesso parsing dei
@@ -639,7 +640,15 @@ export async function readChatSessionViaSdk(
 ): Promise<ChatMessage[]> {
   const stamp = await sessionTranscriptStamp(sessionId, source);
   return chatCache.read(sessionCacheKey(sessionId, source), stamp, async () => {
-    const messages = mapSdkMessagesToChat(await getSessionMessagesScoped(sessionId, source, stamp));
+    // Since SDK 0.3.293 the read also returns the `isMeta` rows that carry an
+    // `origin` — a message from another session or agent, and a
+    // `queued_command` turned into one under a synthetic uuid. The second pass
+    // below already puts those back from the file, drawn from `origin.body`, so
+    // mapping them here too showed each message twice, once wrapped in the
+    // preamble written for Claude. The sub-agent reads keep them: they have no
+    // second pass, and their `isMeta` rows were drawn before as well.
+    const sdkRows = await getSessionMessagesScoped(sessionId, source, stamp);
+    const messages = mapSdkMessagesToChat(sdkRows.filter(m => m.is_meta !== true));
     // `getSessionMessages` returns chat rows only, and only those on the one
     // parent chain it walks, so a second pass over the same file recovers what
     // it cannot see: the messages typed mid-turn (#245), the skill expansion

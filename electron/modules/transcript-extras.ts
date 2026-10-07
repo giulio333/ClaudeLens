@@ -49,10 +49,11 @@ const SKILL_EXPANSION_PREFIX = 'Base directory for this skill:';
 export interface TranscriptExtras {
   /** Prosa dell'utente digitata a turno in corso e assorbita in esso. */
   queued: ChatMessage[];
-  /** Righe che l'SDK non restituisce affatto e che non sono dell'utente: i
+  /** Righe che la lettura SDK non disegna e che non sono dell'utente: i
    *  messaggi arrivati da un'altra sessione o da un agente interno, e le notizie
-   *  dell'harness che viaggiano su righe `isMeta`. Vanno inserite al loro posto
-   *  cronologico come i `queued` (#274). */
+   *  dell'harness che viaggiano su righe `isMeta` (l'SDK ne restituisce una parte
+   *  dalla 0.3.293, ma `readChatSessionViaSdk` le scarta). Vanno inserite al loro
+   *  posto cronologico come i `queued` (#274). */
   injected: ChatMessage[];
   /** uuid della riga → notizia, per le righe che l'SDK RESTITUISCE ma che non
    *  sono conversazione (la notifica di un task, l'idle di un sub-agente): si
@@ -425,7 +426,7 @@ export async function readTranscriptExtras(filePath: string): Promise<Transcript
 // `human` (l'ha digitata l'utente), `peer` (un'altra sessione, o un agente
 // dentro questa), `task-notification`, `auto-continuation`, `coordinator`.
 // Nessun lettore lo guardava, quindi un messaggio di un'altra sessione o
-// spariva — le sue righe sono `isMeta`, e l'SDK non le restituisce — o si
+// spariva — le sue righe sono `isMeta`, e la lettura SDK non le disegna — o si
 // vedeva come una bolla utente con dentro l'involucro XML.
 //
 // Due forme, decise da cosa stava facendo chi riceve, non da che sessione è:
@@ -736,7 +737,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       const origin = json.origin as Record<string, unknown> | undefined;
 
       // Ricevente fermo: la riga `user` porta tutto, ed è `isMeta`, quindi
-      // l'SDK non la restituisce e questa passata è l'unica che la vede.
+      // la lettura SDK la scarta e questa passata è l'unica che la disegna.
       const parsed = parseInbound(origin, false);
       if (parsed) {
         injected.push({
@@ -1076,7 +1077,7 @@ export function mergeTranscriptExtras(
 
   const alreadyShown = new Set(messages.filter(m => m.role === 'user').map(m => messageText(m)));
   // Le righe iniettate non passano dal filtro per testo: non sono dell'utente e
-  // l'SDK non le restituisce affatto, quindi un testo uguale a quello di un
+  // la lettura SDK non le disegna affatto, quindi un testo uguale a quello di un
   // messaggio utente è una coincidenza, non un doppione.
   const pending = queued
     .filter(m => !alreadyShown.has(messageText(m)))
