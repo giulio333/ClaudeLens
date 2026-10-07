@@ -31,7 +31,12 @@ export interface WhatsNewHighlight {
     | 'parked-terminals'
     | 'session-tabs'
     | 'project-files'
-    | 'web-sources';
+    | 'web-sources'
+    | 'tab-live'
+    | 'tab-attention'
+    | 'tab-overflow'
+    | 'git-branch'
+    | 'side-question';
 }
 
 export interface WhatsNewRelease {
@@ -40,6 +45,46 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.35',
+    highlights: [
+      {
+        title: 'Tabs that show the work',
+        description:
+          'Each tab wears its session’s state at rest — the orb while Claude works, circled by its sub-agents, and a fill for how much of the context window is in use, in the accent past 80% — and under the pointer the title gives way to what it is doing: the tool and its file, what it waits on, how long it has been idle.',
+        where: 'The tab bar of Mission Control; hover a tab',
+        visual: 'tab-live',
+      },
+      {
+        title: 'Nothing finishes behind your back',
+        description:
+          'A turn that ended while its tab was out of sight rings the dot until you look, a question wears a ?, one left unanswered for two minutes tints its tab, and an ended session greys out.',
+        where: 'The tab bar, the background badge and its list',
+        visual: 'tab-attention',
+      },
+      {
+        title: 'Tabs grouped by project',
+        description:
+          'Tabs sit together under their project’s name, and when there are more than fit they scroll, with a mark on the edge past which a session is waiting for you.',
+        where: 'The tab bar of Mission Control; click the edge mark',
+        visual: 'tab-overflow',
+      },
+      {
+        title: 'The branch a session is on',
+        description:
+          'The branch each turn ran on is read from the transcript: Mission Control names it, with the worktree and the branches before it on hover, and the Lens marks every change of branch.',
+        where: 'The strip at the foot of Mission Control’s rail; the tab’s card; the Lens',
+        visual: 'git-branch',
+      },
+      {
+        title: 'Side questions with /btw',
+        description:
+          'Type /btw and a question in the chat to have it answered from the session’s context, even mid-turn, without adding it to the conversation.',
+        where: 'The chat composer',
+        visual: 'side-question',
+      },
+    ],
+  },
   {
     version: '2.2.34',
     highlights: [

@@ -27,7 +27,7 @@ import { ContextRail } from './project/chat/ContextRail';
 import { contextFiles } from './project/chat/context-files';
 import { ComposerSelect } from './project/chat/ChatComposer';
 import { composerModelOptions } from './project/chat/model-options';
-import type { ActiveSession, InitModel } from '../types';
+import type { ActiveSession, InitModel, SessionActivity } from '../types';
 import type { PromptCandidate, PromptTemplate } from '../../electron/shared/playbook-types';
 import { buildProcessedMessages, type ProcessedMessage } from './project/chat/utils';
 import type { ArtifactPublish } from '../types';
@@ -45,6 +45,12 @@ import {
 } from './project/terminal/TerminalMissionControl';
 import { ParkedTerminals } from './project/terminal/ParkedTerminals';
 import { SessionTabs } from './project/terminal/SessionTabs';
+import { TabAttentionContext } from './project/terminal/use-tab-attention';
+import type { AttentionState } from './project/terminal/tab-attention';
+import { EnvironmentStrip } from './project/terminal/EnvironmentStrip';
+import type { SessionGitState } from './project/chat/git-state';
+import { SideQuestionCard } from './project/chat/SideQuestionCard';
+import type { SideQuestions } from './project/chat/useSideQuestions';
 import type { TerminalInstance } from './project/terminal/terminal-instances';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
 import { BackgroundShells } from './project/terminal/BackgroundShells';
@@ -1288,6 +1294,240 @@ function WebSourcesVisual(): ReactNode {
   return <TranscriptFrame turns={WEB_SOURCES_TURN} />;
 }
 
+// 2.2.35's tabs: two projects, five sessions, each tab in a state the strip
+// draws at rest — the orb with two sub-agents circling it, a `?` asked minutes
+// ago, a turn that finished while its tab was out of sight, a context window
+// near compaction, a session that ended. The registry and the tails are handed
+// in, and so is what the strip remembers between looks (`TabAttentionContext`):
+// every change older than the state's `seq`, so none of the one-shot
+// animations plays when the popup opens.
+function previewTabs(now: number, ids: number[]) {
+  const min = 60_000;
+  const all: Record<number, [string, string, TerminalInstance['report']['color'], string, number]> =
+    {
+      1: ['/home/acme/web', 'Wire the retry loop', null, 'busy', 22],
+      2: ['/home/acme/web', 'Fix the flaky login test', null, 'waiting', 9],
+      3: ['/home/acme/web', 'Bump the router', 'green', 'idle', 6],
+      4: ['/home/acme/billing', 'Migrate the invoice tables', 'blue', 'idle', 41],
+      5: ['/home/acme/billing', 'Draft the refund API', null, 'ended', 70],
+      6: ['/home/acme/billing', 'Audit the tax rounding', 'purple', 'busy', 3],
+      7: ['/home/acme/docs', 'Rewrite the quickstart', null, 'idle', 15],
+      8: ['/home/acme/docs', 'Check the broken links', null, 'waiting', 4],
+    };
+  const instances = ids.map((n): TerminalInstance => {
+    const [realPath, title, color, status] = all[n];
+    return {
+      id: `wn-live-${n}`,
+      view: {
+        type: 'terminal',
+        project: { hash: `wn-live-project-${realPath}`, realPath },
+        resumeSessionId: `wn-live-session-${n}`,
+      },
+      report: {
+        pid: null,
+        sessionId: `wn-live-session-${n}`,
+        title,
+        color,
+        termStatus: status === 'ended' ? 'exited' : 'running',
+        gitBranch: n === 4 ? 'invoices-v2' : 'main',
+      },
+    };
+  });
+  const registry = ids
+    .filter(n => all[n][3] !== 'ended')
+    .map((n): ActiveSession => {
+      const [cwd, , , status, since] = all[n];
+      return {
+        pid: 0,
+        sessionId: `wn-live-session-${n}`,
+        cwd,
+        status,
+        startedAt: now - (since + 30) * min,
+        statusUpdatedAt: now - since * min,
+        source: 'registry',
+        ...(status === 'waiting'
+          ? { waitingFor: n === 2 ? 'input needed' : 'permission prompt' }
+          : {}),
+      };
+    });
+  const activity = (
+    n: number,
+    tool: { name: string; arg: string } | null,
+    used: number,
+    delegates: string[] = []
+  ): SessionActivity => ({
+    sessionId: `wn-live-session-${n}`,
+    title: null,
+    titleSource: null,
+    transcriptPath: null,
+    activity: null,
+    lastTool: tool,
+    delegates: delegates.map((name, i) => ({ id: `wn-agent-${n}-${i}`, name, at: now })),
+    lastActivityAt: now,
+    toolCount: 0,
+    errorCount: 0,
+    model: 'claude-opus-5-5',
+    context: { used, max: 200_000 },
+    spend: null,
+    spendEstimated: false,
+    tokens: 0,
+    cwd: all[n][0],
+    recent: [],
+    endedAt: null,
+  });
+  const tails = [
+    activity(1, { name: 'Edit', arg: '/home/acme/web/src/net/retry.ts' }, 92_000, [
+      'Explore',
+      'code-reviewer',
+    ]),
+    activity(2, null, 64_000),
+    activity(3, null, 30_000),
+    activity(4, null, 174_000),
+    activity(6, { name: 'Bash', arg: 'cd ledger && npm test' }, 51_000),
+    activity(7, null, 22_000),
+    activity(8, { name: 'WebFetch', arg: 'https://example.com/docs' }, 12_000),
+  ];
+  // Session 4's turn ended while another tab was on screen.
+  const attention: AttentionState = {
+    seq: 10,
+    byId: {
+      'wn-live-4': { tone: 'idle', from: 'busy', seq: 3, unseen: true },
+      'wn-live-7': { tone: 'idle', from: 'busy', seq: 4, unseen: true },
+    },
+  };
+  return { instances, registry, tails, attention };
+}
+
+function PreviewLiveTabs({ ids, currentId }: { ids: number[]; currentId: string }): ReactNode {
+  const [preview] = useState(() => previewTabs(Date.now(), ids));
+  return (
+    <TabAttentionContext.Provider value={preview.attention}>
+      <SessionTabs
+        instances={preview.instances}
+        currentId={currentId}
+        onSelect={() => {}}
+        onClose={() => {}}
+        onNew={() => {}}
+        activeSessions={preview.registry}
+        activity={preview.tails}
+      />
+    </TabAttentionContext.Provider>
+  );
+}
+
+function TabBarFrame({ children }: { children: ReactNode }): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--tabs">
+      <div className="cl-stabs-bar">
+        <TabBarBack label="Back to app" title="Back to the app" onClick={() => {}} />
+        {/* No view switch or rail toggle: the tabs are the subject, and the
+            frame is narrower than a window. */}
+        {children}
+      </div>
+      <div className="cl-transcript-inner">
+        {TABS_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={12 + i}
+          />
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TabLiveVisual(): ReactNode {
+  return (
+    <TabBarFrame>
+      <PreviewLiveTabs ids={[1, 3, 4]} currentId="wn-live-3" />
+    </TabBarFrame>
+  );
+}
+
+function TabAttentionVisual(): ReactNode {
+  return (
+    <TabBarFrame>
+      <PreviewLiveTabs ids={[2, 3, 4, 5]} currentId="wn-live-3" />
+    </TabBarFrame>
+  );
+}
+
+// More sessions than the bar holds: the row scrolls, and the edge past which
+// sessions wait or finished unseen carries the mark that brings them back.
+function TabOverflowVisual(): ReactNode {
+  return (
+    <TabBarFrame>
+      <PreviewLiveTabs ids={[1, 2, 3, 4, 5, 6, 7, 8]} currentId="wn-live-1" />
+    </TabBarFrame>
+  );
+}
+
+// The branch the last turn ran on, in the strip at the foot of Mission
+// Control's rail; its card names the worktree and the branches before it.
+const PREVIEW_GIT: SessionGitState = {
+  branch: 'invoices-v2',
+  runs: [
+    { branch: 'main', uuid: 'wn-git-1', timestamp: '2026-10-06T09:12:00.000Z' },
+    { branch: 'invoices-v2', uuid: 'wn-git-2', timestamp: '2026-10-06T10:40:00.000Z' },
+  ],
+  worktree: {
+    name: 'invoices-v2',
+    path: '/home/acme/billing/.claude/worktrees/invoices-v2',
+    branch: 'invoices-v2',
+    originalBranch: 'main',
+  },
+};
+
+function GitBranchVisual(): ReactNode {
+  return (
+    // Tall enough for the card the chip raises above the strip.
+    <div className="cl-whatsnew-frame flex flex-col justify-end" style={{ minHeight: 260 }}>
+      <EnvironmentStrip init={null} git={PREVIEW_GIT} />
+    </div>
+  );
+}
+
+// A side question answered above the composer: the thread is handed in, so
+// nothing here reaches a session.
+const PREVIEW_BTW: SideQuestions = {
+  exchanges: [
+    {
+      id: 'wn-btw-1',
+      question: 'Which file holds the retry delays now?',
+      status: 'answered',
+      response:
+        '`src/net/backoff.ts` — `retry.ts` imports `delayFor(attempt)` from it and no longer keeps its own table.',
+    },
+  ],
+  pending: false,
+  ask: () => {},
+  stop: () => {},
+  retry: () => {},
+  clear: () => {},
+};
+
+function SideQuestionVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame">
+      <div className="cl-transcript-inner">
+        {TABS_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={12 + i}
+          />
+        ))}
+        <SideQuestionCard thread={PREVIEW_BTW} />
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1306,6 +1546,11 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'session-tabs': SessionTabsVisual,
   'project-files': ProjectFilesVisual,
   'web-sources': WebSourcesVisual,
+  'tab-live': TabLiveVisual,
+  'tab-attention': TabAttentionVisual,
+  'tab-overflow': TabOverflowVisual,
+  'git-branch': GitBranchVisual,
+  'side-question': SideQuestionVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

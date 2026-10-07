@@ -60,8 +60,9 @@ import {
  * than this strip, which remounts on every switch — a tint on a tab whose
  * question has gone unanswered for minutes, and a grey on an ended one.
  *
- * `activeSessions` stands in for the registry where the instances are not real
- * ones (the "What's new" preview), as on `ParkedTerminals`.
+ * `activeSessions` and `activity` stand in for the registry and the transcript
+ * tails where the instances are not real ones (the "What's new" preview), as on
+ * `ParkedTerminals`.
  */
 export function SessionTabs({
   instances,
@@ -70,6 +71,7 @@ export function SessionTabs({
   onClose,
   onNew,
   activeSessions: registryOverride,
+  activity: activityOverride,
 }: {
   instances: readonly TerminalInstance[];
   currentId: string | null;
@@ -77,10 +79,12 @@ export function SessionTabs({
   onClose: (id: string) => void;
   onNew: () => void;
   activeSessions?: readonly ActiveSession[];
+  activity?: readonly SessionActivity[];
 }) {
   const { data: registry } = useActiveSessions();
   const activeSessions = registryOverride ?? registry;
-  const { data: activity } = useSessionActivity();
+  const { data: liveActivity } = useSessionActivity();
+  const activity = activityOverride ?? liveActivity;
   const { hover, enter, leave } = useTabHover();
   const hovered = hover && instances.find(i => i.id === hover.id);
   const attention = useTabAttention();
