@@ -559,7 +559,7 @@ describe('correlateSessionAgents', () => {
     startedAt: '2026-05-30T00:00:00.000Z',
     endedAt: '2026-05-30T00:01:00.000Z',
     messageCount: 3,
-    fork: { description: 'count the files' },
+    fork: { name: 'count-files', description: 'count the files' },
     ...overrides,
   });
   const forkNotification = (taskId: string, status: string) =>
@@ -572,11 +572,19 @@ describe('correlateSessionAgents', () => {
     const agents = correlateSessionAgents(processed, [forkMeta()]);
     expect(agents).toHaveLength(1);
     expect(agents[0]).toMatchObject({
-      subagentType: 'fork',
+      subagentType: 'count-files',
       description: 'count the files',
       agentId: 'afork-0123456789abcdef',
       runState: 'running',
     });
+  });
+
+  it('names a fork "fork" when its sidecar carries no name', () => {
+    const processed = buildProcessedMessages([msg('user', [text('/subtask count the files')])]);
+    const [a] = correlateSessionAgents(processed, [
+      forkMeta({ fork: { name: '', description: 'count the files' } }),
+    ]);
+    expect(a.subagentType).toBe('fork');
   });
 
   it('flips a fork to done on the notification carrying its task-id', () => {
@@ -612,7 +620,7 @@ describe('correlateSessionAgents', () => {
     ]);
     expect(agents.map(a => [a.subagentType, a.agentId])).toEqual([
       ['Explore', 'aExplore'],
-      ['fork', 'afork-0123456789abcdef'],
+      ['count-files', 'afork-0123456789abcdef'],
     ]);
   });
 });

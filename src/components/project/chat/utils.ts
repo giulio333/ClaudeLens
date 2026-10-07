@@ -796,7 +796,7 @@ export function correlateSessionAgents(
     agents.push({
       key: `fork-${m.agentId}`,
       turnN: end?.turnN ?? processed.length,
-      subagentType: 'fork',
+      subagentType: m.fork.name || 'fork',
       description: m.fork.description,
       prompt: '',
       isError: runState === 'failed',

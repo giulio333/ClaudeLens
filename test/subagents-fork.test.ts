@@ -74,7 +74,12 @@ beforeEach(() => {
   );
   writeFileSync(
     join(subagentsDir, `agent-${FORK_ID}.meta.json`),
-    JSON.stringify({ agentType: 'fork', isFork: true, description: 'count the files' })
+    JSON.stringify({
+      agentType: 'fork',
+      isFork: true,
+      name: 'count-files',
+      description: 'count the files',
+    })
   );
   writeFileSync(
     join(subagentsDir, `agent-${PLAIN_ID}.jsonl`),
@@ -98,7 +103,10 @@ describe('readSessionSubagentsViaSdk — forks', () => {
   it('marks a fork from its sidecar and leaves an ordinary sub-agent alone', async () => {
     const metas = await readSessionSubagentsViaSdk(SESSION_ID, source);
     const byId = new Map(metas.map(m => [m.agentId, m]));
-    expect(byId.get(FORK_ID)?.fork).toEqual({ description: 'count the files' });
+    expect(byId.get(FORK_ID)?.fork).toEqual({
+      name: 'count-files',
+      description: 'count the files',
+    });
     expect(byId.get(PLAIN_ID)).toBeDefined();
     expect(byId.get(PLAIN_ID)?.fork).toBeUndefined();
   });

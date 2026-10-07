@@ -32,7 +32,7 @@ export interface SubagentMeta {
   /** Set only for a fork (`/subtask`): an agent no `Agent` tool call launched, so it
    *  has no dispatch in the parent to be linked to. Read from the `.meta.json`
    *  sidecar, the only place that says so. */
-  fork?: { description: string };
+  fork?: { name: string; description: string };
 }
 
 /** The `isFork` sidecar of one sub-agent, or `undefined` when it is not a fork,
@@ -48,9 +48,12 @@ async function readForkMeta(
       join(subagentsDirFor(projectDir, sessionId), `agent-${agentId}.meta.json`),
       'utf8'
     );
-    const meta = JSON.parse(raw) as { isFork?: unknown; description?: unknown };
+    const meta = JSON.parse(raw) as { isFork?: unknown; name?: unknown; description?: unknown };
     if (meta.isFork !== true) return undefined;
-    return { description: typeof meta.description === 'string' ? meta.description : '' };
+    return {
+      name: typeof meta.name === 'string' ? meta.name : '',
+      description: typeof meta.description === 'string' ? meta.description : '',
+    };
   } catch {
     return undefined;
   }
