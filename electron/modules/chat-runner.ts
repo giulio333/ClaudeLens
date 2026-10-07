@@ -25,7 +25,13 @@
 import { randomUUID } from 'crypto';
 import { mapSdkMessageToChat, type ChatMessage } from './session-reader';
 import { sdkExecutableOption } from './claude-executable';
-import type { ToolActivity, ChatTurnSummary } from '../shared/chat-types';
+import type {
+  ToolActivity,
+  ChatTurnSummary,
+  SideQuestionAnswer,
+  SideQuestionTurn,
+} from '../shared/chat-types';
+import { askOnQuery, type SideQuestionCapable } from './side-question';
 import {
   noteMessage,
   compactBoundaryNote,
@@ -176,6 +182,18 @@ export class ChatSession {
     if (mode === this.permissionMode) return;
     this.permissionMode = mode;
     await this.query?.setPermissionMode(mode);
+  }
+
+  /** Claude Code's `/btw` on this session's own query: answered from its
+   *  context, never added to it, and allowed while a turn is running. The
+   *  signal cancels the question, not the session. */
+  askSideQuestion(
+    question: string,
+    history: SideQuestionTurn[],
+    signal: AbortSignal
+  ): Promise<SideQuestionAnswer> {
+    const query = this.closed ? null : (this.query as unknown as SideQuestionCapable | null);
+    return askOnQuery(query, question, history, signal);
   }
 
   /** Stop the in-flight turn but keep the session alive (the SDK emits a `result`,

@@ -38,6 +38,8 @@ import type {
   ChatMessageEvent,
   ChatToolActivityEvent,
   PermissionRequest,
+  SideQuestionAnswer,
+  SideQuestionTurn,
 } from '../../electron/shared/chat-types';
 import type {
   ActiveSession,
@@ -170,6 +172,14 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     ),
     stopMessage: vi.fn(async () => ok(null)),
     endChat: vi.fn(async () => ok(null)),
+    // A side question (`/btw`) on the live chat. No answer is the honest
+    // default — the CLI's own "nothing came back" — so a test wanting a reply
+    // scripts one.
+    sideQuestion: vi.fn(
+      async (_sessionId: string, _question: string, _history: SideQuestionTurn[], _id: string) =>
+        ok<SideQuestionAnswer>({ response: null, synthetic: true })
+    ),
+    cancelSideQuestion: vi.fn(async (_requestId: string) => ok(null)),
     // Session deletion: `getArtifacts` is the inventory the dialog shows,
     // `deleteSession` the act. The default answer is a clean success — the
     // interesting cases are the partial ones, scripted per test.

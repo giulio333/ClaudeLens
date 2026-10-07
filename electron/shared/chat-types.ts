@@ -361,3 +361,19 @@ export type PermissionDecision =
   | { kind: 'allow'; input: Record<string, unknown> }
   | { kind: 'always'; input: Record<string, unknown>; suggestions?: PermissionSuggestion[] }
   | { kind: 'deny'; message?: string };
+
+/** One settled side question (`/btw`), sent back with a follow-up so the answer
+ *  can build on what was already asked: the SDK keeps no side-question history
+ *  of its own across requests. */
+export interface SideQuestionTurn {
+  question: string;
+  response: string;
+}
+
+/** What the session answered a side question. `response: null` or
+ *  `synthetic: true` is the CLI saying it had no real answer — a notice to
+ *  show, never a reply to render. */
+export interface SideQuestionAnswer {
+  response: string | null;
+  synthetic: boolean;
+}

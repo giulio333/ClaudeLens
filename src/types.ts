@@ -82,6 +82,8 @@ export type {
   PermissionSuggestion,
   PermissionRequest,
   PermissionDecision,
+  SideQuestionTurn,
+  SideQuestionAnswer,
 } from '../electron/shared/chat-types';
 
 // The exchange a message between sessions belongs to (#280) — shared with the

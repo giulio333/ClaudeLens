@@ -9,6 +9,8 @@ import { LiveTurn } from './LiveTurn';
 import { VaultLinksProvider } from '../../VaultLinks';
 import { useChatAutoScroll } from './useAutoScroll';
 import { useLiveChat } from './useLiveChat';
+import { useSideQuestions } from './useSideQuestions';
+import { SideQuestionCard } from './SideQuestionCard';
 import { fmt, fmtCost, fmtModel, sessionTitle } from '../utils';
 import { SessionSummary, useActiveSessions } from '../../../hooks/useIPC';
 
@@ -62,6 +64,11 @@ export function LiveChatView({
     resume !== undefined && activeSessions.some(a => a.sessionId === resume.sessionId);
 
   const chat = useLiveChat(project.realPath, resume, liveInTerminal);
+  // `/btw` from the composer: asked on this chat's own live session, so it
+  // reads the session's prompt cache and leaves the conversation as it is.
+  // This view is keyed per session in `ProjectOverview`, so another
+  // conversation starts with no thread.
+  const sideQuestions = useSideQuestions(chat.sessionId);
 
   const processed = useMemo(
     () => buildProcessedMessages(chat.displayMessages),
@@ -196,6 +203,9 @@ export function LiveChatView({
             onRespondPermission={chat.respondPermission}
             onSend={(text, opts) => void chat.send(text, opts)}
             onStop={chat.stop}
+            onSideQuestion={sideQuestions.ask}
+            above={<SideQuestionCard thread={sideQuestions} />}
+            onEscape={sideQuestions.exchanges.length > 0 ? sideQuestions.clear : undefined}
             lockNotice={
               liveInTerminal
                 ? 'This session is live in your terminal — replying here would race it on the same transcript. The composer unlocks when the terminal session ends.'

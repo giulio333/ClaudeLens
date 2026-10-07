@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron';
 import type { PromptTemplateInput } from './shared/playbook-types';
 import type { RemoteHostInput } from './shared/remote-host';
 import type { RemoteLensState } from './shared/remote-session';
+import type { SideQuestionTurn } from './shared/chat-types';
 
 // Subscribe to a renderer IPC channel with a *named* handler and return an
 // unsubscribe disposer. Unlike `removeAllListeners(channel)` (the old pattern),
@@ -137,6 +138,16 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
     stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
     endChat: () => ipcRenderer.invoke('sessions:endChat'),
+    // A side question (`/btw`) on the live chat session: answered from its
+    // context, never added to it. `requestId` lets the renderer cancel it.
+    sideQuestion: (
+      sessionId: string,
+      question: string,
+      history: SideQuestionTurn[],
+      requestId: string
+    ) => ipcRenderer.invoke('sessions:sideQuestion', sessionId, question, history, requestId),
+    cancelSideQuestion: (requestId: string) =>
+      ipcRenderer.invoke('sessions:cancelSideQuestion', requestId),
     respondPermission: (requestId: string, decision: unknown) =>
       ipcRenderer.invoke('sessions:permissionResponse', requestId, decision),
     onPermissionRequest: (cb: (request: unknown) => void) =>

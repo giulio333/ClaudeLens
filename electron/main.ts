@@ -92,6 +92,7 @@ import {
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
 import { toPermissionRequest, toPermissionResult } from './modules/chat-permissions';
+import { parseSideQuestionRequest } from './modules/side-question';
 import { readPrefs, setPref } from './modules/prefs-store';
 import { claudelensDir, useDevClaudelensDir } from './modules/claudelens-dir';
 import { checkForUpdates, RELEASES_PAGE_URL } from './modules/update-checker';
@@ -2054,6 +2055,45 @@ ipcMain.handle('sessions:endChat', async () => {
   currentChatSession?.dispose();
   currentChatSession = null;
   denyAllPending('Session closed.');
+  return ok(null);
+});
+
+// A side question (`/btw`) on the live chat session — the same process, so the
+// session's prompt cache is read rather than written again, and a turn in
+// flight is no obstacle. Never a resume: a second process would re-write the
+// whole context (see `side-question.ts`), so with no live session for this id
+// the answer is an error that says so. `requestId` is the renderer's, so it can
+// cancel what it asked; cancelling ends the question, never the session.
+const sideQuestions = new Map<string, AbortController>();
+
+ipcMain.handle(
+  'sessions:sideQuestion',
+  async (_event, sessionId: unknown, question: unknown, history: unknown, requestId: unknown) => {
+    try {
+      if (typeof requestId !== 'string' || !requestId) throw new Error('Missing request id');
+      if (sideQuestions.has(requestId)) throw new Error('Request already running');
+      const request = parseSideQuestionRequest(sessionId, question, history);
+      const session = currentChatSession;
+      if (!session || session.sessionId !== request.sessionId) {
+        throw new Error(
+          'No live chat for this session — send a message first, then ask with /btw.'
+        );
+      }
+      const abort = new AbortController();
+      sideQuestions.set(requestId, abort);
+      try {
+        return ok(await session.askSideQuestion(request.question, request.history, abort.signal));
+      } finally {
+        sideQuestions.delete(requestId);
+      }
+    } catch (e) {
+      return err(e);
+    }
+  }
+);
+
+ipcMain.handle('sessions:cancelSideQuestion', async (_event, requestId: unknown) => {
+  if (typeof requestId === 'string') sideQuestions.get(requestId)?.abort();
   return ok(null);
 });
 

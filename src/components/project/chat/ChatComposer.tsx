@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
+import type { ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { composerModelOptions } from './model-options';
 import { PermissionRequestDialog } from './PermissionRequestDialog';
@@ -145,6 +146,9 @@ export function ChatComposer({
   onSend,
   onStop,
   lockNotice,
+  onSideQuestion,
+  above,
+  onEscape,
 }: {
   projectHash?: string;
   realPath: string;
@@ -169,6 +173,14 @@ export function ChatComposer({
    *  while the session is live in a terminal, where replying here would both
    *  race the CLI on the same transcript and silently spend SDK credits. */
   lockNotice?: string | null;
+  /** Claude Code's `/btw`: a draft `/btw <question>` goes here instead of to
+   *  the conversation — also while a turn is running, which is the point of
+   *  asking on the side. Unset, `/btw` is sent like any other text. */
+  onSideQuestion?: (question: string) => void;
+  /** Drawn above the input sheet (the side-question card). */
+  above?: ReactNode;
+  /** Escape in the input while no slash menu is open — closes what `above` shows. */
+  onEscape?: () => void;
 }) {
   const [draft, setDraft] = useState('');
   // The user's explicit model pick; null = follow the session's inherited model
@@ -192,7 +204,14 @@ export function ChatComposer({
   // resolved Claude Code config (`init.slashCommands`, cached); sending one is
   // native — the Agent SDK runs a slash command passed in the prompt string.
   const { data: config } = useEffectiveConfig(realPath);
-  const slashCommands = useMemo(() => config?.init?.slashCommands ?? [], [config]);
+  // `/btw` is answered here, so it is offered whatever the handshake listed —
+  // and while a turn runs it is the only command that can be sent at all.
+  const slashCommands = useMemo(() => {
+    const listed = config?.init?.slashCommands ?? [];
+    if (!onSideQuestion) return listed;
+    if (sending) return ['btw'];
+    return listed.includes('btw') ? listed : ['btw', ...listed];
+  }, [config, onSideQuestion, sending]);
   const [slashIndex, setSlashIndex] = useState(0);
   // Set when the user presses Esc; cleared on the next keystroke so the menu
   // reappears as they keep typing.
@@ -212,7 +231,8 @@ export function ChatComposer({
   }, [slashQuery, slashCommands]);
   // Clamp the highlight in case the candidate set shrank as the user typed.
   const activeSlash = Math.min(slashIndex, slashMatches.length - 1);
-  const showSlash = slashMatches.length > 0 && !slashDismissed && !sending;
+  const showSlash =
+    slashMatches.length > 0 && !slashDismissed && (!sending || Boolean(onSideQuestion));
 
   // Fill the draft with the picked command (trailing space so args can follow)
   // and keep focus in the textarea. The trailing space closes the menu.
@@ -239,7 +259,16 @@ export function ChatComposer({
   // different risky mode. Safe modes send straight through.
   function handleSend() {
     const text = draft.trim();
-    if (!text || sending || lockNotice) return;
+    if (!text || lockNotice) return;
+    const btw = onSideQuestion ? /^\/btw(?:\s+([\s\S]*))?$/.exec(text) : null;
+    if (btw) {
+      const question = (btw[1] ?? '').trim();
+      if (!question) return;
+      setDraft('');
+      onSideQuestion?.(question);
+      return;
+    }
+    if (sending) return;
     if (CONFIRM_MODES.includes(permission) && confirmedMode !== permission) {
       setPendingText(text);
       return;
@@ -264,6 +293,7 @@ export function ChatComposer({
     <div className="cl-composer">
       <div className="cl-composer-inner">
         {errorText && <div className="cl-composer-error">{errorText}</div>}
+        {above}
         {lockNotice && !sending && (
           <div className="cl-composer-lock">
             <span className="led" aria-hidden />
@@ -337,14 +367,17 @@ export function ChatComposer({
                   e.preventDefault();
                   handleSend();
                 }
+                if (e.key === 'Escape') onEscape?.();
               }}
-              disabled={sending || !!lockNotice}
+              disabled={!!lockNotice || (sending && !onSideQuestion)}
               placeholder={
                 lockNotice
                   ? 'This session is live in your terminal'
-                  : sessionId
-                    ? 'Continue this session…   ⏎ send · ⇧⏎ newline'
-                    : 'Start a new conversation…   ⏎ send · ⇧⏎ newline'
+                  : sending
+                    ? 'Claude is working…   /btw asks on the side'
+                    : sessionId
+                      ? 'Continue this session…   ⏎ send · ⇧⏎ newline'
+                      : 'Start a new conversation…   ⏎ send · ⇧⏎ newline'
               }
               rows={1}
             />

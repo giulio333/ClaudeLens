@@ -33,6 +33,8 @@ import type {
   LocalImageAnswer,
   ProjectDirListing,
   ProjectFileAnswer,
+  SideQuestionAnswer,
+  SideQuestionTurn,
   SubagentMeta,
   SessionArtifacts,
   DeleteRequest,
@@ -294,6 +296,13 @@ declare global {
         ) => Promise<IpcResult<null>>;
         stopMessage: () => Promise<IpcResult<null>>;
         endChat: () => Promise<IpcResult<null>>;
+        sideQuestion: (
+          sessionId: string,
+          question: string,
+          history: SideQuestionTurn[],
+          requestId: string
+        ) => Promise<IpcResult<SideQuestionAnswer>>;
+        cancelSideQuestion: (requestId: string) => Promise<IpcResult<null>>;
         respondPermission: (
           requestId: string,
           decision: PermissionDecision
