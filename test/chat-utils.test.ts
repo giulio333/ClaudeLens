@@ -550,6 +550,71 @@ describe('correlateSessionAgents', () => {
     const agents = correlateSessionAgents(processed, []);
     expect(agents.map(a => a.runState)).toEqual(['done', 'running']);
   });
+
+  // ── a fork (`/subtask`): no Agent call launched it, its notification has no tool-use-id ──
+  const forkMeta = (overrides: Partial<SubagentMeta> = {}): SubagentMeta => ({
+    agentId: 'afork-0123456789abcdef',
+    filePath: '',
+    firstPrompt: '<fork-boilerplate>',
+    startedAt: '2026-05-30T00:00:00.000Z',
+    endedAt: '2026-05-30T00:01:00.000Z',
+    messageCount: 3,
+    fork: { description: 'count the files' },
+    ...overrides,
+  });
+  const forkNotification = (taskId: string, status: string) =>
+    text(
+      `<task-notification>\n<task-id>${taskId}</task-id>\n<status>${status}</status>\n<summary>Agent "count the files" finished</summary>\n</task-notification>`
+    );
+
+  it('lists a fork as a running agent until its notification lands', () => {
+    const processed = buildProcessedMessages([msg('user', [text('/subtask count the files')])]);
+    const agents = correlateSessionAgents(processed, [forkMeta()]);
+    expect(agents).toHaveLength(1);
+    expect(agents[0]).toMatchObject({
+      subagentType: 'fork',
+      description: 'count the files',
+      agentId: 'afork-0123456789abcdef',
+      runState: 'running',
+    });
+  });
+
+  it('flips a fork to done on the notification carrying its task-id', () => {
+    const processed = buildProcessedMessages([
+      msg('user', [text('/subtask count the files')]),
+      msg('user', [forkNotification('afork-0123456789abcdef', 'completed')]),
+    ]);
+    const [a] = correlateSessionAgents(processed, [forkMeta()]);
+    expect(a.runState).toBe('done');
+    expect(a.turnN).toBe(2);
+  });
+
+  it("flips a fork to failed on a failed notification, and ignores another agent's", () => {
+    const processed = buildProcessedMessages([
+      msg('user', [forkNotification('aother-0000000000000000', 'completed')]),
+      msg('user', [forkNotification('afork-0123456789abcdef', 'failed')]),
+    ]);
+    const [a] = correlateSessionAgents(processed, [forkMeta()]);
+    expect(a.runState).toBe('failed');
+    expect(a.isError).toBe(true);
+  });
+
+  it('never lets a fork take the transcript of an Agent dispatch', () => {
+    const processed = buildProcessedMessages([
+      msg('assistant', [
+        toolUse('t1', 'Task', { subagent_type: 'Explore', prompt: 'look around' }),
+      ]),
+      msg('user', [toolResult('t1', 'ok')]),
+    ]);
+    const agents = correlateSessionAgents(processed, [
+      forkMeta({ firstPrompt: 'look around' }),
+      meta({ agentId: 'aExplore', firstPrompt: 'look around' }),
+    ]);
+    expect(agents.map(a => [a.subagentType, a.agentId])).toEqual([
+      ['Explore', 'aExplore'],
+      ['fork', 'afork-0123456789abcdef'],
+    ]);
+  });
 });
 
 // Skill expansion message Claude Code injects right after a skill slash command.

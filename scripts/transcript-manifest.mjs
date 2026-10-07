@@ -111,6 +111,12 @@ export const ROW_TYPES = {
   // `subagents/agent-*.meta.json`, which is one flat object per sub-agent run
   // rather than a stream of rows. It sits in ROW_TYPES so its fields get walked
   // and triaged like everything else.
+  'fork-context-ref': ignored(
+    "the first row of a fork's (`/subtask`) transcript: names the parent session. The fork is recognised from its sidecar's `isFork` (subagents-reader), so this row adds nothing"
+  ),
+  'dev-mods': ignored(
+    'a bare `{type, folder, sessionId}` pointer to a dev-mods folder; no conversation content'
+  ),
   'agent-meta': candidate(
     'the sub-agent sidecar. `teams-reader` reads it, but only when taskKind is "in_process_teammate" — 1 of the 35 on disk; for the rest nothing reads it at all. See FIELDS for agentType'
   ),
@@ -266,6 +272,9 @@ export const SYSTEM_SUBTYPES = {
   bridge_status: ignored('remote-bridge connection state'),
   model_refusal_fallback: candidate(
     'records that the model refused and the CLI fell back — worth surfacing, it explains an odd turn'
+  ),
+  model_refusal_no_fallback: candidate(
+    'as model_refusal_fallback, with no fallback to fall back to — explains a turn that ends without an answer'
   ),
 };
 
@@ -447,9 +456,8 @@ export const FIELDS = {
   'agent-meta.spawnDepth': candidate(
     'how deep a nested spawn is; would let a sub-agent tree be shown as a tree'
   ),
-  'agent-meta.description': ignored(
-    "the dispatch's own description, already on the parent's tool_use input"
-  ),
+  'agent-meta.description': read('subagents-reader'),
+  'agent-meta.isFork': read('subagents-reader'),
   'agent-meta.type': ignored(
     'synthetic — the census stamps the `agent-meta` row type onto these objects itself, since the files carry no type field of their own'
   ),
@@ -592,6 +600,157 @@ export const FIELDS = {
   ),
   'user.turnOrigin': ignored(
     "the row's origin kind again (peer, task_notification, …); transcript-extras reads origin.kind"
+  ),
+  // ── Claude Code 2.1.292 ────────────────────────────────────────────────
+  'assistant.message.stop_details.type': candidate(
+    'why the turn stopped, beside assistant.message.stop_reason'
+  ),
+  'assistant.message.stop_details.category': candidate('as stop_details.type'),
+  'assistant.message.stop_details.explanation': candidate('as stop_details.type'),
+  'assistant.message.stop_details.fallback_has_prefill_claim': candidate('as stop_details.type'),
+  'assistant.message.usage.fallback_credit': unknown(
+    'null on every row observed; a non-null one would say whether cost-tracker should subtract it from a fallback turn'
+  ),
+  'assistant.thinkingDurationMs': candidate(
+    'how long the turn thought; a thinking block shows no duration'
+  ),
+  'attachment.attachment.builtInTypes': ignored(
+    'attachment bookkeeping; attachments are not read (see ATTACHMENT_TYPES)'
+  ),
+  'attachment.attachment.surfacedDefinitions': ignored('as attachment.attachment.builtInTypes'),
+  'attachment.attachment.delivery_id': ignored('an id; nothing joins on it'),
+  'attachment.attachment.reminderId': ignored('an id; nothing joins on it'),
+  'attachment.attachment.runId': ignored('an id; nothing joins on it'),
+  'attachment.attachment.origin.producer': ignored('which harness component wrote the row'),
+  'attachment.renderedBesideToolResult': ignored('how the CLI placed the attachment on screen'),
+  'attachment.renderedRole': ignored('as attachment.renderedBesideToolResult'),
+  'queue-operation.commandUuid': ignored('an id; nothing joins on it'),
+  'queue-operation.deliveryId': ignored('an id; nothing joins on it'),
+  'user.origin.producer': ignored('which harness component wrote the row'),
+  'user.origin.runId': ignored('an id; nothing joins on it'),
+  'user.classifierBoundary': unknown(
+    'true on a handful of rows; what boundary it marks is not clear from the rows'
+  ),
+  'user.toolEndsTurn': unknown(
+    'true on a handful of rows; presumably a tool whose result ends the turn, not confirmed'
+  ),
+  'user.permissionDecision': candidate(
+    "how a tool call was approved ({decision, source, reasonType}: accepted by config through a classifier, in the rows seen) — the permission dialog shows only the SDK chat's own asks, so a call the CLI auto-approved says nothing about why"
+  ),
+  'user.permissionDecision.decision': candidate('as user.permissionDecision'),
+  'user.permissionDecision.source': candidate('as user.permissionDecision'),
+  'user.permissionDecision.reasonType': candidate('as user.permissionDecision'),
+  'user.turnPosition': candidate(
+    'the 1-based prompt and turn index of a row within its session — what a turn navigator would number by'
+  ),
+  'user.turnPosition.promptIndex': candidate('as user.turnPosition'),
+  'user.turnPosition.turnIndex': candidate('as user.turnPosition'),
+  'user.usageLimitNote': candidate(
+    'a short code ("wrap_up", "release") saying a usage limit shaped the turn'
+  ),
+  'worktree-state.worktreeSession.enteredExisting': ignored(
+    'whether the session entered a worktree that already existed — bookkeeping'
+  ),
+  // The `Artifact` tool's own answers (listing types, design systems, files, a pin):
+  // prose written for the harness, never drawn — `artifact-card` reads the publish only.
+  'user.toolUseResult.artifact_types': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_system': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_system.unavailable': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_systems': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_systems.instances': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_systems.scope': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_systems.type': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.design_systems.type_url': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.cowritten': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.files': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.foreign': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.from_type': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.stored': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.type': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.url': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_list.ver': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.file_read.title': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.files_read.title': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.pin': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.pin.id': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.pin.name': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.pin.ref': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.quickstart.design_guidance': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.quickstart.types': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.read.title': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.type_instances': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.type_instances.instances': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.type_instances.scope': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.type_instances.type': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.type_instances.type_url': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.capabilities.sample': ignored(
+    'an `Artifact` listing or read answer, written for the harness'
+  ),
+  'user.toolUseResult.bashEditDiff.shared': unknown(
+    'a flag on the Bash edit diff; what it marks is not clear from the rows — bash-edit-diff-view does not read it'
   ),
 };
 

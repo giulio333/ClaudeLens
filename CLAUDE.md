@@ -34,7 +34,13 @@ cache's invalidation, and the merge of the rows the SDK read does not return
 (#245/#246 — a message absorbed mid-turn lands in chronological place and a
 slash-command skill gets its `skillPath`, both from one extra pass over the
 same file — and the page an `Artifact` publish produced, which lives on the
-`toolUseResult` the SDK read never returns at all). CI (`.github/workflows/ci.yml`) runs format:check +
+`toolUseResult` the SDK read never returns at all). `subagents-fork` is the same kind
+of test for a `/subtask` fork, an agent no `Agent` call launched: it is told from
+an ordinary sub-agent only by `isFork` in its `.meta.json` sidecar, which the SDK
+read never returns, and a missing or unreadable sidecar is not a fork (the
+renderer's half — a fork listed as running until a notification carrying its
+`task-id` lands, and never taking an `Agent` dispatch's transcript — is in
+`chat-utils`). CI (`.github/workflows/ci.yml`) runs format:check +
 typecheck + lint + test + build on every push/PR, **on Node 22 and 24 both** —
 `engines` says `>=22`, so a claim the suite only holds on one of them is a claim
 the project does not make. Pinning 22 alone is what hid #258: two assertions were

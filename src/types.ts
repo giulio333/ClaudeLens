@@ -129,6 +129,8 @@ export interface SubagentMeta {
   startedAt: string;
   endedAt: string;
   messageCount: number;
+  /** Present only for a fork (`/subtask`), which no `Agent` call dispatched. */
+  fork?: { description: string };
 }
 
 /** The eight names `/color` can stamp on a session. Mirrors `AGENT_COLORS` in

@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+import { join } from 'node:path';
 import { StampCache, treeStamp } from './session-read-cache';
 import {
   canTrustEmptyScoped,
@@ -27,6 +29,31 @@ export interface SubagentMeta {
   endedAt: string;
   /** Numero di righe chat (user/assistant non-meta) nel transcript interno. */
   messageCount: number;
+  /** Set only for a fork (`/subtask`): an agent no `Agent` tool call launched, so it
+   *  has no dispatch in the parent to be linked to. Read from the `.meta.json`
+   *  sidecar, the only place that says so. */
+  fork?: { description: string };
+}
+
+/** The `isFork` sidecar of one sub-agent, or `undefined` when it is not a fork,
+ *  has no sidecar, or the sidecar is unreadable (an older Claude Code writes none). */
+async function readForkMeta(
+  projectDir: string | undefined,
+  sessionId: string,
+  agentId: string
+): Promise<SubagentMeta['fork']> {
+  if (!projectDir) return undefined;
+  try {
+    const raw = await readFile(
+      join(subagentsDirFor(projectDir, sessionId), `agent-${agentId}.meta.json`),
+      'utf8'
+    );
+    const meta = JSON.parse(raw) as { isFork?: unknown; description?: unknown };
+    if (meta.isFork !== true) return undefined;
+    return { description: typeof meta.description === 'string' ? meta.description : '' };
+  } catch {
+    return undefined;
+  }
 }
 
 function firstLineText(content: unknown): string {
@@ -184,7 +211,16 @@ async function loadSessionSubagents(
     // Il prompt di dispatch dal padre è la chiave di correlazione robusta;
     // ricade sul testo interno solo se il legame non c'è.
     const firstPrompt = (promptByToolUse.get(parentToolUse) || fallbackPrompt).slice(0, 400);
-    metas.push({ agentId, filePath: '', firstPrompt, startedAt, endedAt, messageCount });
+    const fork = await readForkMeta(source.projectDir, sessionId, agentId);
+    metas.push({
+      agentId,
+      filePath: '',
+      firstPrompt,
+      startedAt,
+      endedAt,
+      messageCount,
+      ...(fork ? { fork } : {}),
+    });
   }
 
   metas.sort((a, b) => a.startedAt.localeCompare(b.startedAt));

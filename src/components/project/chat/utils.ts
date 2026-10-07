@@ -715,6 +715,7 @@ export function correlateSessionAgents(
   // is an ISO timestamp → a lexical sort is chronological; the sort is stable, so
   // metas that share a timestamp keep their input order.
   const pool = metas
+    .filter(m => !m.fork)
     .map(m => ({ m, used: false }))
     .sort((a, b) => a.m.startedAt.localeCompare(b.m.startedAt));
   const agents: SessionAgent[] = [];
@@ -724,10 +725,14 @@ export function correlateSessionAgents(
   // from running → done/failed when its completion lands. (A backgrounded agent
   // may notify more than once on resume; the latest status wins.)
   const notifByToolUseId = new Map<string, TaskNotification>();
-  for (const p of processed) {
+  // A fork (`/subtask`) was launched by no tool call, so its notification has a
+  // task-id and no tool-use-id: pair those on the agent's own id instead.
+  const forkNotif = new Map<string, { n: TaskNotification; turnN: number }>();
+  processed.forEach((p, idx) => {
     const n = p.notification;
     if (n?.toolUseId) notifByToolUseId.set(n.toolUseId, n);
-  }
+    else if (n?.taskId) forkNotif.set(n.taskId, { n, turnN: idx + 1 });
+  });
 
   processed.forEach((p, idx) => {
     p.toolGroups.forEach((g, gi) => {
@@ -779,6 +784,29 @@ export function correlateSessionAgents(
       });
     });
   });
+
+  for (const m of metas) {
+    if (!m.fork) continue;
+    const end = forkNotif.get(m.agentId);
+    const runState: AgentRunState = !end
+      ? 'running'
+      : /fail|error/i.test(end.n.status)
+        ? 'failed'
+        : 'done';
+    agents.push({
+      key: `fork-${m.agentId}`,
+      turnN: end?.turnN ?? processed.length,
+      subagentType: 'fork',
+      description: m.fork.description,
+      prompt: '',
+      isError: runState === 'failed',
+      runState,
+      agentId: m.agentId,
+      startedAt: m.startedAt,
+      endedAt: m.endedAt,
+      messageCount: m.messageCount,
+    });
+  }
 
   return agents;
 }
