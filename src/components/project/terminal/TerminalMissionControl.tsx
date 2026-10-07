@@ -14,6 +14,7 @@ import { SkillDetailView } from '../skills/SkillDetailView';
 import { AgentDetailView } from '../agents/AgentDetailView';
 import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
+import type { SessionWaiting } from '../chat/WaitingLine';
 import {
   buildProcessedMessages,
   resolveToolIcon,
@@ -653,6 +654,27 @@ export function TerminalMissionControl({
   // top bar's Back asks: the Lens calls `onBack` after deleting the session, a
   // step the user has already confirmed.
   const paneBusy = terminalMounted && termStatus === 'running' && !!busy;
+
+  // The session waiting on the user, for the Lens: its transcript does not hold
+  // the question until it is answered (see `WaitingLine`). The terminal is
+  // offered only when this pane runs one — showing it is all the button does;
+  // without one, opening the terminal would resume the session a second time.
+  const waitingEntry = activeSessions?.find(
+    s => s.sessionId === sessionId && s.status === 'waiting'
+  );
+  // A string, not the entry: every registry read hands over new objects.
+  const waitingFor = waitingEntry ? waitingEntry.waitingFor || '' : null;
+  const paneRunning = terminalMounted && termStatus === 'running';
+  const waiting = useMemo<SessionWaiting | null>(
+    () =>
+      waitingFor === null
+        ? null
+        : {
+            reason: waitingFor || null,
+            onOpenTerminal: paneRunning ? () => setView('terminal') : undefined,
+          },
+    [waitingFor, paneRunning, setView]
+  );
   const requestBack = useCallback(() => {
     if (
       paneBusy &&
@@ -855,6 +877,7 @@ export function TerminalMissionControl({
                   fileOpenerFor={fileOpenerFor}
                   jumpToTurnRef={jumpToTurnRef}
                   focusMessageUuid={focusMessageUuid}
+                  waiting={waiting}
                 />
               </div>
             )}

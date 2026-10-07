@@ -17,6 +17,7 @@ import {
 } from './icons';
 import { ThoughtLine } from './ThoughtLine';
 import { Thought } from './thoughts';
+import { WaitingLine, type SessionWaiting } from './WaitingLine';
 
 /** Inline style that paints an orb with a model run's identity color, falling
  *  back to the default violet (handled in CSS) when there is none. */
@@ -139,6 +140,7 @@ export function ChatControlPill({
   vitals,
   find,
   thought,
+  waiting,
 }: {
   /** Whether this host renders the density toggle — the pill's one transcript
    *  control. False in a mode with no transcript to thin out. */
@@ -196,6 +198,9 @@ export function ChatControlPill({
   /** The sentence currently being narrated, or null when there is nothing to
    *  say. Rendered above the pill; see `ThoughtLine`. */
   thought?: Thought | null;
+  /** The session is waiting on the user (the registry says so): takes the
+   *  sentence's slot. See `WaitingLine`. */
+  waiting?: SessionWaiting | null;
 }) {
   // Only one sheet is raised above the pill at a time: the model runs, or the
   // export/delete menu.
@@ -279,7 +284,12 @@ export function ChatControlPill({
     <div className="cl-pill-wrap" ref={rootRef}>
       {/* Keyed by the call, so each sentence enters on its own rather than
           cross-fading into the next one mid-read. */}
-      {thought && !readout && <ThoughtLine key={thought.id} thought={thought} />}
+      {!readout &&
+        (waiting ? (
+          <WaitingLine waiting={waiting} />
+        ) : (
+          thought && <ThoughtLine key={thought.id} thought={thought} />
+        ))}
       {readout === 'ctx' && <ContextPopover ctx={vitals?.ctx ?? null} placement="pill" />}
       {readout === 'spend' && <SpendPopover summary={vitals?.session} placement="pill" />}
       {sheet === 'models' && switched && (

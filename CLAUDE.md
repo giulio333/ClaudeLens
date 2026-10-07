@@ -293,6 +293,11 @@ plain dot, and the grid button lists every tab with the one on screen marked and
 not reopened; what the reducer does with a closed or new tab — the neighbour
 comes on screen, the last one leaves, `+` keeps the one it replaces — is in
 `terminal-instances`) and
+`lens-waiting` (the Lens of a session waiting on the user, whose transcript
+holds nothing yet — Claude Code writes a question's row together with its
+answer: the frame reads the registry and hands the Lens a line above its pill
+with the reason, leading to this pane's terminal without a second process, and
+offering no terminal when the session waits in one this pane does not run) and
 `terminal-host` (parked sessions end to end on the real pane: a parked `claude`
 survives every navigation that does not end it, comes back without a second
 spawn — also when its session is opened again from elsewhere — dies on its ✕ or,

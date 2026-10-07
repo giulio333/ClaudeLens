@@ -1,3 +1,4 @@
+import { QuestionGlyph } from '../shared/QuestionGlyph';
 import type { ChipTone } from './terminal-instances';
 
 /**
@@ -9,19 +10,7 @@ import type { ChipTone } from './terminal-instances';
 export function ToneDot({ tone }: { tone: ChipTone }) {
   return (
     <span className="cl-parked-dot" data-tone={tone} aria-hidden>
-      {tone === 'waiting' && (
-        <svg
-          viewBox="0 0 16 16"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M5.9 6a2.2 2.2 0 0 1 4.25.75c0 1.5-2.15 1.9-2.15 3" />
-          <path d="M8 12.6h.01" />
-        </svg>
-      )}
+      {tone === 'waiting' && <QuestionGlyph />}
     </span>
   );
 }

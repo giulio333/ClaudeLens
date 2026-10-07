@@ -54,6 +54,7 @@ import { TagPicker } from '../sessions/TagPicker';
 import { useHighlights } from './useHighlights';
 import { useHighlightLayer } from './useHighlightLayer';
 import { HighlightToolbar } from './HighlightToolbar';
+import type { SessionWaiting } from './WaitingLine';
 
 type ViewMode = 'chat' | 'timeline';
 
@@ -79,6 +80,7 @@ export function ChatView({
   jumpToTurnRef,
   focusMessageUuid,
   remote,
+  waiting,
 }: {
   project: { hash: string; realPath: string };
   session: SessionSummary;
@@ -117,6 +119,9 @@ export function ChatView({
    *  locally — definitions, configuration, wikilinks — nor can the transcript
    *  be exported, highlighted or deleted from here. Unset, nothing changes. */
   remote?: RemoteTranscript;
+  /** The session waits on the user, as the frame read it off the registry: the
+   *  transcript cannot show it (see `WaitingLine`). */
+  waiting?: SessionWaiting | null;
 }) {
   const chat = useChatSession(project.hash, remote ? null : session.filename);
   const messages = remote ? remote.messages : chat.data;
@@ -685,6 +690,7 @@ export function ChatView({
       modelRuns={modelRuns}
       onLocateModel={jumpToTurn}
       thought={thought}
+      waiting={waiting}
     />
   );
 

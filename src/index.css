@@ -4445,6 +4445,137 @@ body {
   }
 }
 
+/* "Claude is waiting for you" (`WaitingLine`), in the narration's slot — the
+   same floating line, so the pill under it never moves — on the satin glass of
+   the READING rail's list: 60% paper and a light blur, the two-stop contour (a
+   dark hairline inside, a light one outside) that keeps a translucent body from
+   reading as a smudge. The glass stays neutral: the accent is spent on the `?`
+   mark alone, the one thing on the line that asks for the eye. */
+.cl-waiting {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  max-width: min(560px, 74vw);
+  padding: 5px 5px 5px 7px;
+  border-radius: 999px;
+  background: color-mix(in oklch, var(--cl-paper) 60%, transparent);
+  -webkit-backdrop-filter: blur(8px) saturate(1.4);
+  backdrop-filter: blur(8px) saturate(1.4);
+  box-shadow:
+    inset 0 0 0 1px color-mix(in oklch, var(--cl-ink) 11%, transparent),
+    0 0 0 1px oklch(1 0 0 / 0.42),
+    0 16px 34px -20px oklch(0.2 0.02 60 / 0.4),
+    0 2px 6px -4px oklch(0.2 0.02 60 / 0.16);
+  white-space: nowrap;
+  animation: cl-thought-in 0.22s ease-out;
+}
+:root[data-theme='dark'] .cl-waiting {
+  box-shadow:
+    inset 0 0 0 1px oklch(1 0 0 / 0.07),
+    0 0 0 1px oklch(0 0 0 / 0.42),
+    0 16px 34px -20px oklch(0 0 0 / 0.66),
+    0 2px 6px -4px oklch(0 0 0 / 0.4);
+}
+.cl-waiting-ic {
+  width: 18px;
+  height: 18px;
+}
+.cl-waiting-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font: 500 12.5px/1.5 var(--font-reading);
+  color: var(--cl-ink-2);
+}
+.cl-waiting-reason {
+  flex: none;
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+/* set off from the sentence by a hairline: the line says, the button does */
+.cl-waiting-open {
+  flex: none;
+  position: relative;
+  margin-left: 3px;
+  padding: 4px 11px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: 500 12px/1.4 var(--font-sans);
+  color: var(--cl-accent-ink);
+  cursor: pointer;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-waiting-open::before {
+  content: '';
+  position: absolute;
+  left: -6px;
+  top: 5px;
+  bottom: 5px;
+  width: 1px;
+  background: var(--cl-line);
+}
+.cl-waiting-open:hover,
+.cl-waiting-open:focus-visible {
+  background: var(--cl-glass-hover-bg);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-waiting {
+    animation: none;
+  }
+}
+@media (prefers-reduced-transparency: reduce) {
+  .cl-waiting {
+    background: var(--cl-paper);
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+}
+
+/* The `?` a waiting session wears, on its tab (`ToneDot`) and on this line: a
+   veiled accent disc with the glyph and a hairline ring in the accent, not a
+   solid slab with a white glyph — on the paper of the Lens and on the
+   terminal's dark bar alike the veil takes the surface's colour, and the
+   mark weighs what a 7px dot weighs. The pulse rides a pseudo-element: on the
+   disc's own box-shadow it would wipe the ring for the whole animation. */
+.cl-waiting-ic,
+.cl-parked-dot[data-tone='waiting'] {
+  position: relative;
+  flex: none;
+  display: inline-grid;
+  place-items: center;
+  border-radius: 50%;
+  color: var(--cl-accent);
+  background: color-mix(in oklch, var(--cl-accent) 16%, transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 55%, transparent);
+}
+.cl-waiting-ic::after,
+.cl-parked-dot[data-tone='waiting']::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+.cl-waiting-ic > svg,
+.cl-parked-dot > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-waiting-ic::after,
+  .cl-parked-dot[data-tone='waiting']::after {
+    animation: none;
+  }
+}
+
 /* The in-flight chip carries a sentence now, not just a tool name: prose in
    mono reads as a command. The meta half stays mono — it IS an identifier. */
 .cl-live-tool.is-note b {
@@ -21871,24 +22002,14 @@ select.cl-opt-input {
 .cl-parked-dot[data-tone='idle'] {
   background: var(--cl-ok);
 }
-/* Waiting for an answer is a `?` on an accent disc (`ToneDot`): a 7px dot
-   cannot hold the glyph, so the disc grows to 13px and the negative margins
-   keep the 7px footprint — a session going waiting↔idle does not move the
-   title beside it. */
+/* Waiting for an answer is the `?` mark (`ToneDot`, drawn with `.cl-waiting-ic`
+   above): a 7px dot cannot hold the glyph, so the disc grows to 13px and the
+   negative margins keep the 7px footprint — a session going waiting↔idle does
+   not move the title beside it. */
 .cl-parked-dot[data-tone='waiting'] {
-  display: inline-grid;
-  place-items: center;
   width: 13px;
   height: 13px;
   margin: -3px;
-  color: var(--cl-on-accent);
-  background: var(--cl-accent);
-  animation: cl-ntf-pulse 2.2s ease-out infinite;
-}
-.cl-parked-dot > svg {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
 .cl-parked-dot[data-tone='busy'] {
   background: var(--cl-violet);
@@ -22387,8 +22508,7 @@ select.cl-opt-input {
   color: var(--cl-ink-4);
 }
 @media (prefers-reduced-motion: reduce) {
-  .cl-parked-dot[data-tone='busy'],
-  .cl-parked-dot[data-tone='waiting'] {
+  .cl-parked-dot[data-tone='busy'] {
     animation: none;
   }
 }
