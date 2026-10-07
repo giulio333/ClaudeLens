@@ -164,6 +164,32 @@ it('closes without asking a session that is idle, or that works in a terminal el
   expect(props.onClose).toHaveBeenCalledWith('t2');
 });
 
+it('marks a session waiting for an answer with a question mark, and any other with a plain dot', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(
+    ok([
+      busy({ status: 'waiting', waitingFor: 'dialog open' }),
+      busy({ pid: 3, sessionId: 'session-b', status: 'idle' }),
+    ])
+  );
+  mount(
+    [
+      tab('t1', { pid: 2, sessionId: 'session-a', title: 'Asks a question' }),
+      tab('t2', { pid: 3, sessionId: 'session-b', title: 'Done turn' }),
+    ],
+    't1'
+  );
+  await registryRead();
+  const waiting = await screen.findByRole('button', {
+    name: /^Asks a question · .*Waiting for you$/,
+  });
+  const dot = waiting.querySelector('.cl-parked-dot[data-tone="waiting"]');
+  expect(dot?.querySelector('svg')).not.toBeNull();
+  const idle = screen.getByRole('button', { name: /^Done turn · .*Your turn$/ });
+  const plain = idle.querySelector('.cl-parked-dot[data-tone="idle"]');
+  expect(plain).not.toBeNull();
+  expect(plain?.childElementCount).toBe(0);
+});
+
 it('offers the grid button only once there are two tabs, before the tabs', () => {
   mount([tab('t1', { title: 'Fix the build' })], 't1');
   expect(screen.queryByRole('button', { name: 'All open sessions' })).toBeNull();

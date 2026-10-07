@@ -3,6 +3,7 @@ import { createPortal } from 'react-dom';
 import { useActiveSessions } from '../../../hooks/useIPC';
 import type { ActiveSession } from '../../../types';
 import { spanLabel } from './background-shells';
+import { ToneDot } from './ToneDot';
 import { useMinuteClock } from './use-minute-clock';
 import {
   TONE_LABEL,
@@ -68,7 +69,7 @@ export function ParkedTerminals({
         title={summary}
         onClick={toggle}
       >
-        <span className="cl-parked-dot" data-tone={badgeTone} aria-hidden />
+        <ToneDot tone={badgeTone} />
         <span className="cl-parked-count">{count}</span>
         <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="cl-parked-caret">
           <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.3" />
@@ -306,7 +307,7 @@ function SessionListPanel({
                   if (!current) onRestore(inst.id);
                 }}
               >
-                <span className="cl-parked-dot" data-tone={tone} aria-hidden />
+                <ToneDot tone={tone} />
                 <span className="cl-bgshell-item-body">
                   {!compact && <span className="cl-parked-project">{project}</span>}
                   {/* The session's colour is worn by its title, as on the

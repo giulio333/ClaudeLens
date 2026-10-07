@@ -4,6 +4,7 @@ import { LiveOrb } from '../../LiveOrb';
 import { inFlightTool } from '../../live-orb';
 import { OpenSessionsButton } from './ParkedTerminals';
 import { SessionTabCard } from './SessionTabCard';
+import { ToneDot } from './ToneDot';
 import { useTabHover } from './use-tab-hover';
 import {
   TONE_LABEL,
@@ -107,7 +108,7 @@ export function SessionTabs({
                     />
                   </span>
                 ) : (
-                  <span className="cl-parked-dot" data-tone={tone} aria-hidden />
+                  <ToneDot tone={tone} />
                 )}
                 <span className={`cl-stab-title${color ? ` cl-session-identity ${color}` : ''}`}>
                   {title}

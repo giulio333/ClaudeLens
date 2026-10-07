@@ -288,7 +288,8 @@ Lens without persisting anything, and what it reports to its tab) and
 on screen marked, the title in the session's colour, a click on another tab
 brings it on screen while one on the current tab does nothing, `+` opens a new
 session, a tab's ✕ asks first only while Claude works in that session's own
-terminal, and the grid button lists every tab with the one on screen marked and
+terminal, a session waiting for an answer wears a `?` where the others wear a
+plain dot, and the grid button lists every tab with the one on screen marked and
 not reopened; what the reducer does with a closed or new tab — the neighbour
 comes on screen, the last one leaves, `+` keeps the one it replaces — is in
 `terminal-instances`) and

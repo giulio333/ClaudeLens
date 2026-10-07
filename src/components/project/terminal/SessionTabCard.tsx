@@ -1,6 +1,7 @@
 import { createPortal } from 'react-dom';
 import type { ActiveSession, SessionActivity } from '../../../types';
 import { spanLabel } from './background-shells';
+import { ToneDot } from './ToneDot';
 import { useMinuteClock } from './use-minute-clock';
 import {
   TONE_LABEL,
@@ -47,7 +48,7 @@ export function SessionTabCard({
       </div>
       <div className="cl-stab-card-project">{instanceProjectName(inst)}</div>
       <div className="cl-stab-card-state cl-parked-state" data-tone={tone}>
-        <span className="cl-parked-dot" data-tone={tone} aria-hidden />
+        <ToneDot tone={tone} />
         <span>{since ? `${state} · open ${since}` : state}</span>
       </div>
       {tool && (

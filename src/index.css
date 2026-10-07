@@ -21871,9 +21871,24 @@ select.cl-opt-input {
 .cl-parked-dot[data-tone='idle'] {
   background: var(--cl-ok);
 }
+/* Waiting for an answer is a `?` on an accent disc (`ToneDot`): a 7px dot
+   cannot hold the glyph, so the disc grows to 13px and the negative margins
+   keep the 7px footprint — a session going waiting↔idle does not move the
+   title beside it. */
 .cl-parked-dot[data-tone='waiting'] {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  margin: -3px;
+  color: var(--cl-on-accent);
   background: var(--cl-accent);
   animation: cl-ntf-pulse 2.2s ease-out infinite;
+}
+.cl-parked-dot > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 .cl-parked-dot[data-tone='busy'] {
   background: var(--cl-violet);
@@ -21919,6 +21934,9 @@ select.cl-opt-input {
 }
 .cl-parked-panel .cl-bgshell-item > .cl-parked-dot {
   margin-top: 5px;
+}
+.cl-parked-panel .cl-bgshell-item > .cl-parked-dot[data-tone='waiting'] {
+  margin-top: 2px;
 }
 .cl-parked-row > .cl-bgshell-item {
   flex: 1;
