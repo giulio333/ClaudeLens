@@ -27,7 +27,8 @@ so visual changes still need a manual pass.
 - [ ] Tests added or updated — pure modules under `electron/modules/`, and
       renderer hooks holding stream or cache state (see
       `test/helpers/fake-electron-api.ts`)
-- [ ] `CLAUDE.md` updated if the architecture, an IPC namespace, or a convention changed
+- [ ] `CLAUDE.md` touched only for a new command, rule or gotcha an agent would otherwise get
+      wrong — never a feature description or the story of the fix (that goes in the commit)
 
 ## Screenshots
 

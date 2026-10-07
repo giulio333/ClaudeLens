@@ -29,7 +29,8 @@ Quando invocato:
 1. Leggi CLAUDE.md per capire architettura e convenzioni.
 2. Ispeziona electron/modules/ e src/ per lo stato attuale delle feature.
 3. Considera il backlog noto (session replay, memory diff, health score,
-   cache savings rate, merge progetti duplicati).
+   cache savings rate). Non riproporre ciò che i CLAUDE.md segnano come tolto
+   apposta (es. il merge dei progetti duplicati).
 
 Proponi 1-3 feature candidate. Per ognuna fornisci:
 

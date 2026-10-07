@@ -40,7 +40,7 @@ npm run dev      # Vite dev server + Electron in parallel
 - `electron/` — Electron main process, preload, and backend modules (`electron/modules/`)
 - `src/` — React renderer (single-page UI)
 
-See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture: IPC namespaces, the file watcher, backend module responsibilities, the IPC result shape, project identity hashing, and key conventions.
+See [`CLAUDE.md`](CLAUDE.md) for the detailed architecture: IPC namespaces, the file watcher, the IPC result shape, project identity hashing, and key conventions.
 
 ## Code style
 

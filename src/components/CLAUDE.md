@@ -1,271 +1,56 @@
-# components/ — React Components
+# components/ — shared components
 
-Reusable UI components for the ClaudeLens renderer.
+The components used across views. Each file's header says what it does; these are the rules that
+are easy to break.
 
-## Components
+## `Markdown.tsx` and what it renders
 
-### Markdown.tsx
+- `Markdown` is memoized for a measured reason: a transcript holds hundreds of them. It consumes
+  only stable contexts, so data arriving for one chip never re-renders every bubble.
+- **Images by path** (`![x](/abs/file.png)`, `file://`, a relative path inside a
+  `VaultLinksProvider`) are read through `images:read` and drawn from the `data:` URI it returns
+  (`ImageFigure.tsx`, `image-src.ts`): the renderer runs sandboxed on `file://` under
+  `img-src 'self' data:` and cannot load them itself. `urlTransform` keeps `file:` and
+  `data:image/`, which react-markdown drops by default. A missing or refused file is a chip that
+  says so, never a broken-image glyph. Under a `RemoteOriginContext` (`remote-origin.ts`) a path is
+  not read at all: it names a file on the host.
+- Obsidian callouts (`rehype-callouts.ts`) take one of the app's existing tones, never a hue of
+  their own.
 
-Renders markdown with syntax highlighting and styled headings.
+## `[[wikilinks]]` (`VaultLinks.tsx`, `vault-link-engine.ts`, `rehype-wikilinks.ts`)
 
-**Features:**
+- A chip has three states: solid (the project has the file), dashed (nothing answers to the name),
+  plain (the lookup is in flight or failed — not knowing must not read as "missing"). Resolution is
+  in the main process (`electron/modules/vault-index.ts`).
+- `VaultLinksProvider` is mounted by `ChatView` and `LiveChatView` and deliberately not higher: the
+  memory views carry wikilinks that point at topics, not project files. Outside a provider
+  `Markdown` renders `[[…]]` exactly as before.
+- `rehype-wikilinks` catches prose and an inline code span that is entirely one link, never
+  descends into `<pre>`, and **must run before `rehypeHighlight`**. `lib/wikilinks.ts` strips fences
+  for the same reason: the two passes must agree on what a citation is.
+- The engine asks once per tick, not per link. Its `dispose` has a `revive` because StrictMode
+  runs every effect twice: a one-way dispose left every chip neutral in the real app while the
+  tests were green. A name is marked as asked in `flush`, when it is sent, and `request` is not
+  gated on `disposed` (effects run child-first).
+- A hit is cached forever, a miss for 30 s (`RETRY_MISS_AFTER_MS`), which must not be shorter than
+  the main process' `INDEX_TTL_MS`: Claude writes the notes it cites, so a missing name often
+  becomes real a minute later.
 
-- Syntax highlighting via `rehype-highlight`
-- GitHub-flavored markdown (GFM)
-- Frontmatter support (YAML)
-- Custom styled links, headings, and code blocks
-- External links open in system browser (safe from Electron context)
-- `[[wikilink]]` chips — **only inside a `VaultLinksProvider`** (see below)
-- Obsidian callouts (`> [!tip] Title`, `[!type]-`/`[!type]+` folded) —
-  `rehype-callouts.ts`, everywhere markdown renders. The rest of the first line
-  is the title, the lines after it the body; the type picks one of the app's
-  existing tones (info cyan, tip sage, warning amber, danger red, example
-  violet, anything else ink), never a hue of its own, drawn as a soft rounded
-  card — a 7% wash, a hairline and the type's glyph before the title, the type
-  label shown only when there is no title; a folded one is a `<details>`. Without it the marker printed as text inside a quote, in exactly
-  the notes a vault is made of. `test/markdown-callouts.test.tsx`
-- Images by path (`![x](/abs/file.png)`, `file://`, and a relative path when
-  inside a `VaultLinksProvider`, resolved against its root) are read through
-  `images:read` and drawn from the `data:` URI it answers — `ImageFigure.tsx`,
-  pure half in `image-src.ts`. The renderer cannot load them itself: it runs
-  sandboxed on `file://` under `img-src 'self' data:`. A file that is gone or
-  refused is a chip saying so, never the broken-image glyph. `urlTransform`
-  keeps `file:` and `data:image/` sources, which react-markdown drops by default.
-  Under a `RemoteOriginContext` (`remote-origin.ts`, set by the Remote view, #294)
-  a path is **not** read: it names a file on the host, and this machine's file
-  at the same path would be drawn as if it were that one
+## `LiveOrb.tsx` + `live-orb.ts`
 
-**Props:**
+- The orb means "Claude is working now", never "the process is alive".
+- `color` takes only hex or `rgb()`: an `oklch()` token or a `var()` is dropped silently and the
+  dots go grey. `ORB_INK` repeats each token in hex per theme, and `test/live-orb.test.ts` fails
+  when a copy goes stale.
+- The theme is pinned from `ThemeContext`, never the orb's `auto`, which observes the whole
+  document. Always `aria-hidden`.
 
-- `children: string` — markdown source
-- `className?: string` — optional wrapper CSS classes
+## Banners and toasts
 
-**Usage:**
-
-```tsx
-import Markdown from './components/Markdown';
-
-export default function MyDoc() {
-  return <Markdown className="max-w-2xl">{markdownString}</Markdown>;
-}
-```
-
-### VaultLinks.tsx + vault-link-engine.ts + rehype-wikilinks.ts
-
-The `[[wikilink]]` a message cites, drawn as a chip that says whether the file
-is there. Claude writes its sources in Obsidian's notation — `Fonte: [[Procedura
-Installazione.pdf]]` — and the transcript rendered that as text, so a citation of
-a file that is really in the project and one Claude invented looked exactly the
-same. **Solid and clickable** = the project has it (click → `vault:openFile` →
-`shell.openPath`, because the citations are PDFs as often as notes);
-**dashed and inert** = nothing on disk answers to that name; **plain, no border**
-= the lookup is still in flight or failed — not knowing is a third thing and
-must not read as "missing". Resolution itself is in the main process
-(`electron/modules/vault-index.ts`), which is where the reasoning about what may
-resolve to what lives.
-
-- **`rehype-wikilinks.ts`** — the pass that emits the chips as
-  `<span data-wikilink>`, mapped back to `<WikiLink>` by `Markdown`'s `span`
-  component (a data attribute, not a custom tag: react-markdown's `Components`
-  map is keyed by intrinsic elements and a custom key needs a cast). It catches
-  **two** forms, because both occur in real transcripts: plain prose and inline
-  code — Claude writes `` `[[Nota]]` `` about as often — which is why this cannot
-  be a remark plugin over text nodes. An `<code>` is rewritten only when its
-  ENTIRE content is one link (a code span that merely mentions one is code);
-  `<pre>` is never descended into, so a transcript quoting markdown source keeps
-  its brackets. **It must run before `rehypeHighlight`**, which rewrites the
-  inside of code elements into nested spans — after it, an inline `` `[[x]]` ``
-  no longer has the single text child the pass looks for.
-- **`lib/wikilinks.ts`** — the grammar (`[[Note#Heading|alias]]` → target +
-  label) and `wikiLinkTargets`, the names a message reports. It strips fenced
-  blocks for the same reason the rehype pass skips `<pre>`: the two passes have
-  to agree on what counts as a citation, or the renderer asks the main process
-  about names that can never be drawn.
-- **`vault-link-engine.ts`** — contexts, hooks and the batching closure.
-  **One call per tick, not per link**: a transcript holds hundreds of messages,
-  so the engine collects what every `<Markdown>` reports in a commit and asks
-  once. **Two contexts** because `<Markdown>` is memoized for a measured reason
-  (see its own note): it consumes only the API context, stable for as long as
-  the project is, so answers arriving cannot re-render every bubble — the states
-  context is consumed by the chips alone. The mutable bookkeeping is a closure
-  created in a `useMemo` keyed on the root, not refs: it belongs to one project
-  and is replaced wholesale when the root changes (a reply from the old engine
-  is dropped by its `dispose`), and refs mutated during render are a lint error.
-  **`dispose` has a `revive` because the app mounts in `React.StrictMode`**
-  (`src/main.tsx`), which runs every effect, its cleanup, and the effect again
-  to prove a component survives a remount: a one-way dispose turned that
-  rehearsal into an engine that never asked anything, so in the real app every
-  citation sat in the neutral "we do not know" state while the suite was green —
-  Testing Library's `render` does not use StrictMode. Two consequences the fix
-  encodes: a name is stamped as asked **in `flush`, when it is actually sent**
-  (stamping on the way in meant a batch cancelled before it left was remembered
-  as asked and never sent again), and `request` is **not** gated on `disposed` —
-  effects run child-first, so a bubble reports its names before the provider
-  above it has revived; the timer is armed off the queue, and `flush` is where
-  the check belongs.
-  **A hit is cached forever, a miss only for 30s** (`RETRY_MISS_AFTER_MS`, which
-  must not be shorter than the main process' `INDEX_TTL_MS` or the re-ask is
-  served from the same cached index): Claude writes the notes it cites, so the
-  name that was not there when the transcript first mentioned it is exactly the
-  one that becomes real a minute later — a permanent "already asked" latch would
-  have reintroduced, one layer up, the failure the index TTL exists to avoid,
-  and would have pinned a chip to plain text on a single transient IPC error.
-  The re-ask rides a `<Markdown>` reporting the name again (a later message, a
-  streaming turn); a static transcript nobody adds to never re-asks.
-- **`VaultLinks.tsx`** — `VaultLinksProvider` and the chip. The provider is
-  mounted by `ChatView` and `LiveChatView` with `project.realPath`, and
-  **deliberately not higher**: the memory views carry wikilinks of their own
-  that point at topics under `~/.claude`, not at files in the project, so a
-  provider above them would mark every one of those as a missing source.
-  Outside a provider `Markdown` runs its original plugin list and `[[…]]`
-  renders byte-identical to before.
-
-Covered by `test/markdown-wikilinks.test.tsx` (the chip, both forms, the fence,
-the failed lookup, the no-provider passthrough) and `test/wikilinks.test.ts`.
-
-### ErrorBoundary.tsx
-
-React class error boundary that catches render-time errors in its subtree and
-renders `<QueryError />` instead of crashing the app.
-
-### QueryError.tsx
-
-Presentational error surface for failed IPC/React Query calls. Accepts an
-`error` (Error, string, or unknown) and an optional `onRetry` handler (renders
-a "Retry" button when provided).
-
-### UpdateBanner.tsx
-
-Passive "new release available" notice, mounted in `App.tsx`. Shows once per
-launch when `useUpdateCheck()` (IPC `updates:check` → GitHub releases API)
-reports a version newer than the running build. Bottom-left toast (the session
-toaster owns bottom-right) reusing the `.cl-toast` anatomy with an accent
-stripe. Actions: "View release" (opens the GitHub release page in the system
-browser), "Skip this version" (persisted per-version in prefs as
-`cl-update-skipped-version`), ✕ (hides for this run only). On macOS adds a
-footnote pointing to the quarantine-clearing command in Settings → General.
-No auto-install by design — the app ships unsigned. It is now the **only** user
-of the `.cl-toast` stripe-card anatomy: session notifications moved to the
-feed-row form (below), so the two bottom corners no longer share one shape.
-
-The file hosts a **second, quieter notice** in the same bottom-left anchor
-(`.cl-update-anchor`, now a column stack so both can be on screen without
-either knowing about the other): **the installed Claude Code CLI is older than
-the `claudeCodeVersion` this build was prepared against**. The installed
-version comes from `useClaudeCodeVersion()` (IPC `updates:claudeCodeVersion` →
-`readInstalledClaudeVersion` in `claude-cli.ts`, i.e. `claude --version` parsed
-by `parseClaudeCliVersion`), compared renderer-side with the shared `compareVersions`
-— the same verdict Settings → General already prints as the `outdated` chip,
-now surfaced at launch, where a stale CLI actually costs something (ClaudeLens
-reads what that CLI writes to `~/.claude`). Settings reads **this same hook**:
-it used to print the SDK handshake's `claude_code_version` instead, which is
-the CLI bundled in the Agent SDK this build ships and therefore stands still
-when the user updates their own — the two surfaces disagreed by whatever the
-user had installed since. That switch alone did **not** fix the number: the
-handler still passed `resolveClaudeExecutablePath()`, which in a packaged app is
-the asar-unpacked _SDK_ binary, so `claude --version` was asked of the same
-bundled CLI and answered 2.1.220 to a user on 2.1.232 (invisible in dev, where
-the resolver returns undefined and the PATH CLI answers). The read now lives in
-`readInstalledClaudeVersion(env)`, whose signature has no executable to pass —
-only the PATH `claudeEnv()` builds can answer this question.
-
-Deliberately minimal: **no stripe and no title** — nothing is broken, so it
-gets one sentence, the `claude update` command with a Copy button, and a
-"Don't remind me". The CLI check is asked to the CLI itself rather than to the
-Agent SDK handshake, which is slow and cwd-scoped (an untrusted dir answers
-nothing). A failed read (`claude` not in PATH, timeout) throws and the notice
-simply never appears — an unknown version is never treated as outdated.
-Dismissal pins the **required** version in prefs
-(`cl-cli-update-dismissed-version`), so raising the requirement in a later
-ClaudeLens brings the notice back; ✕ hides it for this run only. Silent in
-`SCREENSHOT_MODE` (the handler returns a null version).
-
-### NotificationToaster.tsx
-
-Transient toasts for session-lifecycle events pushed over `notifications:event`
-(`electron/modules/notifications/`), bottom-right, mounted inside
-`ProjectOverview` so `onOpenSession` can reach the navigation state. Passive and
-suggested only: it never navigates on its own.
-
-Each toast is **one Mission Control feed row** (`.cl-ntf-*`, mirroring
-`terminal/MissionRail`'s `FeedRow`: state dot · subject · status tag). A
-notification _is_ a session event, and that is the language this app already
-uses for events; the previous form was a generic 4px-stripe-on-the-left card, a
-library convention in an app that carries state with a dot everywhere else.
-Consequences of the row form:
-
-- **The subject line is the project**, not the prose — it is what the eye looks
-  for when a corner of the screen moves. The state is the right-hand tag
-  (`FINISHED` / `WAITING` / `ERROR`) and the prose becomes the meta line, with
-  the session's short id after it.
-- The row is composed from `kind` + `cwd` + `body`, **deliberately not from the
-  event's `title`**: that full sentence ("Claude finished — your turn") is
-  written for the OS notification's conventions, so it stays the row's `title`
-  tooltip instead of being re-flowed into a two-line row.
-- `needs-attention` is the one kind still blocked on the user, so it is the one
-  that pulses — with its own accent keyframes, since `.cl-live-dot`'s halo is
-  hardcoded to the green "ok" hue.
-- **The card is dressed like the global home**, the surface it floats over:
-  `--cl-r-card` radius, 14px sans subject, 10px mono meta, and a bare mono
-  `open session →` in place of the boxed uppercase button — the same register as
-  the home's `resume →`. It stops short of the home's **tinted** row: there the
-  accent wash means "live project you can resume", while a state tint here would
-  be the colored-card idiom coming back in a softer coat, and the state is
-  already said three times (dot, tag, timer hairline). The action hangs off the
-  subject's left rail instead of the card's right edge — unboxed and
-  right-aligned in a 340px card, it read as unanchored.
-- **The time gutter is gone.** It printed the literal string `now`, always: a
-  transient toast has no other time to show, so the column was 30px of nothing.
-  The remaining three columns are still the feed anatomy.
-- **The auto-dismiss is visible**: a hairline that retracts over
-  `AUTO_DISMISS_MS`, whose duration is passed in from the component so the bar
-  and the timer cannot drift. Hover pauses **both** — a bar that kept running
-  while you read a long error would be lying — via a remaining-time ref, so
-  pausing never restarts the clock. `onDismiss` takes the id rather than being
-  pre-bound: it is a dependency of that timer, and a fresh closure per parent
-  render would restart it on every re-render. Both animations respect
-  `prefers-reduced-motion`.
-
-### LiveOrb.tsx + live-orb.ts
-
-"Claude is working right now", drawn as a thinking orb — the `thinking-orbs`
-dependency, a 20px canvas — whose animation follows the tool in flight
-(`liveOrbState`: breathing with no tool, searching for Read/Grep/Web, composing
-for Edit/Write, listening for Agent/Task/SendMessage/AskUserQuestion — waiting
-on another party's answer — and `working` for everything else). Only states
-that read at the 20px preset: `connecting`, the obvious verb for an agent, draws
-eight or nine loose dots and no line there, and `weaving` hardly more — in
-Mission Control it looked like noise. Five places, all of them the claim
-"working now" and none of them "alive": the SDK chat's live turn (`LiveTurn`,
-chip and the caret's place while it thinks), the narration line
-(`ThoughtLine`), a session's tab in Mission Control's first row while the
-registry says it is busy (`SessionTabs`) — in place of the tab's state dot,
-violet like Mission Control's "busy", and shown for a session run in a terminal
-elsewhere too; it used to be `orb WORKING` in the old top bar, and beside the
-rail's MISSION CONTROL title it read as the panel's icon — a running sub-agent's row in the rail's feed, beside
-WORKING (`state="working"`: its calls are not this session's to see), and a
-working cell of the Monitor (sage, its WORKING tag). A LIVE/RUNNING dot, the
-background-shell spinner and long lists keep what they had: a process being up
-is not Claude working, and every orb is a canvas of its own.
-
-- **`color` takes only hex or `rgb()`.** An `oklch()` token or a `var()` is
-  dropped without a word and the dots go grey, so `ORB_INK` repeats each token
-  in hex per theme; `test/live-orb.test.ts` converts the tokens in `index.css`
-  and fails when a copy goes stale.
-- **The theme is pinned from `ThemeContext`**, never the orb's `auto`, which
-  puts a `MutationObserver` on the whole document for as long as it is mounted.
-- **`inFlightTool`** reads a session's tail digest (`useSessionActivity`, the
-  Monitor's): its own call, else `Agent` for a sub-agent it waits on, else
-  nothing — the model thinking between calls.
-- Always `aria-hidden`: every surface already says in words what runs.
-
-## CSS Classes
-
-Components use Tailwind CSS + a custom `prose-lens` variant defined in `tailwind.config.ts` for semantic markdown rendering.
-
-## When adding components
-
-1. Keep components focused (single responsibility)
-2. Use Tailwind for styling — no CSS modules or styled-components
-3. Document props and usage in this file
-4. Export as default from `index.ts` if it's a shared component
+- `UpdateBanner.tsx`: no auto-install, because the app ships without a Developer ID signature. The
+  Claude Code notice reads the installed CLI (`useClaudeCodeVersion` → `claude --version`), never
+  the SDK handshake's bundled version; an unknown version is never treated as outdated, and
+  dismissing it pins the required version, so a raised requirement brings it back.
+- `NotificationToaster.tsx` never navigates on its own. `onDismiss` takes the id instead of being
+  pre-bound, because it is a dependency of the dismiss timer; hover pauses both the timer and its
+  bar.
