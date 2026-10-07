@@ -908,7 +908,14 @@ function PreviewParkedTerminals(): ReactNode {
         project: { hash: `wn-park-project-${n}`, realPath },
         resumeSessionId: `wn-park-session-${n}`,
       },
-      report: { pid: null, sessionId: `wn-park-session-${n}`, title, color, termStatus: 'running' },
+      report: {
+        pid: null,
+        sessionId: `wn-park-session-${n}`,
+        title,
+        color,
+        termStatus: 'running',
+        gitBranch: null,
+      },
     });
     const instances = [
       parked(1, '/home/acme/billing', 'Migrate the invoice tables', 'blue'),
@@ -1008,7 +1015,14 @@ function PreviewSessionTabs(): ReactNode {
         project: { hash: `wn-tab-project-${n}`, realPath },
         resumeSessionId: `wn-tab-session-${n}`,
       },
-      report: { pid: null, sessionId: `wn-tab-session-${n}`, title, color, termStatus: 'running' },
+      report: {
+        pid: null,
+        sessionId: `wn-tab-session-${n}`,
+        title,
+        color,
+        termStatus: 'running',
+        gitBranch: null,
+      },
     });
     const instances = [
       tab(1, '/home/acme/web', 'Wire the retry loop', null),

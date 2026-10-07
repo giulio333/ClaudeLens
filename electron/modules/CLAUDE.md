@@ -25,10 +25,11 @@ under `test/`; this file keeps the rules that span modules and the traps a reade
   - `getSessionMessages` returns one `parentUuid` chain: a fork resolved the wrong way, or the
     history before a `/compact`, is missing. `withRowsTheSdkChainMissed` puts the rows back from
     the file.
-  - It returns only the `message` of chat rows. Row fields (`effort`, `origin`), `toolUseResult`
-    (`bashEditDiff`, `structuredPatch`, an `Artifact` publish, a `SendMessage` `msg_id`), `isMeta`
-    rows (skill expansions, #246) and non-chat rows (`queue-operation` removes, #245) come from the
-    second pass of `transcript-extras.ts` over the same file.
+  - It returns only the `message` of chat rows. Row fields (`effort`, `origin`, `gitBranch`),
+    `toolUseResult` (`bashEditDiff`, `structuredPatch`, an `Artifact` publish, a `SendMessage`
+    `msg_id`), `isMeta` rows (skill expansions, #246) and non-chat rows (`queue-operation` removes,
+    #245; `worktree-state`, which has no uuid and is stamped on the next assistant turn) come from
+    the second pass of `transcript-extras.ts` over the same file.
 - **One parse decides what a message is**: `parseChatSessionText` + `parseTranscriptExtras`, shared
   by the transcript view, conversation search and the remote Lens. Two readers with different rules
   disagree in front of the user.

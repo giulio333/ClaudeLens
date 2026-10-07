@@ -23,6 +23,10 @@
 // che non produce nessuna tool call Edit — si vede come un comando con il suo
 // stdout e nulla che dica che un file è cambiato (#265).
 //
+// Lo stesso vale per `gitBranch`, l'ultima chiave di ogni riga, e per le righe
+// `worktree-state`, che non sono chat e non hanno né uuid né timestamp: dicono
+// in che worktree lavora la sessione, e si attaccano al turno che le segue.
+//
 // Il modulo si limita a riferire cosa dice il file; cosa sia ridondante lo
 // decide `mergeTranscriptExtras`, che ha sotto gli occhi i messaggi dell'SDK.
 import { readTextFile } from './safe-fs';
@@ -36,6 +40,7 @@ import type {
   InboundOrigin,
   SentMessage,
   SessionNotice,
+  WorktreeState,
 } from '../shared/chat-types';
 
 /** Prima riga dell'espansione che Claude Code inietta dopo una skill. */
@@ -76,6 +81,11 @@ export interface TranscriptExtras {
    *  generica con dentro il JSON del risultato — mentre la metà ricevuta ha la
    *  sua bolla (#274) e la sua pagina (#280), raggiungibili solo da lì. */
   sentByToolUseId: Map<string, SentMessage>;
+  /** uuid della riga assistant → ramo git su cui quel turno è girato. */
+  gitBranchByUuid: Map<string, string>;
+  /** uuid del primo turno assistant dopo un cambio di `worktree-state` → la
+   *  worktree da lì in poi, `null` se la sessione ne è uscita. */
+  worktreeByUuid: Map<string, WorktreeState | null>;
 }
 
 const EMPTY: TranscriptExtras = {
@@ -88,7 +98,45 @@ const EMPTY: TranscriptExtras = {
   patchByToolUseId: new Map(),
   artifactByToolUseId: new Map(),
   sentByToolUseId: new Map(),
+  gitBranchByUuid: new Map(),
+  worktreeByUuid: new Map(),
 };
+
+/**
+ * Il ramo git di una riga già deserializzata. Su tutto il corpus di questa
+ * macchina è sempre una stringa non vuota — `HEAD` a testa staccata — ma un
+ * valore che non lo è vale assente, come per `rowEffort`.
+ */
+export function rowGitBranch(row: Record<string, unknown>): string | undefined {
+  const branch = row.gitBranch;
+  return typeof branch === 'string' && branch ? branch : undefined;
+}
+
+/**
+ * Lo stato di una riga `worktree-state`: la worktree, `null` quando
+ * `worktreeSession` è `null` (la sessione ne è uscita), `undefined` quando la
+ * riga non è una di queste o non dice abbastanza da nominare una worktree.
+ */
+export function parseWorktreeState(row: Record<string, unknown>): WorktreeState | null | undefined {
+  if (row.type !== 'worktree-state') return undefined;
+  const ws = row.worktreeSession;
+  if (ws === null) return null;
+  if (!ws || typeof ws !== 'object') return undefined;
+  const w = ws as Record<string, unknown>;
+  const name = str(w.worktreeName);
+  const path = str(w.worktreePath);
+  const branch = str(w.worktreeBranch);
+  if (!name || !path || !branch) return undefined;
+  const originalBranch = str(w.originalBranch);
+  const originalHeadCommit = str(w.originalHeadCommit);
+  return {
+    name,
+    path,
+    branch,
+    ...(originalBranch ? { originalBranch } : {}),
+    ...(originalHeadCommit ? { originalHeadCommit } : {}),
+  };
+}
 
 /**
  * L'effort di una riga di transcript già deserializzata: `perTurnEffort` quando
@@ -535,20 +583,40 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
   const sentByToolUseId = new Map<string, SentMessage>();
   const injected: ChatMessage[] = [];
   const noticeByUuid = new Map<string, SessionNotice>();
+  const gitBranchByUuid = new Map<string, string>();
+  const worktreeByUuid = new Map<string, WorktreeState | null>();
   // Quando l'utente ha scritto il messaggio, per contenuto: la `remove` porta
   // l'ora dell'assorbimento, la `enqueue` quella della digitazione.
   const enqueuedAt = new Map<string, string>();
+  // La worktree in attesa del turno a cui attaccarsi. Claude Code riscrive la
+  // stessa istantanea decine di volte per file: solo un cambio è una notizia.
+  let pendingWorktree: WorktreeState | null | undefined;
+  let lastWorktree = 'null';
+  let lastAssistantUuid = '';
 
   const lines = raw.split('\n');
   for (const line of lines) {
     if (!line) continue;
     // L'effort è un campo su una riga che l'SDK restituisce comunque, non una
     // riga a sé: si legge qui e si esce, senza passare dal `JSON.parse` sotto.
+    // Così il ramo, che è l'ULTIMA chiave della riga: `lastIndexOf` lo prende
+    // anche dietro un contenuto che cita un altro transcript.
     if (line.includes('"type":"assistant"')) {
       const uuid = tailString(line, 'uuid');
       const effort = tailString(line, 'perTurnEffort') ?? tailString(line, 'effort');
       if (uuid && effort) effortByUuid.set(uuid, effort);
+      const branch = tailString(line, 'gitBranch');
+      if (uuid && branch) gitBranchByUuid.set(uuid, branch);
+      if (uuid && !line.includes('"isSidechain":true')) lastAssistantUuid = uuid;
+      if (pendingWorktree !== undefined) {
+        const shown = shownAssistantUuid(line);
+        if (shown) {
+          worktreeByUuid.set(shown, pendingWorktree);
+          pendingWorktree = undefined;
+        }
+      }
     }
+    const isWorktree = line.includes('"type":"worktree-state"');
     const isQueue = line.includes('"queue-operation"');
     const isSkillExpansion = line.includes(SKILL_EXPANSION_PREFIX);
     const isBashEdit = line.includes('"bashEditDiff"');
@@ -574,6 +642,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       line.includes(IDLE_NOTICE_PREFIX) ||
       line.includes('<teammate-message');
     if (
+      !isWorktree &&
       !isQueue &&
       !isSkillExpansion &&
       !isBashEdit &&
@@ -589,6 +658,18 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
       json = JSON.parse(line) as Record<string, unknown>;
     } catch {
       continue;
+    }
+
+    if (isWorktree) {
+      const state = parseWorktreeState(json);
+      if (state !== undefined) {
+        const key = state ? JSON.stringify(state) : 'null';
+        if (key !== lastWorktree) {
+          lastWorktree = key;
+          pendingWorktree = state;
+        }
+        continue;
+      }
     }
 
     if (isBashEdit) {
@@ -746,6 +827,12 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     }
   }
 
+  // Un cambio dopo l'ultimo turno (una sessione chiusa subito dopo essere
+  // uscita dalla worktree) vale per l'ultimo turno: è lo stato in cui è finita.
+  if (pendingWorktree !== undefined && lastAssistantUuid) {
+    worktreeByUuid.set(lastAssistantUuid, pendingWorktree);
+  }
+
   nameHandbacks(lines, injected);
 
   return {
@@ -758,7 +845,25 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
     patchByToolUseId,
     artifactByToolUseId,
     sentByToolUseId,
+    gitBranchByUuid,
+    worktreeByUuid,
   };
+}
+
+/**
+ * L'uuid di una riga assistant che il transcript mostra — né `isMeta` né
+ * sidechain — o `undefined`. Deserializza la riga, e per questo si chiama solo
+ * quando una worktree aspetta il suo turno: poche volte per file.
+ */
+function shownAssistantUuid(line: string): string | undefined {
+  let row: Record<string, unknown>;
+  try {
+    row = JSON.parse(line) as Record<string, unknown>;
+  } catch {
+    return undefined;
+  }
+  if (row.type !== 'assistant' || row.isMeta === true || row.isSidechain === true) return undefined;
+  return typeof row.uuid === 'string' && row.uuid ? row.uuid : undefined;
 }
 
 /**
@@ -890,6 +995,8 @@ export function mergeTranscriptExtras(
     patchByToolUseId,
     artifactByToolUseId,
     sentByToolUseId,
+    gitBranchByUuid,
+    worktreeByUuid,
   } = extras;
   if (
     queued.length === 0 &&
@@ -900,7 +1007,9 @@ export function mergeTranscriptExtras(
     bashEditDiffByToolUseId.size === 0 &&
     patchByToolUseId.size === 0 &&
     artifactByToolUseId.size === 0 &&
-    sentByToolUseId.size === 0
+    sentByToolUseId.size === 0 &&
+    gitBranchByUuid.size === 0 &&
+    worktreeByUuid.size === 0
   ) {
     return messages;
   }
@@ -918,11 +1027,20 @@ export function mergeTranscriptExtras(
     patchByToolUseId.size === 0 &&
     artifactByToolUseId.size === 0 &&
     sentByToolUseId.size === 0 &&
-    noticeByUuid.size === 0
+    noticeByUuid.size === 0 &&
+    gitBranchByUuid.size === 0 &&
+    worktreeByUuid.size === 0
       ? messages
       : messages.map(msg => {
           const skillPath = skillPathByParentUuid.get(msg.uuid);
           const effort = msg.effort ? undefined : effortByUuid.get(msg.uuid);
+          const gitBranch = msg.gitBranch ? undefined : gitBranchByUuid.get(msg.uuid);
+          // `null` is a value here (the session left its worktree), so the
+          // test is the key, not the truthiness.
+          const worktree =
+            msg.worktree === undefined && worktreeByUuid.has(msg.uuid)
+              ? worktreeByUuid.get(msg.uuid)
+              : undefined;
           const notice = noticeByUuid.get(msg.uuid);
           const content = stampSentMessages(
             stampArtifacts(
@@ -934,12 +1052,23 @@ export function mergeTranscriptExtras(
             ),
             sentByToolUseId
           );
-          if (!skillPath && !effort && !notice && content === msg.content) return msg;
+          if (
+            !skillPath &&
+            !effort &&
+            !gitBranch &&
+            worktree === undefined &&
+            !notice &&
+            content === msg.content
+          ) {
+            return msg;
+          }
           return {
             ...msg,
             ...(content === msg.content ? {} : { content }),
             ...(skillPath ? { skillPath } : {}),
             ...(effort ? { effort } : {}),
+            ...(gitBranch ? { gitBranch } : {}),
+            ...(worktree !== undefined ? { worktree } : {}),
             ...(notice ? { notice } : {}),
           };
         });

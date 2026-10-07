@@ -636,3 +636,30 @@ describe('advisor consults', () => {
     expect(msgs[0].content).toEqual([{ type: 'text', text: 'searching' }]);
   });
 });
+
+describe('gitBranch on the file read path', () => {
+  // Row-level like `effort`, and the row's LAST key. Read off assistant rows
+  // only — the rule the SDK path's second pass keeps, so the two agree.
+  const rows = [
+    line({
+      type: 'user',
+      message: { role: 'user', content: 'switch branch' },
+      uuid: 'u1',
+      timestamp: '2026-01-01T00:00:00Z',
+      gitBranch: 'trunk',
+    }),
+    line({
+      type: 'assistant',
+      message: { role: 'assistant', content: [{ type: 'text', text: 'done' }] },
+      uuid: 'a1',
+      timestamp: '2026-01-01T00:00:01Z',
+      gitBranch: 'feature-one',
+    }),
+  ];
+
+  it('carries the branch an assistant turn ran on, and none on a user row', () => {
+    const msgs = readChatSession(writeJsonl('s.jsonl', rows));
+    expect(msgs.find(m => m.uuid === 'a1')?.gitBranch).toBe('feature-one');
+    expect(msgs.find(m => m.uuid === 'u1')?.gitBranch).toBeUndefined();
+  });
+});

@@ -11,6 +11,7 @@ import type {
   BashEditDiff,
   ChatMessage,
   SentMessage,
+  WorktreeState,
 } from '../electron/shared/chat-types';
 import { mkdtempSync, rmSync, writeFileSync } from 'fs';
 import { join } from 'path';
@@ -250,6 +251,8 @@ describe('mergeTranscriptExtras', () => {
     patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(),
+    gitBranchByUuid: new Map(),
+    worktreeByUuid: new Map(),
   });
 
   it('leaves the transcript untouched when there is nothing to add', () => {
@@ -492,6 +495,8 @@ describe('readTranscriptExtras — structuredPatch', () => {
       patchByToolUseId: new Map([['toolu_edit1', oneHunk]]),
       artifactByToolUseId: new Map(),
       sentByToolUseId: new Map(),
+      gitBranchByUuid: new Map(),
+      worktreeByUuid: new Map(),
     });
     expect((merged[0].content[0] as { patch?: unknown }).patch).toEqual(oneHunk);
   });
@@ -553,6 +558,8 @@ describe('mergeTranscriptExtras — bashEditDiff', () => {
     patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(),
+    gitBranchByUuid: new Map(),
+    worktreeByUuid: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -845,6 +852,8 @@ describe('mergeTranscriptExtras with what the SDK cannot see', () => {
       patchByToolUseId: new Map(),
       artifactByToolUseId: new Map(),
       sentByToolUseId: new Map(),
+      gitBranchByUuid: new Map(),
+      worktreeByUuid: new Map(),
     });
     expect(merged.map(m => m.uuid)).toEqual(['u1', 'p1', 'n1', 'a1']);
     expect(merged[1].inbound?.name).toBe('alice-7c');
@@ -1018,6 +1027,8 @@ describe('mergeTranscriptExtras — artifact', () => {
     patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(entries),
     sentByToolUseId: new Map(),
+    gitBranchByUuid: new Map(),
+    worktreeByUuid: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -1209,6 +1220,8 @@ describe('mergeTranscriptExtras — sent message', () => {
     patchByToolUseId: new Map(),
     artifactByToolUseId: new Map(),
     sentByToolUseId: new Map(entries),
+    gitBranchByUuid: new Map(),
+    worktreeByUuid: new Map(),
   });
 
   const resultMsg = (uuid: string, toolUseId: string): ChatMessage => ({
@@ -1438,5 +1451,146 @@ describe('handbackReport', () => {
   it('falls back to the whole body when nothing follows the frame', () => {
     const body = '[Subagent hand-back] frame only';
     expect(handbackReport(body)).toBe(body);
+  });
+});
+
+/** An assistant row with `gitBranch` where Claude Code writes it: last. */
+function branchRow(uuid: string, gitBranch: string, extra: Record<string, unknown> = {}) {
+  return {
+    parentUuid: 'p0',
+    ...extra,
+    message: { role: 'assistant', content: [{ type: 'text', text: 'ok' }] },
+    type: 'assistant',
+    uuid,
+    timestamp: '2026-09-08T10:00:00.000Z',
+    gitBranch,
+  };
+}
+
+function worktreeRow(session: Record<string, unknown> | null) {
+  return { type: 'worktree-state', worktreeSession: session, sessionId: 's1' };
+}
+
+const WORKTREE = {
+  originalCwd: '/work/acme',
+  preEnterOriginalCwd: '/work/acme',
+  worktreePath: '/work/acme/.claude/worktrees/spike',
+  worktreeName: 'spike',
+  worktreeBranch: 'worktree-spike',
+  originalBranch: 'trunk',
+  originalHeadCommit: '0123456789abcdef0123456789abcdef01234567',
+  sessionId: 's1',
+};
+
+describe('readTranscriptExtras — git', () => {
+  it('reads the branch of each assistant turn off the end of the row', async () => {
+    const p = writeJsonl([
+      branchRow('a1', 'trunk'),
+      // A tool input that happens to carry the key, before the row's own.
+      {
+        parentUuid: 'p0',
+        message: {
+          role: 'assistant',
+          content: [{ type: 'tool_use', id: 't1', name: 'X', input: { gitBranch: 'quoted' } }],
+        },
+        type: 'assistant',
+        uuid: 'a2',
+        timestamp: '2026-09-08T10:00:01.000Z',
+        gitBranch: 'feature-one',
+      },
+    ]);
+    const { gitBranchByUuid } = await readTranscriptExtras(p);
+    expect(gitBranchByUuid.get('a1')).toBe('trunk');
+    expect(gitBranchByUuid.get('a2')).toBe('feature-one');
+  });
+
+  it('leaves user rows out, as the file reader does', async () => {
+    const p = writeJsonl([{ ...userRow('u1', 'hi'), gitBranch: 'trunk' }]);
+    expect((await readTranscriptExtras(p)).gitBranchByUuid.size).toBe(0);
+  });
+
+  it('stamps a worktree once, on the first shown assistant turn after it changed', async () => {
+    const p = writeJsonl([
+      branchRow('a0', 'trunk'),
+      worktreeRow(WORKTREE),
+      worktreeRow(WORKTREE),
+      branchRow('side', 'worktree-spike', { isSidechain: true }),
+      branchRow('a1', 'worktree-spike'),
+      worktreeRow(WORKTREE),
+      branchRow('a2', 'worktree-spike'),
+    ]);
+    const { worktreeByUuid } = await readTranscriptExtras(p);
+    expect([...worktreeByUuid.keys()]).toEqual(['a1']);
+    expect(worktreeByUuid.get('a1')).toEqual({
+      name: 'spike',
+      path: '/work/acme/.claude/worktrees/spike',
+      branch: 'worktree-spike',
+      originalBranch: 'trunk',
+      originalHeadCommit: '0123456789abcdef0123456789abcdef01234567',
+    });
+  });
+
+  it('stamps null when the session leaves its worktree', async () => {
+    const p = writeJsonl([
+      worktreeRow(WORKTREE),
+      branchRow('a1', 'worktree-spike'),
+      worktreeRow(null),
+      branchRow('a2', 'trunk'),
+    ]);
+    expect((await readTranscriptExtras(p)).worktreeByUuid.get('a2')).toBeNull();
+  });
+
+  it('gives a change after the last turn to the last turn', async () => {
+    const p = writeJsonl([
+      worktreeRow(WORKTREE),
+      branchRow('a1', 'worktree-spike'),
+      worktreeRow(null),
+    ]);
+    expect((await readTranscriptExtras(p)).worktreeByUuid.get('a1')).toBeNull();
+  });
+
+  it('says nothing for a session that never entered one', async () => {
+    const p = writeJsonl([worktreeRow(null), branchRow('a1', 'trunk')]);
+    expect((await readTranscriptExtras(p)).worktreeByUuid.size).toBe(0);
+  });
+});
+
+describe('mergeTranscriptExtras — git', () => {
+  const extras = (
+    branches: [string, string][],
+    worktrees: [string, WorktreeState | null][] = []
+  ) => ({
+    queued: [],
+    injected: [],
+    noticeByUuid: new Map(),
+    skillPathByParentUuid: new Map(),
+    effortByUuid: new Map(),
+    bashEditDiffByToolUseId: new Map(),
+    patchByToolUseId: new Map(),
+    artifactByToolUseId: new Map(),
+    sentByToolUseId: new Map(),
+    gitBranchByUuid: new Map(branches),
+    worktreeByUuid: new Map(worktrees),
+  });
+
+  it('stamps the branch and the worktree, null included', () => {
+    const merged = mergeTranscriptExtras(
+      [
+        msg('a1', 'assistant', 'one', '2026-09-08T10:00:00.000Z'),
+        msg('a2', 'assistant', 'two', '2026-09-08T10:00:01.000Z'),
+      ],
+      extras([['a1', 'trunk']], [['a2', null]])
+    );
+    expect(merged[0].gitBranch).toBe('trunk');
+    expect('worktree' in merged[0]).toBe(false);
+    expect(merged[1].worktree).toBeNull();
+  });
+
+  it('returns a message by reference when the file reader already put the branch on it', () => {
+    const own = {
+      ...msg('a1', 'assistant', 'one', '2026-09-08T10:00:00.000Z'),
+      gitBranch: 'trunk',
+    };
+    expect(mergeTranscriptExtras([own], extras([['a1', 'trunk']]))[0]).toBe(own);
   });
 });

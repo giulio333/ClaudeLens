@@ -597,7 +597,9 @@ function NoticeMarker({ notice, timestamp }: { notice: SessionNotice; timestamp:
       ? 'session idle'
       : notice.kind === 'agent-idle'
         ? 'agent done'
-        : 'resumed';
+        : notice.kind === 'branch-change'
+          ? 'branch'
+          : 'resumed';
   return (
     <div className="cl-notice-mark">
       <span className="cl-notice-badge" title={notice.text}>

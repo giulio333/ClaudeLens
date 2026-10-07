@@ -246,6 +246,7 @@ it('reports its process, its session and its state to its tab', async () => {
       title: null,
       color: null,
       termStatus: 'running',
+      gitBranch: null,
     })
   );
 });

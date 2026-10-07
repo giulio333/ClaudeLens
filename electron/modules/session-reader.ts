@@ -12,6 +12,7 @@ import {
   parseSentMessage,
   parseTranscriptExtras,
   rowEffort,
+  rowGitBranch,
   withArtifactPublish,
   withBashEditDiff,
   withEditPatch,
@@ -362,6 +363,8 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).
         effort: rowEffort(json),
+        // Assistant rows only, as in the second pass (see `ChatMessage.gitBranch`).
+        gitBranch: role === 'assistant' ? rowGitBranch(json) : undefined,
       };
       fillAdvisorDurations(message, advisorStartedAt);
       messages.push(message);

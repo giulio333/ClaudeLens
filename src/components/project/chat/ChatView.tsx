@@ -41,6 +41,7 @@ import { findMatchingTurns, stepToHit } from './find';
 import { useFindLayer } from './useFindLayer';
 import { ContextRail } from './ContextRail';
 import { contextFiles, nearestTurn } from './context-files';
+import { withBranchMarkers } from './git-state';
 import { agentTintColor } from '../shared/entityOptions';
 import { TopBar } from '../shared/TopBar';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
@@ -244,7 +245,12 @@ export function ChatView({
   const activeTurnRef = useRef<number | null>(null);
 
   // Heavy: rebuild the processed transcript only when the displayed messages change.
-  const processed = useMemo(() => buildProcessedMessages(displayMessages), [displayMessages]);
+  // The branch markers are added here, not by the main process, so a search or
+  // the rail reading the same transcript never meets a row nobody wrote.
+  const processed = useMemo(
+    () => buildProcessedMessages(withBranchMarkers(displayMessages)),
+    [displayMessages]
+  );
   const canExport = !remote && processed.length > 0 && !isLoading;
 
   const sessionId = useMemo(() => session.filename.replace(/\.jsonl$/, ''), [session.filename]);

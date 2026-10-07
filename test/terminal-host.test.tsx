@@ -33,6 +33,7 @@ vi.mock('../src/components/project/terminal/TerminalMissionControl', async () =>
         title: null,
         color: null,
         termStatus: status,
+        gitBranch: null,
       });
     }, [onReport, pid, status, props.resumeSessionId]);
     return (
@@ -229,6 +230,7 @@ function parked(id: string, report: Partial<InstanceReport>, project = ACME) {
       title: null,
       color: null,
       termStatus: 'running' as const,
+      gitBranch: null,
       ...report,
     },
   };

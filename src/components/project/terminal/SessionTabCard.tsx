@@ -1,5 +1,6 @@
 import { createPortal } from 'react-dom';
 import type { ActiveSession, SessionActivity } from '../../../types';
+import { branchLabel } from '../chat/git-state';
 import { spanLabel } from './background-shells';
 import { ToneDot } from './ToneDot';
 import { useMinuteClock } from './use-minute-clock';
@@ -47,6 +48,10 @@ export function SessionTabCard({
         {instanceTitle(inst)}
       </div>
       <div className="cl-stab-card-project">{instanceProjectName(inst)}</div>
+      {/* Two tabs of one project in two worktrees read the same until here. */}
+      {inst.report.gitBranch && (
+        <div className="cl-stab-card-branch">{branchLabel(inst.report.gitBranch)}</div>
+      )}
       <div className="cl-stab-card-state cl-parked-state" data-tone={tone}>
         <ToneDot tone={tone} />
         <span>{since ? `${state} · open ${since}` : state}</span>

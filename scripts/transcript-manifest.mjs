@@ -97,9 +97,9 @@ export const ROW_TYPES = {
   relocated: candidate(
     'a project directory that moved; duplicate-detector guesses at this from path shape'
   ),
-  'worktree-state': candidate(
-    'the worktree a session ran in; would let the session list group by worktree'
-  ),
+  // Was a candidate: "the worktree a session ran in". Stamped on the next
+  // assistant turn when the snapshot changes (Mission Control's branch card).
+  'worktree-state': read('transcript-extras'),
   'pr-link': candidate('a PR the session opened'),
   'frame-link': candidate('a linked frame/artifact URL'),
   'continued-in': candidate(
@@ -342,7 +342,10 @@ export const FIELDS = {
   ),
   'assistant.effort': candidate('the reasoning effort a turn ran at'),
   'assistant.slug': candidate("the CLI's short session slug"),
-  'assistant.gitBranch': candidate('branch the turn ran on; the session list has no branch column'),
+  // Was a candidate: "branch the turn ran on". Read on assistant rows only (a
+  // user row's tail sits behind `toolUseResult`); the session list still has no
+  // branch column.
+  'assistant.gitBranch': read('session-reader + transcript-extras'),
   'assistant.version': candidate(
     'the Claude Code version that wrote the row — the field a drift report should group by'
   ),

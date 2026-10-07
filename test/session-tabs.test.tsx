@@ -57,6 +57,7 @@ function tab(id: string, report: Partial<InstanceReport>, project = ACME): Termi
       title: null,
       color: null,
       termStatus: 'running',
+      gitBranch: null,
       ...report,
     },
   };
@@ -255,6 +256,36 @@ it('shows the whole title, project and state under a tab after a rest, and hides
     expect(card.textContent).not.toContain('run test --silent');
     fireEvent.mouseLeave(screen.getByRole('navigation', { name: 'Open sessions' }));
     expect(screen.queryByRole('tooltip')).toBeNull();
+  } finally {
+    vi.useRealTimers();
+  }
+});
+
+it('names the branch under the project, so two worktrees of one project read apart', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(ok([]));
+  mount(
+    [
+      tab('t1', { sessionId: 'session-a', title: 'Spike', gitBranch: 'worktree-spike' }),
+      tab('t2', { sessionId: 'session-b', title: 'Detached', gitBranch: 'HEAD' }),
+      tab('t3', { sessionId: 'session-c', title: 'No repo' }),
+    ],
+    't1'
+  );
+  await registryRead();
+  vi.useFakeTimers();
+  try {
+    const cardOf = (title: string) => {
+      fireEvent.mouseEnter(
+        screen.getByRole('button', { name: new RegExp(`^${title}`) }).parentElement!
+      );
+      act(() => vi.advanceTimersByTime(500));
+      const text = screen.getByRole('tooltip').textContent;
+      fireEvent.mouseLeave(screen.getByRole('navigation', { name: 'Open sessions' }));
+      return text;
+    };
+    expect(cardOf('Spike')).toContain('worktree-spike');
+    expect(cardOf('Detached')).toContain('detached HEAD');
+    expect(cardOf('No repo')).not.toMatch(/HEAD|worktree/);
   } finally {
     vi.useRealTimers();
   }

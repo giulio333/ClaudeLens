@@ -169,7 +169,9 @@ function noticeLabel(notice: SessionNotice): string {
     ? 'session idle'
     : notice.kind === 'agent-idle'
       ? 'agent done'
-      : 'resumed';
+      : notice.kind === 'branch-change'
+        ? 'branch'
+        : 'resumed';
 }
 
 /** Who a turn is attributed to. An inbound message keeps `role: 'user'` — it

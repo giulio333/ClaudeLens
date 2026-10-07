@@ -330,6 +330,7 @@ describe('chipTone', () => {
     title: null,
     color: null,
     termStatus: 'running',
+    gitBranch: null,
     ...patch,
   });
 

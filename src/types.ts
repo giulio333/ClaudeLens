@@ -71,6 +71,7 @@ export type {
   InboundOrigin,
   SentMessage,
   SessionNotice,
+  WorktreeState,
   MessageUsage,
   ToolActivity,
   ChatTurnSummary,

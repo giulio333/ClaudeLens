@@ -30,6 +30,8 @@ export interface InstanceReport {
   color: AgentColor | null;
   /** Null while no PTY is mounted: Mission Control opened on its Lens side. */
   termStatus: TerminalStatus | null;
+  /** The branch the session's latest turn ran on, from its transcript. */
+  gitBranch: string | null;
 }
 
 export interface TerminalInstance {
@@ -65,6 +67,7 @@ const NO_REPORT: InstanceReport = {
   title: null,
   color: null,
   termStatus: null,
+  gitBranch: null,
 };
 
 export function initNav(view: View): NavState {

@@ -11,6 +11,7 @@ import { StrictMode } from 'react';
 import { cleanup, fireEvent, render } from '@testing-library/react';
 import { EnvironmentStrip } from '../src/components/project/terminal/EnvironmentStrip';
 import type { InitInfo } from '../src/types';
+import type { SessionGitState } from '../src/components/project/chat/git-state';
 
 afterEach(cleanup);
 
@@ -104,5 +105,76 @@ describe('EnvironmentStrip', () => {
   it('says one server in the singular', () => {
     const { getByLabelText } = mount(init([{ name: 'ide', status: 'failed' }]));
     expect(getByLabelText('1 MCP server failed to connect').textContent).toBe('1 MCP');
+  });
+});
+
+describe('EnvironmentStrip — git', () => {
+  const run = (branch: string, uuid: string, timestamp: string) => ({ branch, uuid, timestamp });
+  const GIT: SessionGitState = {
+    branch: 'worktree-spike',
+    runs: [
+      run('trunk', 'a1', '2026-09-08T09:00:00.000Z'),
+      run('worktree-spike', 'a2', '2026-09-08T09:30:00.000Z'),
+    ],
+    worktree: {
+      name: 'spike',
+      path: '/work/acme/.claude/worktrees/spike',
+      branch: 'worktree-spike',
+      originalBranch: 'trunk',
+      originalHeadCommit: '0123456789abcdef',
+    },
+  };
+
+  function mountGit(info: InitInfo | null, git: SessionGitState | null) {
+    return render(
+      <StrictMode>
+        <EnvironmentStrip init={info} git={git} />
+      </StrictMode>
+    );
+  }
+
+  it('names the branch without waiting for the handshake', () => {
+    const { getByLabelText, container } = mountGit(null, GIT);
+    expect(getByLabelText('Git branch worktree-spike').textContent).toBe('worktree-spike');
+    expect(container.textContent).not.toContain('DEFAULT');
+  });
+
+  it('sits beside the permission mode once the handshake answers', () => {
+    const { getByLabelText, container } = mountGit(init([]), GIT);
+    expect(container.textContent).toContain('DEFAULT');
+    expect(getByLabelText('Git branch worktree-spike')).toBeTruthy();
+  });
+
+  it('raises the worktree, what it was cut from and the branches of the session', () => {
+    const { getByLabelText, getByRole, queryByRole } = mountGit(init([]), GIT);
+    const chip = getByLabelText('Git branch worktree-spike');
+    fireEvent.mouseEnter(chip);
+    const card = getByRole('tooltip').textContent;
+    expect(card).toContain('WORKTREE');
+    expect(card).toContain('spike');
+    expect(card).toContain('cut from trunk @ 0123456');
+    expect(card).toContain('BRANCHES THIS SESSION');
+    expect(card).toContain('trunk');
+    // The reading's own limit is part of the card: it is not a live git read.
+    expect(card).toContain('the branch the last turn ran on');
+    fireEvent.mouseLeave(chip);
+    expect(queryByRole('tooltip')).toBeNull();
+  });
+
+  it('lists no branches for a session that stayed on one, and says detached for HEAD', () => {
+    const { getByLabelText, getByRole } = mountGit(null, {
+      branch: 'HEAD',
+      runs: [run('HEAD', 'a1', '2026-09-08T09:00:00.000Z')],
+      worktree: null,
+    });
+    const chip = getByLabelText('Git branch detached HEAD');
+    fireEvent.focus(chip);
+    const card = getByRole('tooltip').textContent;
+    expect(card).not.toContain('BRANCHES THIS SESSION');
+    expect(card).not.toContain('WORKTREE');
+  });
+
+  it('draws nothing with neither a handshake nor a branch', () => {
+    expect(mountGit(null, null).container.textContent).toBe('');
   });
 });

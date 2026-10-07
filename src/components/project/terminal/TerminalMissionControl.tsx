@@ -24,6 +24,7 @@ import {
   type ToolGroup,
 } from '../chat/utils';
 import { contextFiles } from '../chat/context-files';
+import { sessionGitState, shownBranch } from '../chat/git-state';
 import { FileViewer } from '../files/FileViewer';
 import { relToRoot, sessionMarks } from '../files/session-marks';
 import { sessionTitle } from '../utils';
@@ -614,6 +615,8 @@ export function TerminalMissionControl({
     () => buildBackgroundShells(sessionProcessed),
     [sessionProcessed]
   );
+  // For the tab card: the same answer the rail's strip gives, off the same read.
+  const gitBranch = useMemo(() => shownBranch(sessionGitState(chatMessages)), [chatMessages]);
   // A file a read, a diff or the rail names, opened in the Files viewer — when
   // it is a file of this project; elsewhere there is nothing to open it in.
   const fileOpenerFor = useCallback(
@@ -730,8 +733,9 @@ export function TerminalMissionControl({
       title,
       color: summary?.agentColor ?? null,
       termStatus: terminalMounted ? termStatus : null,
+      gitBranch,
     });
-  }, [ptyPid, sessionId, title, summary?.agentColor, terminalMounted, termStatus]);
+  }, [ptyPid, sessionId, title, summary?.agentColor, terminalMounted, termStatus, gitBranch]);
 
   async function insertPrompt(text: string) {
     promptInsertionRef.current?.abort();

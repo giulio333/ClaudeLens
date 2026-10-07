@@ -34,6 +34,7 @@ import { sessionMarks } from '../files/session-marks';
 import { contextFiles, shellReadPaths } from '../chat/context-files';
 import { FileIcon } from '../chat/fileIcons';
 import { buildArtifactActivity } from '../chat/artifact';
+import { sessionGitState } from '../chat/git-state';
 import { LiveOrb } from '../../LiveOrb';
 import { QueryError } from '../../QueryError';
 import { fmtCost, fmt } from '../utils';
@@ -715,6 +716,7 @@ export function MissionRail({
   // The conversations of the session — kept out of the feed and pinned under
   // it as their own dock (see `MessagesDock`).
   const threads = useMemo(() => buildMessageThreads(processed), [processed]);
+  const git = useMemo(() => sessionGitState(messages), [messages]);
   const visible = useMemo(
     () => (filter === 'ALL' ? feed : feed.filter(e => e.kind === filter)),
     [feed, filter]
@@ -1181,8 +1183,9 @@ export function MissionRail({
         />
 
         {/* ENVIRONMENT — the session's standing setup, pinned under the stream.
-            This machine's setup says nothing about a session on another one. */}
-        {!remote && <EnvironmentStrip init={init} />}
+            This machine's setup says nothing about a session on another one;
+            the branch does, since it is read off the host's own transcript. */}
+        <EnvironmentStrip init={remote ? null : init} git={git} />
       </div>
     </aside>
   );

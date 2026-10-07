@@ -213,7 +213,9 @@ export interface InboundOrigin {
  *  turns `<task-notification>` into its own card, and a second mechanism for
  *  the same row would render it twice. */
 export interface SessionNotice {
-  kind: 'session-idle' | 'agent-idle' | 'auto-continuation';
+  /** `branch-change` is the one kind no row carries: the renderer makes it
+   *  where the branch on two assistant rows differs (`chat/git-state.ts`). */
+  kind: 'session-idle' | 'agent-idle' | 'auto-continuation' | 'branch-change';
   /** What the notice is about: a task id, a session or agent name. */
   subject?: string;
   /** One readable line, taken from the payload's own words. */
@@ -252,6 +254,27 @@ export interface ChatMessage {
    *  `transcript-extras`, like `queued` and `skillPath`. A row's own
    *  `perTurnEffort` wins over the session-level `effort` when set. */
   effort?: string;
+  /** The git branch an assistant turn ran on — `HEAD` when detached. Row-level
+   *  like `effort`, and read off assistant rows only: a user row's key order
+   *  puts `toolUseResult` before its tail, where a quoted transcript could
+   *  answer for it. Absent on a turn Claude Code wrote outside a repository. */
+  gitBranch?: string;
+  /** The worktree the session was in from this turn on, stamped on the first
+   *  assistant row after a `worktree-state` row that changed it; `null` when
+   *  the session left one. Those rows carry no uuid or timestamp, and Claude
+   *  Code re-appends the same snapshot dozens of times. */
+  worktree?: WorktreeState | null;
+}
+
+/** A `worktree-state` snapshot: the worktree a session works in and what it
+ *  was cut from. `originalBranch`/`originalHeadCommit` are missing on a
+ *  worktree the session entered after it already existed. */
+export interface WorktreeState {
+  name: string;
+  path: string;
+  branch: string;
+  originalBranch?: string;
+  originalHeadCommit?: string;
 }
 
 /** Live tool indicator for the in-flight turn (`sessions:chatToolActivity`):
