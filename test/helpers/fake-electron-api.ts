@@ -158,8 +158,13 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   const sessions = {
     getChat: vi.fn(async (_hash: string, _filename: string) => ok<ChatMessage[]>([])),
     startMessage: vi.fn(
-      async (_realPath: string, _message: string, _model?: string, _permissionMode?: string) =>
-        ok(null)
+      async (
+        _realPath: string,
+        _message: string,
+        _model?: string,
+        _permissionMode?: string,
+        _messageUuid?: string
+      ) => ok(null)
     ),
     sendMessage: vi.fn(
       async (
@@ -167,7 +172,8 @@ export function createFakeElectronAPI(channels: FakeChannels) {
         _sessionId: string,
         _message: string,
         _model?: string,
-        _permissionMode?: string
+        _permissionMode?: string,
+        _messageUuid?: string
       ) => ok(null)
     ),
     stopMessage: vi.fn(async () => ok(null)),

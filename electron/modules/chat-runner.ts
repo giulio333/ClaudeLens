@@ -23,7 +23,7 @@
 // CommonJS main process (same approach as config-reader.ts / live-monitor.ts).
 
 import { randomUUID } from 'crypto';
-import { mapSdkMessageToChat, type ChatMessage } from './session-reader';
+import type { ChatMessage } from './session-reader';
 import { sdkExecutableOption } from './claude-executable';
 import type {
   ToolActivity,
@@ -38,6 +38,8 @@ import {
   summarizeResult,
   isPromptEcho,
   isSubagentTraffic,
+  streamedChatMessage,
+  userTurn,
 } from './chat-stream';
 
 async function loadSdk() {
@@ -161,12 +163,8 @@ export class ChatSession {
 
   /** Queue a user message for the next turn. Safe to call between turns; while a
    *  turn is in flight the SDK processes it after the current one (queued input). */
-  send(text: string): void {
-    this.queue.push({
-      type: 'user',
-      message: { role: 'user', content: text },
-      parent_tool_use_id: null,
-    } as SdkUserMessage);
+  send(text: string, uuid?: string): void {
+    this.queue.push(userTurn(text, uuid) as SdkUserMessage);
     this.wake();
   }
 
@@ -277,7 +275,7 @@ export class ChatSession {
         // prompt we just sent (it has no tool_result blocks) — the renderer already
         // shows that optimistically, and forwarding it would double the bubble.
         if (msg.type === 'assistant' || msg.type === 'user') {
-          const mapped = mapSdkMessageToChat(msg as Parameters<typeof mapSdkMessageToChat>[0]);
+          const mapped = streamedChatMessage(msg as Parameters<typeof streamedChatMessage>[0]);
           if (mapped && !isPromptEcho(mapped)) {
             if (mapped.role === 'assistant') this.sawAssistant = true;
             cb.onMessage(mapped);

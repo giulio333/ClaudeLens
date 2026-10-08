@@ -117,6 +117,36 @@ describe('useLiveChat — stream envelopes', () => {
 });
 
 describe('useLiveChat — turn lifecycle', () => {
+  it('sends each prompt under the uuid its bubble carries, so the transcript row matches it', async () => {
+    // The SDK writes a supplied `SDKUserMessage.uuid` as the row's id. The
+    // bubble keeps its uuid when the turn commits, so a highlight made on the
+    // prompt here is found again when the session is reread from disk.
+    const { result } = await renderWithTurnInFlight();
+    const firstBubble = result.current.displayMessages[0];
+    expect(bridge.api.sessions.startMessage).toHaveBeenCalledWith(
+      REAL_PATH,
+      'hello',
+      undefined,
+      'default',
+      firstBubble.uuid
+    );
+    act(() => bridge.channels.chatDone.emit({ sessionId: SESSION }));
+
+    await act(async () => {
+      await result.current.send('and then?', { permissionMode: 'default' });
+    });
+    const secondBubble = result.current.displayMessages[1];
+    expect(secondBubble.uuid).not.toBe(firstBubble.uuid);
+    expect(bridge.api.sessions.sendMessage).toHaveBeenCalledWith(
+      REAL_PATH,
+      SESSION,
+      'and then?',
+      undefined,
+      'default',
+      secondBubble.uuid
+    );
+  });
+
   it('shows the optimistic user bubble while the send is still in flight', async () => {
     // Hold startMessage open: the bubble must be on screen before it resolves,
     // because the SDK never echoes the prompt back.
@@ -382,7 +412,8 @@ describe('useLiveChat — resume mode', () => {
       resume.sessionId,
       'continue',
       'opus',
-      'default'
+      'default',
+      expect.any(String)
     );
   });
 

@@ -4,7 +4,10 @@ import {
   summarizeResult,
   isPromptEcho,
   isSubagentTraffic,
+  userTurn,
+  streamedChatMessage,
 } from '../electron/modules/chat-stream';
+import { isPersistableMessageUuid } from '../src/components/project/chat/highlights';
 import type { ChatMessage } from '../electron/shared/chat-types';
 
 function userMessage(content: ChatMessage['content']): ChatMessage {
@@ -118,5 +121,55 @@ describe('isSubagentTraffic', () => {
   it('keeps main-conversation messages (null or absent parent)', () => {
     expect(isSubagentTraffic({ type: 'assistant', parent_tool_use_id: null })).toBe(false);
     expect(isSubagentTraffic({ type: 'assistant' })).toBe(false);
+  });
+});
+
+describe('userTurn', () => {
+  it('carries the uuid the renderer gave the prompt, which the SDK writes as the row id', () => {
+    expect(userTurn('hello', '6f1c2d3e-4a5b-4c6d-8e7f-90a1b2c3d4e5')).toEqual({
+      type: 'user',
+      message: { role: 'user', content: 'hello' },
+      parent_tool_use_id: null,
+      uuid: '6f1c2d3e-4a5b-4c6d-8e7f-90a1b2c3d4e5',
+    });
+  });
+
+  it('leaves the id to the SDK when there is none', () => {
+    expect(userTurn('hello')).not.toHaveProperty('uuid');
+  });
+});
+
+describe('messages that never reach the transcript', () => {
+  // A highlight is stored under the message's uuid and found again on a reread.
+  // Output that is never written to disk must not be highlightable, or the
+  // highlight is orphaned the moment the session is reopened.
+  it('mints a note that cannot anchor a highlight', () => {
+    expect(isPersistableMessageUuid(noteMessage('Context compacted.').uuid)).toBe(false);
+  });
+
+  it('marks a streamed slash-command output, which Claude Code writes only as a placeholder', () => {
+    const streamed = streamedChatMessage({
+      type: 'assistant',
+      uuid: '7d2e4f60-1a2b-4c3d-8e9f-a0b1c2d3e4f5',
+      message: {
+        role: 'assistant',
+        model: '<synthetic>',
+        content: [{ type: 'text', text: '## Context Usage' }],
+      },
+    });
+    expect(streamed && isPersistableMessageUuid(streamed.uuid)).toBe(false);
+  });
+
+  it('keeps the id of a model turn, which is written as it streamed', () => {
+    const streamed = streamedChatMessage({
+      type: 'assistant',
+      uuid: '7d2e4f60-1a2b-4c3d-8e9f-a0b1c2d3e4f5',
+      message: {
+        role: 'assistant',
+        model: 'claude-sonnet-5',
+        content: [{ type: 'text', text: 'Hi' }],
+      },
+    });
+    expect(streamed?.uuid).toBe('7d2e4f60-1a2b-4c3d-8e9f-a0b1c2d3e4f5');
   });
 });

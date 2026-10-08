@@ -20,13 +20,9 @@ import {
 } from './transcript-extras';
 import type {
   AdvisorConsult,
-  ArtifactPublish,
-  BashEditDiff,
-  BashEditHunk,
   ChatContentBlock,
   ChatImage,
   ChatMessage,
-  SentMessage,
   MessageUsage,
 } from '../shared/chat-types';
 
@@ -243,17 +239,23 @@ export interface ReadChatOptions {
   includeSidechain?: boolean;
 }
 
-/** I dati che stanno sulla RIGA e non dentro `message`, attaccati al blocco di
- *  risultato a cui appartengono. Separati per non fare più copie dei blocchi
- *  quando la riga ne porta più d'uno — e per non farne nessuna quando non ne
- *  porta, che è ogni riga tranne una manciata. */
-function withRowExtras(
+/** I dati che stanno sulla RIGA (`toolUseResult`) e non dentro `message`,
+ *  attaccati al blocco di risultato a cui appartengono: il diff di un comando
+ *  Bash, gli hunk di un `Edit`/`Write`, la pagina di una publish dell'`Artifact`
+ *  tool, la consegna di una `SendMessage`. Non fa copie dei blocchi quando la
+ *  riga non porta niente, che è ogni riga tranne una manciata.
+ *
+ *  Esportata per lo stream della chat (`chat-stream.ts`): l'SDK manda lo
+ *  stesso oggetto come `tool_use_result`, e le due letture devono leggerlo con
+ *  le stesse regole — un parse solo. */
+export function withToolUseResult(
   blocks: ChatContentBlock[],
-  bashEditDiff: BashEditDiff | undefined,
-  patch: BashEditHunk[] | undefined,
-  artifact: ArtifactPublish | undefined,
-  sent: SentMessage | undefined
+  toolUseResult: unknown
 ): ChatContentBlock[] {
+  const bashEditDiff = parseBashEditDiff(toolUseResult);
+  const patch = parseEditPatch(toolUseResult);
+  const artifact = parseArtifactPublish(toolUseResult);
+  const sent = parseSentMessage(toolUseResult);
   let out = blocks;
   if (bashEditDiff) out = withBashEditDiff(out, bashEditDiff);
   if (patch) out = withEditPatch(out, patch);
@@ -339,26 +341,16 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       if (uuid && seenUuids.has(uuid)) continue;
       if (uuid) seenUuids.add(uuid);
 
-      // Row-level like `effort`: the diff of the files a Bash command changed
-      // sits on `toolUseResult`, beside `message`, so here it is free — while
-      // the SDK path, which gets only `message`, has to recover it with a
-      // second pass (see `transcript-extras`).
-      const bashEditDiff = parseBashEditDiff(json.toolUseResult);
-      // E gli hunk di un `Edit`/`Write`, gli unici a portare i numeri di riga.
-      const patch = parseEditPatch(json.toolUseResult);
-      // Stessa riga, stessa ragione: la pagina che una publish dell'`Artifact`
-      // tool ha prodotto (titolo, link, versione) sta su `toolUseResult`.
-      const artifact = parseArtifactPublish(json.toolUseResult);
-      // E la consegna di una `SendMessage`, con il `msg_id` che la lega al
-      // transcript in cui è arrivata.
-      const sent = parseSentMessage(json.toolUseResult);
-
       const message: ChatMessage = {
         uuid,
         role,
         timestamp: String(json.timestamp ?? ''),
         model: msg.model as string | undefined,
-        content: withRowExtras(blocks, bashEditDiff, patch, artifact, sent),
+        // Row-level, like `effort`: what the tool returned sits on
+        // `toolUseResult`, beside `message`, so here it is free — the SDK read,
+        // which gets only `message`, recovers it in a second pass
+        // (`transcript-extras`), and the live stream gets it as `tool_use_result`.
+        content: withToolUseResult(blocks, json.toolUseResult),
         usage: parseUsage(msg),
         // Row-level, not `message`-level: free here, recovered by a second pass
         // on the SDK path (see `transcript-extras`).

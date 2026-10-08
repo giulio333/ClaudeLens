@@ -61,12 +61,13 @@ export function blockKey(messageUuid: string, blockIndex: number): string {
   return `${messageUuid}:${blockIndex}`;
 }
 
-/** Whether a message uuid is durable enough to anchor a highlight. Synthetic
- *  uuids (the optimistic `__pending_user__` bubble shown mid-stream) use a
- *  `__sentinel__` form and never persist: the real message lands later with its
- *  transcript uuid, so a highlight anchored to the synthetic one would orphan
- *  forever in the store (never repainted, never exported). Gate the
- *  `data-hl-block` attribute on this so such blocks aren't highlightable. */
+/** Whether a message uuid is durable enough to anchor a highlight. A uuid in
+ *  the `__sentinel__` form never persists: a highlight anchored to it would
+ *  orphan forever in the store (never repainted, never exported). Gate the
+ *  `data-hl-block` attribute on this so such blocks aren't highlightable. The
+ *  live chat gives that form to what it shows but no transcript row carries
+ *  (`chat-stream.ts`); its prompt bubble is not one of them — its uuid is sent
+ *  with the prompt and written as the row's own (`useLiveChat`). */
 export function isPersistableMessageUuid(uuid: string): boolean {
   return !!uuid && !(uuid.startsWith('__') && uuid.endsWith('__'));
 }

@@ -29,6 +29,9 @@ file e il suo test.
 
 ## Transcript (`chat/`)
 
+- **Una colonna di lettura sola** (`TranscriptBody`, #304): la disegnano il Lens (`ChatView`, dal
+  disco) e la chat SDK (`LiveChatView`, dallo stream); un'affordance di lettura va lì, non in una
+  delle due viste. Il turno in streaming è la sua `tail`, sotto la lista finestrata.
 - **La colonna di lettura è finestrata** (`@tanstack/react-virtual`): sono montate solo le righe
   attorno al viewport.
   - Ciò che dipende dai vicini si deriva prima, in `buildRenderRows`; lo scroll-spy legge la

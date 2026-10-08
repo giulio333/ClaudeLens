@@ -281,18 +281,21 @@ declare global {
         ) => Promise<IpcResult<ChatMessage[]>>;
         getArtifacts: (hash: string, filename: string) => Promise<IpcResult<SessionArtifacts>>;
         deleteSession: (requests: DeleteRequest[]) => Promise<IpcResult<DeleteSessionResult>>;
+        /** `messageUuid`: the prompt bubble's id, written as the row's own. */
         sendMessage: (
           realPath: string,
           sessionId: string,
           message: string,
           model?: string,
-          permissionMode?: string
+          permissionMode?: string,
+          messageUuid?: string
         ) => Promise<IpcResult<null>>;
         startMessage: (
           realPath: string,
           message: string,
           model?: string,
-          permissionMode?: string
+          permissionMode?: string,
+          messageUuid?: string
         ) => Promise<IpcResult<null>>;
         stopMessage: () => Promise<IpcResult<null>>;
         endChat: () => Promise<IpcResult<null>>;

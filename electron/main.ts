@@ -1915,6 +1915,13 @@ function asPermissionMode(m?: string): ChatPermissionMode {
     : RESUME_PERMISSION_MODE;
 }
 
+// The id the renderer gave a prompt's bubble, which the SDK writes as the row's
+// own. Only a UUID — the SDK's type for it — is passed on; anything else is
+// dropped and the CLI mints the id, as it did before.
+function promptUuid(uuid: unknown): string | undefined {
+  return isValidSessionId(uuid) ? uuid : undefined;
+}
+
 // Continue an existing session: `resume: sessionId` (no fork) appends to the same
 // transcript. Tool calls route through the in-app approval dialog via canUseTool.
 ipcMain.handle(
@@ -1925,7 +1932,8 @@ ipcMain.handle(
     sessionId: string,
     message: string,
     model?: string,
-    permissionMode?: string
+    permissionMode?: string,
+    messageUuid?: string
   ) => {
     try {
       const { existsSync, statSync } = await import('fs');
@@ -1958,7 +1966,7 @@ ipcMain.handle(
         // disposed or replaced the session between them, and sending into a
         // torn-down query would silently drop the message.
         if (currentChatSession === live) {
-          live.send(message);
+          live.send(message, promptUuid(messageUuid));
           return ok(null);
         }
       }
@@ -1974,7 +1982,7 @@ ipcMain.handle(
         canUseTool: makeCanUseTool(event, realPath),
         env: claudeEnv(),
       });
-      currentChatSession.send(message);
+      currentChatSession.send(message, promptUuid(messageUuid));
       return ok(null);
     } catch (e) {
       return err(e);
@@ -1988,7 +1996,14 @@ ipcMain.handle(
 // new-chat view), then run the turn — tool calls still flow through canUseTool.
 ipcMain.handle(
   'sessions:startMessage',
-  async (event, realPath: string, message: string, model?: string, permissionMode?: string) => {
+  async (
+    event,
+    realPath: string,
+    message: string,
+    model?: string,
+    permissionMode?: string,
+    messageUuid?: string
+  ) => {
     try {
       const { existsSync, statSync } = await import('fs');
       if (!realPath || !existsSync(realPath) || !statSync(realPath).isDirectory()) {
@@ -2014,7 +2029,7 @@ ipcMain.handle(
         canUseTool: makeCanUseTool(event, realPath),
         env: claudeEnv(),
       });
-      currentChatSession.send(message);
+      currentChatSession.send(message, promptUuid(messageUuid));
       return ok(null);
     } catch (e) {
       return err(e);
