@@ -50,6 +50,8 @@ import type { AttentionState } from './project/terminal/tab-attention';
 import { EnvironmentStrip } from './project/terminal/EnvironmentStrip';
 import type { SessionGitState } from './project/chat/git-state';
 import { SideQuestionCard } from './project/chat/SideQuestionCard';
+import { PinIcon } from './project/shared/SearchPopover';
+import { TagGlyph } from './project/sessions/SessionRowMenu';
 import type { SideQuestions } from './project/chat/useSideQuestions';
 import type { TerminalInstance } from './project/terminal/terminal-instances';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
@@ -1490,6 +1492,43 @@ function GitBranchVisual(): ReactNode {
   );
 }
 
+// Pin and tags in the bar, drawn with SessionActions' own markup and classes but
+// static: the real component writes the user's pins and tags, and this session
+// is synthetic. Both are pressed, so the accent they take on is what shows.
+function SessionActionsVisual(): ReactNode {
+  return (
+    <TabBarFrame>
+      <PreviewLiveTabs ids={[1, 3]} currentId="wn-live-3" />
+      <div className="cl-stabs-end">
+        <button
+          type="button"
+          className="cl-stabs-icon cl-stabs-mark"
+          aria-pressed
+          aria-label="Unpin session"
+          title="Unpin session"
+        >
+          <span className="cl-stabs-glyph">
+            <PinIcon filled />
+          </span>
+        </button>
+        <button
+          type="button"
+          className="cl-stabs-icon cl-stabs-mark"
+          aria-pressed
+          aria-label="Tags: billing, review"
+          title="Tags: billing, review"
+        >
+          <span className="cl-stabs-glyph">
+            <TagGlyph />
+          </span>
+          <span className="cl-stabs-count">2</span>
+        </button>
+        <ViewSwitch view="lens" setView={() => {}} />
+      </div>
+    </TabBarFrame>
+  );
+}
+
 // A side question answered above the composer: the thread is handed in, so
 // nothing here reaches a session.
 const PREVIEW_BTW: SideQuestions = {
@@ -1551,6 +1590,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'tab-overflow': TabOverflowVisual,
   'git-branch': GitBranchVisual,
   'side-question': SideQuestionVisual,
+  'session-actions': SessionActionsVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

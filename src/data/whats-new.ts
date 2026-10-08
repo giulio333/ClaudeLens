@@ -36,7 +36,8 @@ export interface WhatsNewHighlight {
     | 'tab-attention'
     | 'tab-overflow'
     | 'git-branch'
-    | 'side-question';
+    | 'side-question'
+    | 'session-actions';
 }
 
 export interface WhatsNewRelease {
@@ -45,6 +46,25 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.36',
+    highlights: [
+      {
+        title: 'The chat reads like the Lens',
+        description:
+          'A chat you start in ClaudeLens is drawn by the Lens’s own reading column while it streams: diffs, folded tools, skills and agents, the tool detail on click, and highlights.',
+        where: 'Mission Control, in the SDK chat',
+        visual: 'file-changes',
+      },
+      {
+        title: 'Pin and tag from Mission Control',
+        description:
+          'Two quiet icons in the bar pin the session or open its tags, and take the accent once they hold something; a pinned session also wears a small pin on its tab.',
+        where: 'The bar of Mission Control, beside the view switch',
+        visual: 'session-actions',
+      },
+    ],
+  },
   {
     version: '2.2.35',
     highlights: [
