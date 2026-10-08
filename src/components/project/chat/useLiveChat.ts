@@ -242,7 +242,11 @@ export function useLiveChat(
   const send = useCallback(
     async (text: string, opts: { model?: string; permissionMode: string }): Promise<boolean> => {
       const startingNew = sessionIdRef.current === null;
-      pendingRef.current = { text, at: new Date().toISOString(), uuid: crypto.randomUUID() };
+      // The bubble's uuid goes to the SDK with the prompt, which writes it as the
+      // transcript row's own: the bubble and the row are then one message, so a
+      // highlight made on it here is found again on a reread.
+      const uuid = crypto.randomUUID();
+      pendingRef.current = { text, at: new Date().toISOString(), uuid };
       liveMessagesRef.current = [];
       setPendingUser(pendingRef.current);
       setLiveMessages([]);
@@ -254,13 +258,14 @@ export function useLiveChat(
       try {
         const api = window.electronAPI.sessions;
         const res = startingNew
-          ? await api.startMessage(realPathRef.current, text, opts.model, opts.permissionMode)
+          ? await api.startMessage(realPathRef.current, text, opts.model, opts.permissionMode, uuid)
           : await api.sendMessage(
               realPathRef.current,
               sessionIdRef.current as string,
               text,
               opts.model,
-              opts.permissionMode
+              opts.permissionMode,
+              uuid
             );
         if (res.error) throw new Error(res.error);
         if (startingNew) trackEvent('chat_started');

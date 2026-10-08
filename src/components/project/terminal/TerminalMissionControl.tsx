@@ -1,31 +1,20 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
 import { useTheme } from '../../../hooks/useTheme';
-import type { Agent, SessionSummary, Skill } from '../../../hooks/useIPC';
+import type { SessionSummary } from '../../../hooks/useIPC';
 import {
   SessionBottomGlow,
   SessionColorFrame,
   SessionColorIdentity,
 } from '../shared/SessionColorIdentity';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
-import { ToolDetailPanel } from '../chat/ToolDetailPanel';
-import { SubagentTranscriptPanel } from '../chat/SubagentTranscriptPanel';
-import { SkillDetailView } from '../skills/SkillDetailView';
-import { AgentDetailView } from '../agents/AgentDetailView';
-import { TeamDetailView } from '../teams/TeamDetailView';
 import { ChatView } from '../chat/ChatView';
+import { SessionDetailPanel } from '../shared/SessionDetailPanel';
+import { overlayCrumb as crumbOf, type SessionOverlay } from '../shared/session-overlay';
 import type { SessionWaiting } from '../chat/WaitingLine';
-import {
-  buildProcessedMessages,
-  resolveToolIcon,
-  toolRunStatus,
-  touchedFiles,
-  type SessionAgent,
-  type ToolGroup,
-} from '../chat/utils';
+import { buildProcessedMessages, toolRunStatus, touchedFiles } from '../chat/utils';
 import { contextFiles } from '../chat/context-files';
 import { sessionGitState, shownBranch } from '../chat/git-state';
-import { FileViewer } from '../files/FileViewer';
 import { relToRoot, sessionMarks } from '../files/session-marks';
 import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
@@ -33,8 +22,6 @@ import { TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
 import { BackgroundShells } from './BackgroundShells';
 import { buildBackgroundShells } from './background-shells';
-import type { FileChange } from './mission-feed';
-import { FileChangePage } from '../chat/FileChangesStrip';
 import { flushSync } from 'react-dom';
 import type { TerminalPromptHandle } from './terminal-prompt';
 import type { InstanceReport } from './terminal-instances';
@@ -77,15 +64,6 @@ const RAIL_MIN = 380;
 const RAIL_MAX = 560;
 
 export type View = 'terminal' | 'lens';
-type Overlay =
-  | { kind: 'tool'; group: ToolGroup }
-  | { kind: 'change'; change: FileChange }
-  | { kind: 'agent'; agent: SessionAgent }
-  | { kind: 'skill-def'; skill: Skill }
-  | { kind: 'agent-def'; agent: Agent }
-  | { kind: 'team'; teamName: string }
-  | { kind: 'file'; rel: string }
-  | null;
 
 /** v2 centered tab switch: TERMINAL ❯_ ↔ LENS ◎ as underline tabs that head the
  *  focus (center) column, replacing the glass segmented pill (design 02 · Outline
@@ -476,7 +454,7 @@ export function TerminalMissionControl({
     setPtySince(pid ? Date.now() : null);
   }, []);
   const [termStatus, setTermStatus] = useState<TerminalStatus>('starting');
-  const [overlay, setOverlay] = useState<Overlay>(null);
+  const [overlay, setOverlay] = useState<SessionOverlay | null>(null);
   useEffect(() => {
     if (overlay) promptInsertionRef.current?.abort();
   }, [overlay]);
@@ -504,34 +482,7 @@ export function TerminalMissionControl({
    *  called. The detail views themselves no longer say it: they render
    *  `chromeless` here, so this crumb is the only place the frame states which
    *  of the session's units is on screen. */
-  const overlayCrumb = useMemo((): { icon?: string; kind: string; label: string } | null => {
-    if (!overlay) return null;
-    switch (overlay.kind) {
-      case 'tool':
-        return {
-          icon: resolveToolIcon(
-            overlay.group.use.name,
-            overlay.group.use.input as Record<string, unknown>
-          ),
-          kind: 'tool',
-          label: overlay.group.use.name,
-        };
-      case 'change':
-        return { kind: 'change', label: overlay.change.name };
-      case 'agent':
-        return { kind: 'agent', label: overlay.agent.subagentType || 'agent' };
-      case 'skill-def':
-        return { kind: 'skill', label: overlay.skill.name };
-      case 'agent-def':
-        return { kind: 'agent', label: overlay.agent.name };
-      case 'team':
-        return { kind: 'team', label: overlay.teamName };
-      case 'file':
-        // The file's page names it in its own head, with its own ✕: a crumb
-        // here said the same name a few hundred pixels away.
-        return null;
-    }
-  }, [overlay]);
+  const overlayCrumb = useMemo(() => crumbOf(overlay), [overlay]);
 
   // The CLI registers itself in `~/.claude/sessions/<pid>.json` a few seconds
   // after boot; matching by the PTY's pid pins down *this* terminal's session.
@@ -899,62 +850,15 @@ export function TerminalMissionControl({
                 {/* Every panel here is `chromeless`: the crumb in the top bar,
                     the ✕ in the tab row and Esc are the frame's, so a panel
                     drawing its own bar would only repeat them one line lower. */}
-                {overlay.kind === 'tool' ? (
-                  <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
-                ) : overlay.kind === 'change' ? (
-                  <div className="cl-file-change-scroll">
-                    <FileChangePage
-                      file={overlay.change.file}
-                      onOpenFile={
-                        overlay.change.deleted ? undefined : fileOpenerFor(overlay.change.path)
-                      }
-                    />
-                  </div>
-                ) : overlay.kind === 'skill-def' ? (
-                  <SkillDetailView
-                    skill={overlay.skill}
-                    project={project}
-                    onBack={closeOverlay}
-                    readOnly
-                    chromeless
-                  />
-                ) : overlay.kind === 'agent-def' ? (
-                  <AgentDetailView
-                    agent={overlay.agent}
-                    project={project}
-                    onBack={closeOverlay}
-                    readOnly
-                    chromeless
-                  />
-                ) : overlay.kind === 'team' ? (
-                  <TeamDetailView
-                    project={project}
-                    teamName={overlay.teamName}
-                    onBack={closeOverlay}
-                    backLabel="Close"
-                    onOpenChat={openSessionFromOverlay}
-                    chromeless
-                  />
-                ) : overlay.kind === 'file' ? (
-                  <FileViewer
-                    key={overlay.rel}
-                    root={project.realPath}
-                    rel={overlay.rel}
-                    version={openFileMarks?.writes.get(overlay.rel) ?? 0}
-                    mark={openFileMarks?.files.get(overlay.rel)}
-                    onClose={closeOverlay}
-                  />
-                ) : overlay.kind === 'agent' && overlay.agent.agentId && sessionId ? (
-                  <SubagentTranscriptPanel
-                    hash={project.hash}
-                    sessionFilename={`${sessionId}.jsonl`}
-                    agentId={overlay.agent.agentId}
-                    subagentType={overlay.agent.subagentType}
-                    description={overlay.agent.description}
-                    onBack={closeOverlay}
-                    chromeless
-                  />
-                ) : null}
+                <SessionDetailPanel
+                  overlay={overlay}
+                  project={project}
+                  sessionId={sessionId}
+                  onClose={closeOverlay}
+                  fileOpenerFor={fileOpenerFor}
+                  fileMarks={openFileMarks}
+                  onOpenChat={openSessionFromOverlay}
+                />
               </div>
             )}
 

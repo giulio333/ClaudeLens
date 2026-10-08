@@ -124,7 +124,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       sessionId: string,
       message: string,
       model?: string,
-      permissionMode?: string
+      permissionMode?: string,
+      messageUuid?: string
     ) =>
       ipcRenderer.invoke(
         'sessions:sendMessage',
@@ -132,10 +133,24 @@ contextBridge.exposeInMainWorld('electronAPI', {
         sessionId,
         message,
         model,
-        permissionMode
+        permissionMode,
+        messageUuid
       ),
-    startMessage: (realPath: string, message: string, model?: string, permissionMode?: string) =>
-      ipcRenderer.invoke('sessions:startMessage', realPath, message, model, permissionMode),
+    startMessage: (
+      realPath: string,
+      message: string,
+      model?: string,
+      permissionMode?: string,
+      messageUuid?: string
+    ) =>
+      ipcRenderer.invoke(
+        'sessions:startMessage',
+        realPath,
+        message,
+        model,
+        permissionMode,
+        messageUuid
+      ),
     stopMessage: () => ipcRenderer.invoke('sessions:stopMessage'),
     endChat: () => ipcRenderer.invoke('sessions:endChat'),
     // A side question (`/btw`) on the live chat session: answered from its

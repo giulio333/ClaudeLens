@@ -359,3 +359,13 @@ existing session** from the in-app SDK chat (use the terminal, which resumes the
 `.jsonl` the live chat wrote); export/highlights/timeline/tags are **not**
 available during a live chat (leave and reopen the session read-only to get them);
 reopening a just-created chat shows it read-only (it's on disk now).
+
+## 11. Reading parity (#304)
+
+The trade-off in §10 ("export/highlights/timeline/tags are not available during a live chat") no
+longer holds for reading. Both views draw the same column, `TranscriptBody`: `ChatView` feeds it
+from disk, `LiveChatView` from the stream, with the streaming turn as its `tail` under the
+windowed list. The stream gained the tool's structured output (`tool_use_result`, stamped by
+`streamedChatMessage` with the reader's own `withToolUseResult`). It is still stream-only: no
+reconcile against the file at turn end, so a streamed turn's effort, git branch and skill
+expansion appear only when the session is reread.

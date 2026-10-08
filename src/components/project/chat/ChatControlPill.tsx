@@ -179,9 +179,10 @@ export function ChatControlPill({
    *  figures, which live here whenever this transcript is on screen. `ctx` is
    *  null until a turn has reported usage; the cell prints an em dash rather
    *  than a zero, because "no reading yet" and "empty window" are not the same
-   *  claim. Absent altogether (no `vitals`) the two cells simply do not exist —
-   *  a host that has no session row to read them off says nothing. */
-  vitals?: { ctx: ContextState | null; session: SessionSummary } | null;
+   *  claim. `session` is null when the host has no session row yet (a new SDK
+   *  chat): the spend cell then prints an em dash too, for the same reason.
+   *  Absent altogether (no `vitals`) the two cells simply do not exist. */
+  vitals?: { ctx: ContextState | null; session: SessionSummary | null } | null;
   /** Find-in-transcript. The reading column is windowed, so the browser's own
    *  Ctrl+F sees only the rows around the viewport; this is its replacement and
    *  the pill is where it lives. Navigation is by TURN, not by match — see
@@ -291,7 +292,9 @@ export function ChatControlPill({
           thought && <ThoughtLine key={thought.id} thought={thought} />
         ))}
       {readout === 'ctx' && <ContextPopover ctx={vitals?.ctx ?? null} placement="pill" />}
-      {readout === 'spend' && <SpendPopover summary={vitals?.session} placement="pill" />}
+      {readout === 'spend' && (
+        <SpendPopover summary={vitals?.session ?? undefined} placement="pill" />
+      )}
       {sheet === 'models' && switched && (
         <ModelDockSheet
           runs={modelRuns}
@@ -476,7 +479,7 @@ export function ChatControlPill({
               onFocus={() => setVitalFocus('spend')}
               onBlur={() => setVitalFocus(null)}
             >
-              {fmtCost(vitals.session.estimatedCost)}
+              {vitals.session ? fmtCost(vitals.session.estimatedCost) : '—'}
             </span>
             <span className="cl-pill-div" />
           </>
