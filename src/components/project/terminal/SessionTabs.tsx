@@ -1,8 +1,10 @@
 import { useRef, useState, type CSSProperties } from 'react';
 import { useActiveSessions, useSessionActivity } from '../../../hooks/useIPC';
+import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
 import type { ActiveSession, SessionActivity } from '../../../types';
 import { LiveOrb } from '../../LiveOrb';
 import { inFlightTool } from '../../live-orb';
+import { PinIcon } from '../shared/SearchPopover';
 import { OpenSessionsButton } from './ParkedTerminals';
 import { SessionTabCard } from './SessionTabCard';
 import { useStripOverflow } from './strip-overflow';
@@ -88,6 +90,7 @@ export function SessionTabs({
   const { hover, enter, leave } = useTabHover();
   const hovered = hover && instances.find(i => i.id === hover.id);
   const attention = useTabAttention();
+  const { isPinned } = usePinnedSessions();
   // The changes this strip has already been drawn after: anything older is
   // history, and replaying its animation on a switch of tab would be noise.
   const [mountedSeq] = useState(() => attention.seq);
@@ -162,6 +165,10 @@ export function SessionTabs({
                       key={inst.id}
                       inst={inst}
                       on={inst.id === currentId}
+                      pinned={
+                        !!inst.report.sessionId &&
+                        isPinned(inst.view.project.hash, `${inst.report.sessionId}.jsonl`)
+                      }
                       tone={toneOf.get(inst.id) ?? 'idle'}
                       entry={entry}
                       attention={attention.byId[inst.id]}
@@ -225,6 +232,7 @@ export function SessionTabs({
 function SessionTab({
   inst,
   on,
+  pinned,
   tone,
   entry,
   attention,
@@ -237,6 +245,7 @@ function SessionTab({
 }: {
   inst: TerminalInstance;
   on: boolean;
+  pinned: boolean;
   tone: ChipTone;
   entry: ActiveSession | undefined;
   attention: TabAttention | undefined;
@@ -314,6 +323,11 @@ function SessionTab({
             live line rolls in over it and gets the tab's whole width (sharing
             it, both were cut to a few letters); a file written rolls its name
             in for a moment. The label above says all of it already. */}
+        {pinned && (
+          <span className="cl-stab-pin" aria-hidden>
+            <PinIcon filled />
+          </span>
+        )}
         <span className="cl-stab-slot" data-wrote={alternate(wrote)}>
           <span className={`cl-stab-title${color ? ` cl-session-identity ${color}` : ''}`}>
             {title}

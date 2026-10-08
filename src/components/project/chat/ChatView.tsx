@@ -16,6 +16,8 @@ import { SessionColorIdentity } from '../shared/SessionColorIdentity';
 import { SessionGraphView } from './graph/SessionGraphView';
 import { QueryError } from '../../QueryError';
 import { useSessionTags } from '../../../hooks/useSessionTags';
+import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
+import { PinIcon } from '../shared/SearchPopover';
 import { ManagedTagChip } from '../sessions/ManagedTagChip';
 import { TagPicker } from '../sessions/TagPicker';
 import type { SessionWaiting } from './WaitingLine';
@@ -100,6 +102,8 @@ export function ChatView({
     deleteTag,
   } = useSessionTags(project.hash);
   const sessionTags = tagsForSession(session.filename);
+  const { isPinned, togglePin } = usePinnedSessions();
+  const pinned = isPinned(project.hash, session.filename);
   const [tagPickerAnchor, setTagPickerAnchor] = useState<DOMRect | null>(null);
   // Read-only, disk-backed viewer: `displayMessages` is whatever the session
   // transcript holds, kept fresh by the file watcher. Memoized so the
@@ -241,6 +245,16 @@ export function ChatView({
                       }}
                     >
                       + tag
+                    </button>
+                    <button
+                      type="button"
+                      className="cl-chat-pin"
+                      aria-pressed={pinned}
+                      aria-label={pinned ? 'Unpin session' : 'Pin session'}
+                      title={pinned ? 'Unpin session' : 'Pin session'}
+                      onClick={() => togglePin(project.hash, session.filename)}
+                    >
+                      <PinIcon filled={pinned} />
                     </button>
                     {tagPickerAnchor && (
                       <TagPicker

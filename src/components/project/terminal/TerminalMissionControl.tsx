@@ -9,6 +9,7 @@ import {
 } from '../shared/SessionColorIdentity';
 import { CloseOverlayButton } from '../shared/CloseOverlayButton';
 import { ChatView } from '../chat/ChatView';
+import { SessionActions } from './SessionActions';
 import { SessionDetailPanel } from '../shared/SessionDetailPanel';
 import { overlayCrumb as crumbOf, type SessionOverlay } from '../shared/session-overlay';
 import type { SessionWaiting } from '../chat/WaitingLine';
@@ -771,6 +772,7 @@ export function TerminalMissionControl({
           {overlay && overlay.kind !== 'file' && (
             <CloseOverlayButton label="Back to session" onClose={closeOverlay} />
           )}
+          {filename && <SessionActions projectHash={project.hash} filename={filename} />}
           <ViewSwitch view={view} setView={setView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
           <TabBarRailToggle collapsed={railCollapsed} onToggle={toggleRail} />

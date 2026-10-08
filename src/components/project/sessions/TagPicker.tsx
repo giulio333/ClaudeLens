@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { TagChip } from './TagChip';
 import type { SessionTag } from '../../../hooks/useSessionTags';
 
 type AnchorRect = Pick<DOMRect, 'top' | 'left' | 'bottom' | 'right' | 'width' | 'height'>;
@@ -62,12 +61,11 @@ export function TagPicker({
       onMouseDown={e => e.stopPropagation()}
     >
       <div className="cl-tag-picker-input">
-        <span aria-hidden>#</span>
         <input
           ref={inputRef}
           type="text"
           value={query}
-          placeholder="Type to filter or create…"
+          placeholder="Find or create a tag…"
           onChange={e => setQuery(e.target.value)}
           onKeyDown={e => {
             if (e.key === 'Enter' && canCreate) {
@@ -93,10 +91,16 @@ export function TagPicker({
               key={t.name}
               type="button"
               className={`cl-tag-picker-row${isSelected ? ' on' : ''}`}
+              aria-pressed={isSelected}
               onClick={() => onToggle(t.name)}
             >
-              <TagChip name={t.name} tone={isSelected ? 'on' : 'muted'} />
-              <span className="status">{isSelected ? '✓' : ''}</span>
+              <span className="check" aria-hidden>
+                {isSelected && <CheckGlyph />}
+              </span>
+              <span className="hash" aria-hidden>
+                #
+              </span>
+              <span className="name">{t.name}</span>
             </button>
           );
         })}
@@ -109,12 +113,32 @@ export function TagPicker({
               setQuery('');
             }}
           >
-            <span className="create-label">Create</span>
-            <TagChip name={normalized} tone="soft" />
+            <span className="check" aria-hidden>
+              +
+            </span>
+            <span className="name">
+              Create <strong>#{normalized}</strong>
+            </span>
           </button>
         )}
       </div>
     </div>,
     document.body
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.8"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      <path d="M3.5 8.5 6.5 11.5 12.5 4.5" />
+    </svg>
   );
 }

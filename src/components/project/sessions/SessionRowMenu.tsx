@@ -226,7 +226,7 @@ function ChatGlyph() {
   );
 }
 
-function TagGlyph() {
+export function TagGlyph() {
   return (
     <svg
       viewBox="0 0 16 16"

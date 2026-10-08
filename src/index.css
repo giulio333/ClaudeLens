@@ -1467,6 +1467,30 @@ body {
   background: color-mix(in srgb, var(--cl-accent) 8%, transparent);
 }
 
+.cl-chat-pin {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 4px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--cl-ink-4);
+  cursor: pointer;
+  transition:
+    color 140ms,
+    background 140ms;
+}
+.cl-chat-pin:hover {
+  color: var(--cl-accent-ink);
+  background: var(--cl-glass-hover-bg);
+}
+.cl-chat-pin[aria-pressed='true'] {
+  color: var(--cl-accent);
+}
+
 /* A rail of filter options, not a band: it rides the section head (sessions) or
    a toolbar (memory), so it carries no padding, rule or margin of its own. As
    its own band under the heading it cost a hairline and 28px of vertical space
@@ -1661,7 +1685,7 @@ body {
 }
 
 .cl-tag-picker {
-  width: 260px;
+  width: 240px;
   background: var(--cl-paper);
   border: 1px solid var(--cl-line);
   border-radius: 10px;
@@ -1677,67 +1701,78 @@ body {
   box-shadow: 0 8px 28px oklch(0 0 0 / 0.45);
 }
 .cl-tag-picker-input {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--cl-line-soft);
-  color: var(--cl-ink-4);
-  font-family: var(--font-mono);
+  padding: 4px 4px 0;
 }
 .cl-tag-picker-input input {
-  flex: 1;
+  width: 100%;
+  padding: 7px 10px;
   background: transparent;
   border: none;
+  border-bottom: 1px solid var(--cl-line-soft);
   outline: none;
-  font: inherit;
-  font-family: var(--font-mono);
+  font: 400 12.5px/1.2 var(--font-sans);
   color: var(--cl-ink);
-  font-size: 12px;
 }
+.cl-tag-picker-input input::placeholder {
+  color: var(--cl-ink-4);
+}
+/* Rows read like the menu's items: plain text, no chip of their own — the
+   check on the left is the only state the row carries. */
 .cl-tag-picker-list {
   max-height: 260px;
   overflow-y: auto;
-  padding: 4px 0;
+  padding: 4px;
 }
 .cl-tag-picker-row {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 8px;
   width: 100%;
-  padding: 6px 12px;
+  padding: 6px 10px;
   border: none;
+  border-radius: 6px;
   background: transparent;
   cursor: pointer;
-  font: inherit;
+  font: 400 12.5px/1.2 var(--font-sans);
   color: var(--cl-ink-2);
-  transition: background 100ms;
+  text-align: left;
+  transition: background var(--cl-hover-ms, 120ms);
 }
 .cl-tag-picker-row:hover {
   background: var(--cl-hover-bg);
 }
+.cl-tag-picker-row .check {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 13px;
+  height: 13px;
+  color: var(--cl-accent);
+}
+.cl-tag-picker-row .hash {
+  color: var(--cl-ink-4);
+  margin-right: -6px;
+}
+.cl-tag-picker-row .name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 .cl-tag-picker-row.on {
-  color: var(--cl-accent-ink);
+  color: var(--cl-ink);
 }
-.cl-tag-picker-row .status {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-accent-ink);
-}
-.cl-tag-picker-row.create {
-  border-top: 1px solid var(--cl-line-soft);
-}
-.cl-tag-picker-row.create .create-label {
-  font-family: var(--font-mono);
-  font-size: 10px;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+.cl-tag-picker-row.create .check {
   color: var(--cl-ink-4);
 }
+.cl-tag-picker-row.create strong {
+  font-weight: 600;
+  color: var(--cl-accent-ink);
+}
 .cl-tag-picker-empty {
-  padding: 10px 12px;
-  font-family: var(--font-mono);
-  font-size: 11px;
+  padding: 8px 10px;
+  font-size: 12px;
   color: var(--cl-ink-4);
 }
 
@@ -22361,6 +22396,14 @@ select.cl-opt-input {
   text-align: left;
   cursor: pointer;
 }
+.cl-stab-pin {
+  flex: none;
+  display: inline-flex;
+  width: 11px;
+  height: 11px;
+  /* Only there when pinned, so it can stay quiet: a mark, not a control. */
+  color: var(--cl-ink-4);
+}
 .cl-stab-title {
   min-width: 0;
   overflow: hidden;
@@ -22838,6 +22881,26 @@ select.cl-opt-input {
 }
 .cl-stabs-new {
   margin-left: 4px;
+}
+/* Pin and tags (SessionActions): quiet until they hold something. */
+.cl-stabs-mark {
+  position: relative;
+  color: var(--cl-ink-4);
+}
+.cl-stabs-mark[aria-pressed='true'] {
+  color: var(--cl-accent);
+}
+.cl-stabs-glyph {
+  display: inline-flex;
+  width: 14px;
+  height: 14px;
+}
+.cl-stabs-count {
+  position: absolute;
+  top: 3px;
+  right: 2px;
+  font: 600 9px/1 var(--font-mono);
+  color: var(--cl-accent-ink);
 }
 .cl-stabs-bar > .cl-parked > .cl-stabs-icon {
   margin-bottom: 0;
