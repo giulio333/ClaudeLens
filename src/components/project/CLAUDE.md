@@ -121,7 +121,9 @@ file e il suo test.
 - **Settings**: la versione di Claude Code è `claude --version` (`useClaudeCodeVersion`), mai il
   `claude_code_version` dell'handshake SDK, che è la CLI impacchettata nell'app. La tab MCP legge
   `claude mcp list` (`mcp:getGlobal`): l'handshake è scoped alla cwd, e la home è untrusted.
-  Read-only tranne Appearance e Privacy.
+  Il rail ha due gruppi e la posizione dice se una tab si modifica: ClaudeLens (General, Privacy)
+  sì, Claude Code (Runtime in giù) è read-only. I renderer read-only sono condivisi con la Config
+  di progetto, che li impila in un ledger: il titolo è di chi li monta, mai del renderer.
 - **Descrizione del progetto**: l'edit va nelle prefs, mai nel CLAUDE.md del progetto; svuotarla
   toglie l'override.
 

@@ -17417,17 +17417,8 @@ select.cl-opt-input {
   padding: 30px 48px 72px;
 }
 
-/* panel header */
-.set-head {
-  padding-bottom: 22px;
-  border-bottom: 1.5px solid var(--cl-ink);
-}
-.set-head-top {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  gap: 18px;
-}
+/* panel header — a title block with no rule under it: the first line on the
+   page belongs to what follows (the status tape, or the first block's own) */
 .set-eyebrow {
   display: inline-flex;
   align-items: center;
@@ -17443,12 +17434,6 @@ select.cl-opt-input {
   height: 6px;
   border-radius: 50%;
   background: var(--cl-accent);
-}
-.set-head-count {
-  font-family: var(--font-mono);
-  font-size: 11px;
-  color: var(--cl-ink-4);
-  letter-spacing: 0.02em;
 }
 .set-title {
   margin-top: 12px;
@@ -17476,10 +17461,8 @@ select.cl-opt-input {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   margin-top: 24px;
-  border: 1px solid var(--cl-line);
-  border-radius: 14px;
-  background: var(--cl-paper);
-  overflow: hidden;
+  border-top: 1.5px solid var(--cl-ink);
+  border-bottom: 1px solid var(--cl-line);
 }
 .set-tape .cell {
   padding: 14px 18px;
@@ -17488,6 +17471,10 @@ select.cl-opt-input {
 }
 .set-tape .cell:first-child {
   border-left: none;
+  padding-left: 0;
+}
+.set-tape .cell:last-child {
+  padding-right: 0;
 }
 .set-tape .cell .l {
   font-family: var(--font-mono);
@@ -17528,23 +17515,28 @@ select.cl-opt-input {
   flex-shrink: 0;
 }
 
-/* sub-block — boxed card so each group of options reads as its own panel */
+/* sub-block — a mono label over an ink rule, then the content. No card: the
+   page is paper, and its structure is rules and the space between things. */
 .set-block {
-  margin-top: 16px;
-  padding: 16px 22px 18px;
-  border: 1px solid var(--cl-line);
-  border-radius: 16px;
-  background: var(--cl-paper-2);
+  margin-top: 36px;
 }
-.set-block:first-child {
-  margin-top: 24px;
+/* no label of its own (a tab that is one list): the rule still opens it */
+.set-block.bare {
+  padding-top: 4px;
+  border-top: 1.5px solid var(--cl-ink);
+}
+/* spans the row when its siblings sit side by side (the ledger's Extensions) */
+.set-block.wide {
+  grid-column: 1 / -1;
 }
 .set-block-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: 14px;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
+  padding-bottom: 9px;
+  border-bottom: 1.5px solid var(--cl-ink);
 }
 .set-block-head .lbl {
   font-family: var(--font-mono);
@@ -17559,20 +17551,6 @@ select.cl-opt-input {
   font-size: 11px;
   color: var(--cl-ink-4);
   letter-spacing: 0.02em;
-}
-/* "editable" marker — General mixes one writable block into a read-only
-   datasheet, so the writable one says so. Accent (= actionable), mirroring the
-   violet source stamp that marks a resolved, read-only value. */
-.set-block-head .ed {
-  font-family: var(--font-mono);
-  font-size: 9px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cl-accent-ink);
-  background: var(--cl-accent-soft);
-  border-radius: 4px;
-  padding: 2px 6px;
-  white-space: nowrap;
 }
 .set-block-hint {
   margin: 2px 0 6px;
@@ -17647,17 +17625,25 @@ select.cl-opt-input {
   word-break: break-all;
 }
 
-/* source stamp (provenance citation) */
+/* source stamp (provenance citation) — which settings file set the value.
+   Neutral by default; a project-tier stamp takes the accent, like the project
+   layer in the CLAUDE.md cascade. Not violet: outside the brand hue a colour
+   says which model wrote something, and a stamp says nothing of the kind. */
 .set-src {
   font-family: var(--font-mono);
   font-size: 9px;
   letter-spacing: 0.12em;
   text-transform: uppercase;
-  color: var(--cl-violet-ink);
-  background: var(--cl-violet-soft);
-  border-radius: 4px;
-  padding: 2px 6px;
+  color: var(--cl-ink-3);
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-pill);
+  padding: 2px 7px;
   white-space: nowrap;
+}
+.set-src.here {
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
 }
 
 /* value typography */
@@ -17883,23 +17869,173 @@ select.cl-opt-input {
   }
 }
 
-/* The project's Config page is a page of the project, not the Settings
-   panel: its blocks drop the paper-2 card and sit on the paper like every
-   other project section — a mono label over an ink rule, then the content. */
-.cl-pcfg .set-block {
-  margin-top: 36px;
-  padding: 0;
-  border: 0;
-  border-radius: 0;
+/* The project's Config page is a ledger: each domain named in the margin, its
+   blocks beside it, an ink rule above. Read down the left edge and you have
+   the page's table of contents — which a flat stack of five titled groups,
+   one screen apart, never gave. Inside a domain the block label steps down to
+   a hairline: the ink rule is already there, one line up. */
+.cl-section--config > * {
+  max-width: var(--cl-measure);
+}
+.cl-cfg-actions {
+  margin-left: auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* the settings cascade as a legend: one cell per file, lowest precedence first */
+.cl-cfg-tiers {
+  padding-bottom: 20px;
+}
+.cl-cfg-tiers .legend {
+  margin-bottom: 10px;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+}
+.cl-cfg-tiers .cells {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(220px, 100%), 1fr));
+  border-top: 1px solid var(--cl-line);
+}
+.cl-cfg-tiers .cell {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px 18px 0;
+  border-left: 1px solid var(--cl-line);
+}
+.cl-cfg-tiers .cell:first-child {
+  padding-left: 0;
+  border-left: 0;
+}
+.cl-cfg-tiers .cell:last-child {
+  padding-right: 0;
+}
+.cl-cfg-tiers .top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.cl-cfg-tiers .tier {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.11em;
+  text-transform: uppercase;
+  color: var(--cl-ink-3);
+  border: 1px solid var(--cl-line);
+  border-radius: var(--cl-r-pill);
+  padding: 3px 10px 4px;
+}
+.cl-cfg-tiers .tier.here {
+  color: var(--cl-accent-ink);
+  border-color: var(--cl-accent);
+  background: var(--cl-accent-soft);
+}
+.cl-cfg-tiers .n {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  color: var(--cl-ink-3);
+}
+/* the path keeps its case: it is data (see .cl-eyebrow .path) */
+.cl-cfg-tiers .path {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--cl-ink-2);
+}
+/* a tier that sets nothing stays on the tape, drawn as absent */
+.cl-cfg-tiers .cell.is-empty .tier {
+  color: var(--cl-ink-3);
+  border-style: dashed;
+  border-color: var(--cl-line);
   background: none;
 }
-.cl-pcfg .set-block-head {
-  margin-bottom: 6px;
-  padding-bottom: 9px;
-  border-bottom: 1.5px solid var(--cl-ink);
+.cl-cfg-tiers .cell.is-empty .n,
+.cl-cfg-tiers .cell.is-empty .path {
+  color: var(--cl-ink-4);
+}
+.cl-ledger-domain {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px 40px;
+  padding: 22px 0 36px;
+  border-top: 1.5px solid var(--cl-ink);
+}
+.cl-ledger-domain:last-child {
+  padding-bottom: 0;
+}
+.cl-ledger-domain > .side {
+  flex: 1 1 190px;
+  max-width: 220px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cl-ledger-domain > .side h3 {
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--cl-ink);
+}
+.cl-ledger-domain > .side .meta {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  line-height: 1.5;
+  color: var(--cl-ink-4);
+}
+.cl-ledger-domain > .body {
+  flex: 999 1 520px;
+  min-width: 0;
+}
+/* short lists side by side where the column allows (Extensions) */
+.cl-ledger-domain > .body.is-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+  gap: 28px 48px;
+  align-items: start;
+}
+.cl-ledger .set-block {
+  margin-top: 28px;
+}
+.cl-ledger .body > .set-block:first-child,
+.cl-ledger .body.is-grid > .set-block {
+  margin-top: 0;
+}
+.cl-ledger .set-block-head {
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-ledger .set-block.bare {
+  padding-top: 0;
+  border-top: 0;
+}
+/* the first row of a domain sits level with its title in the margin */
+.cl-ledger .body > .set-row:first-child,
+.cl-ledger .body > .set-block:first-child > div > .set-line:first-child {
+  padding-top: 2px;
+}
+.cl-ledger .cl-md-cascade {
+  border-top: 0;
+}
+.cl-ledger .cl-md-layer:first-child {
+  padding-top: 0;
 }
 
-/* chip cloud (permission rules — colored, meaningful tones) */
+/* chip cloud (permission rules) — neutral chips. Allow / Ask / Deny is said by
+   the row label and one dot beside it: sage or amber text on its own soft
+   ground did not clear AA, and fifteen tinted chips outshouted the page. */
 .set-cloud {
   display: flex;
   flex-wrap: wrap;
@@ -17915,17 +18051,26 @@ select.cl-opt-input {
   border-radius: 6px;
   padding: 5px 9px;
 }
-.set-chip.ok {
-  color: var(--cl-ok);
-  background: var(--cl-task-green-soft);
-}
 .set-chip.warn {
   color: var(--cl-warn);
   background: var(--cl-warn-soft);
 }
-.set-chip.danger {
-  color: var(--cl-danger);
-  background: var(--cl-danger-soft);
+.set-tone {
+  display: inline-block;
+  width: 7px;
+  height: 7px;
+  margin-right: 8px;
+  border-radius: 50%;
+  vertical-align: 1px;
+}
+.set-tone.ok {
+  background: var(--cl-ok);
+}
+.set-tone.warn {
+  background: var(--cl-warn);
+}
+.set-tone.danger {
+  background: var(--cl-danger);
 }
 
 /* status lines (mcp servers / plugins) */
@@ -17953,55 +18098,135 @@ select.cl-opt-input {
   border-radius: 50%;
 }
 
-/* editable cards (appearance + privacy) */
-.set-card {
+/* editable preference rows (appearance, notifications, privacy): what it is
+   on the left, its control on the right. No dotted leader — a leader reads a
+   value off, and this row sets one. */
+.set-pref {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 14px 16px;
-  border-radius: 12px;
-  border: 1px solid var(--cl-line);
-  background: var(--cl-paper);
+  gap: 12px 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--cl-line-soft);
 }
-/* segmented control (theme picker) — compact, in scale with the datasheet rows */
-.set-seg {
-  display: inline-flex;
-  margin-top: 6px;
-  border: 1px solid var(--cl-line);
-  border-radius: 10px;
-  background: var(--cl-paper);
-  overflow: hidden;
+.set-pref .txt {
+  flex: 1 1 280px;
+  min-width: 0;
 }
-.set-seg button {
-  display: inline-flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 14px;
-  font-size: 12.5px;
+.set-pref .lbl {
+  font-size: 13.5px;
   font-weight: 500;
-  color: var(--cl-ink-2);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition:
-    background 120ms,
-    color 120ms;
-}
-.set-seg button + button {
-  border-left: 1px solid var(--cl-line);
-}
-.set-seg button svg {
-  width: 14px;
-  height: 14px;
-}
-.set-seg button:hover {
   color: var(--cl-ink);
 }
-.set-seg button.on {
-  background: var(--cl-accent-soft);
+.set-pref .hint {
+  margin-top: 4px;
+  max-width: 64ch;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cl-ink-4);
+}
+.set-pref.is-off .lbl {
+  color: var(--cl-ink-4);
+}
+/* on/off: a cl-btn whose is-pinned tint is the on state. Fixed width, so the
+   control does not jump when the check comes and goes. */
+.set-onoff {
+  min-width: 64px;
+  justify-content: center;
+}
+.set-onoff:disabled {
+  color: var(--cl-ink-4);
+  opacity: 0.6;
+  cursor: default;
+  transition: none;
+}
+/* a value that is a link (release notes, the privacy policy) */
+.set-link {
+  padding: 0;
+  border: 0;
+  background: none;
   color: var(--cl-accent-ink);
-  font-weight: 600;
+  cursor: pointer;
+}
+.set-link:hover {
+  color: var(--cl-ink);
+}
+/* a block's closing line: a note on the left, its action on the right */
+.set-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px 24px;
+  margin-top: 8px;
+  padding-top: 14px;
+  border-top: 1px solid var(--cl-line-soft);
+}
+.set-actions .set-disc {
+  flex: 1 1 320px;
+  min-width: 0;
+  margin-top: 0;
+}
+/* a command to copy: hairlines above and below, not a box */
+.set-cmd {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 0;
+  border-top: 1px solid var(--cl-line-soft);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.set-cmd code {
+  flex: 1;
+  min-width: 0;
+  overflow-x: auto;
+  white-space: nowrap;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--cl-ink-2);
+}
+/* Settings rail — the project rail's vocabulary (cl-rail, cl-rail-group,
+   cl-rail-item) with the filter on top and the scope at the foot. */
+.set-rail-search {
+  flex-shrink: 0;
+  padding: 13px 12px 2px;
+}
+.set-rail-group {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+}
+.set-rail-group .note {
+  letter-spacing: 0.12em;
+}
+.set-rail-foot {
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 18px;
+  border-top: 1px solid var(--cl-line);
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  color: var(--cl-ink-3);
+}
+.set-rail-foot .k {
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.set-rail-foot .path {
+  word-break: break-all;
+  color: var(--cl-ink-2);
+}
+.set-rail-foot .k + .path {
+  margin-bottom: 8px;
+}
+.set-rail-foot .ver {
+  letter-spacing: 0.02em;
 }
 
 /* flat disclosure — for notes that matter once (the macOS quarantine command)
@@ -18014,14 +18239,14 @@ select.cl-opt-input {
   display: inline-flex;
   align-items: center;
   gap: 7px;
+  min-height: 28px;
   cursor: pointer;
   list-style: none;
   user-select: none;
   font-family: var(--font-mono);
-  font-size: 10.5px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  color: var(--cl-ink-4);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--cl-ink-3);
   transition: color 120ms;
 }
 .set-disc > summary::-webkit-details-marker {
@@ -20522,8 +20747,6 @@ select.cl-opt-input {
   align-items: flex-start;
   justify-content: space-between;
   gap: 24px;
-  padding: 16px 0 0;
-  border-top: 1px solid var(--cl-line);
 }
 .cl-danger-zone-body {
   display: flex;

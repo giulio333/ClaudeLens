@@ -46,10 +46,12 @@ import type {
   BgSession,
   DeleteRequest,
   DeleteSessionResult,
+  ClaudeMdHierarchy,
   EffectiveConfig,
   InstalledPlugin,
   LiveEvent,
   LiveWatchStatus,
+  McpData,
   SessionActivity,
   SessionArtifacts,
   SessionSummary,
@@ -64,7 +66,7 @@ import type {
   ProjectDirListing,
   ProjectFileAnswer,
 } from '../../src/types';
-import type { DerivedDescription, DuplicateGroup } from '../../src/hooks/useIPC';
+import type { DerivedDescription, DuplicateGroup, UpdateInfo } from '../../src/hooks/useIPC';
 
 /** The envelope every IPC handler returns (`electron/main.ts`). */
 type IpcResult<T> = { data: T | null; error: string | null };
@@ -219,6 +221,9 @@ export function createFakeElectronAPI(channels: FakeChannels) {
         _severity?: 'fatal' | 'error'
       ) => ok(null)
     ),
+    // The opt-out switch in Settings → Privacy: on until the user turns it off.
+    isEnabled: vi.fn(async () => ok(true)),
+    setEnabled: vi.fn(async (_enabled: boolean) => ok(null)),
   };
 
   // `claudeCodeVersion` is `claude --version` asked to the CLI on PATH — NOT the
@@ -226,6 +231,28 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   // shipped Agent SDK. Settings and the launch notice both read this one.
   const updates = {
     claudeCodeVersion: vi.fn(async () => ok<{ version: string | null }>({ version: null })),
+    // The GitHub releases check. `null` is "nothing learned": Settings draws a
+    // dash for the latest release, and no test here depends on the network.
+    check: vi.fn(async () => ok<UpdateInfo | null>(null)),
+  };
+
+  // `claude mcp list`, the source behind Settings → MCP servers. Empty, with a
+  // probe that never ran: a test that needs servers pushes its own.
+  const mcp = {
+    getGlobal: vi.fn(async () =>
+      ok<McpData>({
+        cloudServers: [],
+        localServers: [],
+        unlistedServers: [],
+        totalProjects: 0,
+        probe: { command: 'claude mcp list', observedAt: null, error: null },
+      })
+    ),
+  };
+
+  // The CLAUDE.md cascade of a project. No layers by default.
+  const claudeMd = {
+    getHierarchy: vi.fn(async (_realPath: string) => ok<ClaudeMdHierarchy>({ layers: [] })),
   };
 
   // Project deletion is delegated to `claude project purge`: `planPurge` is the
@@ -383,6 +410,8 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     vault,
     telemetry,
     updates,
+    mcp,
+    claudeMd,
     projects,
     config,
     plugins,

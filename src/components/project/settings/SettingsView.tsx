@@ -1,4 +1,4 @@
-import { useState, type ReactNode } from 'react';
+import { Fragment, useState, type ReactNode } from 'react';
 import { TopBar } from '../shared/TopBar';
 import {
   useEffectiveConfig,
@@ -16,6 +16,7 @@ import {
 } from '../../../hooks/useIPC';
 import { mcpStatusMeta } from '../mcp/McpServerCard';
 import { SlashCommandList } from './SlashCommandList';
+import { isProjectTier, sourceLabel } from './config-scope';
 import { useTheme, type ThemePreference } from '../../../hooks/useTheme';
 import { fmtModel } from '../utils';
 import { compareVersions } from '../../../../electron/shared/version-compare';
@@ -25,72 +26,81 @@ import { version as appVersion, claudeCodeVersion } from '../../../../package.js
 const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md';
 
 // ─── Settings page ────────────────────────────────────────────────────────────
-// Reads the *effective* Claude Code configuration through the official Agent SDK
-// (see electron/modules/config-reader.ts). Left rail of tabs; the right panel is
-// an "instrument readout" of the resolved config — a precise datasheet, with
-// dotted leaders from each setting to its value and a source stamp showing which
-// settings file it came from. Read-only except Appearance + Privacy (ClaudeLens
-// preferences). The tab content renderers are also reused by ProjectConfigView.
+// Two ledgers on one rail. "ClaudeLens" holds the app's own preferences, which
+// are edited here. "Claude Code" is the *effective* configuration read through
+// the official Agent SDK (see electron/modules/config-reader.ts), which is not:
+// a precise datasheet, with dotted leaders from each setting to its value and a
+// source stamp naming the settings file it came from. Where a tab sits on the
+// rail says whether it can be changed, so no block has to say it again. The
+// read-only renderers are reused by ProjectConfigView.
 
-type TabId =
-  'general' | 'permissions' | 'tools' | 'mcp' | 'extensions' | 'notifications' | 'privacy';
+type TabId = 'general' | 'privacy' | 'runtime' | 'permissions' | 'tools' | 'mcp' | 'extensions';
 
-const TABS: { id: TabId; label: string; icon: ReactNode }[] = [
-  { id: 'general', label: 'General', icon: <GearIcon /> },
-  { id: 'permissions', label: 'Permissions', icon: <ShieldIcon /> },
-  { id: 'tools', label: 'Tools', icon: <WrenchIcon /> },
-  { id: 'mcp', label: 'MCP Servers', icon: <PlugIcon /> },
-  { id: 'extensions', label: 'Extensions', icon: <BlocksIcon /> },
-  { id: 'notifications', label: 'Notifications', icon: <BellIcon /> },
-  { id: 'privacy', label: 'Privacy', icon: <LockIcon /> },
+// The rail is the project rail's (`cl-rail`): a mono tile, a label, a count.
+const TAB_GROUPS: {
+  label: string;
+  note?: string;
+  tabs: { id: TabId; label: string; mono: string }[];
+}[] = [
+  {
+    label: 'ClaudeLens',
+    tabs: [
+      { id: 'general', label: 'General', mono: 'G' },
+      { id: 'privacy', label: 'Privacy', mono: 'P' },
+    ],
+  },
+  {
+    label: 'Claude Code',
+    note: 'read-only',
+    tabs: [
+      { id: 'runtime', label: 'Runtime', mono: 'R' },
+      { id: 'permissions', label: 'Permissions', mono: 'Pm' },
+      { id: 'tools', label: 'Tools', mono: 'T' },
+      { id: 'mcp', label: 'MCP servers', mono: 'N' },
+      { id: 'extensions', label: 'Extensions', mono: 'E' },
+    ],
+  },
 ];
 
 // Per-tab header copy, written from the user's side of the screen.
-const SDK = 'Resolved via Agent SDK';
-const PREF = 'ClaudeLens preference';
-const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string; ro: boolean }> = {
-  privacy: {
-    eyebrow: PREF,
-    title: 'Privacy',
-    caption: 'Anonymous, opt-out usage analytics. Editable here.',
-    ro: false,
-  },
-  notifications: {
-    eyebrow: PREF,
-    title: 'Notifications',
-    caption: 'How ClaudeLens alerts you when a session needs you or fails. Editable here.',
-    ro: false,
-  },
+const OWN = 'ClaudeLens · editable here';
+const SDK = 'Claude Code · resolved via Agent SDK';
+const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string }> = {
   general: {
-    eyebrow: 'App & runtime',
+    eyebrow: OWN,
     title: 'General',
+    caption: 'How ClaudeLens looks, how it alerts you, and which version you are running.',
+  },
+  privacy: {
+    eyebrow: OWN,
+    title: 'Privacy',
+    caption: 'Anonymous, opt-out usage analytics.',
+  },
+  runtime: {
+    eyebrow: SDK,
+    title: 'Runtime',
     caption:
-      'Versions and updates, how ClaudeLens looks, and the configuration Claude Code resolves for this scope.',
-    ro: true,
+      'What Claude Code resolves for this scope: the model, the two CLIs, and the preferences your settings files ask for.',
   },
   permissions: {
     eyebrow: SDK,
     title: 'Permissions',
     caption: 'Which tools Claude may run, must ask about, or can never touch.',
-    ro: true,
   },
   tools: {
     eyebrow: SDK,
     title: 'Tools',
     caption: 'Every tool the model can call in this scope.',
-    ro: true,
   },
   mcp: {
-    eyebrow: 'Resolved via claude mcp list',
+    eyebrow: 'Claude Code · resolved via claude mcp list',
     title: 'MCP servers',
     caption: 'Model Context Protocol integrations and the health Claude Code reports for them.',
-    ro: true,
   },
   extensions: {
     eyebrow: SDK,
     title: 'Extensions',
     caption: 'Skills, subagents, slash commands and plugins available to Claude.',
-    ro: true,
   },
 };
 
@@ -111,15 +121,10 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
         crumbs={[{ label: 'Settings', accent: true }]}
         right={
           <button
-            onClick={() => refetch()}
+            type="button"
+            className="cl-btn-ghost"
             title="Reload from the Agent SDK"
-            className="font-mono uppercase rounded-md px-2.5 py-1 transition-colors hover:text-[var(--cl-accent)]"
-            style={{
-              fontSize: 11,
-              letterSpacing: '0.16em',
-              color: 'var(--cl-ink-3)',
-              border: '1px solid var(--cl-line)',
-            }}
+            onClick={() => refetch()}
           >
             {isFetching ? 'Loading…' : 'Reload'}
           </button>
@@ -128,95 +133,87 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
 
       <div className="flex flex-1 min-h-0">
         {/* ─── Left rail ─── */}
-        <aside
-          className="shrink-0 flex flex-col gap-1 p-3 border-r overflow-y-auto"
-          style={{ width: 232, borderColor: 'var(--cl-line)', background: 'var(--cl-paper-2)' }}
-        >
-          <div
-            className="px-2 pt-1 pb-3"
-            style={{ fontSize: 11, letterSpacing: '0.18em', color: 'var(--cl-ink-4)' }}
-          >
-            <span className="font-mono uppercase">Settings</span>
+        <aside className="cl-rail set-rail" aria-label="Settings sections">
+          <div className="set-rail-search">
+            <SearchBox value={q} onChange={setQ} />
           </div>
-          <SearchBox value={q} onChange={setQ} />
-          <div className="h-2" />
-          {TABS.map(t => (
-            <button
-              key={t.id}
-              onClick={() => setTab(t.id)}
-              className="flex items-center gap-2.5 rounded-lg px-2.5 py-2 text-left transition-colors"
-              style={{
-                background: tab === t.id ? 'var(--cl-accent-soft)' : 'transparent',
-                color: tab === t.id ? 'var(--cl-accent-ink)' : 'var(--cl-ink-2)',
-                fontWeight: tab === t.id ? 600 : 500,
-                fontSize: 13.5,
-              }}
-            >
-              <span style={{ opacity: tab === t.id ? 1 : 0.7, display: 'flex' }}>{t.icon}</span>
-              {t.label}
-            </button>
-          ))}
-          <div className="mt-auto px-2 pt-4" style={{ fontSize: 10.5, color: 'var(--cl-ink-4)' }}>
+          <nav className="cl-rail-nav">
+            {TAB_GROUPS.map(g => (
+              <Fragment key={g.label}>
+                <div className="cl-rail-group set-rail-group">
+                  <span>{g.label}</span>
+                  {g.note && <span className="note">{g.note}</span>}
+                </div>
+                {g.tabs.map(t => {
+                  // The count lives here and only here: the panel head used to
+                  // repeat it one glance to the right.
+                  const count = countFor(t.id, data, mcpServerCount(mcp));
+                  return (
+                    <button
+                      key={t.id}
+                      type="button"
+                      className={`cl-rail-item${tab === t.id ? ' on' : ''}`}
+                      aria-current={tab === t.id ? 'page' : undefined}
+                      onClick={() => setTab(t.id)}
+                    >
+                      <span className="mono" aria-hidden="true">
+                        {t.mono}
+                      </span>
+                      <span className="lbl">{t.label}</span>
+                      {count !== undefined && <span className="ct">{count}</span>}
+                    </button>
+                  );
+                })}
+              </Fragment>
+            ))}
+          </nav>
+          <div className="set-rail-foot">
             {data?.cwd && (
               <>
-                <div className="font-mono uppercase" style={{ letterSpacing: '0.14em' }}>
-                  Scope
-                </div>
-                <div className="mt-1 break-all" style={{ color: 'var(--cl-ink-3)' }}>
-                  {data.cwd}
-                </div>
+                <span className="k">Scope</span>
+                <span className="path">{data.cwd}</span>
               </>
             )}
-            <div
-              className="mt-3 font-mono"
-              style={{ letterSpacing: '0.1em', color: 'var(--cl-ink-3)' }}
-            >
-              ClaudeLens v{appVersion}
-            </div>
+            <span className="ver">ClaudeLens v{appVersion}</span>
           </div>
         </aside>
 
         {/* ─── Content panel ─── */}
         <main className="set-main">
           <div className="set-panel">
-            <PanelHead meta={meta} count={countFor(tab, data, mcpServerCount(mcp))} />
+            <PanelHead meta={meta} />
 
-            {tab === 'privacy' ? (
+            {tab === 'general' ? (
+              /* All of it is ClaudeLens' own, so none of it waits on the SDK:
+                 only the status tape reads the config, and it draws a dash
+                 until that arrives. */
+              <GeneralPanel cfg={data ?? null} />
+            ) : tab === 'privacy' ? (
               <PrivacyTab />
-            ) : tab === 'notifications' ? (
-              <NotificationsTab />
-            ) : tab === 'general' ? (
-              /* General composes its own order and gating — see GeneralPanel:
-                 part of it is ClaudeLens' own and must not wait on the SDK. */
-              <GeneralPanel cfg={data ?? null} isLoading={isLoading} error={error} q={ql} />
-            ) : (
+            ) : tab === 'mcp' ? (
+              /* MCP reads `claude mcp list`, not the SDK config — so it must
+                 not wait on (or be hidden by) that slower, fallible read. */
               <>
-                {/* MCP reads `claude mcp list`, not the SDK config — so it must
-                    not wait on (or be hidden by) that slower, fallible read. */}
-                {tab === 'mcp' && (
-                  <>
-                    <McpTab cwd={data?.cwd} q={ql} />
-                    <ReadOnlyHint />
-                  </>
-                )}
-                {tab === 'mcp' ? null : isLoading ? (
-                  <p className="set-dim" style={{ marginTop: 32 }}>
-                    Reading configuration via the Agent SDK…
-                  </p>
-                ) : error ? (
-                  <p className="set-dim" style={{ marginTop: 32 }}>
-                    Couldn’t read configuration: {(error as Error).message}
-                  </p>
-                ) : data ? (
-                  <>
-                    {tab === 'permissions' && <PermissionsTab cfg={data} q={ql} />}
-                    {tab === 'tools' && <ToolsTab cfg={data} q={ql} />}
-                    {tab === 'extensions' && <ExtensionsTab cfg={data} q={ql} />}
-                    {meta.ro && <ReadOnlyHint />}
-                  </>
-                ) : null}
+                <McpTab cwd={data?.cwd} q={ql} />
+                <ReadOnlyHint />
               </>
-            )}
+            ) : isLoading ? (
+              <p className="set-dim" style={{ marginTop: 32 }}>
+                Reading configuration via the Agent SDK…
+              </p>
+            ) : error ? (
+              <p className="set-dim" style={{ marginTop: 32 }}>
+                Couldn’t read configuration: {(error as Error).message}
+              </p>
+            ) : data ? (
+              <>
+                {tab === 'runtime' && <RuntimeTab cfg={data} />}
+                {tab === 'permissions' && <PermissionsTab cfg={data} q={ql} />}
+                {tab === 'tools' && <ToolsTab cfg={data} q={ql} />}
+                {tab === 'extensions' && <ExtensionsTab cfg={data} q={ql} />}
+                <ReadOnlyHint />
+              </>
+            ) : null}
           </div>
         </main>
       </div>
@@ -230,36 +227,28 @@ function mcpServerCount(
   return mcp ? mcp.cloudServers.length + mcp.localServers.length : undefined;
 }
 
-function countFor(tab: TabId, cfg?: EffectiveConfig | null, mcpCount?: number): string | undefined {
-  if (tab === 'mcp') return mcpCount === undefined ? undefined : `${mcpCount} servers`;
+/** The figure a rail item carries. `undefined` is "not known yet", never zero. */
+function countFor(tab: TabId, cfg?: EffectiveConfig | null, mcpCount?: number): number | undefined {
+  if (tab === 'mcp') return mcpCount;
   const init = cfg?.init;
   if (!init) return undefined;
   switch (tab) {
     case 'tools':
-      return `${init.tools.length} tools`;
+      return init.tools.length;
     case 'extensions':
-      return `${init.skills.length + init.agents.length + init.slashCommands.length} items`;
+      return init.skills.length + init.agents.length + init.slashCommands.length;
     default:
       return undefined;
   }
 }
 
-function PanelHead({
-  meta,
-  count,
-}: {
-  meta: { eyebrow: string; title: string; caption: string; ro: boolean };
-  count?: string;
-}) {
+function PanelHead({ meta }: { meta: { eyebrow: string; title: string; caption: string } }) {
   return (
     <header className="set-head">
-      <div className="set-head-top">
-        <span className="set-eyebrow">
-          <span className="pip" />
-          {meta.eyebrow}
-        </span>
-        {count && <span className="set-head-count">{count}</span>}
-      </div>
+      <span className="set-eyebrow">
+        <span className="pip" />
+        {meta.eyebrow}
+      </span>
       <h1 className="set-title">{meta.title}</h1>
       <p className="set-caption">{meta.caption}</p>
     </header>
@@ -267,47 +256,22 @@ function PanelHead({
 }
 
 // ─── General panel ────────────────────────────────────────────────────────────
-// The one tab that mixes ClaudeLens' own preferences with the resolved Claude
-// Code config, so it composes its own order instead of the shared gate: the
-// status tape answers "is my setup ok?" before any reading, then Updates (which
-// version is this, which one shipped, and the button to re-ask) and Appearance
-// — both ClaudeLens' own, both shown immediately — and finally the read-only
-// datasheet, which waits on the SDK read and is closed by the read-only hint.
-// With Updates sitting right under the tape, the app version and its update
-// state are ONE tape cell, not two: the block 16px below already spells out
-// installed vs latest and carries the action, so a second cell restating it was
-// the same sentence three times in one screenful.
+// ClaudeLens' own page. The status tape answers "is my setup ok?" before any
+// reading, then the three things that can be changed here: how the app looks,
+// how it alerts you, and which release it is. The resolved Claude Code
+// configuration used to trail under them; it is the Runtime tab now, so this
+// page no longer mixes what you can edit with what you can only read.
+//
+// The app version and its update state are ONE tape cell, not two: the Updates
+// block below already spells out installed vs latest and carries the action.
 
-function GeneralPanel({
-  cfg,
-  isLoading,
-  error,
-  q,
-}: {
-  cfg: EffectiveConfig | null;
-  isLoading: boolean;
-  error: unknown;
-  q: string;
-}) {
+function GeneralPanel({ cfg }: { cfg: EffectiveConfig | null }) {
   return (
     <>
       <StatusTape cfg={cfg} />
+      <AppearanceBlock />
+      <NotificationsBlock />
       <UpdatesBlock />
-      <AppearanceTab />
-      {isLoading ? (
-        <p className="set-dim" style={{ marginTop: 32 }}>
-          Reading configuration via the Agent SDK…
-        </p>
-      ) : error ? (
-        <p className="set-dim" style={{ marginTop: 32 }}>
-          Couldn’t read configuration: {(error as Error).message}
-        </p>
-      ) : cfg ? (
-        <>
-          <GeneralTab cfg={cfg} q={q} />
-          <ReadOnlyHint />
-        </>
-      ) : null}
     </>
   );
 }
@@ -530,17 +494,11 @@ function updateStatus(update: UpdateInfo | null, isFetching: boolean, failed: bo
 }
 
 // ─── Tab content renderers ────────────────────────────────────────────────────
-// `heading` makes a renderer print its own domain label — used by
-// ProjectConfigView, which stacks them all without a per-tab PanelHead.
+// Shared with ProjectConfigView, which stacks them down one page: each renders
+// its blocks and nothing above them — the title is the caller's (a panel head
+// here, a ledger domain there).
 
-export function GeneralTab({
-  cfg,
-  heading,
-}: {
-  cfg: EffectiveConfig;
-  q: string;
-  heading?: boolean;
-}) {
+export function RuntimeTab({ cfg }: { cfg: EffectiveConfig }) {
   const s = cfg.effective;
   const init = cfg.init;
   return (
@@ -550,7 +508,6 @@ export function GeneralTab({
           Runtime (init) info unavailable: {cfg.initError}
         </div>
       )}
-      {heading && <DomainLabel>General</DomainLabel>}
       <Block label="Runtime" grid>
         <Row k="Model" hint="Resolved model id for this scope">
           {init ? <Val>{init.model}</Val> : <Dim />}
@@ -579,7 +536,7 @@ export function GeneralTab({
 
       <Block label="Claude Code preferences" grid>
         {/* "CLI theme", not "Theme": this is the terminal's own theme from the
-            settings cascade, and the Appearance block above — ClaudeLens' theme
+            settings cascade, and the Appearance block in General — ClaudeLens' theme
             — was reading as the same setting under the same name. */}
         <Row
           k="CLI theme"
@@ -613,19 +570,10 @@ export function GeneralTab({
   );
 }
 
-export function PermissionsTab({
-  cfg,
-  q,
-  heading,
-}: {
-  cfg: EffectiveConfig;
-  q: string;
-  heading?: boolean;
-}) {
+export function PermissionsTab({ cfg, q }: { cfg: EffectiveConfig; q: string }) {
   const p = (cfg.effective.permissions as Record<string, unknown>) ?? {};
   return (
     <>
-      {heading && <DomainLabel>Permissions</DomainLabel>}
       <Block label="Mode" grid>
         <Row k="Default mode" src={prov(cfg, 'permissions')}>
           <Pill>{String(p.defaultMode ?? 'default')}</Pill>
@@ -649,30 +597,18 @@ export function PermissionsTab({
   );
 }
 
-export function ToolsTab({
-  cfg,
-  q,
-  heading,
-}: {
-  cfg: EffectiveConfig;
-  q: string;
-  heading?: boolean;
-}) {
+export function ToolsTab({ cfg, q }: { cfg: EffectiveConfig; q: string }) {
   const all = cfg.init?.tools ?? [];
   const tools = all.filter(t => !q || t.toLowerCase().includes(q));
-  if (!cfg.init) return <RuntimeUnavailable label={heading ? 'Tools' : undefined} />;
+  if (!cfg.init) return <RuntimeUnavailable />;
   return (
-    <Block
-      label={heading ? 'Tools' : undefined}
-      bare={!heading}
-      count={heading ? all.length : undefined}
-    >
+    <Block>
       {tools.length === 0 ? <p className="set-dim">No tools match.</p> : <InvList items={tools} />}
     </Block>
   );
 }
 
-export function McpTab({ cwd, q, heading }: { cwd?: string; q: string; heading?: boolean }) {
+export function McpTab({ cwd, q }: { cwd?: string; q: string }) {
   // Deliberately NOT cfg.init.mcpServers: the SDK handshake is scoped to the
   // queried directory, and this panel is resolved against the home dir — which
   // Claude Code treats as untrusted, so it loads no MCP server there and the
@@ -696,7 +632,7 @@ export function McpTab({ cwd, q, heading }: { cwd?: string; q: string; heading?:
     );
   return (
     <>
-      <Block label={heading ? 'MCP servers' : undefined} bare={!heading}>
+      <Block>
         {probeError && <p className="set-dim">Live status unavailable: {probeError}</p>}
         {listed.length === 0 ? (
           <p className="set-dim">
@@ -708,7 +644,7 @@ export function McpTab({ cwd, q, heading }: { cwd?: string; q: string; heading?:
               <div key={s.name} className="set-line">
                 <span className="set-val">{s.name}</span>
                 <span style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  {offHere(s) && <SourceBadge source="off in this scope" />}
+                  {offHere(s) && <Stamp>off in this scope</Stamp>}
                   <StatusDot
                     status={mcpStatusMeta(s.status).label}
                     color={mcpStatusMeta(s.status).color}
@@ -744,20 +680,11 @@ export function McpTab({ cwd, q, heading }: { cwd?: string; q: string; heading?:
   );
 }
 
-export function ExtensionsTab({
-  cfg,
-  q,
-  heading,
-}: {
-  cfg: EffectiveConfig;
-  q: string;
-  heading?: boolean;
-}) {
+export function ExtensionsTab({ cfg, q }: { cfg: EffectiveConfig; q: string }) {
   const init = cfg.init;
   const filt = (arr: string[] = []) => arr.filter(x => !q || x.toLowerCase().includes(q));
   return (
     <>
-      {heading && <DomainLabel>Extensions</DomainLabel>}
       <Block label="Skills" count={init?.skills.length}>
         <InvList items={filt(init?.skills)} empty={!init} />
       </Block>
@@ -765,12 +692,13 @@ export function ExtensionsTab({
         <InvList items={filt(init?.agents)} empty={!init} />
       </Block>
       <Block
+        wide
         label="Slash commands"
         count={init ? init.commands?.length || init.slashCommands.length : undefined}
       >
         <SlashCommandList init={init} q={q} />
       </Block>
-      <Block label="Plugins" count={init?.plugins.length}>
+      <Block wide label="Plugins" count={init?.plugins.length}>
         {!init ? (
           <p className="set-dim">Runtime info unavailable.</p>
         ) : (init.plugins?.length ?? 0) === 0 ? (
@@ -797,36 +725,78 @@ export function ExtensionsTab({
   );
 }
 
-// ─── Appearance (editable, ClaudeLens-own preference) ─────────────────────────
+// ─── Appearance (ClaudeLens-own preference) ───────────────────────────────────
 
-const THEME_OPTIONS: { id: ThemePreference; label: string; icon: ReactNode; hint: string }[] = [
-  { id: 'light', label: 'Light', icon: <SunIcon />, hint: 'Always light' },
-  { id: 'dark', label: 'Dark', icon: <MoonIcon />, hint: 'Always dark' },
-  { id: 'system', label: 'System', icon: <DisplayIcon />, hint: 'Follow the OS' },
+const THEME_OPTIONS: { id: ThemePreference; label: string; hint: string }[] = [
+  { id: 'light', label: 'Light', hint: 'Always light.' },
+  { id: 'dark', label: 'Dark', hint: 'Always dark.' },
+  { id: 'system', label: 'System', hint: 'Follows your system.' },
 ];
 
-export function AppearanceTab() {
+function AppearanceBlock() {
   const { preference, resolved, setPreference } = useTheme();
+  const chosen = THEME_OPTIONS.find(o => o.id === preference);
   return (
-    <Block label="Appearance" hint="Applies to ClaudeLens only." editable>
-      <div className="set-seg">
-        {THEME_OPTIONS.map(opt => (
-          <button
-            key={opt.id}
-            type="button"
-            className={preference === opt.id ? 'on' : ''}
-            onClick={() => setPreference(opt.id)}
-          >
-            {opt.icon}
-            {opt.label}
-          </button>
-        ))}
-      </div>
-      {preference === 'system' && (
-        <p style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 10 }}>
-          Following your system: <strong style={{ color: 'var(--cl-ink-3)' }}>{resolved}</strong>.
-        </p>
-      )}
+    <Block label="Appearance" note="ClaudeLens only">
+      <PrefRow
+        label="Theme"
+        hint={
+          preference === 'system'
+            ? `Following your system, which is ${resolved} right now.`
+            : chosen?.hint
+        }
+      >
+        <div className="cl-seg cl-seg--paper" role="group" aria-label="Theme">
+          {THEME_OPTIONS.map(opt => (
+            <button
+              key={opt.id}
+              type="button"
+              className={preference === opt.id ? 'on' : undefined}
+              aria-pressed={preference === opt.id}
+              onClick={() => setPreference(opt.id)}
+            >
+              {opt.label}
+            </button>
+          ))}
+        </div>
+      </PrefRow>
+    </Block>
+  );
+}
+
+// ─── Notifications (ClaudeLens-own preference) ────────────────────────────────
+// Two switches, so they sit in General rather than behind a tab of their own.
+
+function NotificationsBlock() {
+  const { data, isLoading } = useNotifyPrefs();
+  const setPref = useSetNotifyPref();
+  const enabled = data?.enabled ?? true;
+  const os = data?.os ?? true;
+  return (
+    <Block label="Notifications">
+      <PrefRow
+        label="Show notifications"
+        hint="A toast when a session is waiting for you, such as a permission prompt, or when a chat turn fails."
+      >
+        <OnOff
+          label="Show notifications"
+          checked={enabled}
+          disabled={isLoading || setPref.isPending}
+          onChange={v => setPref.mutate({ key: 'enabled', value: v })}
+        />
+      </PrefRow>
+      <PrefRow
+        label="Native OS notifications"
+        hint="Also a system notification and a dock badge, sent only while ClaudeLens is in the background."
+        off={!enabled}
+      >
+        <OnOff
+          label="Native OS notifications"
+          checked={os}
+          disabled={isLoading || setPref.isPending || !enabled}
+          onChange={v => setPref.mutate({ key: 'os', value: v })}
+        />
+      </PrefRow>
     </Block>
   );
 }
@@ -864,24 +834,6 @@ function UpdatesBlock() {
         <Row k="Installed">
           <Val>v{appVersion}</Val>
         </Row>
-        {LATEST_NOTES && (
-          <Row k="Release notes" hint="The popup this version opened with, and the ones before it">
-            <button
-              type="button"
-              onClick={openWhatsNew}
-              className="set-val"
-              style={{
-                color: 'var(--cl-accent)',
-                background: 'none',
-                border: 0,
-                padding: 0,
-                cursor: 'pointer',
-              }}
-            >
-              What’s new in {LATEST_NOTES.version}
-            </button>
-          </Row>
-        )}
         <Row k="Latest release" hint="Checked against GitHub releases at launch">
           {isFetching ? (
             <Dim>checking…</Dim>
@@ -896,14 +848,20 @@ function UpdatesBlock() {
             <Dim />
           )}
         </Row>
+        {LATEST_NOTES && (
+          <Row k="Release notes" hint="The popup this version opened with, and the ones before it">
+            <button type="button" onClick={openWhatsNew} className="set-val set-link">
+              What’s new in {LATEST_NOTES.version}
+            </button>
+          </Row>
+        )}
         {update?.updateAvailable && (
           <Row k="Download" hint="Opens the GitHub release page in your browser">
             <a
               href={update.releaseUrl}
               target="_blank"
               rel="noreferrer"
-              className="set-val"
-              style={{ color: 'var(--cl-accent)' }}
+              className="set-val set-link"
             >
               {update.releaseName ?? `ClaudeLens ${update.latestVersion}`} →
             </a>
@@ -911,67 +869,45 @@ function UpdatesBlock() {
         )}
       </div>
 
-      <button
-        onClick={() => refetch()}
-        disabled={isFetching}
-        className="font-mono uppercase rounded-md px-2.5 py-1 transition-colors hover:text-[var(--cl-accent)]"
-        style={{
-          fontSize: 11,
-          letterSpacing: '0.16em',
-          color: 'var(--cl-ink-3)',
-          border: '1px solid var(--cl-line)',
-          marginTop: 16,
-          opacity: isFetching ? 0.6 : 1,
-        }}
-      >
-        {isFetching ? 'Checking…' : 'Check now'}
-      </button>
-
-      {/* Collapsed: it's a once-per-install command, and left open it was the
-          longest thing on the tab — now that Updates sits at the top, that
-          weight would push the rest of General below the fold. */}
-      {IS_MAC && (
-        <details className="set-disc">
-          <summary>macOS: app can’t be opened after updating</summary>
-          <p className="set-block-hint" style={{ marginTop: 12 }}>
-            ClaudeLens isn’t code-signed, so after installing an update macOS quarantines the new
-            app (“can’t be opened”). Clear it once from Terminal:
-          </p>
-          <div
-            className="flex items-center gap-2 rounded-lg px-3 py-2"
-            style={{ background: 'var(--cl-paper)', border: '1px solid var(--cl-line)' }}
-          >
-            <code
-              className="font-mono flex-1 min-w-0"
-              style={{
-                fontSize: 12,
-                color: 'var(--cl-ink-2)',
-                overflowX: 'auto',
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {QUARANTINE_CMD}
-            </code>
-            <button
-              onClick={copyCmd}
-              className="font-mono uppercase rounded-md px-2 py-0.5 shrink-0 transition-colors hover:text-[var(--cl-accent)]"
-              style={{
-                fontSize: 10.5,
-                letterSpacing: '0.14em',
-                color: copied ? 'var(--cl-ok)' : 'var(--cl-ink-3)',
-                border: '1px solid var(--cl-line)',
-              }}
-            >
-              {copied ? 'Copied' : 'Copy'}
-            </button>
-          </div>
-        </details>
-      )}
+      {/* One closing line: the note that matters once on the left, the action on
+          the right. The disclosure stays collapsed — it's a once-per-install
+          command, and left open it was the longest thing on the page. */}
+      <div className="set-actions">
+        {IS_MAC && (
+          <details className="set-disc">
+            <summary>macOS: app can’t be opened after updating</summary>
+            <p className="set-block-hint" style={{ marginTop: 10 }}>
+              ClaudeLens isn’t code-signed, so after installing an update macOS quarantines the new
+              app (“can’t be opened”). Clear it once from Terminal:
+            </p>
+            <div className="set-cmd">
+              <code>{QUARANTINE_CMD}</code>
+              <button
+                type="button"
+                onClick={copyCmd}
+                className="cl-btn-ghost"
+                style={copied ? { color: 'var(--cl-ok)' } : undefined}
+              >
+                {copied ? 'Copied' : 'Copy'}
+              </button>
+            </div>
+          </details>
+        )}
+        <button
+          type="button"
+          className="cl-btn-ghost"
+          style={{ marginLeft: 'auto' }}
+          onClick={() => refetch()}
+          disabled={isFetching}
+        >
+          {isFetching ? 'Checking…' : 'Check now'}
+        </button>
+      </div>
     </Block>
   );
 }
 
-// ─── Privacy (editable, ClaudeLens-own preference) ────────────────────────────
+// ─── Privacy (ClaudeLens-own preference) ──────────────────────────────────────
 
 const COLLECTED = [
   'App launch and exit, including how long the app was open',
@@ -997,23 +933,21 @@ function PrivacyTab() {
           Helps us understand how many people use ClaudeLens and on which platforms, and catch the
           crashes nobody reports. Data is anonymous, aggregate, and never identifies you.
         </p>
-        <div className="set-card">
-          <div className="min-w-0">
-            <div style={{ fontSize: 13.5, color: 'var(--cl-ink)', fontWeight: 600 }}>
-              Share anonymous usage data
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
-              {on
-                ? 'On — anonymous usage events and error reports are sent via Aptabase (EU).'
-                : 'Off — nothing is sent.'}
-            </div>
-          </div>
-          <ToggleSwitch
+        <PrefRow
+          label="Share anonymous usage data"
+          hint={
+            on
+              ? 'Anonymous usage events and error reports are sent via Aptabase (EU).'
+              : 'Nothing is sent.'
+          }
+        >
+          <OnOff
+            label="Share anonymous usage data"
             checked={on}
             disabled={isLoading || setEnabled.isPending}
             onChange={v => setEnabled.mutate(v)}
           />
-        </div>
+        </PrefRow>
       </Block>
 
       <Block label="Collected">
@@ -1041,8 +975,7 @@ function PrivacyTab() {
             href="https://aptabase.com"
             target="_blank"
             rel="noreferrer"
-            className="set-val"
-            style={{ color: 'var(--cl-accent)' }}
+            className="set-val set-link"
           >
             Aptabase (EU)
           </a>
@@ -1055,90 +988,13 @@ function PrivacyTab() {
             href={PRIVACY_POLICY_URL}
             target="_blank"
             rel="noreferrer"
-            className="set-val"
-            style={{ color: 'var(--cl-accent)' }}
+            className="set-val set-link"
           >
             Read PRIVACY.md →
           </a>
         </Row>
       </Block>
     </>
-  );
-}
-
-function NotificationsTab() {
-  const { data, isLoading } = useNotifyPrefs();
-  const setPref = useSetNotifyPref();
-  const enabled = data?.enabled ?? true;
-  const os = data?.os ?? true;
-  return (
-    <>
-      <Block label="Alerts">
-        <p className="set-block-hint">
-          A transient toast appears when a session is waiting for you (e.g. a permission prompt) or
-          a chat turn fails. When the app is in the background these can also raise a native OS
-          notification and a dock badge.
-        </p>
-        <div className="set-card">
-          <div className="min-w-0">
-            <div style={{ fontSize: 13.5, color: 'var(--cl-ink)', fontWeight: 600 }}>
-              Show notifications
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
-              {enabled
-                ? 'On — you’ll be alerted when a session needs attention.'
-                : 'Off — nothing is surfaced.'}
-            </div>
-          </div>
-          <ToggleSwitch
-            checked={enabled}
-            disabled={isLoading || setPref.isPending}
-            onChange={v => setPref.mutate({ key: 'enabled', value: v })}
-          />
-        </div>
-        <div className="set-card">
-          <div className="min-w-0">
-            <div
-              style={{
-                fontSize: 13.5,
-                color: enabled ? 'var(--cl-ink)' : 'var(--cl-ink-4)',
-                fontWeight: 600,
-              }}
-            >
-              Native OS notifications
-            </div>
-            <div style={{ fontSize: 12, color: 'var(--cl-ink-4)', marginTop: 3 }}>
-              {os
-                ? 'On — sent only while ClaudeLens is in the background.'
-                : 'Off — in-app toasts only.'}
-            </div>
-          </div>
-          <ToggleSwitch
-            checked={os}
-            disabled={isLoading || setPref.isPending || !enabled}
-            onChange={v => setPref.mutate({ key: 'os', value: v })}
-          />
-        </div>
-      </Block>
-    </>
-  );
-}
-
-function BellIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M18 8a6 6 0 0 0-12 0c0 7-3 9-3 9h18s-3-2-3-9" />
-      <path d="M13.7 21a2 2 0 0 1-3.4 0" />
-    </svg>
   );
 }
 
@@ -1179,89 +1035,114 @@ function LedgerItem({ tone, children }: { tone: 'neutral' | 'block'; children: R
   );
 }
 
-function ToggleSwitch({
+/** One editable preference: what it is on the left, its control on the right.
+ *  No dotted leader — a leader reads a value off, and this row sets one. */
+function PrefRow({
+  label,
+  hint,
+  off,
+  children,
+}: {
+  label: string;
+  hint?: string;
+  /** The preference has no effect right now (its parent switch is off). */
+  off?: boolean;
+  children: ReactNode;
+}) {
+  return (
+    <div className={`set-pref${off ? ' is-off' : ''}`}>
+      <div className="txt">
+        <div className="lbl">{label}</div>
+        {hint && <div className="hint">{hint}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+/** On/off the way the design system draws one: a glass button whose accent tint
+ *  is the on state, with the state spelled out so the tint is never the only
+ *  signal. Still a `switch` to assistive tech. */
+function OnOff({
+  label,
   checked,
   disabled,
   onChange,
 }: {
+  label: string;
   checked: boolean;
   disabled?: boolean;
   onChange: (v: boolean) => void;
 }) {
   return (
     <button
+      type="button"
       role="switch"
       aria-checked={checked}
+      aria-label={label}
       disabled={disabled}
       onClick={() => onChange(!checked)}
-      className="relative shrink-0 rounded-full transition-colors"
-      style={{
-        width: 44,
-        height: 26,
-        background: checked ? 'var(--cl-accent)' : 'var(--cl-ink-4)',
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'default' : 'pointer',
-      }}
+      className={`cl-btn cl-btn--icon set-onoff${checked ? ' is-pinned' : ''}`}
     >
-      <span
-        className="absolute rounded-full transition-all"
-        style={{
-          top: 3,
-          left: checked ? 21 : 3,
-          width: 20,
-          height: 20,
-          background: 'var(--cl-paper)',
-          boxShadow: '0 1px 2px rgba(0,0,0,0.25)',
-        }}
-      />
+      {checked && (
+        <svg
+          aria-hidden="true"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth="1.6"
+          strokeLinecap="round"
+          strokeLinejoin="round"
+        >
+          <path d="M20 6 9 17l-5-5" />
+        </svg>
+      )}
+      <span>{checked ? 'On' : 'Off'}</span>
     </button>
   );
 }
 
 // ─── Building blocks ────────────────────────────────────────────────────────
 
-function DomainLabel({ children }: { children: ReactNode }) {
-  return (
-    <h2 className="set-title" style={{ fontSize: 21, marginTop: 30 }}>
-      {children}
-    </h2>
-  );
-}
-
+/** A group of rows: a mono label over a rule, then the content — no card. On
+ *  the Settings panel the rule is ink; inside the project's ledger, where the
+ *  domain above already drew the ink rule, it steps down to a hairline. A block
+ *  with no label (`bare`: a tab that is one list) still opens with the rule. */
 function Block({
   label,
-  hint,
-  bare,
+  note,
   grid,
   count,
-  editable,
+  wide,
   children,
 }: {
   label?: string;
-  hint?: string;
-  bare?: boolean;
+  /** A short qualifier on the right of the label, where a count would sit. */
+  note?: string;
   grid?: boolean;
   count?: number;
-  /** Marks a writable block inside an otherwise read-only datasheet. */
-  editable?: boolean;
+  /** Span every column when the blocks around it are laid out side by side. */
+  wide?: boolean;
   children: ReactNode;
 }) {
   return (
-    <section className="set-block">
-      {label && !bare && (
+    <section className={`set-block${label ? '' : ' bare'}${wide ? ' wide' : ''}`}>
+      {label && (
         <div className="set-block-head">
           <span className="lbl">{label}</span>
-          {count != null && <span className="ct">{count}</span>}
-          {editable && <span className="ed">editable</span>}
+          {count != null ? (
+            <span className="ct">{count}</span>
+          ) : (
+            note && <span className="ct">{note}</span>
+          )}
         </div>
       )}
-      {hint && <p className="set-block-hint">{hint}</p>}
       <div className={grid ? 'set-rows' : undefined}>{children}</div>
     </section>
   );
 }
 
-function Row({
+export function Row({
   k,
   hint,
   src,
@@ -1283,7 +1164,7 @@ function Row({
         <span className="leader" />
         <span className="v">
           {children}
-          {src && <SourceBadge source={src.source} />}
+          {src && <SourceBadge source={src.source} path={src.path} />}
         </span>
       </div>
       {hint && <div className="hint">{hint}</div>}
@@ -1304,7 +1185,12 @@ function RuleRow({
   return (
     <div className="set-row">
       <div className="set-row-line" style={{ alignItems: 'baseline' }}>
-        <span className="k">{label}</span>
+        {/* The tone is one dot on the label. It used to tint every chip, and
+            sage or amber text on its own soft ground did not clear AA. */}
+        <span className="k">
+          {tone && <span className={`set-tone ${tone}`} aria-hidden="true" />}
+          {label}
+        </span>
         <span className="leader" />
         <span className="v">
           <span className="set-val sm">{list.length || 'none'}</span>
@@ -1313,7 +1199,7 @@ function RuleRow({
       {list.length > 0 && (
         <div className="set-cloud" style={{ marginTop: 10 }}>
           {list.map((x, i) => (
-            <span key={i} className={`set-chip${tone ? ` ${tone}` : ''}`}>
+            <span key={i} className="set-chip">
               {x}
             </span>
           ))}
@@ -1337,15 +1223,15 @@ function InvList({ items, empty }: { items: string[]; empty?: boolean }) {
   );
 }
 
-function RuntimeUnavailable({ label }: { label?: string }) {
+function RuntimeUnavailable() {
   return (
-    <Block label={label} bare={!label}>
+    <Block>
       <p className="set-dim">Runtime info unavailable.</p>
     </Block>
   );
 }
 
-function Val({ children, sm }: { children: ReactNode; sm?: boolean }) {
+export function Val({ children, sm }: { children: ReactNode; sm?: boolean }) {
   return <span className={`set-val${sm ? ' sm' : ''}`}>{children}</span>;
 }
 
@@ -1375,8 +1261,20 @@ function StatusDot({ status, color: given }: { status: string; color?: string })
   );
 }
 
-function SourceBadge({ source }: { source: string }) {
-  return <span className="set-src">{source}</span>;
+/** Which settings file a value came from, by tier. A project-tier stamp takes
+ *  the accent — the same mark the project layer carries in the CLAUDE.md
+ *  cascade — so "set here" can be picked out of a column of stamps. */
+export function SourceBadge({ source, path }: { source: string; path?: string }) {
+  return (
+    <span className={`set-src${isProjectTier(source) ? ' here' : ''}`} title={path}>
+      {sourceLabel(source)}
+    </span>
+  );
+}
+
+/** A stamp that is not a settings tier (an MCP server switched off here). */
+function Stamp({ children }: { children: ReactNode }) {
+  return <span className="set-src">{children}</span>;
 }
 
 export function ReadOnlyHint() {
@@ -1459,158 +1357,6 @@ function val(v: unknown): ReactNode | null {
 }
 
 // ─── Icons ────────────────────────────────────────────────────────────────────
-
-function GearIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="3" />
-      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-    </svg>
-  );
-}
-function ShieldIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
-    </svg>
-  );
-}
-function WrenchIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.1 2.1-2.4-2.4z" />
-    </svg>
-  );
-}
-function PlugIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M12 22v-5M9 8V2M15 8V2M5 8h14v3a7 7 0 0 1-14 0z" />
-    </svg>
-  );
-}
-function BlocksIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="3" y="3" width="8" height="8" rx="1" />
-      <rect x="13" y="13" width="8" height="8" rx="1" />
-      <path d="M13 7h8M17 3v8M3 17h8M7 13v8" />
-    </svg>
-  );
-}
-function LockIcon() {
-  return (
-    <svg
-      width="16"
-      height="16"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="4.5" y="11" width="15" height="10" rx="2" />
-      <path d="M8 11V8a4 4 0 0 1 8 0v3" />
-      <circle cx="12" cy="16" r="1.2" fill="currentColor" stroke="none" />
-    </svg>
-  );
-}
-function SunIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <circle cx="12" cy="12" r="4.2" />
-      <path d="M12 2v2M12 20v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M2 12h2M20 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4" />
-    </svg>
-  );
-}
-function MoonIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <path d="M20 14.5A8 8 0 0 1 9.5 4a8 8 0 1 0 10.5 10.5z" />
-    </svg>
-  );
-}
-function DisplayIcon() {
-  return (
-    <svg
-      width="18"
-      height="18"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.8"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-    >
-      <rect x="2.5" y="3.5" width="19" height="13" rx="1.6" />
-      <path d="M8 21h8M12 16.5V21" />
-    </svg>
-  );
-}
 
 /** Gear glyph for the top-bar trigger (exported for ProjectOverview). */
 export function SettingsGearIcon() {

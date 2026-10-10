@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 //
-// Settings → General prints "which Claude Code do I have installed?". There are
+// Settings → Runtime prints "which Claude Code do I have installed?". There are
 // two numbers in the app that could answer it and only one is right:
 //
 //   - `init.claudeCodeVersion`, from the Agent SDK `system/init` handshake — the
@@ -22,7 +22,7 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { cleanup, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { createElement } from 'react';
-import { GeneralTab } from '../src/components/project/settings/SettingsView';
+import { RuntimeTab } from '../src/components/project/settings/SettingsView';
 import type { EffectiveConfig } from '../src/hooks/useIPC';
 import { installFakeElectronAPI, ok, fail, type FakeBridge } from './helpers/fake-electron-api';
 
@@ -70,12 +70,12 @@ function config(cliSource: 'bundled' | 'path' = 'bundled'): EffectiveConfig {
   };
 }
 
-function renderGeneral(cliSource?: 'bundled' | 'path') {
+function renderRuntime(cliSource?: 'bundled' | 'path') {
   return render(
     createElement(
       QueryClientProvider,
       { client: queryClient },
-      createElement(GeneralTab, { cfg: config(cliSource), q: '' })
+      createElement(RuntimeTab, { cfg: config(cliSource) })
     )
   );
 }
@@ -87,11 +87,11 @@ function row(label: string): HTMLElement {
   return el as HTMLElement;
 }
 
-describe('Settings → General · installed Claude Code', () => {
+describe('Settings → Runtime · installed Claude Code', () => {
   it('prints the CLI version in the installed row and the SDK one in the bundled row', async () => {
     bridge.api.updates.claudeCodeVersion.mockResolvedValue(ok({ version: INSTALLED_VERSION }));
 
-    renderGeneral();
+    renderRuntime();
 
     await waitFor(() => expect(row('Claude Code').textContent).toContain(INSTALLED_VERSION));
     // The handshake number is shown, but only ever as the bundled CLI.
@@ -106,7 +106,7 @@ describe('Settings → General · installed Claude Code', () => {
     // the only thing that moves that number.
     bridge.api.updates.claudeCodeVersion.mockResolvedValue(ok({ version: '9.9.9' }));
 
-    renderGeneral();
+    renderRuntime();
 
     await waitFor(() => expect(row('Claude Code').textContent).toContain('9.9.9'));
     expect(screen.queryByText('outdated')).toBeNull();
@@ -115,7 +115,7 @@ describe('Settings → General · installed Claude Code', () => {
   it('says the CLI could not be read instead of falling back to the SDK version', async () => {
     bridge.api.updates.claudeCodeVersion.mockResolvedValue(fail(`'claude' CLI not found in PATH.`));
 
-    renderGeneral();
+    renderRuntime();
 
     await waitFor(() => expect(screen.getByText('not found in PATH')).toBeTruthy());
     expect(row('Claude Code').textContent).not.toContain(SDK_BUNDLED_VERSION);
@@ -126,7 +126,7 @@ describe('Settings → General · installed Claude Code', () => {
     // the handshake reports that one's version: the row must say whose it is.
     bridge.api.updates.claudeCodeVersion.mockResolvedValue(ok({ version: INSTALLED_VERSION }));
 
-    renderGeneral('path');
+    renderRuntime('path');
 
     await waitFor(() => expect(row('Claude Code').textContent).toContain(INSTALLED_VERSION));
     expect(screen.queryByText('Bundled CLI')).toBeNull();
