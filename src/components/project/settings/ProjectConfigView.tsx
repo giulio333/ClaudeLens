@@ -341,7 +341,7 @@ function Domain({
 /** The settings cascade as a legend: each file, and how many keys it sets. A
  *  tier that sets nothing still has its cell — that is the answer the reader
  *  came for, and a missing cell would read as "not checked". */
-function SettingsTiers({ tiers }: { tiers: CascadeTier[] }) {
+export function SettingsTiers({ tiers }: { tiers: CascadeTier[] }) {
   return (
     <div className="cl-cfg-tiers">
       <div className="legend">Settings files · later wins</div>

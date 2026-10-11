@@ -52,6 +52,8 @@ import type { SessionGitState } from './project/chat/git-state';
 import { SideQuestionCard } from './project/chat/SideQuestionCard';
 import { PinIcon } from './project/shared/SearchPopover';
 import { TagGlyph } from './project/sessions/SessionRowMenu';
+import { SettingsTiers } from './project/settings/ProjectConfigView';
+import type { CascadeTier } from './project/settings/config-scope';
 import type { SideQuestions } from './project/chat/useSideQuestions';
 import type { TerminalInstance } from './project/terminal/terminal-instances';
 import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
@@ -1529,6 +1531,32 @@ function SessionActionsVisual(): ReactNode {
   );
 }
 
+const PREVIEW_TIERS: CascadeTier[] = [
+  { key: 'user', label: 'User', here: false, path: '~/.claude/settings.json', keys: 6 },
+  { key: 'project', label: 'Project', here: true, path: '.claude/settings.json', keys: 2 },
+  { key: 'local', label: 'Local', here: true, path: '.claude/settings.local.json', keys: 0 },
+];
+
+// The Config page's head: its scope filter, static and on This project, over
+// the settings-file strip the page draws, fed a synthetic cascade.
+function ConfigLedgerVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame" style={{ padding: '18px 24px 4px' }}>
+      <div className="flex justify-end" style={{ marginBottom: 16 }}>
+        <div className="cl-seg cl-seg--paper" role="group" aria-label="Which values to show">
+          <button type="button" aria-pressed={false}>
+            All
+          </button>
+          <button type="button" className="on" aria-pressed>
+            This project
+          </button>
+        </div>
+      </div>
+      <SettingsTiers tiers={PREVIEW_TIERS} />
+    </div>
+  );
+}
+
 // A side question answered above the composer: the thread is handed in, so
 // nothing here reaches a session.
 const PREVIEW_BTW: SideQuestions = {
@@ -1591,6 +1619,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'git-branch': GitBranchVisual,
   'side-question': SideQuestionVisual,
   'session-actions': SessionActionsVisual,
+  'config-ledger': ConfigLedgerVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

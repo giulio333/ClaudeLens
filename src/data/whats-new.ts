@@ -37,7 +37,8 @@ export interface WhatsNewHighlight {
     | 'tab-overflow'
     | 'git-branch'
     | 'side-question'
-    | 'session-actions';
+    | 'session-actions'
+    | 'config-ledger';
 }
 
 export interface WhatsNewRelease {
@@ -46,6 +47,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.37',
+    highlights: [
+      {
+        title: 'What this project changes',
+        description:
+          'A project’s configuration reads as one ledger: a strip of its settings files says how many keys each one sets, and This project narrows the page to what the repository’s own files wrote.',
+        where: 'A project’s Config page',
+        visual: 'config-ledger',
+      },
+    ],
+  },
   {
     version: '2.2.36',
     highlights: [
