@@ -85,6 +85,8 @@ describe('fmtModel — model id to display name', () => {
     ['claude-3-5-sonnet-20241022', 'Sonnet 3.5'],
     ['claude-3-5-haiku', 'Haiku 3.5'],
     ['claude-opus-5-5', 'Opus 5.5'],
+    ['claude-haiku-5-5', 'Haiku 5.5'],
+    ['claude-sonnet-5-5', 'Sonnet 5.5'],
     // a context marker is a setting, not part of the version
     ['claude-opus-5-5[1m]', 'Opus 5.5'],
     ['claude-opus-5[1m]', 'Opus 5'],

@@ -70,7 +70,7 @@ export type AgentColor = (typeof AGENT_COLORS)[number];
 // `cacheWrite` is the **5-minute** cache write rate (1.25x base input). The 1-hour
 // rate is 2x base input on every model, so it is derived rather than tabled —
 // see `cacheWrite1hTokens` for where a transcript says which TTL a write had.
-export const PRICING_LAST_UPDATED = '2026-09-22';
+export const PRICING_LAST_UPDATED = '2026-10-12';
 
 interface ModelPricing {
   input: number;
@@ -86,6 +86,10 @@ const PRICING: Record<string, ModelPricing> = {
   // Haiku 4.5 — NOT the same as Haiku 3.5, which is what this used to charge
   'claude-haiku-4-5': { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
   'claude-haiku-4-5-20251001': { input: 1.0, output: 5.0, cacheWrite: 1.25, cacheRead: 0.1 },
+  // Haiku 5.5 — a tenth of Haiku 4.5, and the `haiku` fallback below still
+  // anchors on 4.5, so an unpriced Haiku 5.5 was billed 10x. This is the rate
+  // for prompts up to 100k tokens; a longer turn is billed at `LONG_PROMPT`.
+  'claude-haiku-5-5': { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 },
   // Sonnet 3.5 — no longer listed on the pricing page; kept for old transcripts
   'claude-3-5-sonnet': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-3-5-sonnet-20241022': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
@@ -97,6 +101,10 @@ const PRICING: Record<string, ModelPricing> = {
   'claude-sonnet-4': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-5': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
   'claude-sonnet-4-6': { input: 3.0, output: 15.0, cacheWrite: 3.75, cacheRead: 0.3 },
+  // Sonnet 5.5 — Sonnet 5's $2/$10, but cache reads at 0.05x ($0.10/MTok), half
+  // of Sonnet 5's. Priced by the `sonnet` fallback it was charged Sonnet 5's
+  // $0.20 on every cache read.
+  'claude-sonnet-5-5': { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.1 },
   // Opus 4 / 4.1 — retired, and the only Opus models still on the old rates
   'claude-opus-4': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
   'claude-opus-4-1': { input: 15.0, output: 75.0, cacheWrite: 18.75, cacheRead: 1.5 },
@@ -122,6 +130,24 @@ const PRICING: Record<string, ModelPricing> = {
   // read, which on an agentic session is most of the input bill.
   'claude-fable-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
   'claude-mythos-5-1': { input: 10.0, output: 50.0, cacheWrite: 12.5, cacheRead: 0.25 },
+};
+
+/** A rate that applies to a single turn whose prompt is longer than `above`
+ *  tokens (input + cache reads + cache writes, what the context gauge counts). */
+interface LongPromptTier {
+  above: number;
+  prices: ModelPricing;
+}
+
+// Haiku 5.5 bills a turn over 100k prompt tokens at 5x the short-prompt rate.
+// The tier belongs to ONE turn, never to a session's summed tokens, so it is
+// applied where a turn is read (`foldLine`, `costOfUsage`) and kept as a dollar
+// surcharge over the base rate rather than as a second table of totals.
+const LONG_PROMPT: Record<string, LongPromptTier> = {
+  'claude-haiku-5-5': {
+    above: 100_000,
+    prices: { input: 0.5, output: 2.5, cacheWrite: 0.625, cacheRead: 0.05 },
+  },
 };
 
 /** A published rate that changes on a date. `from` is the first day (UTC,
@@ -270,16 +296,14 @@ export function cacheWrite1hTokens(usage: unknown): number {
 /** `at`: ISO timestamp of the session, so a model whose published rate changed
  *  is billed at the rate in force when it ran. `cacheWrite1hTokens` is the part
  *  of `cacheWriteTokens` written to the 1-hour cache. */
-function calculateCost(
+function priceTokens(
+  p: ModelPricing,
   inputTokens: number,
   outputTokens: number,
   cacheWriteTokens: number,
   cacheReadTokens: number,
-  model: string | undefined,
-  at?: string,
-  cacheWrite1hTokens = 0
+  cacheWrite1hTokens: number
 ): number {
-  const p = getPricing(model, at);
   const oneHour = Math.min(cacheWrite1hTokens, cacheWriteTokens);
   return (
     (inputTokens / 1_000_000) * p.input +
@@ -290,8 +314,62 @@ function calculateCost(
   );
 }
 
+/** What one turn costs on top of its base rate because its prompt crossed a
+ *  long-prompt threshold; 0 for every model without one. */
+function longPromptSurcharge(usage: TurnUsage, model: string | undefined, at?: string): number {
+  const tier = model ? LONG_PROMPT[withoutDateSuffix(model)] : undefined;
+  if (!tier) return 0;
+  const prompt = usage.inputTokens + usage.cacheReadTokens + usage.cacheWriteTokens;
+  if (prompt <= tier.above) return 0;
+  const at1h = usage.cacheWrite1hTokens ?? 0;
+  const args = [
+    usage.inputTokens,
+    usage.outputTokens,
+    usage.cacheWriteTokens,
+    usage.cacheReadTokens,
+    at1h,
+  ] as const;
+  return priceTokens(tier.prices, ...args) - priceTokens(getPricing(model, at), ...args);
+}
+
+/** `at`: ISO timestamp of the session, so a model whose published rate changed
+ *  is billed at the rate in force when it ran. `cacheWrite1hTokens` is the part
+ *  of `cacheWriteTokens` written to the 1-hour cache. `tierSurcharge` is the
+ *  long-prompt extra already summed over the session's turns. */
+function calculateCost(
+  inputTokens: number,
+  outputTokens: number,
+  cacheWriteTokens: number,
+  cacheReadTokens: number,
+  model: string | undefined,
+  at?: string,
+  cacheWrite1hTokens = 0,
+  tierSurcharge = 0
+): number {
+  return (
+    priceTokens(
+      getPricing(model, at),
+      inputTokens,
+      outputTokens,
+      cacheWriteTokens,
+      cacheReadTokens,
+      cacheWrite1hTokens
+    ) + tierSurcharge
+  );
+}
+
+interface TurnUsage {
+  inputTokens: number;
+  outputTokens: number;
+  cacheWriteTokens: number;
+  cacheReadTokens: number;
+  /** The part of `cacheWriteTokens` written to the 1-hour cache. */
+  cacheWrite1hTokens?: number;
+}
+
 /**
- * Dollars for one turn's usage, at the rate its model had when it ran.
+ * Dollars for ONE turn's usage, at the rate its model had when it ran — a turn,
+ * not a total: a long-prompt tier is decided by this usage alone.
  *
  * Exported for the **Monitor's tail** (`session-tails.ts`), which prices each
  * assistant line as it appends: a live session's spend cannot come from
@@ -299,18 +377,7 @@ function calculateCost(
  * the same `at` resolution as every other figure in the app, so the Monitor and
  * the project views can never quote two different prices for one turn.
  */
-export function costOfUsage(
-  usage: {
-    inputTokens: number;
-    outputTokens: number;
-    cacheWriteTokens: number;
-    cacheReadTokens: number;
-    /** The part of `cacheWriteTokens` written to the 1-hour cache. */
-    cacheWrite1hTokens?: number;
-  },
-  model: string | undefined,
-  at?: string
-): number {
+export function costOfUsage(usage: TurnUsage, model: string | undefined, at?: string): number {
   return calculateCost(
     usage.inputTokens,
     usage.outputTokens,
@@ -318,7 +385,8 @@ export function costOfUsage(
     usage.cacheReadTokens,
     model,
     at,
-    usage.cacheWrite1hTokens
+    usage.cacheWrite1hTokens,
+    longPromptSurcharge(usage, model, at)
   );
 }
 
@@ -354,7 +422,16 @@ export async function readSessionSpend(
   // figure and the offset stay consistent because both come from that entry.
   const entry = cacheGet(filePath);
   return {
-    costUsd: costOfUsage(parsed, parsed.model, parsed.date),
+    costUsd: calculateCost(
+      parsed.inputTokens,
+      parsed.outputTokens,
+      parsed.cacheWriteTokens,
+      parsed.cacheReadTokens,
+      parsed.model,
+      parsed.date,
+      parsed.cacheWrite1hTokens,
+      parsed.tierSurcharge
+    ),
     tokens:
       parsed.inputTokens + parsed.outputTokens + parsed.cacheWriteTokens + parsed.cacheReadTokens,
     model: parsed.model,
@@ -384,6 +461,8 @@ interface ParsedSession {
   cacheWriteTokens: number;
   cacheWrite1hTokens: number;
   cacheReadTokens: number;
+  /** Long-prompt extra, summed turn by turn (see `LONG_PROMPT`). */
+  tierSurcharge: number;
   messageCount: number;
   date: string;
   model: string | undefined; // modello dominante
@@ -550,6 +629,7 @@ interface SessionAccumulator {
   cacheWriteTokens: number;
   cacheWrite1hTokens: number;
   cacheReadTokens: number;
+  tierSurcharge: number;
   messageCount: number;
   date: string;
   modelCounts: Record<string, number>;
@@ -696,6 +776,7 @@ function newAccumulator(): SessionAccumulator {
     cacheWriteTokens: 0,
     cacheWrite1hTokens: 0,
     cacheReadTokens: 0,
+    tierSurcharge: 0,
     messageCount: 0,
     date: '',
     modelCounts: {},
@@ -746,6 +827,7 @@ function foldLine(line: string, acc: SessionAccumulator): void {
     acc.cacheWriteTokens += parsed.cacheWriteTokens;
     acc.cacheWrite1hTokens += parsed.cacheWrite1hTokens;
     acc.cacheReadTokens += parsed.cacheReadTokens;
+    acc.tierSurcharge += longPromptSurcharge(parsed, parsed.model, parsed.date);
   }
 }
 
@@ -760,6 +842,7 @@ function finalize(acc: SessionAccumulator, mtimeMs: number): ParsedSession {
     cacheWriteTokens: acc.cacheWriteTokens,
     cacheWrite1hTokens: acc.cacheWrite1hTokens,
     cacheReadTokens: acc.cacheReadTokens,
+    tierSurcharge: acc.tierSurcharge,
     messageCount: acc.messageCount,
     date: acc.date || new Date(mtimeMs).toISOString(),
     model: entries.length > 0 ? entries.sort((a, b) => b[1] - a[1])[0][0] : undefined,
@@ -929,7 +1012,8 @@ async function aggregateProject(projectPath: string): Promise<ProjectAggregate> 
       s.cacheReadTokens,
       s.model,
       s.date,
-      s.cacheWrite1hTokens
+      s.cacheWrite1hTokens,
+      s.tierSurcharge
     );
   }
 
@@ -1005,7 +1089,8 @@ export async function getSessionList(projectPath: string): Promise<SessionSummar
           s.cacheReadTokens,
           s.model,
           s.date,
-          s.cacheWrite1hTokens
+          s.cacheWrite1hTokens,
+          s.tierSurcharge
         );
 
         return {

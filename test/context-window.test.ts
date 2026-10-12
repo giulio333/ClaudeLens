@@ -28,6 +28,8 @@ describe('Mission Control context window', () => {
   // earlier Sonnet is not.
   it.each([
     'claude-sonnet-5',
+    'claude-sonnet-5-5',
+    'claude-haiku-5-5',
     'claude-opus-4-7',
     'claude-opus-4-8',
     'claude-opus-5-5',
@@ -52,6 +54,15 @@ describe('Mission Control context window', () => {
       used: 150_000,
       max: 1_000_000,
       pct: 15,
+    });
+  });
+
+  // The reading this fixes: ~50k of prompt on Haiku 5.5 read 25% in Mission
+  // Control while the CLI's own status line said 5%.
+  it('measures a Haiku 5.5 session against 1M', () => {
+    expect(deriveContext([assistant('claude-haiku-5-5', 49_937)], undefined)).toMatchObject({
+      max: 1_000_000,
+      pct: 5,
     });
   });
 

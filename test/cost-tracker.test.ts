@@ -30,6 +30,12 @@ const PRICE = {
   // Opus 5.5: cheaper than Opus 5 on every line, cache read at 0.05x.
   opus55: { input: 4.0, output: 20.0, cacheWrite: 5.0, cacheRead: 0.2 },
   sonnet5: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.2 },
+  // Sonnet 5.5: Sonnet 5's rate, cache read halved.
+  sonnet55: { input: 2.0, output: 10.0, cacheWrite: 2.5, cacheRead: 0.1 },
+  // Haiku 5.5, the up-to-100k-prompt tier.
+  haiku55: { input: 0.1, output: 0.5, cacheWrite: 0.125, cacheRead: 0.01 },
+  // Haiku 5.5 on a turn whose prompt is over 100k tokens: 5x on every line.
+  haiku55Long: { input: 0.5, output: 2.5, cacheWrite: 0.625, cacheRead: 0.05 },
 };
 
 function expectedCost(
@@ -1090,6 +1096,67 @@ describe('pricing table — rates verified against the official pricing page', (
     expect(cost).toBeCloseTo(expectedCost(PRICE.opus55, tokens), 10);
     expect(cost).not.toBeCloseTo(expectedCost(PRICE.opus, tokens), 4);
     expect(calculateCacheSavings(1_000_000, 'claude-opus-5-5')).toBeCloseTo(3.8, 6);
+  });
+
+  it.each([
+    ['claude-sonnet-5-5', PRICE.sonnet55, PRICE.sonnet5],
+    ['claude-haiku-5-5', PRICE.haiku55, PRICE.haiku],
+  ])('prices %s at its own rate on all four lines', async (model, own, fallback) => {
+    const tokens = { input: 1000, output: 2000, cacheWrite: 3000, cacheRead: 80_000 };
+    writeSession(tmp, `${model}.jsonl`, [assistantLine({ model, ...tokens })]);
+    const { cost } = await getProjectUsage(tmp);
+    expect(cost).toBeCloseTo(expectedCost(own, tokens), 10);
+    expect(cost).not.toBeCloseTo(expectedCost(fallback, tokens), 4);
+    expect(isModelPriced(model)).toBe(true);
+  });
+
+  // The tier belongs to one turn's prompt, not to the session: summing the two
+  // turns below first would put the short one over 100k as well.
+  describe('Haiku 5.5 long-prompt tier', () => {
+    const short = { input: 2, output: 500, cacheWrite: 0, cacheRead: 60_000 };
+    const long = { input: 2, output: 800, cacheWrite: 10_000, cacheRead: 140_000 };
+
+    it('bills only the turn over 100k at the long rate, in a project and in the session list', async () => {
+      writeSession(tmp, 'h55.jsonl', [
+        assistantLine({ model: 'claude-haiku-5-5', ...short }),
+        assistantLine({ model: 'claude-haiku-5-5', ...long }),
+      ]);
+      const expected = expectedCost(PRICE.haiku55, short) + expectedCost(PRICE.haiku55Long, long);
+      expect((await getProjectUsage(tmp)).cost).toBeCloseTo(expected, 10);
+      expect((await getSessionList(tmp))[0].estimatedCost).toBeCloseTo(expected, 10);
+    });
+
+    it('keeps the 1-hour cache write at 2x the tier input price', () => {
+      const turn = {
+        inputTokens: 2,
+        outputTokens: 0,
+        cacheWriteTokens: 150_000,
+        cacheReadTokens: 0,
+        cacheWrite1hTokens: 150_000,
+      };
+      expect(costOfUsage(turn, 'claude-haiku-5-5')).toBeCloseTo(0.15 + (2 / 1e6) * 0.5, 10);
+    });
+
+    it('switches strictly above 100k prompt tokens, for one turn priced alone', () => {
+      const turn = (prompt: number) => ({
+        inputTokens: prompt,
+        outputTokens: 0,
+        cacheWriteTokens: 0,
+        cacheReadTokens: 0,
+      });
+      expect(costOfUsage(turn(100_000), 'claude-haiku-5-5')).toBeCloseTo(0.01, 10);
+      expect(costOfUsage(turn(100_001), 'claude-haiku-5-5')).toBeCloseTo(0.0500005, 10);
+      expect(costOfUsage(turn(100_001), 'claude-haiku-5-5-20260101')).toBeCloseTo(0.0500005, 10);
+    });
+
+    it('leaves a model with no tier alone, however long the prompt', () => {
+      expect(
+        costOfUsage(
+          { inputTokens: 500_000, outputTokens: 0, cacheWriteTokens: 0, cacheReadTokens: 0 },
+          'claude-sonnet-5-5'
+        )
+      ).toBeCloseTo(1, 10);
+    });
   });
 
   it('anchors the fuzzy family fallbacks on the current generation', async () => {
