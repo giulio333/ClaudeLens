@@ -38,7 +38,8 @@ export interface WhatsNewHighlight {
     | 'git-branch'
     | 'side-question'
     | 'session-actions'
-    | 'config-ledger';
+    | 'config-ledger'
+    | 'view-switch';
 }
 
 export interface WhatsNewRelease {
@@ -47,6 +48,24 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.38',
+    highlights: [
+      {
+        title: 'Terminal and Lens, one key apart',
+        description:
+          '⌘J — Ctrl+Shift+J on Windows and Linux — flips a session between Terminal and Lens, and each view slides in from its side of the switch.',
+        where: 'Mission Control',
+        visual: 'view-switch',
+      },
+      {
+        title: 'Write from the Lens',
+        description:
+          'Typing in the Lens hands the keys to the session’s running terminal, and once the prompt you sent lands in the transcript the session slides back to the Lens.',
+        where: 'Mission Control, with the terminal running',
+      },
+    ],
+  },
   {
     version: '2.2.37',
     highlights: [

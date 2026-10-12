@@ -42,7 +42,9 @@ import {
   TabBarRailToggle,
   ViewSwitch,
   ViewTabs,
+  type View,
 } from './project/terminal/TerminalMissionControl';
+import { VIEW_TOGGLE_LABEL } from './project/terminal/view-keys';
 import { ParkedTerminals } from './project/terminal/ParkedTerminals';
 import { SessionTabs } from './project/terminal/SessionTabs';
 import { TabAttentionContext } from './project/terminal/use-tab-attention';
@@ -1531,6 +1533,21 @@ function SessionActionsVisual(): ReactNode {
   );
 }
 
+// The view switch, live: pressing it slides the thumb the way Mission Control
+// does, beside the shortcut that does the same from the keyboard.
+function ViewSwitchVisual(): ReactNode {
+  const [view, setView] = useState<View>('terminal');
+  return (
+    <TabBarFrame>
+      <PreviewLiveTabs ids={[1, 3]} currentId="wn-live-3" />
+      <div className="cl-stabs-end">
+        <kbd className="cl-whatsnew-kbd">{VIEW_TOGGLE_LABEL}</kbd>
+        <ViewSwitch view={view} setView={setView} />
+      </div>
+    </TabBarFrame>
+  );
+}
+
 const PREVIEW_TIERS: CascadeTier[] = [
   { key: 'user', label: 'User', here: false, path: '~/.claude/settings.json', keys: 6 },
   { key: 'project', label: 'Project', here: true, path: '.claude/settings.json', keys: 2 },
@@ -1620,6 +1637,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'side-question': SideQuestionVisual,
   'session-actions': SessionActionsVisual,
   'config-ledger': ConfigLedgerVisual,
+  'view-switch': ViewSwitchVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the
