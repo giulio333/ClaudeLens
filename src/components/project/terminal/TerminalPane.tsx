@@ -102,6 +102,7 @@ export function TerminalPane({
       pastePrompt: (text, signal) =>
         promptRef.current?.pastePrompt(text, signal) ??
         Promise.reject(new Error('The terminal is not mounted yet. Try again.')),
+      typeText: text => termRef.current?.input(text, true),
     }),
     []
   );

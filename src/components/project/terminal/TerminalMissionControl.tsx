@@ -1,4 +1,12 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
 import { useTheme } from '../../../hooks/useTheme';
 import type { SessionSummary } from '../../../hooks/useIPC';
@@ -25,6 +33,7 @@ import { BackgroundShells } from './BackgroundShells';
 import { buildBackgroundShells } from './background-shells';
 import { flushSync } from 'react-dom';
 import type { TerminalPromptHandle } from './terminal-prompt';
+import { isViewToggleKey, lensTypedChar, sentPromptIds, VIEW_TOGGLE_LABEL } from './view-keys';
 import type { InstanceReport } from './terminal-instances';
 
 /**
@@ -61,6 +70,9 @@ function samePath(a: string, b: string): boolean {
 }
 
 const RAIL_DEFAULT = 432;
+// How long after an Enter a new prompt in the transcript still counts as its
+// echo: the watcher, the debounce and the re-read take about a second.
+const PROMPT_ECHO_MS = 15_000;
 const RAIL_MIN = 380;
 const RAIL_MAX = 560;
 
@@ -159,9 +171,40 @@ export function ViewTabs({
  *  switch at the right end of Mission Control's single top bar (variant C).
  *  `ViewTabs` is the centred underline row the Remote view still draws. */
 export function ViewSwitch({ view, setView }: { view: View; setView: (v: View) => void }) {
+  // The filled half is one thumb that slides to the pressed button, measured
+  // off it: the two labels are not the same width.
+  const groupRef = useRef<HTMLDivElement>(null);
+  const [thumb, setThumb] = useState<{ left: number; width: number } | null>(null);
+  useLayoutEffect(() => {
+    const group = groupRef.current;
+    if (!group) return;
+    const measure = () => {
+      const on = group.querySelector<HTMLElement>(`[data-view="${view}"]`);
+      if (on) setThumb({ left: on.offsetLeft, width: on.offsetWidth });
+    };
+    measure();
+    // The labels change width once the web font arrives.
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(measure);
+    observer.observe(group);
+    return () => observer.disconnect();
+  }, [view]);
   return (
-    <div className="cl-stabs-view" role="group" aria-label="View">
-      <button type="button" aria-pressed={view === 'terminal'} onClick={() => setView('terminal')}>
+    <div ref={groupRef} className="cl-stabs-view" role="group" aria-label="View">
+      {thumb && (
+        <span
+          className="cl-stabs-view-thumb"
+          aria-hidden
+          style={{ left: thumb.left, width: thumb.width }}
+        />
+      )}
+      <button
+        type="button"
+        data-view="terminal"
+        aria-pressed={view === 'terminal'}
+        title={`Terminal (${VIEW_TOGGLE_LABEL})`}
+        onClick={() => setView('terminal')}
+      >
         <svg
           width="14"
           height="14"
@@ -177,7 +220,13 @@ export function ViewSwitch({ view, setView }: { view: View; setView: (v: View) =
         </svg>
         Terminal
       </button>
-      <button type="button" aria-pressed={view === 'lens'} onClick={() => setView('lens')}>
+      <button
+        type="button"
+        data-view="lens"
+        aria-pressed={view === 'lens'}
+        title={`Lens (${VIEW_TOGGLE_LABEL})`}
+        onClick={() => setView('lens')}
+      >
         <svg
           width="14"
           height="14"
@@ -397,6 +446,19 @@ export function TerminalMissionControl({
     localStorage.setItem('tmc-view', v);
     if (v === 'terminal') setTerminalMounted(true);
   }, []);
+  // A switch the user makes slides the new view in from its side. Only
+  // these: the Playbook and a jump to a turn need the view on screen in the
+  // same frame, and a pane that comes back from parking was never left.
+  const [entering, setEntering] = useState<View | null>(null);
+  const switchView = useCallback(
+    (v: View) => {
+      if (v === view) return;
+      const still = window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+      setEntering(still ? null : v);
+      setView(v);
+    },
+    [view, setView]
+  );
 
   const [railWidth, setRailWidth] = useState<number>(() => {
     const saved = Number(localStorage.getItem('tmc-rail-width'));
@@ -626,10 +688,76 @@ export function TerminalMissionControl({
         ? null
         : {
             reason: waitingFor || null,
-            onOpenTerminal: paneRunning ? () => setView('terminal') : undefined,
+            onOpenTerminal: paneRunning ? () => switchView('terminal') : undefined,
           },
-    [waitingFor, paneRunning, setView]
+    [waitingFor, paneRunning, switchView]
   );
+  // ⌘J flips Terminal ↔ Lens. Capture phase: xterm stops the keys it handles
+  // from bubbling, and the shortcut must work with the terminal focused.
+  // The same listener notes an Enter pressed in the terminal: the return to
+  // the Lens below waits for one.
+  const enterAtRef = useRef(0);
+  useEffect(() => {
+    if (!active) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (
+        e.key === 'Enter' &&
+        view === 'terminal' &&
+        (e.target as Element | null)?.closest?.('.xterm')
+      )
+        enterAtRef.current = Date.now();
+      if (!isViewToggleKey(e)) return;
+      e.preventDefault();
+      e.stopPropagation();
+      setOverlay(null);
+      switchView(view === 'terminal' ? 'lens' : 'terminal');
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [active, view, switchView]);
+
+  // The Lens is read-only, so text typed into it is meant for the CLI: switch
+  // to the terminal and hand it the key. Only with this pane's CLI running —
+  // otherwise a stray key would spawn a `claude --resume`. While the session
+  // waits on a permission or a question the key is dropped: a `1` or a `y`
+  // typed at the Lens must never answer a prompt the user has not seen.
+  const sessionWaiting = waitingFor !== null;
+  useEffect(() => {
+    if (!active || view !== 'lens' || overlay || !paneRunning) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented) return;
+      const char = lensTypedChar(e, e.target);
+      if (!char) return;
+      e.preventDefault();
+      switchView('terminal');
+      if (!sessionWaiting) terminalPromptRef.current?.typeText(char);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [active, view, overlay, paneRunning, sessionWaiting, switchView]);
+
+  // Back to the Lens once a prompt sent from the terminal lands in the
+  // transcript. It takes both: an Enter in the terminal shortly before, and a
+  // prompt id the transcript did not hold — Enter alone also approves tools
+  // and picks menu items. A new file (a resume that minted another id) is
+  // read as the starting point, never as a prompt.
+  const promptsSeenRef = useRef<{ file: string; ids: Set<string> } | null>(null);
+  useEffect(() => {
+    if (!filename || !chatMessages) return;
+    const ids = sentPromptIds(sessionProcessed);
+    const seen = promptsSeenRef.current;
+    if (seen?.file !== filename) {
+      promptsSeenRef.current = { file: filename, ids: new Set(ids) };
+      return;
+    }
+    const fresh = ids.filter(id => !seen.ids.has(id));
+    if (fresh.length === 0) return;
+    fresh.forEach(id => seen.ids.add(id));
+    if (!active || view !== 'terminal' || Date.now() - enterAtRef.current > PROMPT_ECHO_MS) return;
+    enterAtRef.current = 0;
+    switchView('lens');
+  }, [filename, chatMessages, sessionProcessed, active, view, switchView]);
+
   const requestBack = useCallback(() => {
     if (
       paneBusy &&
@@ -689,6 +817,11 @@ export function TerminalMissionControl({
     });
   }, [ptyPid, sessionId, title, summary?.agentColor, terminalMounted, termStatus, gitBranch]);
 
+  // Only the fade's own end: the panes are full of animations that bubble.
+  const endEnter = (e: React.AnimationEvent) => {
+    if (e.target === e.currentTarget) setEntering(null);
+  };
+
   async function insertPrompt(text: string) {
     promptInsertionRef.current?.abort();
     const insertion = new AbortController();
@@ -715,7 +848,7 @@ export function TerminalMissionControl({
     // MissionRail keeps its own --cl-paper (set in railWrap). Holds in light + dark.
     <SessionColorFrame
       color={summary?.agentColor}
-      className="cl-chat"
+      className={`cl-chat cl-mc-surface${entering ? ' is-swapping' : ''}`}
       style={{ background: view === 'terminal' ? TERMINAL_SURFACE[resolved] : 'var(--cl-paper)' }}
     >
       {/* Level one: the way back to the app, then every open session as a tab.
@@ -773,7 +906,7 @@ export function TerminalMissionControl({
             <CloseOverlayButton label="Back to session" onClose={closeOverlay} />
           )}
           {filename && <SessionActions projectHash={project.hash} filename={filename} />}
-          <ViewSwitch view={view} setView={setView} />
+          <ViewSwitch view={view} setView={switchView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
           <TabBarRailToggle collapsed={railCollapsed} onToggle={toggleRail} />
         </div>
@@ -796,12 +929,15 @@ export function TerminalMissionControl({
               display: 'flex',
               padding: '12px 26px 22px',
               position: 'relative',
+              // A pane sliding in from the side stays inside the stage.
+              overflowX: 'clip',
             }}
           >
             {terminalMounted && (
               <div
-                className="flex-1 min-w-0"
+                className={`flex-1 min-w-0${entering === 'terminal' ? ' cl-pane-enter cl-pane-enter--terminal' : ''}`}
                 style={{ display: view === 'terminal' ? 'block' : 'none' }}
+                onAnimationEnd={endEnter}
               >
                 <TerminalPane
                   ref={terminalPromptRef}
@@ -816,8 +952,9 @@ export function TerminalMissionControl({
             )}
             {sessionForChat && (
               <div
-                className="flex-1 min-w-0"
+                className={`flex-1 min-w-0${entering === 'lens' ? ' cl-pane-enter cl-pane-enter--lens' : ''}`}
                 style={{ display: view === 'lens' ? 'block' : 'none' }}
+                onAnimationEnd={endEnter}
               >
                 <ChatView
                   embedded

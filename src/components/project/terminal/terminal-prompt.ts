@@ -3,6 +3,8 @@ import type { Terminal } from '@xterm/xterm';
 export interface TerminalPromptHandle {
   /** Insert an editable draft after the CLI enables bracketed paste. Never submits. */
   pastePrompt(text: string, signal?: AbortSignal): Promise<void>;
+  /** Send text as if typed at the keyboard; the caller checks the session runs. */
+  typeText(text: string): void;
 }
 
 type PromptTerminal = Pick<Terminal, 'modes' | 'onWriteParsed' | 'paste' | 'focus'>;

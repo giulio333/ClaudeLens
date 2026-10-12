@@ -23195,6 +23195,77 @@ select.cl-opt-input {
   color: var(--cl-ink);
   box-shadow: 0 0 0 1px var(--cl-line);
 }
+/* Once measured, the filled half is a thumb that slides between the two
+   buttons (ViewSwitch); the pressed button gives up its own fill to it. */
+.cl-stabs-view {
+  position: relative;
+}
+.cl-stabs-view-thumb {
+  position: absolute;
+  top: 2px;
+  bottom: 2px;
+  border-radius: 7px;
+  background: var(--cl-stab-surface, var(--cl-paper));
+  box-shadow: 0 0 0 1px var(--cl-line);
+  transition:
+    left var(--cl-view-swap-ms) var(--cl-view-swap-ease),
+    width var(--cl-view-swap-ms) var(--cl-view-swap-ease),
+    background-color var(--cl-view-swap-ms) var(--cl-view-swap-ease);
+}
+.cl-stabs-view-thumb ~ button {
+  position: relative;
+}
+.cl-stabs-view-thumb ~ button[aria-pressed='true'] {
+  background: transparent;
+  box-shadow: none;
+}
+
+/* Terminal ↔ Lens in Mission Control: the view the user picks slides in from
+   its side of the switch — Terminal from the left, Lens from the right, the
+   way the thumb travels — while the frame and the tab bar fade to its surface
+   in step. Translate and opacity only: a scale would skew xterm's mouse
+   mapping and the Lens's measurements. */
+:root {
+  --cl-view-swap-ms: 300ms;
+  --cl-view-swap-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+.cl-pane-enter {
+  animation: cl-pane-enter var(--cl-view-swap-ms) var(--cl-view-swap-ease) both;
+}
+.cl-pane-enter--terminal {
+  --cl-pane-enter-x: -56px;
+}
+.cl-pane-enter--lens {
+  --cl-pane-enter-x: 56px;
+}
+@keyframes cl-pane-enter {
+  from {
+    opacity: 0;
+    transform: translateX(var(--cl-pane-enter-x));
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+.cl-mc-surface.is-swapping,
+.cl-mc-surface.is-swapping .cl-stabs-bar,
+.cl-mc-surface.is-swapping .cl-stab {
+  transition: background-color var(--cl-view-swap-ms) var(--cl-view-swap-ease);
+}
+/* The shortcut beside the switch in the What's New preview. */
+.cl-whatsnew-kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--cl-line);
+  border-radius: 5px;
+  color: var(--cl-ink-3);
+  font: 500 11px/1 var(--font-sans);
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-stabs-view-thumb {
+    transition: none;
+  }
+}
 /* What a tab has no room for, under it after a rest (SessionTabCard): the
    whole title, the project and where it lives, the state and the tool in
    flight. Glass like the open-sessions list; no controls, so it never takes
