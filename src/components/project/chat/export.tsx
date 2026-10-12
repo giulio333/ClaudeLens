@@ -2,6 +2,7 @@ import { renderToStaticMarkup } from 'react-dom/server';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import remarkMath from 'remark-math';
+import { remarkCurrencyDollar } from '../../remark-currency';
 import rehypeKatex from 'rehype-katex';
 import rehypeHighlight from 'rehype-highlight';
 // Inlined at build time (Vite ?raw) so the standalone export document needs no
@@ -451,7 +452,7 @@ function escapeHtml(value: string): string {
 function markdownToHtml(value: string): string {
   return renderToStaticMarkup(
     <ReactMarkdown
-      remarkPlugins={[remarkGfm, remarkMath]}
+      remarkPlugins={[remarkGfm, remarkMath, remarkCurrencyDollar]}
       rehypePlugins={[[rehypeKatex, { output: 'mathml' }], rehypeHighlight]}
     >
       {value}

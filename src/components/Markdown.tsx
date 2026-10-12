@@ -8,6 +8,7 @@ import rehypeKatex from 'rehype-katex';
 import type { Components } from 'react-markdown';
 import 'katex/dist/katex.min.css';
 import { rehypeCallouts } from './rehype-callouts';
+import { remarkCurrencyDollar } from './remark-currency';
 import { rehypeWikiLinks } from './rehype-wikilinks';
 import { useReportWikiLinks, useVaultLinksApi } from './vault-link-engine';
 import { WikiLink } from './VaultLinks';
@@ -175,7 +176,7 @@ function Markdown({ children, className = '' }: Props) {
   return (
     <div className={`prose prose-sm prose-lens max-w-none ${className}`}>
       <ReactMarkdown
-        remarkPlugins={[remarkGfm, remarkFrontmatter, remarkMath]}
+        remarkPlugins={[remarkGfm, remarkFrontmatter, remarkMath, remarkCurrencyDollar]}
         rehypePlugins={linksEnabled ? WIKILINK_REHYPE : BASE_REHYPE}
         components={components}
         urlTransform={urlTransform}
