@@ -18129,6 +18129,41 @@ select.cl-opt-input {
 .set-pref.is-off .lbl {
   color: var(--cl-ink-4);
 }
+/* Settings → AI: the prompt boxes and the output-language field. */
+.set-ai-prompt textarea {
+  display: block;
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--cl-line-soft);
+  border-radius: 6px;
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  resize: vertical;
+}
+.set-ai-lang {
+  display: inline-flex;
+  gap: 8px;
+}
+.set-ai-lang select,
+.set-ai-lang input {
+  padding: 5px 8px;
+  border: 1px solid var(--cl-line-soft);
+  border-radius: 6px;
+  background: var(--cl-paper);
+  color: var(--cl-ink);
+  font: inherit;
+  font-size: 12.5px;
+}
+.set-ai-prompt textarea:focus-visible,
+.set-ai-lang select:focus-visible,
+.set-ai-lang input:focus-visible {
+  outline: 2px solid var(--cl-accent);
+  outline-offset: 1px;
+}
 /* on/off: a cl-btn whose is-pinned tint is the on state. Fixed width, so the
    control does not jump when the check comes and goes. */
 .set-onoff {

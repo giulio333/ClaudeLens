@@ -264,3 +264,59 @@
   padding: 0;
   background: var(--cl-ink-3);
 }
+
+/* Notes AI: the toolbar menu, its running state and the cost line. */
+.cl-notes-ai {
+  position: relative;
+}
+.cl-notes-ai-menu {
+  position: absolute;
+  top: calc(100% + 4px);
+  right: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--cl-line-soft);
+  border-radius: 8px;
+  background: var(--cl-paper);
+  box-shadow: 0 6px 20px oklch(0 0 0 / 0.12);
+}
+.cl-notes-ai-menu button {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 6px;
+  background: none;
+  color: var(--cl-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.cl-notes-ai-menu button:hover,
+.cl-notes-ai-menu button:focus-visible {
+  background: var(--cl-hover-bg);
+  outline: none;
+}
+.cl-notes-ai-menu .lbl {
+  font-size: 12.5px;
+  font-weight: 500;
+}
+.cl-notes-ai-menu .hint {
+  font-size: 11.5px;
+  color: var(--cl-ink-4);
+}
+.cl-notes-ai-run {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--cl-ink-3);
+}
+.cl-notes-ai-meta {
+  color: var(--cl-ink-4);
+  font-variant-numeric: tabular-nums;
+}

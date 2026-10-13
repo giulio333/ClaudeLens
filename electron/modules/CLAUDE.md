@@ -111,6 +111,10 @@ under `test/`; this file keeps the rules that span modules and the traps a reade
   so the live chat keeps it in memory.
 - Approvals (`chat-permissions.ts`, #292): with `suppressAlwaysAllowRule` the suggestions are not
   forwarded and an `always` answer is downgraded to once — the lock does not depend on the dialog.
+- `ai-insights.ts` (Notes AI): `persistSession: false`, `settingSources: []` and `strictMcpConfig`
+  are load-bearing — without them a run lists as a session, loads the project's hooks and starts
+  MCP servers — and the $1 guard runs before the call, because `maxBudgetUsd` cannot stop a single
+  turn.
 - The installed CLI's version is `readInstalledClaudeVersion(env)`, which takes no executable on
   purpose: in a packaged app the resolver points at the bundled SDK binary. Unknown stays unknown.
 - `claude-executable.ts` (#289) leaves a healthy SDK install alone and falls back to the user's

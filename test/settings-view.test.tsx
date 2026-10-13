@@ -102,6 +102,7 @@ describe('Settings · the rail', () => {
     expect(labels).toEqual([
       'General',
       'Privacy',
+      'AI',
       'Runtime',
       'Permissions',
       'Tools',

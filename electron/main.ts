@@ -83,7 +83,7 @@ import { createAgent, AgentInput } from './modules/agents-writer';
 import { getGlobalMcp } from './modules/mcp-reader';
 import { buildDispatchBgArgs, buildAiRunArgs } from './modules/claude-cli-args';
 import { spawnClaude, execClaude, readInstalledClaudeVersion } from './modules/claude-cli';
-import { claudeExtraDirs } from './modules/claude-executable';
+import { claudeExtraDirs, sdkExecutableOption } from './modules/claude-executable';
 import { readEffectiveConfig } from './modules/config-reader';
 import {
   ChatSession,
@@ -92,6 +92,14 @@ import {
   PermissionResult,
 } from './modules/chat-runner';
 import type { PermissionDecision } from './shared/chat-types';
+import { AI_SETTINGS_KEY, normalizeAiSettings } from './shared/ai-settings';
+import {
+  aiModelPrices,
+  cancelInsight,
+  resetInsights,
+  runInsight,
+  sdkQuery,
+} from './modules/ai-insights';
 import { toPermissionRequest, toPermissionResult } from './modules/chat-permissions';
 import { parseSideQuestionRequest } from './modules/side-question';
 import { readPrefs, setPref } from './modules/prefs-store';
@@ -1786,6 +1794,37 @@ ipcMain.handle('ai:stop', async () => {
   return ok(null);
 });
 
+// Notes AI: one tool-less turn over a session's transcript (modules/ai-insights.ts).
+// The renderer sends the session id and the action; everything else is read here.
+ipcMain.handle('ai:insight', async (_event, sessionId: unknown, kind: unknown) => {
+  try {
+    return ok(
+      await runInsight(sessionId, kind, {
+        query: sdkQuery,
+        projectsDir: PROJECTS_DIR,
+        readSettings: () => normalizeAiSettings(readPrefs()[AI_SETTINGS_KEY]),
+        env: claudeEnv(),
+        executable: () => sdkExecutableOption(),
+      })
+    );
+  } catch (e) {
+    return err(e);
+  }
+});
+
+ipcMain.handle('ai:cancelInsight', async (_event, sessionId: unknown) => {
+  cancelInsight(sessionId);
+  return ok(null);
+});
+
+ipcMain.handle('ai:catalog', async () => {
+  try {
+    return ok(aiModelPrices());
+  } catch (e) {
+    return err(e);
+  }
+});
+
 // ─── Chat composer (Agent SDK with in-app approvals) ──────────────────────────
 // Runs chat turns through the official Agent SDK (`modules/chat-runner.ts`) rather
 // than spawning `claude -p`. The SDK persists to the same
@@ -2817,6 +2856,8 @@ app.on('window-all-closed', () => {
     currentAiProcess.kill();
     currentAiProcess = null;
   }
+  // A Notes AI run has no one left to answer: abort it rather than spend tokens.
+  resetInsights();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -2836,5 +2877,6 @@ app.on('before-quit', event => {
 // none outlive the app.
 app.on('will-quit', () => {
   disposeAllTerminals();
+  resetInsights();
   for (const dir of [...controlDirs]) closeControlDir(dir);
 });

@@ -303,6 +303,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     run: (instruction: string, inputContent: string, projectPath: string) =>
       ipcRenderer.invoke('ai:run', instruction, inputContent, projectPath),
     stop: () => ipcRenderer.invoke('ai:stop'),
+    insight: (sessionId: string, kind: string) => ipcRenderer.invoke('ai:insight', sessionId, kind),
+    cancelInsight: (sessionId: string) => ipcRenderer.invoke('ai:cancelInsight', sessionId),
+    catalog: () => ipcRenderer.invoke('ai:catalog'),
     onChunk: (cb: (chunk: string) => void) => subscribe('ai:chunk', cb),
     onDone: (cb: () => void) => subscribe('ai:done', cb),
     onError: (cb: (error: string) => void) => subscribe('ai:error', cb),

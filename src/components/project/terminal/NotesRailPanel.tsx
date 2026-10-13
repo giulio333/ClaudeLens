@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import type { ClipboardEvent, KeyboardEvent, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { saveSessionNotes, useSessionNotes } from '../../../hooks/useIPC';
+import { saveSessionNotes, useAiSettings, useSessionNotes } from '../../../hooks/useIPC';
+import type { InsightKind } from '../../../../electron/shared/ai-settings';
 import {
   backspaceAtStart,
   enterAt,
@@ -18,6 +19,9 @@ import {
 import './session-notes.css';
 import { htmlToNoteBlocks } from './session-notes-paste';
 import { IS_MAC } from './view-keys';
+import { appendInsight, insightMeta } from './notes-ai';
+import { NotesAiMenu } from './NotesAiMenu';
+import { useNotesAi } from './use-notes-ai';
 
 const TOGGLE_KEY = IS_MAC ? '⌘⇧L' : 'Ctrl+Shift+L';
 
@@ -83,9 +87,8 @@ type PanelProps = {
 
 /** The session's scratchpad, in the rail's body. While it is open its own
  *  state is the truth — seeded once from disk, never overwritten by a read —
- *  and every change goes straight into the query cache, so the rail badge and
- *  the tab count follow as you type; the file is written after a short pause
- *  and on close. */
+ *  and every change goes straight into the query cache, so the rail badge
+ *  follows as you type; the file is written after a short pause and on close. */
 export function NotesRailPanel(props: PanelProps) {
   const query = useSessionNotes(props.preview === undefined ? props.sessionId : null);
   if (props.preview !== undefined) return <NotesSheet {...props} initial={props.preview} />;
@@ -119,7 +122,16 @@ function NotesSheet({
   const [blocks, setBlocks] = useState(() => seed(initial));
   const [focusedId, setFocusedId] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [undo, setUndo] = useState<NoteBlock[] | null>(null);
+  // What one click can take back: a cleared sheet, or what a Notes AI run added.
+  const [undo, setUndo] = useState<{ blocks: NoteBlock[]; label: string; meta?: string } | null>(
+    null
+  );
+  const [aiStatus, setAiStatus] = useState<{ tone: 'error' | 'info'; text: string } | null>(null);
+  // The sheet as of the last commit, for a run's answer that arrives later.
+  const latest = useRef(blocks);
+  const ai = useNotesAi(sessionId);
+  const aiSettings = useAiSettings();
+  const aiOn = preview === undefined && aiSettings.data?.enabled === true;
   const { save, flush: flushSave } = useDebouncedSave(sessionId, setSaveError);
   const client = useQueryClient();
   const last = blocks[blocks.length - 1];
@@ -143,7 +155,10 @@ function NotesSheet({
   function commit(next: NoteBlock[], focus?: Edit['focus']) {
     if (focus) focusReq.current = focus;
     setUndo(null);
+    setAiStatus(null);
     setBlocks(next);
+    // A run's answer lands on the newest sheet, not on the one it was asked from.
+    latest.current = next;
     if (preview !== undefined) return;
     const text = serializeNotes(next);
     client.setQueryData(['notes', sessionId], text);
@@ -238,14 +253,39 @@ function NotesSheet({
   /** Empty the sheet at once; the old one stays a click away until the next edit. */
   function clearAll() {
     const empty = newBlock();
+    const before = blocks;
     commit([empty], { id: empty.id, pos: 0 });
-    setUndo(blocks);
+    setUndo({ blocks: before, label: 'Notes cleared' });
   }
 
   function restore() {
     if (!undo) return;
-    const last = undo[undo.length - 1];
-    commit(undo, { id: last.id, pos: last.text.length });
+    const last = undo.blocks[undo.blocks.length - 1];
+    commit(undo.blocks, { id: last.id, pos: last.text.length });
+  }
+
+  async function runAi(kind: InsightKind) {
+    setAiStatus(null);
+    const outcome = await ai.run(kind);
+    if (outcome.kind === 'cancelled') return;
+    if (outcome.kind === 'error') {
+      setAiStatus({ tone: 'error', text: outcome.message });
+      return;
+    }
+    const { result } = outcome;
+    if (result.lines.length === 0) {
+      setAiStatus({ tone: 'info', text: 'Nothing to add' });
+      return;
+    }
+    const before = latest.current;
+    const next = appendInsight(before, kind, result.lines, new Date());
+    // No focus request: the answer can land while the user types elsewhere.
+    commit(next);
+    setUndo({
+      blocks: before,
+      label: kind === 'summary' ? 'Summary added' : 'To-dos added',
+      meta: insightMeta(result),
+    });
   }
 
   function clearDone() {
@@ -293,6 +333,9 @@ function NotesSheet({
           </span>
         )}
         <span className="cl-notes-spacer" />
+        {aiOn && (
+          <NotesAiMenu running={ai.running} onRun={kind => void runAi(kind)} onCancel={ai.cancel} />
+        )}
         {tally.done > 0 && (
           <button
             type="button"
@@ -344,13 +387,22 @@ function NotesSheet({
           <span className="cl-notes-error" role="alert">
             Not saved: {saveError}
           </span>
-        ) : undo ? (
-          <span className="cl-notes-undo" role="status">
-            Notes cleared
-            <button type="button" onClick={restore}>
-              Undo
-            </button>
+        ) : aiStatus?.tone === 'error' ? (
+          <span className="cl-notes-error" role="alert">
+            AI: {aiStatus.text}
           </span>
+        ) : aiStatus ? (
+          <span role="status">{aiStatus.text}</span>
+        ) : undo ? (
+          <>
+            <span className="cl-notes-undo" role="status">
+              {undo.label}
+              <button type="button" onClick={restore}>
+                Undo
+              </button>
+            </span>
+            {undo.meta && <span className="cl-notes-ai-meta">{undo.meta}</span>}
+          </>
         ) : (
           <>
             <span>

@@ -23,6 +23,7 @@
 // cast in `installFakeElectronAPI` is the one place that concession is made.
 
 import { vi } from 'vitest';
+import type { AiModelPrice, InsightResult } from '../../electron/shared/ai-settings';
 import type {
   PromptTemplate,
   PromptTemplateInput,
@@ -373,6 +374,21 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     notes: {
       get: vi.fn(async (_sessionId: string) => ok('')),
       save: vi.fn(async (_sessionId: string, _text: string) => ok(null)),
+    },
+    // No Notes AI run answers anything until a test says so.
+    ai: {
+      insight: vi.fn(async (_sessionId: string, _kind: string) =>
+        ok<InsightResult>({
+          lines: [],
+          truncated: false,
+          model: 'claude-haiku-5-5',
+          inputTokens: 0,
+          outputTokens: 0,
+          costUsd: 0,
+        })
+      ),
+      cancelInsight: vi.fn(async (_sessionId: string) => ok(null)),
+      catalog: vi.fn(async () => ok<AiModelPrice[]>([])),
     },
     playbook: {
       getTemplates: vi.fn(async (_hash: string) => ok<PromptTemplate[]>([])),

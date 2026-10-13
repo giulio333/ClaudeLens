@@ -12,6 +12,15 @@ import type {
   RemoteLaunchMode,
 } from '../../electron/shared/remote-host';
 import type { RemoteLensState } from '../../electron/shared/remote-session';
+import {
+  AI_SETTINGS_KEY,
+  DEFAULT_AI_SETTINGS,
+  normalizeAiSettings,
+  type AiModelPrice,
+  type AiSettings,
+  type InsightKind,
+  type InsightResult,
+} from '../../electron/shared/ai-settings';
 
 import type {
   MemoryTopic,
@@ -451,6 +460,9 @@ declare global {
           projectPath: string
         ) => Promise<IpcResult<null>>;
         stop: () => Promise<IpcResult<null>>;
+        insight: (sessionId: string, kind: InsightKind) => Promise<IpcResult<InsightResult>>;
+        cancelInsight: (sessionId: string) => Promise<IpcResult<null>>;
+        catalog: () => Promise<IpcResult<AiModelPrice[]>>;
         onChunk: (cb: (chunk: string) => void) => () => void;
         onDone: (cb: () => void) => () => void;
         onError: (cb: (error: string) => void) => () => void;
@@ -562,7 +574,7 @@ export function usePromptPlaybook(hash: string, enabled = true) {
 
 /** A session's scratchpad (`~/.claudelens/notes/<id>.md`). Only the app writes
  *  it, so nothing refetches it: the panel seeds itself once and every save puts
- *  the new text in the cache, where the rail badge and the tab count read it. */
+ *  the new text in the cache, where the rail badge reads it. */
 export function useSessionNotes(sessionId: string | null | undefined) {
   return useQuery({
     queryKey: ['notes', sessionId],
@@ -576,6 +588,54 @@ export function useSessionNotes(sessionId: string | null | undefined) {
 
 export function saveSessionNotes(sessionId: string, text: string): Promise<null> {
   return unwrap(window.electronAPI.notes.save(sessionId, text));
+}
+
+/** One Notes AI run (Summary or To-dos) over the session's transcript. */
+export function runSessionInsight(sessionId: string, kind: InsightKind): Promise<InsightResult> {
+  return unwrap(window.electronAPI.ai.insight(sessionId, kind));
+}
+
+export function cancelSessionInsight(sessionId: string): Promise<null> {
+  return unwrap(window.electronAPI.ai.cancelInsight(sessionId));
+}
+
+/** The Notes AI settings (`cl-ai`), through the same normaliser the main uses. */
+export function useAiSettings() {
+  return useQuery({
+    queryKey: ['prefs:ai'],
+    queryFn: async (): Promise<AiSettings> =>
+      normalizeAiSettings((await unwrap(window.electronAPI.prefs.getAll()))[AI_SETTINGS_KEY]),
+    staleTime: Infinity,
+  });
+}
+
+/** Some of the settings, or a function of the current ones. */
+export type AiSettingsPatch = Partial<AiSettings> | ((current: AiSettings) => Partial<AiSettings>);
+
+/** A save merges into the cache at once, before the IPC round-trip, so two quick
+ *  changes in different rows never overwrite each other. A failed write rereads
+ *  the file instead of showing what was not saved. */
+export function useSetAiSettings() {
+  const qc = useQueryClient();
+  const { mutate, isPending } = useMutation({
+    mutationFn: (next: AiSettings) => unwrap(window.electronAPI.prefs.set(AI_SETTINGS_KEY, next)),
+    onError: () => qc.invalidateQueries({ queryKey: ['prefs:ai'] }),
+  });
+  const save = (patch: AiSettingsPatch) => {
+    const current = qc.getQueryData<AiSettings>(['prefs:ai']) ?? DEFAULT_AI_SETTINGS;
+    const next = { ...current, ...(typeof patch === 'function' ? patch(current) : patch) };
+    qc.setQueryData(['prefs:ai'], next);
+    mutate(next);
+  };
+  return { save, isPending };
+}
+
+export function useAiCatalog() {
+  return useQuery({
+    queryKey: ['ai:catalog'],
+    queryFn: () => unwrap(window.electronAPI.ai.catalog()),
+    staleTime: Infinity,
+  });
 }
 
 export function copyPromptText(text: string): Promise<null> {

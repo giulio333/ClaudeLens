@@ -22,6 +22,8 @@ import { fmtModel } from '../utils';
 import { compareVersions } from '../../../../electron/shared/version-compare';
 import { latestWhatsNew, openWhatsNew } from '../../../data/whats-new';
 import { version as appVersion, claudeCodeVersion } from '../../../../package.json';
+import { Block, OnOff, PrefRow } from './SettingsKit';
+import { AiSettingsTab } from './AiSettingsTab';
 
 const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PRIVACY.md';
 
@@ -34,7 +36,8 @@ const PRIVACY_POLICY_URL = 'https://github.com/giulio333/ClaudeLens/blob/main/PR
 // rail says whether it can be changed, so no block has to say it again. The
 // read-only renderers are reused by ProjectConfigView.
 
-type TabId = 'general' | 'privacy' | 'runtime' | 'permissions' | 'tools' | 'mcp' | 'extensions';
+type TabId =
+  'general' | 'privacy' | 'ai' | 'runtime' | 'permissions' | 'tools' | 'mcp' | 'extensions';
 
 // The rail is the project rail's (`cl-rail`): a mono tile, a label, a count.
 const TAB_GROUPS: {
@@ -47,6 +50,7 @@ const TAB_GROUPS: {
     tabs: [
       { id: 'general', label: 'General', mono: 'G' },
       { id: 'privacy', label: 'Privacy', mono: 'P' },
+      { id: 'ai', label: 'AI', mono: 'AI' },
     ],
   },
   {
@@ -75,6 +79,11 @@ const TAB_META: Record<TabId, { eyebrow: string; title: string; caption: string 
     eyebrow: OWN,
     title: 'Privacy',
     caption: 'Anonymous, opt-out usage analytics.',
+  },
+  ai: {
+    eyebrow: OWN,
+    title: 'AI',
+    caption: 'Summaries and to-dos written from a session, in its notes, when you ask for them.',
   },
   runtime: {
     eyebrow: SDK,
@@ -190,6 +199,8 @@ export function SettingsView({ onBack }: { onBack: () => void }) {
               <GeneralPanel cfg={data ?? null} />
             ) : tab === 'privacy' ? (
               <PrivacyTab />
+            ) : tab === 'ai' ? (
+              <AiSettingsTab />
             ) : tab === 'mcp' ? (
               /* MCP reads `claude mcp list`, not the SDK config — so it must
                  not wait on (or be hidden by) that slower, fallible read. */
@@ -1035,112 +1046,7 @@ function LedgerItem({ tone, children }: { tone: 'neutral' | 'block'; children: R
   );
 }
 
-/** One editable preference: what it is on the left, its control on the right.
- *  No dotted leader — a leader reads a value off, and this row sets one. */
-function PrefRow({
-  label,
-  hint,
-  off,
-  children,
-}: {
-  label: string;
-  hint?: string;
-  /** The preference has no effect right now (its parent switch is off). */
-  off?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <div className={`set-pref${off ? ' is-off' : ''}`}>
-      <div className="txt">
-        <div className="lbl">{label}</div>
-        {hint && <div className="hint">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-/** On/off the way the design system draws one: a glass button whose accent tint
- *  is the on state, with the state spelled out so the tint is never the only
- *  signal. Still a `switch` to assistive tech. */
-function OnOff({
-  label,
-  checked,
-  disabled,
-  onChange,
-}: {
-  label: string;
-  checked: boolean;
-  disabled?: boolean;
-  onChange: (v: boolean) => void;
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      disabled={disabled}
-      onClick={() => onChange(!checked)}
-      className={`cl-btn cl-btn--icon set-onoff${checked ? ' is-pinned' : ''}`}
-    >
-      {checked && (
-        <svg
-          aria-hidden="true"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.6"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-        >
-          <path d="M20 6 9 17l-5-5" />
-        </svg>
-      )}
-      <span>{checked ? 'On' : 'Off'}</span>
-    </button>
-  );
-}
-
 // ─── Building blocks ────────────────────────────────────────────────────────
-
-/** A group of rows: a mono label over a rule, then the content — no card. On
- *  the Settings panel the rule is ink; inside the project's ledger, where the
- *  domain above already drew the ink rule, it steps down to a hairline. A block
- *  with no label (`bare`: a tab that is one list) still opens with the rule. */
-function Block({
-  label,
-  note,
-  grid,
-  count,
-  wide,
-  children,
-}: {
-  label?: string;
-  /** A short qualifier on the right of the label, where a count would sit. */
-  note?: string;
-  grid?: boolean;
-  count?: number;
-  /** Span every column when the blocks around it are laid out side by side. */
-  wide?: boolean;
-  children: ReactNode;
-}) {
-  return (
-    <section className={`set-block${label ? '' : ' bare'}${wide ? ' wide' : ''}`}>
-      {label && (
-        <div className="set-block-head">
-          <span className="lbl">{label}</span>
-          {count != null ? (
-            <span className="ct">{count}</span>
-          ) : (
-            note && <span className="ct">{note}</span>
-          )}
-        </div>
-      )}
-      <div className={grid ? 'set-rows' : undefined}>{children}</div>
-    </section>
-  );
-}
 
 export function Row({
   k,
