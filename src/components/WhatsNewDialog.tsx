@@ -63,6 +63,7 @@ import { RemoteBanner, RemoteStatus } from './project/remote/RemoteChrome';
 import { BackgroundShells } from './project/terminal/BackgroundShells';
 import type { BackgroundShell } from './project/terminal/background-shells';
 import type { RemoteHost } from '../../electron/shared/remote-host';
+import type { InsightKind, InsightResult } from '../../electron/shared/ai-settings';
 import { FilesRailPanel } from './project/files/FilesRailPanel';
 import type { FileTreePreview } from './project/files/FileTree';
 import type { SessionMarks } from './project/files/session-marks';
@@ -1589,6 +1590,67 @@ function SessionNotesVisual(): ReactNode {
   );
 }
 
+const PREVIEW_AI_NOTES = `Before the release:
+- [ ] Check the Windows build
+`;
+
+const PREVIEW_AI_ANSWERS: Record<InsightKind, string[]> = {
+  summary: [
+    '- Added an AI button to the Notes toolbar',
+    '- Settings → AI sets the model, length and language',
+    '- Refuses a run that would cost more than $1',
+  ],
+  todos: [
+    '- [x] Write the Settings → AI tab',
+    '- [x] Cut the answer to a fixed number of lines',
+    '- [ ] Check the Windows build',
+  ],
+};
+
+// The same panel again, with its AI button live: a click runs a canned answer
+// instead of the model, so the popup shows what a run adds and what it costs.
+function NotesAiVisual(): ReactNode {
+  const answer = async (kind: InsightKind): Promise<InsightResult> => {
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    return {
+      lines: PREVIEW_AI_ANSWERS[kind],
+      truncated: false,
+      model: 'claude-haiku-5-5',
+      inputTokens: 5200,
+      outputTokens: 180,
+      costUsd: 0.006,
+    };
+  };
+  return (
+    <div className="cl-whatsnew-frame" style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: 320, display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="font-mono"
+          style={{
+            padding: '15px 20px 12px',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.22em',
+            color: 'var(--cl-ink)',
+            borderBottom: '1px solid var(--cl-line-soft)',
+          }}
+        >
+          NOTES
+        </div>
+        <NotesRailPanel
+          id="whats-new-notes-ai"
+          sessionId="whats-new-ai"
+          onClose={() => {}}
+          onUse={async () => {}}
+          useHint="Add to the terminal's input without sending"
+          preview={PREVIEW_AI_NOTES}
+          previewAi={answer}
+        />
+      </div>
+    </div>
+  );
+}
+
 const PREVIEW_TIERS: CascadeTier[] = [
   { key: 'user', label: 'User', here: false, path: '~/.claude/settings.json', keys: 6 },
   { key: 'project', label: 'Project', here: true, path: '.claude/settings.json', keys: 2 },
@@ -1680,6 +1742,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'config-ledger': ConfigLedgerVisual,
   'view-switch': ViewSwitchVisual,
   'session-notes': SessionNotesVisual,
+  'notes-ai': NotesAiVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

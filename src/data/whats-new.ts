@@ -40,7 +40,8 @@ export interface WhatsNewHighlight {
     | 'session-actions'
     | 'config-ledger'
     | 'view-switch'
-    | 'session-notes';
+    | 'session-notes'
+    | 'notes-ai';
 }
 
 export interface WhatsNewRelease {
@@ -49,6 +50,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.41',
+    highlights: [
+      {
+        title: 'Let AI fill your notes',
+        description:
+          'Press AI in Notes and a model reads the session for you: Summary lists what it did, To-dos lists the tasks it raised, the finished ones already ticked. Try it below — the result lands at the end of your notes, with Undo and what it cost.',
+        where: 'Mission Control rail · Notes · AI (model and language in Settings → AI)',
+        visual: 'notes-ai',
+      },
+    ],
+  },
   {
     version: '2.2.40',
     highlights: [

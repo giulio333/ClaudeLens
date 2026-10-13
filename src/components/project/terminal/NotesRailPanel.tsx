@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import type { ClipboardEvent, KeyboardEvent, ReactNode } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { saveSessionNotes, useAiSettings, useSessionNotes } from '../../../hooks/useIPC';
-import type { InsightKind } from '../../../../electron/shared/ai-settings';
+import type { InsightKind, InsightResult } from '../../../../electron/shared/ai-settings';
 import {
   backspaceAtStart,
   enterAt,
@@ -21,7 +21,7 @@ import { htmlToNoteBlocks } from './session-notes-paste';
 import { IS_MAC } from './view-keys';
 import { appendInsight, insightMeta } from './notes-ai';
 import { NotesAiMenu } from './NotesAiMenu';
-import { useNotesAi } from './use-notes-ai';
+import { useNotesAi, type NotesAiOutcome } from './use-notes-ai';
 
 const TOGGLE_KEY = IS_MAC ? '⌘⇧L' : 'Ctrl+Shift+L';
 
@@ -83,6 +83,9 @@ type PanelProps = {
   /** Fixed notes for a preview of the panel (the "What's new" popup): nothing
    *  is read or written, so a demo never touches the reader's own notes. */
   preview?: string;
+  /** With `preview`: stands in for the model, so the popup can show a run
+   *  end to end — the AI button, the running state, the lines it adds. */
+  previewAi?: (kind: InsightKind) => Promise<InsightResult>;
 };
 
 /** The session's scratchpad, in the rail's body. While it is open its own
@@ -117,6 +120,7 @@ function NotesSheet({
   onUse,
   useHint,
   preview,
+  previewAi,
   initial,
 }: PanelProps & { initial: string }) {
   const [blocks, setBlocks] = useState(() => seed(initial));
@@ -131,7 +135,8 @@ function NotesSheet({
   const latest = useRef(blocks);
   const ai = useNotesAi(sessionId);
   const aiSettings = useAiSettings();
-  const aiOn = preview === undefined && aiSettings.data?.enabled === true;
+  const [demoRunning, setDemoRunning] = useState<InsightKind | null>(null);
+  const aiOn = preview === undefined ? aiSettings.data?.enabled === true : previewAi !== undefined;
   const { save, flush: flushSave } = useDebouncedSave(sessionId, setSaveError);
   const client = useQueryClient();
   const last = blocks[blocks.length - 1];
@@ -264,9 +269,21 @@ function NotesSheet({
     commit(undo.blocks, { id: last.id, pos: last.text.length });
   }
 
+  async function demoRun(
+    answer: (kind: InsightKind) => Promise<InsightResult>,
+    kind: InsightKind
+  ): Promise<NotesAiOutcome> {
+    setDemoRunning(kind);
+    try {
+      return { kind: 'done', result: await answer(kind) };
+    } finally {
+      setDemoRunning(null);
+    }
+  }
+
   async function runAi(kind: InsightKind) {
     setAiStatus(null);
-    const outcome = await ai.run(kind);
+    const outcome = previewAi ? await demoRun(previewAi, kind) : await ai.run(kind);
     if (outcome.kind === 'cancelled') return;
     if (outcome.kind === 'error') {
       setAiStatus({ tone: 'error', text: outcome.message });
@@ -334,7 +351,11 @@ function NotesSheet({
         )}
         <span className="cl-notes-spacer" />
         {aiOn && (
-          <NotesAiMenu running={ai.running} onRun={kind => void runAi(kind)} onCancel={ai.cancel} />
+          <NotesAiMenu
+            running={demoRunning ?? ai.running}
+            onRun={kind => void runAi(kind)}
+            onCancel={ai.cancel}
+          />
         )}
         {tally.done > 0 && (
           <button
