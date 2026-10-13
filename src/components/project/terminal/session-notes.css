@@ -264,11 +264,3 @@
   padding: 0;
   background: var(--cl-ink-3);
 }
-
-/* Open to-dos on a session tab. */
-.cl-stab-notes {
-  flex: none;
-  font: 700 9.5px/1 var(--font-mono);
-  color: var(--cl-accent-ink);
-  font-variant-numeric: tabular-nums;
-}
