@@ -10,20 +10,20 @@ export const STATUS_LABEL: Record<TerminalStatus, string> = {
   error: 'Error',
 };
 
-// Per-theme terminal palettes — the brand surfaces (`--cl-paper-2`/`--cl-ink`)
+// Per-theme terminal palettes — the Lens ground (`--cl-paper`) and `--cl-ink`,
 // plus a terracotta cursor. xterm needs concrete colors; `scrim`/`muted`/`body`
 // drive the exit overlay so it sits on the matching ground. The `term` field is
 // the xterm theme; the CLI reads `term.background` (OSC 11) to pick its palette.
 export const PALETTES = {
   dark: {
     term: {
-      background: '#262421',
+      background: '#191713',
       foreground: '#cfccc3',
       cursor: '#C15F3C',
-      cursorAccent: '#262421',
+      cursorAccent: '#191713',
       selectionBackground: 'rgba(193, 95, 60, 0.28)',
     },
-    scrim: 'color-mix(in srgb, #262421 82%, transparent)',
+    scrim: 'color-mix(in srgb, #191713 82%, transparent)',
     muted: '#8d897f',
     body: '#cfccc3',
   },
