@@ -210,6 +210,10 @@ declare global {
         delete: (hash: string, id: string) => Promise<IpcResult<null>>;
         dismiss: (hash: string, text: string) => Promise<IpcResult<null>>;
       };
+      notes: {
+        get: (sessionId: string) => Promise<IpcResult<string>>;
+        save: (sessionId: string, text: string) => Promise<IpcResult<null>>;
+      };
       memory: {
         listProjects: () => Promise<IpcResult<Array<{ hash: string; realPath: string }>>>;
         getProject: (hash: string) => Promise<IpcResult<MemoryData>>;
@@ -554,6 +558,24 @@ export function usePromptPlaybook(hash: string, enabled = true) {
     },
   });
   return { templates, candidates, change };
+}
+
+/** A session's scratchpad (`~/.claudelens/notes/<id>.md`). Only the app writes
+ *  it, so nothing refetches it: the panel seeds itself once and every save puts
+ *  the new text in the cache, where the rail badge and the tab count read it. */
+export function useSessionNotes(sessionId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['notes', sessionId],
+    queryFn: () => unwrap(window.electronAPI.notes.get(sessionId!)),
+    enabled: !!sessionId,
+    staleTime: Infinity,
+    refetchOnWindowFocus: false,
+    retry: false,
+  });
+}
+
+export function saveSessionNotes(sessionId: string, text: string): Promise<null> {
+  return unwrap(window.electronAPI.notes.save(sessionId, text));
 }
 
 export function copyPromptText(text: string): Promise<null> {

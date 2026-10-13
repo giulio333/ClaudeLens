@@ -369,6 +369,11 @@ export function createFakeElectronAPI(channels: FakeChannels) {
   return {
     images,
     files,
+    // No session has notes until a test says so.
+    notes: {
+      get: vi.fn(async (_sessionId: string) => ok('')),
+      save: vi.fn(async (_sessionId: string, _text: string) => ok(null)),
+    },
     playbook: {
       getTemplates: vi.fn(async (_hash: string) => ok<PromptTemplate[]>([])),
       getCandidates: vi.fn(async (_hash: string) =>

@@ -107,6 +107,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     delete: (hash: string, id: string) => ipcRenderer.invoke('playbook:delete', hash, id),
     dismiss: (hash: string, text: string) => ipcRenderer.invoke('playbook:dismiss', hash, text),
   },
+  notes: {
+    get: (sessionId: string) => ipcRenderer.invoke('notes:get', sessionId),
+    save: (sessionId: string, text: string) => ipcRenderer.invoke('notes:save', sessionId, text),
+  },
   sessions: {
     listByProject: (hash: string) => ipcRenderer.invoke('sessions:listByProject', hash),
     getChat: (hash: string, filename: string) =>

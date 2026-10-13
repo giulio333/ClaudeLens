@@ -49,6 +49,7 @@ import {
   deletePromptTemplate,
   dismissPrompt,
 } from './modules/playbook-store';
+import { readSessionNotes, writeSessionNotes } from './modules/notes-store';
 import { resolveVaultFile, resolveVaultLinks, type VaultLinkAnswer } from './modules/vault-index';
 import { readLocalImage, type LocalImageAnswer } from './modules/local-image';
 import { createProjectRootGuard, listProjectDir, readProjectFile } from './modules/project-files';
@@ -1016,6 +1017,23 @@ for (const [name, handler] of Object.entries(playbookHandlers)) {
     }
   });
 }
+
+// The session scratchpad: ClaudeLens's own state, one Markdown file per session.
+const NOTES_DIR = join(claudelensDir(), 'notes');
+ipcMain.handle('notes:get', async (_event, sessionId: string) => {
+  try {
+    return ok(await readSessionNotes(NOTES_DIR, sessionId));
+  } catch (e) {
+    return err(e);
+  }
+});
+ipcMain.handle('notes:save', async (_event, sessionId: string, text: string) => {
+  try {
+    return ok(await writeSessionNotes(NOTES_DIR, sessionId, text));
+  } catch (e) {
+    return err(e);
+  }
+});
 
 ipcMain.handle('sessions:listByProject', async (_event, hash: string) => {
   try {

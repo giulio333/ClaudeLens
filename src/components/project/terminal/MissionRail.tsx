@@ -11,6 +11,7 @@ import {
   useProjectTeams,
   usePlugins,
   useSessionList,
+  useSessionNotes,
   useSessionSubagents,
 } from '../../../hooks/useIPC';
 import type { Agent, MemoryTopic, Skill } from '../../../hooks/useIPC';
@@ -30,6 +31,8 @@ import {
 } from '../chat/utils';
 import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
 import { FilesRailPanel } from '../files/FilesRailPanel';
+import { NotesRailPanel } from './NotesRailPanel';
+import { notesBadge, notesTally } from './session-notes';
 import { sessionMarks } from '../files/session-marks';
 import { contextFiles, shellReadPaths } from '../chat/context-files';
 import { FileIcon } from '../chat/fileIcons';
@@ -472,12 +475,23 @@ export function MissionRail({
    *  changes. */
   remote?: RemoteTranscript;
 }) {
-  // One panel at a time takes the rail's body: the Playbook or the project's
-  // files. The feed under it stays mounted, hidden, so its filters and scroll
-  // are where the reader left them.
-  const [panel, setPanel] = useState<'playbook' | 'files' | null>(null);
+  // One panel at a time takes the rail's body: the Playbook, the project's
+  // files or the session's notes. The feed under it stays mounted, hidden, so
+  // its filters and scroll are where the reader left them.
+  const [panel, setPanel] = useState<'playbook' | 'files' | 'notes' | null>(null);
   const playbookOpen = panel === 'playbook';
   const filesOpen = panel === 'files';
+  // The notes belong to the session: none until the CLI has registered it.
+  // A remote rail has no input to hand a line to, so it has no notes either.
+  const notesOpen = panel === 'notes' && !!sessionId && !remote;
+  const notesTrigger = useRef<HTMLButtonElement>(null);
+  const notesId = useId();
+  const notes = useSessionNotes(remote ? null : sessionId);
+  const badge = notesBadge(notesTally(notes.data));
+  function closeNotes(restoreFocus = true) {
+    setPanel(null);
+    if (restoreFocus) notesTrigger.current?.focus();
+  }
   const playbookTrigger = useRef<HTMLButtonElement>(null);
   const playbookId = useId();
   const filesTrigger = useRef<HTMLButtonElement>(null);
@@ -860,7 +874,13 @@ export function MissionRail({
             {/* The open panel names the rail: with the files on screen this is
                 the files panel or the Playbook, not Mission Control with a second
                 title under it. */}
-            {filesOpen ? 'FILES' : playbookOpen ? 'PLAYBOOK' : 'MISSION CONTROL'}
+            {filesOpen
+              ? 'FILES'
+              : playbookOpen
+                ? 'PLAYBOOK'
+                : notesOpen
+                  ? 'NOTES'
+                  : 'MISSION CONTROL'}
           </span>
           <span style={{ flex: 1 }} />
           {!remote && onOpenFile && (
@@ -913,6 +933,39 @@ export function MissionRail({
                 <path d="M12 5.5C9 3.5 5.5 3.5 2 5v15c3.5-1.5 7-1.5 10 .5 3-2 6.5-2 10-.5V5c-3.5-1.5-7-1.5-10 .5Z" />
                 <path d="M12 5.5v15" />
               </svg>
+            </button>
+          )}
+          {sessionId && !remote && (
+            <button
+              ref={notesTrigger}
+              type="button"
+              className="cl-playbook-rail-trigger cl-notes-trigger"
+              aria-label={badge && !notesOpen ? `Notes — ${badge.title}` : 'Notes'}
+              title={badge && !notesOpen ? `Session notes · ${badge.title}` : 'Session notes'}
+              aria-expanded={notesOpen}
+              aria-controls={notesOpen ? notesId : undefined}
+              onClick={() => (notesOpen ? closeNotes() : setPanel('notes'))}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <path d="M5 4h10l4 4v12H5z" />
+                <path d="M8 11h8M8 15h6" />
+              </svg>
+              {/* What the notes hold, while they are out of sight. */}
+              {badge && !notesOpen && (
+                <span className="cl-notes-badge" data-kind={badge.kind} aria-hidden>
+                  {badge.kind === 'progress' ? badge.label : badge.kind === 'done' ? '✓' : ''}
+                </span>
+              )}
             </button>
           )}
         </div>
@@ -1036,6 +1089,16 @@ export function MissionRail({
           openFile={openFile ?? null}
           onOpen={onOpenFile}
           onClose={closeFiles}
+        />
+      )}
+      {notesOpen && (
+        <NotesRailPanel
+          key={sessionId}
+          id={notesId}
+          sessionId={sessionId}
+          onClose={closeNotes}
+          onUse={onUsePrompt}
+          useHint="Open Terminal and add to its input without sending"
         />
       )}
       {playbookOpen && (

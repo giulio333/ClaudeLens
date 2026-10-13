@@ -1,5 +1,5 @@
 import { useRef, useState, type CSSProperties } from 'react';
-import { useActiveSessions, useSessionActivity } from '../../../hooks/useIPC';
+import { useActiveSessions, useSessionActivity, useSessionNotes } from '../../../hooks/useIPC';
 import { usePinnedSessions } from '../../../hooks/usePinnedSessions';
 import type { ActiveSession, SessionActivity } from '../../../types';
 import { LiveOrb } from '../../LiveOrb';
@@ -8,6 +8,8 @@ import { PinIcon } from '../shared/SearchPopover';
 import { OpenSessionsButton } from './ParkedTerminals';
 import { SessionTabCard } from './SessionTabCard';
 import { useStripOverflow } from './strip-overflow';
+import { notesTally } from './session-notes';
+import './session-notes.css';
 import { CONTEXT_HIGH, contextShare, liveLine, newestWrite } from './tab-live';
 import { useBump } from './use-bump';
 import { ToneDot } from './ToneDot';
@@ -275,6 +277,9 @@ function SessionTab({
   const write = newestWrite(activity);
   const wrote = useBump(write?.key, ready);
   const fault = useBump(activity?.errorCount, ready);
+  // To-dos still open in the session's notes: which tab has work left.
+  const notes = notesTally(useSessionNotes(inst.report.sessionId).data);
+  const openTodos = notes.total - notes.done;
   return (
     <div
       className="cl-stab"
@@ -294,7 +299,7 @@ function SessionTab({
         aria-current={on ? 'page' : undefined}
         aria-label={`${title} · ${project} — ${stateLabel(tone, entry)}${
           unseen ? ', not seen yet' : ''
-        }`}
+        }${openTodos > 0 ? `, ${openTodos} open ${openTodos === 1 ? 'to-do' : 'to-dos'}` : ''}`}
         onClick={onPick}
       >
         {tone === 'busy' ? (
@@ -342,6 +347,15 @@ function SessionTab({
             </span>
           )}
         </span>
+        {openTodos > 0 && (
+          <span
+            className="cl-stab-notes"
+            title={`${openTodos} open ${openTodos === 1 ? 'to-do' : 'to-dos'} in this session's notes`}
+            aria-hidden
+          >
+            ☐ {openTodos}
+          </span>
+        )}
       </button>
       <button
         type="button"

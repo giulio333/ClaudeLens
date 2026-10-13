@@ -112,8 +112,8 @@ An Electron app that reads Claude Code's local data from `~/.claude/`.
 `claudeMd`, `sessions`, `rules`, `tasks`, `plans`, `workflows`, `teams`, `agents`, `skills`,
 `plugins`, `mcp`, `projects`, `live`, `ai`, `export`, `markdownFile`, `settings`, `config`,
 `prefs`, `telemetry`, `updates`, `search`, `exchange`, `files`, `images`, `vault`, `clipboard`,
-`notifications`, `studio`, `playbook`, `terminal`, `remote`. The backend modules are described in
-`electron/modules/CLAUDE.md`.
+`notifications`, `studio`, `playbook`, `notes`, `terminal`, `remote`. The backend modules are
+described in `electron/modules/CLAUDE.md`.
 
 - **The chat runs on the Agent SDK in streaming input mode** (`modules/chat-runner.ts`): one
   long-lived `ChatSession` per chat view drives one `query()` fed by a push-generator, so turns
