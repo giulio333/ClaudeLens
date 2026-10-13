@@ -39,7 +39,8 @@ export interface WhatsNewHighlight {
     | 'side-question'
     | 'session-actions'
     | 'config-ledger'
-    | 'view-switch';
+    | 'view-switch'
+    | 'session-notes';
 }
 
 export interface WhatsNewRelease {
@@ -48,6 +49,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.40',
+    highlights: [
+      {
+        title: 'Notes for every session',
+        description:
+          'A scratchpad of your own beside each session: free text, to-dos and lists, a badge that shows how many to-dos are done, and a list copied from the Lens pastes as a list.',
+        where: 'Mission Control rail · Notes',
+        visual: 'session-notes',
+      },
+    ],
+  },
   {
     version: '2.2.38',
     highlights: [

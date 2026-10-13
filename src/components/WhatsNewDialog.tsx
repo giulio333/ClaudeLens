@@ -45,6 +45,7 @@ import {
   type View,
 } from './project/terminal/TerminalMissionControl';
 import { VIEW_TOGGLE_LABEL } from './project/terminal/view-keys';
+import { NotesRailPanel } from './project/terminal/NotesRailPanel';
 import { ParkedTerminals } from './project/terminal/ParkedTerminals';
 import { SessionTabs } from './project/terminal/SessionTabs';
 import { TabAttentionContext } from './project/terminal/use-tab-attention';
@@ -1548,6 +1549,46 @@ function ViewSwitchVisual(): ReactNode {
   );
 }
 
+const PREVIEW_NOTES = `Before the release:
+- [x] Bump the version
+- [ ] Write the release notes
+- [ ] Check the Windows build
+Ideas for later:
+- Undo for Clear done
+`;
+
+// The rail's Notes panel itself, fed fixed notes: ticks and edits work in the
+// popup, and nothing is read from or written to the reader's own notes.
+function SessionNotesVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame" style={{ display: 'flex', justifyContent: 'center' }}>
+      <div style={{ width: 320, display: 'flex', flexDirection: 'column' }}>
+        <div
+          className="font-mono"
+          style={{
+            padding: '15px 20px 12px',
+            fontSize: 10,
+            fontWeight: 700,
+            letterSpacing: '0.22em',
+            color: 'var(--cl-ink)',
+            borderBottom: '1px solid var(--cl-line-soft)',
+          }}
+        >
+          NOTES
+        </div>
+        <NotesRailPanel
+          id="whats-new-notes"
+          sessionId="whats-new"
+          onClose={() => {}}
+          onUse={async () => {}}
+          useHint="Add to the terminal's input without sending"
+          preview={PREVIEW_NOTES}
+        />
+      </div>
+    </div>
+  );
+}
+
 const PREVIEW_TIERS: CascadeTier[] = [
   { key: 'user', label: 'User', here: false, path: '~/.claude/settings.json', keys: 6 },
   { key: 'project', label: 'Project', here: true, path: '.claude/settings.json', keys: 2 },
@@ -1638,6 +1679,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'session-actions': SessionActionsVisual,
   'config-ledger': ConfigLedgerVisual,
   'view-switch': ViewSwitchVisual,
+  'session-notes': SessionNotesVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the
