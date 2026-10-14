@@ -7,7 +7,12 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useActiveSessions, useChatSession, useSessionList } from '../../../hooks/useIPC';
+import {
+  useActiveSessions,
+  useChatSession,
+  useSessionList,
+  useSessionNotes,
+} from '../../../hooks/useIPC';
 import { useTheme } from '../../../hooks/useTheme';
 import type { SessionSummary } from '../../../hooks/useIPC';
 import {
@@ -29,6 +34,7 @@ import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
 import { TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
+import { notesBadge, notesTally } from './session-notes';
 import { BackgroundShells } from './BackgroundShells';
 import { buildBackgroundShells } from './background-shells';
 import { flushSync } from 'react-dom';
@@ -282,19 +288,24 @@ export function TabBarBack({
 }
 
 /** The Mission Control toggle at the tab bar's right end: the same panel-right
- *  glyph as `RailToggle`, drawn as one of the bar's bare icons. */
+ *  glyph as `RailToggle`, drawn as one of the bar's bare icons. `notes` is the
+ *  open to-do progress the rail's Notes trigger would show, carried here while
+ *  the rail is collapsed and that trigger is out of sight. */
 export function TabBarRailToggle({
   collapsed,
   onToggle,
+  notes,
 }: {
   collapsed: boolean;
   onToggle: () => void;
+  notes?: { label: string; title: string } | null;
 }) {
-  const label = collapsed ? 'Show Mission Control' : 'Hide Mission Control';
+  const base = collapsed ? 'Show Mission Control' : 'Hide Mission Control';
+  const label = notes ? `${base} · Notes: ${notes.title}` : base;
   return (
     <button
       type="button"
-      className="cl-stabs-icon"
+      className={notes ? 'cl-stabs-icon cl-stabs-notes' : 'cl-stabs-icon'}
       onClick={onToggle}
       aria-pressed={!collapsed}
       aria-label={label}
@@ -323,6 +334,11 @@ export function TabBarRailToggle({
           />
         )}
       </svg>
+      {notes && (
+        <span className="cl-notes-badge" data-kind="progress" aria-hidden>
+          {notes.label}
+        </span>
+      )}
     </button>
   );
 }
@@ -587,6 +603,14 @@ export function TerminalMissionControl({
   const latchedSessionId = ptyPid && latched?.pid === ptyPid ? latched.sessionId : null;
   const sessionId = registrySessionId ?? latchedSessionId ?? resumeSessionId ?? null;
   const filename = sessionId ? `${sessionId}.jsonl` : null;
+
+  // With the rail collapsed its Notes trigger is out of sight, so the open
+  // to-dos surface on the toggle that brings the rail back. The rail reads
+  // the same query while it is open, so this costs no second read.
+  const collapsedNotes = useSessionNotes(railCollapsed ? sessionId : null);
+  const notesProgress = notesBadge(notesTally(collapsedNotes.data));
+  const collapsedNotesBadge =
+    railCollapsed && notesProgress?.kind === 'progress' ? notesProgress : null;
 
   // "Open chat" from the team detail overlay: jump to that session's Mission
   // Control. Same session → just close the overlay. Different session →
@@ -908,7 +932,11 @@ export function TerminalMissionControl({
           {filename && <SessionActions projectHash={project.hash} filename={filename} />}
           <ViewSwitch view={view} setView={switchView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
-          <TabBarRailToggle collapsed={railCollapsed} onToggle={toggleRail} />
+          <TabBarRailToggle
+            collapsed={railCollapsed}
+            onToggle={toggleRail}
+            notes={collapsedNotesBadge}
+          />
         </div>
       </div>
 

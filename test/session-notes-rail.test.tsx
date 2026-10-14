@@ -146,6 +146,34 @@ it('shows the to-do progress on the closed trigger and follows a tick as it happ
   );
 });
 
+it('carries the open to-dos on the Mission Control toggle while the rail is collapsed', async () => {
+  localStorage.setItem('tmc-rail-collapsed', '1');
+  bridge.api.notes.get.mockResolvedValue(ok(STORED));
+  mount();
+  const toggle = await screen.findByRole('button', { name: /^Show Mission Control/ });
+  await waitFor(() =>
+    expect(toggle.getAttribute('aria-label')).toBe(
+      'Show Mission Control · Notes: 1 of 2 to-dos done'
+    )
+  );
+  expect(toggle.textContent).toContain('1/2');
+  expect(screen.queryByRole('button', { name: /^Notes/ })).toBeNull();
+
+  fireEvent.click(toggle);
+  const hide = await screen.findByRole('button', { name: 'Hide Mission Control' });
+  expect(hide.querySelector('.cl-notes-badge')).toBeNull();
+  expect(badge().textContent).toContain('1/2');
+});
+
+it('leaves the collapsed toggle bare when every to-do is done', async () => {
+  localStorage.setItem('tmc-rail-collapsed', '1');
+  bridge.api.notes.get.mockResolvedValue(ok('- [x] write the hook\n'));
+  mount();
+  const toggle = await screen.findByRole('button', { name: 'Show Mission Control' });
+  await waitFor(() => expect(bridge.api.notes.get).toHaveBeenCalledWith('session-a'));
+  expect(toggle.querySelector('.cl-notes-badge')).toBeNull();
+});
+
 it('turns a typed [] into a to-do and saves the sheet after a pause', async () => {
   mount();
   await waitFor(() => expect(bridge.api.notes.get).toHaveBeenCalled());

@@ -320,3 +320,12 @@
   color: var(--cl-ink-4);
   font-variant-numeric: tabular-nums;
 }
+
+/* The same badge on the tab bar's Mission Control toggle, while the rail is collapsed. */
+.cl-stabs-notes {
+  position: relative;
+}
+.cl-stabs-notes .cl-notes-badge {
+  top: 0;
+  right: -4px;
+}
