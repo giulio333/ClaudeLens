@@ -130,7 +130,7 @@ function useNow(intervalMs = 30_000): number {
 /* ── presentational atoms ─────────────────────────────────────────────── */
 
 /** +N −N, tabular. */
-function DiffNum({ added, removed, size = 9 }: { added: number; removed: number; size?: number }) {
+function DiffNum({ added, removed, size = 10 }: { added: number; removed: number; size?: number }) {
   return (
     <span
       className="font-mono shrink-0"
@@ -236,7 +236,7 @@ function FeedRow({
       title={[e.title, e.meta, e.hint].filter(Boolean).join('\n')}
       style={{
         display: 'grid',
-        gridTemplateColumns: '34px 20px minmax(0,1fr) auto',
+        gridTemplateColumns: '38px 20px minmax(0,1fr) auto',
         alignItems: 'center',
         gap: 9,
         width: '100%',
@@ -251,7 +251,7 @@ function FeedRow({
       <span
         className="font-mono"
         style={{
-          fontSize: 9,
+          fontSize: 10,
           letterSpacing: '0.06em',
           fontVariantNumeric: 'tabular-nums',
           color: e.live ? 'var(--cl-violet-ink)' : 'var(--cl-ink-4)',
@@ -263,7 +263,7 @@ function FeedRow({
       <span className="min-w-0">
         <span
           className="flex items-center"
-          style={{ gap: 5, font: '500 12px/1.3 var(--font-sans)' }}
+          style={{ gap: 5, font: '500 12.5px/1.3 var(--font-sans)' }}
         >
           {e.actionGlyph && <ActionGlyph kind={e.actionGlyph} />}
           <span
@@ -277,7 +277,7 @@ function FeedRow({
         {e.meta && (
           <span
             className="font-mono truncate"
-            style={{ display: 'block', fontSize: 9, color: 'var(--cl-ink-4)', marginTop: 2 }}
+            style={{ display: 'block', fontSize: 10, color: 'var(--cl-ink-4)', marginTop: 2 }}
           >
             {e.meta}
           </span>
@@ -290,7 +290,7 @@ function FeedRow({
           className="font-mono shrink-0 flex items-center"
           style={{
             gap: 6,
-            fontSize: 9,
+            fontSize: 10,
             fontWeight: 700,
             letterSpacing: '0.08em',
             whiteSpace: 'nowrap',
@@ -331,18 +331,18 @@ function FeedOperations({
             className="tmc-row w-full text-left flex items-center gap-2"
             onClick={() => onOpenTool(g)}
             title={note || undefined}
-            style={{ padding: '3px 6px 3px 69px', margin: '0 -6px', fontSize: 10.5 }}
+            style={{ padding: '3px 6px 3px 73px', margin: '0 -6px', fontSize: 11 }}
           >
             <span className="shrink-0" style={{ color: 'var(--cl-ink-3)' }}>
               {g.use.name}
             </span>
             {note && (
-              <span className="truncate" style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>
+              <span className="truncate" style={{ fontSize: 10.5, color: 'var(--cl-ink-4)' }}>
                 {note}
               </span>
             )}
             {g.result?.isError && (
-              <span className="font-mono" style={{ fontSize: 9, color: 'var(--cl-danger)' }}>
+              <span className="font-mono" style={{ fontSize: 10, color: 'var(--cl-danger)' }}>
                 ERROR
               </span>
             )}
@@ -365,32 +365,32 @@ function TaskDetail({ event }: { event: Extract<FeedEvent['source'], { kind: 'ta
   return (
     <div
       style={{
-        padding: '4px 6px 8px 69px',
+        padding: '4px 6px 8px 73px',
         display: 'flex',
         flexDirection: 'column',
         gap: 6,
       }}
     >
       {liveForm && (
-        <span style={{ fontSize: 11, lineHeight: 1.45, color: 'var(--cl-ok)', fontWeight: 600 }}>
+        <span style={{ fontSize: 11.5, lineHeight: 1.45, color: 'var(--cl-ok)', fontWeight: 600 }}>
           ⟳ {liveForm}…
         </span>
       )}
       {t.description?.trim() && (
-        <span style={{ fontSize: 11, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}>
+        <span style={{ fontSize: 11.5, lineHeight: 1.5, color: 'var(--cl-ink-2)' }}>
           {t.description}
         </span>
       )}
       {(t.blockedBy.length > 0 || t.blocks.length > 0) && (
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
           {t.blockedBy.length > 0 && (
-            <span className="font-mono" style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+            <span className="font-mono" style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>
               <span style={{ color: 'var(--cl-danger)', letterSpacing: '0.06em' }}>BLOCKED BY</span>{' '}
               {t.blockedBy.map(id => `#${id}`).join(' ')}
             </span>
           )}
           {t.blocks.length > 0 && (
-            <span className="font-mono" style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+            <span className="font-mono" style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>
               <span style={{ letterSpacing: '0.06em' }}>BLOCKS</span>{' '}
               {t.blocks.map(id => `#${id}`).join(' ')}
             </span>
@@ -865,9 +865,9 @@ export function MissionRail({
           <span
             className="font-mono"
             style={{
-              fontSize: 10,
+              fontSize: 10.5,
               fontWeight: 700,
-              letterSpacing: '0.22em',
+              letterSpacing: '0.14em',
               color: 'var(--cl-ink)',
             }}
           >
@@ -1007,9 +1007,9 @@ export function MissionRail({
                 {ctx ? pct : '—'}
                 {ctx && <span style={{ fontSize: 11, color: 'var(--cl-ink-3)' }}>%</span>}
               </span>
-              <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>ctx</span>
+              <span style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>ctx</span>
             </span>
-            <span style={{ fontSize: 9.5, color: 'var(--cl-line)' }}>·</span>
+            <span style={{ fontSize: 10, color: 'var(--cl-line)' }}>·</span>
             <span
               className="cl-vitals-trigger"
               tabIndex={0}
@@ -1029,12 +1029,12 @@ export function MissionRail({
             {/* Zero is not a reading: `+0 −0 0 files` in green and red said
                 three times that nothing happened, in the band's loudest hues. */}
             {changes.length === 0 ? (
-              <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>no changes</span>
+              <span style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>no changes</span>
             ) : (
               <>
                 <span
                   style={{
-                    fontSize: 9.5,
+                    fontSize: 10,
                     color: totals.added > 0 ? 'var(--cl-ok)' : 'var(--cl-ink-4)',
                   }}
                 >
@@ -1042,13 +1042,13 @@ export function MissionRail({
                 </span>
                 <span
                   style={{
-                    fontSize: 9.5,
+                    fontSize: 10,
                     color: totals.removed > 0 ? 'var(--cl-danger)' : 'var(--cl-ink-4)',
                   }}
                 >
                   −{fmt(totals.removed)}
                 </span>
-                <span style={{ fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+                <span style={{ fontSize: 10, color: 'var(--cl-ink-4)' }}>
                   {changes.length} {changes.length === 1 ? 'file' : 'files'}
                 </span>
               </>
@@ -1140,9 +1140,9 @@ export function MissionRail({
                   borderRadius: 999,
                   cursor: 'pointer',
                   whiteSpace: 'nowrap',
-                  fontSize: 9,
+                  fontSize: 10,
                   fontWeight: 600,
-                  letterSpacing: '0.12em',
+                  letterSpacing: '0.06em',
                   // The active filter is an accent veil, as on the tag filters:
                   // solid ink made the choice of an empty filter the heaviest
                   // thing in the rail.
@@ -1192,7 +1192,7 @@ export function MissionRail({
           {filter === 'TEAMS' && visible.length === 0 && projectTeamCount > 0 && (
             <p
               className="font-mono"
-              style={{ fontSize: 10.5, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
+              style={{ fontSize: 11, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
             >
               No teams in this session · {projectTeamCount} in the project
             </p>
@@ -1228,7 +1228,7 @@ export function MissionRail({
               <span style={{ flex: 1, height: 1, background: 'var(--cl-line-soft)' }} />
               <span
                 className="font-mono"
-                style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--cl-ink-4)' }}
+                style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--cl-ink-4)' }}
               >
                 SESSION START
               </span>

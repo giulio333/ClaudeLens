@@ -77,7 +77,7 @@ const Rule = ReadoutRule;
 
 function Waiting({ text }: { text: string }) {
   return (
-    <div className="font-mono" style={{ marginTop: 10, fontSize: 10, color: 'var(--cl-ink-4)' }}>
+    <div className="font-mono" style={{ marginTop: 10, fontSize: 10.5, color: 'var(--cl-ink-4)' }}>
       {text}
     </div>
   );
@@ -220,7 +220,7 @@ export function SpendPopover({
         />
         <Cell label="WOULD BE" value={fmtCost(wouldBe)} />
       </div>
-      <div className="font-mono" style={{ marginTop: 7, fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+      <div className="font-mono" style={{ marginTop: 7, fontSize: 10, color: 'var(--cl-ink-4)' }}>
         {saved > 0
           ? `${savedPct}% of the full-price bill saved by the cache`
           : 'no cache reuse yet'}

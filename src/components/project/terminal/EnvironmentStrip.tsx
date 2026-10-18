@@ -38,7 +38,7 @@ function McpFailureCard({ groups, count }: { groups: McpFailureGroup[]; count: n
         <div key={`${g.plugin ?? ''}|${g.source ?? ''}`} style={{ marginTop: 11 }}>
           <div
             className="font-mono"
-            style={{ fontSize: 8.5, letterSpacing: '0.16em', color: 'var(--cl-ink-4)' }}
+            style={{ fontSize: 9.5, letterSpacing: '0.1em', color: 'var(--cl-ink-4)' }}
           >
             {groupLabel(g)}
           </div>
@@ -48,7 +48,7 @@ function McpFailureCard({ groups, count }: { groups: McpFailureGroup[]; count: n
         </div>
       ))}
       <ReadoutRule />
-      <div className="font-mono" style={{ marginTop: 8, fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+      <div className="font-mono" style={{ marginTop: 8, fontSize: 10, color: 'var(--cl-ink-4)' }}>
         /mcp in the terminal lists them and can retry the connection
       </div>
     </ReadoutShell>
@@ -84,8 +84,8 @@ const RUNS_SHOWN = 6;
 
 const SECTION_LABEL = {
   marginTop: 11,
-  fontSize: 8.5,
-  letterSpacing: '0.16em',
+  fontSize: 9.5,
+  letterSpacing: '0.1em',
   color: 'var(--cl-ink-4)',
 } as const;
 
@@ -127,7 +127,7 @@ function GitCard({ git }: { git: SessionGitState }) {
             className="font-mono"
             style={{
               marginTop: 2,
-              fontSize: 10,
+              fontSize: 10.5,
               color: 'var(--cl-ink-3)',
               overflowWrap: 'anywhere',
             }}
@@ -137,7 +137,7 @@ function GitCard({ git }: { git: SessionGitState }) {
           {w.originalBranch && (
             <div
               className="font-mono"
-              style={{ marginTop: 2, fontSize: 10, color: 'var(--cl-ink-3)' }}
+              style={{ marginTop: 2, fontSize: 10.5, color: 'var(--cl-ink-3)' }}
             >
               cut from {branchLabel(w.originalBranch)}
               {w.originalHeadCommit && ` @ ${shortCommit(w.originalHeadCommit)}`}
@@ -153,7 +153,7 @@ function GitCard({ git }: { git: SessionGitState }) {
           {earlier > 0 && (
             <div
               className="font-mono"
-              style={{ marginTop: 3, fontSize: 10, color: 'var(--cl-ink-4)' }}
+              style={{ marginTop: 3, fontSize: 10.5, color: 'var(--cl-ink-4)' }}
             >
               +{earlier} earlier
             </div>
@@ -165,7 +165,7 @@ function GitCard({ git }: { git: SessionGitState }) {
               style={{
                 marginTop: 3,
                 gap: 8,
-                fontSize: 10,
+                fontSize: 10.5,
                 color: i === runs.length - 1 ? 'var(--cl-ink)' : 'var(--cl-ink-3)',
               }}
             >
@@ -176,7 +176,7 @@ function GitCard({ git }: { git: SessionGitState }) {
         </>
       )}
       <ReadoutRule />
-      <div className="font-mono" style={{ marginTop: 8, fontSize: 9.5, color: 'var(--cl-ink-4)' }}>
+      <div className="font-mono" style={{ marginTop: 8, fontSize: 10, color: 'var(--cl-ink-4)' }}>
         the branch the last turn ran on — a checkout made outside the session shows once it writes
         again
       </div>
@@ -246,9 +246,9 @@ export function EnvironmentStrip({
           <span
             className="font-mono"
             style={{
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 700,
-              letterSpacing: '0.12em',
+              letterSpacing: '0.06em',
               padding: '3px 8px',
               borderRadius: 999,
               color: danger ? 'var(--cl-on-accent)' : 'var(--cl-ink-2)',
@@ -273,7 +273,7 @@ export function EnvironmentStrip({
               gap: 5,
               minWidth: 0,
               flex: '0 1 auto',
-              fontSize: 9.5,
+              fontSize: 10,
               letterSpacing: '0.02em',
               color: 'var(--cl-ink-2)',
             }}
@@ -292,9 +292,9 @@ export function EnvironmentStrip({
             {...hover('mcp')}
             style={{
               gap: 5,
-              fontSize: 9,
+              fontSize: 10,
               fontWeight: 700,
-              letterSpacing: '0.1em',
+              letterSpacing: '0.06em',
               color: 'var(--cl-danger)',
             }}
           >
@@ -312,7 +312,7 @@ export function EnvironmentStrip({
             <span
               key={c.label}
               className="font-mono"
-              style={{ fontSize: 9, letterSpacing: '0.1em', color: 'var(--cl-ink-4)' }}
+              style={{ fontSize: 10, letterSpacing: '0.06em', color: 'var(--cl-ink-4)' }}
             >
               <b style={{ fontWeight: 700, color: 'var(--cl-ink-2)' }}>{c.n}</b> {c.label}
             </span>
