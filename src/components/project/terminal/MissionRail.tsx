@@ -48,6 +48,7 @@ import {
   buildWebActivity,
   countByKind,
   editStats,
+  foldRuns,
   shortAgo,
   webItemNote,
   FEED_KINDS,
@@ -290,8 +291,8 @@ function FeedRow({
           className="font-mono shrink-0 flex items-center"
           style={{
             gap: 6,
-            fontSize: 10,
-            fontWeight: 700,
+            fontSize: 9,
+            fontWeight: 600,
             letterSpacing: '0.08em',
             whiteSpace: 'nowrap',
             fontVariantNumeric: 'tabular-nums',
@@ -732,7 +733,7 @@ export function MissionRail({
   const threads = useMemo(() => buildMessageThreads(processed), [processed]);
   const git = useMemo(() => sessionGitState(messages), [messages]);
   const visible = useMemo(
-    () => (filter === 'ALL' ? feed : feed.filter(e => e.kind === filter)),
+    () => (filter === 'ALL' ? foldRuns(feed) : feed.filter(e => e.kind === filter)),
     [feed, filter]
   );
 
@@ -1198,8 +1199,26 @@ export function MissionRail({
             </p>
           )}
 
-          {visible.map(e => {
+          {visible.map(function row(e: FeedEvent): React.ReactNode {
             const open = expanded.has(e.id);
+            if (e.run) {
+              return (
+                <div key={e.id}>
+                  <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />
+                  {open && (
+                    <div
+                      style={{
+                        marginLeft: 23,
+                        paddingLeft: 10,
+                        borderLeft: '1px solid var(--cl-line-soft)',
+                      }}
+                    >
+                      {e.run.map(row)}
+                    </div>
+                  )}
+                </div>
+              );
+            }
             return (
               <div key={e.id}>
                 <FeedRow e={e} now={now} open={open} onActivate={() => activate(e)} />

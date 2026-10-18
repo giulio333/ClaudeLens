@@ -7,10 +7,11 @@ import {
   buildWebActivity,
   countByKind,
   editStats,
+  foldRuns,
   shortAgo,
   webItemNote,
 } from '../src/components/project/terminal/mission-feed';
-import type { MissionFeedInput } from '../src/components/project/terminal/mission-feed';
+import type { FeedEvent, MissionFeedInput } from '../src/components/project/terminal/mission-feed';
 import { buildArtifactActivity } from '../src/components/project/chat/artifact';
 import type { ArtifactPublish } from '../src/types';
 import type {
@@ -299,7 +300,8 @@ describe('mission feed — row copy', () => {
     );
     expect(event.meta).toBe('consulted');
     expect(event.right).toBe('READ');
-    expect(event.glyphTint).toBe('var(--cl-warn)');
+    // The species' tint, never the type's: amber is the questions' badge.
+    expect(event.glyphTint).toBe('var(--cl-fable)');
   });
 
   it('reports a live team as LEAD LIVE and surfaces the quiet signal', () => {
@@ -661,11 +663,12 @@ describe('mission feed — questions', () => {
     { 'Which approach?': 'Fixed cells' }
   );
 
-  it('draws one row per call, titled by the question and carrying the answer', () => {
+  it('draws one row per call, titled by the question, the answer kept for the tooltip', () => {
     const [e] = buildMissionFeed(input({ processed: [turn(3, [asked])], ownTools: [asked] }));
     expect(e.kind).toBe('QUESTIONS');
     expect(e.title).toBe('Which approach?');
-    expect(e.meta).toBe('Fixed cells');
+    expect(e.meta).toBe('');
+    expect(e.hint).toBe('Which approach? → Fixed cells');
     expect(e.right).toBe('ANSWERED');
     expect(e.at).toBe(T0 + 3 * 60_000);
   });
@@ -683,14 +686,14 @@ describe('mission feed — questions', () => {
       input({ processed: [turn(1, [dismissed])], ownTools: [dismissed] })
     );
     expect(e.right).toBe('NO ANSWER');
-    expect(e.meta).toBe('kept talking');
+    expect(e.meta).toBe('');
   });
 
   it('reads a call with no result yet as pending, never as answered', () => {
     const pending = ask('q3', [{ question: 'Ship it?', options: ['Yes', 'No'] }]);
     const [e] = buildMissionFeed(input({ processed: [turn(1, [pending])], ownTools: [pending] }));
     expect(e.right).toBe('PENDING');
-    expect(e.meta).toBe('waiting for reply');
+    expect(e.meta).toBe('');
   });
 
   it('keeps the first question as the title and says how many the call carried', () => {
@@ -704,7 +707,7 @@ describe('mission feed — questions', () => {
     );
     const [e] = buildMissionFeed(input({ processed: [turn(1, [two])], ownTools: [two] }));
     expect(e.title).toBe('Which approach?');
-    expect(e.meta).toBe('2 questions · A · Rail');
+    expect(e.meta).toBe('2 questions');
     // The row truncates at 380px, so the full ask stays recoverable in the tooltip.
     expect(e.hint).toContain('Which surface?');
   });
@@ -844,5 +847,78 @@ describe('mission feed — published pages', () => {
     );
     expect(feed[0].at).toBe(T0 + 5 * 60_000);
     expect(countByKind(feed).PAGES).toBe(1);
+  });
+});
+
+describe('mission feed — folded runs', () => {
+  function ev(id: string, over: Partial<FeedEvent> = {}): FeedEvent {
+    return {
+      id,
+      kind: 'CHANGES',
+      at: T0,
+      live: false,
+      glyph: '',
+      glyphTint: 'var(--cl-accent)',
+      title: id,
+      meta: '',
+      right: '',
+      rightTint: 'var(--cl-ink-4)',
+      items: [],
+      expandable: false,
+      source: { kind: 'change', change: {} as never },
+      ...over,
+    };
+  }
+  const memory = (id: string, action: 'read' | 'new') =>
+    ev(id, {
+      kind: 'MEMORY',
+      right: action === 'read' ? 'READ' : 'NEW',
+      source: { kind: 'memory', touch: { action } as never },
+    });
+  const shape = (rows: FeedEvent[]) => rows.map(r => (r.run ? r.run.map(e => e.id) : r.id));
+
+  it('folds neighbours of the same operation into one row, keeping time order', () => {
+    const rows = foldRuns([
+      ev('a.ts', { rightDiff: { added: 3, removed: 1 } }),
+      ev('b.ts', { rightDiff: { added: 2, removed: 0 } }),
+      memory('m1', 'read'),
+      ev('c.ts', { rightDiff: { added: 1, removed: 1 } }),
+    ]);
+    expect(shape(rows)).toEqual([['a.ts', 'b.ts'], 'm1', 'c.ts']);
+    expect(rows[0]).toMatchObject({
+      title: '2 files changed',
+      meta: '',
+      rightDiff: { added: 5, removed: 1 },
+      expandable: true,
+    });
+  });
+
+  it('keeps reads apart from writes, and a live row out of any fold', () => {
+    const rows = foldRuns([
+      ev('busy', { kind: 'AGENTS', live: true }),
+      ev('done', { kind: 'AGENTS' }),
+      memory('r1', 'read'),
+      memory('r2', 'read'),
+      memory('w1', 'new'),
+    ]);
+    expect(shape(rows)).toEqual(['busy', 'done', ['r1', 'r2'], 'w1']);
+    expect(rows[2].title).toBe('2 memories read');
+    // Every read says READ, so the fold can say it too.
+    expect(rows[2].right).toBe('READ');
+  });
+
+  it('drops a right-hand label the run does not share', () => {
+    const [row] = foldRuns([
+      ev('t1', { kind: 'TASKS', right: 'DONE' }),
+      ev('t2', { kind: 'TASKS', right: 'TODO' }),
+    ]);
+    expect(row.title).toBe('2 tasks');
+    expect(row.right).toBe('');
+  });
+
+  it('keys a fold on its oldest event, so it stays open as newer ones join', () => {
+    const before = foldRuns([ev('b'), ev('a')]);
+    const after = foldRuns([ev('c'), ev('b'), ev('a')]);
+    expect(after[0].id).toBe(before[0].id);
   });
 });

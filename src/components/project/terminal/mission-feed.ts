@@ -2,7 +2,6 @@ import type { Task, TeamSummary } from '../../../types';
 import {
   fileExt,
   isQuestionDismissed,
-  MEMORY_TYPE_TINT,
   parseAnswersFromResultText,
   parseAskUserQuestions,
   QUESTION_TOOL,
@@ -217,6 +216,9 @@ export type FeedEvent = {
   items: ToolGroup[];
   expandable: boolean;
   source: FeedSource;
+  /** Set on a folded row (`foldRuns`): the events it stands for, newest first.
+   *  Expanding it draws them as ordinary rows. */
+  run?: FeedEvent[];
 };
 
 export type MissionFeedInput = {
@@ -309,7 +311,10 @@ function agentEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] {
       glyph: 'A',
       glyphTint: live ? 'var(--cl-violet)' : failed ? 'var(--cl-danger)' : 'var(--cl-violet)',
       title: a.subagentType,
-      meta: a.description || a.prompt,
+      // The short label Claude gave the call, never the prompt it was sent: the
+      // prompt is a paragraph, and the tooltip still carries it.
+      meta: a.description,
+      hint: a.description ? undefined : clip(a.prompt),
       right: live
         ? 'WORKING'
         : failed
@@ -365,7 +370,10 @@ function skillEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] {
     glyph: s.group ? '✦' : '/',
     glyphTint: 'var(--cl-accent)',
     title: s.name,
-    meta: s.description || s.args || (s.group ? 'agentic skill' : 'slash command'),
+    // The definition's description and the args typed after `/foo` are
+    // sentences, a piece of the prompt; they wait in the tooltip, not the row.
+    meta: '',
+    hint: clip([s.args, s.description].filter(Boolean).join('\n')) || undefined,
     right: (s.scope ?? 'skill').toUpperCase(),
     rightTint: 'var(--cl-ink-4)',
     items: [],
@@ -381,7 +389,7 @@ function skillEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] {
  * It is not that kind of thing: an `AskUserQuestion` is a tool call, an event
  * with a time and an outcome, exactly like a skill invocation or a fetched page
  * — and the pill's filter could only say how many there were. Here a row names
- * the question, carries the answer that was actually chosen, and dates it.
+ * the question, keeps the answer that was chosen in its tooltip, and dates it.
  *
  * The three states are the transcript card's, not new ones (`AskQuestionCard`
  * in `MessageBubble`): a call with no result is **pending**, a result with no
@@ -406,12 +414,10 @@ function questionEvents(input: MissionFeedInput, turnAt: number[]): FeedEvent[] 
         : chosen.length === 0 && isQuestionDismissed(resultText)
           ? 'dismissed'
           : 'answered';
-      // The answer is the fact worth carrying; the count only earns its place
-      // when one call asked more than one thing.
-      const meta =
-        [questions.length > 1 ? `${questions.length} questions` : null, ...chosen]
-          .filter(Boolean)
-          .join(' · ') || (state === 'pending' ? 'waiting for reply' : 'kept talking');
+      // No answer text under the title: an option label is a sentence, and the
+      // right-hand status already says whether one was picked. The tooltip
+      // keeps every question and its answer.
+      const meta = questions.length > 1 ? `${questions.length} questions` : '';
       events.push({
         id: `question:${g.use.id || `${i}`}`,
         kind: 'QUESTIONS' as const,
@@ -463,7 +469,10 @@ function memoryEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
       at: latestOf(t.items, at),
       live: false,
       glyph: 'M',
-      glyphTint: MEMORY_TYPE_TINT[t.type] ?? MEMORY_TYPE_TINT.user,
+      // One tint for the species, not the memory's type: the four type tints
+      // are the feed's question, agent, task and team tints too, so a feedback
+      // memory read as a question. The type keeps its colour in Memory.
+      glyphTint: 'var(--cl-fable)',
       title: t.title,
       meta,
       right: t.hasError ? 'FAILED' : MEMORY_ACTION_LABEL[t.action],
@@ -678,6 +687,104 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
   ];
   // Stable sort (ES2019+): rows that tie keep the order their species produced.
   return events.sort((a, b) => Number(b.live) - Number(a.live) || b.at - a.at);
+}
+
+/* ── folded runs ────────────────────────────────────────────────────── */
+
+/** What makes two neighbouring events "the same operation": the species, and
+ *  for memory and the web the verb too — a consultation is not a write, a
+ *  search is not a page read. */
+function runKey(e: FeedEvent): string {
+  const s = e.source;
+  if (s.kind === 'memory') return `MEMORY:${s.touch.action === 'read' ? 'read' : 'write'}`;
+  if (s.kind === 'web') return `WEB:${s.visit.kind}`;
+  return e.kind;
+}
+
+function runTitle(key: string, n: number): string {
+  switch (key) {
+    case 'MEMORY:read':
+      return `${n} memories read`;
+    case 'MEMORY:write':
+      return `${n} memories written`;
+    case 'WEB:fetch':
+      return `${n} pages read`;
+    case 'WEB:search':
+      return `${n} web searches`;
+    case 'CHANGES':
+      return `${n} files changed`;
+    case 'PAGES':
+      return `${n} pages published`;
+    default:
+      return `${n} ${key.toLowerCase()}`;
+  }
+}
+
+/** One row for a run of same-operation events. It keeps the newest event's
+ *  place and time; the right-hand label survives only when every event in the
+ *  run shares it, and a CHANGES run sums its diff. */
+function foldedRow(run: FeedEvent[], key: string): FeedEvent {
+  const head = run[0];
+  const rights = new Set(run.map(e => e.right));
+  const diff = run.every(e => e.rightDiff)
+    ? run.reduce(
+        (acc, e) => ({
+          added: acc.added + e.rightDiff!.added,
+          removed: acc.removed + e.rightDiff!.removed,
+        }),
+        { added: 0, removed: 0 }
+      )
+    : undefined;
+  return {
+    // Keyed on the oldest event: a run grows at its newest end, so the key —
+    // and the row's open state — holds while new events join it.
+    id: `run:${run[run.length - 1].id}`,
+    kind: head.kind,
+    at: head.at,
+    live: false,
+    glyph: head.kind === 'CHANGES' ? '±' : head.glyph,
+    glyphTint: head.glyphTint,
+    title: runTitle(key, run.length),
+    // The title already says what folded; the names are one click away.
+    meta: '',
+    right: rights.size === 1 ? head.right : '',
+    rightTint: head.rightTint,
+    rightDiff: diff,
+    danger: run.some(e => e.danger),
+    items: [],
+    expandable: true,
+    source: head.source,
+    run,
+  };
+}
+
+/**
+ * The ALL view with every run of two or more neighbouring events of the same
+ * operation folded into one expandable row — five file edits in a row read as
+ * "5 files changed", three memory reads as "3 memories read". Only neighbours
+ * fold, so the feed stays in time order; a live row never folds, because
+ * running is the one thing a summary must not hide.
+ */
+export function foldRuns(events: FeedEvent[]): FeedEvent[] {
+  const out: FeedEvent[] = [];
+  let run: FeedEvent[] = [];
+  let key = '';
+  const flush = () => {
+    if (run.length >= 2) out.push(foldedRow(run, key));
+    else out.push(...run);
+    run = [];
+  };
+  for (const e of events) {
+    const k = e.live ? '' : runKey(e);
+    if (!k || k !== key) {
+      flush();
+      key = k;
+    }
+    if (k) run.push(e);
+    else out.push(e);
+  }
+  flush();
+  return out;
 }
 
 /** How many events each filter would show. */
