@@ -196,6 +196,8 @@ export type FeedEvent = {
   /** Single glyph for the row's badge; `ext` instead means "draw the file icon". */
   glyph: string;
   glyphTint: string;
+  /** `brain` instead of a letter: the badge draws that icon (memory rows). */
+  icon?: 'brain';
   /** File extension for CHANGES rows — the badge draws the real language icon. */
   ext?: string;
   /** CHANGES rows only: which action the row's icon draws — a file created by
@@ -468,11 +470,12 @@ function memoryEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
       kind: 'MEMORY' as const,
       at: latestOf(t.items, at),
       live: false,
-      glyph: 'M',
+      glyph: '',
+      icon: 'brain' as const,
       // One tint for the species, not the memory's type: the four type tints
       // are the feed's question, agent, task and team tints too, so a feedback
       // memory read as a question. The type keeps its colour in Memory.
-      glyphTint: 'var(--cl-fable)',
+      glyphTint: 'var(--cl-memory)',
       title: t.title,
       meta,
       right: t.hasError ? 'FAILED' : MEMORY_ACTION_LABEL[t.action],
@@ -691,7 +694,7 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
 
 /* ── folded runs ────────────────────────────────────────────────────── */
 
-/** What makes two neighbouring events "the same operation": the species, and
+/** What makes two events "the same operation": the species, and
  *  for memory and the web the verb too — a consultation is not a write, a
  *  search is not a page read. */
 function runKey(e: FeedEvent): string {
@@ -720,7 +723,7 @@ function runTitle(key: string, n: number): string {
   }
 }
 
-/** One row for a run of same-operation events. It keeps the newest event's
+/** One row for a group of same-operation events. It keeps the newest event's
  *  place and time; the right-hand label survives only when every event in the
  *  run shares it, and a CHANGES run sums its diff. */
 function foldedRow(run: FeedEvent[], key: string): FeedEvent {
@@ -743,6 +746,7 @@ function foldedRow(run: FeedEvent[], key: string): FeedEvent {
     at: head.at,
     live: false,
     glyph: head.kind === 'CHANGES' ? '±' : head.glyph,
+    icon: head.icon,
     glyphTint: head.glyphTint,
     title: runTitle(key, run.length),
     // The title already says what folded; the names are one click away.
@@ -759,31 +763,30 @@ function foldedRow(run: FeedEvent[], key: string): FeedEvent {
 }
 
 /**
- * The ALL view with every run of two or more neighbouring events of the same
- * operation folded into one expandable row — five file edits in a row read as
- * "5 files changed", three memory reads as "3 memories read". Only neighbours
- * fold, so the feed stays in time order; a live row never folds, because
- * running is the one thing a summary must not hide.
+ * The ALL view with every operation done two or more times folded into one
+ * expandable row — five file edits read as "5 files changed", three memory
+ * reads as "3 memories read" — wherever they sit in the feed. The row takes
+ * the place of its newest event. A live row never folds, because running is
+ * the one thing a summary must not hide.
  */
 export function foldRuns(events: FeedEvent[]): FeedEvent[] {
-  const out: FeedEvent[] = [];
-  let run: FeedEvent[] = [];
-  let key = '';
-  const flush = () => {
-    if (run.length >= 2) out.push(foldedRow(run, key));
-    else out.push(...run);
-    run = [];
-  };
+  const groups = new Map<string, FeedEvent[]>();
   for (const e of events) {
-    const k = e.live ? '' : runKey(e);
-    if (!k || k !== key) {
-      flush();
-      key = k;
-    }
-    if (k) run.push(e);
-    else out.push(e);
+    if (e.live) continue;
+    const key = runKey(e);
+    groups.set(key, [...(groups.get(key) ?? []), e]);
   }
-  flush();
+  const out: FeedEvent[] = [];
+  const emitted = new Set<string>();
+  for (const e of events) {
+    const key = e.live ? '' : runKey(e);
+    const group = key ? groups.get(key)! : [];
+    if (group.length < 2) out.push(e);
+    else if (!emitted.has(key)) {
+      emitted.add(key);
+      out.push(foldedRow(group, key));
+    }
+  }
   return out;
 }
 

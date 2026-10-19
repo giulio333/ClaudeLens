@@ -61,6 +61,9 @@
   /* data-encoding hue for the Fable family, same category as --cl-violet /
      --cl-haiku above (which model produced this slice), not a brand accent */
   --cl-fable: oklch(0.55 0.2 355);
+  /* Memory's own badge tint: indigo-violet, a step off --cl-violet (agents) so
+     the two species do not share a badge */
+  --cl-memory: oklch(0.55 0.2 285);
   --cl-danger: oklch(0.58 0.21 25);
   --cl-danger-soft: oklch(0.94 0.04 25);
   --cl-warn: oklch(0.7 0.15 75);
@@ -132,6 +135,7 @@
   --cl-cyan: oklch(0.7 0.14 200);
   --cl-haiku: oklch(0.7 0.16 175);
   --cl-fable: oklch(0.72 0.17 355);
+  --cl-memory: oklch(0.7 0.16 285);
   --cl-danger: oklch(0.68 0.19 25);
   --cl-danger-soft: oklch(0.33 0.09 25);
   --cl-warn: oklch(0.78 0.14 75);

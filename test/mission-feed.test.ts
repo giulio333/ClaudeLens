@@ -301,7 +301,7 @@ describe('mission feed — row copy', () => {
     expect(event.meta).toBe('consulted');
     expect(event.right).toBe('READ');
     // The species' tint, never the type's: amber is the questions' badge.
-    expect(event.glyphTint).toBe('var(--cl-fable)');
+    expect(event.glyphTint).toBe('var(--cl-memory)');
   });
 
   it('reports a live team as LEAD LIVE and surfaces the quiet signal', () => {
@@ -877,18 +877,18 @@ describe('mission feed — folded runs', () => {
     });
   const shape = (rows: FeedEvent[]) => rows.map(r => (r.run ? r.run.map(e => e.id) : r.id));
 
-  it('folds neighbours of the same operation into one row, keeping time order', () => {
+  it('folds events of the same operation into one row, wherever they sit', () => {
     const rows = foldRuns([
       ev('a.ts', { rightDiff: { added: 3, removed: 1 } }),
       ev('b.ts', { rightDiff: { added: 2, removed: 0 } }),
       memory('m1', 'read'),
       ev('c.ts', { rightDiff: { added: 1, removed: 1 } }),
     ]);
-    expect(shape(rows)).toEqual([['a.ts', 'b.ts'], 'm1', 'c.ts']);
+    expect(shape(rows)).toEqual([['a.ts', 'b.ts', 'c.ts'], 'm1']);
     expect(rows[0]).toMatchObject({
-      title: '2 files changed',
+      title: '3 files changed',
       meta: '',
-      rightDiff: { added: 5, removed: 1 },
+      rightDiff: { added: 6, removed: 2 },
       expandable: true,
     });
   });
