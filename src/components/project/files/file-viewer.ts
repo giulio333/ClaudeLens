@@ -1,4 +1,6 @@
-import { isMarkdownPath, splitLines } from '../chat/file-view';
+import { fileName, isMarkdownPath, splitLines } from '../chat/file-view';
+import { memoryScopeOf } from '../chat/utils';
+import type { MemoryData } from '../../../types';
 
 /**
  * How the explorer shows a file, from its extension. Only the raster images an
@@ -63,4 +65,36 @@ export function fmtBytes(n: number): string {
   if (n < 1024) return `${n} B`;
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(n < 10 * 1024 ? 1 : 0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
+}
+
+/** Where a memory topic's text is read from: the project whose history folder
+ *  holds it (the hash in its path, which may be another project's) for a
+ *  user-level topic, this project for one committed under its `.claude/memory/`.
+ *  Memory is read from the memory reader, not `files:readText`: the history
+ *  folder is not a project root. */
+export function memoryTopicSource(
+  path: string,
+  projectHash: string
+): { hash: string; level: 'user' | 'project' } | null {
+  const scope = memoryScopeOf(path);
+  if (scope === 'project') return { hash: projectHash, level: 'project' };
+  if (scope !== 'user') return null;
+  const hash = path.replace(/\\/g, '/').match(/\/\.claude\/projects\/([^/]+)\/memory\//)?.[1];
+  return hash ? { hash, level: 'user' } : null;
+}
+
+/** The topic's text as the memory reader has it now, or null when it is not
+ *  there (deleted, or never read). Its map is keyed by the filename, which is
+ *  a bare name for a flat topic and can be a path for one the index points at. */
+export function memoryTopicText(
+  data: MemoryData | undefined,
+  path: string,
+  level: 'user' | 'project'
+): string | null {
+  const topics = level === 'user' ? data?.topics : data?.projectLevelTopics;
+  if (!topics) return null;
+  const name = fileName(path);
+  if (name in topics) return topics[name];
+  const key = Object.keys(topics).find(k => k === path || fileName(k) === name);
+  return key === undefined ? null : topics[key];
 }

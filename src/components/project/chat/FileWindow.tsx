@@ -14,6 +14,9 @@ import {
   planOutcome,
 } from './utils';
 import { resolveLang } from './code-lang';
+import { PageCopyButton, PageHead, ReadingSwitch } from '../shared/PageHead';
+import { FileKindIcon } from '../files/FileKindIcon';
+import { homeRelativePath } from '../shared/projectName';
 import { CopyButton, IconButton, ExpandIcon, CloseIcon, SheetModal } from './CommandBlock';
 import {
   contentRows,
@@ -211,6 +214,7 @@ function EditorWindow({
   onClose,
   full,
   preview,
+  bare,
 }: {
   sheet: Sheet;
   language: string | null;
@@ -223,6 +227,9 @@ function EditorWindow({
   /** Present only when the file is markdown: `on` draws the document instead of
    *  its source. Undefined for every other file, which has no second reading. */
   preview?: { on: boolean; onToggle: () => void };
+  /** The call as a page over the session (`FileToolPage`): the body only, the
+   *  page draws the head and the foot. */
+  bare?: boolean;
 }) {
   const rows = sheet.rows ?? NO_ROWS;
   const shown = useMemo(
@@ -245,6 +252,49 @@ function EditorWindow({
   const meta = [full ? sheet.path : sheet.dir, sheet.flag].filter(Boolean).join(' · ');
   // Gutter wide enough for the largest number it has to hold.
   const digits = Math.max(2, ...rows.map(r => String(r.line ?? '').length));
+
+  const body = (
+    <div
+      className={`cl-term-body cl-file-body${preview?.on ? ' is-preview' : ''}${
+        clamped ? ' is-clamped' : ''
+      }`}
+    >
+      {preview?.on ? (
+        <div className="cl-file-preview">
+          <Markdown>{sheet.copyText}</Markdown>
+        </div>
+      ) : (
+        shown.map((row, i) => <Line key={i} row={row} html={html[i]} />)
+      )}
+      {sheet.images && (
+        <div className="cl-file-image">
+          {sheet.images.map((image, i) => (
+            <ImageFigure key={i} src={imageDataUri(image)} alt={fileName(sheet.path)} />
+          ))}
+        </div>
+      )}
+      {sheet.rows && sheet.rows.length === 0 && sheet.state !== 'error' && (
+        <div className="cl-term-note">
+          {sheet.state === 'pending' ? 'still running — no result recorded yet' : 'empty file'}
+        </div>
+      )}
+      {sheet.note && (
+        <div className="cl-term-out">
+          <code>{sheet.note}</code>
+        </div>
+      )}
+    </div>
+  );
+  if (bare) {
+    return (
+      <div
+        className={`cl-term cl-term--file is-bare${sheet.state === 'error' ? ' is-error' : ''}`}
+        style={{ '--tint': tint, '--gutter': `${digits}ch` } as CSSProperties}
+      >
+        {body}
+      </div>
+    );
+  }
 
   return (
     <div
@@ -304,36 +354,7 @@ function EditorWindow({
         </span>
       </div>
 
-      <div
-        className={`cl-term-body cl-file-body${preview?.on ? ' is-preview' : ''}${
-          clamped ? ' is-clamped' : ''
-        }`}
-      >
-        {preview?.on ? (
-          <div className="cl-file-preview">
-            <Markdown>{sheet.copyText}</Markdown>
-          </div>
-        ) : (
-          shown.map((row, i) => <Line key={i} row={row} html={html[i]} />)
-        )}
-        {sheet.images && (
-          <div className="cl-file-image">
-            {sheet.images.map((image, i) => (
-              <ImageFigure key={i} src={imageDataUri(image)} alt={fileName(sheet.path)} />
-            ))}
-          </div>
-        )}
-        {sheet.rows && sheet.rows.length === 0 && sheet.state !== 'error' && (
-          <div className="cl-term-note">
-            {sheet.state === 'pending' ? 'still running — no result recorded yet' : 'empty file'}
-          </div>
-        )}
-        {sheet.note && (
-          <div className="cl-term-out">
-            <code>{sheet.note}</code>
-          </div>
-        )}
-      </div>
+      {body}
 
       <div className="cl-term-foot">
         <span className={`cl-term-state is-${sheet.state}`}>
@@ -348,6 +369,61 @@ function EditorWindow({
           )}
         </span>
       </div>
+    </div>
+  );
+}
+
+/** A file tool call as a page over the session — what a rail row opens in
+ *  Mission Control: the head every page there has (the file over its folder,
+ *  markdown's reading switch and the copy on the right), the editor's rows
+ *  unclamped under it, and the status in the page's foot. */
+export function FileToolPage({
+  name,
+  input,
+  result,
+}: {
+  name: string;
+  input: Record<string, unknown>;
+  result: ToolGroup['result'];
+}) {
+  const kind: FileKind =
+    name === 'Read' || name === 'Write' ? name : name === EXIT_PLAN_TOOL ? 'Plan' : 'Edit';
+  const sheet = useMemo(() => buildSheet(kind, input, result), [kind, input, result]);
+  const markdown =
+    kind === 'Plan' || (kind !== 'Edit' && sheet.state === 'ok' && isMarkdownPath(sheet.path));
+  const [asDocument, setAsDocument] = useState(kind === 'Write' || kind === 'Plan');
+  const preview =
+    markdown && sheet.copyText
+      ? { on: asDocument, onToggle: () => setAsDocument(d => !d) }
+      : undefined;
+  const sep = Math.max(sheet.path.lastIndexOf('/'), sheet.path.lastIndexOf('\\'));
+  const dir = sep > 0 ? sheet.path.slice(0, sep) : '';
+  return (
+    <div className="cl-fview cl-term-page">
+      <PageHead
+        icon={<FileKindIcon ext={fileExt(sheet.path)} />}
+        name={sheet.path ? fileName(sheet.path) : '(no file)'}
+        sub={dir ? homeRelativePath(dir) : undefined}
+        subTitle={sheet.path}
+      >
+        {preview && <ReadingSwitch doc={preview.on} onChange={setAsDocument} />}
+        {sheet.copyText && <PageCopyButton text={sheet.copyText} label={sheet.copyLabel} />}
+      </PageHead>
+      <div className="cl-fview-body">
+        <div className="cl-term-page-scroll">
+          <EditorWindow
+            sheet={sheet}
+            language={resolveLang(fileExt(sheet.path))}
+            memory={isMemoryFile(input)}
+            clamped={false}
+            preview={preview}
+            bare
+          />
+        </div>
+      </div>
+      <footer className="cl-fview-foot">
+        {[kind.toLowerCase(), sheet.flag, sheet.status].filter(Boolean).join(' · ')}
+      </footer>
     </div>
   );
 }

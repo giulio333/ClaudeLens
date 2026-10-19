@@ -1,6 +1,7 @@
 import type { Agent, Skill } from '../../../hooks/useIPC';
 import { resolveToolIcon, type SessionAgent, type ToolGroup } from '../chat/utils';
 import type { FileChange } from '../terminal/mission-feed';
+import { fileName } from '../chat/file-view';
 
 /** A detail opened over a session — from its transcript, or from the Mission
  *  Control rail. One switch renders them all (`SessionDetailPanel`), so a tool
@@ -12,7 +13,10 @@ export type SessionOverlay =
   | { kind: 'skill-def'; skill: Skill }
   | { kind: 'agent-def'; agent: Agent }
   | { kind: 'team'; teamName: string }
-  | { kind: 'file'; rel: string };
+  | { kind: 'file'; rel: string }
+  /** A memory topic, on the Files page. `fallback` is the operation that opens
+   *  instead when the topic is no longer there to read. */
+  | { kind: 'memory'; path: string; fallback?: ToolGroup };
 
 export type OverlayCrumb = { icon?: string; kind: string; label: string };
 
@@ -41,9 +45,11 @@ export function overlayCrumb(overlay: SessionOverlay | null): OverlayCrumb | nul
       return { kind: 'agent', label: overlay.agent.name };
     case 'team':
       return { kind: 'team', label: overlay.teamName };
+    // Named here like every other detail, so every overlay closes from the
+    // same place: the page's own ✕ beside its name was a second spot for it.
     case 'file':
-      // The file's page names it in its own head, with its own ✕: a crumb
-      // here said the same name a few hundred pixels away.
-      return null;
+      return { kind: 'file', label: fileName(overlay.rel) };
+    case 'memory':
+      return { kind: 'memory', label: fileName(overlay.path) };
   }
 }

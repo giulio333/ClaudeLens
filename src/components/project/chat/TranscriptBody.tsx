@@ -180,8 +180,9 @@ export function TranscriptBody({
     return (name: string) => resolve(name) ?? undefined;
   }, [allSkills, plugins]);
   const [detailsFilter, setDetailsFilter] = useState<ChatDetailsFilter>('minimal');
-  // The diffs at the foot of the turns: open until the pill folds them.
-  const [diffsOpen, setDiffsOpen] = useState(true);
+  // The diffs at the foot of the turns: folded until the pill opens them — a
+  // turn's header line says what changed; the hunks are a click away.
+  const [diffsOpen, setDiffsOpen] = useState(false);
   const [exportPreset, setExportPreset] = useState<ChatExportPreset>('message');
   const [exporting, setExporting] = useState<ChatExportFormat | null>(null);
   const [exportMessage, setExportMessage] = useState<string | null>(null);

@@ -3,10 +3,19 @@ import type { CSSProperties } from 'react';
 import { FileIcon } from './fileIcons';
 import { SheetModal } from './CommandBlock';
 import { resolveLang } from './code-lang';
-import { changeRows, changeStat, fileName, highlightRows, markPairs, shortDir } from './file-view';
+import {
+  changeRows,
+  changeStat,
+  fileName,
+  foldChanges,
+  highlightRows,
+  markPairs,
+  shortDir,
+} from './file-view';
 import type { FileRow } from './file-view';
 import { fileCategoryTint, fileExt } from './utils';
 import { DiffsOpenContext } from './diffs-open';
+import { FilePageHead } from '../files/FileViewer';
 import type { FileChangeSource, TouchedFile } from './utils';
 
 /** Rows drawn before a change folds. A created file is its whole content, so
@@ -23,14 +32,15 @@ const EDIT_CLAMP = 60;
  * without switching the whole conversation to FULL. Each changed file is now
  * the diff itself, the way Claude Code prints it in the terminal: one line
  * saying what happened to the file and how many lines moved, the numbered
- * hunks under it, open by default. It is drawn on the page, in the page's own
+ * hunks under it, folded until opened. It is drawn on the page, in the page's own
  * light or dark palette, not as a window inside the turn: it is part of what
  * the turn said, not a tool card beside it. The header folds it, a control
  * opens it full-screen.
  *
  * Reads are not changes. They keep the icon chips: a turn that read twelve
  * files to edit one should show the one, and the twelve should not stand in
- * front of it.
+ * front of it. Files changed the same way in one folder fold into one row
+ * (`foldChanges`), which opens into theirs.
  */
 export function FileChangesStrip({ files }: { files: TouchedFile[] }) {
   const changed = files.filter(f => f.action !== 'read');
@@ -40,9 +50,13 @@ export function FileChangesStrip({ files }: { files: TouchedFile[] }) {
     <>
       {changed.length > 0 && (
         <div className="cl-file-changes">
-          {changed.map(f => (
-            <FileChange key={f.path} file={f} />
-          ))}
+          {foldChanges(changed).map(e =>
+            e.kind === 'file' ? (
+              <FileChange key={e.file.path} file={e.file} />
+            ) : (
+              <FolderChange key={`${e.action}:${e.files[0].path}`} files={e.files} />
+            )
+          )}
         </div>
       )}
       <FileChipCluster files={read} />
@@ -57,9 +71,9 @@ const VERB: Record<TouchedFile['action'], string> = {
   read: 'Read',
 };
 
-function FileChange({ file }: { file: TouchedFile }) {
-  // The pill's switch sets every diff at once; a click on this one moves only
-  // this one, until the switch is flipped again.
+/** Open or folded: the pill's switch sets every row at once; a click on one
+ *  moves only that one, until the switch is flipped again. */
+function useSwitchedOpen(): [boolean, (next: (o: boolean) => boolean) => void] {
   const allOpen = useContext(DiffsOpenContext);
   // A click here is a local choice; a flip of the switch is the newer intent
   // and drops it (state reset during render, keyed on the last switch value).
@@ -70,7 +84,67 @@ function FileChange({ file }: { file: TouchedFile }) {
     setLocal(null);
   }
   const open = local ?? allOpen;
-  const setOpen = (next: (o: boolean) => boolean) => setLocal(next(open));
+  return [open, next => setLocal(next(open))];
+}
+
+/** Files changed the same way in one folder: the verb, how many, the folder
+ *  once and the lines summed; open, the files under it without their folder. */
+function FolderChange({ files }: { files: TouchedFile[] }) {
+  const [open, setOpen] = useSwitchedOpen();
+  const { action, ext } = files[0];
+  const oneExt = files.every(f => f.ext === ext);
+  const stat = changeStat(files.flatMap(f => f.sources));
+  // ×N only when it is true of every file: one touched twice among ten is
+  // that file's to say, on its own row.
+  const times = files[0].sources.length;
+  const sameTimes = times > 1 && files.every(f => f.sources.length === times);
+  const dir = shortDir(files[0].path);
+  return (
+    <div
+      className={`cl-file-change cl-file-change--folder is-${action}${open ? ' is-open' : ''}`}
+      style={{ '--ft': fileCategoryTint(oneExt ? ext : '') } as CSSProperties}
+    >
+      <div className="cl-file-change-head">
+        <button
+          type="button"
+          className="cl-file-change-toggle"
+          onClick={() => setOpen(o => !o)}
+          aria-expanded={open}
+          title={files.map(f => fileName(f.path)).join('\n')}
+        >
+          <span className="cl-file-change-caret" aria-hidden>
+            {open ? '▾' : '▸'}
+          </span>
+          <span className="cl-file-change-verb">{VERB[action]}</span>
+          <span className="cl-file-change-icon" aria-hidden>
+            <FileIcon ext={oneExt ? ext : ''} />
+          </span>
+          <span className="cl-file-change-path">
+            <b>{files.length} files</b>
+            {dir !== '/' && <span className="cl-file-change-dir">{dir}</span>}
+          </span>
+          {sameTimes && <span className="cl-file-change-times">×{times}</span>}
+          {(stat.added > 0 || stat.removed > 0) && (
+            <span className="cl-file-change-stat">
+              {stat.added > 0 && <span className="is-add">+{stat.added}</span>}
+              {stat.removed > 0 && <span className="is-del">−{stat.removed}</span>}
+            </span>
+          )}
+        </button>
+      </div>
+      {open && (
+        <div className="cl-file-change-members">
+          {files.map(f => (
+            <FileChange key={f.path} file={f} inFolder />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function FileChange({ file, inFolder = false }: { file: TouchedFile; inFolder?: boolean }) {
+  const [open, setOpen] = useSwitchedOpen();
   const [full, setFull] = useState(false);
   const stat = changeStat(file.sources);
   const dir = shortDir(file.path);
@@ -93,13 +167,13 @@ function FileChange({ file }: { file: TouchedFile }) {
           <span className="cl-file-change-caret" aria-hidden>
             {open && hasBody ? '▾' : '▸'}
           </span>
-          <span className="cl-file-change-verb">{VERB[file.action]}</span>
+          {!inFolder && <span className="cl-file-change-verb">{VERB[file.action]}</span>}
           <span className="cl-file-change-icon" aria-hidden>
             <FileIcon ext={file.ext} />
           </span>
           <span className="cl-file-change-path">
             <b>{fileName(file.path)}</b>
-            {dir !== '/' && <span className="cl-file-change-dir">{dir}</span>}
+            {!inFolder && dir !== '/' && <span className="cl-file-change-dir">{dir}</span>}
           </span>
           {file.sources.length > 1 && (
             <span className="cl-file-change-times">×{file.sources.length}</span>
@@ -151,8 +225,9 @@ function FileChange({ file }: { file: TouchedFile }) {
 }
 
 /** The file's change as a page of its own — what a CHANGES row of Mission
- *  Control opens: the strip's header with the whole path, every diff under it,
- *  unclamped. The frame around it supplies the crumb and the close. */
+ *  Control opens: the head every file page has (`FilePageHead`), with what
+ *  happened and how many lines moved where a file page has its controls, and
+ *  every diff under it, unclamped. The frame supplies the crumb and the close. */
 export function FileChangePage({
   file,
   onOpenFile,
@@ -163,35 +238,31 @@ export function FileChangePage({
   onOpenFile?: () => void;
 }) {
   const stat = changeStat(file.sources);
+  const sep = Math.max(file.path.lastIndexOf('/'), file.path.lastIndexOf('\\'));
   return (
-    <div className="cl-file-change cl-file-change--page is-open">
-      <div className="cl-file-change-head">
-        <span className="cl-file-change-toggle is-static">
-          <span className="cl-file-change-verb">{VERB[file.action]}</span>
-          <span className="cl-file-change-icon" aria-hidden>
-            <FileIcon ext={file.ext} />
+    <div className={`cl-fview cl-file-change cl-file-change--page is-${file.action}`}>
+      <FilePageHead path={file.path} dir={sep > 0 ? file.path.slice(0, sep) : file.path}>
+        <span className="cl-file-change-verb">{VERB[file.action]}</span>
+        {file.sources.length > 1 && (
+          <span className="cl-file-change-times">×{file.sources.length}</span>
+        )}
+        {(stat.added > 0 || stat.removed > 0) && (
+          <span className="cl-file-change-stat">
+            {stat.added > 0 && <span className="is-add">+{stat.added}</span>}
+            {stat.removed > 0 && <span className="is-del">−{stat.removed}</span>}
           </span>
-          <span className="cl-file-change-path">
-            <b>{fileName(file.path)}</b>
-            <span className="cl-file-change-dir">{file.path}</span>
-          </span>
-          {file.sources.length > 1 && (
-            <span className="cl-file-change-times">×{file.sources.length}</span>
-          )}
-          {(stat.added > 0 || stat.removed > 0) && (
-            <span className="cl-file-change-stat">
-              {stat.added > 0 && <span className="is-add">+{stat.added}</span>}
-              {stat.removed > 0 && <span className="is-del">−{stat.removed}</span>}
-            </span>
-          )}
-        </span>
+        )}
         {onOpenFile && (
           <button type="button" className="cl-file-change-open" onClick={onOpenFile}>
             Open file
           </button>
         )}
+      </FilePageHead>
+      <div className="cl-fview-body">
+        <div className="cl-file-change-scroll">
+          <FileChangeDiffs file={file} clamp={false} />
+        </div>
       </div>
-      <FileChangeDiffs file={file} clamp={false} />
     </div>
   );
 }

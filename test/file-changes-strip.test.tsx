@@ -266,6 +266,65 @@ describe('the files a turn changed, in MIN density', () => {
     expect(container.querySelectorAll('.cl-diff')).toHaveLength(0);
   });
 
+  describe('files changed the same way in one folder', () => {
+    const writes = (paths: string[]) =>
+      [
+        paths.map((p, i) => use(`w${i}`, 'Write', { file_path: p, content: 'a\nb' })),
+        paths.map((p, i) => ok(`w${i}`, `File created successfully at: ${p}`)),
+      ] as const;
+    const mountSwitched = (open: boolean, paths: string[]) => {
+      const [processed] = buildProcessedMessages(transcript(...writes(paths)));
+      return render(
+        <StrictMode>
+          <DiffsOpenContext.Provider value={open}>
+            <MessageBubble
+              processed={processed}
+              detailsFilter="minimal"
+              onOpenToolDetail={() => {}}
+            />
+          </DiffsOpenContext.Provider>
+        </StrictMode>
+      );
+    };
+    const topRows = (el: ParentNode) =>
+      [...el.querySelectorAll('.cl-file-changes > .cl-file-change')].map(headOnly);
+    // The row's own header, not the headers of the files folded under it.
+    const headOnly = (el: Element) => headText(el.querySelector('.cl-file-change-head')!);
+
+    it('fold into one row with the count, the folder once and the lines summed', () => {
+      const { container } = mountSwitched(false, [
+        '/p/docs/a.md',
+        '/p/src/x.ts',
+        '/p/docs/b.md',
+        '/p/docs/c.md',
+      ]);
+      // In the place of the first of them, wherever the others sit.
+      expect(topRows(container)).toEqual(['Created 3 files /p/docs +6', 'Created x.ts /p/src +2']);
+      expect(container.querySelector('.cl-file-change-members')).toBeNull();
+    });
+
+    it('open into their files, without a verb or a folder of their own', () => {
+      const { container } = mountSwitched(false, ['/p/docs/a.md', '/p/docs/b.md', '/p/docs/c.md']);
+      act(() => {
+        fireEvent.click(container.querySelector('.cl-file-change-toggle')!);
+      });
+      const members = [...container.querySelectorAll('.cl-file-change-members > .cl-file-change')];
+      expect(members.map(headOnly)).toEqual(['a.md +2', 'b.md +2', 'c.md +2']);
+      // Opening the folder lists the files; their diffs stay a click further.
+      expect(container.querySelectorAll('.cl-diff')).toHaveLength(0);
+    });
+
+    it('follow the switch: on, the folder and every diff in it are open', () => {
+      const { container } = mountSwitched(true, ['/p/docs/a.md', '/p/docs/b.md', '/p/docs/c.md']);
+      expect(container.querySelectorAll('.cl-diff')).toHaveLength(3);
+    });
+
+    it('stay one row each while there are only two of them', () => {
+      const { container } = mountSwitched(false, ['/p/docs/a.md', '/p/docs/b.md']);
+      expect(topRows(container)).toEqual(['Created a.md /p/docs +2', 'Created b.md /p/docs +2']);
+    });
+  });
+
   it('draws the same strip under the badge of a run of tool-only turns', () => {
     const files = touchedFiles([{ use: editSed(), result: sedResult() }]);
     const { container } = render(

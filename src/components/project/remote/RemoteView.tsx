@@ -614,9 +614,7 @@ function RemoteSessionView({
                   {overlay.kind === 'tool' ? (
                     <ToolDetailPanel group={overlay.group} onBack={closeOverlay} chromeless />
                   ) : (
-                    <div className="cl-file-change-scroll">
-                      <FileChangePage file={overlay.change.file} />
-                    </div>
+                    <FileChangePage file={overlay.change.file} />
                   )}
                 </div>
               )}

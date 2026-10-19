@@ -7,6 +7,8 @@ import { BashEditDiffView } from './BashEditDiffView';
 import type { BashEditDiff } from '../../../types';
 import { parseShellCommand, normalizeOutput, promptRows } from './shell';
 import type { PromptLead } from './shell';
+import { PageCopyButton, PageHead } from '../shared/PageHead';
+import { FileKindIcon } from '../files/FileKindIcon';
 
 /** Output rows shown before the window asks to be unfolded. Deliberately a clamp
  *  and not an inner vertical scroller: a nested scrollbar inside a transcript
@@ -204,6 +206,7 @@ function TerminalWindow({
   onClose,
   full,
   diff,
+  bare,
 }: {
   title: string;
   meta: string;
@@ -216,6 +219,9 @@ function TerminalWindow({
   full?: boolean;
   /** Files the command edited, when Claude Code recorded them (#265). */
   diff?: BashEditDiff;
+  /** The run as a page over the session (`TerminalPage`): the body only, the
+   *  page draws the head and the foot. */
+  bare?: boolean;
 }) {
   const output = run?.output ?? '';
   const totalLines = run?.totalLines ?? 0;
@@ -226,6 +232,35 @@ function TerminalWindow({
       : totalLines > 0
         ? `${totalLines} ${totalLines === 1 ? 'line' : 'lines'}`
         : 'no output';
+
+  const body = (
+    <>
+      <div className={`cl-term-body${clamped ? ' is-clamped' : ''}`}>
+        {command && <PromptLines command={command} />}
+        {run &&
+          (output ? (
+            <div className="cl-term-out">
+              <code>{shown}</code>
+            </div>
+          ) : (
+            <div className="cl-term-note">
+              {run.state === 'pending'
+                ? 'still running — no result recorded yet'
+                : 'completed with no output'}
+            </div>
+          ))}
+      </div>
+
+      {/* Outside the body: the output clamp must not fold away the one part
+          that says a file changed. */}
+      {diff && <BashEditDiffView diff={diff} />}
+    </>
+  );
+  if (bare) {
+    return (
+      <div className={`cl-term is-bare${run?.state === 'error' ? ' is-error' : ''}`}>{body}</div>
+    );
+  }
 
   return (
     <div className={`cl-term${full ? ' is-full' : ''}${run?.state === 'error' ? ' is-error' : ''}`}>
@@ -255,25 +290,7 @@ function TerminalWindow({
         </span>
       </div>
 
-      <div className={`cl-term-body${clamped ? ' is-clamped' : ''}`}>
-        {command && <PromptLines command={command} />}
-        {run &&
-          (output ? (
-            <div className="cl-term-out">
-              <code>{shown}</code>
-            </div>
-          ) : (
-            <div className="cl-term-note">
-              {run.state === 'pending'
-                ? 'still running — no result recorded yet'
-                : 'completed with no output'}
-            </div>
-          ))}
-      </div>
-
-      {/* Outside the body: the output clamp must not fold away the one part
-          that says a file changed. */}
-      {diff && <BashEditDiffView diff={diff} />}
+      {body}
 
       {run && (
         <div className="cl-term-foot">
@@ -374,6 +391,59 @@ export function CommandSheet({
         />
       )}
     </>
+  );
+}
+
+/** A recorded shell run as a page over the session — what a rail row opens in
+ *  Mission Control: the head every page there has (the description over the
+ *  shape of the run, copies on the right), the dark terminal body unclamped
+ *  under it, and the status in the page's foot. The inline window keeps its
+ *  title bar: in the transcript it is a window among the turns. */
+export function TerminalPage({
+  input,
+  result,
+}: {
+  input: Record<string, unknown>;
+  result: ToolGroup['result'];
+}) {
+  const command = readCommand(input);
+  const description = typeof input.description === 'string' ? input.description : '';
+  const output = useMemo(() => normalizeOutput(result?.content ?? ''), [result?.content]);
+  const state: RunState = !result ? 'pending' : result.isError ? 'error' : 'ok';
+  const totalLines = output ? output.split('\n').length : 0;
+  const status =
+    state === 'pending'
+      ? 'running'
+      : state === 'error'
+        ? `failed · ${lineLabel(totalLines)}`
+        : totalLines > 0
+          ? lineLabel(totalLines)
+          : 'no output';
+  return (
+    <div className="cl-fview cl-term-page">
+      <PageHead
+        icon={<FileKindIcon ext="sh" />}
+        name={description || 'bash'}
+        sub={commandMeta(input, command) || undefined}
+      >
+        {command && <PageCopyButton text={command} label="Copy command" />}
+        {output && <PageCopyButton text={output} label="Copy output" />}
+      </PageHead>
+      <div className="cl-fview-body">
+        <div className="cl-term-page-scroll">
+          <TerminalWindow
+            title=""
+            meta=""
+            command={command}
+            run={{ output, state, totalLines }}
+            diff={result?.bashEditDiff}
+            clamped={false}
+            bare
+          />
+        </div>
+      </div>
+      <footer className="cl-fview-foot">{status}</footer>
+    </div>
   );
 }
 

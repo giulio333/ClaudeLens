@@ -216,11 +216,12 @@ it('opens a file in the overlay, over the session, not in the rail', async () =>
   expect(bridge.api.files.readText).toHaveBeenCalledWith(ROOT, 'README.md');
   expect(document.querySelector('.cl-files-rail .cl-fview')).toBeNull();
   expect((await treeRow(region, 'README.md')).getAttribute('aria-current')).toBe('true');
-  // The page names the file and closes itself; the top bar repeats neither.
-  expect(document.querySelector('.cl-stabs-crumb')).toBeNull();
-  // The back arrow still walks out of the detail; there is no second ✕ beside it.
-  expect(screen.getAllByRole('button', { name: 'Back to session' })).toHaveLength(1);
-  fireEvent.click(screen.getByRole('button', { name: 'Close' }));
+  // Closed from the frame like every other detail: the crumb names it and the
+  // ✕ sits beside it; the page draws no ✕ of its own.
+  expect(document.querySelector('.cl-stabs-crumb')?.textContent).toContain('README.md');
+  expect(screen.queryByRole('button', { name: 'Close' })).toBeNull();
+  const back = screen.getAllByRole('button', { name: 'Back to session' });
+  fireEvent.click(back[back.length - 1]);
   await waitFor(() => expect(document.querySelector('.cl-fview')).toBeNull());
 });
 

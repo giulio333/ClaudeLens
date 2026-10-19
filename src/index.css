@@ -3295,6 +3295,16 @@ body {
 .cl-tool-detail-panel.is-error {
   border-color: color-mix(in oklch, var(--cl-danger) 38%, var(--cl-line));
 }
+/* A body that is already a window — a shell run, a file's editor — is the
+   page: a paper card around it drew a window inside a window. */
+.cl-tool-detail-panel.is-window {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+}
 
 /* ──────────────────────────────────────────────────────────
    WEB SEARCH SOURCES — the leader-dot bibliography
@@ -6704,19 +6714,40 @@ button.cl-pill-model[data-on] {
 }
 /* The files a turn changed, at its foot in MIN density (FileChangesStrip).
    Drawn the way Claude Code prints them in the terminal: one line — verb,
-   file, +added −removed — and the numbered hunks under it, open by default.
+   file, +added −removed — and the numbered hunks under it, folded until opened.
    On the page, in the page's own palette (light or dark), not a window inside
    the turn: the diff is part of what the turn said. Syntax colours come from
    `.cl-code-pre`, the same map the markdown code blocks use. */
 .cl-file-changes {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 2px;
   margin-top: 14px;
   min-width: 0;
 }
 .cl-file-change {
   min-width: 0;
+}
+/* Folded rows sit as a list; an open one, diff under it, takes air on both
+   sides so the next header does not read as part of its hunks. */
+.cl-file-change.is-open:not(:first-child),
+.cl-file-change.is-open + .cl-file-change {
+  margin-top: 14px;
+}
+/* A folder row's files, under its header: no verb and no folder of their own,
+   both said once above them. */
+.cl-file-change-members {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin: 2px 0 0 18px;
+  padding-left: 10px;
+  border-left: 1px solid var(--cl-line-soft);
+  min-width: 0;
+}
+.cl-file-change-members .cl-file-change.is-open:not(:first-child),
+.cl-file-change-members .cl-file-change.is-open + .cl-file-change {
+  margin-top: 10px;
 }
 .cl-file-change-head {
   display: flex;
@@ -7078,15 +7109,18 @@ button.cl-pill-model[data-on] {
   overflow: auto;
   padding: 18px 28px 40px;
 }
-.cl-file-change--page {
-  max-width: var(--cl-read-col);
-}
-.cl-file-change--page .cl-file-change-toggle {
-  font-size: 13px;
-  padding-bottom: 8px;
-}
 .cl-file-change--page .cl-file-change-body {
-  margin-top: 8px;
+  max-width: var(--cl-read-col);
+  margin-top: 0;
+}
+/* The change in the head's control row: verb, count and lines, then the way
+   to the file — spaced like the file page's own controls. */
+.cl-file-change--page .cl-fview-controls {
+  gap: 10px;
+  font: 400 12px/1.4 var(--font-mono);
+}
+.cl-file-change--page .cl-file-change-stat {
+  margin-left: 0;
 }
 /* full screen: the same object in the modal, on a sheet of its own */
 .cl-file-change--full {
@@ -8836,6 +8870,16 @@ button.cl-pill-model[data-on] {
   display: flex;
   width: min(1180px, 96vw);
   max-height: 92vh;
+}
+/* A run or a file call as a page over the session (TerminalPage, FileToolPage):
+   the page's head and foot are paper, and the dark body sits between them on
+   the page's margins — the terminal itself, with no title bar of its own. */
+.cl-term-page-scroll {
+  min-width: 0;
+  padding: 20px 24px 28px;
+}
+.cl-term.is-bare {
+  border-radius: 9px;
 }
 .cl-term.is-full {
   flex: 1;
@@ -23782,6 +23826,83 @@ select.cl-opt-input {
 }
 .cl-fview-doc .prose-lens {
   font-size: 15px;
+}
+/* The frontmatter, read as the document's properties: the description as a
+   lead in the prose's voice, then the fields between two hairlines — keys in
+   small mono like every label of the app, values in ink. Nothing tinted but a
+   memory topic's type, which wears the colour the Memory views give it. */
+.cl-fview-fm {
+  margin: 0 0 30px;
+}
+.cl-fview-fm-lead {
+  margin: 0 0 18px;
+  font-size: 17px;
+  line-height: 1.5;
+  color: var(--cl-ink-2);
+  text-wrap: pretty;
+}
+.cl-fview-fm-props {
+  margin: 0;
+  padding: 8px 0;
+  border-top: 1px solid var(--cl-line-soft);
+  border-bottom: 1px solid var(--cl-line-soft);
+}
+.cl-fview-fm-row {
+  display: grid;
+  grid-template-columns: minmax(96px, max-content) 1fr;
+  gap: 18px;
+  padding: 4px 0;
+  align-items: baseline;
+}
+.cl-fview-fm-row dt {
+  font: 500 10.5px/1.6 var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-fview-fm-row dd {
+  margin: 0;
+  min-width: 0;
+  font-size: 13.5px;
+  line-height: 1.5;
+  color: var(--cl-ink-2);
+  overflow-wrap: anywhere;
+}
+.cl-fview-fm-row dd .is-date {
+  font-variant-numeric: tabular-nums;
+}
+.cl-fview-fm-chips {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.cl-fview-fm-chip {
+  padding: 1px 8px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  font-size: 12px;
+}
+.cl-fview-fm-type {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--cl-ink);
+}
+.cl-fview-fm-type::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--tint);
+}
+.cl-fview-fm-raw {
+  margin: 0;
+  padding: 10px 0;
+  border-top: 1px solid var(--cl-line-soft);
+  border-bottom: 1px solid var(--cl-line-soft);
+  font: 12px/1.6 var(--font-mono);
+  color: var(--cl-ink-3);
+  white-space: pre-wrap;
 }
 /* A document reads on paper, not in chips. The transcript's markdown dresses
    inline code, a found [[wikilink]] and a blockquote in the accent wash, which

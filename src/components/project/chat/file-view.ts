@@ -7,7 +7,7 @@
  */
 
 import { EXIT_PLAN_TOOL, writeAction } from './utils';
-import type { FileChangeSource } from './utils';
+import type { FileChangeSource, TouchedFile } from './utils';
 import type { BashEditHunk } from '../../../types';
 import { highlightLines } from './code-lang';
 
@@ -192,6 +192,39 @@ export function shortDir(path: string, keep = 3, max = 40): string {
   while (kept.length > 1 && kept.join('/').length > max) kept = kept.slice(1);
   const dir = kept.join('/');
   return kept.length === segments.length ? `/${dir}` : `…/${dir}`;
+}
+
+/** Files that fold into one row of the strip once there are this many of them
+ *  with the same verb in the same folder. */
+export const FOLD_MIN = 3;
+
+export type ChangeEntry =
+  | { kind: 'file'; file: TouchedFile }
+  | { kind: 'folder'; action: TouchedFile['action']; files: TouchedFile[] };
+
+/** The strip's rows: files changed the same way in the same folder fold into
+ *  one, wherever they sit in the turn, at the place of the first of them. Ten
+ *  files archived in one go are one thing the turn did, not ten. */
+export function foldChanges(files: TouchedFile[], min = FOLD_MIN): ChangeEntry[] {
+  const key = (f: TouchedFile) =>
+    `${f.action}\0${f.path.slice(0, f.path.length - fileName(f.path).length)}`;
+  const byKey = new Map<string, TouchedFile[]>();
+  for (const f of files) {
+    const k = key(f);
+    byKey.set(k, [...(byKey.get(k) ?? []), f]);
+  }
+  const out: ChangeEntry[] = [];
+  const placed = new Set<string>();
+  for (const f of files) {
+    const k = key(f);
+    const same = byKey.get(k)!;
+    if (same.length < min) out.push({ kind: 'file', file: f });
+    else if (!placed.has(k)) {
+      placed.add(k);
+      out.push({ kind: 'folder', action: f.action, files: same });
+    }
+  }
+  return out;
 }
 
 /** Markdown by extension. A written `.md` is prose by construction, printed as

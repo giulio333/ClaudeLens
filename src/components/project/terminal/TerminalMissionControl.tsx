@@ -926,9 +926,7 @@ export function TerminalMissionControl({
               {toolRunStatus(overlay.group.result, overlay.group.use.name).label}
             </span>
           )}
-          {overlay && overlay.kind !== 'file' && (
-            <CloseOverlayButton label="Back to session" onClose={closeOverlay} />
-          )}
+          {overlay && <CloseOverlayButton label="Back to session" onClose={closeOverlay} />}
           {filename && <SessionActions projectHash={project.hash} filename={filename} />}
           <ViewSwitch view={view} setView={switchView} />
           <BackgroundShells shells={backgroundShells} liveSince={liveSince} compact />
@@ -1059,6 +1057,7 @@ export function TerminalMissionControl({
             }
             onUsePrompt={insertPrompt}
             onOpenFile={rel => setOverlay({ kind: 'file', rel })}
+            onOpenMemory={(path, fallback) => setOverlay({ kind: 'memory', path, fallback })}
             openFile={openFileRel}
             // The Lens has the control pill, which carries context % and spend
             // with their readout cards; the Terminal has no pill, so there the

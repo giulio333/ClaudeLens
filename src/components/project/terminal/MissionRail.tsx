@@ -452,6 +452,7 @@ export function MissionRail({
   onOpenExchange,
   onUsePrompt,
   onOpenFile,
+  onOpenMemory,
   openFile,
   showVitals = true,
   remote,
@@ -489,6 +490,9 @@ export function MissionRail({
    *  overlay. Unset — a remote pane — the files panel is not offered: the
    *  host's folder is often the same path as a local one. */
   onOpenFile?: (rel: string) => void;
+  /** Open a memory topic on the Files page; `fallback` is its last operation,
+   *  for when the topic is no longer there. Ignored for a remote pane. */
+  onOpenMemory?: (path: string, fallback?: ToolGroup) => void;
   /** The file the overlay shows, so the panel marks where it was opened. */
   openFile?: string | null;
   /** Whether this rail carries the vitals line — context %, spend, and the
@@ -701,9 +705,16 @@ export function MissionRail({
   // not by call: one shell command can rewrite a memory and a project file, and
   // only the first belongs to MEMORY. A deleted topic stays, since MEMORY has no
   // word for it and CHANGES says DELETED.
+  const allChanges = useMemo(() => buildFileChanges(ownTools), [ownTools]);
   const changes = useMemo(
-    () => buildFileChanges(ownTools).filter(c => c.deleted || !memoryScopeOf(c.path)),
-    [ownTools]
+    () => allChanges.filter(c => c.deleted || !memoryScopeOf(c.path)),
+    [allChanges]
+  );
+  // A memory's own edits still open as a change — the diff on paper, the page a
+  // CHANGES row opens — rather than as the tool call's editor window.
+  const memoryChanges = useMemo(
+    () => new Map(allChanges.filter(c => memoryScopeOf(c.path)).map(c => [c.path, c])),
+    [allChanges]
   );
   const totals = useMemo(
     () =>
@@ -811,6 +822,14 @@ export function MissionRail({
    *  operation, otherwise the event's destination. Every branch degrades to a
    *  no-op rather than opening the wrong thing. */
   const activate = (e: FeedEvent) => {
+    // A memory row opens the topic itself, on the Files page, whatever its
+    // operations, and folds or unfolds them like any row. A run of memory rows
+    // ("2 memories written") is only a disclosure: it names no topic.
+    if (e.source.kind === 'memory' && !e.run && onOpenMemory && !remote) {
+      onOpenMemory(e.source.touch.path, e.items[e.items.length - 1]);
+      if (e.expandable) toggleExpanded(e.id);
+      return;
+    }
     if (e.expandable) {
       toggleExpanded(e.id);
       return;
@@ -1259,13 +1278,25 @@ export function MissionRail({
                     items={e.items}
                     // Every call under a change row opens the same page: the
                     // file's change, with that call's diff among the others.
+                    // Under a memory row, a call that changed the topic opens that
+                    // same page; a read keeps its own view.
                     onOpenTool={
                       e.source.kind === 'change'
                         ? (() => {
                             const change = e.source.change;
                             return () => onOpenChange(change);
                           })()
-                        : onOpenTool
+                        : e.source.kind === 'memory'
+                          ? (() => {
+                              const change = memoryChanges.get(e.source.touch.path);
+                              return (g: ToolGroup) =>
+                                // `items` holds a read of the topic too: the change is what the
+                                // file is, a read is still a read.
+                                change?.items.includes(g) && g.use.name !== 'Read'
+                                  ? onOpenChange(change)
+                                  : onOpenTool(g);
+                            })()
+                          : onOpenTool
                     }
                   />
                 )}

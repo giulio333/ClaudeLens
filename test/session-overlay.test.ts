@@ -30,7 +30,13 @@ describe('overlayCrumb', () => {
     expect(overlayCrumb({ kind: 'skill-def', skill })).toEqual({ kind: 'skill', label: 'deploy' });
   });
 
-  it('leaves a file to name itself in its own head', () => {
-    expect(overlayCrumb({ kind: 'file', rel: 'src/a.ts' })).toBeNull();
+  it('names a file and a memory topic like every other detail, so all close from one place', () => {
+    expect(overlayCrumb({ kind: 'file', rel: 'src/a.ts' })).toEqual({
+      kind: 'file',
+      label: 'a.ts',
+    });
+    expect(overlayCrumb({ kind: 'memory', path: '/h/.claude/projects/p/memory/topic.md' })).toEqual(
+      { kind: 'memory', label: 'topic.md' }
+    );
   });
 });

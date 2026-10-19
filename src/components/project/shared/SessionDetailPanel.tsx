@@ -5,7 +5,7 @@ import { FileChangePage } from '../chat/FileChangesStrip';
 import { SkillDetailView } from '../skills/SkillDetailView';
 import { AgentDetailView } from '../agents/AgentDetailView';
 import { TeamDetailView } from '../teams/TeamDetailView';
-import { FileViewer } from '../files/FileViewer';
+import { FileViewer, MemoryFileViewer } from '../files/FileViewer';
 import type { SessionMarks } from '../files/session-marks';
 import type { SessionOverlay } from './session-overlay';
 
@@ -45,12 +45,10 @@ export function SessionDetailPanel({
       return <ToolDetailPanel group={overlay.group} onBack={onClose} chromeless />;
     case 'change':
       return (
-        <div className="cl-file-change-scroll">
-          <FileChangePage
-            file={overlay.change.file}
-            onOpenFile={overlay.change.deleted ? undefined : fileOpenerFor?.(overlay.change.path)}
-          />
-        </div>
+        <FileChangePage
+          file={overlay.change.file}
+          onOpenFile={overlay.change.deleted ? undefined : fileOpenerFor?.(overlay.change.path)}
+        />
       );
     case 'skill-def':
       return (
@@ -91,7 +89,19 @@ export function SessionDetailPanel({
           rel={overlay.rel}
           version={fileMarks?.writes.get(overlay.rel) ?? 0}
           mark={fileMarks?.files.get(overlay.rel)}
-          onClose={onClose}
+        />
+      );
+    case 'memory':
+      return (
+        <MemoryFileViewer
+          key={overlay.path}
+          path={overlay.path}
+          projectHash={project.hash}
+          fallback={
+            overlay.fallback && (
+              <ToolDetailPanel group={overlay.fallback} onBack={onClose} chromeless />
+            )
+          }
         />
       );
     case 'agent':

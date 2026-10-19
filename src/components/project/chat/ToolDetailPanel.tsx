@@ -9,10 +9,12 @@ import {
   SKILL_TOOL,
   EXIT_PLAN_TOOL,
   toolRunStatus,
+  touchedFiles,
 } from './utils';
 import { PathChip, SectionLabel, CodeBlock, UrlChip } from './atoms';
-import { CommandBlock, CommandOutput, CommandSheet } from './CommandBlock';
-import { FileSheet } from './FileWindow';
+import { CommandBlock, CommandOutput, CommandSheet, TerminalPage } from './CommandBlock';
+import { FileSheet, FileToolPage } from './FileWindow';
+import { FileChangePage } from './FileChangesStrip';
 import { hasFileWindow } from './file-view';
 import { ownsToolBody, ownsOutputHead, isShellOutput } from './shell';
 import {
@@ -906,6 +908,18 @@ export function ToolDetailPanel({
       : name === WEB_SEARCH && typeof input.query === 'string'
         ? input.query
         : null;
+  // In a frame that owns the crumb and the close, a call whose body is a
+  // window is a page like the others there — a file, a memory, a change: the
+  // shared head, the body, the foot. An edit is its change, the page a CHANGES
+  // row opens; the inline windows keep their title bars.
+  if (chromeless && !isAgent) {
+    if (ownsToolBody(name)) return <TerminalPage input={input} result={result} />;
+    if (name === 'Edit' || name === 'MultiEdit') {
+      const [file] = touchedFiles([group]);
+      if (file && file.action !== 'read') return <FileChangePage file={file} />;
+    }
+    if (hasFileWindow(name)) return <FileToolPage name={name} input={input} result={result} />;
+  }
   const detailTitle = isAgent
     ? (input.description as string | undefined) || 'Agent dispatch'
     : webSubject || name;
@@ -946,12 +960,16 @@ export function ToolDetailPanel({
         <div className="cl-tool-detail-grid">
           {ownsToolBody(name) ? (
             // One panel: the command and what it printed are one reading unit.
-            <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+            <section
+              className={`cl-tool-detail-panel is-window ${result?.isError ? 'is-error' : ''}`}
+            >
               <CommandSheet input={input} result={result} showCommand showDescription />
             </section>
           ) : hasFileWindow(name) ? (
             // Same for a file: the editor window carries input and result.
-            <section className={`cl-tool-detail-panel ${result?.isError ? 'is-error' : ''}`}>
+            <section
+              className={`cl-tool-detail-panel is-window ${result?.isError ? 'is-error' : ''}`}
+            >
               <FileSheet name={name} input={input} result={result} />
             </section>
           ) : (
