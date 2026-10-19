@@ -44,3 +44,6 @@ docs/ClaudeLens_Architecture_Guide_IT.docx
 
 # Brainstorming visual companion scratch (superpowers skill)
 .superpowers/
+
+# Specs, plans and prototypes written by the superpowers skills
+docs/superpowers/
