@@ -145,7 +145,10 @@
       "entitlements": "build/entitlements.mac.plist",
       "entitlementsInherit": "build/entitlements.mac.inherit.plist",
       "gatekeeperAssess": false,
-      "notarize": false
+      "notarize": false,
+      "extendInfo": {
+        "NSLocalNetworkUsageDescription": "ClaudeLens connects to Claude Code sessions on other machines on your local network."
+      }
     },
     "linux": {
       "target": [

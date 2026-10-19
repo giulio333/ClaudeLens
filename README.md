@@ -20,7 +20,7 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens 
 
 1. Download the `.dmg` for your Mac (`arm64` for Apple silicon or `x64` for Intel) from the [latest release](https://github.com/giulio333/ClaudeLens/releases/latest).
 2. Open the `.dmg` and drag **ClaudeLens** to **Applications**.
-3. Because ClaudeLens is not code-signed, macOS may block the first launch. Open Terminal and run:
+3. Because ClaudeLens is not notarized by Apple, macOS may block the first launch. Open Terminal and run:
 
    ```bash
    xattr -d com.apple.quarantine /Applications/ClaudeLens.app
@@ -28,7 +28,7 @@ If you use Claude Code heavily, you know how opaque `~/.claude/` is. ClaudeLens 
 
 4. Open ClaudeLens from Applications. The command is only needed once per installation or update.
 
-You can also try right-clicking ClaudeLens in Finder, choosing **Open**, and confirming the Gatekeeper prompt instead of using Terminal.
+Instead of using Terminal, you can try to open ClaudeLens once, then go to **System Settings → Privacy & Security** and click **Open Anyway**.
 
 ### Linux (experimental)
 
