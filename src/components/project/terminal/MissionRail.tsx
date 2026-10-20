@@ -32,6 +32,7 @@ import {
 import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
 import { FilesRailPanel } from '../files/FilesRailPanel';
 import { NotesRailPanel } from './NotesRailPanel';
+import { PagesRailPanel } from './PagesRailPanel';
 import { notesBadge, notesTally } from './session-notes';
 import { sessionMarks } from '../files/session-marks';
 import { contextFiles, shellReadPaths } from '../chat/context-files';
@@ -513,9 +514,10 @@ export function MissionRail({
   remote?: RemoteTranscript;
 }) {
   // One panel at a time takes the rail's body: the Playbook, the project's
-  // files or the session's notes. The feed under it stays mounted, hidden, so
-  // its filters and scroll are where the reader left them.
-  const [panel, setPanel] = useState<'playbook' | 'files' | 'notes' | null>(null);
+  // files, the session's notes or the pages it published. The feed under it
+  // stays mounted, hidden, so its filters and scroll are where the reader left
+  // them.
+  const [panel, setPanel] = useState<'playbook' | 'files' | 'notes' | 'pages' | null>(null);
   const playbookOpen = panel === 'playbook';
   const filesOpen = panel === 'files';
   // The notes belong to the session: none until the CLI has registered it.
@@ -536,6 +538,12 @@ export function MissionRail({
   function closeFiles(restoreFocus = true) {
     setPanel(null);
     if (restoreFocus) filesTrigger.current?.focus();
+  }
+  const pagesTrigger = useRef<HTMLButtonElement>(null);
+  const pagesId = useId();
+  function closePages(restoreFocus = true) {
+    setPanel(null);
+    if (restoreFocus) pagesTrigger.current?.focus();
   }
   function closePlaybook(restoreFocus = true) {
     setPanel(null);
@@ -696,10 +704,15 @@ export function MissionRail({
   // the rail could see them: a research session's sources used to leave no trace
   // at all, and a fetch that only got a redirect left even less.
   const web = useMemo(() => buildWebActivity(ownTools), [ownTools]);
-  // PAGES — what the session published with the `Artifact` tool. One row per
-  // page, however many times it was republished: nothing else in the rail could
-  // see them, and a published page outlives the session that made it.
+  // What the session published with the `Artifact` tool, one entry per page
+  // however many times it was republished. Not a feed species: a published
+  // page outlives the session that made it, so it has its own panel.
   const artifacts = useMemo(() => buildArtifactActivity(ownTools), [ownTools]);
+  // A session that published nothing has no Pages icon, so no panel either.
+  const pagesOpen = panel === 'pages' && artifacts.length > 0;
+  // The panel actually on screen: a Pages panel left open on a session with no
+  // pages would hide the feed behind nothing.
+  const shownPanel = panel === 'pages' && !pagesOpen ? null : panel;
   // CHANGES excludes the memory files: they are a topic each, not a diff, and
   // reporting them twice would double-count the session's line totals. By path,
   // not by call: one shell command can rewrite a memory and a project file, and
@@ -749,7 +762,6 @@ export function MissionRail({
         memory: memoryActivity,
         web,
         changes,
-        artifacts,
         tasks,
         teams: teamRows,
         realPath,
@@ -763,7 +775,6 @@ export function MissionRail({
       memoryActivity,
       web,
       changes,
-      artifacts,
       tasks,
       teamRows,
       realPath,
@@ -855,10 +866,6 @@ export function MissionRail({
       onOpenChange(s.change);
     } else if (s.kind === 'memory' || s.kind === 'web') {
       if (e.items.length > 0) onOpenTool(e.items[e.items.length - 1]);
-    } else if (s.kind === 'artifact') {
-      // The page, not the tool call that made it: the call's answer is prose
-      // written for the harness, and the row already says everything it holds.
-      window.open(s.artifact.url, '_blank', 'noopener');
     }
     // A task with no detail has nothing to open — its row is already the fact.
   };
@@ -928,13 +935,49 @@ export function MissionRail({
                 title under it. */}
             {filesOpen
               ? 'FILES'
-              : playbookOpen
-                ? 'PLAYBOOK'
-                : notesOpen
-                  ? 'NOTES'
-                  : 'MISSION CONTROL'}
+              : pagesOpen
+                ? 'PAGES'
+                : playbookOpen
+                  ? 'PLAYBOOK'
+                  : notesOpen
+                    ? 'NOTES'
+                    : 'MISSION CONTROL'}
           </span>
           <span style={{ flex: 1 }} />
+          {/* First in the row, so the icons after it never move when it appears. */}
+          {artifacts.length > 0 && (
+            <button
+              ref={pagesTrigger}
+              type="button"
+              className="cl-playbook-rail-trigger cl-pages-trigger"
+              aria-label={pagesOpen ? 'Pages' : `Pages — ${artifacts.length} published`}
+              title="Pages published in this session"
+              aria-expanded={pagesOpen}
+              aria-controls={pagesOpen ? pagesId : undefined}
+              onClick={() => (pagesOpen ? closePages() : setPanel('pages'))}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M10 16l5-5M11 11h4v4" />
+              </svg>
+              {!pagesOpen && (
+                <span className="cl-pages-badge" aria-hidden>
+                  {artifacts.length}
+                </span>
+              )}
+            </button>
+          )}
           {!remote && onOpenFile && (
             <button
               ref={filesTrigger}
@@ -1034,7 +1077,7 @@ export function MissionRail({
             transcript they describe; printing them here as well would put the
             same number on screen twice a few hundred pixels apart, which is
             exactly why the terminal's TopBar stopped printing the spend. */}
-        {showVitals && !panel && (
+        {showVitals && !shownPanel && (
           <div
             className="font-mono flex items-baseline"
             style={{ gap: 9, marginTop: 14, fontVariantNumeric: 'tabular-nums' }}
@@ -1108,15 +1151,15 @@ export function MissionRail({
           </div>
         )}
 
-        {showVitals && !panel && vital === 'ctx' && <ContextPopover ctx={ctx} />}
-        {showVitals && !panel && vital === 'spend' && <SpendPopover summary={summary} />}
+        {showVitals && !shownPanel && vital === 'ctx' && <ContextPopover ctx={ctx} />}
+        {showVitals && !shownPanel && vital === 'spend' && <SpendPopover summary={summary} />}
       </div>
 
       {/* The context fill, edge to edge — a 2px rule that doubles as a gauge.
           It is the context figure's gauge, so it leaves with the figure: what
           stays behind is the plain hairline the band needs to end on, not a
           two-pixel bar that would still look like a reading of something. */}
-      {showVitals && !panel ? (
+      {showVitals && !shownPanel ? (
         <div className="shrink-0" style={{ height: 2, background: 'var(--cl-line-soft)' }}>
           <div
             style={{
@@ -1143,6 +1186,7 @@ export function MissionRail({
           onClose={closeFiles}
         />
       )}
+      {pagesOpen && <PagesRailPanel id={pagesId} pages={artifacts} onClose={closePages} />}
       {notesOpen && (
         <NotesRailPanel
           key={sessionId}
@@ -1167,7 +1211,7 @@ export function MissionRail({
       )}
       <div
         style={{
-          display: panel ? 'none' : 'flex',
+          display: shownPanel ? 'none' : 'flex',
           flexDirection: 'column',
           flex: 1,
           minHeight: 0,

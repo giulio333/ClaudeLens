@@ -12,7 +12,6 @@ import {
   webItemNote,
 } from '../src/components/project/terminal/mission-feed';
 import type { FeedEvent, MissionFeedInput } from '../src/components/project/terminal/mission-feed';
-import { buildArtifactActivity } from '../src/components/project/chat/artifact';
 import type { ArtifactPublish } from '../src/types';
 import type {
   MemoryActivity,
@@ -98,7 +97,6 @@ function input(over: Partial<MissionFeedInput> = {}): MissionFeedInput {
     memory: EMPTY_MEMORY,
     web: [],
     changes: [],
-    artifacts: [],
     tasks: [],
     teams: [],
     realPath: '/Users/dev/proj',
@@ -604,7 +602,6 @@ describe('mission feed — filters', () => {
       MEMORY: 0,
       WEB: 0,
       CHANGES: 1,
-      PAGES: 0,
       TASKS: 1,
     });
   });
@@ -750,18 +747,14 @@ describe('mission feed — questions', () => {
 });
 
 describe('mission feed — published pages', () => {
-  /** An `Artifact` publish: the page is stamped on the result block, the way
-   *  the transcript readers stamp it from `toolUseResult`. */
-  function publish(
-    id: string,
-    over: Partial<ArtifactPublish> = {},
-    input: Record<string, unknown> = {}
-  ): ToolGroup {
-    return {
-      use: { type: 'tool_use', id, name: 'Artifact', input: { action: 'publish', ...input } },
+  it('leaves the pages to their own panel', () => {
+    // A publish is the Pages panel's (`PagesRailPanel`), not a feed species:
+    // a session that only published has nothing to say in the feed.
+    const call = {
+      use: { type: 'tool_use', id: 'p1', name: 'Artifact', input: { action: 'publish' } },
       result: {
         type: 'tool_result',
-        tool_use_id: id,
+        tool_use_id: 'p1',
         content: 'Published … (Version 2)',
         isError: false,
         artifact: {
@@ -770,83 +763,10 @@ describe('mission feed — published pages', () => {
           title: 'Release checklist',
           updated: true,
           seq: 2,
-          audience: 'owner',
-          ...over,
-        },
+        } satisfies ArtifactPublish,
       },
     } as unknown as ToolGroup;
-  }
-
-  it('draws one row per page, however many times it was republished', () => {
-    const calls = [
-      publish('p1', { updated: false, seq: 1 }, { description: 'Before and after' }),
-      publish('p2', { seq: 2 }),
-      publish('p3', { seq: 3 }),
-    ];
-    const feed = buildMissionFeed(
-      input({
-        processed: [turn(1, calls)],
-        ownTools: calls,
-        artifacts: buildArtifactActivity(calls),
-      })
-    );
-    expect(feed).toHaveLength(1);
-    const [e] = feed;
-    expect(e.kind).toBe('PAGES');
-    expect(e.title).toBe('Release checklist');
-    expect(e.meta).toBe('3 publishes · claude.ai/artifact/AbCdEf');
-    expect(e.right).toBe('v3');
-    // The publishes are in the chat, each at the moment it happened; a click
-    // here is worth more spent on the page than on the tool's own prose.
-    expect(e.expandable).toBe(false);
-    expect(e.source).toEqual({
-      kind: 'artifact',
-      artifact: expect.objectContaining({ id: 'page-1' }),
-    });
-  });
-
-  it('says whether this session made the page or only updated one', () => {
-    const made = buildMissionFeed(
-      input({ artifacts: buildArtifactActivity([publish('p1', { updated: false, seq: 1 })]) })
-    );
-    expect(made[0].meta).toBe('created · claude.ai/artifact/AbCdEf');
-
-    const updated = buildMissionFeed(
-      input({ artifacts: buildArtifactActivity([publish('p1', { updated: true, seq: 9 })]) })
-    );
-    expect(updated[0].meta).toBe('updated · claude.ai/artifact/AbCdEf');
-  });
-
-  it('says PUBLISHED rather than a version the transcript never stated', () => {
-    const feed = buildMissionFeed(
-      input({ artifacts: buildArtifactActivity([publish('p1', { seq: undefined })]) })
-    );
-    expect(feed[0].right).toBe('PUBLISHED');
-  });
-
-  it('keeps the summary and the sharing for the tooltip, which the row cannot fit', () => {
-    const feed = buildMissionFeed(
-      input({
-        artifacts: buildArtifactActivity([
-          publish('p1', { audience: 'users' }, { description: 'Before and after' }),
-        ]),
-      })
-    );
-    expect(feed[0].hint).toBe('Before and after — shared');
-  });
-
-  it('dates the row from the last publish, and counts it among the filters', () => {
-    const first = publish('p1', { updated: false, seq: 1 });
-    const second = publish('p2', { seq: 2 });
-    const feed = buildMissionFeed(
-      input({
-        processed: [turn(1, [first]), turn(5, [second])],
-        ownTools: [first, second],
-        artifacts: buildArtifactActivity([first, second]),
-      })
-    );
-    expect(feed[0].at).toBe(T0 + 5 * 60_000);
-    expect(countByKind(feed).PAGES).toBe(1);
+    expect(buildMissionFeed(input({ processed: [turn(1, [call])], ownTools: [call] }))).toEqual([]);
   });
 });
 

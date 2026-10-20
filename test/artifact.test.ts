@@ -6,7 +6,9 @@ import {
   artifactOf,
   artifactStatusLabel,
   artifactVersion,
+  artifactPageMeta,
   buildArtifactActivity,
+  pagesNewestFirst,
   shortArtifactUrl,
 } from '../src/components/project/chat/artifact';
 import type { ArtifactPublish } from '../src/types';
@@ -145,5 +147,39 @@ describe('the pages a session published', () => {
 
   it('has no entry for a session that published nothing', () => {
     expect(buildArtifactActivity([])).toEqual([]);
+  });
+});
+
+describe('the pages as the Pages panel lists them', () => {
+  const other = { id: 'a2', title: 'Two', url: 'https://claude.ai/artifact/Zz' };
+
+  it('puts the page published to last on top', () => {
+    // One is created first, Two after it, then One is republished: One is the
+    // newest, whatever order the pages first appeared in.
+    const groups = [
+      call({}, page({ id: 'a1', title: 'One' }), { id: 't1' }),
+      call({}, page(other), { id: 't2' }),
+      call({}, page({ id: 'a1', title: 'One' }), { id: 't3' }),
+    ];
+    expect(pagesNewestFirst(buildArtifactActivity(groups)).map(a => a.title)).toEqual([
+      'One',
+      'Two',
+    ]);
+    const twoLast = [groups[0], groups[1]];
+    expect(pagesNewestFirst(buildArtifactActivity(twoLast)).map(a => a.title)).toEqual([
+      'Two',
+      'One',
+    ]);
+  });
+
+  it('says how the session touched the page, and its sharing only when recorded', () => {
+    const meta = (groups: ToolGroup[]) => artifactPageMeta(buildArtifactActivity(groups)[0]);
+    expect(meta([call({}, page({ updated: false, audience: 'owner' }))])).toBe('created · private');
+    expect(meta([call({}, page({ updated: true, audience: 'users' }))])).toBe('updated · shared');
+    expect(
+      meta([call({}, page({ updated: false }), { id: 't1' }), call({}, page(), { id: 't2' })])
+    ).toMatch(/^2 publishes/);
+    // No `audience` on an older transcript: no claim about who can open it.
+    expect(meta([call({}, page({ updated: true, audience: undefined }))])).toBe('updated');
   });
 });

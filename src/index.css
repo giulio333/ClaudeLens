@@ -24193,6 +24193,103 @@ select.cl-opt-input {
   color: var(--cl-ink-4);
 }
 
+/* Mission Control's Pages panel (`PagesRailPanel`): the pages the session
+   published, each a link out to claude.ai. The row's monogram is the chat's
+   artifact card's (`.cl-artifact-mono`), so the same page reads the same in
+   both places. */
+.cl-pages-trigger {
+  position: relative;
+}
+.cl-pages-badge {
+  position: absolute;
+  top: -4px;
+  right: -7px;
+  min-width: 15px;
+  height: 15px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: var(--cl-accent);
+  color: var(--cl-on-accent);
+  font: 700 9px/15px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
+  box-shadow: 0 0 0 2px var(--cl-paper);
+  pointer-events: none;
+}
+.cl-pages-rail {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  outline: none;
+}
+.cl-pages-rail-head {
+  flex-shrink: 0;
+  padding: 10px 20px;
+  border-bottom: 1px solid var(--cl-line);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-pages-rail-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 6px 0 16px;
+}
+.cl-pages-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 16px 9px 20px;
+  border-bottom: 1px solid var(--cl-line-soft);
+  color: var(--cl-ink);
+  text-decoration: none;
+  transition: background var(--cl-hover-ms);
+}
+.cl-pages-row:hover {
+  background: var(--cl-hover-bg);
+}
+.cl-pages-row:focus {
+  outline: none;
+}
+.cl-pages-row:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
+}
+.cl-pages-row .text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cl-pages-row .name,
+.cl-pages-row .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-pages-row .name {
+  font-family: var(--font-sans);
+  font-size: 13px;
+  font-weight: 500;
+}
+.cl-pages-row .meta {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--cl-ink-4);
+}
+.cl-pages-row .right {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--cl-accent-ink);
+  white-space: nowrap;
+}
+
 /* SDK chat: the side questions (`/btw`), a card above the composer sheet. Same
    paper and hairline as the sheet, so the two read as one input area; inside,
    the thread reads like the transcript it asks about — the question as a small
