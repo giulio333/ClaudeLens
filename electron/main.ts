@@ -5,9 +5,11 @@ import {
   dialog,
   ipcMain,
   Menu,
+  nativeImage,
   Notification,
   session,
   shell,
+  Tray,
 } from 'electron';
 import { basename, delimiter, isAbsolute, join, sep } from 'path';
 import os from 'os';
@@ -150,6 +152,19 @@ import {
   type NotificationKind,
   type NotificationPrefs,
 } from './modules/notifications/types';
+import {
+  brandMarkGlyph,
+  dockBadgeText,
+  hasNewWait,
+  isWorking,
+  parseStatusSummary,
+  sublabelsShown,
+  trayModel,
+  trayTitle,
+  waitingIds,
+  type TrayModel,
+} from './modules/status-surface';
+import type { StatusSummary } from './shared/status-surface';
 import { getBgSessions } from './modules/bg-sessions-reader';
 import { startLiveMonitor, stopLiveMonitor } from './modules/live-monitor';
 import { syncSessionTails, onTranscriptChanged, getSessionActivity } from './modules/session-tails';
@@ -412,7 +427,108 @@ function focusMainWindow(): void {
 
 function clearBadge(): void {
   badgeCount = 0;
-  if (process.platform === 'darwin' && app.dock) app.dock.setBadge('');
+  refreshBadge();
+}
+
+// ─── Session state in the menu bar and the Dock ──────────────────────────────
+// What the tabs say, outside the window (`notifications:setStatus`, from the
+// renderer's StatusMirror; the words are in modules/status-surface.ts). On macOS
+// a menu bar item names what most needs the user and lists every open session;
+// the Dock's badge counts the waits until they are answered, and the app icon
+// wears a bar while Claude works (the taskbar button's progress elsewhere). A
+// new wait bounces the Dock, or flashes the taskbar button, while the window is
+// in the background.
+let statusSummary: StatusSummary | null = null;
+let statusWaits: ReadonlySet<string> = new Set();
+// The first summary after a (re)load reports waits that are not new.
+let statusPrimed = false;
+let statusTray: Tray | null = null;
+let traySpin: ReturnType<typeof setInterval> | null = null;
+
+// The one writer of the Dock's badge: the waits, else the notifications count.
+function refreshBadge(): void {
+  if (process.platform === 'darwin' && app.dock) {
+    app.dock.setBadge(dockBadgeText(statusWaits.size, badgeCount));
+  }
+}
+
+function applyStatus(next: StatusSummary | null): void {
+  const waits = waitingIds(next);
+  if (statusPrimed && hasNewWait(statusWaits, waits) && !windowFocused()) requestAttention();
+  statusSummary = next;
+  statusWaits = waits;
+  statusPrimed = true;
+  refreshBadge();
+  refreshProgress();
+  refreshTray();
+}
+
+// The renderer went away (reload, crash, window closed): what it said is void.
+function resetStatus(): void {
+  applyStatus(null);
+  statusPrimed = false;
+}
+
+function requestAttention(): void {
+  if (process.platform === 'darwin') app.dock?.bounce('informational');
+  else if (mainWindow && !mainWindow.isDestroyed()) mainWindow.flashFrame(true);
+}
+
+function refreshProgress(): void {
+  if (!mainWindow || mainWindow.isDestroyed()) return;
+  // Above 1 is the indeterminate bar: how long a turn will take is not known.
+  mainWindow.setProgressBar(isWorking(statusSummary) ? 2 : -1);
+}
+
+function refreshTray(): void {
+  if (process.platform !== 'darwin' || process.env.SCREENSHOT_MODE) return;
+  const model = statusSummary ? trayModel(statusSummary) : null;
+  if (!model) return destroyTray();
+  if (!statusTray) {
+    const icon = nativeImage.createFromBitmap(brandMarkGlyph(32), {
+      width: 32,
+      height: 32,
+      scaleFactor: 2,
+    });
+    icon.setTemplateImage(true);
+    statusTray = new Tray(icon);
+    statusTray.setToolTip('ClaudeLens sessions');
+  }
+  statusTray.setContextMenu(trayMenu(model));
+  spinTray(model);
+}
+
+// A row brings its session on screen: the renderer knows the tab by its id.
+function trayMenu(model: TrayModel): Menu {
+  const twoLines = sublabelsShown(process.getSystemVersion());
+  return Menu.buildFromTemplate([
+    ...model.items.map(item => ({
+      label: twoLines ? item.label : `${item.label} · ${item.sublabel}`,
+      sublabel: twoLines ? item.sublabel : undefined,
+      click: () => {
+        focusMainWindow();
+        safeSend('notifications:restoreSession', item.id);
+      },
+    })),
+    { type: 'separator' as const },
+    { label: 'Open ClaudeLens', click: focusMainWindow },
+  ]);
+}
+
+function spinTray(model: TrayModel): void {
+  if (traySpin) clearInterval(traySpin);
+  traySpin = null;
+  let frame = 0;
+  statusTray?.setTitle(trayTitle(model, frame));
+  if (!model.spinning) return;
+  traySpin = setInterval(() => statusTray?.setTitle(trayTitle(model, ++frame)), 400);
+}
+
+function destroyTray(): void {
+  if (traySpin) clearInterval(traySpin);
+  traySpin = null;
+  statusTray?.destroy();
+  statusTray = null;
 }
 
 // Gate, push, and (when unfocused) mirror a single notification.
@@ -430,7 +546,8 @@ function emitNotification(event: NotificationEvent): void {
     const n = new Notification({ title: event.title, body: event.body ?? '' });
     n.on('click', focusMainWindow);
     n.show();
-    if (process.platform === 'darwin' && app.dock) app.dock.setBadge(String(++badgeCount));
+    badgeCount++;
+    refreshBadge();
   }
 }
 
@@ -527,8 +644,14 @@ function createWindow() {
     },
   });
 
-  // Focusing the window means the user is back: clear any notification dock badge.
-  mainWindow.on('focus', clearBadge);
+  // Focusing the window means the user is back: clear the notifications' count
+  // on the dock badge (the waits stay until answered) and stop a taskbar flash.
+  mainWindow.on('focus', () => {
+    clearBadge();
+    if (process.platform !== 'darwin') mainWindow?.flashFrame(false);
+  });
+  // A (re)load starts a renderer that has said nothing yet about its tabs.
+  mainWindow.webContents.on('did-start-loading', resetStatus);
 
   // Open external links (window.open from Markdown) in the system browser, deny in-app windows
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
@@ -864,6 +987,18 @@ ipcMain.handle('prefs:set', async (_event, key: string, value: unknown) => {
 ipcMain.handle('notifications:clearBadge', async () => {
   try {
     clearBadge();
+    return ok(true);
+  } catch (e) {
+    return err(e);
+  }
+});
+
+// The open sessions as the tabs show them, for the menu bar and the Dock; null
+// (the preference off, no session open) clears both. Checked before use: a
+// shape the renderer never sends is an error, and the surfaces keep what they had.
+ipcMain.handle('notifications:setStatus', async (_event, input: unknown) => {
+  try {
+    applyStatus(parseStatusSummary(input));
     return ok(true);
   } catch (e) {
     return err(e);
@@ -2813,7 +2948,10 @@ process.on('uncaughtExceptionMonitor', error => queueFatalError(error));
 // The renderer died on its own (OOM, GPU fault, killed). The main process is
 // still alive here, so this one can go out immediately. `clean-exit` is the
 // normal window teardown, not a crash.
-app.on('render-process-gone', (_event, _contents, details) => {
+app.on('render-process-gone', (_event, contents, details) => {
+  if (mainWindow && !mainWindow.isDestroyed() && contents === mainWindow.webContents) {
+    resetStatus();
+  }
   if (details.reason === 'clean-exit') return;
   void trackError(
     new Error(`Renderer process gone: ${details.reason} (exit code ${details.exitCode})`),
@@ -2858,6 +2996,8 @@ app.on('window-all-closed', () => {
   }
   // A Notes AI run has no one left to answer: abort it rather than spend tokens.
   resetInsights();
+  // The sessions went with the window: the menu bar and the Dock forget them.
+  resetStatus();
   if (process.platform !== 'darwin') app.quit();
 });
 
@@ -2878,5 +3018,6 @@ app.on('before-quit', event => {
 app.on('will-quit', () => {
   disposeAllTerminals();
   resetInsights();
+  destroyTray();
   for (const dir of [...controlDirs]) closeControlDir(dir);
 });

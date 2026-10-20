@@ -364,6 +364,114 @@
     transition: opacity 160ms linear;
   }
 }
+/* The edge of the work stage (`PaneEdge`, `pane-edge.ts`): quiet while Claude
+   works, insistent while it waits for the user, one sweep when a turn ends. The
+   colours are Mission Control's own: violet works, the accent waits, sage is
+   done. Over the panes, under the rail's detail overlay and the Lens pill, and
+   never in the way of a click. */
+.cl-pane-edge {
+  position: absolute;
+  z-index: 20;
+  inset: 4px 14px 10px;
+  border-radius: 14px;
+  pointer-events: none;
+}
+.cl-pane-edge::before,
+.cl-pane-edge::after {
+  content: '';
+  position: absolute;
+  pointer-events: none;
+}
+.cl-pane-edge[data-signal='working'],
+.cl-pane-edge[data-signal='settled'] {
+  overflow: hidden;
+}
+.cl-pane-edge[data-signal='working']::before,
+.cl-pane-edge[data-signal='settled']::before {
+  top: 0;
+  left: 0;
+  width: 30%;
+  height: 2px;
+  border-radius: 2px;
+  transform: translateX(-100%);
+}
+.cl-pane-edge[data-signal='working']::before {
+  background: linear-gradient(90deg, transparent, var(--cl-violet), transparent);
+  animation: cl-pane-edge-run 1.9s ease-in-out infinite;
+}
+.cl-pane-edge[data-signal='waiting'] {
+  box-shadow: inset 0 0 0 1.5px var(--cl-accent);
+}
+.cl-pane-edge[data-signal='waiting']::after {
+  inset: 0;
+  border-radius: inherit;
+  box-shadow:
+    0 0 14px 1px color-mix(in oklch, var(--cl-accent) 40%, transparent),
+    inset 0 0 16px color-mix(in oklch, var(--cl-accent) 20%, transparent);
+  animation: cl-pane-edge-breathe 2.4s ease-in-out infinite;
+}
+/* Its own keyframes, not the working line's: an animation that keeps its name
+   keeps its clock, and a turn that ran past 1.1s would count the sweep done. */
+.cl-pane-edge[data-signal='settled']::before {
+  background: linear-gradient(90deg, transparent, var(--cl-ok), transparent);
+  animation: cl-pane-edge-sweep 1.1s ease-out 1 forwards;
+}
+/* The ring fades on its own; its end is what clears the signal. */
+.cl-pane-edge[data-signal='settled']::after {
+  inset: 0;
+  border-radius: inherit;
+  box-shadow: inset 0 0 0 1.5px var(--cl-ok);
+  opacity: 0;
+  animation: cl-pane-edge-settle 2.6s ease-out 1;
+}
+@keyframes cl-pane-edge-run {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(334%);
+  }
+}
+@keyframes cl-pane-edge-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(334%);
+  }
+}
+@keyframes cl-pane-edge-breathe {
+  0%,
+  100% {
+    opacity: 0.15;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+@keyframes cl-pane-edge-settle {
+  0%,
+  50% {
+    opacity: 1;
+  }
+  100% {
+    opacity: 0;
+  }
+}
+/* Still: a plain line while it works and a plain ring while it waits. A sweep
+   without its animation stays out of sight (translated away, transparent). */
+@media (prefers-reduced-motion: reduce) {
+  .cl-pane-edge::before,
+  .cl-pane-edge::after {
+    animation: none;
+  }
+  .cl-pane-edge[data-signal='working']::before {
+    width: 100%;
+    transform: none;
+    opacity: 0.5;
+    background: var(--cl-violet);
+  }
+}
 /* On a sessions row the colour is worn by the TITLE, not by a dot of its own.
    The row already carries two dots — the green LIVE one and the model's — and
    a third beside them read as a traffic light, three marks competing to say
@@ -22441,6 +22549,66 @@ select.cl-opt-input {
   background: color-mix(in oklch, var(--cl-accent) 8%, var(--cl-paper-2));
 }
 .cl-parked-caret {
+  color: var(--cl-ink-4);
+}
+/* The orb is a 20px canvas standing in for the 7px dot: the negative margins
+   keep the badge's height and the count where the dot would have put them. */
+.cl-parked-orb {
+  flex: none;
+  display: inline-flex;
+  width: 20px;
+  height: 20px;
+  margin: 0 -6px 0 -7px;
+}
+/* The session that needs the user, by name (`badgeLine`); the count follows
+   after a dot, as the rest of a short line. The free cell of the top bar is
+   all the room the badge has: the name is cut short first and the verb never;
+   where a name would be a stub only the verb stays, and where even that does
+   not fit, the dot and the count. */
+.cl-bar-parked {
+  container-type: inline-size;
+}
+.cl-bar-parked .cl-parked {
+  flex-shrink: 1;
+  min-width: 0;
+}
+.cl-bar-parked .cl-parked-badge {
+  max-width: 100%;
+}
+.cl-parked-label {
+  display: inline-flex;
+  gap: 4px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.cl-parked-name {
+  min-width: 0;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.cl-parked-name + span {
+  flex: none;
+}
+@container (max-width: 230px) {
+  .cl-parked-name {
+    display: none;
+  }
+}
+@container (max-width: 165px) {
+  .cl-parked-label {
+    display: none;
+  }
+}
+.cl-parked-badge[data-tone='waiting'] .cl-parked-label {
+  color: var(--cl-accent-ink);
+}
+.cl-parked-label + .cl-parked-count {
+  color: var(--cl-ink-3);
+}
+.cl-parked-label + .cl-parked-count::before {
+  content: '·';
+  margin-right: 6px;
   color: var(--cl-ink-4);
 }
 .cl-parked-dot {

@@ -61,6 +61,7 @@ import { TerminalHost } from '../components/project/terminal/TerminalHost';
 import { ParkedTerminals } from '../components/project/terminal/ParkedTerminals';
 import { SessionTabs } from '../components/project/terminal/SessionTabs';
 import { TabAttentionProvider } from '../components/project/terminal/TabAttentionProvider';
+import { StatusMirror } from '../components/project/terminal/StatusMirror';
 import { useTerminalNav } from '../components/project/terminal/use-terminal-nav';
 import {
   exitViewFor,
@@ -859,6 +860,7 @@ export default function ProjectOverview() {
           </div>
         )}
         {terminals}
+        <StatusMirror instances={instances} onRestore={restoreInstance} />
       </TabAttentionProvider>
     );
   }
@@ -1094,6 +1096,7 @@ export default function ProjectOverview() {
     <TabAttentionProvider instances={instances} currentId={currentId}>
       {editorial}
       {terminals}
+      <StatusMirror instances={instances} onRestore={restoreInstance} />
     </TabAttentionProvider>
   );
 }

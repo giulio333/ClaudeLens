@@ -31,6 +31,7 @@ import type {
 } from '../../electron/shared/playbook-types';
 import type { RemoteHost, RemoteHostInput } from '../../electron/shared/remote-host';
 import type { RemoteLensState } from '../../electron/shared/remote-session';
+import type { StatusSummary } from '../../electron/shared/status-surface';
 import type {
   ChatChunkEvent,
   ChatDoneEvent,
@@ -152,6 +153,8 @@ export function createChannels() {
     liveWatchStatus: new Channel<LiveWatchStatus>(),
     // What a remote pane's Lens knows about its session (#294), pushed by main.
     lensState: new Channel<RemoteLensState>(),
+    /** `notifications:restoreSession` — a menu bar row picked, by instance id. */
+    restoreSession: new Channel<string>(),
   };
 }
 
@@ -420,6 +423,14 @@ export function createFakeElectronAPI(channels: FakeChannels) {
       answerLens: vi.fn(async (_terminalId: string, _text: string) => ok(null)),
       retryLens: vi.fn(async (_terminalId: string) => ok(null)),
       onLensState: channels.lensState.subscribe,
+    },
+    // The menu bar and the Dock: what the renderer last said about its tabs is
+    // in `setStatus`'s calls, and a menu bar row is a `restoreSession` emit.
+    notifications: {
+      onEvent: vi.fn((_cb: (event: unknown) => void) => () => {}),
+      clearBadge: vi.fn(async () => ok(true)),
+      setStatus: vi.fn(async (_summary: StatusSummary | null) => ok(true)),
+      onRestoreSession: channels.restoreSession.subscribe,
     },
     clipboard: {
       readText: vi.fn(async () => ok('')),

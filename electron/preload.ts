@@ -327,6 +327,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   notifications: {
     onEvent: (cb: (event: unknown) => void) => subscribe('notifications:event', cb),
     clearBadge: () => ipcRenderer.invoke('notifications:clearBadge'),
+    setStatus: (summary: unknown) => ipcRenderer.invoke('notifications:setStatus', summary),
+    onRestoreSession: (cb: (instanceId: string) => void) =>
+      subscribe('notifications:restoreSession', cb),
   },
   telemetry: {
     isEnabled: () => ipcRenderer.invoke('telemetry:isEnabled'),
