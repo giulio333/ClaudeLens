@@ -22,6 +22,14 @@ export interface McpFailureGroup {
   servers: string[];
 }
 
+/** `PLUGIN · ACME`, `CONFIGURED · USER` — where to go to fix the group. */
+export function mcpGroupLabel(g: McpFailureGroup): string {
+  if (g.plugin !== null) return `PLUGIN · ${g.plugin.toUpperCase()}`;
+  if (!g.source) return 'CONFIGURED';
+  if (g.source === 'plugin') return 'PLUGIN';
+  return `CONFIGURED · ${g.source === 'claudeai' ? 'CLAUDE.AI' : g.source.toUpperCase()}`;
+}
+
 /** `failed` is the SDK's word; an older CLI reported the reason in the status. */
 export function isFailedMcp(status: string): boolean {
   const s = status.toLowerCase();
