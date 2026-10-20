@@ -607,7 +607,6 @@ export function MissionRail({
   // sessionId; the stale-prone config lead id is only a secondary signal, never
   // the sole anchor.
   const { data: teams } = useProjectTeams(localHash);
-  const projectTeamCount = teams?.length ?? 0;
   const teamRows = useMemo(() => {
     if (!sessionId) return [];
     return (teams ?? [])
@@ -797,11 +796,9 @@ export function MissionRail({
   // A figure that has not moved off zero keeps its place but drops to meta ink.
   const spent = !!summary && summary.estimatedCost > 0;
 
-  // The filter pills: only species the session actually produced, plus TEAMS
-  // whenever the *project* has teams — so "no teams anywhere" (no pill) and "no
-  // teams in this session" (pill, count 0, explicit empty state) stay apart.
+  // The filter pills: only species the session actually produced.
   const filters = useMemo(() => {
-    const kinds = FEED_KINDS.filter(k => counts[k] > 0 || (k === 'TEAMS' && projectTeamCount > 0));
+    const kinds = FEED_KINDS.filter(k => counts[k] > 0);
     return [
       { key: 'ALL' as const, label: 'ALL', n: String(feed.length) },
       ...kinds.map(k => ({
@@ -812,7 +809,7 @@ export function MissionRail({
         n: k === 'TASKS' ? `${doneTasks}/${counts.TASKS}` : String(counts[k]),
       })),
     ];
-  }, [counts, feed.length, projectTeamCount, doneTasks]);
+  }, [counts, feed.length, doneTasks]);
 
   const empty = feed.length === 0;
 
@@ -1280,17 +1277,6 @@ export function MissionRail({
           {sessionId && !isError && empty && filter === 'ALL' && (
             <p className="cl-rail-empty">
               Agents, skills and file changes will appear here as Claude works.
-            </p>
-          )}
-
-          {/* The project has teams but this session started none — worth saying,
-            since an empty TEAMS filter would otherwise read as "no teams". */}
-          {filter === 'TEAMS' && visible.length === 0 && projectTeamCount > 0 && (
-            <p
-              className="font-mono"
-              style={{ fontSize: 11, color: 'var(--cl-ink-4)', margin: 0, padding: '10px 0 2px' }}
-            >
-              No teams in this session · {projectTeamCount} in the project
             </p>
           )}
 

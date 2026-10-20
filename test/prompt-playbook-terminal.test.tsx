@@ -193,32 +193,40 @@ it('supersedes an earlier insertion when the playbook is closed and reopened', a
   );
 });
 
+function team(sessionId: string): TeamSummary {
+  return {
+    teamName: 'review',
+    displayName: 'Review team',
+    sessionId,
+    filename: `${sessionId}.jsonl`,
+    sessionIds: [sessionId],
+    createdAt: 1,
+    lastActivity: 1,
+    hasConfig: false,
+    memberCount: 0,
+    memberNames: [],
+    memberColors: [],
+    transcriptCount: 0,
+    memberTokens: [],
+    totalTokens: 0,
+    messageCount: 0,
+    leadSessionIdFromConfig: null,
+  };
+}
+
+it('offers no TEAMS filter for a team another session of the project started', async () => {
+  mount();
+  await act(async () => {
+    client.setQueryData<TeamSummary[]>(['teams:project', 'project-a'], [team('other-session')]);
+  });
+  await screen.findByRole('button', { name: /^ALL/ });
+  expect(screen.queryByRole('button', { name: /TEAMS/ })).toBeNull();
+});
+
 it('opens inside the rail on demand and restores the activity filter and focus', async () => {
   mount();
   await act(async () => {
-    client.setQueryData<TeamSummary[]>(
-      ['teams:project', 'project-a'],
-      [
-        {
-          teamName: 'review',
-          displayName: 'Review team',
-          sessionId: 'other-session',
-          filename: 'other-session.jsonl',
-          sessionIds: ['other-session'],
-          createdAt: 1,
-          lastActivity: 1,
-          hasConfig: false,
-          memberCount: 0,
-          memberNames: [],
-          memberColors: [],
-          transcriptCount: 0,
-          memberTokens: [],
-          totalTokens: 0,
-          messageCount: 0,
-          leadSessionIdFromConfig: null,
-        },
-      ]
-    );
+    client.setQueryData<TeamSummary[]>(['teams:project', 'project-a'], [team('session-a')]);
   });
   const teams = await screen.findByRole('button', { name: /TEAMS/ });
   fireEvent.click(teams);
