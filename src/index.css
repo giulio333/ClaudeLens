@@ -21685,6 +21685,15 @@ select.cl-opt-input {
 /* The stage preview: the real top bar, without the 88px gutter that clears
    the traffic lights here — there are none — and enough floor under the last
    turn for the bottom glow to be read as the glow it is. */
+/* The control pill floats over the transcript's foot, as it does in a session:
+   the frame keeps room under the last turn for it to sit in. */
+.cl-whatsnew-frame--pill {
+  position: relative;
+  padding-bottom: 76px;
+}
+.cl-whatsnew-frame--pill .cl-pill-wrap {
+  bottom: 16px;
+}
 .cl-whatsnew-frame--stage .cl-topbar {
   padding-left: 22px;
   border-bottom: 1px solid var(--cl-line);

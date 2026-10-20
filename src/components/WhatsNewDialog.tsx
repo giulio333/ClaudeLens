@@ -67,7 +67,11 @@ import type { InsightKind, InsightResult } from '../../electron/shared/ai-settin
 import { FilesRailPanel } from './project/files/FilesRailPanel';
 import type { FileTreePreview } from './project/files/FileTree';
 import type { SessionMarks } from './project/files/session-marks';
-import type { ProjectDirEntry } from '../types';
+import type { ProjectDirEntry, SessionSummary } from '../types';
+import { ChatControlPill } from './project/chat/ChatControlPill';
+import type { ChatDetailsFilter } from './project/chat/utils';
+import type { ContextState } from './project/terminal/context-window';
+import { MemoryPagePreview } from './project/files/FileViewer';
 import { version as appVersion } from '../../package.json';
 
 function turn(msg: ChatMessage): ProcessedMessage {
@@ -1715,6 +1719,111 @@ function SideQuestionVisual(): ReactNode {
   );
 }
 
+const PILL_CTX: ContextState = {
+  used: 102_400,
+  max: 200_000,
+  pct: 51,
+  cacheRead: 88_000,
+  freshInput: 6_400,
+  cacheWrite: 8_000,
+  model: PICKER_SESSION_MODEL,
+};
+const PILL_SESSION: SessionSummary = {
+  filename: 'wn-pill.jsonl',
+  date: '2026-10-20T09:00:00.000Z',
+  inputTokens: 64_000,
+  outputTokens: 182_000,
+  cacheWriteTokens: 410_000,
+  cacheReadTokens: 9_800_000,
+  totalTokens: 10_456_000,
+  estimatedCost: 23.77,
+  cacheSavings: 61.2,
+  messageCount: 84,
+  model: PICKER_SESSION_MODEL,
+  models: { [PICKER_SESSION_MODEL]: 42 },
+};
+
+// The real control pill, folded at rest: hover it and it opens. A component of
+// its own because it holds the density, diffs and find state it toggles.
+function PreviewChatPill(): ReactNode {
+  const [density, setDensity] = useState<ChatDetailsFilter>('minimal');
+  const [diffsOpen, setDiffsOpen] = useState(false);
+  const [query, setQuery] = useState('');
+  return (
+    <ChatControlPill
+      showTranscriptControls
+      density={density}
+      setDensity={setDensity}
+      diffsOpen={diffsOpen}
+      onToggleDiffs={() => setDiffsOpen(o => !o)}
+      canExport={false}
+      exporting={null}
+      exportPreset="message"
+      exportMessage={null}
+      exportError={null}
+      onOpenSheet={() => {}}
+      openExportRef={{ current: null }}
+      selectionMode={false}
+      selectedCount={0}
+      onToggleSelectionMode={() => {}}
+      onClearSelection={() => {}}
+      onExportPreset={() => {}}
+      onExport={() => {}}
+      exportable={false}
+      modelRuns={[
+        { key: 'wn-run', turnN: 1, model: PICKER_SESSION_MODEL, effort: 'xhigh', turns: 42 },
+      ]}
+      onLocateModel={() => {}}
+      vitals={{ ctx: PILL_CTX, session: PILL_SESSION }}
+      find={{ query, setQuery, hits: 0, position: 0, onStep: () => {} }}
+    />
+  );
+}
+
+function ChatPillVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--pill">
+      <div className="cl-transcript-inner">
+        {PICKER_TURNS.map((processed, i) => (
+          <MessageBubble
+            key={processed.msg.uuid}
+            processed={processed}
+            detailsFilter="minimal"
+            onOpenToolDetail={() => {}}
+            turnIndex={41 + i}
+          />
+        ))}
+      </div>
+      <PreviewChatPill />
+    </div>
+  );
+}
+
+const MEMORY_PAGE_PATH = '/home/acme/.claude/projects/-home-acme-app/memory/retry-budget.md';
+const MEMORY_PAGE_TEXT = [
+  '---',
+  'name: retry-budget',
+  'description: Network calls retry at most five times, with backoff from 200 ms',
+  'metadata:',
+  '  type: project',
+  '---',
+  '',
+  'The cap lives in `src/net/retry.ts` as `MAX_ATTEMPTS`; the suite pins it.',
+  '',
+  '**Why:** a flaky upstream once turned an unbounded retry into a storm.',
+  '',
+].join('\n');
+
+// A memory topic on the Files page: its frontmatter read as properties, the
+// description as the lead and the type tinted.
+function DetailPageVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--page">
+      <MemoryPagePreview path={MEMORY_PAGE_PATH} text={MEMORY_PAGE_TEXT} />
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1743,6 +1852,8 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'view-switch': ViewSwitchVisual,
   'session-notes': SessionNotesVisual,
   'notes-ai': NotesAiVisual,
+  'chat-pill': ChatPillVisual,
+  'detail-page': DetailPageVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

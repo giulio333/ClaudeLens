@@ -54,6 +54,8 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'Tabs', description: 'Across the top.', visual: 'session-tabs' },
     { title: 'Files', description: 'Marked.', visual: 'project-files' },
     { title: 'Sources', description: 'At the foot.', visual: 'web-sources' },
+    { title: 'A bar', description: 'Folded.', visual: 'chat-pill' },
+    { title: 'A page', description: 'Of a memory.', visual: 'detail-page' },
   ],
 };
 

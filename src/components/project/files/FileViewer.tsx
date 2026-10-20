@@ -322,6 +322,21 @@ export function MemoryFileViewer({
   );
 }
 
+/** A memory topic's page drawn from text in hand rather than read from disk —
+ *  the same page `MemoryFileViewer` draws, for the "What's new" preview. */
+export function MemoryPagePreview({ path, text }: { path: string; text: string }) {
+  const [asDocument, setAsDocument] = useState(true);
+  const sep = path.lastIndexOf('/');
+  return (
+    <FilePage
+      path={path}
+      dir={sep > 0 ? path.slice(0, sep) : path}
+      body={textBody(text, path, [asDocument, setAsDocument], true)}
+      note="memory"
+    />
+  );
+}
+
 /** The page itself: the head that names the file once, name over its folder,
  *  with every control in one row; the body; the facts in the foot. */
 function FilePage({

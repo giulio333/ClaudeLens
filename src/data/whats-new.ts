@@ -41,7 +41,9 @@ export interface WhatsNewHighlight {
     | 'config-ledger'
     | 'view-switch'
     | 'session-notes'
-    | 'notes-ai';
+    | 'notes-ai'
+    | 'chat-pill'
+    | 'detail-page';
 }
 
 export interface WhatsNewRelease {
@@ -50,6 +52,25 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.44',
+    highlights: [
+      {
+        title: 'A quieter bar under the transcript',
+        description:
+          'At rest the bar shows only the model, its effort and how full the context is. Hover it and it opens on the same line to the spend, Find, Min / Full, the diffs and export. Try it below.',
+        where: 'Lens · the bar at the foot of a session',
+        visual: 'chat-pill',
+      },
+      {
+        title: 'Every detail opens as one kind of page',
+        description:
+          'A file, a change, a shell run or a memory opened from the rail now share one page, closed from the crumb. A memory opens on the Files page, its frontmatter read as properties.',
+        where: 'Mission Control rail · any row',
+        visual: 'detail-page',
+      },
+    ],
+  },
   {
     version: '2.2.41',
     highlights: [
