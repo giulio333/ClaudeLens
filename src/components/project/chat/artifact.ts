@@ -58,7 +58,7 @@ export function shortArtifactUrl(url: string): string {
 /** `v4`, or nothing at all. An older transcript carries no `seq`, and a version
  *  counted from the publishes this session happens to show would be wrong on
  *  exactly the pages that were published from more than one. */
-export function artifactVersion(page: ArtifactPublish): string {
+export function artifactVersion(page: { seq?: number }): string {
   return page.seq && page.seq > 0 ? `v${page.seq}` : '';
 }
 
@@ -88,6 +88,9 @@ export type ArtifactActivity = {
   /** True when this session created the page rather than only republishing it. */
   created: boolean;
   publishes: number;
+  /** Position of the page's latest publish among the session's calls: what
+   *  orders the pages newest first. */
+  lastIndex: number;
   items: ToolGroup[];
 };
 
@@ -110,7 +113,7 @@ export function buildArtifactActivity(groups: ToolGroup[]): ArtifactActivity[] {
   // written: a page created from an Artifact type records only the URL, and
   // keying on the id would split it from the publishes that followed.
   const byUrl = new Map<string, ArtifactActivity>();
-  for (const g of groups) {
+  for (const [i, g] of groups.entries()) {
     if (!isArtifactTool(g.use.name)) continue;
     const page = artifactOf(g);
     if (!page) continue;
@@ -122,12 +125,14 @@ export function buildArtifactActivity(groups: ToolGroup[]): ArtifactActivity[] {
         title: page.title,
         created: false,
         publishes: 0,
+        lastIndex: i,
         items: [],
       };
       byUrl.set(page.url, a);
     }
     a.items.push(g);
     a.publishes += 1;
+    a.lastIndex = i;
     a.title = page.title || a.title;
     if (page.seq && page.seq > (a.seq ?? 0)) a.seq = page.seq;
     if (page.audience) a.audience = page.audience;
@@ -135,4 +140,18 @@ export function buildArtifactActivity(groups: ToolGroup[]): ArtifactActivity[] {
     a.description = a.description ?? artifactDescription(g);
   }
   return [...byUrl.values()];
+}
+
+/** The pages, the one published to last on top. */
+export function pagesNewestFirst(pages: ArtifactActivity[]): ArtifactActivity[] {
+  return [...pages].sort((a, b) => b.lastIndex - a.lastIndex);
+}
+
+/** `14 publishes · private`, `created`, `updated · shared`. The sharing only
+ *  when the transcript recorded it: unknown is not "private". */
+export function artifactPageMeta(page: ArtifactActivity): string {
+  const what =
+    page.publishes > 1 ? `${page.publishes} publishes` : page.created ? 'created' : 'updated';
+  const isPrivate = artifactIsPrivate(page);
+  return isPrivate === undefined ? what : `${what} · ${isPrivate ? 'private' : 'shared'}`;
 }

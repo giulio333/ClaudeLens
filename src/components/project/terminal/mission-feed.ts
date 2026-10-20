@@ -8,8 +8,6 @@ import {
   touchedFiles,
 } from '../chat/utils';
 import { changeStat, fileName } from '../chat/file-view';
-import { artifactIsPrivate, shortArtifactUrl } from '../chat/artifact';
-import type { ArtifactActivity } from '../chat/artifact';
 import type {
   MemoryAction,
   MemoryActivity,
@@ -153,12 +151,13 @@ export const MEMORY_ACTION_TINT: Record<MemoryAction, string> = {
 /* ── the feed ─────────────────────────────────────────────────────────── */
 
 export type FeedKind =
-  'AGENTS' | 'TEAMS' | 'SKILLS' | 'QUESTIONS' | 'MEMORY' | 'WEB' | 'CHANGES' | 'PAGES' | 'TASKS';
+  'AGENTS' | 'TEAMS' | 'SKILLS' | 'QUESTIONS' | 'MEMORY' | 'WEB' | 'CHANGES' | 'TASKS';
 
 /** Every filter the rail can offer, in the order the pills are laid out: who did
  *  the work, then what informed it (asked of the user, recalled, then read from
- *  outside), then what it produced — the files it changed, the pages it
- *  published — and what is still planned. */
+ *  outside), then what it produced — the files it changed — and what is still
+ *  planned. The pages it published are not a filter: they have the rail's
+ *  own Pages panel (`PagesRailPanel`). */
 export const FEED_KINDS: FeedKind[] = [
   'AGENTS',
   'TEAMS',
@@ -167,7 +166,6 @@ export const FEED_KINDS: FeedKind[] = [
   'MEMORY',
   'WEB',
   'CHANGES',
-  'PAGES',
   'TASKS',
 ];
 
@@ -181,7 +179,6 @@ export type FeedSource =
   | { kind: 'memory'; touch: MemoryTouch }
   | { kind: 'web'; visit: WebVisit }
   | { kind: 'change'; change: FileChange }
-  | { kind: 'artifact'; artifact: ArtifactActivity }
   | { kind: 'task'; task: Task }
   | { kind: 'team'; team: TeamSummary };
 
@@ -233,8 +230,6 @@ export type MissionFeedInput = {
   /** Pages fetched and searches run — `buildWebActivity(ownTools)`. */
   web: WebVisit[];
   changes: FileChange[];
-  /** Pages published with the `Artifact` tool — `buildArtifactActivity(ownTools)`. */
-  artifacts: ArtifactActivity[];
   tasks: Task[];
   /** Session-scoped teams, already resolved to a display title and liveness. */
   teams: { team: TeamSummary; title: string; live: boolean }[];
@@ -598,46 +593,6 @@ function changeEvents(input: MissionFeedInput, at: Map<string, number>): FeedEve
   });
 }
 
-/**
- * One row per page the session published, not one per publish.
- *
- * Four republishes of the same page are one outcome — the rail already reads a
- * file's edits that way, and the chat is where each publish sits at the moment
- * it happened. The row is not expandable for the same reason: what a publish
- * answered is a kilobyte of prose written for the harness, so the click is
- * worth more spent on the page itself.
- */
-function artifactEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
-  return input.artifacts.map(a => {
-    const isPrivate = artifactIsPrivate(a);
-    const what = a.publishes > 1 ? `${a.publishes} publishes` : a.created ? 'created' : 'updated';
-    return {
-      id: `artifact:${a.id}`,
-      kind: 'PAGES' as const,
-      at: latestOf(a.items, at),
-      live: false,
-      // The arrow the app already uses for a link that leaves it (`UrlChip`):
-      // the one thing worth saying about this row before its name is that it
-      // points somewhere outside.
-      glyph: '↗',
-      glyphTint: 'var(--cl-accent)',
-      title: a.title || 'Untitled page',
-      meta: `${what} · ${shortArtifactUrl(a.url)}`,
-      hint: [a.description, isPrivate === undefined ? '' : isPrivate ? 'private' : 'shared']
-        .filter(Boolean)
-        .join(' — '),
-      // No `seq` on older transcripts, and a version counted from the publishes
-      // this session happens to show would be wrong on any page published from
-      // more than one of them.
-      right: a.seq && a.seq > 0 ? `v${a.seq}` : 'PUBLISHED',
-      rightTint: 'var(--cl-accent-ink)',
-      items: a.items,
-      expandable: false,
-      source: { kind: 'artifact' as const, artifact: a },
-    };
-  });
-}
-
 function taskEvents(input: MissionFeedInput, at: Map<string, number>): FeedEvent[] {
   const { byId, bySubject } = buildTaskTimes(input.ownTools, at);
   return input.tasks.map(t => {
@@ -685,7 +640,6 @@ export function buildMissionFeed(input: MissionFeedInput): FeedEvent[] {
     ...memoryEvents(input, at),
     ...webEvents(input, at),
     ...changeEvents(input, at),
-    ...artifactEvents(input, at),
     ...taskEvents(input, at),
   ];
   // Stable sort (ES2019+): rows that tie keep the order their species produced.
@@ -716,8 +670,6 @@ function runTitle(key: string, n: number): string {
       return `${n} web searches`;
     case 'CHANGES':
       return `${n} files changed`;
-    case 'PAGES':
-      return `${n} pages published`;
     default:
       return `${n} ${key.toLowerCase()}`;
   }
@@ -800,7 +752,6 @@ export function countByKind(events: FeedEvent[]): Record<FeedKind, number> {
     MEMORY: 0,
     WEB: 0,
     CHANGES: 0,
-    PAGES: 0,
     TASKS: 0,
   };
   for (const e of events) counts[e.kind]++;
