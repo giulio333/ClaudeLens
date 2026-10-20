@@ -20,6 +20,7 @@ import { liveLeadSession, teamLabel } from '../teams/utils';
 import {
   buildMemoryActivity,
   buildProcessedMessages,
+  buildSkillIndex,
   correlateSessionAgents,
   correlateSessionSkills,
   memoryScopeOf,
@@ -33,6 +34,8 @@ import { PromptPlaybookPanel } from '../chat/PromptPlaybook';
 import { FilesRailPanel } from '../files/FilesRailPanel';
 import { NotesRailPanel } from './NotesRailPanel';
 import { PagesRailPanel } from './PagesRailPanel';
+import { ToolkitRailPanel } from './ToolkitRailPanel';
+import { buildToolkit } from './toolkit';
 import { notesBadge, notesTally } from './session-notes';
 import { sessionMarks } from '../files/session-marks';
 import { contextFiles, shellReadPaths } from '../chat/context-files';
@@ -86,10 +89,11 @@ import type { RemoteTranscript } from '../../remote-origin';
  * used/left/total and cache-savings copy plus the composition behind each — the
  * detail belongs to the second level, not to the always-on line. They were
  * native `title` tooltips for one release, which is where the numbers
- * effectively went missing: an unstyled OS rectangle a second late. The read-only session
- * ENVIRONMENT (permission mode, capability counts, failed MCP) is state, not an
- * event, so it holds a slim strip pinned at the bottom (`EnvironmentStrip`) —
- * one row, the failed MCP servers a count on it and the list in its hover card.
+ * effectively went missing: an unstyled OS rectangle a second late. The git
+ * branch is state, not an event, so it holds a slim strip pinned at the bottom
+ * (`EnvironmentStrip`); what the project loads — skills, agents, tools, the MCP
+ * servers that failed — is a list, and opens as the TOOLKIT panel from the
+ * rail's head (`ToolkitRailPanel`).
  *
  * Rows are single click targets, as a feed should be: an agent opens its
  * transcript (falling back to its definition when no transcript exists yet), a
@@ -514,10 +518,12 @@ export function MissionRail({
   remote?: RemoteTranscript;
 }) {
   // One panel at a time takes the rail's body: the Playbook, the project's
-  // files, the session's notes or the pages it published. The feed under it
-  // stays mounted, hidden, so its filters and scroll are where the reader left
-  // them.
-  const [panel, setPanel] = useState<'playbook' | 'files' | 'notes' | 'pages' | null>(null);
+  // files, the session's notes, the pages it published or the project's
+  // toolkit. The feed under it stays mounted, hidden, so its filters and scroll
+  // are where the reader left them.
+  const [panel, setPanel] = useState<'playbook' | 'files' | 'notes' | 'pages' | 'toolkit' | null>(
+    null
+  );
   const playbookOpen = panel === 'playbook';
   const filesOpen = panel === 'files';
   // The notes belong to the session: none until the CLI has registered it.
@@ -545,6 +551,12 @@ export function MissionRail({
     setPanel(null);
     if (restoreFocus) pagesTrigger.current?.focus();
   }
+  const toolkitTrigger = useRef<HTMLButtonElement>(null);
+  const toolkitId = useId();
+  function closeToolkit(restoreFocus = true) {
+    setPanel(null);
+    if (restoreFocus) toolkitTrigger.current?.focus();
+  }
   function closePlaybook(restoreFocus = true) {
     setPanel(null);
     if (restoreFocus) playbookTrigger.current?.focus();
@@ -568,8 +580,9 @@ export function MissionRail({
     typeof effectiveConfig?.effective?.model === 'string'
       ? (effectiveConfig.effective.model as string)
       : undefined;
-  // The SDK init handshake (zero token cost) — surfaced read-only in the footer.
-  const init = effectiveConfig?.init ?? null;
+  // The SDK init handshake (zero token cost) — what the TOOLKIT panel lists.
+  // This machine's setup says nothing about a session on another one.
+  const init = remote ? null : (effectiveConfig?.init ?? null);
   // The skills registry — lets a typed `/foo` skill be recognised by a name match
   // even when its post-command expansion marker isn't visible (same source the
   // Lens footer dock uses, so the rail and the dock stay in agreement).
@@ -709,9 +722,27 @@ export function MissionRail({
   const artifacts = useMemo(() => buildArtifactActivity(ownTools), [ownTools]);
   // A session that published nothing has no Pages icon, so no panel either.
   const pagesOpen = panel === 'pages' && artifacts.length > 0;
+  // TOOLKIT — what the handshake says the project loads, against what this
+  // session called. No handshake (still on its way, an untrusted folder, a
+  // remote pane), no icon and no panel.
+  const toolkit = useMemo(
+    () =>
+      init
+        ? buildToolkit(
+            init,
+            skills.map(s => s.name),
+            agents.map(a => a.subagentType)
+          )
+        : null,
+    [init, skills, agents]
+  );
+  const toolkitOpen = panel === 'toolkit' && toolkit !== null;
+  const skillDef = useMemo(() => buildSkillIndex(allSkills, plugins), [allSkills, plugins]);
   // The panel actually on screen: a Pages panel left open on a session with no
-  // pages would hide the feed behind nothing.
-  const shownPanel = panel === 'pages' && !pagesOpen ? null : panel;
+  // pages would hide the feed behind nothing, and so would a Toolkit panel
+  // whose handshake is gone.
+  const shownPanel =
+    (panel === 'pages' && !pagesOpen) || (panel === 'toolkit' && !toolkitOpen) ? null : panel;
   // CHANGES excludes the memory files: they are a topic each, not a diff, and
   // reporting them twice would double-count the session's line totals. By path,
   // not by call: one shell command can rewrite a memory and a project file, and
@@ -934,11 +965,13 @@ export function MissionRail({
               ? 'FILES'
               : pagesOpen
                 ? 'PAGES'
-                : playbookOpen
-                  ? 'PLAYBOOK'
-                  : notesOpen
-                    ? 'NOTES'
-                    : 'MISSION CONTROL'}
+                : toolkitOpen
+                  ? 'TOOLKIT'
+                  : playbookOpen
+                    ? 'PLAYBOOK'
+                    : notesOpen
+                      ? 'NOTES'
+                      : 'MISSION CONTROL'}
           </span>
           <span style={{ flex: 1 }} />
           {/* First in the row, so the icons after it never move when it appears. */}
@@ -972,6 +1005,43 @@ export function MissionRail({
                 <span className="cl-pages-badge" aria-hidden>
                   {artifacts.length}
                 </span>
+              )}
+            </button>
+          )}
+          {/* Conditional like Pages — it waits for the handshake — so it sits
+              beside it, left of the icons that are always there. */}
+          {toolkit && (
+            <button
+              ref={toolkitTrigger}
+              type="button"
+              className="cl-playbook-rail-trigger cl-toolkit-trigger"
+              aria-label={
+                toolkit.mcpFailedCount > 0 && !toolkitOpen
+                  ? `Toolkit — ${toolkit.mcpFailedCount} MCP ${toolkit.mcpFailedCount === 1 ? 'server' : 'servers'} failed to connect`
+                  : 'Toolkit'
+              }
+              title="Skills, agents and tools this project loads"
+              aria-expanded={toolkitOpen}
+              aria-controls={toolkitOpen ? toolkitId : undefined}
+              onClick={() => (toolkitOpen ? closeToolkit() : setPanel('toolkit'))}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="4" y="4" width="7" height="7" rx="1.5" />
+                <rect x="13" y="4" width="7" height="7" rx="1.5" />
+                <rect x="4" y="13" width="7" height="7" rx="1.5" />
+                <rect x="13" y="13" width="7" height="7" rx="1.5" />
+              </svg>
+              {toolkit.mcpFailedCount > 0 && !toolkitOpen && (
+                <span className="cl-toolkit-alert" aria-hidden />
               )}
             </button>
           )}
@@ -1184,6 +1254,17 @@ export function MissionRail({
         />
       )}
       {pagesOpen && <PagesRailPanel id={pagesId} pages={artifacts} onClose={closePages} />}
+      {toolkitOpen && toolkit && (
+        <ToolkitRailPanel
+          id={toolkitId}
+          toolkit={toolkit}
+          skillDef={skillDef}
+          agentDef={agentDefOf}
+          onOpenSkillDef={onOpenSkillDef}
+          onOpenAgentDef={onOpenAgentDef}
+          onClose={closeToolkit}
+        />
+      )}
       {notesOpen && (
         <NotesRailPanel
           key={sessionId}
@@ -1357,10 +1438,9 @@ export function MissionRail({
           onLocateTurn={onLocateTurn}
         />
 
-        {/* ENVIRONMENT — the session's standing setup, pinned under the stream.
-            This machine's setup says nothing about a session on another one;
-            the branch does, since it is read off the host's own transcript. */}
-        <EnvironmentStrip init={remote ? null : init} git={git} />
+        {/* The branch — the session's standing setup, pinned under the stream.
+            A remote pane has one too: it is read off the host's own transcript. */}
+        <EnvironmentStrip git={git} />
       </div>
     </aside>
   );

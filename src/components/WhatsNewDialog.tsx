@@ -1499,7 +1499,7 @@ function GitBranchVisual(): ReactNode {
   return (
     // Tall enough for the card the chip raises above the strip.
     <div className="cl-whatsnew-frame flex flex-col justify-end" style={{ minHeight: 260 }}>
-      <EnvironmentStrip init={null} git={PREVIEW_GIT} />
+      <EnvironmentStrip git={PREVIEW_GIT} />
     </div>
   );
 }

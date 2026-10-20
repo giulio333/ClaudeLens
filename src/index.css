@@ -24299,6 +24299,154 @@ select.cl-opt-input {
   white-space: nowrap;
 }
 
+/* Mission Control's Toolkit panel (`ToolkitRailPanel`): the skills, agents and
+   tools the project loads, on the Pages panel's frame. A row is the feed's own
+   grid — the same glyph tile, the same 12.5px name — so a skill reads the same
+   here as in the stream; the namespace a plugin adds is dimmed. */
+.cl-toolkit-trigger {
+  position: relative;
+}
+.cl-toolkit-alert {
+  position: absolute;
+  top: 1px;
+  right: 1px;
+  width: 7px;
+  height: 7px;
+  border-radius: 999px;
+  background: var(--cl-danger);
+  box-shadow: 0 0 0 2px var(--cl-paper);
+  pointer-events: none;
+}
+.cl-toolkit-body {
+  padding-top: 0;
+}
+.cl-toolkit-sec {
+  padding: 12px 20px 6px;
+}
+.cl-toolkit-sec + .cl-toolkit-sec {
+  border-top: 1px solid var(--cl-line-soft);
+}
+.cl-toolkit-sec-head {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin-bottom: 4px;
+  font: 700 9.5px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-2);
+}
+.cl-toolkit-sec-head .meta {
+  margin-left: auto;
+  font-weight: 400;
+  letter-spacing: 0.04em;
+  color: var(--cl-ink-4);
+}
+.cl-toolkit-row {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: calc(100% + 12px);
+  margin: 0 -6px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  text-align: left;
+  font: 500 12.5px/1.3 var(--font-sans);
+  color: var(--cl-ink);
+}
+button.cl-toolkit-row {
+  cursor: pointer;
+  transition: background var(--cl-hover-ms);
+}
+button.cl-toolkit-row:hover {
+  background: var(--cl-hover-bg);
+}
+button.cl-toolkit-row:focus {
+  outline: none;
+}
+button.cl-toolkit-row:focus-visible {
+  box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--cl-accent) 45%, transparent);
+}
+.cl-toolkit-row .name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-toolkit-row .ns {
+  color: var(--cl-ink-4);
+}
+.cl-toolkit-row .uses {
+  font: 400 10px var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-ink-4);
+}
+.cl-toolkit-glyph {
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  font: 700 9px/1 var(--font-mono);
+}
+.cl-toolkit-glyph.is-skill {
+  background: var(--cl-accent);
+}
+.cl-toolkit-glyph.is-agent {
+  background: var(--cl-violet);
+}
+.cl-toolkit-fold {
+  display: block;
+  padding: 4px 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: 400 10px/1.4 var(--font-mono);
+  color: var(--cl-ink-4);
+  transition: color var(--cl-hover-ms);
+}
+.cl-toolkit-fold:hover {
+  color: var(--cl-ink-2);
+}
+.cl-toolkit-fold:focus {
+  outline: none;
+}
+.cl-toolkit-fold:focus-visible {
+  color: var(--cl-ink-2);
+  text-decoration: underline;
+}
+.cl-toolkit-names {
+  padding: 2px 0 6px;
+  font: 400 10.5px/1.7 var(--font-mono);
+  color: var(--cl-ink-3);
+  overflow-wrap: anywhere;
+}
+.cl-toolkit-bad {
+  color: var(--cl-danger);
+}
+.cl-toolkit-mcp {
+  margin-top: 8px;
+}
+.cl-toolkit-mcp .label {
+  font: 400 9.5px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+.cl-toolkit-mcp .servers {
+  margin-top: 2px;
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--cl-ink);
+}
+.cl-toolkit-note {
+  padding: 8px 0 4px;
+  font: 400 10px/1.5 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+
 /* SDK chat: the side questions (`/btw`), a card above the composer sheet. Same
    paper and hairline as the sheet, so the two read as one input area; inside,
    the thread reads like the transcript it asks about — the question as a small
