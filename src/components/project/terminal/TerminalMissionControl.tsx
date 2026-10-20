@@ -34,6 +34,7 @@ import { sessionTitle } from '../utils';
 import { TerminalPane } from './TerminalPane';
 import { TERMINAL_SURFACE, type TerminalStatus } from './terminal-theme';
 import { MissionRail } from './MissionRail';
+import { PaneEdge } from './PaneEdge';
 import { notesBadge, notesTally } from './session-notes';
 import { BackgroundShells } from './BackgroundShells';
 import { buildBackgroundShells } from './background-shells';
@@ -406,6 +407,7 @@ export function TerminalMissionControl({
   onPark,
   onReport,
   sessionTabs,
+  instanceId,
 }: {
   project: { hash: string; realPath: string };
   resumeSessionId?: string;
@@ -439,6 +441,9 @@ export function TerminalMissionControl({
   /** The first row: every open session as a tab (`SessionTabs`). Without it the
    *  row names the project and the session. */
   sessionTabs?: ReactNode;
+  /** The instance this Mission Control is (TerminalHost): what its tab
+   *  remembers draws the stage's edge (`PaneEdge`). Without it, no edge. */
+  instanceId?: string;
 }) {
   const { resolved } = useTheme();
   // Opening an existing session defaults to LENS (read-only, nothing spawned); a
@@ -1028,6 +1033,7 @@ export function TerminalMissionControl({
             )}
 
             <SessionBottomGlow color={summary?.agentColor} active={view === 'lens'} />
+            {instanceId && <PaneEdge instanceId={instanceId} />}
           </div>
         </main>
 

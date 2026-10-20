@@ -776,13 +776,15 @@ function AppearanceBlock() {
 }
 
 // ─── Notifications (ClaudeLens-own preference) ────────────────────────────────
-// Two switches, so they sit in General rather than behind a tab of their own.
+// Three switches, so they sit in General rather than behind a tab of their own.
+// The menu bar and Dock one stands on its own: it is a state, not a notification.
 
 function NotificationsBlock() {
   const { data, isLoading } = useNotifyPrefs();
   const setPref = useSetNotifyPref();
   const enabled = data?.enabled ?? true;
   const os = data?.os ?? true;
+  const surface = data?.surface ?? true;
   return (
     <Block label="Notifications">
       <PrefRow
@@ -806,6 +808,17 @@ function NotificationsBlock() {
           checked={os}
           disabled={isLoading || setPref.isPending || !enabled}
           onChange={v => setPref.mutate({ key: 'os', value: v })}
+        />
+      </PrefRow>
+      <PrefRow
+        label="Session state in the menu bar and Dock"
+        hint="Which session works, waits for you or is done, in the macOS menu bar; a badge on the app icon that counts the sessions waiting for you until you answer, and a bar on it while Claude works."
+      >
+        <OnOff
+          label="Session state in the menu bar and Dock"
+          checked={surface}
+          disabled={isLoading || setPref.isPending}
+          onChange={v => setPref.mutate({ key: 'surface', value: v })}
         />
       </PrefRow>
     </Block>

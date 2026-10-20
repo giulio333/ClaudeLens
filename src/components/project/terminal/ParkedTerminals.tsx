@@ -2,7 +2,9 @@ import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { createPortal } from 'react-dom';
 import { useActiveSessions } from '../../../hooks/useIPC';
 import type { ActiveSession } from '../../../types';
+import { LiveOrb } from '../../LiveOrb';
 import { spanLabel } from './background-shells';
+import { badgeLine } from './parked-badge';
 import { ToneDot } from './ToneDot';
 import { showsUnseen } from './tab-attention';
 import { useMinuteClock } from './use-minute-clock';
@@ -13,7 +15,6 @@ import {
   endNeedsConfirm,
   instanceProjectName,
   instanceTitle,
-  mostUrgentTone,
   registryEntryFor,
   stateLabel,
   type ChipTone,
@@ -23,14 +24,16 @@ import {
 /**
  * The sessions kept running in the background, behind one badge: how many, and
  * a dot in the colour of the one that most needs the user (waiting before
- * working before done). A click opens the list — any number of sessions fits
- * there, where a row of chips in the top bar ran out of room at the second one.
+ * working before done) — the thinking orb while Claude works in one and none
+ * needs the user, and, when one does, its name in a few words (`badgeLine`).
+ * A click opens the list — any number of sessions fits there, where a row of
+ * chips in the top bar ran out of room at the second one.
  * A row brings its session back exactly as it was left (same process, same
  * scrollback); its ✕ ends it.
  *
  * A session whose turn ended while the user was elsewhere rings its dot, here
- * as on its tab, and the badge's dot rings while any of them does: this badge
- * is what is on screen when the strip of tabs is not.
+ * as on its tab, and the badge's dot rings and names it while no other session
+ * waits: this badge is what is on screen when the strip of tabs is not.
  *
  * Same anatomy as the background-shells pill beside it in Mission Control, and
  * portalled to `<body>` for the same reason: the top bar is a stacking context
@@ -57,7 +60,7 @@ export function ParkedTerminals({
   );
   if (instances.length === 0) return null;
 
-  const badgeTone = mostUrgentTone(rows.map(r => r.tone));
+  const line = badgeLine(rows);
   const waiting = rows.filter(r => r.tone === 'waiting').length;
   const unseen = rows.filter(r => r.unseen).length;
   const count = instances.length;
@@ -71,14 +74,26 @@ export function ParkedTerminals({
       <button
         type="button"
         className="cl-parked-badge"
-        data-tone={badgeTone}
+        data-tone={line.tone}
         aria-expanded={open}
         aria-controls={id}
-        aria-label={summary}
+        aria-label={line.name ? `${line.name} ${line.verb} · ${summary}` : summary}
         title={summary}
         onClick={toggle}
       >
-        <ToneDot tone={badgeTone} question={rows.some(r => r.question)} unseen={unseen > 0} />
+        {line.tone === 'busy' ? (
+          <span className="cl-parked-orb">
+            <LiveOrb tone="violet" />
+          </span>
+        ) : (
+          <ToneDot tone={line.tone} question={line.question} unseen={line.unseen} />
+        )}
+        {line.name && (
+          <span className="cl-parked-label">
+            <span className="cl-parked-name">{line.name}</span>
+            <span>{line.verb}</span>
+          </span>
+        )}
         <span className="cl-parked-count">{count}</span>
         <svg width="8" height="8" viewBox="0 0 8 8" aria-hidden="true" className="cl-parked-caret">
           <path d="M1.5 3 4 5.5 6.5 3" fill="none" stroke="currentColor" strokeWidth="1.3" />

@@ -12,6 +12,7 @@ import type {
   RemoteLaunchMode,
 } from '../../electron/shared/remote-host';
 import type { RemoteLensState } from '../../electron/shared/remote-session';
+import type { StatusSummary } from '../../electron/shared/status-surface';
 import {
   AI_SETTINGS_KEY,
   DEFAULT_AI_SETTINGS,
@@ -484,6 +485,10 @@ declare global {
       notifications: {
         onEvent: (cb: (event: NotificationEvent) => void) => () => void;
         clearBadge: () => Promise<IpcResult<boolean>>;
+        /** The open sessions for the menu bar and the Dock; null clears both. */
+        setStatus: (summary: StatusSummary | null) => Promise<IpcResult<boolean>>;
+        /** A menu bar row was picked: bring that instance's tab on screen. */
+        onRestoreSession: (cb: (instanceId: string) => void) => () => void;
       };
       telemetry: {
         isEnabled: () => Promise<IpcResult<boolean>>;
@@ -1100,25 +1105,29 @@ export function useDismissCliUpdate() {
 // Notification preferences (master switch + OS-mirror toggle). Persisted in
 // ~/.claudelens/preferences.json via the generic prefs store; the main process
 // reads them live when gating each notification (instant, no restart).
+// `surface` is the session state in the menu bar and the Dock, which the
+// renderer gates itself: with it off, StatusMirror sends nothing to show.
 export interface NotifyPrefs {
   enabled: boolean;
   os: boolean;
+  surface: boolean;
 }
-const NOTIFY_ENABLED_KEY = 'cl-notify-enabled';
-const NOTIFY_OS_KEY = 'cl-notify-os';
+const NOTIFY_PREF_KEYS: Record<keyof NotifyPrefs, string> = {
+  enabled: 'cl-notify-enabled',
+  os: 'cl-notify-os',
+  surface: 'cl-status-surface',
+};
 
 export function useNotifyPrefs() {
   return useQuery({
     queryKey: ['prefs:notify'],
     queryFn: async (): Promise<NotifyPrefs> => {
       const all = await unwrap(window.electronAPI.prefs.getAll());
-      return {
-        enabled:
-          typeof all[NOTIFY_ENABLED_KEY] === 'boolean'
-            ? (all[NOTIFY_ENABLED_KEY] as boolean)
-            : true,
-        os: typeof all[NOTIFY_OS_KEY] === 'boolean' ? (all[NOTIFY_OS_KEY] as boolean) : true,
+      const flag = (key: keyof NotifyPrefs) => {
+        const v = all[NOTIFY_PREF_KEYS[key]];
+        return typeof v === 'boolean' ? v : true;
       };
+      return { enabled: flag('enabled'), os: flag('os'), surface: flag('surface') };
     },
     staleTime: Infinity,
   });
@@ -1127,14 +1136,13 @@ export function useNotifyPrefs() {
 export function useSetNotifyPref() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ key, value }: { key: 'enabled' | 'os'; value: boolean }) =>
-      unwrap(
-        window.electronAPI.prefs.set(key === 'enabled' ? NOTIFY_ENABLED_KEY : NOTIFY_OS_KEY, value)
-      ),
+    mutationFn: ({ key, value }: { key: keyof NotifyPrefs; value: boolean }) =>
+      unwrap(window.electronAPI.prefs.set(NOTIFY_PREF_KEYS[key], value)),
     onSuccess: (_data, { key, value }) => {
       qc.setQueryData(['prefs:notify'], (prev: NotifyPrefs | undefined) => ({
         enabled: true,
         os: true,
+        surface: true,
         ...prev,
         [key]: value,
       }));

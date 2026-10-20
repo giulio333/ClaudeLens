@@ -6,7 +6,7 @@
 // parked, as before. Mission Control is a stub around the real TerminalPane: the
 // claim is about which processes live, not about the frame drawn around them.
 import { StrictMode, useEffect, useState } from 'react';
-import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import type { ActiveSession } from '../src/types';
@@ -255,19 +255,45 @@ it('gathers the background sessions behind one badge, wearing the most urgent st
     )
   );
   const badge = await screen.findByRole('button', {
-    name: '3 sessions in background · 1 waiting for you',
+    name: 'Write the docs waits for you · 3 sessions in background · 1 waiting for you',
   });
   expect(badge.getAttribute('data-tone')).toBe('waiting');
+  // The one that needs the user is named beside the count, not only in the list.
+  // The name can be cut short in a narrow bar; the verb is its own run of text.
+  expect(badge.querySelector('.cl-parked-name')?.textContent).toBe('Write the docs');
+  expect(badge.querySelector('.cl-parked-label')?.textContent).toBe('Write the docswaits for you');
   expect(screen.queryByRole('dialog')).toBeNull();
   fireEvent.click(badge);
-  expect(screen.getByRole('dialog', { name: 'Sessions in background' })).toBeTruthy();
+  const list = within(screen.getByRole('dialog', { name: 'Sessions in background' }));
   expect(screen.getAllByRole('button', { name: /^Open / })).toHaveLength(3);
   // The session's colour is worn by its title, as on the sessions list.
-  expect(screen.getByText('Write the docs').className).toContain('cl-session-identity blue');
-  expect(screen.getByText('Fix the build').className).not.toContain('cl-session-identity');
+  expect(list.getByText('Write the docs').className).toContain('cl-session-identity blue');
+  expect(list.getByText('Fix the build').className).not.toContain('cl-session-identity');
   fireEvent.click(screen.getByRole('button', { name: /Open zeta · Write the docs/ }));
   expect(onRestore).toHaveBeenCalledWith('t2');
   expect(screen.queryByRole('dialog')).toBeNull();
+});
+
+it('wears the thinking orb while one works and names no one, since none needs the user', async () => {
+  bridge.api.live.getActiveSessions.mockResolvedValue(ok([busyHere]));
+  render(
+    wrap(
+      <ParkedTerminals
+        instances={[
+          parked('t1', { pid: 2, sessionId: 'session-a', title: 'Fix the build' }),
+          parked('t2', { pid: 5, title: 'Tidy up' }),
+        ]}
+        onRestore={vi.fn()}
+        onClose={vi.fn()}
+      />
+    )
+  );
+  const badge = await screen.findByRole('button', { name: /in background/ });
+  await waitFor(() => expect(badge.getAttribute('data-tone')).toBe('busy'));
+  expect(badge.querySelector('.cl-parked-orb .cl-live-orb')).not.toBeNull();
+  expect(badge.querySelector('.cl-parked-dot')).toBeNull();
+  expect(badge.querySelector('.cl-parked-label')).toBeNull();
+  expect(badge.getAttribute('aria-label')).toBe('2 sessions in background');
 });
 
 it('asks before its ✕ stops a session that is working', async () => {
