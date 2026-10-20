@@ -25,6 +25,35 @@ function orbStyle(color?: string): CSSProperties {
   return color ? ({ '--orb-color': color } as CSSProperties) : {};
 }
 
+/** How long the pill stays open after the pointer leaves it. */
+const FOLD_DELAY_MS = 320;
+/** The context ring: radius in its 14px box, and the circumference the
+ *  occupancy is drawn along. */
+const RING_R = 5.25;
+const RING_C = 2 * Math.PI * RING_R;
+/** How long the pointer rests on context or spend before its readout card
+ *  opens. Well above the pill's own opening: the pointer crosses both figures on
+ *  its way to the controls, and a card popping on every pass covers the bar. */
+const READOUT_DELAY_MS = 650;
+/** The effort ladder the ticks are drawn against, lowest first. */
+const EFFORT_LEVELS = ['low', 'medium', 'high', 'xhigh', 'max'];
+
+/** The effort as a row of rising ticks, filled up to its rung — readable at a
+ *  glance in the folded pill, next to the word that says it exactly. Nothing for
+ *  an effort off the ladder: a bar of ticks for a level it cannot place would
+ *  claim a reading it does not have. */
+function EffortTicks({ effort }: { effort: string }) {
+  const level = EFFORT_LEVELS.indexOf(effort);
+  if (level < 0) return null;
+  return (
+    <span className="cl-pill-ticks" aria-hidden>
+      {EFFORT_LEVELS.map((name, i) => (
+        <i key={name} data-on={i <= level || undefined} />
+      ))}
+    </span>
+  );
+}
+
 /** The model dock sheet — raised when a session did not run on one setting
  *  throughout. One row per run, oldest first, each locating the turn the change
  *  took effect on. Without it the pill's chip would name the current model and
@@ -218,7 +247,24 @@ export function ChatControlPill({
   // would close its card with no way back short of blurring and re-focusing.
   const [vitalHover, setVitalHover] = useState<'ctx' | 'spend' | null>(null);
   const [vitalFocus, setVitalFocus] = useState<'ctx' | 'spend' | null>(null);
+  const readoutTimer = useRef<number | null>(null);
+  const cancelReadout = () => {
+    if (readoutTimer.current !== null) window.clearTimeout(readoutTimer.current);
+    readoutTimer.current = null;
+  };
+  useEffect(() => cancelReadout, []);
+  // Hover waits (`READOUT_DELAY_MS`); focus does not, since the keyboard lands
+  // on a figure on purpose.
+  const hoverVital = (which: 'ctx' | 'spend') => {
+    cancelReadout();
+    readoutTimer.current = window.setTimeout(() => setVitalHover(which), READOUT_DELAY_MS);
+  };
+  const leaveVital = () => {
+    cancelReadout();
+    setVitalHover(null);
+  };
   const clearVitals = () => {
+    cancelReadout();
     setVitalHover(null);
     setVitalFocus(null);
   };
@@ -228,6 +274,19 @@ export function ChatControlPill({
   // reader is stepping with.
   const [findOpen, setFindOpen] = useState(false);
   const findInputRef = useRef<HTMLInputElement | null>(null);
+  // At rest the pill folds to what the session IS — model, effort, context —
+  // and opens to the spend and its controls while the pointer is on it, focus is in it, or
+  // something it raised (a sheet, a find) is still standing. The fold waits a
+  // beat after the pointer leaves, so one that slips off the edge on its way to
+  // a control does not fold the bar out from under it.
+  const [hovered, setHovered] = useState(false);
+  const [focused, setFocused] = useState(false);
+  const foldTimer = useRef<number | null>(null);
+  const cancelFold = () => {
+    if (foldTimer.current !== null) window.clearTimeout(foldTimer.current);
+    foldTimer.current = null;
+  };
+  useEffect(() => cancelFold, []);
 
   useEffect(() => {
     if (!sheet) return;
@@ -280,6 +339,7 @@ export function ChatControlPill({
   // sits under whatever sheet is raised, so it yields to a sheet and takes the
   // slot from the sentence while it is up.
   const readout = sheet ? null : (vitalHover ?? vitalFocus);
+  const open = hovered || focused || sheet !== null || findOpen || !!find?.query;
 
   return (
     <div className="cl-pill-wrap" ref={rootRef}>
@@ -397,7 +457,24 @@ export function ChatControlPill({
         </div>
       )}
 
-      <div className="cl-pill" role="toolbar" aria-label="Transcript controls">
+      <div
+        className="cl-pill"
+        role="toolbar"
+        aria-label="Transcript controls"
+        data-folded={!open || undefined}
+        onMouseEnter={() => {
+          cancelFold();
+          setHovered(true);
+        }}
+        onMouseLeave={() => {
+          cancelFold();
+          foldTimer.current = window.setTimeout(() => setHovered(false), FOLD_DELAY_MS);
+        }}
+        onFocus={() => setFocused(true)}
+        onBlur={e => {
+          if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setFocused(false);
+        }}
+      >
         {currentRun && (
           <>
             {switched ? (
@@ -415,10 +492,15 @@ export function ChatControlPill({
                 } time${modelRuns.length === 2 ? '' : 's'} in this chat`}
                 onClick={toggleModels}
               >
-                <span className="cl-pill-model-dot" aria-hidden />
+                <span className="cl-pill-orb" aria-hidden>
+                  {fmtModel(currentRun.model)[0]}
+                </span>
                 <span className="cl-pill-model-name">{fmtModel(currentRun.model)}</span>
                 {currentRun.effort && (
-                  <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                  <>
+                    <EffortTicks effort={currentRun.effort} />
+                    <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                  </>
                 )}
                 <span className="cl-pill-model-switched">+{modelRuns.length - 1}</span>
                 <DockCaretGlyph open={sheet === 'models'} />
@@ -433,10 +515,15 @@ export function ChatControlPill({
                     : 'Model in use'
                 }
               >
-                <span className="cl-pill-model-dot" aria-hidden />
+                <span className="cl-pill-orb" aria-hidden>
+                  {fmtModel(currentRun.model)[0]}
+                </span>
                 <span className="cl-pill-model-name">{fmtModel(currentRun.model)}</span>
                 {currentRun.effort && (
-                  <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                  <>
+                    <EffortTicks effort={currentRun.effort} />
+                    <span className="cl-pill-model-effort">{currentRun.effort}</span>
+                  </>
                 )}
               </span>
             )}
@@ -456,166 +543,187 @@ export function ChatControlPill({
               data-danger={ctxDanger || undefined}
               tabIndex={0}
               aria-label="Context window detail"
-              onMouseEnter={() => setVitalHover('ctx')}
-              onMouseLeave={() => setVitalHover(null)}
+              onMouseEnter={() => hoverVital('ctx')}
+              onMouseLeave={leaveVital}
               onFocus={() => setVitalFocus('ctx')}
               onBlur={() => setVitalFocus(null)}
             >
-              <span className="cl-pill-gauge" aria-hidden>
-                <i style={{ width: `${vitals.ctx?.pct ?? 0}%` }} />
-              </span>
+              <svg className="cl-pill-ring" viewBox="0 0 14 14" aria-hidden>
+                <circle cx="7" cy="7" r={RING_R} />
+                <circle
+                  cx="7"
+                  cy="7"
+                  r={RING_R}
+                  className="cl-pill-ring-fill"
+                  strokeDasharray={`${((vitals.ctx?.pct ?? 0) / 100) * RING_C} ${RING_C}`}
+                  transform="rotate(-90 7 7)"
+                />
+              </svg>
               <span className="cl-pill-ctx-n">
                 {vitals.ctx ? vitals.ctx.pct : '—'}
                 <em>%</em>
               </span>
-              <span className="cl-pill-ctx-u">ctx</span>
+              <span className="cl-pill-fold">
+                <span>
+                  <span className="cl-pill-ctx-u">ctx</span>
+                </span>
+              </span>
             </span>
-            <span
-              className="cl-vitals-trigger cl-pill-spend"
-              tabIndex={0}
-              aria-label="Session spend detail"
-              onMouseEnter={() => setVitalHover('spend')}
-              onMouseLeave={() => setVitalHover(null)}
-              onFocus={() => setVitalFocus('spend')}
-              onBlur={() => setVitalFocus(null)}
-            >
-              {vitals.session ? fmtCost(vitals.session.estimatedCost) : '—'}
+            <span className="cl-pill-fold">
+              <span>
+                <span
+                  className="cl-vitals-trigger cl-pill-spend"
+                  tabIndex={0}
+                  aria-label="Session spend detail"
+                  onMouseEnter={() => hoverVital('spend')}
+                  onMouseLeave={leaveVital}
+                  onFocus={() => setVitalFocus('spend')}
+                  onBlur={() => setVitalFocus(null)}
+                >
+                  {vitals.session ? fmtCost(vitals.session.estimatedCost) : '—'}
+                </span>
+                <span className="cl-pill-div" />
+              </span>
             </span>
-            <span className="cl-pill-div" />
           </>
         )}
-        {find && (
-          <>
-            {findOpen || find.query ? (
-              <span className="cl-pill-find" role="search">
-                <FindGlyph />
-                <input
-                  ref={findInputRef}
-                  type="text"
-                  value={find.query}
-                  spellCheck={false}
-                  // Says what it searches. The scan reads the prose, not tool
-                  // output, and a placeholder that promised the whole session
-                  // would make every miss look like a bug.
-                  placeholder="Find in prose"
-                  aria-label="Find in transcript"
-                  onChange={e => find.setQuery(e.target.value)}
-                  onKeyDown={e => {
-                    if (e.key === 'Enter') {
-                      e.preventDefault();
-                      find.onStep(e.shiftKey ? -1 : 1);
-                    } else if (e.key === 'Escape') {
-                      e.preventDefault();
-                      find.setQuery('');
-                      setFindOpen(false);
-                    }
-                  }}
-                />
-                {/* "12 turns", never a bare "2/12": that reads as "match 2 of
+        {/* The controls fold away at rest; see `open`. */}
+        <span className="cl-pill-fold cl-pill-controls">
+          <span>
+            {find && (
+              <>
+                {findOpen || find.query ? (
+                  <span className="cl-pill-find" role="search">
+                    <FindGlyph />
+                    <input
+                      ref={findInputRef}
+                      type="text"
+                      value={find.query}
+                      spellCheck={false}
+                      // Says what it searches. The scan reads the prose, not tool
+                      // output, and a placeholder that promised the whole session
+                      // would make every miss look like a bug.
+                      placeholder="Find in prose"
+                      aria-label="Find in transcript"
+                      onChange={e => find.setQuery(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault();
+                          find.onStep(e.shiftKey ? -1 : 1);
+                        } else if (e.key === 'Escape') {
+                          e.preventDefault();
+                          find.setQuery('');
+                          setFindOpen(false);
+                        }
+                      }}
+                    />
+                    {/* "12 turns", never a bare "2/12": that reads as "match 2 of
                     12" to everyone, and this find counts turns. */}
-                <span className="cl-pill-find-count">
-                  {find.query.trim() === ''
-                    ? ''
-                    : find.hits === 0
-                      ? 'none'
-                      : `${find.position > 0 ? `${find.position}/` : ''}${find.hits} turn${
-                          find.hits === 1 ? '' : 's'
-                        }`}
-                </span>
-                <button
-                  type="button"
-                  className="cl-pill-find-step"
-                  disabled={find.hits === 0}
-                  title="Previous turn with a match (⇧⏎)"
-                  aria-label="Previous turn with a match"
-                  onClick={() => find.onStep(-1)}
-                >
-                  <FindStepGlyph up />
-                </button>
-                <button
-                  type="button"
-                  className="cl-pill-find-step"
-                  disabled={find.hits === 0}
-                  title="Next turn with a match (⏎)"
-                  aria-label="Next turn with a match"
-                  onClick={() => find.onStep(1)}
-                >
-                  <FindStepGlyph up={false} />
-                </button>
-                <button
-                  type="button"
-                  className="cl-pill-find-close"
-                  title="Close find (Esc)"
-                  aria-label="Close find"
-                  onClick={() => {
-                    find.setQuery('');
-                    setFindOpen(false);
-                  }}
-                >
-                  ✕
-                </button>
-              </span>
-            ) : (
+                    <span className="cl-pill-find-count">
+                      {find.query.trim() === ''
+                        ? ''
+                        : find.hits === 0
+                          ? 'none'
+                          : `${find.position > 0 ? `${find.position}/` : ''}${find.hits} turn${
+                              find.hits === 1 ? '' : 's'
+                            }`}
+                    </span>
+                    <button
+                      type="button"
+                      className="cl-pill-find-step"
+                      disabled={find.hits === 0}
+                      title="Previous turn with a match (⇧⏎)"
+                      aria-label="Previous turn with a match"
+                      onClick={() => find.onStep(-1)}
+                    >
+                      <FindStepGlyph up />
+                    </button>
+                    <button
+                      type="button"
+                      className="cl-pill-find-step"
+                      disabled={find.hits === 0}
+                      title="Next turn with a match (⏎)"
+                      aria-label="Next turn with a match"
+                      onClick={() => find.onStep(1)}
+                    >
+                      <FindStepGlyph up={false} />
+                    </button>
+                    <button
+                      type="button"
+                      className="cl-pill-find-close"
+                      title="Close find (Esc)"
+                      aria-label="Close find"
+                      onClick={() => {
+                        find.setQuery('');
+                        setFindOpen(false);
+                      }}
+                    >
+                      ✕
+                    </button>
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    className="cl-pill-more"
+                    title="Find in transcript"
+                    aria-label="Find in transcript"
+                    onClick={() => {
+                      setFindOpen(true);
+                      // The box is not in the DOM until this render commits.
+                      requestAnimationFrame(() => findInputRef.current?.focus());
+                    }}
+                  >
+                    <FindGlyph />
+                  </button>
+                )}
+                <span className="cl-pill-div" />
+              </>
+            )}
+            {showTranscriptControls && (
+              <>
+                <div className="cl-seg" aria-label="Transcript detail">
+                  {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
+                    <button
+                      key={v}
+                      type="button"
+                      className={density === v ? 'on' : ''}
+                      onClick={() => setDensity(v)}
+                    >
+                      {v === 'minimal' ? 'Min' : 'Full'}
+                    </button>
+                  ))}
+                  {/* The diffs switch lives in the segment: it thins the transcript
+                  the way the density does, one kind of content at a time. A
+                  glyph, not a word — it is a switch, not a third density. */}
+                  <button
+                    type="button"
+                    className={`cl-seg-icon${diffsOpen ? ' on' : ''}`}
+                    aria-pressed={diffsOpen}
+                    title={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
+                    aria-label={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
+                    onClick={onToggleDiffs}
+                  >
+                    <DiffGlyph />
+                  </button>
+                </div>
+                {exportable && <span className="cl-pill-div" />}
+              </>
+            )}
+            {exportable && (
               <button
                 type="button"
                 className="cl-pill-more"
-                title="Find in transcript"
-                aria-label="Find in transcript"
-                onClick={() => {
-                  setFindOpen(true);
-                  // The box is not in the DOM until this render commits.
-                  requestAnimationFrame(() => findInputRef.current?.focus());
-                }}
+                aria-haspopup="menu"
+                aria-expanded={sheet === 'export'}
+                data-on={sheet === 'export' || undefined}
+                title="Export & more"
+                onClick={toggleExport}
               >
-                <FindGlyph />
+                <ChevronUpGlyph />
               </button>
             )}
-            <span className="cl-pill-div" />
-          </>
-        )}
-        {showTranscriptControls && (
-          <>
-            <div className="cl-seg" aria-label="Transcript detail">
-              {(['minimal', 'all'] as ChatDetailsFilter[]).map(v => (
-                <button
-                  key={v}
-                  type="button"
-                  className={density === v ? 'on' : ''}
-                  onClick={() => setDensity(v)}
-                >
-                  {v === 'minimal' ? 'Min' : 'Full'}
-                </button>
-              ))}
-              {/* The diffs switch lives in the segment: it thins the transcript
-                  the way the density does, one kind of content at a time. A
-                  glyph, not a word — it is a switch, not a third density. */}
-              <button
-                type="button"
-                className={`cl-seg-icon${diffsOpen ? ' on' : ''}`}
-                aria-pressed={diffsOpen}
-                title={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
-                aria-label={diffsOpen ? 'Fold the file diffs' : 'Show the file diffs'}
-                onClick={onToggleDiffs}
-              >
-                <DiffGlyph />
-              </button>
-            </div>
-            {exportable && <span className="cl-pill-div" />}
-          </>
-        )}
-        {exportable && (
-          <button
-            type="button"
-            className="cl-pill-more"
-            aria-haspopup="menu"
-            aria-expanded={sheet === 'export'}
-            data-on={sheet === 'export' || undefined}
-            title="Export & more"
-            onClick={toggleExport}
-          >
-            <ChevronUpGlyph />
-          </button>
-        )}
+          </span>
+        </span>
       </div>
     </div>
   );

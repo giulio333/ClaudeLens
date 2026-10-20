@@ -5895,7 +5895,7 @@ body {
   display: inline-flex;
   align-items: center;
   gap: 7px;
-  padding: 5px 11px;
+  padding: 4px 11px 4px 4px;
   border: 0;
   border-radius: 999px;
   background: transparent;
@@ -5922,12 +5922,51 @@ button.cl-pill-model[data-on] {
 button.cl-pill-model[data-on] {
   box-shadow: inset 0 0 0 1px color-mix(in oklch, var(--mt, var(--cl-accent)) 30%, transparent);
 }
-.cl-pill-model-dot {
-  width: 6px;
-  height: 6px;
-  flex: 0 0 auto;
+/* The model's initial on a tint of its own colour, ahead of its name. */
+.cl-pill-orb {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  flex: none;
   border-radius: 50%;
-  background: var(--mt, var(--cl-ink-3));
+  background: color-mix(in oklch, var(--mt, var(--cl-ink-3)) 16%, transparent);
+  color: var(--mt, var(--cl-ink-2));
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+/* Effort ticks: five rising bars, filled up to the session's rung. */
+.cl-pill-ticks {
+  display: inline-flex;
+  align-items: flex-end;
+  gap: 2px;
+  height: 11px;
+}
+.cl-pill-ticks i {
+  width: 3px;
+  border-radius: 1px;
+  background: color-mix(in oklch, var(--cl-ink) 16%, transparent);
+}
+.cl-pill-ticks i:nth-child(1) {
+  height: 3px;
+}
+.cl-pill-ticks i:nth-child(2) {
+  height: 5px;
+}
+.cl-pill-ticks i:nth-child(3) {
+  height: 7px;
+}
+.cl-pill-ticks i:nth-child(4) {
+  height: 9px;
+}
+.cl-pill-ticks i:nth-child(5) {
+  height: 11px;
+}
+.cl-pill-ticks i[data-on] {
+  background: var(--cl-ink-2);
 }
 .cl-pill-model-effort {
   color: var(--cl-ink-4);
@@ -5984,20 +6023,22 @@ button.cl-pill-model[data-on] {
   border-bottom-color: transparent;
   outline: none;
 }
-.cl-pill-gauge {
-  width: 26px;
-  height: 3px;
-  flex: none;
-  border-radius: 999px;
-  overflow: hidden;
-  background: color-mix(in oklch, var(--cl-ink) 14%, transparent);
+.cl-pill-ctx {
+  --fold-gap: 6px;
 }
-.cl-pill-gauge i {
-  display: block;
-  height: 100%;
-  border-radius: 999px;
-  background: var(--cl-accent);
-  transition: width 0.4s ease;
+.cl-pill-ring {
+  width: 14px;
+  height: 14px;
+  flex: none;
+}
+.cl-pill-ring circle {
+  fill: none;
+  stroke: color-mix(in oklch, var(--cl-ink) 14%, transparent);
+  stroke-width: 2.5;
+}
+.cl-pill-ring .cl-pill-ring-fill {
+  stroke: var(--cl-accent);
+  transition: stroke-dasharray 0.4s ease;
 }
 .cl-pill-ctx-n {
   font-variant-numeric: tabular-nums;
@@ -6019,8 +6060,8 @@ button.cl-pill-model[data-on] {
 .cl-pill-ctx[data-danger] .cl-pill-ctx-n {
   color: var(--cl-danger);
 }
-.cl-pill-ctx[data-danger] .cl-pill-gauge i {
-  background: var(--cl-danger);
+.cl-pill-ctx[data-danger] .cl-pill-ring-fill {
+  stroke: var(--cl-danger);
 }
 .cl-pill-spend {
   font-variant-numeric: tabular-nums;
@@ -6029,7 +6070,54 @@ button.cl-pill-model[data-on] {
 @media (prefers-reduced-motion: reduce) {
   .cl-pill-ctx,
   .cl-pill-spend,
-  .cl-pill-gauge i {
+  .cl-pill-ring-fill {
+    transition: none;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────
+   PILL FOLD — at rest the pill shows what the session is (model, effort,
+   context) and folds the spend and every control away; `ChatControlPill` decides when it is
+   open. A fold is a one-column grid whose track animates 0fr ↔ 1fr, which is
+   how an auto-width cell transitions at all. Folded, it also hands back the
+   gap its parent spends on it, through `--fold-gap`.
+   ────────────────────────────────────────────────────────── */
+.cl-pill {
+  --fold-gap: 8px;
+}
+.cl-pill-fold {
+  display: grid;
+  grid-template-columns: 1fr;
+  opacity: 1;
+  transition:
+    grid-template-columns 0.34s cubic-bezier(0.2, 0.8, 0.2, 1),
+    margin 0.34s cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 0.2s ease 0.08s;
+}
+/* The row clips while its track is narrower than it. The 3px of padding, given
+   back by the margin, keeps the clip off the on-chip's shadow and focus rings. */
+.cl-pill-fold > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--fold-gap);
+  min-width: 0;
+  overflow: hidden;
+  padding: 3px;
+  margin: -3px;
+}
+.cl-pill[data-folded] .cl-pill-fold {
+  grid-template-columns: 0fr;
+  opacity: 0;
+  margin-inline-start: calc(-1 * var(--fold-gap));
+  transition:
+    grid-template-columns 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+    margin 0.26s cubic-bezier(0.4, 0, 0.2, 1),
+    opacity 0.12s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .cl-pill-fold,
+  .cl-pill[data-folded] .cl-pill-fold,
+  .cl-pill-model {
     transition: none;
   }
 }
