@@ -72,6 +72,8 @@ import { ChatControlPill } from './project/chat/ChatControlPill';
 import type { ChatDetailsFilter } from './project/chat/utils';
 import type { ContextState } from './project/terminal/context-window';
 import { MemoryPagePreview } from './project/files/FileViewer';
+import { PagesRailPanel } from './project/terminal/PagesRailPanel';
+import type { ArtifactActivity } from './project/chat/artifact';
 import { version as appVersion } from '../../package.json';
 
 function turn(msg: ChatMessage): ProcessedMessage {
@@ -1824,6 +1826,83 @@ function DetailPageVisual(): ReactNode {
   );
 }
 
+const PREVIEW_PAGES: ArtifactActivity[] = [
+  {
+    id: 'wn-art-1',
+    url: 'https://claude.ai/artifact/AbCdEf',
+    title: 'Release checklist',
+    seq: 3,
+    audience: 'owner',
+    created: true,
+    publishes: 3,
+    lastIndex: 9,
+    items: [],
+  },
+  {
+    id: 'wn-art-2',
+    url: 'https://claude.ai/artifact/GhIjKl',
+    title: 'Retry flow diagram',
+    seq: 1,
+    created: true,
+    publishes: 1,
+    lastIndex: 4,
+    items: [],
+  },
+];
+
+// The pages a session published, in their own rail panel: the transcript's
+// publish card on the left, the PAGES panel open on the right.
+function PagesPanelVisual(): ReactNode {
+  return (
+    <div className="cl-whatsnew-frame cl-whatsnew-frame--files">
+      <div className="cl-whatsnew-files-stage">
+        <div className="cl-transcript-inner">
+          {ARTIFACT_TURN.map((processed, i) => (
+            <MessageBubble
+              key={processed.msg.uuid}
+              processed={processed}
+              detailsFilter="minimal"
+              onOpenToolDetail={() => {}}
+              turnIndex={9 + i}
+            />
+          ))}
+        </div>
+        <aside className="cl-whatsnew-files-rail">
+          <div className="cl-whatsnew-files-rail-head">
+            <span aria-hidden className="cl-live-dot cl-whatsnew-files-led" />
+            <span className="cl-whatsnew-files-title">PAGES</span>
+            <span style={{ flex: 1 }} />
+            <button
+              type="button"
+              className="cl-playbook-rail-trigger cl-pages-trigger"
+              aria-label="Pages"
+              aria-expanded
+              tabIndex={-1}
+            >
+              <svg
+                width="17"
+                height="17"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.6"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                aria-hidden="true"
+              >
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <path d="M3 9h18" />
+                <path d="M10 16l5-5M11 11h4v4" />
+              </svg>
+            </button>
+          </div>
+          <PagesRailPanel id="whats-new-pages" pages={PREVIEW_PAGES} onClose={() => {}} preview />
+        </aside>
+      </div>
+    </div>
+  );
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1854,6 +1933,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'notes-ai': NotesAiVisual,
   'chat-pill': ChatPillVisual,
   'detail-page': DetailPageVisual,
+  'pages-panel': PagesPanelVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

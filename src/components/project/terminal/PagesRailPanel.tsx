@@ -24,17 +24,21 @@ export function PagesRailPanel({
   id,
   pages,
   onClose,
+  preview = false,
 }: {
   id: string;
   pages: ArtifactActivity[];
   onClose: (restoreFocus?: boolean) => void;
+  /** A static copy (the "What's new" popup): it takes no focus and no Escape,
+   *  as `FilesRailPanel`'s preview does not. */
+  preview?: boolean;
 }) {
   const ref = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    ref.current?.focus();
-  }, []);
+    if (!preview) ref.current?.focus();
+  }, [preview]);
   const onKey = (e: KeyboardEvent<HTMLDivElement>) => {
-    if (e.key !== 'Escape') return;
+    if (e.key !== 'Escape' || preview) return;
     e.stopPropagation();
     onClose(true);
   };

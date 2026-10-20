@@ -56,6 +56,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'Sources', description: 'At the foot.', visual: 'web-sources' },
     { title: 'A bar', description: 'Folded.', visual: 'chat-pill' },
     { title: 'A page', description: 'Of a memory.', visual: 'detail-page' },
+    { title: 'Pages', description: 'Published.', visual: 'pages-panel' },
   ],
 };
 

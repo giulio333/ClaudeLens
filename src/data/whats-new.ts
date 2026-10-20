@@ -43,7 +43,8 @@ export interface WhatsNewHighlight {
     | 'session-notes'
     | 'notes-ai'
     | 'chat-pill'
-    | 'detail-page';
+    | 'detail-page'
+    | 'pages-panel';
 }
 
 export interface WhatsNewRelease {
@@ -68,6 +69,13 @@ export const WHATS_NEW: WhatsNewRelease[] = [
           'A file, a change, a shell run or a memory opened from the rail now share one page, closed from the crumb. A memory opens on the Files page, its frontmatter read as properties.',
         where: 'Mission Control rail · any row',
         visual: 'detail-page',
+      },
+      {
+        title: 'The pages a session published, in one place',
+        description:
+          'Pages published with the Artifact tool have their own panel instead of rows in the feed: each page once, the latest on top, with its sharing, link and version. A row opens it in the browser.',
+        where: 'Mission Control rail · the Pages icon, once a page is published',
+        visual: 'pages-panel',
       },
     ],
   },
