@@ -123,7 +123,6 @@ const TerminalSlot = memo(function TerminalSlot({
       onPark={park}
       onReport={report}
       sessionTabs={tabs}
-      instanceId={id}
     />
   );
 });
