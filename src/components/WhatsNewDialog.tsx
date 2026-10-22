@@ -1903,6 +1903,50 @@ function PagesPanelVisual(): ReactNode {
   );
 }
 
+// A session that went on past a compaction: the marker where the context was
+// cut, between the last turn before it and the first after. The marker is live,
+// so it opens on a summary in the shape Claude Code writes one.
+const COMPACTION_TEXT = 'Context compacted — was ~312,480 tokens (auto).';
+const COMPACTION_SUMMARY = [
+  '1. **Primary request and intent**',
+  '   - Rename the transcript parser and keep every caller working.',
+  '',
+  '2. **Files and code sections**',
+  '   - `src/parser.ts` — the renamed module.',
+  '   - `test/parser.test.ts` — moved to the new name.',
+  '',
+  '3. **Pending tasks**',
+  '   - A test for an empty file.',
+].join('\n');
+const COMPACTION_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-c1',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-22T10:54:40.000Z',
+    content: [
+      { type: 'text', text: 'Renamed the parser and its 14 call sites; the suite is green.' },
+    ],
+  }),
+  turn({
+    uuid: 'wn-c2',
+    role: 'user',
+    timestamp: '2026-10-22T10:55:03.000Z',
+    content: [{ type: 'text', text: COMPACTION_TEXT }],
+    notice: { kind: 'compaction', text: COMPACTION_TEXT, summary: COMPACTION_SUMMARY },
+  }),
+  turn({
+    uuid: 'wn-c3',
+    role: 'user',
+    timestamp: '2026-10-22T10:56:12.000Z',
+    content: [{ type: 'text', text: 'Now add a test for the empty file.' }],
+  }),
+];
+
+function CompactionVisual(): ReactNode {
+  return <TranscriptFrame turns={COMPACTION_TURNS} />;
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1934,6 +1978,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'chat-pill': ChatPillVisual,
   'detail-page': DetailPageVisual,
   'pages-panel': PagesPanelVisual,
+  compaction: CompactionVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

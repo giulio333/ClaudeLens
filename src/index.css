@@ -22198,8 +22198,9 @@ select.cl-opt-input {
    A session going idle, an agent finishing, a turn resumed after a usage
    limit. Modelled on the advisor marker: it explains the turn that follows
    without pretending to be one. */
+/* The row starts where its middle meets the rail's orb (12px down, 30px tall). */
 .cl-turn--notice .cl-turn-body {
-  padding: 2px 0 10px;
+  padding: 15px 0 10px;
 }
 .cl-notice-mark {
   display: flex;

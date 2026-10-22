@@ -44,7 +44,8 @@ export interface WhatsNewHighlight {
     | 'notes-ai'
     | 'chat-pill'
     | 'detail-page'
-    | 'pages-panel';
+    | 'pages-panel'
+    | 'compaction';
 }
 
 export interface WhatsNewRelease {
@@ -53,6 +54,24 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.45',
+    highlights: [
+      {
+        title: 'What a compacted session remembers',
+        description:
+          'When Claude Code compacts a session, the transcript marks the spot instead of showing the summary as a message you never typed. Open the marker to read the summary the model went on from. Try it below.',
+        where: 'Lens · where a session was compacted',
+        visual: 'compaction',
+      },
+      {
+        title: 'Session state in the menu bar and Dock',
+        description:
+          'On macOS the menu bar says which session works, waits for you or is done, and its menu brings that session back. The Dock badge counts the sessions waiting for you until you answer.',
+        where: 'macOS menu bar and Dock · Settings → General to turn it off',
+      },
+    ],
+  },
   {
     version: '2.2.44',
     highlights: [
