@@ -206,8 +206,8 @@ export interface InboundOrigin {
 
 /** A line the harness put in the transcript that is not conversation: a peer
  *  session that went idle, an agent that finished, a turn resumed after a usage
- *  limit. Drawn as a one-line marker — it explains why a turn happened, and it
- *  is not something anyone said.
+ *  limit, a compaction. Drawn as a one-line marker — it explains why a turn
+ *  happened, and it is not something anyone said.
  *
  *  A finished background task is NOT here: `parseTaskNotification` already
  *  turns `<task-notification>` into its own card, and a second mechanism for
@@ -215,11 +215,14 @@ export interface InboundOrigin {
 export interface SessionNotice {
   /** `branch-change` is the one kind no row carries: the renderer makes it
    *  where the branch on two assistant rows differs (`chat/git-state.ts`). */
-  kind: 'session-idle' | 'agent-idle' | 'auto-continuation' | 'branch-change';
+  kind: 'session-idle' | 'agent-idle' | 'auto-continuation' | 'branch-change' | 'compaction';
   /** What the notice is about: a task id, a session or agent name. */
   subject?: string;
   /** One readable line, taken from the payload's own words. */
   text: string;
+  /** A compaction's summary, without the lines Claude Code wraps it in for the
+   *  model. Absent when the row held nothing else. */
+  summary?: string;
 }
 
 export interface ChatMessage {

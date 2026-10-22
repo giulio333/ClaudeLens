@@ -267,6 +267,19 @@ describe('parseJsonlLine', () => {
     });
     expect(events.find(e => e.type === 'user_message')?.toolUseId).toBeUndefined();
   });
+
+  it('does not take the summary written at a compaction for a prompt', () => {
+    const events = parseJsonlLine({
+      type: 'user',
+      isCompactSummary: true,
+      timestamp: '2026-08-16T10:00:00.000Z',
+      message: {
+        role: 'user',
+        content: 'This session is being continued from a previous conversation that ran out.',
+      },
+    });
+    expect(events).toEqual([]);
+  });
 });
 
 // The usage block: the one part of an assistant line the tail used to read past.

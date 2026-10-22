@@ -265,6 +265,9 @@ export const SYSTEM_SUBTYPES = {
   turn_duration: candidate('wall-clock duration of a turn'),
   stop_hook_summary: candidate('what a Stop hook printed'),
   away_summary: candidate('the summary written when the user stepped away'),
+  compact_boundary: read(
+    'session-reader — the compaction marker that replaces the summary row under it'
+  ),
   local_command: candidate(
     'output of a builtin slash command — the real output session-reader drops the "No response requested." placeholder for'
   ),
@@ -307,6 +310,9 @@ export const FIELDS = {
   'assistant.timestamp': read('session-reader'),
   'assistant.isSidechain': read('session-reader'),
   'user.isMeta': read('session-reader + transcript-extras'),
+  'user.isCompactSummary': read('session-reader + transcript-tail'),
+  'system.compactMetadata.preTokens': read('session-reader'),
+  'system.compactMetadata.trigger': read('session-reader'),
   'user.parentUuid': read('transcript-extras'),
   'queue-operation.operation': read('transcript-extras'),
   'queue-operation.content': read('transcript-extras'),

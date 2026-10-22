@@ -60,7 +60,7 @@ function MessageOutGlyph() {
   );
 }
 
-function CaretGlyph({ open }: { open: boolean }) {
+export function CaretGlyph({ open }: { open: boolean }) {
   return (
     <svg
       width="11"

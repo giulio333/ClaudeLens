@@ -60,11 +60,12 @@ describe('buildSessionDigest', () => {
     expect(d.text).not.toContain('AAAA');
   });
 
-  it('replaces the compaction summary with a marker', () => {
+  it('writes a compaction as its own marker line', () => {
     const d = buildSessionDigest([
-      msg('user', [
-        text('This session is being continued from a previous conversation that ran out.'),
-      ]),
+      {
+        ...msg('user', [text('Context compacted (auto).')]),
+        notice: { kind: 'compaction', text: 'Context compacted (auto).' },
+      },
     ]);
     expect(d.text).toBe(COMPACTED_LINE);
   });
@@ -118,4 +119,29 @@ it('reads a transcript through the same parse the Lens uses', () => {
   expect(d.text).toContain('Add a retry to the fetcher');
   expect(d.text).toContain('Added one retry.');
   expect(d.text).not.toContain('inner');
+});
+
+it('marks a compaction instead of quoting the summary written for the model', () => {
+  const rows = [
+    {
+      type: 'system',
+      subtype: 'compact_boundary',
+      uuid: 'b1',
+      timestamp: '2026-01-01T00:00:00Z',
+      compactMetadata: { trigger: 'manual', preTokens: 1000 },
+    },
+    {
+      type: 'user',
+      uuid: 's1',
+      parentUuid: 'b1',
+      isCompactSummary: true,
+      timestamp: '2026-01-01T00:00:00Z',
+      message: {
+        role: 'user',
+        content: 'This session is being continued from a previous conversation that ran out.',
+      },
+    },
+  ];
+  const d = digestTranscriptText(rows.map(r => JSON.stringify(r)).join('\n'));
+  expect(d.text).toBe(COMPACTED_LINE);
 });

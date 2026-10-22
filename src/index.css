@@ -22237,6 +22237,105 @@ select.cl-opt-input {
   margin-left: auto;
   flex-shrink: 0;
 }
+/* The reading column hangs its dot 19px down the rail: the row starts where its
+   middle meets the dot's, instead of riding above it. */
+.cl-chat-reading .cl-turn--notice .cl-turn-body {
+  padding: 12px 0 14px;
+}
+
+/* ── A compaction: where the model's context was cut ─────────────────────────
+   CompactionMarker.tsx. Read like a message between sessions (`.cl-msg`): the
+   whole row is the disclosure, with no pill to aim at, and opened, the summary
+   hangs off a rule under it. Ink, never accent: nobody said it. */
+.cl-compaction {
+  min-width: 0;
+  max-width: var(--cl-read-measure);
+}
+.cl-compaction-toggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: calc(100% + 5px);
+  min-width: 0;
+  background: none;
+  border: none;
+  border-radius: var(--cl-r-tile, 7px);
+  padding: 3px 8px 3px 5px;
+  margin-left: -5px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--cl-hover-ms, 120ms);
+}
+.cl-compaction-toggle[data-static] {
+  cursor: default;
+}
+.cl-compaction-toggle:not([data-static]):hover {
+  background: var(--cl-hover-bg, color-mix(in oklab, var(--cl-ink) 5%, transparent));
+}
+.cl-compaction-icon {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 17px;
+  height: 17px;
+  border-radius: 5px;
+  background: color-mix(in oklab, var(--cl-ink-3) 10%, var(--cl-paper));
+  border: 1px solid color-mix(in oklab, var(--cl-ink-3) 26%, transparent);
+  color: var(--cl-ink-3);
+}
+.cl-compaction-text {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 12px/1.5 var(--font-sans);
+  color: var(--cl-ink-3);
+}
+.cl-compaction-cue {
+  flex: 0 0 auto;
+  font: 500 9.5px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--cl-ink-4);
+}
+.cl-compaction-toggle:not([data-static]):hover .cl-compaction-cue {
+  color: var(--cl-ink-2);
+}
+.cl-compaction-time {
+  flex: 0 0 auto;
+  font: 400 10px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-compaction-caret {
+  flex: 0 0 auto;
+  display: inline-flex;
+  color: var(--cl-ink-4);
+}
+.cl-compaction-open {
+  margin: 6px 0 4px 8px;
+  padding-left: 14px;
+  border-left: 2px solid color-mix(in oklab, var(--cl-ink-3) 30%, transparent);
+}
+.cl-compaction-body {
+  color: var(--cl-ink-2);
+}
+/* At the foot too: a summary runs to a couple of hundred lines, and the row
+   that opened it is by then a screen up. */
+.cl-compaction-hide {
+  margin-top: 8px;
+  background: none;
+  border: none;
+  padding: 0;
+  font: 500 11px/1 var(--font-mono);
+  color: var(--cl-ink-3);
+  cursor: pointer;
+}
+.cl-compaction-hide:hover {
+  color: var(--cl-ink);
+  text-decoration: underline;
+}
 
 /* ── Background shells: the pill in a session's top bar and its list ─────────
    BackgroundShells.tsx. Plain words, not a terminal: sans type, minutes. */

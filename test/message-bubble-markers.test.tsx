@@ -439,6 +439,42 @@ describe('a harness notice', () => {
   });
 });
 
+describe('a compaction', () => {
+  const text = 'Context compacted — was ~367,636 tokens (auto).';
+
+  it('opens on the summary the model carried across', () => {
+    const { container } = mount(
+      userMessage(text, {
+        notice: { kind: 'compaction', text, summary: '1. **Primary Request**\n   - Rename it.' },
+      })
+    );
+    const row = container.querySelector('.cl-compaction-toggle') as HTMLButtonElement;
+
+    expect(row.textContent).toContain(text);
+    expect(container.querySelector('.cl-notice-badge')).toBeNull();
+    expect(container.querySelector('.cl-compaction-body')).toBeNull();
+
+    fireEvent.click(row);
+    expect(row.getAttribute('aria-expanded')).toBe('true');
+    expect(container.querySelector('.cl-compaction-body strong')?.textContent).toBe(
+      'Primary Request'
+    );
+
+    fireEvent.click(container.querySelector('.cl-compaction-hide') as HTMLButtonElement);
+    expect(container.querySelector('.cl-compaction-body')).toBeNull();
+  });
+
+  it('promises no summary it does not have', () => {
+    const { container } = mount(userMessage(text, { notice: { kind: 'compaction', text } }));
+    const row = container.querySelector('.cl-compaction-toggle') as HTMLButtonElement;
+
+    expect(row.hasAttribute('aria-expanded')).toBe(false);
+    expect(container.querySelector('.cl-compaction-caret')).toBeNull();
+    fireEvent.click(row);
+    expect(container.querySelector('.cl-compaction-body')).toBeNull();
+  });
+});
+
 // ─── A thinking block the terminal prints as a message ───────────────────────
 
 describe('a thinking block', () => {

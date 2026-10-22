@@ -8,6 +8,9 @@ import { randomUUID } from 'crypto';
 import type { ChatMessage, ChatTurnSummary } from '../shared/chat-types';
 import { mapSdkMessageToChat, withToolUseResult, type SdkSessionMessage } from './session-reader';
 
+// The same words for a compaction in the live chat and in a reread transcript.
+export { compactBoundaryNote } from './session-reader';
+
 /** A synthetic assistant message carrying a plain note — used to surface output
  *  from slash commands that finish without a model turn (e.g. /context, /usage)
  *  or a system event (e.g. /compact's boundary), so the command isn't silently
@@ -23,14 +26,6 @@ export function noteMessage(text: string): ChatMessage {
     timestamp: new Date().toISOString(),
     content: [{ type: 'text', text }],
   };
-}
-
-/** The note text for a `system`/`compact_boundary` event: `/compact` emits no
- *  assistant turn, so this is all the user sees of what the command did. */
-export function compactBoundaryNote(preTokens?: number, trigger?: string): string {
-  return `Context compacted${preTokens ? ` — was ~${preTokens.toLocaleString()} tokens` : ''}${
-    trigger ? ` (${trigger})` : ''
-  }.`;
 }
 
 /** Pull the turn's cost/token/model summary out of an SDK `result` message. Read

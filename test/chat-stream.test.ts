@@ -32,16 +32,14 @@ describe('noteMessage', () => {
 describe('compactBoundaryNote', () => {
   it('includes token count and trigger when present', () => {
     expect(compactBoundaryNote(153000, 'auto')).toBe(
-      `Context compacted — was ~${(153000).toLocaleString()} tokens (auto).`
+      'Context compacted — was ~153,000 tokens (auto).'
     );
   });
 
   it('degrades to the bare note when metadata is missing', () => {
     expect(compactBoundaryNote()).toBe('Context compacted.');
     expect(compactBoundaryNote(undefined, 'manual')).toBe('Context compacted (manual).');
-    expect(compactBoundaryNote(1000)).toBe(
-      `Context compacted — was ~${(1000).toLocaleString()} tokens.`
-    );
+    expect(compactBoundaryNote(1000)).toBe('Context compacted — was ~1,000 tokens.');
   });
 });
 

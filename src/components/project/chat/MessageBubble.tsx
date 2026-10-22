@@ -35,6 +35,7 @@ import { ToolGroupCard } from './ToolGroupCard';
 import { artifactOf, isArtifactTool } from './artifact';
 import { isMessageTool } from './sent-message';
 import { MessageLine } from './MessageLine';
+import { CompactionMarker } from './CompactionMarker';
 import { previewLine } from './message-line';
 import { FileChangesStrip } from './FileChangesStrip';
 import { WebSourcesStrip } from './WebSourcesStrip';
@@ -833,7 +834,11 @@ export const MessageBubble = memo(function MessageBubble({
           <span className="cl-turn-spine" aria-hidden />
         </aside>
         <section className="cl-turn-body">
-          <NoticeMarker notice={msg.notice} timestamp={timestamp} />
+          {msg.notice.kind === 'compaction' ? (
+            <CompactionMarker notice={msg.notice} timestamp={timestamp} />
+          ) : (
+            <NoticeMarker notice={msg.notice} timestamp={timestamp} />
+          )}
         </section>
       </article>
     );

@@ -13,8 +13,6 @@ export const OMITTED_LINE = '[Earlier part of the session omitted]';
 export const COMPACTED_LINE = '[conversation compacted here]';
 // Pessimistic on purpose: code, Italian and CJK run denser than 4.
 const CHARS_PER_TOKEN = 3;
-// Claude Code opens the summary it writes at a compaction with this sentence.
-const COMPACT_SUMMARY_PREFIX = 'This session is being continued from a previous conversation';
 const TARGET_KEYS = ['description', 'file_path', 'path', 'pattern', 'command'] as const;
 
 export interface SessionDigest {
@@ -63,12 +61,11 @@ function speaker(m: ChatMessage): string {
 }
 
 function turnText(m: ChatMessage): string | null {
+  if (m.notice?.kind === 'compaction') return COMPACTED_LINE;
   if (m.notice) return `### Notice\n${m.notice.text}`;
   const lines = m.content.map(blockLine).filter((l): l is string => l !== null);
   if (lines.length === 0) return null;
-  const body = lines.join('\n');
-  if (m.role === 'user' && body.startsWith(COMPACT_SUMMARY_PREFIX)) return COMPACTED_LINE;
-  return `### ${speaker(m)}\n${body}`;
+  return `### ${speaker(m)}\n${lines.join('\n')}`;
 }
 
 export function buildSessionDigest(

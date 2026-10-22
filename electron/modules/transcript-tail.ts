@@ -327,6 +327,8 @@ export function parseJsonlLine(json: Record<string, unknown>): LiveEvent[] {
 
   if (json.type !== 'user' && json.type !== 'assistant') return events;
   if (json.isMeta === true || json.isSidechain === true) return events;
+  // The summary written at a compaction is a `user` row nobody typed.
+  if (json.isCompactSummary === true) return events;
 
   const msg = json.message as Record<string, unknown> | undefined;
   if (!msg) return events;

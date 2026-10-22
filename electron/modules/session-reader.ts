@@ -24,6 +24,7 @@ import type {
   ChatImage,
   ChatMessage,
   MessageUsage,
+  SessionNotice,
 } from '../shared/chat-types';
 
 // The message shapes live in the shared module (single definition for main and
@@ -275,6 +276,53 @@ export function readChatSession(filePath: string, options: ReadChatOptions = {})
   }
 }
 
+/** The note text for a compaction, from what its `compact_boundary` recorded —
+ *  the row on disk or the event in the live stream. `/compact` emits no
+ *  assistant turn, so this is all the user sees of what the command did. */
+export function compactBoundaryNote(preTokens?: number, trigger?: string): string {
+  return `Context compacted${preTokens ? ` — was ~${preTokens.toLocaleString('en-US')} tokens` : ''}${
+    trigger ? ` (${trigger})` : ''
+  }.`;
+}
+
+/** The marker for the `compact_boundary` row on disk (camelCase, unlike the
+ *  stream's `compact_metadata.pre_tokens`). */
+function compactionNotice(boundary: Record<string, unknown>): SessionNotice {
+  const meta = boundary.compactMetadata as Record<string, unknown> | undefined;
+  const preTokens = typeof meta?.preTokens === 'number' ? meta.preTokens : undefined;
+  const trigger = typeof meta?.trigger === 'string' ? meta.trigger : undefined;
+  return { kind: 'compaction', text: compactBoundaryNote(preTokens, trigger) };
+}
+
+// What Claude Code wraps the summary in for the model: an opening that says the
+// session goes on, the tools used before it and a `Summary:` header; after it,
+// the instructions to carry on without a recap.
+const SUMMARY_HEAD =
+  /^(This session is being continued from a previous conversation|<tools-used-before-summary>|Summary:\s*$)/;
+const SUMMARY_TAIL =
+  /^(If you need specific details from before compaction|Continue the conversation from where it left off|The messages after this summary are)/;
+
+/** The summary a compaction wrote, as a reader wants it: the row's text with the
+ *  harness's lines trimmed off both ends — only the ends, since a summary of a
+ *  session about compaction may quote them. */
+export function compactSummaryBody(content: unknown): string | undefined {
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content)
+        ? content
+            .map(b => (b?.type === 'text' && typeof b.text === 'string' ? b.text : ''))
+            .join('\n')
+        : '';
+  const lines = text.split('\n');
+  const harness = (line: string, marks: RegExp) => !line.trim() || marks.test(line);
+  let start = 0;
+  while (start < lines.length && harness(lines[start], SUMMARY_HEAD)) start++;
+  let end = lines.length;
+  while (end > start && harness(lines[end - 1], SUMMARY_TAIL)) end--;
+  return lines.slice(start, end).join('\n') || undefined;
+}
+
 /**
  * The line-by-line half of `readChatSession`, over text already in memory.
  *
@@ -298,6 +346,8 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
   const seenUuids = new Set<string>();
   // `server_tool_use` id → timestamp of the row that opened an advisor consult.
   const advisorStartedAt = new Map<string, string>();
+  // `compact_boundary` uuid → its marker, for the summary row hung under it.
+  const compactions = new Map<string, SessionNotice>();
 
   const lines = raw.split('\n').filter(l => l.trim());
 
@@ -305,12 +355,38 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
     try {
       const json = JSON.parse(line) as Record<string, unknown>;
 
+      if (json.type === 'system' && json.subtype === 'compact_boundary') {
+        compactions.set(String(json.uuid ?? ''), compactionNotice(json));
+        continue;
+      }
       // Salta righe non-chat
       if (json.type !== 'user' && json.type !== 'assistant') continue;
       // Salta messaggi di sistema/meta
       if (json.isMeta === true) continue;
       // Salta sidechain (subagent internals) salvo lettura esplicita del transcript
       if (json.isSidechain === true && !options.includeSidechain) continue;
+
+      // Il riassunto che Claude Code scrive a una compaction è per il modello,
+      // non per chi legge: una riga `user` senza `isMeta`, che disegnata come
+      // messaggio sembrava scritta dall'utente. Al suo posto, il marcatore.
+      if (json.isCompactSummary === true) {
+        const uuid = String(json.uuid ?? '');
+        if (uuid && seenUuids.has(uuid)) continue;
+        if (uuid) seenUuids.add(uuid);
+        const boundary = compactions.get(String(json.parentUuid ?? '')) ?? compactionNotice({});
+        const summary = compactSummaryBody(
+          (json.message as Record<string, unknown> | undefined)?.content
+        );
+        const notice = summary ? { ...boundary, summary } : boundary;
+        messages.push({
+          uuid,
+          role: 'user',
+          timestamp: String(json.timestamp ?? ''),
+          content: [{ type: 'text', text: notice.text }],
+          notice,
+        });
+        continue;
+      }
 
       const msg = json.message as Record<string, unknown> | undefined;
       if (!msg) continue;
