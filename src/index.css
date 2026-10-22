@@ -25,9 +25,15 @@
      `--cl-read-col` is how wide the column is (what the tool windows, diffs,
      terminals and tables get), `--cl-read-measure` is how long a line of
      running prose is allowed to be (what the eye gets). Widening the column
-     alone only grows the empty space to the right of the paragraphs. */
+     alone only grows the empty space to the right of the paragraphs.
+     The measure is a length, not `ch`: `ch` resolves in each element's own
+     font, so the headings (Space Grotesk at 18px) ran a quarter past the
+     paragraphs and the prompt, composer and turn rule each ended somewhere
+     else. It is wider than the feed beside Mission Control's rail, so there
+     the text fills the feed and closing the rail gives the room to the text;
+     95ch of the prose (896px) left it the same width either way. */
   --cl-read-col: 1560px;
-  --cl-read-measure: 95ch;
+  --cl-read-measure: 1400px;
 
   /* ── Editorial tokens — LIGHT (paper / ink) ──
      Brand palette (Claude Code official):
@@ -3655,11 +3661,22 @@ body {
   margin-top: 0;
 }
 
-/* ── body: on paper, closed by a rule aligned to the text column ── */
+/* ── body: on paper, closed by a rule aligned to the text column ──
+   The body keeps the whole column for diffs, tables and code, but its rule
+   stops where the prose does: the border is painted by a gradient that ends at
+   the measure. A border image only paints while the border has a width, so
+   every variant that drops the border (`border: none`, `border-bottom: 0`)
+   still drops the rule. */
 .cl-chat-reading .cl-turn-body {
   padding: 10px 0 24px;
   border: 0;
   border-bottom: 1px solid var(--cl-line-soft);
+  border-image: linear-gradient(
+      to right,
+      var(--cl-line-soft) var(--cl-read-measure),
+      transparent var(--cl-read-measure)
+    )
+    0 0 1 0;
   border-radius: 0;
   background: none;
   box-shadow: none;
@@ -3682,13 +3699,22 @@ body {
 .cl-chat-workspace--focus .cl-chat-reading .cl-turn--notification .cl-turn-body {
   padding: 10px 0 24px;
   border-bottom: 1px solid var(--cl-line-soft);
+  /* the notification's own `border: none` reset the image along with it */
+  border-image: linear-gradient(
+      to right,
+      var(--cl-line-soft) var(--cl-read-measure),
+      transparent var(--cl-read-measure)
+    )
+    0 0 1 0;
 }
 .cl-chat-reading .cl-turn--tool-only {
   margin-top: 0;
 }
 
 /* ── header: quieter, wider-tracked speaker label ── */
+/* Capped like the prose, so the timestamp ends the line the text ends. */
 .cl-chat-reading .cl-turn-head {
+  max-width: var(--cl-read-measure);
   min-height: 0;
   margin-bottom: 9px;
 }
@@ -4687,6 +4713,13 @@ body {
 .cl-chat-workspace--focus[data-composer] .cl-chat-reading .cl-transcript-inner {
   padding-bottom: 228px;
 }
+/* Centred on the window until the window outgrows the prose; from there on it
+   stays under the middle of the text, which is anchored left. 106px is the
+   text's left edge: the column's 64 + the inner box's 12 + the 30px turn rail.
+   In a feed under ~1600px, as beside Mission Control, it stays centred. */
+.cl-chat-workspace--focus .cl-pill-wrap {
+  left: min(50%, calc(106px + var(--cl-read-measure) / 2));
+}
 .cl-chat-workspace--focus[data-composer] .cl-pill-wrap {
   bottom: 112px;
 }
@@ -4734,9 +4767,7 @@ body {
   gap: 7px;
 }
 /* Sheet, error and lock notice all stop at the same run as the prose above —
-   they belong to the text column, not to the window. The `ch` resolves in the
-   UI sans here and in Inter up there, so the right edges differ by a few dozen
-   pixels; the left edge, which is the one the eye reads, is exact. */
+   they belong to the text column, not to the window. */
 .cl-composer-inner > * {
   width: 100%;
   max-width: var(--cl-read-measure);
@@ -6813,6 +6844,13 @@ button.cl-pill-model[data-on] {
   margin-top: 14px;
   min-width: 0;
 }
+/* In the transcript both strips end where the prose does: their counts ride
+   the right edge, which in a wide window was a screen away from the text. An
+   open diff stays inside the measure too; ⤢ is the way to a wider one. */
+.cl-chat-reading .cl-file-changes,
+.cl-chat-reading .cl-web-sources {
+  max-width: var(--cl-read-measure);
+}
 .cl-file-change {
   min-width: 0;
 }
@@ -7398,8 +7436,6 @@ button.cl-pill-model[data-on] {
 .cl-message-text--assistant {
   padding: 1px 0;
   overflow-wrap: anywhere;
-  /* The reading face lives on the wrapper so the `ch` measure below is
-     computed in Inter, not the inherited UI sans. */
   font-family: var(--font-reading);
   font-size: 15px;
 }
@@ -7415,7 +7451,7 @@ button.cl-pill-model[data-on] {
    tables and other block furniture keep the full column width. */
 .cl-message-text--assistant
   .prose-lens
-  > :where(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6) {
+  > :where(p, ul, ol, dl, blockquote, h1, h2, h3, h4, h5, h6, hr) {
   max-width: var(--cl-read-measure);
 }
 /* Structure stays in the UI voice: headings inside the transcript prose keep
