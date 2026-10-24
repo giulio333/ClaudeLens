@@ -122,6 +122,20 @@ describe('readTranscriptExtras', () => {
     expect(queued[0].content).toEqual([{ type: 'text', text: 'aggiungi anche il grafico' }]);
   });
 
+  it('sets apart the text pasted into a message absorbed mid-turn', async () => {
+    const typed =
+      'also this one\n<pasted_content id="d4d4">\nstack line 3\n</pasted_content id="d4d4">';
+    const p = writeJsonl([
+      queueRow('enqueue', typed, '2026-09-08T10:00:00.000Z'),
+      queueRow('remove', typed, '2026-09-08T10:00:30.000Z', 'absorbed_mid_turn'),
+    ]);
+    const { queued } = await readTranscriptExtras(p);
+    expect(queued[0].content).toEqual([
+      { type: 'text', text: 'also this one' },
+      { type: 'text', text: 'stack line 3', pasted: true },
+    ]);
+  });
+
   it('shows when the message was typed, not when it was absorbed', async () => {
     const p = writeJsonl([
       queueRow('enqueue', 'ciao', '2026-09-08T10:00:00.000Z'),

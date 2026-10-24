@@ -127,6 +127,34 @@ function ExportTurnButton({ onClick }: { onClick: () => void }) {
 }
 
 /** Compact token count for the notification chips: 55059 → "55.1k". */
+/** Lines a paste shows before it folds. */
+const PASTE_CLAMP = 12;
+
+/** Text the user pasted into the prompt, set apart from what they typed. A long
+ *  paste folds with a fade, like a command's output; the fold is CSS only, so
+ *  the whole text stays in the DOM for find and the highlight offsets. */
+function PastedText({ text, hlBlock }: { text: string; hlBlock?: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const lines = text.split('\n').length;
+  const foldable = lines > PASTE_CLAMP;
+  return (
+    <div
+      className={`cl-pasted${foldable && !expanded ? ' is-clamped' : ''}`}
+      style={{ '--paste-clamp': PASTE_CLAMP } as CSSProperties}
+    >
+      <span className="cl-pasted-label">Pasted</span>
+      <p className="cl-message-text cl-pasted-text" data-hl-block={hlBlock}>
+        {text}
+      </p>
+      {foldable && (
+        <button type="button" className="cl-pasted-toggle" onClick={() => setExpanded(e => !e)}>
+          {expanded ? 'Collapse' : `Show all ${lines} lines`}
+        </button>
+      )}
+    </div>
+  );
+}
+
 function fmtTokens(n: number): string {
   if (n < 1000) return String(n);
   return `${(n / 1000).toFixed(n < 10000 ? 1 : 0)}k`;
@@ -1029,7 +1057,13 @@ export const MessageBubble = memo(function MessageBubble({
 
         <div className="cl-turn-content">
           {textBlocks.map((b, i) =>
-            isUser ? (
+            isUser && b.pasted ? (
+              <PastedText
+                key={i}
+                text={b.text}
+                hlBlock={canHighlight ? blockKey(msg.uuid, i) : undefined}
+              />
+            ) : isUser ? (
               <p
                 key={i}
                 className="cl-message-text cl-message-text--user"

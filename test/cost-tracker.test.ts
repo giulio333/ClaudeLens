@@ -424,6 +424,23 @@ describe('getSessionList', () => {
     expect(s.firstUserMessage).toBe('Compare List<String> to Map<K,V>');
   });
 
+  it('firstUserMessage keeps a pasted text without the tag around it', async () => {
+    writeSession(tmp, 'sess.jsonl', [
+      JSON.stringify({
+        type: 'user',
+        timestamp: '2026-05-01T09:00:00.000Z',
+        message: {
+          content:
+            '<pasted_content id="e7e7">\nTypeError: x is undefined\n</pasted_content id="e7e7">',
+        },
+      }),
+      assistantLine({ model: 'claude-sonnet-4-5', input: 10, output: 10 }),
+    ]);
+
+    const [s] = await getSessionList(tmp);
+    expect(s.firstUserMessage).toBe('TypeError: x is undefined');
+  });
+
   it('sorts sessions by date descending', async () => {
     writeSession(tmp, 'older.jsonl', [
       assistantLine({

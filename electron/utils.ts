@@ -342,6 +342,8 @@ const FRAMING_TAGS = [
   'local-command-stderr',
   'local-command-caveat',
   'system-reminder',
+  // Only the wrapper goes: the pasted text inside it is the user's.
+  'pasted_content',
 ].join('|');
 
 const FRAMING_TAG_RE = new RegExp(`<\\/?(?:${FRAMING_TAGS})\\b[^>]*>`, 'gi');

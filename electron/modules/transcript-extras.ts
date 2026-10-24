@@ -29,6 +29,7 @@
 //
 // Il modulo si limita a riferire cosa dice il file; cosa sia ridondante lo
 // decide `mergeTranscriptExtras`, che ha sotto gli occhi i messaggi dell'SDK.
+import { splitPastedContent } from './pasted-content';
 import { readTextFile } from './safe-fs';
 import type {
   ArtifactPublish,
@@ -813,7 +814,7 @@ export function parseTranscriptExtras(raw: string): TranscriptExtras {
           uuid: `queued-${typedAt}-${queued.length}`,
           role: 'user',
           timestamp: typedAt,
-          content: [{ type: 'text', text: content }],
+          content: splitPastedContent(content),
           queued: true,
         });
       }

@@ -508,6 +508,66 @@ describe('structuredPatch on the file read path', () => {
   });
 });
 
+describe('text pasted into a prompt', () => {
+  function readPrompt(content: unknown, role: 'user' | 'assistant' = 'user') {
+    const p = writeJsonl('s.jsonl', [
+      line({ type: role, uuid: 'p1', timestamp: 't', message: { role, content } }),
+    ]);
+    return readChatSession(p)[0]?.content;
+  }
+
+  it('sets the paste apart from what was typed, without its tags', () => {
+    expect(
+      readPrompt(
+        'why does this loop never end?\n\n<pasted_content id="a1b2">\nwhile (ok) {\n  step();\n}\n</pasted_content id="a1b2">'
+      )
+    ).toEqual([
+      { type: 'text', text: 'why does this loop never end?' },
+      { type: 'text', text: 'while (ok) {\n  step();\n}', pasted: true },
+    ]);
+  });
+
+  it('keeps the order of typed text and several pastes', () => {
+    expect(
+      readPrompt(
+        '<pasted_content id="c3d4">\nfirst log\n</pasted_content id="c3d4">\n\ncompare with\n\n<pasted_content id="e5f6">\nsecond log\n</pasted_content id="e5f6">'
+      )
+    ).toEqual([
+      { type: 'text', text: 'first log', pasted: true },
+      { type: 'text', text: 'compare with' },
+      { type: 'text', text: 'second log', pasted: true },
+    ]);
+  });
+
+  it('shows a pasted tag that Claude Code escaped as the text that was pasted', () => {
+    expect(
+      readPrompt(
+        'look\n<pasted_content id="0a0a">\nquote <\\pasted_content id="1b1b">x<\\/pasted_content id="1b1b">\n</pasted_content id="0a0a">'
+      )
+    ).toEqual([
+      { type: 'text', text: 'look' },
+      {
+        type: 'text',
+        text: 'quote <pasted_content id="1b1b">x</pasted_content id="1b1b">',
+        pasted: true,
+      },
+    ]);
+  });
+
+  it('keeps the text of a paste whose closing tag never comes', () => {
+    expect(readPrompt('see <pasted_content id="9f9f">\nhalf a paste')).toEqual([
+      { type: 'text', text: 'see \nhalf a paste' },
+    ]);
+  });
+
+  it('leaves an assistant quoting the tag alone', () => {
+    const quoted = 'It wraps it as <pasted_content id="xxxx">…</pasted_content id="xxxx">.';
+    expect(readPrompt([{ type: 'text', text: quoted }], 'assistant')).toEqual([
+      { type: 'text', text: quoted },
+    ]);
+  });
+});
+
 describe('findSessionFile', () => {
   it('returns the path inside the sessions/ subdir when present', async () => {
     const sessions = join(dir, 'sessions');

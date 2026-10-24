@@ -2,6 +2,7 @@ import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { glob } from 'glob';
 import { stripFramingTags } from '../utils';
+import { splitPastedContent } from './pasted-content';
 import { StampCache, fileStamp, firstFileStamp, treeStamp } from './session-read-cache';
 import { readTextFile } from './safe-fs';
 import {
@@ -196,9 +197,12 @@ function imagesIn(items: unknown[]): ChatImage[] {
 // Preserva i tag noti del flow Claude Code command così il frontend può
 // renderizzarli come card dedicata; altrimenti rimuove solo i tag di framing
 // noti (caveat, ecc.) lasciando intatta la prosa con `<`/`>` da codice (#93).
-function parseStringContent(rawContent: string): ChatContentBlock[] {
+// In un prompt utente ogni testo incollato diventa un blocco suo; un assistant
+// che cita il tag `<pasted_content>` resta com'è.
+function parseStringContent(rawContent: string, role: string): ChatContentBlock[] {
   const isCommand = /<(command-name|local-command-stdout)\b/.test(rawContent);
   if (isCommand) return [{ type: 'text', text: rawContent }];
+  if (role === 'user') return splitPastedContent(rawContent, stripFramingTags);
   const stripped = stripFramingTags(rawContent).trim();
   if (!stripped) return [];
   return [{ type: 'text', text: stripped }];
@@ -398,7 +402,7 @@ export function parseChatSessionText(raw: string, options: ReadChatOptions = {})
       let blocks: ChatContentBlock[] = [];
 
       if (typeof rawContent === 'string') {
-        blocks = parseStringContent(rawContent);
+        blocks = parseStringContent(rawContent, role);
         if (blocks.length === 0) continue;
       } else if (Array.isArray(rawContent)) {
         const startId = advisorStartId(rawContent);
@@ -474,7 +478,7 @@ export function mapSdkMessageToChat(m: SdkSessionMessage): ChatMessage | null {
 
   const rawContent = msg.content;
   let blocks: ChatContentBlock[] = [];
-  if (typeof rawContent === 'string') blocks = parseStringContent(rawContent);
+  if (typeof rawContent === 'string') blocks = parseStringContent(rawContent, m.type);
   else if (Array.isArray(rawContent)) blocks = parseContentArray(rawContent, soleAdvisorSpend(msg));
   if (blocks.length === 0) return null;
   // Drop the local-command placeholder (see isPlaceholderNote). The live output

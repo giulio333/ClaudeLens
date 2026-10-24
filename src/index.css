@@ -7351,6 +7351,50 @@ button.cl-pill-model[data-on] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+/* ── text pasted into a prompt ────────────────────────────────────────────
+   What the user pasted, set apart from what they typed: a hairline on the left
+   and the mono face of material, not the weight of the prompt. A long paste
+   folds with the fade of `.cl-term-body.is-clamped`. */
+.cl-pasted {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+  max-width: var(--cl-read-measure);
+  padding-left: 12px;
+  border-left: 2px solid var(--cl-line);
+}
+.cl-pasted-label {
+  font: 500 10px/1 var(--font-mono);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--cl-ink-4);
+}
+.cl-pasted-text {
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.cl-pasted.is-clamped .cl-pasted-text {
+  max-height: calc(var(--paste-clamp) * 1lh);
+  overflow: hidden;
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 30px), transparent 100%);
+}
+.cl-pasted-toggle {
+  justify-self: start;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--cl-accent);
+  font: 700 9.5px/1.4 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.cl-pasted-toggle:hover {
+  text-decoration: underline;
+}
 /* ── images in the transcript ─────────────────────────────────────────────
    A pasted screenshot, a Read of a .png, a picture linked by path. Drawn at
    reading size — the column's width, capped short of a screenful — and opened

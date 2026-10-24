@@ -13,7 +13,13 @@
 // module systems (CommonJS main, ESNext renderer) and must stay inert.
 
 export type ChatContentBlock =
-  | { type: 'text'; text: string }
+  | {
+      type: 'text';
+      text: string;
+      /** Text the user pasted into the prompt, which Claude Code wraps in a
+       *  `<pasted_content>` tag for the model (`splitPastedContent`). */
+      pasted?: boolean;
+    }
   | { type: 'thinking'; thinking: string }
   | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
   | {
