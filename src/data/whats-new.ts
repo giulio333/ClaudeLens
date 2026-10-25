@@ -45,7 +45,8 @@ export interface WhatsNewHighlight {
     | 'chat-pill'
     | 'detail-page'
     | 'pages-panel'
-    | 'compaction';
+    | 'compaction'
+    | 'pasted';
 }
 
 export interface WhatsNewRelease {
@@ -54,6 +55,18 @@ export interface WhatsNewRelease {
 }
 
 export const WHATS_NEW: WhatsNewRelease[] = [
+  {
+    version: '2.2.46',
+    highlights: [
+      {
+        title: 'Pasted text, apart from what you typed',
+        description:
+          'Text you paste into a prompt now shows as a block of its own under a "Pasted" label, folded when it runs long, instead of the raw tags Claude Code wraps it in. Try it below.',
+        where: 'Lens · prompts with a paste',
+        visual: 'pasted',
+      },
+    ],
+  },
   {
     version: '2.2.45',
     highlights: [

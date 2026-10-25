@@ -1947,6 +1947,54 @@ function CompactionVisual(): ReactNode {
   return <TranscriptFrame turns={COMPACTION_TURNS} />;
 }
 
+// A prompt with a paste in it: the typed line, then the pasted test output as a
+// block of its own, long enough to fold.
+const PASTED_TEXT = [
+  ' FAIL  test/parser.test.ts > parse > an empty file',
+  "AssertionError: expected [ { kind: 'eof' } ] to deeply equal []",
+  '',
+  '- Expected',
+  '+ Received',
+  '',
+  '- []',
+  '+ [',
+  '+   {',
+  '+     "kind": "eof",',
+  '+   },',
+  '+ ]',
+  '',
+  ' ❯ test/parser.test.ts:42:27',
+  '',
+  ' Test Files  1 failed | 37 passed (38)',
+].join('\n');
+const PASTED_TURNS: ProcessedMessage[] = [
+  turn({
+    uuid: 'wn-p1',
+    role: 'user',
+    timestamp: '2026-10-24T09:12:05.000Z',
+    content: [
+      { type: 'text', text: 'The new test fails, here is the output:' },
+      { type: 'text', text: PASTED_TEXT, pasted: true },
+    ],
+  }),
+  turn({
+    uuid: 'wn-p2',
+    role: 'assistant',
+    model: 'claude-opus-5-5',
+    timestamp: '2026-10-24T09:12:31.000Z',
+    content: [
+      {
+        type: 'text',
+        text: 'The tokenizer emits an `eof` token for an empty file; I will drop it there.',
+      },
+    ],
+  }),
+];
+
+function PastedVisual(): ReactNode {
+  return <TranscriptFrame turns={PASTED_TURNS} />;
+}
+
 const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode> = {
   'cross-session-message': CrossSessionMessageVisual,
   'prompt-playbook': PromptPlaybookVisual,
@@ -1979,6 +2027,7 @@ const VISUALS: Record<NonNullable<WhatsNewHighlight['visual']>, () => ReactNode>
   'detail-page': DetailPageVisual,
   'pages-panel': PagesPanelVisual,
   compaction: CompactionVisual,
+  pasted: PastedVisual,
 };
 
 /** The sections of the release on screen — the card's own children, never the

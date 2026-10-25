@@ -58,6 +58,7 @@ const AUTHORED: WhatsNewRelease = {
     { title: 'A page', description: 'Of a memory.', visual: 'detail-page' },
     { title: 'Pages', description: 'Published.', visual: 'pages-panel' },
     { title: 'A compaction', description: 'And its summary.', visual: 'compaction' },
+    { title: 'A paste', description: 'Apart from the prompt.', visual: 'pasted' },
   ],
 };
 
