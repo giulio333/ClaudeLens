@@ -121,4 +121,7 @@ export type View =
   | { type: 'duplicates' }
   | { type: 'settings' }
   /** Claude Code on another machine, over the system ssh (#242). */
-  | { type: 'remote' };
+  | { type: 'remote' }
+  /** One live session as a sentence, a plan, a diff and its checks. Beta,
+   *  behind `NOTEBOOK_ENABLED`. */
+  | { type: 'notebook' };
