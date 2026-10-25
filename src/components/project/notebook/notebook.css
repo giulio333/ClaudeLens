@@ -1,0 +1,414 @@
+/* Notebook: left = what the session is doing now and where it is in its plan,
+   right = what it changed and whether the checks hold. One sentence leads;
+   everything else is small print. Tokens only, no hue of its own. */
+
+.cl-nb {
+  padding: 0 clamp(16px, 4vw, 56px) 48px;
+  max-width: 1320px;
+  margin-inline: auto;
+}
+.cl-nb-pick {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding-block: 18px 4px;
+}
+.cl-nb-pick button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: 320px;
+  padding: 6px 12px;
+  border: 1px solid var(--cl-line);
+  border-radius: 999px;
+  background: none;
+  font: 400 12px/1 var(--font-sans);
+  color: var(--cl-ink-3);
+  cursor: pointer;
+}
+.cl-nb-pick button:hover {
+  color: var(--cl-ink);
+  background: var(--cl-hover-bg);
+}
+.cl-nb-pick button[aria-pressed='true'] {
+  color: var(--cl-ink);
+  border-color: var(--cl-ink-3);
+}
+.cl-nb-pick .t {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-nb-pick .pip {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--cl-ok);
+  flex: none;
+}
+.cl-nb-pick .pip.is-blocked {
+  background: var(--cl-accent);
+}
+.cl-nb-pick .pip.is-ready,
+.cl-nb-pick .pip.is-ended {
+  background: var(--cl-ink-4);
+}
+
+.cl-nb-cols {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr);
+  gap: 0 clamp(28px, 5vw, 80px);
+  padding-top: clamp(20px, 5vh, 48px);
+  align-content: start;
+}
+@media (max-width: 900px) {
+  .cl-nb-cols {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 36px;
+  }
+}
+
+.cl-nb-eyebrow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-nb-eyebrow .state {
+  color: var(--cl-ok);
+}
+.cl-nb-eyebrow .state.is-blocked {
+  color: var(--cl-accent);
+}
+.cl-nb-eyebrow .state.is-ready,
+.cl-nb-eyebrow .state.is-ended {
+  color: var(--cl-ink-4);
+}
+.cl-nb-title {
+  margin: 14px 0 0;
+  font-size: 14px;
+  color: var(--cl-ink-3);
+  max-width: 60ch;
+}
+
+.cl-nb-say {
+  margin: 18px 0 0;
+  font-weight: 500;
+  font-size: clamp(28px, 4vw, 50px);
+  line-height: 1.1;
+  letter-spacing: -0.022em;
+  text-wrap: balance;
+  overflow-wrap: anywhere;
+}
+.cl-nb-say code {
+  font: 500 0.48em/1 var(--font-mono);
+  vertical-align: 0.14em;
+  letter-spacing: 0;
+  background: var(--cl-paper-2);
+  padding: 0.12em 0.4em;
+}
+.cl-nb-say.is-blocked {
+  color: var(--cl-accent);
+}
+.cl-nb-note {
+  margin: 14px 0 0;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  gap: 10px;
+  align-items: baseline;
+  max-width: 52ch;
+  font-size: 16px;
+  line-height: 1.4;
+  color: var(--cl-ink-2);
+}
+.cl-nb-note i {
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  font-style: normal;
+  color: var(--cl-ink-4);
+}
+.cl-nb-note span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.cl-nb-wait {
+  margin-top: 16px;
+  padding-block: 12px;
+  border-block: 1px solid var(--cl-accent);
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  font: 500 clamp(24px, 3.4vw, 38px) / 1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--cl-accent);
+}
+.cl-nb-wait small {
+  font: 400 10px/1.3 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+
+.cl-nb-label {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-nb-label .tot {
+  letter-spacing: 0;
+  text-transform: none;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+.cl-nb-sec {
+  margin-top: clamp(28px, 5vh, 48px);
+}
+.cl-nb-cols > section > .cl-nb-sec:first-child {
+  margin-top: 0;
+}
+
+.cl-nb-steps {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: 1fr;
+  gap: 4px;
+  margin-top: 12px;
+}
+.cl-nb-steps i {
+  height: 6px;
+  display: block;
+  background: var(--cl-paper-3);
+}
+.cl-nb-steps i.is-done {
+  background: var(--cl-ink);
+}
+.cl-nb-steps i.is-now {
+  background: var(--cl-accent);
+}
+.cl-nb-task {
+  margin: 14px 0 0;
+  font-size: 16px;
+  font-weight: 500;
+}
+.cl-nb-task span {
+  margin-right: 8px;
+  font: 400 11.5px/1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-nb-next {
+  margin: 4px 0 0;
+  font-size: 14px;
+  color: var(--cl-ink-3);
+}
+
+.cl-nb-vitals {
+  margin: clamp(28px, 5vh, 48px) 0 0;
+  display: flex;
+  gap: 10px 26px;
+  flex-wrap: wrap;
+  align-items: flex-end;
+}
+.cl-nb-vitals div {
+  display: grid;
+  gap: 5px;
+}
+.cl-nb-vitals dt {
+  font: 500 9.5px/1 var(--font-mono);
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--cl-ink-4);
+}
+.cl-nb-vitals dd {
+  margin: 0;
+  font: 500 15px/1 var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+.cl-nb-vitals dd.bad {
+  color: var(--cl-danger);
+}
+.cl-nb-gauge {
+  width: 90px;
+  height: 4px;
+  margin-top: 5px;
+  position: relative;
+  background: var(--cl-paper-3);
+}
+.cl-nb-gauge i {
+  position: absolute;
+  inset: 0 auto 0 0;
+  background: var(--cl-ink-3);
+}
+.cl-nb-gauge.is-high i {
+  background: var(--cl-accent);
+}
+
+.cl-nb-files,
+.cl-nb-checks {
+  list-style: none;
+  margin: 12px 0 0;
+  padding: 0;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-nb-none {
+  margin: 12px 0 0;
+  padding-block: 12px;
+  border-top: 1px solid var(--cl-line);
+  font-size: 13.5px;
+  color: var(--cl-ink-3);
+}
+.cl-nb-file {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 96px auto;
+  gap: 14px;
+  align-items: center;
+  padding-block: 11px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-nb-file .nm {
+  min-width: 0;
+  display: grid;
+  gap: 3px;
+}
+.cl-nb-file b {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font: 500 13px/1.1 var(--font-mono);
+}
+.cl-nb-file b span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cl-nb-file .dir {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 10.5px/1.1 var(--font-mono);
+  color: var(--cl-ink-4);
+}
+.cl-nb-file .tag {
+  flex: none;
+  padding: 2px 4px;
+  border: 1px solid currentColor;
+  font: 500 8.5px/1 var(--font-mono);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--cl-ok);
+}
+.cl-nb-file .tag.bad {
+  color: var(--cl-danger);
+}
+.cl-nb-file .bar {
+  display: flex;
+  gap: 1px;
+  height: 5px;
+}
+.cl-nb-file .bar i {
+  display: block;
+  height: 100%;
+}
+.cl-nb-file .bar .a {
+  background: var(--cl-ok);
+}
+.cl-nb-file .bar .d {
+  background: var(--cl-danger);
+}
+.cl-nb-file.is-live::before {
+  content: '';
+  position: absolute;
+  left: -14px;
+  top: 50%;
+  width: 6px;
+  height: 6px;
+  margin-top: -3px;
+  border-radius: 50%;
+  background: var(--cl-accent);
+}
+
+.cl-nb-check {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto 64px;
+  gap: 14px;
+  align-items: center;
+  padding-block: 11px;
+  border-bottom: 1px solid var(--cl-line);
+}
+.cl-nb-check code {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 400 12px/1.2 var(--font-mono);
+  color: var(--cl-ink-2);
+}
+.cl-nb-runs {
+  display: flex;
+  gap: 3px;
+}
+.cl-nb-runs i {
+  display: block;
+  width: 9px;
+  height: 9px;
+  background: var(--cl-paper-3);
+}
+.cl-nb-runs i.pass {
+  background: var(--cl-ok);
+}
+.cl-nb-runs i.fail {
+  background: var(--cl-danger);
+}
+.cl-nb-runs i.pending {
+  background: none;
+  border: 1.5px solid var(--cl-ink-3);
+}
+.cl-nb-verdict {
+  text-align: right;
+  font: 500 10px/1 var(--font-mono);
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+.cl-nb-verdict.pass {
+  color: var(--cl-ok);
+}
+.cl-nb-verdict.fail {
+  color: var(--cl-danger);
+}
+.cl-nb-verdict.pending {
+  color: var(--cl-ink-3);
+}
+
+.cl-nb-reads {
+  margin-top: clamp(28px, 5vh, 48px);
+  padding-top: 12px;
+  border-top: 1px solid var(--cl-line);
+}
+.cl-nb-reads summary {
+  cursor: pointer;
+  list-style: none;
+}
+.cl-nb-reads summary::-webkit-details-marker {
+  display: none;
+}
+.cl-nb-reads ul {
+  margin: 12px 0 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+  font: 400 11px/1.3 var(--font-mono);
+  color: var(--cl-ink-3);
+}

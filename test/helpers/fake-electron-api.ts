@@ -57,6 +57,7 @@ import type {
   SessionActivity,
   SessionArtifacts,
   SessionSummary,
+  TaskGroup,
   ConversationSearchRequest,
   ConversationSearchResult,
   ExchangeOutcome,
@@ -319,6 +320,11 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     listProjects: vi.fn(async () => ok<Array<{ hash: string; realPath: string }>>([])),
   };
 
+  // `~/.claude/tasks`, grouped per session. No tasks until a test scripts them.
+  const tasks = {
+    getByProject: vi.fn(async (_hash: string) => ok<TaskGroup[]>([])),
+  };
+
   // Full-text search over the transcripts. Empty is the honest default: the
   // interesting cases (a hit, a truncated scan) are scripted per test.
   const search = {
@@ -450,6 +456,7 @@ export function createFakeElectronAPI(channels: FakeChannels) {
     prefs,
     live,
     memory,
+    tasks,
     onDataChanged: channels.dataChanged.subscribe,
   };
 }

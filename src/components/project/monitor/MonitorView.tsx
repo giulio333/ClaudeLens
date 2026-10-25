@@ -12,6 +12,8 @@ import { projectDisplayName } from '../shared/projectName';
 import { TOOL_TINT } from '../chat/utils';
 import { LiveOrb } from '../../LiveOrb';
 import { buildRibbon, RIBBON_WINDOW } from './trace';
+import { projectForCwd } from './project-of';
+import type { Project } from './project-of';
 
 // The Monitor: every Claude process running on this machine — what is blocked on
 // you as a band, everything else as one cell of a hairline grid.
@@ -54,8 +56,6 @@ import { buildRibbon, RIBBON_WINDOW } from './trace';
 // axis (`trace.ts`). A lane whose right-hand end is empty is a session that has
 // done nothing for that long, which is the "is this hung?" question the three
 // printed rows used to answer in prose and the strip answers in shape.
-
-type Project = { hash: string; realPath: string };
 
 // `ready` is a session that is alive but has finished its turn — observed, not
 // guessed. Worth its own state because "alive" and "working" are not the same
@@ -181,21 +181,6 @@ function span(ms: number | null): string {
   const h = Math.floor(m / 60);
   if (h < 24) return `${h}h${String(m % 60).padStart(2, '0')}`;
   return `${Math.floor(h / 24)}d${String(h % 24).padStart(2, '0')}`;
-}
-
-/** The project a cwd belongs to. Exact match first, then the longest known
- *  project the cwd sits inside — a session started in `packages/api` of a
- *  monorepo belongs to the repo, not to nothing. */
-function projectForCwd(cwd: string | null, projects: Project[]): Project | null {
-  if (!cwd) return null;
-  let best: Project | null = null;
-  for (const p of projects) {
-    if (p.realPath === cwd) return p;
-    if (cwd.startsWith(p.realPath + '/') && (!best || p.realPath.length > best.realPath.length)) {
-      best = p;
-    }
-  }
-  return best;
 }
 
 /** Where in the project this process was started, printed only when that adds

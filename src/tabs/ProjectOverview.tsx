@@ -14,7 +14,8 @@ import { usePinnedProjects } from '../hooks/usePinnedProjects';
 import { usePinnedSessions } from '../hooks/usePinnedSessions';
 import { View } from '../components/project/types';
 import { reportViewOpened } from '../lib/telemetry';
-import { STUDIO_ENABLED } from '../lib/features';
+import { NOTEBOOK_ENABLED, STUDIO_ENABLED } from '../lib/features';
+import { NotebookView } from '../components/project/notebook/NotebookView';
 import { SearchView } from '../components/project/search/SearchView';
 import { ExchangeView } from '../components/project/exchange/ExchangeView';
 import { DeleteProjectDialog } from '../components/project/shared/DeleteProjectDialog';
@@ -834,6 +835,8 @@ export default function ProjectOverview() {
         return <SettingsView onBack={goGlobal} />;
       case 'remote':
         return <RemoteView onBack={goGlobal} />;
+      case 'notebook':
+        return NOTEBOOK_ENABLED ? <NotebookView onBack={goGlobal} /> : null;
       default:
         return null;
     }
@@ -907,6 +910,15 @@ export default function ProjectOverview() {
             Remote
             <BetaTag />
           </button>
+          {NOTEBOOK_ENABLED && (
+            <button
+              className={view.type === 'notebook' ? 'on' : ''}
+              onClick={() => setView({ type: 'notebook' })}
+            >
+              Notebook
+              <BetaTag />
+            </button>
+          )}
           {STUDIO_ENABLED && (
             <button className={isStudio ? 'on' : ''} onClick={goStudio}>
               Agent Studio

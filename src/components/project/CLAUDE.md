@@ -14,7 +14,7 @@ file e il suo test.
 - `overview/` — home globale, landing e rail del progetto, righe di sessione (`SessionRows`),
   Duplicates.
 - `memory/` — topic e grafo dei `[[wikilink]]`; `studio/` — Agent Studio sui workflow `.js`;
-  `monitor/` — i processi vivi; `agents-live/` — i job in background; `shared/` — atomi e dialog
+  `monitor/` — i processi vivi; `notebook/` — una sessione per volta (beta); `agents-live/` — i job in background; `shared/` — atomi e dialog
   condivisi. `search/`, `exchange/`, `remote/`, `files/`, `settings/`, `plugins/`, `teams/`,
   `workflows/`, `plans/`, `tasks/`: una vista ciascuna.
 
@@ -115,6 +115,12 @@ file e il suo test.
   stato terminale vale solo con `tempo !== 'active'`, un ricorrente riuscito non è finito: sono i
   predicati della CLI, non congetture.
 - **Monitor** osserva e basta: dispatch, stop e respawn stanno solo in Agent View.
+- **Notebook** (`notebook/`, beta): una sessione per volta come frase, piano, diff e check; in dev
+  build soltanto (`NOTEBOOK_ENABLED` in `lib/features.ts`). Tutto si deriva in `notebook.ts`. Il
+  "perché" è la `description` di una chiamata o il task corrente: dove mancano non si dice niente
+  (il digest `toolArg` preferisce `command`, quindi la description si legge dal transcript). Un
+  check senza risultato è `pending`, mai verde; i task non hanno timestamp e non se ne mostra
+  nessuno; niente scrubber né replay, perché una vista live non può riavvolgere.
 - **Ricerca nelle conversazioni**: parte con Invio, mai a ogni tasto, e non è nel set di
   `data:changed` — un result set è l'istantanea di una scansione su tutta la storia.
 - **File del progetto**: sola lettura; SVG e HTML si mostrano come sorgente, mai renderizzati.
